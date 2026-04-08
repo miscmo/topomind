@@ -4,294 +4,87 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TopoMind — 可漫游拓扑知识大脑</title>
+
+<!-- 第三方库 -->
 <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
 <script src="https://unpkg.com/elkjs@0.9.3/lib/elk.bundled.js"></script>
 <script src="https://unpkg.com/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
 <script src="https://unpkg.com/marked@12.0.0/marked.min.js"></script>
-<style>
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  background:#f0f2f5;color:#2d3436}
 
-#app{display:flex;width:100%;height:100%}
-
-/* ===== 左侧导航目录 ===== */
-#nav-panel{width:200px;height:100%;background:#fff;border-right:1px solid #e8ecf0;
-  display:flex;flex-direction:column;flex-shrink:0}
-#nav-header{padding:16px;border-bottom:1px solid #e8ecf0;font-size:14px;font-weight:700;
-  color:#1a3a5c;letter-spacing:1px;display:flex;align-items:center;gap:6px}
-#nav-tree{flex:1;overflow-y:auto;padding:8px 0}
-.nav-group{margin-bottom:2px}
-.nav-item{padding:7px 16px;font-size:12.5px;cursor:pointer;transition:all .15s;color:#555;
-  border-left:3px solid transparent}
-.nav-item:hover{background:#f5f7fa;color:#1a3a5c}
-.nav-item.active{background:#edf2fb;color:#1a3a5c;font-weight:600}
-.nav-domain{font-weight:600;color:#333;font-size:13px}
-.nav-child{padding-left:28px;font-size:12px;color:#777}
-#nav-tree::-webkit-scrollbar{width:4px}
-#nav-tree::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
-
-/* ===== 中间图谱 ===== */
-#graph-panel{flex:1;height:100%;position:relative;border-right:1px solid #e8ecf0;overflow:hidden}
-
-/* --- 网格背景 --- */
-#graph-panel .grid-bg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
-#cy{width:100%;height:100%;position:relative;z-index:1}
-
-/* --- 对齐辅助线 --- */
-.align-guide{position:absolute;z-index:30;pointer-events:none;display:none}
-.align-guide-h{height:1px;left:0;right:0;border-top:1px dashed #3498db}
-.align-guide-v{width:1px;top:0;bottom:0;border-left:1px dashed #3498db}
-#cy{width:100%;height:100%}
-#header{position:absolute;top:12px;left:50%;transform:translateX(-50%);
-  background:rgba(255,255,255,.92);border:1px solid #e0e4ea;border-radius:10px;
-  padding:6px 22px;font-size:15px;font-weight:700;color:#1a3a5c;letter-spacing:1px;
-  backdrop-filter:blur(6px);z-index:10;white-space:nowrap}
-#breadcrumb{position:absolute;top:50px;left:50%;transform:translateX(-50%);z-index:12;
-  display:none;align-items:center;gap:5px;background:rgba(255,255,255,.95);
-  border:1px solid #e0e4ea;border-radius:8px;padding:5px 14px;font-size:12px;color:#555;
-  backdrop-filter:blur(6px);white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.05)}
-#breadcrumb.active{display:flex}
-#breadcrumb .bc-link{color:#3498db;cursor:pointer;font-weight:500}
-#breadcrumb .bc-link:hover{text-decoration:underline}
-#breadcrumb .bc-sep{color:#ccc}
-#breadcrumb .bc-current{color:#1a3a5c;font-weight:600}
-
-#legend{position:absolute;top:12px;left:12px;z-index:10;
-  background:rgba(255,255,255,.92);border:1px solid #e0e4ea;border-radius:8px;
-  padding:10px 14px;font-size:11px;line-height:2;backdrop-filter:blur(6px)}
-#legend h4{font-size:12px;color:#333;font-weight:600;margin-bottom:2px}
-.legend-item{display:flex;align-items:center;gap:6px}
-.legend-line{width:22px;height:3px;border-radius:2px;display:inline-block;flex-shrink:0}
-.legend-dash{width:22px;height:0;border-top:2px dashed;display:inline-block;flex-shrink:0}
-
-#search-box{position:absolute;top:12px;right:12px;z-index:10}
-#search-input{width:170px;height:32px;border:1px solid #e0e4ea;border-radius:8px;
-  padding:0 12px;font-size:12px;outline:none;background:rgba(255,255,255,.92);
-  backdrop-filter:blur(6px)}
-#search-input:focus{border-color:#3498db}
-#search-input::placeholder{color:#bbb}
-
-#zoom-indicator{position:absolute;bottom:12px;left:12px;z-index:10;
-  background:rgba(45,52,54,.7);color:#fff;padding:4px 12px;border-radius:16px;
-  font-size:11px;pointer-events:none}
-
-#controls{position:absolute;bottom:12px;right:12px;display:flex;gap:6px;z-index:10}
-#controls button{width:32px;height:32px;border:1px solid #e0e4ea;border-radius:8px;
-  background:rgba(255,255,255,.92);cursor:pointer;font-size:16px;color:#555;
-  display:flex;align-items:center;justify-content:center;transition:all .15s}
-#controls button:hover{background:#eef2f7;color:#333}
-
-#toolbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:10;
-  display:flex;gap:5px;background:rgba(255,255,255,.92);border:1px solid #e0e4ea;
-  border-radius:8px;padding:4px 8px;backdrop-filter:blur(6px)}
-#toolbar button{height:28px;border:1px solid #e0e4ea;border-radius:6px;background:#fff;
-  cursor:pointer;font-size:11px;color:#555;padding:0 10px;transition:all .12s;white-space:nowrap}
-#toolbar button:hover{background:#eef2f7;color:#1a3a5c}
-#toolbar button.active{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
-#toolbar .sep{width:1px;background:#e0e4ea;margin:2px 2px}
-
-#edge-mode-hint{position:absolute;top:55px;left:50%;transform:translateX(-50%);z-index:20;
-  background:#e74c3c;color:#fff;padding:6px 16px;border-radius:8px;font-size:12px;
-  display:none;gap:8px;align-items:center;box-shadow:0 3px 10px rgba(231,76,60,.3)}
-#edge-mode-hint.active{display:flex}
-#edge-mode-hint button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);
-  color:#fff;border-radius:5px;padding:2px 8px;cursor:pointer;font-size:11px}
-
-/* ===== 右侧详情 ===== */
-#detail-panel{width:320px;height:100%;display:flex;flex-direction:column;background:#fff;flex-shrink:0;overflow:hidden}
-#detail-title{padding:16px 20px 10px;border-bottom:1px solid #e8ecf0;font-size:18px;
-  font-weight:700;color:#1a3a5c;flex-shrink:0;border-left:4px solid #ddd;margin-left:0}
-#detail-actions{display:flex;gap:5px;padding:6px 20px 0;flex-shrink:0}
-#detail-actions button{height:26px;padding:0 8px;border:1px solid #e0e4ea;border-radius:5px;
-  background:#fff;cursor:pointer;font-size:11px;color:#666;transition:all .12s}
-#detail-actions button:hover{background:#eef2f7;color:#1a3a5c}
-#detail-body{flex:1;overflow-y:auto;padding:12px 20px 40px;line-height:1.75;font-size:13.5px}
-
-#detail-body h1{font-size:20px;margin:16px 0 8px;color:#1a3a5c;border-bottom:2px solid #e8ecf0;padding-bottom:6px}
-#detail-body h2{font-size:16px;margin:14px 0 6px;color:#2d5a8e}
-#detail-body h3{font-size:14px;margin:12px 0 4px;color:#34678a}
-#detail-body p{margin:5px 0}
-#detail-body ul,#detail-body ol{margin:5px 0 5px 18px}
-#detail-body li{margin:2px 0}
-#detail-body code{background:#edf2f7;padding:1px 5px;border-radius:3px;
-  font-family:"SF Mono","Fira Code",Consolas,monospace;font-size:12px;color:#c0392b}
-#detail-body pre{background:#1a2332;color:#e8ecf1;padding:14px;border-radius:6px;
-  margin:8px 0;overflow-x:auto;line-height:1.5}
-#detail-body pre code{background:none;color:#e8ecf1;padding:0;font-size:11.5px}
-#detail-body blockquote{border-left:3px solid #3498db;background:#f0f7ff;
-  padding:8px 14px;margin:8px 0;border-radius:0 6px 6px 0;color:#555;font-size:13px}
-#detail-body table{border-collapse:collapse;width:100%;margin:8px 0;font-size:12.5px}
-#detail-body th,#detail-body td{border:1px solid #e0e0e0;padding:5px 10px;text-align:left}
-#detail-body th{background:#edf2f7;font-weight:600}
-#detail-body a{color:#2980b9}
-#detail-body hr{border:none;border-top:1px solid #e0e0e0;margin:12px 0}
-#detail-body strong{color:#2c3e50}
-.placeholder-text{color:#aaa;font-size:14px;margin-top:25vh;text-align:center}
-.placeholder-text span{display:block;font-size:40px;margin-bottom:10px}
-#detail-body::-webkit-scrollbar{width:4px}
-#detail-body::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
-
-/* ===== 模态框/菜单 ===== */
-#context-menu{position:fixed;z-index:1000;display:none;background:#fff;border:1px solid #e0e4ea;
-  border-radius:8px;padding:4px 0;min-width:150px;box-shadow:0 4px 16px rgba(0,0,0,.1)}
-#context-menu .ctx-item{padding:7px 14px;font-size:12px;cursor:pointer;color:#333;transition:background .1s}
-#context-menu .ctx-item:hover{background:#eef2f7}
-#context-menu .ctx-item.danger{color:#e74c3c}
-#context-menu .ctx-item.danger:hover{background:#fdf0f0}
-#context-menu .ctx-sep{height:1px;background:#eee;margin:3px 8px}
-
-.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);
-  z-index:2000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
-.modal-overlay.active{display:flex}
-.modal{background:#fff;border-radius:12px;width:480px;max-height:85vh;overflow:hidden;
-  box-shadow:0 8px 28px rgba(0,0,0,.15);display:flex;flex-direction:column}
-.modal-header{padding:14px 18px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between}
-.modal-header h3{font-size:15px;color:#1a3a5c;font-weight:600}
-.modal-close{width:26px;height:26px;border:none;background:none;cursor:pointer;font-size:16px;color:#999;border-radius:5px;display:flex;align-items:center;justify-content:center}
-.modal-close:hover{background:#f0f0f0;color:#333}
-.modal-body{padding:14px 18px;overflow-y:auto;flex:1}
-.modal-footer{padding:10px 18px;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:6px}
-.form-group{margin-bottom:12px}
-.form-group label{display:block;font-size:12px;font-weight:500;color:#555;margin-bottom:4px}
-.form-group input,.form-group select{width:100%;height:34px;border:1px solid #ddd;border-radius:7px;padding:0 10px;font-size:12px;outline:none}
-.form-group input:focus,.form-group select:focus{border-color:#3498db}
-.btn{height:32px;padding:0 16px;border-radius:7px;font-size:12px;cursor:pointer;border:1px solid #ddd;background:#fff;color:#555;transition:all .12s;display:inline-flex;align-items:center}
-.btn:hover{background:#f5f5f5}
-.btn-primary{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
-.btn-primary:hover{background:#254d73}
-.btn-danger{background:#e74c3c;color:#fff;border-color:#e74c3c}
-.btn-danger:hover{background:#c0392b}
-
-.md-editor-modal .modal{width:680px;max-height:90vh}
-.md-editor-wrap{display:flex;flex-direction:column;height:50vh}
-.md-editor-tabs{display:flex;border-bottom:1px solid #eee}
-.md-editor-tab{padding:7px 14px;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#888;background:none;border-top:none;border-left:none;border-right:none}
-.md-editor-tab.active{color:#1a3a5c;border-bottom-color:#1a3a5c;font-weight:500}
-.md-editor-area{flex:1;width:100%;border:none;outline:none;resize:none;padding:10px;
-  font-family:"SF Mono",Consolas,monospace;font-size:12px;line-height:1.6;background:#fafbfc}
-.md-preview-area{flex:1;overflow-y:auto;padding:10px 14px;line-height:1.7;font-size:13px;display:none;background:#fafbfc}
-
-/* ===== 画布内联输入框 ===== */
-#inline-input{position:absolute;z-index:100;display:none;background:#fff;border:2px solid #3498db;
-  border-radius:8px;padding:6px 12px;font-size:13px;outline:none;min-width:140px;
-  box-shadow:0 4px 16px rgba(52,152,219,.25);font-family:inherit;color:#2d3436}
-#inline-input::placeholder{color:#bbb}
-
-/* ===== 节点悬停快捷按钮 ===== */
-#node-actions{position:absolute;z-index:50;display:none;pointer-events:auto}
-#node-actions.visible{display:flex;gap:3px}
-#node-actions button{width:24px;height:24px;border-radius:50%;border:1.5px solid #ddd;
-  background:rgba(255,255,255,.95);cursor:pointer;font-size:12px;color:#555;
-  display:flex;align-items:center;justify-content:center;transition:all .15s;
-  box-shadow:0 1px 4px rgba(0,0,0,.1);padding:0}
-#node-actions button:hover{background:#3498db;color:#fff;border-color:#3498db;transform:scale(1.15)}
-
-/* ===== 拖拽连线手柄 ===== */
-#drag-line{position:absolute;z-index:40;pointer-events:none;display:none}
-#drag-line line{stroke:#3498db;stroke-width:2;stroke-dasharray:6,3}
-#drag-line circle{fill:#3498db}
-
-/* ===== 右侧内联编辑模式 ===== */
-#detail-body.edit-mode{padding:0}
-#detail-edit-area{display:none;width:100%;height:100%;border:none;outline:none;resize:none;
-  padding:12px 20px;font-family:"SF Mono",Consolas,monospace;font-size:12px;
-  line-height:1.6;background:#fafbfc;color:#2d3436}
-#detail-edit-area.active{display:block}
-#detail-body.edit-mode .rendered-content{display:none}
-
-/* 编辑/预览切换 */
-#detail-mode-toggle{display:none;gap:0;margin-left:auto}
-#detail-mode-toggle button{height:24px;padding:0 10px;border:1px solid #dfe4ea;background:#fff;
-  cursor:pointer;font-size:11px;color:#888;transition:all .12s}
-#detail-mode-toggle button:first-child{border-radius:5px 0 0 5px}
-#detail-mode-toggle button:last-child{border-radius:0 5px 5px 0;border-left:0}
-#detail-mode-toggle button.active{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
-#detail-mode-toggle.visible{display:flex}
-
-/* ===== 左侧导航添加按钮 ===== */
-.nav-domain{display:flex;align-items:center;justify-content:space-between}
-.nav-add-btn{width:18px;height:18px;border-radius:50%;border:1px solid #ddd;background:#fff;
-  cursor:pointer;font-size:12px;color:#999;display:flex;align-items:center;justify-content:center;
-  transition:all .12s;flex-shrink:0;padding:0;line-height:1}
-.nav-add-btn:hover{background:#3498db;color:#fff;border-color:#3498db}
-
-/* ===== 快捷提示条 ===== */
-#shortcut-hint{position:absolute;bottom:50px;left:50%;transform:translateX(-50%);z-index:8;
-  background:rgba(26,58,92,.85);color:#fff;padding:5px 14px;border-radius:6px;
-  font-size:11px;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap}
-#shortcut-hint.visible{opacity:1}
-
-/* --- 保存指示器 --- */
-#save-indicator{position:absolute;bottom:48px;left:50%;transform:translateX(-50%) translateY(20px);z-index:15;
-  background:rgba(46,204,113,.9);color:#fff;padding:4px 14px;border-radius:6px;
-  font-size:11px;pointer-events:none;opacity:0;transition:all .3s ease}
-#save-indicator.visible{opacity:1;transform:translateX(-50%) translateY(0)}
-</style>
+<!-- 样式模块 -->
+<link rel="stylesheet" href="src/css/base.css">
+<link rel="stylesheet" href="src/css/nav.css">
+<link rel="stylesheet" href="src/css/graph.css">
+<link rel="stylesheet" href="src/css/detail.css">
+<link rel="stylesheet" href="src/css/modal.css">
+<link rel="stylesheet" href="src/css/editor.css">
 </head>
 <body>
 <div id="app">
-  <!-- 左侧导航 -->
+  <!-- ===== 左侧导航 ===== -->
   <div id="nav-panel">
     <div id="nav-header">🧠 知识目录</div>
     <div id="nav-tree"></div>
   </div>
-  <!-- 中间图谱 -->
+
+  <!-- ===== 中间图谱 ===== -->
   <div id="graph-panel">
     <canvas id="grid-canvas" class="grid-bg"></canvas>
     <div id="cy"></div>
-    <!-- 对齐辅助线 -->
-    <div class="align-guide align-guide-h" id="guide-h"></div>
-    <div class="align-guide align-guide-v" id="guide-v"></div>
+
+    <!-- 顶部信息 -->
     <div id="header">TopoMind · 拓扑知识大脑</div>
     <div id="breadcrumb"></div>
+
+    <!-- 图例 -->
     <div id="legend">
       <h4>关系</h4>
       <div class="legend-item"><span class="legend-line" style="background:#5cb85c"></span> 演进</div>
       <div class="legend-item"><span class="legend-line" style="background:#e8913a"></span> 依赖</div>
       <div class="legend-item"><span class="legend-dash" style="border-color:#bbb"></span> 相关</div>
     </div>
+
+    <!-- 搜索 -->
     <div id="search-box"><input id="search-input" type="text" placeholder="搜索..." /></div>
+
+    <!-- 缩放 -->
     <div id="zoom-indicator">100%</div>
     <div id="controls">
       <button id="btn-zoomin">＋</button>
       <button id="btn-zoomout">－</button>
       <button id="btn-fit">⊡</button>
     </div>
+
+    <!-- 工具栏 -->
     <div id="toolbar">
       <button id="btn-add-node">＋ 节点</button>
       <button id="btn-add-edge">⤯ 连线</button>
       <div class="sep"></div>
       <button id="btn-toggle-grid" class="active" title="网格">⊞</button>
-      <button id="btn-snap" title="吸附对齐">⊟</button>
-      <button id="btn-auto-align" title="自动整理">☰</button>
       <div class="sep"></div>
       <button id="btn-export">↓ 导出</button>
       <button id="btn-import">↑ 导入</button>
       <div class="sep"></div>
       <button id="btn-reset" title="重置为默认数据">↺ 重置</button>
     </div>
-    <!-- 保存指示器 -->
+
+    <!-- 状态提示 -->
     <div id="save-indicator">✓ 已保存</div>
     <div id="edge-mode-hint">
       <span>🔗 连线模式</span>
       <button id="btn-cancel-edge-mode">取消</button>
     </div>
-    <!-- 画布内联输入框 -->
     <input id="inline-input" type="text" placeholder="输入名称，回车确认...">
-    <!-- 节点悬停快捷按钮 -->
     <div id="node-actions">
       <button id="na-add-child" title="添加子节点">＋</button>
       <button id="na-connect" title="画连线">⤯</button>
       <button id="na-edit" title="编辑文档">✏</button>
     </div>
-    <!-- 拖拽连线SVG -->
     <svg id="drag-line" width="100%" height="100%"><line x1="0" y1="0" x2="0" y2="0"/><circle r="4" cx="0" cy="0"/></svg>
-    <!-- 快捷提示 -->
     <div id="shortcut-hint">双击空白新建域 · 选中节点按 Tab 添加子节点 · Delete 删除</div>
   </div>
-  <!-- 右侧详情 -->
+
+  <!-- ===== 右侧详情 ===== -->
   <div id="detail-panel">
     <div id="detail-title">知识详情</div>
     <div id="detail-actions">
@@ -312,7 +105,7 @@ html,body{width:100%;height:100%;overflow:hidden;
   </div>
 </div>
 
-<!-- 菜单 -->
+<!-- ===== 右键菜单 ===== -->
 <div id="context-menu">
   <div class="ctx-item" data-action="focus-in">🔍 聚焦</div>
   <div class="ctx-sep"></div>
@@ -329,7 +122,7 @@ html,body{width:100%;height:100%;overflow:hidden;
   <div class="ctx-item danger" data-action="delete-edge">🗑 删除</div>
 </div>
 
-<!-- 模态框 -->
+<!-- ===== 模态框 ===== -->
 <div class="modal-overlay" id="modal-node"><div class="modal"><div class="modal-header"><h3 id="modal-node-title">新增节点</h3><button class="modal-close" onclick="closeModal('modal-node')">✕</button></div><div class="modal-body"><div class="form-group"><label>ID（英文）</label><input type="text" id="node-id" placeholder="my-topic"></div><div class="form-group"><label>名称</label><input type="text" id="node-label" placeholder="我的主题"></div><div class="form-group"><label>层级</label><select id="node-level"><option value="1">顶层领域</option><option value="2" selected>子领域</option></select></div><div class="form-group"><label>父节点</label><select id="node-parent"><option value="">无</option></select></div></div><div class="modal-footer"><button class="btn" onclick="closeModal('modal-node')">取消</button><button class="btn btn-primary" id="btn-save-node">保存</button></div></div></div>
 
 <div class="modal-overlay" id="modal-edge"><div class="modal"><div class="modal-header"><h3 id="modal-edge-title">新增连线</h3><button class="modal-close" onclick="closeModal('modal-edge')">✕</button></div><div class="modal-body"><div class="form-group"><label>源</label><select id="edge-source"></select></div><div class="form-group"><label>目标</label><select id="edge-target"></select></div><div class="form-group"><label>关系</label><select id="edge-relation"><option value="依赖">依赖</option><option value="演进">演进</option><option value="相关">相关</option></select></div></div><div class="modal-footer"><button class="btn" onclick="closeModal('modal-edge')">取消</button><button class="btn btn-primary" id="btn-save-edge">保存</button></div></div></div>
@@ -339,7 +132,23 @@ html,body{width:100%;height:100%;overflow:hidden;
 <div class="modal-overlay" id="modal-confirm"><div class="modal" style="width:360px"><div class="modal-header"><h3>确认删除</h3><button class="modal-close" onclick="closeModal('modal-confirm')">✕</button></div><div class="modal-body"><p id="confirm-message" style="font-size:13px;color:#555"></p></div><div class="modal-footer"><button class="btn" onclick="closeModal('modal-confirm')">取消</button><button class="btn btn-danger" id="btn-confirm-delete">删除</button></div></div></div>
 
 <input type="file" id="import-file" accept=".json" style="display:none">
-<script src="data.js"></script>
-<script src="app.js"></script>
+
+<!-- ===== JS 模块（按依赖顺序加载） ===== -->
+<!-- 数据层 -->
+<script src="src/data/colors.js"></script>
+<script src="src/data/markdown.js"></script>
+<script src="src/data/graph-data.js"></script>
+<!-- 核心逻辑 -->
+<script src="src/js/config.js"></script>
+<script src="src/js/graph.js"></script>
+<script src="src/js/storage.js"></script>
+<script src="src/js/detail.js"></script>
+<script src="src/js/nav.js"></script>
+<script src="src/js/room.js"></script>
+<script src="src/js/crud.js"></script>
+<script src="src/js/interaction.js"></script>
+<script src="src/js/grid.js"></script>
+<!-- 启动 -->
+<script src="src/js/main.js"></script>
 </body>
 </html>
