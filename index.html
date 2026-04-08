@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TopoMind — 可漫游拓扑知识大脑</title>
+<script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/elkjs@0.9.3/lib/elk.bundled.js"></script>
+<script src="https://unpkg.com/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
+<script src="https://unpkg.com/marked@12.0.0/marked.min.js"></script>
+<style>
+/* ===== Reset ===== */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  background:#f5f6fa;color:#2d3436}
+
+/* ===== 主布局 ===== */
+#app{display:flex;width:100%;height:100%}
+
+/* --- 左侧图谱 --- */
+#graph-panel{flex:0 0 70%;height:100%;position:relative;background:#ffffff;border-right:1px solid #dfe4ea}
+#cy{width:100%;height:100%}
+
+/* --- 标题 --- */
+#header{position:absolute;top:16px;left:50%;transform:translateX(-50%);
+  background:rgba(255,255,255,.95);border:1px solid #dfe4ea;border-radius:10px;
+  padding:8px 28px;font-size:17px;font-weight:700;color:#1a3a5c;letter-spacing:2px;
+  white-space:nowrap;backdrop-filter:blur(6px);z-index:10}
+
+/* --- 图例 --- */
+#legend{position:absolute;top:16px;left:16px;z-index:10;
+  background:rgba(255,255,255,.95);border:1px solid #dfe4ea;border-radius:10px;
+  padding:14px 18px;font-size:12px;line-height:2.1;backdrop-filter:blur(6px)}
+#legend h4{margin-bottom:2px;font-size:13px;color:#2d3436;font-weight:600}
+.legend-item{display:flex;align-items:center;gap:8px}
+.legend-dot{width:14px;height:14px;border-radius:4px;display:inline-block;flex-shrink:0}
+.legend-line{width:26px;height:3px;border-radius:2px;display:inline-block;flex-shrink:0}
+
+/* --- 搜索 --- */
+#search-box{position:absolute;top:16px;right:16px;z-index:10}
+#search-input{width:190px;height:36px;border:1px solid #dfe4ea;border-radius:10px;
+  padding:0 14px;font-size:13px;outline:none;background:rgba(255,255,255,.95);
+  backdrop-filter:blur(6px);transition:border-color .2s}
+#search-input:focus{border-color:#3498db;box-shadow:0 0 0 3px rgba(52,152,219,.15)}
+#search-input::placeholder{color:#bbb}
+
+/* --- 面包屑导航 --- */
+#breadcrumb{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:12;
+  display:none;align-items:center;gap:6px;background:rgba(255,255,255,.96);
+  border:1px solid #dfe4ea;border-radius:10px;padding:6px 16px;
+  backdrop-filter:blur(6px);font-size:13px;color:#555;white-space:nowrap;
+  box-shadow:0 2px 8px rgba(0,0,0,.06)}
+#breadcrumb.active{display:flex}
+#breadcrumb .bc-link{color:#3498db;cursor:pointer;font-weight:500;transition:color .15s}
+#breadcrumb .bc-link:hover{color:#2073b0;text-decoration:underline}
+#breadcrumb .bc-sep{color:#ccc;margin:0 2px}
+#breadcrumb .bc-current{color:#1a3a5c;font-weight:600}
+
+/* --- 聚焦视图中心节点样式 --- */
+.focus-center{}
+
+/* --- 缩放指示器 --- */
+#zoom-indicator{position:absolute;bottom:16px;left:16px;z-index:10;
+  background:rgba(45,52,54,.78);color:#fff;padding:6px 16px;border-radius:20px;
+  font-size:12px;pointer-events:none;backdrop-filter:blur(4px)}
+
+/* --- 控制按钮 --- */
+#controls{position:absolute;bottom:16px;right:16px;display:flex;gap:8px;z-index:10}
+#controls button{width:38px;height:38px;border:1px solid #dfe4ea;border-radius:10px;
+  background:rgba(255,255,255,.95);backdrop-filter:blur(6px);cursor:pointer;
+  font-size:18px;color:#555;display:flex;align-items:center;justify-content:center;
+  transition:all .2s}
+#controls button:hover{background:#eef2f7;border-color:#bbb;color:#333}
+
+/* ===== 右侧详情面板 ===== */
+#detail-panel{flex:0 0 30%;height:100%;display:flex;flex-direction:column;
+  background:#fafbfc;overflow:hidden}
+#detail-title{padding:20px 24px 14px;border-bottom:1px solid #e8ecf0;
+  font-size:20px;font-weight:700;color:#1a3a5c;flex-shrink:0}
+#detail-body{flex:1;overflow-y:auto;padding:16px 24px 48px;line-height:1.8;font-size:14.5px}
+
+/* --- Markdown 渲染 --- */
+#detail-body h1{font-size:22px;margin:20px 0 10px;color:#1a3a5c;border-bottom:2px solid #e8ecf0;padding-bottom:8px}
+#detail-body h2{font-size:17px;margin:18px 0 8px;color:#2d5a8e}
+#detail-body h3{font-size:15px;margin:14px 0 6px;color:#34678a}
+#detail-body p{margin:6px 0}
+#detail-body ul,#detail-body ol{margin:6px 0 6px 20px}
+#detail-body li{margin:3px 0}
+#detail-body code{background:#edf2f7;padding:2px 6px;border-radius:4px;
+  font-family:"SF Mono","Fira Code","Cascadia Code",Consolas,monospace;font-size:13px;color:#c0392b}
+#detail-body pre{background:#1a2332;color:#e8ecf1;padding:16px;border-radius:8px;
+  margin:10px 0;overflow-x:auto;line-height:1.6}
+#detail-body pre code{background:none;color:#e8ecf1;padding:0;font-size:12.5px}
+#detail-body blockquote{border-left:4px solid #3498db;background:#f0f7ff;
+  padding:10px 16px;margin:10px 0;border-radius:0 8px 8px 0;color:#555}
+#detail-body table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13.5px}
+#detail-body th,#detail-body td{border:1px solid #e0e0e0;padding:7px 12px;text-align:left}
+#detail-body th{background:#edf2f7;font-weight:600;color:#2d3436}
+#detail-body a{color:#2980b9;text-decoration:none}
+#detail-body a:hover{text-decoration:underline}
+#detail-body hr{border:none;border-top:1px solid #e0e0e0;margin:14px 0}
+#detail-body strong{color:#2c3e50}
+
+.placeholder-text{color:#aaa;font-size:15px;margin-top:28vh;text-align:center}
+.placeholder-text span{display:block;font-size:48px;margin-bottom:14px}
+
+/* --- 滚动条 --- */
+#detail-body::-webkit-scrollbar{width:5px}
+#detail-body::-webkit-scrollbar-track{background:transparent}
+#detail-body::-webkit-scrollbar-thumb{background:#d0d0d0;border-radius:3px}
+#detail-body::-webkit-scrollbar-thumb:hover{background:#bbb}
+
+/* ===== 工具栏 ===== */
+#toolbar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
+  display:flex;gap:6px;background:rgba(255,255,255,.95);border:1px solid #dfe4ea;
+  border-radius:10px;padding:6px 10px;backdrop-filter:blur(6px)}
+#toolbar button{height:32px;border:1px solid #dfe4ea;border-radius:8px;background:#fff;
+  cursor:pointer;font-size:12px;color:#555;padding:0 12px;display:flex;align-items:center;gap:4px;
+  transition:all .15s;white-space:nowrap}
+#toolbar button:hover{background:#eef2f7;border-color:#bbb;color:#1a3a5c}
+#toolbar button svg{width:14px;height:14px;fill:currentColor}
+
+/* ===== 右键菜单 ===== */
+#context-menu{position:fixed;z-index:1000;display:none;background:#fff;border:1px solid #dfe4ea;
+  border-radius:8px;padding:4px 0;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,.12)}
+#context-menu .ctx-item{padding:8px 16px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;
+  color:#333;transition:background .1s}
+#context-menu .ctx-item:hover{background:#eef2f7;color:#1a3a5c}
+#context-menu .ctx-item.danger{color:#e74c3c}
+#context-menu .ctx-item.danger:hover{background:#fdf0f0}
+#context-menu .ctx-sep{height:1px;background:#eee;margin:4px 8px}
+
+/* ===== 模态框 ===== */
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);
+  z-index:2000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.active{display:flex}
+.modal{background:#fff;border-radius:12px;width:520px;max-height:85vh;overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,.18);display:flex;flex-direction:column}
+.modal-header{padding:16px 20px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{font-size:16px;color:#1a3a5c;font-weight:600}
+.modal-close{width:28px;height:28px;border:none;background:none;cursor:pointer;font-size:18px;
+  color:#999;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:#f0f0f0;color:#333}
+.modal-body{padding:16px 20px;overflow-y:auto;flex:1}
+.modal-footer{padding:12px 20px;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:8px}
+
+/* 表单元素 */
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:#555;margin-bottom:5px}
+.form-group input,.form-group select{width:100%;height:36px;border:1px solid #ddd;border-radius:8px;
+  padding:0 12px;font-size:13px;outline:none;transition:border-color .2s}
+.form-group input:focus,.form-group select:focus{border-color:#3498db;box-shadow:0 0 0 3px rgba(52,152,219,.1)}
+.form-group textarea{width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;
+  font-size:13px;outline:none;resize:vertical;font-family:inherit;line-height:1.6;transition:border-color .2s}
+.form-group textarea:focus{border-color:#3498db;box-shadow:0 0 0 3px rgba(52,152,219,.1)}
+
+.btn{height:34px;padding:0 18px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #ddd;
+  background:#fff;color:#555;transition:all .15s;display:inline-flex;align-items:center;gap:4px}
+.btn:hover{background:#f5f5f5}
+.btn-primary{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
+.btn-primary:hover{background:#254d73}
+.btn-danger{background:#e74c3c;color:#fff;border-color:#e74c3c}
+.btn-danger:hover{background:#c0392b}
+
+/* ===== Markdown 编辑器 ===== */
+.md-editor-modal .modal{width:720px;max-height:90vh}
+.md-editor-wrap{display:flex;flex-direction:column;height:55vh}
+.md-editor-tabs{display:flex;gap:0;border-bottom:1px solid #eee;margin-bottom:0}
+.md-editor-tab{padding:8px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;color:#888;
+  transition:all .15s;background:none;border-top:none;border-left:none;border-right:none}
+.md-editor-tab.active{color:#1a3a5c;border-bottom-color:#1a3a5c;font-weight:500}
+.md-editor-area{flex:1;width:100%;border:none;outline:none;resize:none;padding:12px;
+  font-family:"SF Mono","Fira Code",Consolas,monospace;font-size:13px;line-height:1.7;
+  background:#fafbfc;border-radius:0 0 8px 8px}
+.md-preview-area{flex:1;overflow-y:auto;padding:12px 16px;line-height:1.8;font-size:14px;display:none;
+  background:#fafbfc;border-radius:0 0 8px 8px}
+
+/* 详情面板编辑按钮 */
+#detail-actions{display:flex;gap:6px;padding:0 24px 0;flex-shrink:0}
+#detail-actions button{height:28px;padding:0 10px;border:1px solid #dfe4ea;border-radius:6px;
+  background:#fff;cursor:pointer;font-size:12px;color:#666;transition:all .15s}
+#detail-actions button:hover{background:#eef2f7;color:#1a3a5c}
+
+/* 连线模式提示 */
+#edge-mode-hint{position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:20;
+  background:#e74c3c;color:#fff;padding:8px 20px;border-radius:8px;font-size:13px;
+  display:none;gap:10px;align-items:center;box-shadow:0 4px 12px rgba(231,76,60,.3)}
+#edge-mode-hint.active{display:flex}
+#edge-mode-hint button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);
+  color:#fff;border-radius:6px;padding:2px 10px;cursor:pointer;font-size:12px}
+#edge-mode-hint button:hover{background:rgba(255,255,255,.35)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="graph-panel">
+    <div id="cy"></div>
+    <div id="header">🧠 TopoMind · 拓扑知识大脑</div>
+    <div id="breadcrumb">
+      <span class="bc-link" id="bc-back-global">全局视图</span>
+      <span class="bc-sep">›</span>
+      <span class="bc-current" id="bc-current-name"></span>
+    </div>
+    <div id="legend">
+      <h4>图例</h4>
+      <div class="legend-item"><span class="legend-dot" style="background:#1a3a5c"></span> 顶层领域</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#5b9bd5"></span> 子领域节点</div>
+      <div class="legend-item"><span class="legend-line" style="background:#7f8c8d"></span> 包含</div>
+      <div class="legend-item"><span class="legend-line" style="background:#e67e22"></span> 依赖</div>
+      <div class="legend-item"><span class="legend-line" style="background:#27ae60"></span> 演进</div>
+      <div class="legend-item"><span class="legend-line" style="background:#9b59b6"></span> 相关</div>
+    </div>
+    <div id="search-box"><input id="search-input" type="text" placeholder="搜索节点..." /></div>
+    <div id="zoom-indicator">缩放: 100%</div>
+    <div id="controls">
+      <button id="btn-zoomin" title="放大">＋</button>
+      <button id="btn-zoomout" title="缩小">－</button>
+      <button id="btn-fit" title="适应画布">⊡</button>
+    </div>
+    <!-- 工具栏 -->
+    <div id="toolbar">
+      <button id="btn-add-node" title="新增节点">＋ 节点</button>
+      <button id="btn-add-edge" title="新增连线">⤯ 连线</button>
+      <button id="btn-export" title="导出数据">↓ 导出</button>
+      <button id="btn-import" title="导入数据">↑ 导入</button>
+    </div>
+    <!-- 连线模式提示 -->
+    <div id="edge-mode-hint">
+      <span>🔗 连线模式：依次点击 源节点 → 目标节点</span>
+      <button id="btn-cancel-edge-mode">取消</button>
+    </div>
+  </div>
+  <div id="detail-panel">
+    <div id="detail-title">知识详情</div>
+    <div id="detail-actions">
+      <button id="btn-edit-md" title="编辑文档" style="display:none">✏️ 编辑文档</button>
+      <button id="btn-edit-node" title="编辑节点" style="display:none">⚙ 属性</button>
+      <button id="btn-delete-node" title="删除节点" style="display:none">🗑 删除</button>
+    </div>
+    <div id="detail-body">
+      <div class="placeholder-text">
+        <span>📖</span>
+        点击左侧节点查看详情<br>
+        <small style="color:#bbb">滚轮缩放 · 拖拽漫游 · 单击查看 · 双击聚焦</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 右键菜单 -->
+<div id="context-menu">
+  <div class="ctx-item" data-action="focus-in">🔍 聚焦进入</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="edit-node">⚙ 编辑节点属性</div>
+  <div class="ctx-item" data-action="edit-md">✏️ 编辑文档内容</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="add-child">＋ 添加子节点</div>
+  <div class="ctx-item" data-action="add-edge-from">⤯ 从此节点连线</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" data-action="delete-node">🗑 删除节点</div>
+</div>
+
+<!-- 右键菜单 - 边 -->
+<div id="edge-context-menu" style="position:fixed;z-index:1000;display:none;background:#fff;border:1px solid #dfe4ea;border-radius:8px;padding:4px 0;min-width:150px;box-shadow:0 4px 16px rgba(0,0,0,.12)">
+  <div class="ctx-item" data-action="edit-edge">⚙ 编辑关系</div>
+  <div class="ctx-item danger" data-action="delete-edge">🗑 删除连线</div>
+</div>
+
+<!-- 模态框：新增/编辑节点 -->
+<div class="modal-overlay" id="modal-node">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-node-title">新增节点</h3>
+      <button class="modal-close" onclick="closeModal('modal-node')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>节点 ID（唯一标识，英文）</label>
+        <input type="text" id="node-id" placeholder="例如: my-topic">
+      </div>
+      <div class="form-group">
+        <label>显示名称</label>
+        <input type="text" id="node-label" placeholder="例如: 我的主题">
+      </div>
+      <div class="form-group">
+        <label>层级</label>
+        <select id="node-level">
+          <option value="1">Level 1 — 顶层领域</option>
+          <option value="2" selected>Level 2 — 子领域</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>父节点（可选，仅 Level 2）</label>
+        <select id="node-parent"><option value="">无</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-node')">取消</button>
+      <button class="btn btn-primary" id="btn-save-node">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 模态框：新增/编辑边 -->
+<div class="modal-overlay" id="modal-edge">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-edge-title">新增连线</h3>
+      <button class="modal-close" onclick="closeModal('modal-edge')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>源节点</label>
+        <select id="edge-source"></select>
+      </div>
+      <div class="form-group">
+        <label>目标节点</label>
+        <select id="edge-target"></select>
+      </div>
+      <div class="form-group">
+        <label>关系类型</label>
+        <select id="edge-relation">
+          <option value="包含">包含</option>
+          <option value="依赖">依赖</option>
+          <option value="相关">相关</option>
+          <option value="演进">演进</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-edge')">取消</button>
+      <button class="btn btn-primary" id="btn-save-edge">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 模态框：Markdown 编辑器 -->
+<div class="modal-overlay md-editor-modal" id="modal-md">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-md-title">编辑文档</h3>
+      <button class="modal-close" onclick="closeModal('modal-md')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <div class="md-editor-wrap">
+        <div class="md-editor-tabs">
+          <button class="md-editor-tab active" data-tab="edit" onclick="switchMdTab('edit')">编辑</button>
+          <button class="md-editor-tab" data-tab="preview" onclick="switchMdTab('preview')">预览</button>
+        </div>
+        <textarea class="md-editor-area" id="md-editor-textarea" placeholder="输入 Markdown 内容..."></textarea>
+        <div class="md-preview-area" id="md-preview-area"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-md')">取消</button>
+      <button class="btn btn-primary" id="btn-save-md">保存文档</button>
+    </div>
+  </div>
+</div>
+
+<!-- 模态框：确认删除 -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal" style="width:380px">
+    <div class="modal-header">
+      <h3>确认删除</h3>
+      <button class="modal-close" onclick="closeModal('modal-confirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-message" style="font-size:14px;color:#555"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-confirm')">取消</button>
+      <button class="btn btn-danger" id="btn-confirm-delete">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 隐藏的文件输入 -->
+<input type="file" id="import-file" accept=".json" style="display:none">
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
