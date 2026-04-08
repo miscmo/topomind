@@ -14,30 +14,16 @@
       // 3. 尝试恢复上次的工作目录
       return tryRestoreWorkDir().then(function(dirRestored) {
 
-        // 4. 从 IndexedDB 加载图结构
-        return loadGraphFromDB().then(function(loaded) {
-          if (loaded) {
-            hideWelcome();
-            enterRoom(currentRoom);
-            updateStorageStatus();
-          } else {
-            // 无存档 → 写入默认数据
-            return seedDefaultData().then(function() {
-              return loadGraphFromDB();
-            }).then(function() {
-              hideWelcome();
-              enterRoom(null);
-              updateStorageStatus();
-            });
-          }
-        });
+        // 4. 显示主页
+        showHome();
+        if (welcomeEl) welcomeEl.style.display = 'none';
+
       });
     });
   }).catch(function(err) {
     console.error('启动失败:', err);
-    // 降级：直接使用内存中的默认数据
-    hideWelcome();
-    enterRoom(null);
+    // 降级：直接显示主页
+    showHome();
   });
 
   function hideWelcome() {
@@ -60,7 +46,7 @@
     });
   }
   if (btnSkip) {
-    btnSkip.addEventListener('click', function() { hideWelcome(); enterRoom(null); });
+    btnSkip.addEventListener('click', function() { showHome(); });
   }
 })();
 

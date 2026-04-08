@@ -76,10 +76,8 @@ function enterRoom(roomId) {
         },
         fit: true, padding: 55, animate: roomId !== null, animationDuration: 350,
       }).run();
-    } else {
-      // 已有位置，只做居中适配
-      cy.fit(visibleNodes, 55);
     }
+    // 已有位置时不做任何 fit/zoom 调整，保留用户当前视野
   }
 
   updateBreadcrumb();
@@ -152,4 +150,37 @@ function updateRoomTitle() {
   var h = document.getElementById('header');
   if (currentRoom === null) h.textContent = 'TopoMind · 拓扑知识大脑';
   else { var n = cy.getElementById(currentRoom); h.textContent = n.length ? n.data('label') : currentRoom; }
+}
+
+/** 仅刷新可见性，不重新布局也不调整视野 */
+function refreshRoomVisibility() {
+  cy.nodes('.room-active').removeClass('room-active');
+  cy.elements().addClass('hidden');
+
+  if (currentRoom === null) {
+    cy.nodes().filter(function(n) { return n.data('level') === 1; }).removeClass('hidden');
+    cy.edges().filter(function(e) {
+      return e.source().data('level') === 1 && e.target().data('level') === 1;
+    }).removeClass('hidden');
+  } else {
+    var room = cy.getElementById(currentRoom);
+    if (!room.length) return;
+    room.removeClass('hidden').addClass('room-active');
+    var kids = room.children();
+    kids.removeClass('hidden');
+    kids.forEach(function(kid) { kid.children().addClass('hidden'); });
+    var kidIds = {};
+    kids.forEach(function(k) { kidIds[k.id()] = true; });
+    cy.edges().filter(function(e) {
+      return kidIds[e.source().id()] && kidIds[e.target().id()];
+    }).removeClass('hidden');
+  }
+
+  cy.edges('[weight="minor"]').not('.hidden').addClass('hidden');
+  if (cy.zoom() >= 0.8) cy.edges('[weight="minor"]').not('.hidden').removeClass('hidden');
+
+  updateBreadcrumb();
+  buildNavTree();
+  updateRoomTitle();
+  updateZoomIndicator();
 }

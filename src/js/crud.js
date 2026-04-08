@@ -14,10 +14,18 @@ function quickAddChild(parentId, label) {
     var pool = ['#4a6fa5','#5a8f7b','#7b68ae','#c0723a','#2e86ab','#a23b72','#d64045','#5b7065','#6a8e5d','#8e6a5d'];
     DOMAIN_COLORS[id] = { bg: pool[Object.keys(DOMAIN_COLORS).length % pool.length], border: '#555', light: '#f0f0f0' };
   }
-  cy.add({ group: 'nodes', data: d, classes: 'card' });
+  var ele = cy.add({ group: 'nodes', data: d, classes: 'card' });
+  // 新节点放在父节点附近，不触发全局重布局
+  if (parentId) {
+    var pn2 = cy.getElementById(parentId);
+    if (pn2.length) {
+      var pp = pn2.position();
+      ele.position({ x: pp.x + 120 + Math.random() * 40, y: pp.y + 60 + Math.random() * 40 });
+    }
+  }
   if (!MD[id]) MD[id] = '';
   saveMarkdown(id, '');
-  enterRoom(currentRoom);
+  refreshRoomVisibility();
   saveState();
 }
 
@@ -46,15 +54,13 @@ document.getElementById('context-menu').addEventListener('click', function(e) {
   if (a === 'focus-in') drillInto(contextNode.id());
   else if (a === 'edit-node') openEditNodeModal(contextNode);
   else if (a === 'edit-md') { if (selectedNode) selectedNode.removeClass('selected'); contextNode.addClass('selected'); selectedNode = contextNode; showDetail(contextNode.id()); switchDetailMode('edit'); }
-  else if (a === 'add-child') { var name = prompt('子概念名称：'); if (name && name.trim()) quickAddChild(contextNode.id(), name.trim()); }
-  else if (a === 'add-edge-from') { edgeMode = true; edgeModeSource = contextNode; document.getElementById('edge-mode-hint').classList.add('active'); }
+  else if (a === 'add-child') { showInlineInput(contextNode.position(), function(name) { if (name && name.trim()) quickAddChild(contextNode.id(), name.trim()); }); }
   else if (a === 'delete-node') confirmDeleteNode(contextNode);
   document.getElementById('context-menu').style.display = 'none';
 });
 document.getElementById('edge-context-menu').addEventListener('click', function(e) {
   var it = e.target.closest('.ctx-item'); if (!it || !contextEdge) return;
-  if (it.dataset.action === 'edit-edge') openEditEdgeModal(contextEdge);
-  else if (it.dataset.action === 'delete-edge') { contextEdge.remove(); contextEdge = null; saveState(); }
+  if (it.dataset.action === 'delete-edge') { contextEdge.remove(); contextEdge = null; saveState(); }
   document.getElementById('edge-context-menu').style.display = 'none';
 });
 
@@ -79,8 +85,11 @@ document.getElementById('btn-save-node').addEventListener('click', function() {
   closeModal('modal-node');
 });
 document.getElementById('btn-add-node').addEventListener('click', function() {
-  var name = prompt('输入新卡片名称：');
-  if (name && name.trim()) quickAddChild(currentRoom, name.trim());
+  var center = cy.extent();
+  var pos = { x: (center.x1 + center.x2) / 2, y: (center.y1 + center.y2) / 2 };
+  showInlineInput(pos, function(name) {
+    if (name && name.trim()) quickAddChild(currentRoom, name.trim());
+  });
 });
 
 // --- 删除（级联删除 Markdown + 图片） ---
@@ -103,38 +112,90 @@ document.getElementById('btn-confirm-delete').addEventListener('click', function
     });
 
     if (selectedNode && selectedNode.id() === pendingDeleteNode.id()) { selectedNode = null; showPlaceholder(); }
-    pendingDeleteNode = null; enterRoom(currentRoom); saveState();
+    pendingDeleteNode = null; refreshRoomVisibility(); saveState();
     updateStorageStatus();
   }
   closeModal('modal-confirm');
 });
 
-// --- 边 ---
+// --- 边编辑器（双击连线触发） ---
 var editingEdgeRef = null;
-document.getElementById('btn-add-edge').addEventListener('click', function() { edgeMode = true; edgeModeSource = selectedNode; document.getElementById('edge-mode-hint').classList.add('active'); });
-function openEditEdgeModal(e) {
-  editingEdgeRef = e; document.getElementById('modal-edge-title').textContent = '编辑连线';
-  var h = ''; cy.nodes().forEach(function(n) { h += '<option value="' + n.id() + '">' + n.data('label') + '</option>'; });
-  document.getElementById('edge-source').innerHTML = h; document.getElementById('edge-target').innerHTML = h;
-  document.getElementById('edge-source').value = e.source().id(); document.getElementById('edge-target').value = e.target().id();
-  document.getElementById('edge-relation').value = e.data('relation'); openModal('modal-edge');
+var editingEdgeColor = null;
+
+function openEdgeEditor(edge, x, y) {
+  editingEdgeRef = edge;
+  editingEdgeColor = edge.data('color') || null;
+  document.getElementById('ee-relation').value = edge.data('relation') || '依赖';
+  document.querySelectorAll('.ee-color-dot').forEach(function(d) {
+    d.classList.toggle('active', d.dataset.color === editingEdgeColor);
+  });
+  var el = document.getElementById('edge-editor');
+  el.style.display = 'block';
+  el.style.left = Math.min(x, window.innerWidth - 240) + 'px';
+  el.style.top = Math.min(y, window.innerHeight - 200) + 'px';
 }
-document.getElementById('btn-save-edge').addEventListener('click', function() {
-  var s = document.getElementById('edge-source').value, t = document.getElementById('edge-target').value, r = document.getElementById('edge-relation').value;
-  if (!s || !t || s === t) { alert('请正确选择'); return; }
-  var w = (r === '相关') ? 'minor' : 'main';
-  if (editingEdgeRef) { editingEdgeRef.data('relation', r); editingEdgeRef.data('weight', w); editingEdgeRef = null; }
-  else { cy.add({ group: 'edges', data: { id: nextEdgeId(), source: s, target: t, relation: r, weight: w } }); }
-  closeModal('modal-edge'); saveState();
+
+document.querySelectorAll('.ee-color-dot').forEach(function(d) {
+  d.addEventListener('click', function() {
+    editingEdgeColor = this.dataset.color;
+    document.querySelectorAll('.ee-color-dot').forEach(function(x) { x.classList.remove('active'); });
+    this.classList.add('active');
+  });
 });
-document.getElementById('btn-cancel-edge-mode').addEventListener('click', function() { edgeMode = false; edgeModeSource = null; document.getElementById('edge-mode-hint').classList.remove('active'); });
-cy.on('tap', 'node', function(e) {
-  if (!edgeMode || !edgeModeSource) return;
-  var t = e.target; if (t.id() === edgeModeSource.id()) return;
-  var r = prompt('关系类型（演进/依赖/相关）：', '依赖');
-  if (!r) { edgeMode = false; edgeModeSource = null; document.getElementById('edge-mode-hint').classList.remove('active'); return; }
-  cy.add({ group: 'edges', data: { id: nextEdgeId(), source: edgeModeSource.id(), target: t.id(), relation: r, weight: (r === '相关') ? 'minor' : 'main' } });
-  edgeMode = false; edgeModeSource = null; document.getElementById('edge-mode-hint').classList.remove('active'); saveState();
+
+document.getElementById('ee-save').addEventListener('click', function() {
+  if (!editingEdgeRef) return;
+  var r = document.getElementById('ee-relation').value;
+  var w = (r === '相关') ? 'minor' : 'main';
+  editingEdgeRef.data('relation', r);
+  editingEdgeRef.data('weight', w);
+  if (editingEdgeColor) editingEdgeRef.data('color', editingEdgeColor);
+  applyEdgeStyle(editingEdgeRef);
+  editingEdgeRef = null;
+  document.getElementById('edge-editor').style.display = 'none';
+  saveState();
+});
+
+document.getElementById('ee-cancel').addEventListener('click', function() {
+  editingEdgeRef = null;
+  document.getElementById('edge-editor').style.display = 'none';
+});
+
+document.getElementById('ee-delete').addEventListener('click', function() {
+  if (editingEdgeRef) { editingEdgeRef.remove(); editingEdgeRef = null; saveState(); }
+  document.getElementById('edge-editor').style.display = 'none';
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') document.getElementById('edge-editor').style.display = 'none';
+});
+
+cy.on('dbltap', 'edge', function(evt) {
+  var e = evt.originalEvent;
+  openEdgeEditor(evt.target, e.clientX, e.clientY);
+});
+
+function applyEdgeStyle(edge) {
+  var color = edge.data('color');
+  var r = edge.data('relation');
+  var w = edge.data('weight');
+  if (color) {
+    edge.style({ 'line-color': color, 'target-arrow-color': color });
+  } else {
+    if (r === '演进') edge.style({ 'line-color': '#5cb85c', 'target-arrow-color': '#5cb85c' });
+    else if (r === '依赖') edge.style({ 'line-color': '#e8913a', 'target-arrow-color': '#e8913a' });
+    else edge.style({ 'line-color': '#ccc', 'target-arrow-color': '#ccc' });
+  }
+  if (w === 'minor') edge.style({ 'line-style': 'dotted', 'target-arrow-shape': 'none', 'opacity': 0.4 });
+  else edge.style({ 'line-style': 'solid', 'target-arrow-shape': 'triangle', 'opacity': 1 });
+}
+
+// 关闭 edge-editor 当点击外部
+document.addEventListener('mousedown', function(e) {
+  var el = document.getElementById('edge-editor');
+  if (el.style.display !== 'none' && !el.contains(e.target)) {
+    el.style.display = 'none'; editingEdgeRef = null;
+  }
 });
 
 // --- 导入/导出 ---

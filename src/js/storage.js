@@ -31,6 +31,7 @@ function initDB() {
       if (!d.objectStoreNames.contains('markdown')) d.createObjectStore('markdown', { keyPath: 'id' });
       if (!d.objectStoreNames.contains('images')) d.createObjectStore('images', { keyPath: 'id' });
       if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta', { keyPath: 'key' });
+      if (!d.objectStoreNames.contains('knowledgebases')) d.createObjectStore('knowledgebases', { keyPath: 'id' });
     };
     req.onsuccess = function(e) { db = e.target.result; resolve(db); };
     req.onerror = function(e) { reject(e.target.error); };
@@ -153,8 +154,6 @@ function saveMarkdown(nodeId, content) {
   if (isElectron) {
     p2 = window.electronAPI.writeMarkdown(nodeId, content).catch(function() {});
   } else if (supportsFS && docsDirHandle) {
-  var p2 = Promise.resolve();
-  if (supportsFS && docsDirHandle) {
     p2 = _writeFileToDir(docsDirHandle, nodeId + '.md', content).catch(function() {});
   }
   return Promise.all([p1, p2]).then(function() { showSaveIndicator(); });

@@ -2,7 +2,6 @@
  * 全局状态和配置常量
  */
 var selectedNode = null;
-var edgeMode = false, edgeModeSource = null;
 var currentRoom = null;
 var roomHistory = [];
 var autoIdCounter = Date.now();

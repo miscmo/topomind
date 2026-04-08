@@ -23,6 +23,7 @@
 
 <!-- 样式模块 -->
 <link rel="stylesheet" href="src/css/base.css">
+<link rel="stylesheet" href="src/css/home.css">
 <link rel="stylesheet" href="src/css/nav.css">
 <link rel="stylesheet" href="src/css/graph.css">
 <link rel="stylesheet" href="src/css/detail.css">
@@ -30,6 +31,64 @@
 <link rel="stylesheet" href="src/css/editor.css">
 </head>
 <body>
+<!-- ===== 主页 ===== -->
+<div id="home-modal" style="display:none">
+  <div class="home-header">
+    <div class="home-logo">
+      <div class="home-logo-icon">🧠</div>
+      <div>
+        <h1>TopoMind</h1>
+        <span>可漫游拓扑知识大脑</span>
+      </div>
+    </div>
+    <button class="home-btn home-btn-primary" onclick="showKBForm()">➕ 新建知识库</button>
+  </div>
+  <div class="home-content">
+    <div class="home-section-title">我的知识库</div>
+    <div id="home-grid" class="home-grid"></div>
+    <div id="home-empty" class="home-empty" style="display:none">
+      <div class="home-empty-icon">📚</div>
+      <h3>暂无知识库</h3>
+      <p>点击右上角「新建知识库」按钮开始创建</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 知识库表单 ===== -->
+<div id="home-form-overlay" class="home-form-overlay">
+  <div class="home-form">
+    <div class="home-form-header">
+      <h3 id="home-form-title">新建知识库</h3>
+      <button class="home-form-close" onclick="hideKBForm()">✕</button>
+    </div>
+    <form id="home-form-kb">
+      <div class="home-form-body">
+        <div class="home-form-group">
+          <label>封面图片</label>
+          <div class="home-image-upload">
+            <img style="display:none" />
+            <button type="button" class="home-remove-image" style="display:none">✕</button>
+            <div class="home-image-upload-text">📷</div>
+            <div class="home-image-upload-hint">点击上传图片</div>
+          </div>
+        </div>
+        <div class="home-form-group">
+          <label>名称 *</label>
+          <input type="text" name="name" placeholder="输入知识库名称" required />
+        </div>
+        <div class="home-form-group">
+          <label>简介</label>
+          <textarea name="description" placeholder="简要描述这个知识库的内容..."></textarea>
+        </div>
+      </div>
+      <div class="home-form-footer">
+        <button type="button" class="home-btn home-btn-cancel" onclick="hideKBForm()">取消</button>
+        <button type="submit" class="home-btn home-btn-primary">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="app">
   <!-- ===== 左侧导航 ===== -->
   <div id="nav-panel">
@@ -67,8 +126,9 @@
 
     <!-- 工具栏 -->
     <div id="toolbar">
+      <button id="btn-home" title="返回主页" onclick="goToHome()">🏠 主页</button>
+      <div class="sep"></div>
       <button id="btn-add-node">＋ 节点</button>
-      <button id="btn-add-edge">⤯ 连线</button>
       <div class="sep"></div>
       <button id="btn-toggle-grid" class="active" title="网格">⊞</button>
       <div class="sep"></div>
@@ -83,17 +143,41 @@
     <div id="storage-status" style="display:none"></div>
     <!-- 状态提示 -->
     <div id="save-indicator">✓ 已保存</div>
-    <div id="edge-mode-hint">
-      <span>🔗 连线模式</span>
-      <button id="btn-cancel-edge-mode">取消</button>
-    </div>
     <input id="inline-input" type="text" placeholder="输入名称，回车确认...">
-    <div id="node-actions">
-      <button id="na-add-child" title="添加子节点">＋</button>
-      <button id="na-connect" title="画连线">⤯</button>
-      <button id="na-edit" title="编辑文档">✏</button>
+    <svg id="drag-line" width="100%" height="100%" style="position:absolute;top:0;left:0;pointer-events:none;z-index:15">
+      <defs><marker id="drag-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3498db"/></marker></defs>
+      <line id="drag-line-line" x1="0" y1="0" x2="0" y2="0" stroke="#3498db" stroke-width="2" stroke-dasharray="6,3" marker-end="url(#drag-arrow)" display="none"/>
+    </svg>
+    <!-- 节点连线箭头手柄 -->
+    <svg id="edge-handles" width="100%" height="100%" style="position:absolute;top:0;left:0;z-index:14;overflow:visible;pointer-events:none"></svg>
+    <!-- 连线属性编辑弹窗 -->
+    <div id="edge-editor" style="display:none;position:fixed;z-index:2000;background:#fff;border:1px solid #e0e4ea;border-radius:10px;padding:14px 16px;min-width:220px;box-shadow:0 6px 24px rgba(0,0,0,.15)">
+      <div style="font-size:13px;font-weight:600;color:#1a3a5c;margin-bottom:10px">编辑连线</div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:11px;color:#888;display:block;margin-bottom:3px">关系类型</label>
+        <select id="ee-relation" style="width:100%;height:28px;border:1px solid #e0e4ea;border-radius:6px;font-size:12px;padding:0 6px">
+          <option value="依赖">依赖</option>
+          <option value="演进">演进</option>
+          <option value="相关">相关</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;color:#888;display:block;margin-bottom:5px">颜色</label>
+        <div id="ee-colors" style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="ee-color-dot" data-color="#e8913a" style="background:#e8913a"></span>
+          <span class="ee-color-dot" data-color="#5cb85c" style="background:#5cb85c"></span>
+          <span class="ee-color-dot" data-color="#3498db" style="background:#3498db"></span>
+          <span class="ee-color-dot" data-color="#9b59b6" style="background:#9b59b6"></span>
+          <span class="ee-color-dot" data-color="#e74c3c" style="background:#e74c3c"></span>
+          <span class="ee-color-dot" data-color="#aaa" style="background:#aaa"></span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button id="ee-delete" style="height:26px;padding:0 10px;border:1px solid #e74c3c;border-radius:6px;background:#fff;color:#e74c3c;font-size:11px;cursor:pointer">删除</button>
+        <button id="ee-cancel" style="height:26px;padding:0 10px;border:1px solid #e0e4ea;border-radius:6px;background:#fff;color:#555;font-size:11px;cursor:pointer">取消</button>
+        <button id="ee-save" style="height:26px;padding:0 12px;border:none;border-radius:6px;background:#1a3a5c;color:#fff;font-size:11px;cursor:pointer">保存</button>
+      </div>
     </div>
-    <svg id="drag-line" width="100%" height="100%"><line x1="0" y1="0" x2="0" y2="0"/><circle r="4" cx="0" cy="0"/></svg>
     <div id="shortcut-hint">双击空白新建域 · 选中节点按 Tab 添加子节点 · Delete 删除</div>
   </div>
 
@@ -127,7 +211,6 @@
   <div class="ctx-item" data-action="edit-md">✏️ 文档</div>
   <div class="ctx-sep"></div>
   <div class="ctx-item" data-action="add-child">＋ 子节点</div>
-  <div class="ctx-item" data-action="add-edge-from">⤯ 连线</div>
   <div class="ctx-sep"></div>
   <div class="ctx-item danger" data-action="delete-node">🗑 删除</div>
 </div>
@@ -138,8 +221,6 @@
 
 <!-- ===== 模态框 ===== -->
 <div class="modal-overlay" id="modal-node"><div class="modal"><div class="modal-header"><h3 id="modal-node-title">新增节点</h3><button class="modal-close" onclick="closeModal('modal-node')">✕</button></div><div class="modal-body"><div class="form-group"><label>ID（英文）</label><input type="text" id="node-id" placeholder="my-topic"></div><div class="form-group"><label>名称</label><input type="text" id="node-label" placeholder="我的主题"></div><div class="form-group"><label>层级</label><select id="node-level"><option value="1">顶层领域</option><option value="2" selected>子领域</option></select></div><div class="form-group"><label>父节点</label><select id="node-parent"><option value="">无</option></select></div></div><div class="modal-footer"><button class="btn" onclick="closeModal('modal-node')">取消</button><button class="btn btn-primary" id="btn-save-node">保存</button></div></div></div>
-
-<div class="modal-overlay" id="modal-edge"><div class="modal"><div class="modal-header"><h3 id="modal-edge-title">新增连线</h3><button class="modal-close" onclick="closeModal('modal-edge')">✕</button></div><div class="modal-body"><div class="form-group"><label>源</label><select id="edge-source"></select></div><div class="form-group"><label>目标</label><select id="edge-target"></select></div><div class="form-group"><label>关系</label><select id="edge-relation"><option value="依赖">依赖</option><option value="演进">演进</option><option value="相关">相关</option></select></div></div><div class="modal-footer"><button class="btn" onclick="closeModal('modal-edge')">取消</button><button class="btn btn-primary" id="btn-save-edge">保存</button></div></div></div>
 
 <div class="modal-overlay md-editor-modal" id="modal-md"><div class="modal"><div class="modal-header"><h3 id="modal-md-title">编辑文档</h3><button class="modal-close" onclick="closeModal('modal-md')">✕</button></div><div class="modal-body" style="padding:0"><div class="md-editor-wrap"><div class="md-editor-tabs"><button class="md-editor-tab active" data-tab="edit" onclick="switchMdTab('edit')">编辑</button><button class="md-editor-tab" data-tab="preview" onclick="switchMdTab('preview')">预览</button></div><textarea class="md-editor-area" id="md-editor-textarea" placeholder="Markdown..."></textarea><div class="md-preview-area" id="md-preview-area"></div></div></div><div class="modal-footer"><button class="btn" onclick="closeModal('modal-md')">取消</button><button class="btn btn-primary" id="btn-save-md">保存</button></div></div></div>
 
@@ -162,6 +243,8 @@
 <script src="src/js/crud.js"></script>
 <script src="src/js/interaction.js"></script>
 <script src="src/js/grid.js"></script>
+<!-- 主页 -->
+<script src="src/js/home.js"></script>
 <!-- 启动 -->
 <script src="src/js/main.js"></script>
 </body>
