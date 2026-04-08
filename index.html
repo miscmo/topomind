@@ -65,9 +65,12 @@
       <button id="btn-export">↓ 导出</button>
       <button id="btn-import">↑ 导入</button>
       <div class="sep"></div>
+      <button id="btn-workdir" title="选择工作目录">📁 目录</button>
       <button id="btn-reset" title="重置为默认数据">↺ 重置</button>
     </div>
 
+    <!-- 存储状态 -->
+    <div id="storage-status" style="display:none"></div>
     <!-- 状态提示 -->
     <div id="save-indicator">✓ 已保存</div>
     <div id="edge-mode-hint">
@@ -89,6 +92,7 @@
     <div id="detail-title">知识详情</div>
     <div id="detail-actions">
       <button id="btn-edit-md" style="display:none">✏️ 编辑</button>
+      <button id="btn-insert-image" style="display:none" title="插入图片">📷</button>
       <button id="btn-edit-node" style="display:none">⚙ 属性</button>
       <button id="btn-delete-node" style="display:none">🗑 删除</button>
       <div id="detail-mode-toggle">

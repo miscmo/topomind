@@ -1,7 +1,7 @@
 # OpenSpec 规范文档
 
 **项目**：TopoMind — 可漫游拓扑知识大脑
-**版本**：v2.0.0
+**版本**：v3.0.0
 **最后更新**：2026-04-08
 **状态**：已实现
 
@@ -32,7 +32,8 @@ TopoMind 是一个纯前端的个人知识大脑工具，核心是**知识卡片
 | 布局算法 | elkjs | 0.9.3 | unpkg | ELK 分层拓扑布局计算 |
 | 布局桥接 | cytoscape-elk | 2.2.0 | unpkg | Cytoscape 与 ELK 的适配层 |
 | Markdown | marked.js | 12.0.0 | unpkg | Markdown → HTML 渲染 |
-| 持久化 | localStorage | 原生 | — | 自动保存/恢复应用状态 |
+| 持久化 | IndexedDB | 原生 | — | 结构化数据存储（节点/边/图片索引） |
+| 文件系统 | File System Access API | 原生 | — | 本地磁盘读写 Markdown/图片（Chrome/Edge） |
 | 画布 | Canvas 2D | 原生 | — | 网格背景绘制 |
 | 部署 | GitHub Pages | — | — | GitHub Actions 自动部署 |
 
@@ -149,23 +150,30 @@ var DOMAIN_COLORS = {
 
 颜色继承规则：子节点如无自定义颜色，沿 parent 链向上查找最近的颜色配置。
 
-### 4.5 持久化存储格式
+### 4.5 持久化存储
 
-存储键：`topomind-save-v1`，存储于 `localStorage`。
+存储引擎：`IndexedDB`（数据库名 `topomind-db`），搭配 `File System Access API` 读写本地文件。
 
-```javascript
-{
-  nodes: [{data, position, classes}],     // 全部节点含坐标
-  edges: [{data}],                         // 全部边
-  markdown: { nodeId: mdString },          // 全部 Markdown 文档
-  colors: { nodeId: {bg, border, light} }, // 颜色配置
-  view: {
-    zoom: number,                          // 缩放级别
-    pan: { x: number, y: number },         // 平移偏移
-    currentRoom: string | null,            // 当前房间
-    roomHistory: string[]                  // 房间历史栈
-  }
-}
+**IndexedDB Object Stores**：
+
+| Store | keyPath | 主要字段 |
+|-------|---------|----------|
+| `nodes` | `id` | id, label, level, parent, posX, posY |
+| `edges` | `id` | id, source, target, relation, weight |
+| `markdown` | `id` | id, content, updatedAt |
+| `images` | `id` | id, nodeId, filename, mime, size, createdAt, blob(降级) |
+| `meta` | `key` | key=colors/view/workDirHandle, value |
+
+**本地文件结构**（File System Access 模式）：
+
+```
+{工作目录}/
+├── docs/
+│   ├── {nodeId}.md    # 每个节点一个 Markdown 文件
+│   └── ...
+└── images/
+    ├── img-xxx.png    # 图片原始文件
+    └── ...
 ```
 
 ---
@@ -209,6 +217,7 @@ var DOMAIN_COLORS = {
 - 标题栏：节点名称 + 域颜色竖条
 - 操作按钮行：
   - ✏️ 编辑（切换到内联编辑模式）
+  - 📷 图片（插入本地图片）
   - ⚙ 属性（打开节点属性模态框）
   - 🗑 删除（确认删除节点）
   - 阅读/编辑 模式切换按钮组
@@ -384,6 +393,7 @@ self-attention, multi-head, ffn, positional-encoding
 | ⊞ 网格 | 切换网格背景显示/隐藏 |
 | ↓ 导出 | 导出全部数据为 `topomind-data.json` |
 | ↑ 导入 | 从 `.json` 文件导入数据 |
+| 📁 目录 | 选择/切换本地工作目录（Chrome/Edge） |
 | ↺ 重置 | 清除所有保存数据，恢复默认（带确认） |
 
 #### 缩放控制按钮
@@ -467,33 +477,99 @@ self-attention, multi-head, ffn, positional-encoding
 
 ---
 
-### 5.13 持久化自动保存
+### 5.13 持久化存储（IndexedDB + 本地文件系统混合）
+
+#### 存储架构
+
+```
+本地磁盘（用户选择的工作目录）          IndexedDB（浏览器内）
+┌──────────────────────────┐      ┌─────────────────────┐
+│ ~/TopoMind/              │      │ topomind-db          │
+│ ├── docs/                │      │ ├── nodes (结构+位置) │
+│ │   ├── transformer.md   │      │ ├── edges (关系)      │
+│ │   └── ...              │      │ ├── markdown (文档)    │
+│ └── images/              │      │ ├── images (图片索引)  │
+│     ├── img-xxx.png      │      │ └── meta (颜色/视野)   │
+│     └── ...              │      └─────────────────────┘
+└──────────────────────────┘
+```
+
+| 存储位置 | 存储内容 | 原因 |
+|----------|----------|------|
+| **本地磁盘** | Markdown 文档（.md 文件）、图片原始文件 | 可迁移、可外部编辑、可 Git 管理、无配额限制 |
+| **IndexedDB** | 节点/边/位置/颜色/视野/图片索引 | 结构化查询快、异步不阻塞、启动快 |
+
+#### 浏览器兼容
+
+| 浏览器 | File System Access API | 行为 |
+|--------|----------------------|------|
+| Chrome/Edge 86+ | 支持 | 混合模式：本地文件 + IndexedDB |
+| Safari/Firefox | 不支持 | 降级为纯 IndexedDB（Markdown 和图片 Blob 存 IndexedDB） |
+
+#### IndexedDB 表结构
+
+| Object Store | keyPath | 字段 |
+|-------------|---------|------|
+| `nodes` | `id` | id, label, level, parent, posX, posY |
+| `edges` | `id` | id, source, target, relation, weight |
+| `markdown` | `id` | id, content, updatedAt |
+| `images` | `id` | id, nodeId, filename, mime, size, createdAt, blob(降级模式) |
+| `meta` | `key` | key, value |
 
 #### 保存触发时机
 
-| 时机 | 保存内容 |
+| 时机 | 写入方式 |
 |------|----------|
-| 节点拖拽释放 | 节点位置 |
-| 新增/删除节点 | 节点数据 |
-| 重命名节点 | 标签 |
-| 新增/删除连线 | 边数据 |
-| Markdown 输入（1 秒防抖） | 文档内容 |
-| 切换阅读/编辑模式 | 文档内容 |
-| 进入/退出房间 | 视野状态 |
-| 导入数据 | 全量覆盖 |
-| 页面关闭/刷新前 | 全部未保存内容 |
+| 节点拖拽释放 | 批量更新 nodes 表（300ms 防抖） |
+| 新增/删除节点 | 增量更新 nodes 表 |
+| 重命名节点 | 更新单条 node |
+| 新增/删除连线 | 增量更新 edges 表 |
+| Markdown 编辑（1 秒防抖） | 写入 markdown 表 + 本地 .md 文件 |
+| 切换阅读/编辑模式 | 写入 markdown 表 + 本地 .md 文件 |
+| 进入/退出房间 | 更新 meta 中的 view |
+| 图片粘贴/拖拽 | 写入 images 表 + 本地文件 |
+| 页面关闭/刷新前 | 同步写入全部未保存内容 |
 
-#### 保存机制
+#### 启动流程
 
-- 300ms 防抖，避免频繁写入
-- 保存成功后底部闪现绿色 "✓ 已保存" 提示（1.2 秒后消失）
-- `try-catch` 捕获 quota exceeded 静默处理
+1. 初始化 IndexedDB
+2. 尝试从 localStorage 迁移旧数据（自动清除旧存储）
+3. 尝试恢复上次的工作目录授权
+4. 从 IndexedDB 加载全部图结构
+5. 如无存档 → 写入默认数据
+6. 进入保存的视野状态
 
-#### 加载机制
+#### 工作目录管理
 
-- 启动时自动从 localStorage 读取
-- 成功：恢复全部数据 + 视野状态
-- 失败/无数据：使用 `graph-data.js` 默认数据
+- 工具栏 `📁 目录` 按钮 → 打开系统目录选择器
+- 选择后自动创建 `docs/` 和 `images/` 子目录
+- 将 IndexedDB 中的 Markdown 同步写出到本地 `.md` 文件
+- 目录授权句柄保存在 IndexedDB，下次打开自动恢复
+
+#### 图片存储
+
+- **上传方式**：编辑区粘贴（Ctrl+V）、拖拽、📷 按钮选择文件
+- **自动压缩**：>500KB 的图片自动压缩为 WebP（最大 1920px，质量 85%）
+- **引用格式**：`![描述](images/img-xxx.ext)` 相对路径
+- **渲染**：从 IndexedDB/本地文件读取 Blob → ObjectURL 显示
+- **级联删除**：删除节点时自动清理关联图片
+- **兼容**：不支持 File System 的浏览器将图片 Blob 存入 IndexedDB
+
+#### 迁移能力
+
+| 场景 | 方式 |
+|------|------|
+| 拷贝到另一台电脑 | 整个工作目录拷贝 → 打开 TopoMind → 选择该目录 |
+| 导出为 JSON | ↓ 导出 按钮（含节点位置，不含图片） |
+| 从 JSON 导入 | ↑ 导入 按钮 |
+| Git 版本管理 | 对工作目录 `git init` |
+| 网盘同步 | 工作目录放在 iCloud/OneDrive 中 |
+
+#### 存储状态栏
+
+图谱面板左上角显示当前存储模式和统计：
+- 混合模式：`📁 TopoMind | 36 节点 · 33 文档 · 5 图片`
+- 纯浏览器：`💾 浏览器存储 | 36 节点 · 33 文档`
 
 ---
 
@@ -679,3 +755,4 @@ self-attention, multi-head, ffn, positional-encoding
 | v1.10.0 | 2026-04-08 | 修复切换卡片后修改丢失（智能布局判断） |
 | v1.11.0 | 2026-04-08 | 修复编辑内容自动保存（flushEdit + 输入防抖 + beforeunload） |
 | v2.0.0 | 2026-04-08 | 模块化拆分（19 个模块文件），移除自动整理/吸附对齐 |
+| v3.0.0 | 2026-04-08 | 存储架构重构：IndexedDB + File System Access API 混合存储，图片上传（粘贴/拖拽/按钮），自动压缩，级联删除，localStorage 自动迁移，存储状态栏 |

@@ -16,6 +16,7 @@ function quickAddChild(parentId, label) {
   }
   cy.add({ group: 'nodes', data: d, classes: 'card' });
   if (!MD[id]) MD[id] = '';
+  saveMarkdown(id, '');
   enterRoom(currentRoom);
   saveState();
 }
@@ -82,15 +83,28 @@ document.getElementById('btn-add-node').addEventListener('click', function() {
   if (name && name.trim()) quickAddChild(currentRoom, name.trim());
 });
 
-// --- 删除 ---
+// --- 删除（级联删除 Markdown + 图片） ---
 var pendingDeleteNode = null;
 function confirmDeleteNode(n) { pendingDeleteNode = n; document.getElementById('confirm-message').textContent = '删除「' + n.data('label') + '」及其所有子节点？'; openModal('modal-confirm'); }
 document.getElementById('btn-delete-node').addEventListener('click', function() { if (selectedNode) confirmDeleteNode(selectedNode); });
 document.getElementById('btn-confirm-delete').addEventListener('click', function() {
   if (pendingDeleteNode) {
+    // 收集要删除的节点 ID（递归）
+    var idsToDelete = [];
+    (function collectIds(n) { idsToDelete.push(n.id()); n.children().forEach(collectIds); })(pendingDeleteNode);
+
+    // 从 Cytoscape 中删除
     (function removeRecursive(n) { n.children().forEach(removeRecursive); n.connectedEdges().remove(); n.remove(); delete MD[n.id()]; })(pendingDeleteNode);
+
+    // 从 IndexedDB 中级联删除 Markdown 和图片
+    idsToDelete.forEach(function(nid) {
+      deleteMarkdown(nid);
+      deleteNodeImages(nid);
+    });
+
     if (selectedNode && selectedNode.id() === pendingDeleteNode.id()) { selectedNode = null; showPlaceholder(); }
     pendingDeleteNode = null; enterRoom(currentRoom); saveState();
+    updateStorageStatus();
   }
   closeModal('modal-confirm');
 });
@@ -141,12 +155,29 @@ document.getElementById('import-file').addEventListener('change', function(ev) {
       if (d.nodes) d.nodes.forEach(function(n) { var ele = cy.add({ group: 'nodes', data: n.data, classes: n.classes || 'card' }); if (n.position && n.position.x !== undefined) ele.position(n.position); });
       if (d.edges) d.edges.forEach(function(e) { cy.add({ group: 'edges', data: e.data }); });
       if (d.markdown) Object.assign(MD, d.markdown);
-      roomHistory = []; currentRoom = null; selectedNode = null; enterRoom(null); showPlaceholder(); saveState();
+      roomHistory = []; currentRoom = null; selectedNode = null;
+
+      // 写入 IndexedDB
+      clearAllData().then(function() {
+        return seedDefaultData(); // 用当前 cy 和 MD 的数据重新 seed
+      }).then(function() {
+        // 实际上需要把导入的数据写入，重新调用 saveGraphState
+        _doSaveGraph();
+        // 写入所有 Markdown
+        var tasks = Object.keys(MD).map(function(k) { return saveMarkdown(k, MD[k]); });
+        return Promise.all(tasks);
+      }).then(function() {
+        enterRoom(null); showPlaceholder();
+        updateStorageStatus();
+      });
     } catch (err) { alert('导入失败：' + err.message); }
   }; reader.readAsText(f); ev.target.value = '';
 });
 
+// --- 重置 ---
 document.getElementById('btn-reset').addEventListener('click', function() {
   if (!confirm('确定要重置吗？将清除所有修改，恢复为初始数据。')) return;
-  clearSavedState(); location.reload();
+  clearAllData().then(function() {
+    location.reload();
+  });
 });

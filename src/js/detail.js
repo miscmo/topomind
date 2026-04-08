@@ -1,21 +1,39 @@
 /**
- * 详情面板：Markdown 渲染、内联编辑
+ * 详情面板：Markdown 渲染、内联编辑、图片 URL 解析
  */
 marked.setOptions({ breaks: true, gfm: true });
 
-/** 自动保存当前编辑中的内容（切换节点/房间前调用） */
+/** 自动保存当前编辑中的内容 */
 function flushEdit() {
   var textarea = document.getElementById('detail-edit-area');
   if (textarea && textarea.classList.contains('active') && selectedNode) {
-    MD[selectedNode.id()] = textarea.value;
+    var content = textarea.value;
+    MD[selectedNode.id()] = content;
+    saveMarkdown(selectedNode.id(), content);
     saveState();
   }
+}
+
+/** 解析 Markdown 中的本地图片引用并替换为 ObjectURL */
+function resolveRenderedImages(container) {
+  var imgs = container.querySelectorAll('img');
+  imgs.forEach(function(img) {
+    var src = img.getAttribute('src') || '';
+    // 匹配 images/img-xxx.ext 格式
+    var match = src.match(/^images\/(img-[^.]+\.\w+)$/);
+    if (match) {
+      img.style.opacity = '0.3'; // 加载中
+      loadImageUrl(match[1].replace(/\.\w+$/, '')).then(function(url) {
+        if (url) { img.src = url; img.style.opacity = '1'; }
+        else { img.alt = '[图片加载失败]'; img.style.opacity = '1'; }
+      });
+    }
+  });
 }
 
 function showDetail(nodeId) {
   flushEdit();
 
-  var md = MD[nodeId];
   var titleEl = document.getElementById('detail-title');
   var body = document.getElementById('detail-body');
   var rendered = body.querySelector('.rendered-content');
@@ -30,6 +48,7 @@ function showDetail(nodeId) {
   document.getElementById('btn-mode-read').classList.add('active');
   document.getElementById('btn-mode-edit').classList.remove('active');
 
+  // 子概念信息
   var hasKids = node.children().length > 0;
   var childInfo = '';
   if (hasKids) {
@@ -41,13 +60,18 @@ function showDetail(nodeId) {
     childInfo += '<br><small style="color:#aaa">双击卡片或点击标签进入</small></div>';
   }
 
+  // 从内存 MD 对象渲染（已在启动时预加载）
+  var md = MD[nodeId] || '';
   if (rendered) {
     rendered.style.display = '';
     rendered.innerHTML = (md ? marked.parse(md) : '<div style="color:#bbb;margin-top:20px">暂无文档内容</div>') + childInfo;
+    // 解析图片
+    resolveRenderedImages(rendered);
   }
   body.scrollTop = 0;
 
   document.getElementById('btn-edit-md').style.display = '';
+  document.getElementById('btn-insert-image').style.display = '';
   document.getElementById('btn-edit-node').style.display = '';
   document.getElementById('btn-delete-node').style.display = '';
   document.getElementById('detail-mode-toggle').classList.add('visible');
@@ -67,6 +91,7 @@ function showPlaceholder() {
   var ta = document.getElementById('detail-edit-area');
   if (ta) ta.classList.remove('active');
   document.getElementById('btn-edit-md').style.display = 'none';
+  document.getElementById('btn-insert-image').style.display = 'none';
   document.getElementById('btn-edit-node').style.display = 'none';
   document.getElementById('btn-delete-node').style.display = 'none';
   document.getElementById('detail-mode-toggle').classList.remove('visible');
@@ -85,7 +110,11 @@ function switchDetailMode(mode) {
     if (rendered) rendered.style.display = 'none';
     textarea.focus();
   } else {
-    if (selectedNode) { MD[selectedNode.id()] = textarea.value; saveState(); }
+    if (selectedNode) {
+      MD[selectedNode.id()] = textarea.value;
+      saveMarkdown(selectedNode.id(), textarea.value);
+      saveState();
+    }
     document.getElementById('btn-mode-read').classList.add('active');
     document.getElementById('btn-mode-edit').classList.remove('active');
     textarea.classList.remove('active');
