@@ -36,6 +36,7 @@ TopoMind 是一个纯前端的个人知识大脑工具，核心是**知识卡片
 | 文件系统 | File System Access API | 原生 | — | 本地磁盘读写 Markdown/图片（Chrome/Edge） |
 | 画布 | Canvas 2D | 原生 | — | 网格背景绘制 |
 | 部署 | GitHub Pages | — | — | GitHub Actions 自动部署 |
+| 桌面端 | Electron | 30 | npm | 可选的桌面应用壳，支持 Node.js 文件系统 |
 
 **约束**：
 
@@ -53,8 +54,19 @@ topomind/
 ├── index.html                    # 主入口（纯 HTML 骨架，无内联 CSS/JS）
 ├── README.md                     # 项目说明
 ├── SPEC.md                       # 本规范文档
+├── package.json                  # Electron 依赖 + 构建脚本
 ├── .gitignore
 ├── setup-github.sh               # GitHub 一键部署脚本
+├── electron/                     # Electron 桌面端专属代码
+│   ├── main.js                   # 主进程（窗口、菜单、IPC 注册）
+│   ├── preload.js                # 预加载（contextBridge 暴露安全 API）
+│   └── file-service.js           # Node.js 文件操作服务
+├── vendor/                       # CDN 库本地副本（Electron 离线使用）
+│   ├── cytoscape.min.js
+│   ├── elk.bundled.js
+│   ├── cytoscape-elk.js
+│   └── marked.min.js
+├── assets/                       # 应用图标等资源
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml            # GitHub Pages 自动部署流水线
@@ -756,3 +768,4 @@ self-attention, multi-head, ffn, positional-encoding
 | v1.11.0 | 2026-04-08 | 修复编辑内容自动保存（flushEdit + 输入防抖 + beforeunload） |
 | v2.0.0 | 2026-04-08 | 模块化拆分（19 个模块文件），移除自动整理/吸附对齐 |
 | v3.0.0 | 2026-04-08 | 存储架构重构：IndexedDB + File System Access API 混合存储，图片上传（粘贴/拖拽/按钮），自动压缩，级联删除，localStorage 自动迁移，存储状态栏 |
+| v3.1.0 | 2026-04-08 | Electron 桌面端支持：主进程+预加载+文件服务，Node.js fs 直接读写磁盘，vendor/ 离线库，动态 CDN/本地切换，应用菜单，打包配置 |

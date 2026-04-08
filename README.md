@@ -2,48 +2,76 @@
 
 一个纯前端的知识图谱可视化工具，以「知识卡片房间」为核心模型，支持无限嵌套层级、双击钻入/退出、拖拽编辑、Markdown 文档渲染。
 
-## 在线体验
+**同时支持网页端和 Electron 桌面端运行。**
 
-打开 `index.html` 即可运行，无需安装任何依赖。
+## 快速开始
+
+### 方式一：网页端（零安装）
+
+直接打开 `index.html`，或访问 GitHub Pages 在线版。
+
+### 方式二：Electron 桌面端
+
+```bash
+npm install
+npm start        # 启动应用
+npm run dev      # 开发模式（带 DevTools）
+```
+
+打包为安装程序：
+
+```bash
+npm run build:mac    # macOS (.dmg)
+npm run build:win    # Windows (.exe)
+npm run build:linux  # Linux (.AppImage)
+```
 
 ## 项目结构
 
 ```
-├── index.html                 # 主入口（纯 HTML 骨架）
+├── index.html                 # 主入口（网页端 + Electron 共用）
+├── package.json               # Electron 依赖 + 构建脚本
+├── electron/                  # Electron 专属代码
+│   ├── main.js                # 主进程（窗口、菜单、IPC）
+│   ├── preload.js             # 预加载（安全暴露 Node API）
+│   └── file-service.js        # 文件操作服务（fs 封装）
+├── vendor/                    # CDN 库本地副本（Electron 离线用）
 ├── src/
-│   ├── css/
-│   │   ├── base.css           # Reset + 布局 + 通用组件
-│   │   ├── graph.css          # 画布 + 网格 + 控件 + 工具栏
-│   │   ├── nav.css            # 左侧导航目录
-│   │   ├── detail.css         # 右侧详情面板 + Markdown 渲染
-│   │   ├── modal.css          # 模态框 + 右键菜单
-│   │   └── editor.css         # 编辑器 + 内联输入 + 悬停按钮
-│   ├── js/
-│   │   ├── config.js          # 全局状态 + 配置常量
-│   │   ├── graph.js           # Cytoscape 初始化 + 节点/边样式
-│   │   ├── storage.js         # localStorage 自动持久化
-│   │   ├── room.js            # 房间视野管理 + 面包屑导航
-│   │   ├── detail.js          # 详情面板 + Markdown + 内联编辑
-│   │   ├── nav.js             # 左侧导航目录构建
-│   │   ├── crud.js            # 节点/边增删改 + 右键菜单 + 导入导出
-│   │   ├── interaction.js     # 搜索 + 键盘快捷 + 悬停高亮
-│   │   ├── grid.js            # 网格背景 + 对齐辅助 + snap
-│   │   └── main.js            # 启动入口
-│   └── data/
-│       ├── colors.js          # 域颜色方案
-│       ├── markdown.js        # 知识文档 Markdown 内容
-│       └── graph-data.js      # 节点 + 边定义
+│   ├── css/                   # 6 个样式模块
+│   ├── js/                    # 10 个逻辑模块
+│   └── data/                  # 3 个数据文件
+├── assets/                    # 应用图标等资源
 ├── .github/workflows/
 │   └── deploy.yml             # GitHub Pages 自动部署
-├── setup-github.sh            # GitHub 一键部署脚本
-└── README.md
+└── setup-github.sh            # GitHub 一键部署脚本
+```
+
+## 存储架构
+
+| 运行环境 | 结构数据 | Markdown/图片 |
+|----------|----------|--------------|
+| **Electron** | IndexedDB | Node.js fs 直接读写 `~/Documents/TopoMind/` |
+| **Chrome/Edge** | IndexedDB | File System Access API 读写用户选择的目录 |
+| **其他浏览器** | IndexedDB | IndexedDB Blob 存储（降级） |
+
+工作目录结构（Electron / Chrome）：
+
+```
+~/Documents/TopoMind/
+├── docs/            # 每个节点一个 .md 文件
+│   ├── transformer.md
+│   └── ...
+└── images/          # 图片原始文件
+    ├── img-xxx.png
+    └── ...
 ```
 
 ## 技术栈
 
 - **图谱引擎**: [Cytoscape.js](https://js.cytoscape.org/) + [ELK](https://www.eclipse.org/elk/) 布局
 - **Markdown**: [marked.js](https://marked.js.org/)
-- **持久化**: localStorage
+- **持久化**: IndexedDB + File System Access API / Node.js fs
+- **桌面端**: [Electron](https://www.electronjs.org/)
 - **部署**: GitHub Pages（零配置）
 
 ## 快捷键

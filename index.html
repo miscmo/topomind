@@ -5,11 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TopoMind — 可漫游拓扑知识大脑</title>
 
-<!-- 第三方库 -->
-<script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
-<script src="https://unpkg.com/elkjs@0.9.3/lib/elk.bundled.js"></script>
-<script src="https://unpkg.com/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
-<script src="https://unpkg.com/marked@12.0.0/marked.min.js"></script>
+<!-- 第三方库：Electron 用本地 vendor/，Web 用 CDN -->
+<script>
+  (function() {
+    var libs = [
+      { local: 'vendor/cytoscape.min.js', cdn: 'https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js' },
+      { local: 'vendor/elk.bundled.js', cdn: 'https://unpkg.com/elkjs@0.9.3/lib/elk.bundled.js' },
+      { local: 'vendor/cytoscape-elk.js', cdn: 'https://unpkg.com/cytoscape-elk@2.2.0/dist/cytoscape-elk.js' },
+      { local: 'vendor/marked.min.js', cdn: 'https://unpkg.com/marked@12.0.0/marked.min.js' }
+    ];
+    var isElectron = typeof process !== 'undefined' && process.versions && process.versions.electron;
+    libs.forEach(function(lib) {
+      document.write('<script src="' + (isElectron ? lib.local : lib.cdn) + '"><\/script>');
+    });
+  })();
+</script>
 
 <!-- 样式模块 -->
 <link rel="stylesheet" href="src/css/base.css">

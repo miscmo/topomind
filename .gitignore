@@ -2,3 +2,5 @@
 Thumbs.db
 *.log
 .codebuddy/
+node_modules/
+dist/

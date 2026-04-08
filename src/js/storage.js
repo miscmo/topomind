@@ -1,17 +1,20 @@
 /**
- * 混合存储引擎：IndexedDB（结构索引） + File System Access API（Markdown/图片文件）
- * 不支持 File System Access 的浏览器自动降级为纯 IndexedDB。
+ * 混合存储引擎：
+ *   Electron 模式 → Node.js fs（通过 IPC）+ IndexedDB
+ *   Web 模式     → File System Access API + IndexedDB
+ *   降级模式     → 纯 IndexedDB
  */
 
+var isElectron = !!(window.electronAPI && window.electronAPI.isElectron);
 var DB_NAME = 'topomind-db';
 var DB_VERSION = 1;
 var db = null; // IndexedDB 实例
 
-// File System Access
-var supportsFS = !!window.showDirectoryPicker;
-var workDirHandle = null; // 根目录 DirectoryHandle
-var docsDirHandle = null; // docs/ 子目录
-var imagesDirHandle = null; // images/ 子目录
+// File System Access（仅 Web 模式）
+var supportsFS = !isElectron && !!window.showDirectoryPicker;
+var workDirHandle = null;
+var docsDirHandle = null;
+var imagesDirHandle = null;
 
 // 保存防抖
 var _saveGraphTimer = null;
@@ -128,22 +131,28 @@ function _doSaveGraph() {
 
 // ===================== Markdown 读写 =====================
 
-/** 读取 Markdown：优先本地文件，降级 IndexedDB */
+/** 读取 Markdown：Electron → IPC，Web → 本地文件/IndexedDB */
 function loadMarkdown(nodeId) {
+  if (isElectron) {
+    return window.electronAPI.readMarkdown(nodeId);
+  }
   if (supportsFS && docsDirHandle) {
     return _readFileFromDir(docsDirHandle, nodeId + '.md').catch(function() {
-      // 文件不存在，尝试 IndexedDB
       return dbGet('markdown', nodeId).then(function(r) { return r ? r.content : ''; });
     });
   }
   return dbGet('markdown', nodeId).then(function(r) { return r ? r.content : ''; });
 }
 
-/** 保存 Markdown：写本地文件 + IndexedDB 双写 */
+/** 保存 Markdown：Electron → IPC + IndexedDB，Web → 本地文件 + IndexedDB */
 function saveMarkdown(nodeId, content) {
   // IndexedDB 始终写
   var p1 = dbPut('markdown', { id: nodeId, content: content, updatedAt: Date.now() });
-  // 本地文件
+  // Electron：通过 IPC 写文件
+  var p2 = Promise.resolve();
+  if (isElectron) {
+    p2 = window.electronAPI.writeMarkdown(nodeId, content).catch(function() {});
+  } else if (supportsFS && docsDirHandle) {
   var p2 = Promise.resolve();
   if (supportsFS && docsDirHandle) {
     p2 = _writeFileToDir(docsDirHandle, nodeId + '.md', content).catch(function() {});
@@ -155,7 +164,9 @@ function saveMarkdown(nodeId, content) {
 function deleteMarkdown(nodeId) {
   var p1 = dbDelete('markdown', nodeId);
   var p2 = Promise.resolve();
-  if (supportsFS && docsDirHandle) {
+  if (isElectron) {
+    p2 = window.electronAPI.deleteMarkdown(nodeId).catch(function() {});
+  } else if (supportsFS && docsDirHandle) {
     p2 = docsDirHandle.removeEntry(nodeId + '.md').catch(function() {});
   }
   return Promise.all([p1, p2]);
@@ -173,16 +184,20 @@ function saveImage(nodeId, blob, filename) {
   var processedBlob = (blob.size > 500 * 1024) ? compressImage(blob) : Promise.resolve(blob);
 
   return processedBlob.then(function(finalBlob) {
-    // IndexedDB 存索引（始终存，降级时也存 Blob）
+    // IndexedDB 存索引
     var record = { id: imgId, nodeId: nodeId, filename: imgFilename, mime: blob.type, size: finalBlob.size, createdAt: Date.now() };
-    if (!supportsFS || !imagesDirHandle) {
-      record.blob = finalBlob; // 降级模式：Blob 存 IndexedDB
+    if (!isElectron && !supportsFS) {
+      record.blob = finalBlob; // 纯 IndexedDB 降级模式
     }
     var p1 = dbPut('images', record);
 
-    // 本地文件
+    // 写文件
     var p2 = Promise.resolve();
-    if (supportsFS && imagesDirHandle) {
+    if (isElectron) {
+      p2 = finalBlob.arrayBuffer().then(function(ab) {
+        return window.electronAPI.writeImage(imgFilename, ab);
+      }).catch(function() {});
+    } else if (supportsFS && imagesDirHandle) {
       p2 = _writeBlobToDir(imagesDirHandle, imgFilename, finalBlob).catch(function() {});
     }
 
@@ -194,7 +209,18 @@ function saveImage(nodeId, blob, filename) {
 
 /** 读取图片 Blob，返回 ObjectURL */
 function loadImageUrl(imgIdOrFilename) {
-  var imgId = imgIdOrFilename.replace(/\.\w+$/, ''); // 去掉扩展名
+  var imgId = imgIdOrFilename.replace(/\.\w+$/, '');
+
+  if (isElectron) {
+    return dbGet('images', imgId).then(function(record) {
+      if (!record) return '';
+      return window.electronAPI.readImage(record.filename).then(function(ab) {
+        if (!ab) return '';
+        var blob = new Blob([ab], { type: record.mime || 'image/png' });
+        return URL.createObjectURL(blob);
+      });
+    }).catch(function() { return ''; });
+  }
 
   if (supportsFS && imagesDirHandle) {
     return dbGet('images', imgId).then(function(record) {
@@ -218,7 +244,9 @@ function deleteNodeImages(nodeId) {
     all.forEach(function(img) {
       if (img.nodeId === nodeId) {
         tasks.push(dbDelete('images', img.id));
-        if (supportsFS && imagesDirHandle) {
+        if (isElectron) {
+          tasks.push(window.electronAPI.deleteImage(img.filename).catch(function() {}));
+        } else if (supportsFS && imagesDirHandle) {
           tasks.push(imagesDirHandle.removeEntry(img.filename).catch(function() {}));
         }
       }
@@ -329,7 +357,20 @@ function tryRestoreWorkDir() {
 
 /** 获取工作目录状态信息 */
 function getStorageInfo() {
-  var info = { mode: supportsFS && workDirHandle ? 'hybrid' : 'indexeddb' };
+  var info = {};
+  if (isElectron) {
+    info.mode = 'electron';
+    return window.electronAPI.getWorkDir().then(function(dir) {
+      info.dirName = dir;
+      return Promise.all([
+        dbGetAll('nodes').then(function(r) { info.nodeCount = r.length; }),
+        dbGetAll('edges').then(function(r) { info.edgeCount = r.length; }),
+        dbGetAll('markdown').then(function(r) { info.docCount = r.length; }),
+        dbGetAll('images').then(function(r) { info.imageCount = r.length; info.imageSize = r.reduce(function(s, i) { return s + (i.size || 0); }, 0); })
+      ]).then(function() { return info; });
+    });
+  }
+  info.mode = supportsFS && workDirHandle ? 'hybrid' : 'indexeddb';
   if (workDirHandle) info.dirName = workDirHandle.name;
   return Promise.all([
     dbGetAll('nodes').then(function(r) { info.nodeCount = r.length; }),
@@ -401,8 +442,16 @@ function seedDefaultData() {
   ]);
 }
 
-/** 同步 Markdown 到本地文件（连接工作目录后批量写出） */
+/** 同步 Markdown 到本地文件 */
 function syncMarkdownToFiles() {
+  if (isElectron) {
+    return dbGetAll('markdown').then(function(docs) {
+      var tasks = docs.map(function(d) {
+        return window.electronAPI.writeMarkdown(d.id, d.content).catch(function() {});
+      });
+      return Promise.all(tasks);
+    });
+  }
   if (!supportsFS || !docsDirHandle) return Promise.resolve();
   return dbGetAll('markdown').then(function(docs) {
     var tasks = docs.map(function(d) {
