@@ -3,249 +3,205 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TopoMind — 可漫游拓扑知识大脑</title>
+<title>TopoMind</title>
 
-<!-- 第三方库：Electron 用本地 vendor/，Web 用 CDN -->
-<script>
-  (function() {
-    var libs = [
-      { local: 'vendor/cytoscape.min.js', cdn: 'https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js' },
-      { local: 'vendor/elk.bundled.js', cdn: 'https://unpkg.com/elkjs@0.9.3/lib/elk.bundled.js' },
-      { local: 'vendor/cytoscape-elk.js', cdn: 'https://unpkg.com/cytoscape-elk@2.2.0/dist/cytoscape-elk.js' },
-      { local: 'vendor/marked.min.js', cdn: 'https://unpkg.com/marked@12.0.0/marked.min.js' }
-    ];
-    var isElectron = typeof process !== 'undefined' && process.versions && process.versions.electron;
-    libs.forEach(function(lib) {
-      document.write('<script src="' + (isElectron ? lib.local : lib.cdn) + '"><\/script>');
-    });
-  })();
-</script>
+<!-- 第三方库 -->
+<script src="vendor/cytoscape.min.js"></script>
+<script src="vendor/elk.bundled.js"></script>
+<script src="vendor/cytoscape-elk.js"></script>
+<script src="vendor/marked.min.js"></script>
 
-<!-- 样式模块 -->
+<!-- 样式 -->
 <link rel="stylesheet" href="src/css/base.css">
-<link rel="stylesheet" href="src/css/home.css">
-<link rel="stylesheet" href="src/css/nav.css">
 <link rel="stylesheet" href="src/css/graph.css">
+<link rel="stylesheet" href="src/css/nav.css">
 <link rel="stylesheet" href="src/css/detail.css">
 <link rel="stylesheet" href="src/css/modal.css">
-<link rel="stylesheet" href="src/css/editor.css">
+<link rel="stylesheet" href="src/css/home.css">
 </head>
 <body>
-<!-- ===== 主页 ===== -->
-<div id="home-modal" style="display:none">
+
+<!-- ========== 首页：知识库列表 ========== -->
+<div id="home-modal">
   <div class="home-header">
     <div class="home-logo">
-      <div class="home-logo-icon">🧠</div>
+      <span class="home-logo-icon">🧠</span>
       <div>
         <h1>TopoMind</h1>
         <span>可漫游拓扑知识大脑</span>
       </div>
     </div>
-    <button class="home-btn home-btn-primary" onclick="showKBForm()">➕ 新建知识库</button>
   </div>
   <div class="home-content">
     <div class="home-section-title">我的知识库</div>
-    <div id="home-grid" class="home-grid"></div>
-    <div id="home-empty" class="home-empty" style="display:none">
-      <div class="home-empty-icon">📚</div>
-      <h3>暂无知识库</h3>
-      <p>点击右上角「新建知识库」按钮开始创建</p>
-    </div>
+    <div class="home-grid" id="kb-grid"></div>
   </div>
 </div>
 
-<!-- ===== 知识库表单 ===== -->
-<div id="home-form-overlay" class="home-form-overlay">
-  <div class="home-form">
-    <div class="home-form-header">
-      <h3 id="home-form-title">新建知识库</h3>
-      <button class="home-form-close" onclick="hideKBForm()">✕</button>
+<!-- ========== 图谱页 ========== -->
+<div id="graph-page" style="display:none;width:100%;height:100%">
+  <div id="app">
+    <!-- 左侧导航 -->
+    <div id="nav-panel">
+      <div id="nav-header">🧠 知识目录</div>
+      <div id="nav-tree"></div>
     </div>
-    <form id="home-form-kb">
-      <div class="home-form-body">
-        <div class="home-form-group">
-          <label>封面图片</label>
-          <div class="home-image-upload">
-            <img style="display:none" />
-            <button type="button" class="home-remove-image" style="display:none">✕</button>
-            <div class="home-image-upload-text">📷</div>
-            <div class="home-image-upload-hint">点击上传图片</div>
-          </div>
-        </div>
-        <div class="home-form-group">
-          <label>名称 *</label>
-          <input type="text" name="name" placeholder="输入知识库名称" required />
-        </div>
-        <div class="home-form-group">
-          <label>简介</label>
-          <textarea name="description" placeholder="简要描述这个知识库的内容..."></textarea>
-        </div>
+
+    <!-- 中间图谱 -->
+    <div id="graph-panel">
+      <canvas id="grid-canvas" class="grid-bg"></canvas>
+      <div id="cy"></div>
+
+      <div id="header">TopoMind</div>
+      <div id="breadcrumb"></div>
+
+      <div id="legend">
+        <h4>关系</h4>
+        <div class="legend-item"><span class="legend-line" style="background:#5cb85c"></span> 演进</div>
+        <div class="legend-item"><span class="legend-line" style="background:#e8913a"></span> 依赖</div>
+        <div class="legend-item"><span class="legend-dash" style="border-color:#bbb"></span> 相关</div>
       </div>
-      <div class="home-form-footer">
-        <button type="button" class="home-btn home-btn-cancel" onclick="hideKBForm()">取消</button>
-        <button type="submit" class="home-btn home-btn-primary">保存</button>
+
+      <div id="search-box"><input id="search-input" type="text" placeholder="搜索..." /></div>
+      <div id="zoom-indicator">100%</div>
+
+      <div id="controls">
+        <button id="btn-zoomin">＋</button>
+        <button id="btn-zoomout">－</button>
+        <button id="btn-fit">⊡</button>
       </div>
-    </form>
-  </div>
-</div>
 
-<div id="app">
-  <!-- ===== 左侧导航 ===== -->
-  <div id="nav-panel">
-    <div id="nav-header">🧠 知识目录</div>
-    <div id="nav-tree"></div>
-  </div>
-
-  <!-- ===== 中间图谱 ===== -->
-  <div id="graph-panel">
-    <canvas id="grid-canvas" class="grid-bg"></canvas>
-    <div id="cy"></div>
-
-    <!-- 顶部信息 -->
-    <div id="header">TopoMind · 拓扑知识大脑</div>
-    <div id="breadcrumb"></div>
-
-    <!-- 图例 -->
-    <div id="legend">
-      <h4>关系</h4>
-      <div class="legend-item"><span class="legend-line" style="background:#5cb85c"></span> 演进</div>
-      <div class="legend-item"><span class="legend-line" style="background:#e8913a"></span> 依赖</div>
-      <div class="legend-item"><span class="legend-dash" style="border-color:#bbb"></span> 相关</div>
-    </div>
-
-    <!-- 搜索 -->
-    <div id="search-box"><input id="search-input" type="text" placeholder="搜索..." /></div>
-
-    <!-- 缩放 -->
-    <div id="zoom-indicator">100%</div>
-    <div id="controls">
-      <button id="btn-zoomin">＋</button>
-      <button id="btn-zoomout">－</button>
-      <button id="btn-fit">⊡</button>
-    </div>
-
-    <!-- 工具栏 -->
-    <div id="toolbar">
-      <button id="btn-home" title="返回主页" onclick="goToHome()">🏠 主页</button>
-      <div class="sep"></div>
-      <button id="btn-add-node">＋ 节点</button>
-      <div class="sep"></div>
-      <button id="btn-toggle-grid" class="active" title="网格">⊞</button>
-      <div class="sep"></div>
-      <button id="btn-export">↓ 导出</button>
-      <button id="btn-import">↑ 导入</button>
-      <div class="sep"></div>
-      <button id="btn-workdir" title="选择工作目录">📁 目录</button>
-      <button id="btn-reset" title="重置为默认数据">↺ 重置</button>
-    </div>
-
-    <!-- 存储状态 -->
-    <div id="storage-status" style="display:none"></div>
-    <!-- 状态提示 -->
-    <div id="save-indicator">✓ 已保存</div>
-    <input id="inline-input" type="text" placeholder="输入名称，回车确认...">
-    <svg id="drag-line" width="100%" height="100%" style="position:absolute;top:0;left:0;pointer-events:none;z-index:15">
-      <defs><marker id="drag-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3498db"/></marker></defs>
-      <line id="drag-line-line" x1="0" y1="0" x2="0" y2="0" stroke="#3498db" stroke-width="2" stroke-dasharray="6,3" marker-end="url(#drag-arrow)" display="none"/>
-    </svg>
-    <!-- 节点连线箭头手柄 -->
-    <svg id="edge-handles" width="100%" height="100%" style="position:absolute;top:0;left:0;z-index:14;overflow:visible;pointer-events:none"></svg>
-    <!-- 连线属性编辑弹窗 -->
-    <div id="edge-editor" style="display:none;position:fixed;z-index:2000;background:#fff;border:1px solid #e0e4ea;border-radius:10px;padding:14px 16px;min-width:220px;box-shadow:0 6px 24px rgba(0,0,0,.15)">
-      <div style="font-size:13px;font-weight:600;color:#1a3a5c;margin-bottom:10px">编辑连线</div>
-      <div style="margin-bottom:8px">
-        <label style="font-size:11px;color:#888;display:block;margin-bottom:3px">关系类型</label>
-        <select id="ee-relation" style="width:100%;height:28px;border:1px solid #e0e4ea;border-radius:6px;font-size:12px;padding:0 6px">
-          <option value="依赖">依赖</option>
-          <option value="演进">演进</option>
-          <option value="相关">相关</option>
-        </select>
+      <div id="toolbar">
+        <button id="btn-add-node">＋ 卡片</button>
+        <button id="btn-add-edge">⤯ 连线</button>
+        <div class="sep"></div>
+        <button id="btn-toggle-grid" class="active">⊞</button>
+        <div class="sep"></div>
+        <button id="btn-export">↓ 导出</button>
+        <button id="btn-reset">↺ 重置</button>
       </div>
-      <div style="margin-bottom:10px">
-        <label style="font-size:11px;color:#888;display:block;margin-bottom:5px">颜色</label>
-        <div id="ee-colors" style="display:flex;gap:6px;flex-wrap:wrap">
-          <span class="ee-color-dot" data-color="#e8913a" style="background:#e8913a"></span>
-          <span class="ee-color-dot" data-color="#5cb85c" style="background:#5cb85c"></span>
-          <span class="ee-color-dot" data-color="#3498db" style="background:#3498db"></span>
-          <span class="ee-color-dot" data-color="#9b59b6" style="background:#9b59b6"></span>
-          <span class="ee-color-dot" data-color="#e74c3c" style="background:#e74c3c"></span>
-          <span class="ee-color-dot" data-color="#aaa" style="background:#aaa"></span>
+
+      <div id="save-indicator">✓ 已保存</div>
+      <div id="edge-mode-hint">
+        <span>🔗 连线模式：点击目标节点</span>
+        <button id="btn-cancel-edge-mode">取消</button>
+      </div>
+      <div id="shortcut-hint">右键拖拽画布 · 左键框选 · Tab 子卡片 · Delete 删除 · Backspace 返回</div>
+    </div>
+
+    <!-- 右侧详情 -->
+    <button id="btn-toggle-detail" title="展开详情">◀</button>
+    <div id="detail-resize-handle"></div>
+    <div id="detail-panel">
+      <div id="detail-title"><button id="btn-collapse-detail" title="收起详情">▶</button><span class="detail-title-text">知识详情</span></div>
+      <div id="detail-actions">
+        <button id="btn-edit-md" style="display:none">✏️ 编辑</button>
+        <button id="btn-edit-node" style="display:none">⚙ 改名</button>
+        <button id="btn-delete-node" style="display:none">🗑 删除</button>
+        <div id="detail-mode-toggle">
+          <button id="btn-mode-read" class="active">阅读</button>
+          <button id="btn-mode-edit">编辑</button>
         </div>
       </div>
-      <div style="display:flex;gap:6px;justify-content:flex-end">
-        <button id="ee-delete" style="height:26px;padding:0 10px;border:1px solid #e74c3c;border-radius:6px;background:#fff;color:#e74c3c;font-size:11px;cursor:pointer">删除</button>
-        <button id="ee-cancel" style="height:26px;padding:0 10px;border:1px solid #e0e4ea;border-radius:6px;background:#fff;color:#555;font-size:11px;cursor:pointer">取消</button>
-        <button id="ee-save" style="height:26px;padding:0 12px;border:none;border-radius:6px;background:#1a3a5c;color:#fff;font-size:11px;cursor:pointer">保存</button>
+      <div id="detail-body">
+        <div class="rendered-content">
+          <div class="placeholder-text"><span>📖</span>点击节点查看详情</div>
+        </div>
+        <textarea id="detail-edit-area" placeholder="输入 Markdown..."></textarea>
       </div>
-    </div>
-    <div id="shortcut-hint">双击空白新建域 · 选中节点按 Tab 添加子节点 · Delete 删除</div>
-  </div>
-
-  <!-- ===== 右侧详情 ===== -->
-  <div id="detail-panel">
-    <div id="detail-title">知识详情</div>
-    <div id="detail-actions">
-      <button id="btn-edit-md" style="display:none">✏️ 编辑</button>
-      <button id="btn-insert-image" style="display:none" title="插入图片">📷</button>
-      <button id="btn-edit-node" style="display:none">⚙ 属性</button>
-      <button id="btn-delete-node" style="display:none">🗑 删除</button>
-      <div id="detail-mode-toggle">
-        <button id="btn-mode-read" class="active">阅读</button>
-        <button id="btn-mode-edit">编辑</button>
-      </div>
-    </div>
-    <div id="detail-body">
-      <div class="rendered-content">
-        <div class="placeholder-text"><span>📖</span>点击节点查看详情</div>
-      </div>
-      <textarea id="detail-edit-area" placeholder="在此输入 Markdown 文档..."></textarea>
     </div>
   </div>
 </div>
 
 <!-- ===== 右键菜单 ===== -->
 <div id="context-menu">
-  <div class="ctx-item" data-action="focus-in">🔍 聚焦</div>
+  <div class="ctx-item" data-action="drill">🔍 进入</div>
   <div class="ctx-sep"></div>
-  <div class="ctx-item" data-action="edit-node">⚙ 属性</div>
   <div class="ctx-item" data-action="edit-md">✏️ 文档</div>
+  <div class="ctx-item" data-action="add-child">＋ 子卡片</div>
+  <div class="ctx-item" data-action="connect">⤯ 连线</div>
   <div class="ctx-sep"></div>
-  <div class="ctx-item" data-action="add-child">＋ 子节点</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item danger" data-action="delete-node">🗑 删除</div>
+  <div class="ctx-item danger" data-action="delete">🗑 删除</div>
 </div>
-<div id="edge-context-menu" style="position:fixed;z-index:1000;display:none;background:#fff;border:1px solid #e0e4ea;border-radius:8px;padding:4px 0;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,.1)">
-  <div class="ctx-item" data-action="edit-edge">⚙ 编辑</div>
-  <div class="ctx-item danger" data-action="delete-edge">🗑 删除</div>
+<div id="bg-context-menu" style="position:fixed;z-index:1000;display:none;background:#fff;border:1px solid #e0e4ea;border-radius:8px;padding:4px 0;min-width:150px;box-shadow:0 4px 16px rgba(0,0,0,.1)">
+  <div class="ctx-item" data-action="add-card">＋ 新建卡片</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="fit-view">⊡ 适应视图</div>
+  <div class="ctx-item" data-action="go-back">← 返回上级</div>
+</div>
+<div id="batch-context-menu" style="position:fixed;z-index:1000;display:none;background:#fff;border:1px solid #e0e4ea;border-radius:8px;padding:4px 0;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,.1)">
+  <div style="padding:6px 14px 4px;font-size:11px;color:#999;font-weight:600">批量修改颜色</div>
+  <div style="padding:4px 14px 8px;display:flex;gap:6px;flex-wrap:wrap">
+    <span class="batch-color-dot" data-color="#4a6fa5" style="background:#4a6fa5"></span>
+    <span class="batch-color-dot" data-color="#e74c3c" style="background:#e74c3c"></span>
+    <span class="batch-color-dot" data-color="#2ecc71" style="background:#2ecc71"></span>
+    <span class="batch-color-dot" data-color="#f39c12" style="background:#f39c12"></span>
+    <span class="batch-color-dot" data-color="#9b59b6" style="background:#9b59b6"></span>
+    <span class="batch-color-dot" data-color="#1abc9c" style="background:#1abc9c"></span>
+    <span class="batch-color-dot" data-color="#e67e22" style="background:#e67e22"></span>
+    <span class="batch-color-dot" data-color="#34495e" style="background:#34495e"></span>
+  </div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" data-action="batch-delete">🗑 批量删除</div>
+</div>
+<div id="edge-context-menu" style="position:fixed;z-index:1000;display:none;background:#fff;border:1px solid #e0e4ea;border-radius:8px;padding:4px 0;min-width:120px;box-shadow:0 4px 16px rgba(0,0,0,.1)">
+  <div class="ctx-item danger" data-action="delete-edge">🗑 删除连线</div>
+</div>
+
+<!-- ===== 新建知识库表单 ===== -->
+<div class="home-form-overlay" id="kb-form-overlay">
+  <div class="home-form">
+    <div class="home-form-header">
+      <h3>新建知识库</h3>
+      <button class="home-form-close" onclick="kbFormCancel()">✕</button>
+    </div>
+    <div class="home-form-body">
+      <div class="home-form-group">
+        <label>知识库名称</label>
+        <input type="text" id="kb-form-name" placeholder="输入名称..." onkeydown="if(event.key==='Enter')kbFormSubmit()">
+      </div>
+      <div class="home-form-group">
+        <label>存储位置</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="kb-form-dir-display" data-custom-dir="" style="flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#888;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">默认目录</div>
+          <button class="home-btn home-btn-cancel" onclick="kbFormSelectDir()" style="white-space:nowrap;padding:10px 14px">📁 选择</button>
+        </div>
+      </div>
+      <div class="home-form-group">
+        <label>封面图片</label>
+        <div class="home-image-upload" id="kb-form-cover-preview" onclick="kbFormSelectCover()">
+          <div class="home-image-upload-text">📷 点击选择封面</div>
+          <div class="home-image-upload-hint">可选，不设置使用默认</div>
+        </div>
+        <input type="file" id="kb-form-cover-upload" accept="image/*" style="display:none" onchange="kbFormCoverChanged(this)">
+      </div>
+    </div>
+    <div class="home-form-footer">
+      <button class="home-btn home-btn-cancel" onclick="kbFormCancel()">取消</button>
+      <button class="home-btn home-btn-primary" onclick="kbFormSubmit()">创建</button>
+    </div>
+  </div>
 </div>
 
 <!-- ===== 模态框 ===== -->
-<div class="modal-overlay" id="modal-node"><div class="modal"><div class="modal-header"><h3 id="modal-node-title">新增节点</h3><button class="modal-close" onclick="closeModal('modal-node')">✕</button></div><div class="modal-body"><div class="form-group"><label>ID（英文）</label><input type="text" id="node-id" placeholder="my-topic"></div><div class="form-group"><label>名称</label><input type="text" id="node-label" placeholder="我的主题"></div><div class="form-group"><label>层级</label><select id="node-level"><option value="1">顶层领域</option><option value="2" selected>子领域</option></select></div><div class="form-group"><label>父节点</label><select id="node-parent"><option value="">无</option></select></div></div><div class="modal-footer"><button class="btn" onclick="closeModal('modal-node')">取消</button><button class="btn btn-primary" id="btn-save-node">保存</button></div></div></div>
+<div class="modal-overlay" id="modal-input"><div class="modal" style="width:380px"><div class="modal-header"><h3 id="modal-input-title">输入</h3><button class="modal-close" onclick="cancelInputModal()">✕</button></div><div class="modal-body"><input type="text" id="modal-input-value" style="width:100%;height:36px;border:1px solid #ddd;border-radius:8px;padding:0 12px;font-size:14px;outline:none" placeholder="请输入..."></div><div class="modal-footer"><button class="btn" onclick="cancelInputModal()">取消</button><button class="btn btn-primary" id="modal-input-ok">确定</button></div></div></div>
 
-<div class="modal-overlay md-editor-modal" id="modal-md"><div class="modal"><div class="modal-header"><h3 id="modal-md-title">编辑文档</h3><button class="modal-close" onclick="closeModal('modal-md')">✕</button></div><div class="modal-body" style="padding:0"><div class="md-editor-wrap"><div class="md-editor-tabs"><button class="md-editor-tab active" data-tab="edit" onclick="switchMdTab('edit')">编辑</button><button class="md-editor-tab" data-tab="preview" onclick="switchMdTab('preview')">预览</button></div><textarea class="md-editor-area" id="md-editor-textarea" placeholder="Markdown..."></textarea><div class="md-preview-area" id="md-preview-area"></div></div></div><div class="modal-footer"><button class="btn" onclick="closeModal('modal-md')">取消</button><button class="btn btn-primary" id="btn-save-md">保存</button></div></div></div>
+<div class="modal-overlay" id="modal-confirm"><div class="modal" style="width:360px"><div class="modal-header"><h3>确认删除</h3><button class="modal-close" onclick="document.getElementById('modal-confirm').classList.remove('active');_pendingConfirmAction=null">✕</button></div><div class="modal-body"><p id="confirm-message" style="font-size:13px;color:#555"></p></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('modal-confirm').classList.remove('active');_pendingConfirmAction=null">取消</button><button class="btn btn-danger" id="btn-confirm-delete">删除</button></div></div></div>
 
-<div class="modal-overlay" id="modal-confirm"><div class="modal" style="width:360px"><div class="modal-header"><h3>确认删除</h3><button class="modal-close" onclick="closeModal('modal-confirm')">✕</button></div><div class="modal-body"><p id="confirm-message" style="font-size:13px;color:#555"></p></div><div class="modal-footer"><button class="btn" onclick="closeModal('modal-confirm')">取消</button><button class="btn btn-danger" id="btn-confirm-delete">删除</button></div></div></div>
-
-<input type="file" id="import-file" accept=".json" style="display:none">
-
-<!-- ===== JS 模块（按依赖顺序加载） ===== -->
-<!-- 数据层 -->
-<script src="src/data/colors.js"></script>
-<script src="src/data/markdown.js"></script>
-<script src="src/data/graph-data.js"></script>
-<!-- 核心逻辑 -->
-<script src="src/js/config.js"></script>
-<script src="src/js/graph.js"></script>
-<script src="src/js/storage.js"></script>
-<script src="src/js/detail.js"></script>
-<script src="src/js/nav.js"></script>
-<script src="src/js/room.js"></script>
-<script src="src/js/crud.js"></script>
-<script src="src/js/interaction.js"></script>
-<script src="src/js/grid.js"></script>
-<!-- 主页 -->
-<script src="src/js/home.js"></script>
-<!-- 启动 -->
-<script src="src/js/main.js"></script>
+<!-- ===== JS 模块 ===== -->
+<!-- 存储层 -->
+<script src="src/core/fs-backend.js"></script>
+<script src="src/core/storage.js"></script>
+<!-- UI 层 -->
+<script src="src/ui/graph.js"></script>
+<!-- 业务层 -->
+<script src="src/home.js"></script>
+<script src="src/app.js"></script>
+<script src="src/ui/detail.js"></script>
+<script src="src/ui/nav.js"></script>
+<script src="src/ui/room.js"></script>
+<script src="src/ui/crud.js"></script>
+<script src="src/ui/interaction.js"></script>
+<script src="src/ui/grid.js"></script>
 </body>
 </html>

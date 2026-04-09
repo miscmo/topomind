@@ -1,0 +1,177 @@
+/**
+ * 房间视野管理
+ * 进入房间 = 读取该目录的子目录 + _meta.json → 渲染到 Cytoscape
+ */
+
+/** 加载并渲染某个目录（房间）的内容 */
+function loadRoom(dirPath) {
+  currentRoomPath = dirPath === currentKBPath ? null : dirPath;
+
+  // 读取该目录的子卡片 + 布局元数据
+  Promise.all([
+    Store.listCards(dirPath),
+    Store.readLayout(dirPath)
+  ]).then(function(results) {
+    var cards = results[0];
+    var meta = results[1] || {};
+    var children = meta.children || {};
+    var edges = meta.edges || [];
+
+    // 恢复画布边界
+    if (meta.canvasBounds) {
+      setCanvasBounds(meta.canvasBounds);
+    } else {
+      setCanvasBounds({ x: -750, y: -500, w: 1500, h: 1000 });
+    }
+
+    // 清空 Cytoscape
+    cy.elements().remove();
+
+    // 添加节点
+    cards.forEach(function(card) {
+      var saved = children[card.path] || children[card.name] || {};
+      var data = {
+        id: card.path,
+        label: saved.name || card.name,
+        cardPath: card.path,
+        color: saved.color || ''
+      };
+      var ele = cy.add({ group: 'nodes', data: data, classes: 'card' });
+      if (saved.posX !== undefined && saved.posY !== undefined && (saved.posX !== 0 || saved.posY !== 0)) {
+        ele.position({ x: saved.posX, y: saved.posY });
+      }
+    });
+
+    // 添加边
+    edges.forEach(function(e, i) {
+      if (cy.getElementById(e.source).length && cy.getElementById(e.target).length) {
+        cy.add({ group: 'edges', data: {
+          id: 'e-' + i,
+          source: e.source,
+          target: e.target,
+          relation: e.relation || '相关',
+          weight: e.weight || 'minor'
+        }});
+      }
+    });
+
+    // 检查是否需要自动布局
+    var hasPositions = false;
+    cy.nodes().forEach(function(n) {
+      var p = n.position();
+      if (p.x !== 0 || p.y !== 0) hasPositions = true;
+    });
+
+    if (!hasPositions && cards.length > 0) {
+      // 位置全为零 → 自动布局
+      if (cy.nodes().length > 0) {
+        cy.nodes().layout({
+          name: 'elk',
+          elk: {
+            algorithm: 'layered', 'elk.direction': 'RIGHT',
+            'elk.spacing.nodeNode': 60, 'elk.layered.spacing.nodeNodeBetweenLayers': 80,
+            'elk.padding': '[top=40,left=30,bottom=30,right=30]',
+          },
+          fit: true, padding: 55, animate: false
+        }).run();
+      }
+    } else if (meta.zoom && meta.pan) {
+      // 有保存的视野 → 恢复缩放和平移
+      cy.viewport({ zoom: meta.zoom, pan: meta.pan });
+    } else if (cy.nodes().length > 0) {
+      // 有位置但没有保存的视野 → fit
+      cy.fit(undefined, 55);
+    }
+
+    updateBreadcrumb();
+    buildNavTree();
+    updateRoomTitle();
+  });
+}
+
+// ===== 钻入/返回 =====
+
+function drillInto(cardPath) {
+  // 保存当前布局
+  saveCurrentLayout();
+  // 检查子目录
+  Store.listCards(cardPath).then(function(kids) {
+    if (kids.length === 0) {
+      // 叶子卡片，只显示详情
+      var node = cy.getElementById(cardPath);
+      if (node.length) {
+        if (selectedNode) selectedNode.removeClass('selected');
+        node.addClass('selected'); selectedNode = node;
+        showDetail(cardPath);
+      }
+      return;
+    }
+    // 有子目录，进入
+    var prev = currentRoomPath || currentKBPath;
+    roomHistory.push(prev);
+    loadRoom(cardPath);
+  });
+}
+
+function goBack() {
+  if (roomHistory.length === 0) { showHome(); return; }
+  saveCurrentLayout();
+  loadRoom(roomHistory.pop());
+}
+
+function goRoot() {
+  saveCurrentLayout();
+  roomHistory = [];
+  loadRoom(currentKBPath);
+}
+
+function goToHistoryLevel(idx) {
+  saveCurrentLayout();
+  var target = roomHistory[idx];
+  roomHistory = roomHistory.slice(0, idx);
+  loadRoom(target);
+}
+
+// ===== 保存当前房间布局 =====
+
+function saveCurrentLayout() {
+  if (!currentKBPath) return;
+  var dirPath = currentRoomPath || currentKBPath;
+  var meta = buildCurrentMeta();
+  Store.saveLayout(dirPath, meta);
+}
+
+// ===== 面包屑 =====
+
+function updateBreadcrumb() {
+  var bc = document.getElementById('breadcrumb');
+  if (!currentRoomPath) { bc.classList.remove('active'); return; }
+  bc.classList.add('active');
+
+  var html = '<span class="bc-link" onclick="goRoot()">🏠 ' + (currentKBPath || '根') + '</span>';
+  for (var i = 0; i < roomHistory.length; i++) {
+    var p = roomHistory[i];
+    if (p === currentKBPath) continue;
+    var name = p.split('/').pop();
+    html += '<span class="bc-sep">›</span><span class="bc-link" onclick="goToHistoryLevel(' + i + ')">' + name + '</span>';
+  }
+  if (currentRoomPath) {
+    var curName = currentRoomPath.split('/').pop();
+    html += '<span class="bc-sep">›</span><span class="bc-current">' + curName + '</span>';
+  }
+  bc.innerHTML = html;
+}
+
+function updateRoomTitle() {
+  var h = document.getElementById('header');
+  if (!currentRoomPath) {
+    h.textContent = currentKBPath || 'TopoMind';
+  } else {
+    h.textContent = currentRoomPath.split('/').pop();
+  }
+}
+
+window.drillInto = drillInto;
+window.goBack = goBack;
+window.goRoot = goRoot;
+window.goToHistoryLevel = goToHistoryLevel;

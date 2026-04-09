@@ -1,185 +1,104 @@
 /**
  * Electron 主进程
  */
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
-const fileService = require('./file-service');
+const fs = require('./file-service');
+const nfs = require('fs');
 
-let mainWindow = null;
+let win = null;
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 900,
-    minHeight: 600,
-    title: 'TopoMind — 拓扑知识大脑',
-    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+  win = new BrowserWindow({
+    width: 1400, height: 900, minWidth: 900, minHeight: 600,
+    title: 'TopoMind',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
+      nodeIntegration: false, contextIsolation: true,
     }
   });
-
-  mainWindow.loadFile(path.join(__dirname, '..', 'index.html'));
-
-  // 开发模式打开 DevTools
-  if (process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools();
-  }
+  win.loadFile(path.join(__dirname, '..', 'index.html'));
+  // 转发渲染进程日志到 stdout
+  win.webContents.on('console-message', function(e, level, msg, line, src) {
+    console.log('[renderer]', msg);
+  });
 }
 
-// ===== 应用菜单 =====
-function buildMenu() {
-  const template = [
-    {
-      label: '文件',
-      submenu: [
-        { label: '选择工作目录...', click: function() { handleSelectWorkDir(); } },
-        { type: 'separator' },
-        { label: '导出数据...', click: function() { mainWindow.webContents.send('menu:export'); } },
-        { label: '导入数据...', click: function() { handleImportJson(); } },
-        { type: 'separator' },
-        { label: '重置为默认', click: function() { mainWindow.webContents.send('menu:reset'); } },
-        { type: 'separator' },
-        { role: 'quit', label: '退出' }
-      ]
-    },
-    {
-      label: '编辑',
-      submenu: [
-        { role: 'undo', label: '撤销' },
-        { role: 'redo', label: '重做' },
-        { type: 'separator' },
-        { role: 'cut', label: '剪切' },
-        { role: 'copy', label: '复制' },
-        { role: 'paste', label: '粘贴' },
-        { role: 'selectAll', label: '全选' }
-      ]
-    },
-    {
-      label: '视图',
-      submenu: [
-        { role: 'reload', label: '刷新' },
-        { role: 'toggleDevTools', label: '开发者工具' },
-        { type: 'separator' },
-        { role: 'zoomIn', label: '放大' },
-        { role: 'zoomOut', label: '缩小' },
-        { role: 'resetZoom', label: '重置缩放' },
-        { type: 'separator' },
-        { role: 'togglefullscreen', label: '全屏' }
-      ]
-    },
-    {
-      label: '帮助',
-      submenu: [
-        { label: '关于 TopoMind', click: function() {
-          dialog.showMessageBox(mainWindow, {
-            type: 'info', title: '关于 TopoMind',
-            message: 'TopoMind — 可漫游拓扑知识大脑',
-            detail: '版本 3.0.0\n纯前端知识图谱工具\n支持无限嵌套知识卡片'
-          });
-        }}
-      ]
-    }
-  ];
-
-  // macOS 特殊菜单
-  if (process.platform === 'darwin') {
-    template.unshift({
-      label: app.getName(),
-      submenu: [
-        { role: 'about', label: '关于 TopoMind' },
-        { type: 'separator' },
-        { role: 'hide', label: '隐藏' },
-        { role: 'hideOthers', label: '隐藏其他' },
-        { role: 'unhide', label: '显示全部' },
-        { type: 'separator' },
-        { role: 'quit', label: '退出' }
-      ]
-    });
-  }
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-}
-
-// ===== IPC 注册 =====
+// ===== IPC 注册（与 file-service 一一对应） =====
 function registerIPC() {
-  // Markdown
-  ipcMain.handle('fs:readMarkdown', function(e, nodeId) { return fileService.readMarkdown(nodeId); });
-  ipcMain.handle('fs:writeMarkdown', function(e, nodeId, content) { fileService.writeMarkdown(nodeId, content); });
-  ipcMain.handle('fs:deleteMarkdown', function(e, nodeId) { fileService.deleteMarkdownFile(nodeId); });
-  ipcMain.handle('fs:listMarkdownFiles', function() { return fileService.listMarkdownFiles(); });
-
-  // 图片
-  ipcMain.handle('fs:writeImage', function(e, filename, arrayBuffer) {
-    fileService.writeImage(filename, arrayBuffer);
-    return true;
-  });
-  ipcMain.handle('fs:readImage', function(e, filename) {
-    var buf = fileService.readImage(filename);
-    if (!buf) return null;
-    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-  });
-  ipcMain.handle('fs:deleteImage', function(e, filename) { fileService.deleteImage(filename); });
-  ipcMain.handle('fs:listImages', function() { return fileService.listImages(); });
-
-  // 工作目录
-  ipcMain.handle('fs:getWorkDir', function() { return fileService.getWorkDir(); });
-  ipcMain.handle('fs:selectWorkDir', function() { return handleSelectWorkDir(); });
-
-  // 导入/导出
-  ipcMain.handle('fs:exportJson', function(e, data) {
-    var result = dialog.showSaveDialogSync(mainWindow, {
-      title: '导出数据', defaultPath: 'topomind-data.json',
-      filters: [{ name: 'JSON', extensions: ['json'] }]
+  ipcMain.handle('fs:init',           function()       { fs.ensureDir(fs.getRootDir()); return fs.getRootDir(); });
+  ipcMain.handle('fs:listChildren',   function(e, p)   { return fs.listChildren(p); });
+  ipcMain.handle('fs:mkDir',          function(e, p, m){ fs.mkDir(p, m); });
+  ipcMain.handle('fs:rmDir',          function(e, p)   { fs.rmDir(p); });
+  ipcMain.handle('fs:readMeta',       function(e, p)   { return fs.readMeta(p); });
+  ipcMain.handle('fs:writeMeta',      function(e, p, m){ fs.writeMeta(p, m); });
+  ipcMain.handle('fs:getDir',         function(e, p)   { return fs.getDir(p); });
+  ipcMain.handle('fs:readFile',       function(e, p)   { return fs.readFile(p); });
+  ipcMain.handle('fs:writeFile',      function(e, p, c){ fs.writeFile(p, c); });
+  ipcMain.handle('fs:deleteFile',     function(e, p)   { fs.deleteFile(p); });
+  ipcMain.handle('fs:writeBlobFile',  function(e, p, b){ fs.writeBlobFile(p, b); });
+  ipcMain.handle('fs:readBlobFile',   function(e, p)   { return fs.readBlobFile(p); });
+  ipcMain.handle('fs:clearAll',       function()       { fs.clearAll(); });
+  ipcMain.handle('fs:selectWorkDir',  function() {
+    var result = dialog.showOpenDialogSync(win, {
+      title: '选择工作目录', properties: ['openDirectory', 'createDirectory']
     });
-    if (result) {
-      require('fs').writeFileSync(result, JSON.stringify(data, null, 2), 'utf-8');
-      return result;
-    }
+    if (result && result[0]) { fs.setRootDir(result[0]); return result[0]; }
     return null;
   });
-  ipcMain.handle('fs:importJson', function() { return handleImportJson(); });
-
-  // 窗口
-  ipcMain.on('win:setTitle', function(e, title) {
-    if (mainWindow) mainWindow.setTitle(title);
+  ipcMain.handle('fs:selectDir', function() {
+    var result = dialog.showOpenDialogSync(win, {
+      title: '选择知识库存储位置', properties: ['openDirectory', 'createDirectory']
+    });
+    return (result && result[0]) ? result[0] : null;
   });
+  ipcMain.handle('fs:openInFinder', function(e, dirPath) {
+    var absPath = dirPath.startsWith('/') ? dirPath : path.join(fs.getRootDir(), dirPath);
+    if (nfs.existsSync(absPath)) shell.openPath(absPath);
+  });
+  ipcMain.handle('fs:countChildren', function(e, dirPath) {
+    var d = dirPath ? path.join(fs.getRootDir(), dirPath) : fs.getRootDir();
+    if (!nfs.existsSync(d)) return 0;
+    try {
+      return nfs.readdirSync(d, { withFileTypes: true })
+        .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; }).length;
+    } catch(err) { return 0; }
+  });
+  ipcMain.handle('fs:getRootDir', function() { return fs.getRootDir(); });
 }
 
-function handleSelectWorkDir() {
-  var dir = fileService.selectDirectory(dialog);
-  if (dir && mainWindow) {
-    mainWindow.webContents.send('workdir:changed', dir);
+// ===== 菜单 =====
+function buildMenu() {
+  var tpl = [
+    { label: '文件', submenu: [
+      { label: '选择工作目录...', click: function() { ipcMain.emit('fs:selectWorkDir'); } },
+      { type: 'separator' },
+      { role: 'quit', label: '退出' }
+    ]},
+    { label: '编辑', submenu: [
+      { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
+      { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }
+    ]},
+    { label: '视图', submenu: [
+      { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' },
+      { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'resetZoom' },
+      { type: 'separator' }, { role: 'togglefullscreen' }
+    ]}
+  ];
+  if (process.platform === 'darwin') {
+    tpl.unshift({ label: app.getName(), submenu: [
+      { role: 'about' }, { type: 'separator' }, { role: 'hide' },
+      { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }
+    ]});
   }
-  return dir;
-}
-
-function handleImportJson() {
-  var result = dialog.showOpenDialogSync(mainWindow, {
-    title: '导入数据', filters: [{ name: 'JSON', extensions: ['json'] }],
-    properties: ['openFile']
-  });
-  if (result && result[0]) {
-    return fileService.readJsonFile(result[0]);
-  }
-  return null;
+  Menu.setApplicationMenu(Menu.buildFromTemplate(tpl));
 }
 
 // ===== 生命周期 =====
 app.whenReady().then(function() {
-  fileService.ensureDirs();
   registerIPC();
   buildMenu();
   createWindow();
-
-  app.on('activate', function() {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  app.on('activate', function() { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-
-app.on('window-all-closed', function() {
-  if (process.platform !== 'darwin') app.quit();
-});
+app.on('window-all-closed', function() { if (process.platform !== 'darwin') app.quit(); });

@@ -1,0 +1,160 @@
+/**
+ * 详情面板：Markdown 渲染、内联编辑
+ */
+marked.setOptions({ breaks: true, gfm: true });
+
+function flushEdit() {
+  var ta = document.getElementById('detail-edit-area');
+  if (ta && ta.classList.contains('active') && selectedNode) {
+    Store.writeMarkdown(selectedNode.id(), ta.value);
+    Store.showSaveIndicator();
+  }
+}
+
+function showDetail(cardPath) {
+  flushEdit();
+  var node = cy.getElementById(cardPath);
+  if (!node.length) return;
+
+  var titleEl = document.getElementById('detail-title');
+  var body = document.getElementById('detail-body');
+  var rendered = body.querySelector('.rendered-content');
+  var ta = document.getElementById('detail-edit-area');
+
+  var titleSpan = titleEl.querySelector('.detail-title-text');
+  if (titleSpan) titleSpan.textContent = node.data('label');
+  else titleEl.textContent = node.data('label');
+  if (ta) ta.classList.remove('active');
+  document.getElementById('btn-mode-read').classList.add('active');
+  document.getElementById('btn-mode-edit').classList.remove('active');
+
+  // 子卡片信息
+  Store.listCards(cardPath).then(function(kids) {
+    var childInfo = '';
+    if (kids.length > 0) {
+      childInfo = '<div style="margin:12px 0;padding:10px 14px;background:#f5f7fa;border-radius:8px;font-size:12px;color:#666">';
+      childInfo += '<strong style="color:#333">📂 包含 ' + kids.length + ' 个子概念</strong><br>';
+      kids.forEach(function(kid) {
+        childInfo += '<span style="display:inline-block;margin:3px 4px 3px 0;padding:2px 8px;background:#4a6fa5;color:#fff;border-radius:4px;font-size:11px;cursor:pointer" onclick="drillInto(\'' + kid.path.replace(/'/g, "\\'") + '\')">' + (kid.name || '') + '</span>';
+      });
+      childInfo += '</div>';
+    }
+
+    // 读取 Markdown
+    return Store.readMarkdown(cardPath).then(function(md) {
+      if (rendered) {
+        rendered.style.display = '';
+        rendered.innerHTML = (md ? marked.parse(md) : '<div style="color:#bbb;margin-top:20px">暂无文档内容</div>') + childInfo;
+        resolveRenderedImages(rendered, cardPath);
+      }
+    });
+  });
+
+  body.scrollTop = 0;
+  document.getElementById('btn-edit-md').style.display = '';
+  document.getElementById('btn-edit-node').style.display = '';
+  document.getElementById('btn-delete-node').style.display = '';
+  document.getElementById('detail-mode-toggle').classList.add('visible');
+}
+
+function showPlaceholder() {
+  flushEdit();
+  var titleSpan = document.querySelector('#detail-title .detail-title-text');
+  if (titleSpan) titleSpan.textContent = '知识详情';
+  else document.getElementById('detail-title').textContent = '知识详情';
+  var body = document.getElementById('detail-body');
+  var rendered = body.querySelector('.rendered-content');
+  if (rendered) { rendered.style.display = ''; rendered.innerHTML = '<div class="placeholder-text"><span>📖</span>点击节点查看详情</div>'; }
+  var ta = document.getElementById('detail-edit-area');
+  if (ta) ta.classList.remove('active');
+  ['btn-edit-md','btn-edit-node','btn-delete-node'].forEach(function(id) {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('detail-mode-toggle').classList.remove('visible');
+}
+
+function switchDetailMode(mode) {
+  var rendered = document.querySelector('#detail-body .rendered-content');
+  var ta = document.getElementById('detail-edit-area');
+  if (mode === 'edit' && selectedNode) {
+    document.getElementById('btn-mode-read').classList.remove('active');
+    document.getElementById('btn-mode-edit').classList.add('active');
+    Store.readMarkdown(selectedNode.id()).then(function(md) {
+      ta.value = md || '';
+      ta.classList.add('active');
+      if (rendered) rendered.style.display = 'none';
+      ta.focus();
+    });
+  } else {
+    if (selectedNode) {
+      Store.writeMarkdown(selectedNode.id(), ta.value);
+      Store.showSaveIndicator();
+    }
+    document.getElementById('btn-mode-read').classList.add('active');
+    document.getElementById('btn-mode-edit').classList.remove('active');
+    ta.classList.remove('active');
+    if (rendered) rendered.style.display = '';
+    if (selectedNode) showDetail(selectedNode.id());
+  }
+}
+
+/** 解析图片引用 */
+function resolveRenderedImages(container, cardPath) {
+  container.querySelectorAll('img').forEach(function(img) {
+    var src = img.getAttribute('src') || '';
+    if (src.startsWith('images/')) {
+      var imgPath = cardPath + '/' + src;
+      img.style.opacity = '0.3';
+      Store.loadImage(imgPath).then(function(url) {
+        if (url) { img.src = url; img.style.opacity = '1'; }
+        else { img.alt = '[图片加载失败]'; img.style.opacity = '1'; }
+      });
+    }
+  });
+}
+
+// ===== 详情面板收起/展开 =====
+document.getElementById('btn-collapse-detail').addEventListener('click', function() {
+  document.getElementById('detail-panel').classList.add('collapsed');
+  document.getElementById('btn-toggle-detail').classList.add('visible');
+  document.getElementById('detail-resize-handle').classList.add('hidden');
+});
+document.getElementById('btn-toggle-detail').addEventListener('click', function() {
+  document.getElementById('detail-panel').classList.remove('collapsed');
+  document.getElementById('btn-toggle-detail').classList.remove('visible');
+  document.getElementById('detail-resize-handle').classList.remove('hidden');
+});
+
+// ===== 拖拽调整详情面板宽度 =====
+(function() {
+  var handle = document.getElementById('detail-resize-handle');
+  var panel = document.getElementById('detail-panel');
+  var dragging = false;
+
+  handle.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    dragging = true;
+    panel.classList.add('resizing');
+    handle.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    var appRect = document.getElementById('app').getBoundingClientRect();
+    var newWidth = appRect.right - e.clientX;
+    if (newWidth < 180) newWidth = 180;
+    if (newWidth > 600) newWidth = 600;
+    panel.style.width = newWidth + 'px';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = false;
+    panel.classList.remove('resizing');
+    handle.classList.remove('active');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();

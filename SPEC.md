@@ -1,8 +1,8 @@
 # OpenSpec 规范文档
 
 **项目**：TopoMind — 可漫游拓扑知识大脑
-**版本**：v3.0.0
-**最后更新**：2026-04-08
+**版本**：v4.3.0
+**最后更新**：2026-04-09
 **状态**：已实现
 
 ---
@@ -51,59 +51,44 @@ TopoMind 是一个纯前端的个人知识大脑工具，核心是**知识卡片
 
 ```
 topomind/
-├── index.html                    # 主入口（纯 HTML 骨架，无内联 CSS/JS）
-├── README.md                     # 项目说明
+├── index.html                    # 主入口（首页 + 图谱页两个视图）
+├── README.md
 ├── SPEC.md                       # 本规范文档
 ├── package.json                  # Electron 依赖 + 构建脚本
 ├── .gitignore
-├── setup-github.sh               # GitHub 一键部署脚本
-├── electron/                     # Electron 桌面端专属代码
-│   ├── main.js                   # 主进程（窗口、菜单、IPC 注册）
-│   ├── preload.js                # 预加载（contextBridge 暴露安全 API）
-│   └── file-service.js           # Node.js 文件操作服务
-├── vendor/                       # CDN 库本地副本（Electron 离线使用）
-│   ├── cytoscape.min.js
-│   ├── elk.bundled.js
-│   ├── cytoscape-elk.js
-│   └── marked.min.js
-├── assets/                       # 应用图标等资源
-├── .github/
-│   └── workflows/
-│       └── deploy.yml            # GitHub Pages 自动部署流水线
+├── electron/                     # Electron 桌面端
+│   ├── main.js                   # 主进程（窗口、菜单、IPC）
+│   ├── preload.js                # 预加载（统一 invoke 接口）
+│   └── file-service.js           # Node.js 文件系统操作
+├── vendor/                       # CDN 库本地副本
+├── .github/workflows/deploy.yml  # GitHub Pages 部署
 └── src/
-    ├── css/
-    │   ├── base.css              # Reset + 三栏布局 + 通用按钮/表单
-    │   ├── graph.css             # 图谱面板 + 网格 + 工具栏 + 面包屑
-    │   ├── nav.css               # 左侧导航目录
-    │   ├── detail.css            # 右侧详情面板 + Markdown 渲染
-    │   ├── modal.css             # 模态框 + 右键菜单
-    │   └── editor.css            # Markdown 编辑器 + 内联输入 + 悬停按钮
-    ├── js/
-    │   ├── config.js             # 全局状态变量 + 工具函数
-    │   ├── graph.js              # Cytoscape 初始化 + 节点/边样式定义
-    │   ├── storage.js            # localStorage 持久化（保存/加载/清除）
-    │   ├── detail.js             # 详情面板渲染 + 内联编辑模式切换
-    │   ├── nav.js                # 左侧导航目录动态构建
-    │   ├── room.js               # 房间视野管理 + 面包屑 + 钻入/退出
-    │   ├── crud.js               # 节点/边 CRUD + 右键菜单 + 导入导出
-    │   ├── interaction.js        # 搜索 + 键盘快捷 + 悬停高亮 + 缩放控制
-    │   ├── grid.js               # 网格背景绘制 + 拖拽保存
-    │   └── main.js               # 启动入口 + 事件绑定 + 自动保存
-    └── data/
-        ├── colors.js             # 39 个域颜色方案
-        ├── graph-data.js         # 36 个节点 + 23 条边的默认数据
-        └── markdown.js           # 33 个节点的 Markdown 文档内容
+    ├── core/                     # 存储层（3 个文件）
+    │   ├── idb-backend.js        # IndexedDB 后端（Web 端）
+    │   ├── fs-backend.js         # 文件系统后端（Electron 端）
+    │   └── storage.js            # 统一适配器（业务层唯一入口）
+    ├── ui/                       # UI 模块（7 个文件）
+    │   ├── graph.js              # Cytoscape 初始化 + 样式
+    │   ├── room.js               # 房间视野 + 面包屑
+    │   ├── detail.js             # 右侧详情面板
+    │   ├── nav.js                # 左侧导航
+    │   ├── crud.js               # 卡片/边 CRUD + 右键菜单
+    │   ├── interaction.js        # 搜索 + 键盘 + 悬停
+    │   └── grid.js               # 网格背景
+    ├── app.js                    # 全局状态 + 启动入口
+    ├── home.js                   # 知识库首页
+    └── css/                      # 样式（7 个文件）
+        ├── base.css, graph.css, nav.css, detail.css
+        ├── modal.css, editor.css, home.css
 ```
 
-### 3.1 JS 加载顺序（依赖链）
+### 3.1 JS 加载顺序
 
 ```
-数据层:  colors.js → markdown.js → graph-data.js
-核心层:  config.js → graph.js → storage.js → detail.js → nav.js → room.js → crud.js → interaction.js → grid.js
-启动:    main.js
+存储层:  idb-backend.js → fs-backend.js → storage.js
+UI 层:   graph.js
+业务层:  home.js → app.js → detail.js → nav.js → room.js → crud.js → interaction.js → grid.js
 ```
-
-所有模块通过全局变量通信，加载顺序严格保证依赖关系。
 
 ---
 
@@ -769,3 +754,15 @@ self-attention, multi-head, ffn, positional-encoding
 | v2.0.0 | 2026-04-08 | 模块化拆分（19 个模块文件），移除自动整理/吸附对齐 |
 | v3.0.0 | 2026-04-08 | 存储架构重构：IndexedDB + File System Access API 混合存储，图片上传（粘贴/拖拽/按钮），自动压缩，级联删除，localStorage 自动迁移，存储状态栏 |
 | v3.1.0 | 2026-04-08 | Electron 桌面端支持：主进程+预加载+文件服务，Node.js fs 直接读写磁盘，vendor/ 离线库，动态 CDN/本地切换，应用菜单，打包配置 |
+| v4.0.0 | 2026-04-08 | 架构重构：目录即结构——每个卡片=一个磁盘目录，每个知识库=一个父目录。存储层拆为 idb-backend / fs-backend / storage 三层适配。删除旧 src/js + src/data，新建 src/core + src/ui。首页知识库管理。 |
+| v4.0.1 | 2026-04-09 | UI 修复：首页 HTML 重构对齐 home.css 深色主题（#home-modal/.home-grid/.home-card），图谱页 #graph-page 全屏布局，#edge-mode-hint 连线提示样式，graph.css 重复定义清理，确认模态框统一回调机制 |
+| v4.0.2 | 2026-04-09 | Bug 修复：输入模态框取消/关闭按钮正确 resolve promise（防止 promise 挂起）；新增 cancelInputModal()；createKB/createCard 合并 _meta.json 避免 writeMeta 覆盖 name 字段；Escape 键统一调用 cancelInputModal |
+| v4.0.3 | 2026-04-09 | 首页知识库卡片改为单击进入（ondblclick → onclick） |
+| v4.0.4 | 2026-04-09 | 知识详情面板添加收起/展开按钮，收起后右侧边缘显示展开按钮 |
+| v4.0.5 | 2026-04-09 | 知识详情面板左侧边界可拖拽调整宽度（180px~600px），拖拽时高亮蓝色指示条 |
+| v4.0.6 | 2026-04-09 | 保存/恢复视野状态（zoom + pan），进入子节点再返回不再重置缩放和位置 |
+| v4.0.7 | 2026-04-09 | 有限画布系统：初始 3000x2000 画布带蓝色虚线边界，画布外灰色遮罩，节点拖近边界自动扩展 1000px，平移限制在画布范围内 |
+| v4.0.8 | 2026-04-09 | 画布动态收缩：初始缩小为 1500x1000，节点删除或拖离后自动收缩空白区域（每次 500px），最小不低于 1500x1000 |
+| v4.1.0 | 2026-04-09 | 交互重构：右键按住拖拽画布、左键框选多节点、右键背景弹菜单（新建卡片/适应视图/返回）、多选右键批量改颜色/删除、移除双击空白新建 |
+| v4.2.0 | 2026-04-09 | 知识库管理：卡片缩小为书本比例(3:4)、移除"点击打开"提示、新建时可选存储目录和封面图、卡片显示节点数和存储路径(点击打开目录)、深色表单 |
+| v4.3.0 | 2026-04-09 | 代码质量大修：修复缩放指示器不更新、btn-reset 改用自定义模态框、esc() XSS 防护增强；删除 Web/IDB 后端(仅保留 Electron)、删除 editor.css 废弃样式；清理 graph.css 重复定义和废弃 #storage-status、nav.css 废弃选择器；storage.js 简化为 FSB 直连；提取公共 batchDeleteSelected/showContextMenu 函数消除重复代码；右键菜单添加视口边界检测；detail.js 移除冗余 cardPath 查找；vendor 库改为直接引用 |

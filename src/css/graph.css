@@ -61,12 +61,6 @@
 #toolbar button.active{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
 #toolbar .sep{width:1px;background:#e0e4ea;margin:2px 2px}
 
-/* --- 连线手柄 & 颜色点 --- */
-.edge-handle{cursor:crosshair;pointer-events:all}
-.edge-handle:hover circle{fill:#3498db;r:8}
-.ee-color-dot{width:20px;height:20px;border-radius:50%;cursor:pointer;display:inline-block;border:2px solid transparent;transition:transform .1s}
-.ee-color-dot:hover,.ee-color-dot.active{transform:scale(1.25);border-color:#1a3a5c}
-
 /* --- 保存指示器 --- */
 #save-indicator{position:absolute;bottom:48px;left:50%;transform:translateX(-50%) translateY(20px);z-index:15;
   background:rgba(46,204,113,.9);color:#fff;padding:4px 14px;border-radius:6px;
@@ -79,11 +73,15 @@
   font-size:11px;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap}
 #shortcut-hint.visible{opacity:1}
 
-/* --- 存储状态栏 --- */
-#storage-status{position:absolute;top:16px;left:16px;z-index:10;
-  background:rgba(255,255,255,.92);border:1px solid #e0e4ea;border-radius:8px;
-  padding:4px 12px;font-size:11px;color:#888;backdrop-filter:blur(6px);
-  white-space:nowrap;pointer-events:auto;cursor:default}
+/* --- 连线模式提示 --- */
+#edge-mode-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:20;
+  display:none;align-items:center;gap:10px;background:rgba(52,152,219,.92);color:#fff;
+  padding:8px 18px;border-radius:8px;font-size:13px;backdrop-filter:blur(6px);
+  box-shadow:0 4px 16px rgba(52,152,219,.3)}
+#edge-mode-hint.active{display:flex}
+#edge-mode-hint button{height:26px;padding:0 12px;border:1px solid rgba(255,255,255,.4);border-radius:6px;
+  background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:11px;transition:all .15s}
+#edge-mode-hint button:hover{background:rgba(255,255,255,.3)}
 
 /* --- 连线箭头手柄 --- */
 .edge-handle{cursor:crosshair;pointer-events:all;transition:r .15s,opacity .15s}

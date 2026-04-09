@@ -1,15 +1,22 @@
 /* ===== 右键菜单 ===== */
-#context-menu{position:fixed;z-index:1000;display:none;background:#fff;border:1px solid #e0e4ea;
+#context-menu,#bg-context-menu,#batch-context-menu{position:fixed;z-index:1000;display:none;background:#fff;border:1px solid #e0e4ea;
   border-radius:8px;padding:4px 0;min-width:150px;box-shadow:0 4px 16px rgba(0,0,0,.1)}
-#context-menu .ctx-item{padding:7px 14px;font-size:12px;cursor:pointer;color:#333;transition:background .1s}
-#context-menu .ctx-item:hover{background:#eef2f7}
-#context-menu .ctx-item.danger{color:#e74c3c}
-#context-menu .ctx-item.danger:hover{background:#fdf0f0}
-#context-menu .ctx-sep{height:1px;background:#eee;margin:3px 8px}
+#context-menu .ctx-item,#bg-context-menu .ctx-item,#batch-context-menu .ctx-item,
+#edge-context-menu .ctx-item{padding:7px 14px;font-size:12px;cursor:pointer;color:#333;transition:background .1s}
+#context-menu .ctx-item:hover,#bg-context-menu .ctx-item:hover,#batch-context-menu .ctx-item:hover,
+#edge-context-menu .ctx-item:hover{background:#eef2f7}
+.ctx-item.danger{color:#e74c3c}
+.ctx-item.danger:hover{background:#fdf0f0}
+.ctx-sep{height:1px;background:#eee;margin:3px 8px}
+
+/* 批量颜色点 */
+.batch-color-dot{width:22px;height:22px;border-radius:50%;cursor:pointer;display:inline-block;
+  border:2px solid transparent;transition:transform .1s,border-color .1s}
+.batch-color-dot:hover{transform:scale(1.25);border-color:#333}
 
 /* ===== 模态框 ===== */
 .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.35);
-  z-index:2000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+  z-index:10000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
 .modal-overlay.active{display:flex}
 .modal{background:#fff;border-radius:12px;width:480px;max-height:85vh;overflow:hidden;
   box-shadow:0 8px 28px rgba(0,0,0,.15);display:flex;flex-direction:column}
