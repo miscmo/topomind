@@ -1,9 +1,16 @@
 name: Deploy to GitHub Pages
-
+# 已禁用：项目为纯 Electron 桌面端，无 Web 端，部署 GitHub Pages 会导致页面崩溃
+# on:
+#   push:
+#     branches: [ main ]
+#   workflow_dispatch:
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: '此项目为 Electron 专用，Web 端不可用。确认强制部署请填 yes'
+        required: true
+        default: 'no'
 
 permissions:
   contents: read

@@ -175,6 +175,21 @@ cy.container().addEventListener('wheel', function(e) {
 // ===== 拖拽保存 =====
 cy.on('free', 'node', function() { saveCurrentLayout(); });
 
+// ===== 缩放联动显示规则 =====
+function applyZoomDisplay(zoom) {
+  if (zoom < 0.6) {
+    cy.edges('[weight="main"]').style('label', '');
+    cy.edges('[weight="minor"]').style('display', 'none');
+  } else if (zoom < 0.8) {
+    cy.edges('[weight="main"]').style('label', function(e) { return e.data('relation') || ''; });
+    cy.edges('[weight="minor"]').style('display', 'none');
+  } else {
+    cy.edges('[weight="main"]').style('label', function(e) { return e.data('relation') || ''; });
+    cy.edges('[weight="minor"]').style('display', 'element');
+  }
+}
+cy.on('zoom', function() { applyZoomDisplay(cy.zoom()); });
+
 // ===== 关闭所有自定义右键菜单 =====
 document.addEventListener('click', function() {
   document.getElementById('context-menu').style.display = 'none';

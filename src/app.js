@@ -81,8 +81,7 @@ document.getElementById('modal-input-value').addEventListener('keydown', functio
 function buildCurrentMeta() {
   var children = {};
   var edges = [];
-  cy.nodes().not('.hidden').forEach(function(n) {
-    if (n.hasClass('room-active')) return;
+  cy.nodes().forEach(function(n) {
     children[n.id()] = {
       name: n.data('label'),
       color: n.data('color') || '',
@@ -92,6 +91,7 @@ function buildCurrentMeta() {
   });
   cy.edges().not('.hidden').forEach(function(e) {
     edges.push({
+      id: e.id(),
       source: e.source().id(),
       target: e.target().id(),
       relation: e.data('relation') || '相关',

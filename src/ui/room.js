@@ -37,16 +37,17 @@ function loadRoom(dirPath) {
         color: saved.color || ''
       };
       var ele = cy.add({ group: 'nodes', data: data, classes: 'card' });
+      if (data.color) ele.style('background-color', data.color);
       if (saved.posX !== undefined && saved.posY !== undefined && (saved.posX !== 0 || saved.posY !== 0)) {
         ele.position({ x: saved.posX, y: saved.posY });
       }
     });
 
     // 添加边
-    edges.forEach(function(e, i) {
+    edges.forEach(function(e) {
       if (cy.getElementById(e.source).length && cy.getElementById(e.target).length) {
         cy.add({ group: 'edges', data: {
-          id: 'e-' + i,
+          id: e.id || autoId('e'),
           source: e.source,
           target: e.target,
           relation: e.relation || '相关',
@@ -62,8 +63,11 @@ function loadRoom(dirPath) {
       if (p.x !== 0 || p.y !== 0) hasPositions = true;
     });
 
+    // 记录进入前的缩放率（保持不变）
+    var keepZoom = cy.zoom();
+
     if (!hasPositions && cards.length > 0) {
-      // 位置全为零 → 自动布局
+      // 位置全为零 → 自动布局，但布局完成后恢复 zoom，只调整 pan
       if (cy.nodes().length > 0) {
         cy.nodes().layout({
           name: 'elk',
@@ -72,15 +76,22 @@ function loadRoom(dirPath) {
             'elk.spacing.nodeNode': 60, 'elk.layered.spacing.nodeNodeBetweenLayers': 80,
             'elk.padding': '[top=40,left=30,bottom=30,right=30]',
           },
-          fit: true, padding: 55, animate: false
+          fit: false, animate: false,
+          ready: function() {},
+          stop: function() {
+            // 布局完成后：保持 zoom，将节点包围盒居中
+            cy.zoom(keepZoom);
+            cy.center();
+          }
         }).run();
       }
     } else if (meta.zoom && meta.pan) {
-      // 有保存的视野 → 恢复缩放和平移
-      cy.viewport({ zoom: meta.zoom, pan: meta.pan });
+      // 有保存的视野 → 仅恢复 pan，zoom 保持当前值
+      cy.pan(meta.pan);
     } else if (cy.nodes().length > 0) {
-      // 有位置但没有保存的视野 → fit
-      cy.fit(undefined, 55);
+      // 有位置但无保存视野 → 保持 zoom，将节点居中
+      cy.zoom(keepZoom);
+      cy.center();
     }
 
     updateBreadcrumb();
@@ -92,44 +103,55 @@ function loadRoom(dirPath) {
 // ===== 钻入/返回 =====
 
 function drillInto(cardPath) {
-  // 保存当前布局
-  saveCurrentLayout();
-  // 检查子目录
-  Store.listCards(cardPath).then(function(kids) {
-    if (kids.length === 0) {
-      // 叶子卡片，只显示详情
-      var node = cy.getElementById(cardPath);
-      if (node.length) {
-        if (selectedNode) selectedNode.removeClass('selected');
-        node.addClass('selected'); selectedNode = node;
-        showDetail(cardPath);
+  // 先同步构建 meta，保存完成后再检查子目录，避免 loadRoom 清空图谱前 save 未完成
+  var meta = buildCurrentMeta();
+  var dirPath = currentRoomPath || currentKBPath;
+  Store.saveLayout(dirPath, meta).then(function() {
+    Store.listCards(cardPath).then(function(kids) {
+      if (kids.length === 0) {
+        // 叶子卡片，只显示详情
+        var node = cy.getElementById(cardPath);
+        if (node.length) {
+          if (selectedNode) selectedNode.removeClass('selected');
+          node.addClass('selected'); selectedNode = node;
+          showDetail(cardPath);
+        }
+        return;
       }
-      return;
-    }
-    // 有子目录，进入
-    var prev = currentRoomPath || currentKBPath;
-    roomHistory.push(prev);
-    loadRoom(cardPath);
+      // 有子目录，进入
+      var prev = currentRoomPath || currentKBPath;
+      roomHistory.push(prev);
+      loadRoom(cardPath);
+    });
   });
 }
 
 function goBack() {
   if (roomHistory.length === 0) { showHome(); return; }
-  saveCurrentLayout();
-  loadRoom(roomHistory.pop());
+  var meta = buildCurrentMeta();
+  var dirPath = currentRoomPath || currentKBPath;
+  Store.saveLayout(dirPath, meta).then(function() {
+    loadRoom(roomHistory.pop());
+  });
 }
 
 function goRoot() {
-  saveCurrentLayout();
-  roomHistory = [];
-  loadRoom(currentKBPath);
+  var meta = buildCurrentMeta();
+  var dirPath = currentRoomPath || currentKBPath;
+  Store.saveLayout(dirPath, meta).then(function() {
+    roomHistory = [];
+    loadRoom(currentKBPath);
+  });
 }
 
 function goToHistoryLevel(idx) {
-  saveCurrentLayout();
-  var target = roomHistory[idx];
-  roomHistory = roomHistory.slice(0, idx);
-  loadRoom(target);
+  var meta = buildCurrentMeta();
+  var dirPath = currentRoomPath || currentKBPath;
+  Store.saveLayout(dirPath, meta).then(function() {
+    var target = roomHistory[idx];
+    roomHistory = roomHistory.slice(0, idx);
+    loadRoom(target);
+  });
 }
 
 // ===== 保存当前房间布局 =====

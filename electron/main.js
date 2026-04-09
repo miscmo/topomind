@@ -71,7 +71,15 @@ function registerIPC() {
 function buildMenu() {
   var tpl = [
     { label: '文件', submenu: [
-      { label: '选择工作目录...', click: function() { ipcMain.emit('fs:selectWorkDir'); } },
+      { label: '选择工作目录...', click: function() {
+        var result = dialog.showOpenDialogSync(win, {
+          title: '选择工作目录', properties: ['openDirectory', 'createDirectory']
+        });
+        if (result && result[0]) {
+          fs.setRootDir(result[0]);
+          win.webContents.send('root-dir-changed', result[0]);
+        }
+      }},
       { type: 'separator' },
       { role: 'quit', label: '退出' }
     ]},

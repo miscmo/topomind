@@ -101,9 +101,3 @@ var Store = (function() {
     clearAll: clearAll, showSaveIndicator: showSaveIndicator
   };
 })();
-
-function saveState() {
-  if (typeof currentKBPath !== 'undefined' && currentKBPath) {
-    Store.saveGraphDebounced(currentRoomPath || currentKBPath, buildCurrentMeta);
-  }
-}

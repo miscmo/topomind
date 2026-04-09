@@ -16,7 +16,12 @@ function ensureDir(d) {
 }
 
 function abs(relPath) {
-  return relPath ? path.join(rootDir, relPath) : rootDir;
+  if (!relPath) return rootDir;
+  var result = path.resolve(rootDir, relPath);
+  if (!result.startsWith(path.resolve(rootDir))) {
+    throw new Error('路径越界: ' + relPath);
+  }
+  return result;
 }
 
 // ===== 目录操作 =====
@@ -107,8 +112,14 @@ function readBlobFile(filePath) {
 }
 
 function clearAll() {
-  if (fs.existsSync(rootDir)) fs.rmSync(rootDir, { recursive: true, force: true });
-  ensureDir(rootDir);
+  var rootAbs = path.resolve(rootDir);
+  if (!fs.existsSync(rootAbs)) { ensureDir(rootAbs); return; }
+  // 逐个删除子知识库目录，不删除 rootDir 本身（防止 rootDir 被设为 ~/Documents 等目录时误删）
+  fs.readdirSync(rootAbs, { withFileTypes: true }).forEach(function(e) {
+    if (e.isDirectory() && !e.name.startsWith('.')) {
+      fs.rmSync(path.join(rootAbs, e.name), { recursive: true, force: true });
+    }
+  });
 }
 
 module.exports = {

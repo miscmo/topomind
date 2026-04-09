@@ -35,7 +35,7 @@ function showDetail(cardPath) {
       childInfo = '<div style="margin:12px 0;padding:10px 14px;background:#f5f7fa;border-radius:8px;font-size:12px;color:#666">';
       childInfo += '<strong style="color:#333">📂 包含 ' + kids.length + ' 个子概念</strong><br>';
       kids.forEach(function(kid) {
-        childInfo += '<span style="display:inline-block;margin:3px 4px 3px 0;padding:2px 8px;background:#4a6fa5;color:#fff;border-radius:4px;font-size:11px;cursor:pointer" onclick="drillInto(\'' + kid.path.replace(/'/g, "\\'") + '\')">' + (kid.name || '') + '</span>';
+      childInfo += '<span style="display:inline-block;margin:3px 4px 3px 0;padding:2px 8px;background:#4a6fa5;color:#fff;border-radius:4px;font-size:11px;cursor:pointer" onclick="drillInto(\'' + esc(kid.path) + '\')">' + escHtml(kid.name || '') + '</span>';
       });
       childInfo += '</div>';
     }
