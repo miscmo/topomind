@@ -161,6 +161,7 @@ function saveCurrentLayout() {
   var dirPath = currentRoomPath || currentKBPath;
   var meta = buildCurrentMeta();
   Store.saveLayout(dirPath, meta);
+  GitStore.markDirty(currentKBPath);
 }
 
 // ===== 面包屑 =====

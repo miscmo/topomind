@@ -6,7 +6,10 @@ function addCardPrompt() {
   showInputModal('新建卡片', '输入卡片名称...').then(function(name) {
     if (!name) return;
     var dirPath = currentRoomPath || currentKBPath;
-    Store.createCard(dirPath, name).then(function() { loadRoom(dirPath); });
+    Store.createCard(dirPath, name).then(function() {
+      loadRoom(dirPath);
+      GitStore.markDirty(currentKBPath);
+    });
   });
 }
 

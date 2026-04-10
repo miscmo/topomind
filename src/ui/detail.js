@@ -8,6 +8,7 @@ function flushEdit() {
   if (ta && ta.classList.contains('active') && selectedNode) {
     Store.writeMarkdown(selectedNode.id(), ta.value);
     Store.showSaveIndicator();
+    GitStore.markDirty(currentKBPath);
   }
 }
 
@@ -89,6 +90,7 @@ function switchDetailMode(mode) {
     if (selectedNode) {
       Store.writeMarkdown(selectedNode.id(), ta.value);
       Store.showSaveIndicator();
+      GitStore.markDirty(currentKBPath);
     }
     document.getElementById('btn-mode-read').classList.add('active');
     document.getElementById('btn-mode-edit').classList.remove('active');

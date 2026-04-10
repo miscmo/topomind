@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="src/css/detail.css">
 <link rel="stylesheet" href="src/css/modal.css">
 <link rel="stylesheet" href="src/css/home.css">
+<link rel="stylesheet" href="src/css/git.css">
 </head>
 <body>
 
@@ -79,6 +80,8 @@
         <div class="sep"></div>
         <button id="btn-export">↓ 导出</button>
         <button id="btn-reset">↺ 重置</button>
+        <div class="sep"></div>
+        <button id="btn-git-status">⎇ Git<span class="git-dot" style="display:none"></span></button>
       </div>
 
       <div id="save-indicator">✓ 已保存</div>
@@ -186,12 +189,128 @@
 <!-- ===== 模态框 ===== -->
 <div class="modal-overlay" id="modal-input"><div class="modal" style="width:380px"><div class="modal-header"><h3 id="modal-input-title">输入</h3><button class="modal-close" onclick="cancelInputModal()">✕</button></div><div class="modal-body"><input type="text" id="modal-input-value" style="width:100%;height:36px;border:1px solid #ddd;border-radius:8px;padding:0 12px;font-size:14px;outline:none" placeholder="请输入..."></div><div class="modal-footer"><button class="btn" onclick="cancelInputModal()">取消</button><button class="btn btn-primary" id="modal-input-ok">确定</button></div></div></div>
 
+<!-- ===== Git: Commit 面板 ===== -->
+<div class="git-modal-overlay" id="git-commit-overlay">
+  <div class="git-modal git-modal--md">
+    <div class="git-modal-header">
+      <h3>提交变更</h3>
+      <button class="git-modal-close" onclick="GitUI.closeCommit()">✕</button>
+    </div>
+    <div class="git-modal-body">
+      <div class="git-file-list" id="git-commit-files"></div>
+      <div class="git-commit-msg-label">提交说明</div>
+      <textarea class="git-commit-msg-input" id="git-commit-msg" placeholder="留空则自动生成..."></textarea>
+    </div>
+    <div class="git-modal-footer">
+      <button class="git-btn" onclick="GitUI.closeCommit()">取消</button>
+      <button class="git-btn git-btn--primary" id="git-commit-btn" onclick="GitUI.doCommit()">提交</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Git: 历史 / Diff 面板 ===== -->
+<div class="git-modal-overlay" id="git-log-overlay">
+  <div class="git-modal git-modal--lg">
+    <div class="git-modal-header">
+      <h3>提交历史</h3>
+      <button class="git-modal-close" onclick="GitUI.closeLog()">✕</button>
+    </div>
+    <div class="git-modal-body" style="padding:0">
+      <div class="git-diff-layout">
+        <div class="git-diff-sidebar" id="git-log-list"></div>
+        <div class="git-diff-main" id="git-log-diff"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Git: 同步面板 ===== -->
+<div class="git-modal-overlay" id="git-sync-overlay">
+  <div class="git-modal git-modal--sm">
+    <div class="git-modal-header">
+      <h3 id="git-sync-title">同步</h3>
+      <button class="git-modal-close" onclick="GitUI.closeSync()">✕</button>
+    </div>
+    <div class="git-modal-body">
+      <div class="git-sync-summary" id="git-sync-summary"></div>
+      <div class="git-sync-log hidden" id="git-sync-log"><pre id="git-sync-log-pre"></pre></div>
+    </div>
+    <div class="git-modal-footer">
+      <button class="git-btn" onclick="GitUI.closeSync()">关闭</button>
+      <button class="git-btn git-btn--primary" id="git-sync-action-btn"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Git: 远程设置 ===== -->
+<div class="git-modal-overlay" id="git-remote-overlay">
+  <div class="git-modal git-modal--md">
+    <div class="git-modal-header">
+      <h3>远程仓库设置</h3>
+      <button class="git-modal-close" onclick="GitUI.closeRemote()">✕</button>
+    </div>
+    <div class="git-modal-body">
+      <div class="git-form-group">
+        <label class="git-form-label">认证方式</label>
+        <div class="git-radio-group">
+          <label><input type="radio" name="git-auth-type" value="token" checked> Token (HTTPS)</label>
+          <label><input type="radio" name="git-auth-type" value="ssh"> SSH 密钥</label>
+        </div>
+      </div>
+      <div class="git-form-group">
+        <label class="git-form-label">远程仓库 URL</label>
+        <input class="git-form-input" id="git-remote-url" placeholder="https://github.com/user/repo.git">
+        <div class="git-form-hint">支持 GitHub、Gitee 等 Git 托管服务</div>
+      </div>
+      <div class="git-auth-panel" id="git-auth-token-panel">
+        <div class="git-form-group">
+          <label class="git-form-label">Personal Access Token</label>
+          <input class="git-form-input" id="git-remote-token" type="password" placeholder="ghp_xxxxxxxxxxxx">
+          <div class="git-form-hint">GitHub: Settings → Developer settings → Personal access tokens</div>
+        </div>
+      </div>
+      <div class="git-auth-panel hidden" id="git-auth-ssh-panel">
+        <div class="git-form-group">
+          <label class="git-form-label">SSH 公钥（添加到 GitHub/Gitee）</label>
+          <div class="git-ssh-pubkey" id="git-ssh-pubkey">加载中...</div>
+          <button class="git-ssh-copy-btn" onclick="GitUI.copySSHKey()">复制公钥</button>
+        </div>
+      </div>
+    </div>
+    <div class="git-modal-footer">
+      <button class="git-btn" onclick="GitUI.closeRemote()">取消</button>
+      <button class="git-btn git-btn--primary" onclick="GitUI.saveRemote()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Git: 冲突解决 ===== -->
+<div class="git-modal-overlay" id="git-conflict-overlay">
+  <div class="git-modal git-modal--lg">
+    <div class="git-modal-header">
+      <h3>解决冲突</h3>
+      <button class="git-modal-close" onclick="GitUI.closeConflict()">✕</button>
+    </div>
+    <div class="git-modal-body" style="padding:0">
+      <div class="git-conflict-layout">
+        <div class="git-conflict-sidebar" id="git-conflict-files"></div>
+        <div class="git-conflict-main" id="git-conflict-main"></div>
+      </div>
+    </div>
+    <div class="git-modal-footer">
+      <button class="git-btn" onclick="GitUI.closeConflict()">取消</button>
+      <button class="git-btn git-btn--primary" id="git-conflict-complete-btn" onclick="GitUI.completeConflict()">完成合并</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-confirm"><div class="modal" style="width:360px"><div class="modal-header"><h3>确认删除</h3><button class="modal-close" onclick="document.getElementById('modal-confirm').classList.remove('active');_pendingConfirmAction=null">✕</button></div><div class="modal-body"><p id="confirm-message" style="font-size:13px;color:#555"></p></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('modal-confirm').classList.remove('active');_pendingConfirmAction=null">取消</button><button class="btn btn-danger" id="btn-confirm-delete">删除</button></div></div></div>
 
 <!-- ===== JS 模块 ===== -->
 <!-- 存储层 -->
 <script src="src/core/fs-backend.js"></script>
 <script src="src/core/storage.js"></script>
+<script src="src/core/git-backend.js"></script>
 <!-- UI 层 -->
 <script src="src/ui/graph.js"></script>
 <!-- 业务层 -->
@@ -203,5 +322,6 @@
 <script src="src/ui/crud.js"></script>
 <script src="src/ui/interaction.js"></script>
 <script src="src/ui/grid.js"></script>
+<script src="src/ui/git.js"></script>
 </body>
 </html>

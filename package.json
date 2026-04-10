@@ -52,5 +52,8 @@
   "devDependencies": {
     "electron": "^30.5.1",
     "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "simple-git": "^3.35.2"
   }
 }

@@ -5,6 +5,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron')
 const path = require('path');
 const fs = require('./file-service');
 const nfs = require('fs');
+const gitIPC = require('./git-ipc');
 
 let win = null;
 
@@ -105,6 +106,7 @@ function buildMenu() {
 // ===== 生命周期 =====
 app.whenReady().then(function() {
   registerIPC();
+  gitIPC.registerGitIPC(ipcMain, function() { return fs; });
   buildMenu();
   createWindow();
   app.on('activate', function() { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

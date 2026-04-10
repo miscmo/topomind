@@ -48,9 +48,10 @@ function refreshKBList() {
           ? '<img src="' + escHtml(rootDir + '/' + kb.path + '/' + kb.cover) + '">'
           : '<span class="home-card-image-icon">📚</span>';
 
-        html += '<div class="home-card" onclick="openKB(\'' + esc(kb.path) + '\')">';
+        html += '<div class="home-card" data-kb-path="' + esc(kb.path) + '" onclick="openKB(\'' + esc(kb.path) + '\')">';
         html += '<div class="home-card-image">' + imgContent;
         html += '<button class="home-card-cover-btn" onclick="event.stopPropagation();changeKBCover(\'' + esc(kb.path) + '\')" title="更换封面">📷 更换</button>';
+        html += '<div class="git-status-badge"></div>';
         html += '</div>';
         html += '<div class="home-card-body">';
         html += '<div class="home-card-title">';
@@ -69,6 +70,20 @@ function refreshKBList() {
       // 隐藏的文件输入
       html += '<input type="file" id="kb-cover-file-input" accept="image/*" style="display:none">';
       grid.innerHTML = html;
+
+      // 异步注入 git 状态徽标
+      GitBackend.statusBatch(kbs.map(function(kb) { return kb.path; })).then(function(statuses) {
+        kbs.forEach(function(kb) {
+          var st = statuses[kb.path] || { state: 'uninit' };
+          var card = grid.querySelector('[data-kb-path="' + kb.path + '"]');
+          if (!card) return;
+          var badge = card.querySelector('.git-status-badge');
+          if (!badge) return;
+          var label = _gitBadgeLabel(st);
+          var cls = 'git-badge git-badge--' + st.state;
+          badge.innerHTML = '<span class="' + cls + '" onclick="event.stopPropagation();GitUI.openForKB(\'' + esc(kb.path) + '\')" title="Git 状态">' + label + '</span>';
+        });
+      }).catch(function() {});
     });
   }).catch(function(err) {
     console.error('加载知识库列表失败:', err);
@@ -194,7 +209,26 @@ function openKB(kbPath) {
   roomHistory = [];
   hideHome();
   loadRoom(kbPath);
+  // 自动初始化 git（如果可用）
+  GitBackend.checkAvailable().then(function(r) {
+    if (r && r.available) GitBackend.init(kbPath);
+  }).catch(function() {});
 }
 
 function esc(s) { return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
 function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+function _gitBadgeLabel(st) {
+  var map = {
+    'uninit': '○ 未追踪',
+    'dirty': '● 有变更',
+    'clean': '✓ 本地',
+    'ahead': '⬆ ' + (st.ahead || '') ,
+    'behind': '⬇ ' + (st.behind || ''),
+    'diverged': '⇅ 分叉',
+    'conflict': '⚡ 冲突',
+    'no-remote': '○ 无远程',
+    'git-unavailable': '— Git 不可用',
+  };
+  return map[st.state] || st.state;
+}
