@@ -17,8 +17,11 @@ function ensureDir(d) {
 
 function abs(relPath) {
   if (!relPath) return rootDir;
-  var result = path.resolve(rootDir, relPath);
-  if (!result.startsWith(path.resolve(rootDir))) {
+  var resolvedRoot = path.resolve(rootDir);
+  var result = path.resolve(resolvedRoot, relPath);
+  // 用 path.relative 检查：若结果以 '..' 开头，说明路径逃出了根目录
+  var rel = path.relative(resolvedRoot, result);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
     throw new Error('路径越界: ' + relPath);
   }
   return result;

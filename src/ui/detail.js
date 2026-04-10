@@ -3,6 +3,19 @@
  */
 marked.setOptions({ breaks: true, gfm: true });
 
+// 用于追踪当前显示版本，防止竞态条件
+var _detailVersion = 0;
+// 记录当前已创建的 Object URL，切换卡片时统一释放
+var _activeObjectURLs = [];
+
+/** 释放上一次创建的所有 Object URL */
+function _revokeActiveObjectURLs() {
+  _activeObjectURLs.forEach(function(url) {
+    try { URL.revokeObjectURL(url); } catch (e) {}
+  });
+  _activeObjectURLs = [];
+}
+
 function flushEdit() {
   var ta = document.getElementById('detail-edit-area');
   if (ta && ta.classList.contains('active') && selectedNode) {
@@ -14,6 +27,11 @@ function flushEdit() {
 
 function showDetail(cardPath) {
   flushEdit();
+  // 递增版本号：之后所有异步回调会对比此版本，旧版本的回调直接丢弃
+  var version = ++_detailVersion;
+  // 释放上一张卡片创建的 Object URL，防止内存泄漏
+  _revokeActiveObjectURLs();
+
   var node = cy.getElementById(cardPath);
   if (!node.length) return;
 
@@ -46,7 +64,7 @@ function showDetail(cardPath) {
       if (rendered) {
         rendered.style.display = '';
         rendered.innerHTML = (md ? marked.parse(md) : '<div style="color:#bbb;margin-top:20px">暂无文档内容</div>') + childInfo;
-        resolveRenderedImages(rendered, cardPath);
+        resolveRenderedImages(rendered, cardPath, version);
       }
     });
   });
@@ -100,16 +118,27 @@ function switchDetailMode(mode) {
   }
 }
 
-/** 解析图片引用 */
-function resolveRenderedImages(container, cardPath) {
+/** 解析图片引用（带竞态保护和 URL 追踪） */
+function resolveRenderedImages(container, cardPath, version) {
   container.querySelectorAll('img').forEach(function(img) {
     var src = img.getAttribute('src') || '';
     if (src.startsWith('images/')) {
       var imgPath = cardPath + '/' + src;
       img.style.opacity = '0.3';
       Store.loadImage(imgPath).then(function(url) {
-        if (url) { img.src = url; img.style.opacity = '1'; }
-        else { img.alt = '[图片加载失败]'; img.style.opacity = '1'; }
+        // 若版本已过期（用户已切换到其他卡片），丢弃结果并释放 URL
+        if (version !== _detailVersion) {
+          if (url) try { URL.revokeObjectURL(url); } catch (e) {}
+          return;
+        }
+        if (url) {
+          _activeObjectURLs.push(url); // 登记，切换时统一 revoke
+          img.src = url;
+          img.style.opacity = '1';
+        } else {
+          img.alt = '[图片加载失败]';
+          img.style.opacity = '1';
+        }
       });
     }
   });

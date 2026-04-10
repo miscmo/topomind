@@ -39,10 +39,10 @@ function refreshKBList() {
       return Store.countChildren(kb.path);
     });
 
-    Promise.all(countPromises).then(function(counts) {
+    Promise.allSettled(countPromises).then(function(results) {
       var html = '';
       kbs.forEach(function(kb, i) {
-        var nodeCount = counts[i] || 0;
+        var nodeCount = (results[i].status === 'fulfilled' ? results[i].value : 0) || 0;
         var absPath = rootDir + '/' + kb.path;
         var imgContent = kb.cover
           ? '<img src="' + escHtml(rootDir + '/' + kb.path + '/' + kb.cover) + '">'

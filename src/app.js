@@ -52,8 +52,8 @@ function showContextMenu(menuId, x, y) {
 var _inputResolve = null;
 function showInputModal(title, placeholder, defaultVal) {
   return new Promise(function(resolve) {
-    // 如果上一个 promise 还未 resolve，先取消它
-    if (_inputResolve) { _inputResolve(null); }
+    // 如果上一个 promise 还未 resolve，先以 null 取消，再清空引用
+    if (_inputResolve) { _inputResolve(null); _inputResolve = null; }
     _inputResolve = resolve;
     document.getElementById('modal-input-title').textContent = title || '输入';
     var inp = document.getElementById('modal-input-value');

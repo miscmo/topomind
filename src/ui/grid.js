@@ -179,8 +179,13 @@ function drawGrid() {
   // 网格点（只在画布内绘制）
   if (gridEnabled) {
     var step = GRID_SIZE * zoom;
-    while (step < 12) step *= 5;
-    while (step > 80) step /= 2;
+    // 防止 step 为 0 导致死循环，并限制缩放过小/过大时的步长范围
+    if (step <= 0) step = GRID_SIZE;
+    var safetyLimit = 0;
+    while (step < 12 && safetyLimit++ < 20) step *= 5;
+    safetyLimit = 0;
+    while (step > 80 && safetyLimit++ < 20) step /= 2;
+    if (step <= 0) step = 20; // 兜底保护
     var bigStep = step * 5;
 
     var startX = Math.max(bx, 0);

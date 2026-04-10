@@ -166,20 +166,25 @@ function saveCurrentLayout() {
 
 // ===== 面包屑 =====
 
+/** 兼容 Windows/Unix 路径，取最后一段名称 */
+function _pathBasename(p) {
+  return (p || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || p;
+}
+
 function updateBreadcrumb() {
   var bc = document.getElementById('breadcrumb');
   if (!currentRoomPath) { bc.classList.remove('active'); return; }
   bc.classList.add('active');
 
-  var html = '<span class="bc-link" onclick="goRoot()">🏠 ' + (currentKBPath || '根') + '</span>';
+  var html = '<span class="bc-link" onclick="goRoot()">🏠 ' + escHtml(_pathBasename(currentKBPath) || '根') + '</span>';
   for (var i = 0; i < roomHistory.length; i++) {
     var p = roomHistory[i];
     if (p === currentKBPath) continue;
-    var name = p.split('/').pop();
+    var name = escHtml(_pathBasename(p));
     html += '<span class="bc-sep">›</span><span class="bc-link" onclick="goToHistoryLevel(' + i + ')">' + name + '</span>';
   }
   if (currentRoomPath) {
-    var curName = currentRoomPath.split('/').pop();
+    var curName = escHtml(_pathBasename(currentRoomPath));
     html += '<span class="bc-sep">›</span><span class="bc-current">' + curName + '</span>';
   }
   bc.innerHTML = html;
@@ -188,9 +193,9 @@ function updateBreadcrumb() {
 function updateRoomTitle() {
   var h = document.getElementById('header');
   if (!currentRoomPath) {
-    h.textContent = currentKBPath || 'TopoMind';
+    h.textContent = _pathBasename(currentKBPath) || 'TopoMind';
   } else {
-    h.textContent = currentRoomPath.split('/').pop();
+    h.textContent = _pathBasename(currentRoomPath);
   }
 }
 

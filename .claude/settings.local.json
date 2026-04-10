@@ -5,7 +5,9 @@
       "Bash(findstr /s /n \"applyLayout layout fit animate\" D:\\\\Code\\\\topomind\\\\src\\\\js\\\\*.js)",
       "Bash(node -e ':*)",
       "WebFetch(domain:js.cytoscape.org)",
-      "WebSearch"
+      "WebSearch",
+      "Read(//c/Users/75465/Code/topomind/**)",
+      "Read(//d//**)"
     ]
   }
 }

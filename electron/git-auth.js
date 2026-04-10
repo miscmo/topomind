@@ -37,21 +37,18 @@ function saveStore() {
 async function saveToken(kbPath, token) {
   var store = loadStore();
   if (!store[kbPath]) store[kbPath] = {};
-  try {
-    if (safeStorage.isEncryptionAvailable()) {
-      store[kbPath].token = safeStorage.encryptString(token).toString('base64');
-      store[kbPath].tokenEncrypted = true;
-    } else {
-      // safeStorage 不可用时明文存储（仅开发场景）
-      store[kbPath].token = Buffer.from(token).toString('base64');
-      store[kbPath].tokenEncrypted = false;
-    }
-  } catch (e) {
-    store[kbPath].token = Buffer.from(token).toString('base64');
-    store[kbPath].tokenEncrypted = false;
+  if (!safeStorage.isEncryptionAvailable()) {
+    // safeStorage 不可用时拒绝存储，避免 Token 明文落盘
+    return { ok: false, error: '系统安全存储不可用，无法保存 Token。请确保系统密钥链服务正常运行。' };
   }
-  saveStore();
-  return { ok: true };
+  try {
+    store[kbPath].token = safeStorage.encryptString(token).toString('base64');
+    store[kbPath].tokenEncrypted = true;
+    saveStore();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: '加密 Token 失败: ' + e.message };
+  }
 }
 
 async function getToken(kbPath) {
@@ -62,7 +59,12 @@ async function getToken(kbPath) {
     if (entry.tokenEncrypted && safeStorage.isEncryptionAvailable()) {
       return safeStorage.decryptString(Buffer.from(entry.token, 'base64'));
     }
-    return Buffer.from(entry.token, 'base64').toString('utf-8');
+    // 兼容读取旧版未加密数据（tokenEncrypted=false），读后提示用户重新保存
+    if (!entry.tokenEncrypted) {
+      console.warn('[git-auth] 检测到未加密 Token，建议在设置中重新保存以启用加密存储。');
+      return Buffer.from(entry.token, 'base64').toString('utf-8');
+    }
+    return null;
   } catch (e) {
     return null;
   }
