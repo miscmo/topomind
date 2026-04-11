@@ -6,23 +6,38 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // IPC 通道白名单，只允许渲染进程调用这些通道
 const ALLOWED_CHANNELS = new Set([
-  'fs:listChildren', 'fs:mkDir', 'fs:rmDir',
+  // fs
+  'fs:init', 'fs:listChildren', 'fs:mkDir', 'fs:rmDir',
   'fs:readMeta', 'fs:writeMeta', 'fs:getDir',
   'fs:readFile', 'fs:writeFile', 'fs:deleteFile',
   'fs:writeBlobFile', 'fs:readBlobFile', 'fs:clearAll',
   'fs:setRootDir', 'fs:getRootDir', 'fs:selectDir',
   'fs:openInFinder', 'fs:countChildren',
+  // git: basic
   'git:checkAvailable', 'git:init', 'git:status',
+  'git:statusBatch', 'git:isDirty',
   'git:commit', 'git:log', 'git:diff',
+  'git:diffFiles', 'git:commitDiffFiles', 'git:commitFileDiff',
+  // git: remote
   'git:push', 'git:pull', 'git:fetch',
-  'git:setRemote', 'git:getRemote',
-  'git:getConflictList', 'git:resolveConflict', 'git:abortMerge',
-  'git:statusBatch', 'git:getSSHPublicKey',
-  'git:saveToken', 'git:setAuthType', 'git:getAuthType',
+  'git:remote:get', 'git:remote:set',
+  // git: conflict
+  'git:conflict:list', 'git:conflict:show',
+  'git:conflict:resolve', 'git:conflict:complete',
+  // git: auth
+  'git:auth:setToken', 'git:auth:getSSHKey',
+  'git:auth:setAuthType', 'git:auth:getAuthType',
+  // save
+  'save:layout',
+]);
+
+const ALLOWED_SEND_SYNC_CHANNELS = new Set([
+  'save:layout',
 ]);
 
 const ALLOWED_RECEIVE_CHANNELS = new Set([
   'app:menu-action',
+  'save:before-quit',
 ]);
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -33,6 +48,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
     var args = Array.prototype.slice.call(arguments, 1);
     return ipcRenderer.invoke.apply(ipcRenderer, [channel].concat(args));
+  },
+  sendSync: function(channel) {
+    if (!ALLOWED_SEND_SYNC_CHANNELS.has(channel)) {
+      console.error('[preload] sendSync 通道不在白名单中:', channel);
+      return;
+    }
+    var args = Array.prototype.slice.call(arguments, 1);
+    return ipcRenderer.sendSync.apply(ipcRenderer, [channel].concat(args));
   },
   on: function(channel, fn) {
     if (!ALLOWED_RECEIVE_CHANNELS.has(channel)) {

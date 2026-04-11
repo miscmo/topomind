@@ -19,8 +19,12 @@
 <link rel="stylesheet" href="src/css/modal.css">
 <link rel="stylesheet" href="src/css/home.css">
 <link rel="stylesheet" href="src/css/git.css">
+<link rel="stylesheet" href="src/css/badges.css">
 </head>
 <body>
+
+<div id="tab-bar"></div>
+<div id="page-container">
 
 <!-- ========== 首页：知识库列表 ========== -->
 <div id="home-modal">
@@ -40,18 +44,172 @@
 </div>
 
 <!-- ========== 图谱页 ========== -->
-<div id="graph-page" style="display:none;width:100%;height:100%">
+<div id="graph-page" style="display:none;flex:1;min-height:0">
   <div id="app">
-    <!-- 左侧导航 -->
+
+    <!-- 展开按钮（面板收起时显示） -->
+    <button id="btn-toggle-style" title="展开样式">▶</button>
+
+    <!-- 左侧样式面板 -->
     <div id="nav-panel">
-      <div id="nav-header">🧠 知识目录</div>
-      <div id="nav-tree"></div>
-    </div>
+      <div id="style-panel-header">
+        <span>样式</span>
+        <button id="btn-collapse-style" title="收起">◀</button>
+      </div>
+      <div id="style-panel-body">
+
+        <!-- 空状态 -->
+        <div class="sp-empty" id="sp-empty"><span>点击节点<br>设置样式</span></div>
+
+        <!-- 内容 -->
+        <div id="sp-body" style="display:none">
+          <div class="sp-node-name" id="sp-node-name"></div>
+
+          <!-- ── 文字 ── -->
+          <div class="sp-section-title">文字</div>
+
+          <div class="sp-row">
+            <label class="sp-label">颜色</label>
+            <div class="sp-color-picker-wrap">
+              <div class="sp-color-swatch" id="sp-font-color-swatch">
+                <input type="color" id="sp-font-color" class="sp-color-hidden">
+              </div>
+              <div class="sp-recent-inline" id="sp-font-recent"></div>
+            </div>
+          </div>
+
+          <div class="sp-row">
+            <label class="sp-label">大小</label>
+            <div class="sp-num-wrap">
+              <input type="number" id="sp-font-size" class="sp-num-input" min="8" max="72" value="12">
+              <span class="sp-num-unit">px</span>
+            </div>
+          </div>
+
+          <div class="sp-row">
+            <label class="sp-label">样式</label>
+            <div class="sp-btn-group" id="sp-font-style">
+              <button class="sp-icon-btn sp-font-style-btn" data-style="bold" title="加粗"><b>B</b></button>
+              <button class="sp-icon-btn sp-font-style-btn" data-style="italic" title="斜体"><i>I</i></button>
+            </div>
+          </div>
+
+          <div class="sp-row">
+            <label class="sp-label">对齐</label>
+            <div class="sp-btn-group" id="sp-text-align">
+              <button class="sp-icon-btn" data-value="left" title="左对齐">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="1"/><rect x="1" y="6" width="9" height="2" rx="1"/><rect x="1" y="10" width="12" height="2" rx="1"/><rect x="1" y="14" width="7" height="2" rx="1"/></svg>
+              </button>
+              <button class="sp-icon-btn" data-value="center" title="居中">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="1"/><rect x="3.5" y="6" width="9" height="2" rx="1"/><rect x="2" y="10" width="12" height="2" rx="1"/><rect x="4.5" y="14" width="7" height="2" rx="1"/></svg>
+              </button>
+              <button class="sp-icon-btn" data-value="right" title="右对齐">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="1"/><rect x="6" y="6" width="9" height="2" rx="1"/><rect x="3" y="10" width="12" height="2" rx="1"/><rect x="8" y="14" width="7" height="2" rx="1"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="sp-row">
+            <label class="sp-label">折行</label>
+            <label class="sp-toggle">
+              <input type="checkbox" id="sp-text-wrap">
+              <span class="sp-toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- ── 节点 ── -->
+          <div class="sp-section-title">节点</div>
+
+          <div class="sp-row">
+            <label class="sp-label">背景色</label>
+            <div class="sp-color-picker-wrap">
+              <div class="sp-color-swatch" id="sp-bg-color-swatch">
+                <input type="color" id="sp-bg-color" class="sp-color-hidden">
+              </div>
+              <div class="sp-recent-inline" id="sp-bg-recent"></div>
+            </div>
+          </div>
+
+          <div class="sp-row">
+            <label class="sp-label">宽度</label>
+            <div class="sp-num-wrap">
+              <input type="number" id="sp-node-width" class="sp-num-input" min="0" max="1000" placeholder="自动">
+              <span class="sp-num-unit">px</span>
+            </div>
+          </div>
+
+          <div class="sp-row">
+            <label class="sp-label">高度</label>
+            <div class="sp-num-wrap">
+              <input type="number" id="sp-node-height" class="sp-num-input" min="0" max="1000" placeholder="自动">
+              <span class="sp-num-unit">px</span>
+            </div>
+          </div>
+
+          <div class="sp-row">
+            <label class="sp-label">透明度</label>
+            <div class="sp-slider-wrap">
+              <input type="range" id="sp-opacity" class="sp-slider" min="10" max="100" value="100" step="5">
+              <span class="sp-slider-val" id="sp-opacity-val">100%</span>
+            </div>
+          </div>
+
+          <!-- ── 边框 ── -->
+          <div class="sp-section-title">边框</div>
+
+          <div class="sp-row">
+            <label class="sp-label">颜色</label>
+            <div class="sp-color-picker-wrap">
+              <div class="sp-color-swatch" id="sp-border-color-swatch">
+                <input type="color" id="sp-border-color" class="sp-color-hidden">
+              </div>
+              <div class="sp-recent-inline" id="sp-border-recent"></div>
+            </div>
+          </div>
+
+          <div class="sp-row">
+            <label class="sp-label">粗细</label>
+            <div class="sp-num-wrap">
+              <input type="number" id="sp-border-width" class="sp-num-input" min="0" max="20" value="0">
+              <span class="sp-num-unit">px</span>
+            </div>
+          </div>
+
+          <!-- ── 形状 ── -->
+          <div class="sp-section-title">形状</div>
+
+          <div class="sp-row">
+            <div class="sp-shape-grid" id="sp-shape-grid">
+              <button class="sp-shape-btn active" data-shape="roundrectangle" title="圆角矩形">▭</button>
+              <button class="sp-shape-btn" data-shape="rectangle" title="矩形">□</button>
+              <button class="sp-shape-btn" data-shape="ellipse" title="椭圆">○</button>
+              <button class="sp-shape-btn" data-shape="diamond" title="菱形">◇</button>
+              <button class="sp-shape-btn" data-shape="hexagon" title="六边形">⬡</button>
+              <button class="sp-shape-btn" data-shape="triangle" title="三角形">△</button>
+            </div>
+          </div>
+
+          <!-- ── 效果 ── -->
+          <div class="sp-section-title">效果</div>
+
+          <div class="sp-row">
+            <label class="sp-label">阴影</label>
+            <label class="sp-toggle">
+              <input type="checkbox" id="sp-shadow">
+              <span class="sp-toggle-slider"></span>
+            </label>
+          </div>
+
+        </div><!-- /#sp-body -->
+      </div><!-- /#style-panel-body -->
+    </div><!-- /#nav-panel -->
 
     <!-- 中间图谱 -->
     <div id="graph-panel">
       <canvas id="grid-canvas" class="grid-bg"></canvas>
       <div id="cy"></div>
+      <div id="node-badges-layer"></div>
+      <div id="node-tooltip"><div id="node-tooltip-title"></div><div id="node-tooltip-body"></div></div>
 
       <div id="header">TopoMind</div>
       <div id="breadcrumb"></div>
@@ -304,7 +462,9 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modal-confirm"><div class="modal" style="width:360px"><div class="modal-header"><h3>确认删除</h3><button class="modal-close" onclick="document.getElementById('modal-confirm').classList.remove('active');_pendingConfirmAction=null">✕</button></div><div class="modal-body"><p id="confirm-message" style="font-size:13px;color:#555"></p></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('modal-confirm').classList.remove('active');_pendingConfirmAction=null">取消</button><button class="btn btn-danger" id="btn-confirm-delete">删除</button></div></div></div>
+<div class="modal-overlay" id="modal-confirm"><div class="modal" style="width:360px"><div class="modal-header"><h3>确认</h3><button class="modal-close" onclick="document.getElementById('modal-confirm').classList.remove('active');_pendingConfirmAction=null">✕</button></div><div class="modal-body"><p id="confirm-message" style="font-size:13px;color:#555"></p></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('modal-confirm').classList.remove('active');_pendingConfirmAction=null">取消</button><button class="btn btn-danger" id="btn-confirm-delete">确定</button></div></div></div>
+
+</div><!-- /#page-container -->
 
 <!-- ===== JS 模块 ===== -->
 <!-- 存储层 -->
@@ -316,12 +476,14 @@
 <!-- 业务层 -->
 <script src="src/home.js"></script>
 <script src="src/app.js"></script>
+<script src="src/ui/tabs.js"></script>
 <script src="src/ui/detail.js"></script>
-<script src="src/ui/nav.js"></script>
 <script src="src/ui/room.js"></script>
 <script src="src/ui/crud.js"></script>
 <script src="src/ui/interaction.js"></script>
 <script src="src/ui/grid.js"></script>
 <script src="src/ui/git.js"></script>
+<script src="src/ui/style-panel.js"></script>
+<script src="src/ui/badges.js"></script>
 </body>
 </html>

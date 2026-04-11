@@ -20,7 +20,11 @@ var Store = (function() {
 
   function createKB(name, meta) {
     var fullMeta = Object.assign({ name: name, createdAt: Date.now(), children: {}, edges: [] }, meta || {});
-    return be().mkDir(name, fullMeta);
+    var rootDir = (meta && meta.rootDir) || '';
+    // 如果有自定义目录，在 meta 中移除 rootDir（不应存储到 _meta.json）
+    var metaToSave = Object.assign({}, fullMeta);
+    delete metaToSave.rootDir;
+    return be().mkDir(name, metaToSave, rootDir);
   }
 
   function deleteKB(name) { return be().rmDir(name); }

@@ -19,8 +19,8 @@ var cy = cytoscape({
       'text-valign': 'center', 'text-halign': 'center',
       'width': 'fit-to-label', 'height': 'fit-to-label', 'padding': '14px',
       'underlay-color': '#000', 'underlay-opacity': 0.06, 'underlay-padding': 3,
-      'transition-property': 'background-color,border-color,border-width,opacity',
-      'transition-duration': '0.3s',
+      'transition-property': 'border-color,border-width,opacity',
+      'transition-duration': '0.2s',
     }},
     // 主线边
     { selector: 'edge[weight="main"]', style: {

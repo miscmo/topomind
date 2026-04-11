@@ -29,7 +29,7 @@ function createWindow() {
 function registerIPC() {
   ipcMain.handle('fs:init',           function()       { fs.ensureDir(fs.getRootDir()); return fs.getRootDir(); });
   ipcMain.handle('fs:listChildren',   function(e, p)   { return fs.listChildren(p); });
-  ipcMain.handle('fs:mkDir',          function(e, p, m){ fs.mkDir(p, m); });
+  ipcMain.handle('fs:mkDir',          function(e, p, m, rootDir){ fs.mkDir(p, m, rootDir); });
   ipcMain.handle('fs:rmDir',          function(e, p)   { fs.rmDir(p); });
   ipcMain.handle('fs:readMeta',       function(e, p)   { return fs.readMeta(p); });
   ipcMain.handle('fs:writeMeta',      function(e, p, m){ fs.writeMeta(p, m); });
@@ -66,6 +66,17 @@ function registerIPC() {
     } catch(err) { return 0; }
   });
   ipcMain.handle('fs:getRootDir', function() { return fs.getRootDir(); });
+
+  // ===== 同步保存（beforeunload 时使用）=====
+  ipcMain.on('save:layout', function(event, dirPath, meta) {
+    try {
+      fs.writeMeta(dirPath, meta);
+      event.returnValue = true;
+    } catch (e) {
+      console.error('[main] save:layout 失败:', e);
+      event.returnValue = false;
+    }
+  });
 }
 
 // ===== 菜单 =====
@@ -112,3 +123,10 @@ app.whenReady().then(function() {
   app.on('activate', function() { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', function() { if (process.platform !== 'darwin') app.quit(); });
+
+// ===== 退出前通知渲染进程保存 =====
+app.on('before-quit', function() {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('save:before-quit');
+  }
+});

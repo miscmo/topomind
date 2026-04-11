@@ -102,6 +102,7 @@ var GitStore = (function() {
   return {
     markDirty: markDirty,
     markClean: markClean,
+    isDirty: function(kbPath) { return !!_dirty[kbPath]; },
     setStatus: setStatus,
     getStatus: getStatus,
     invalidate: invalidate,

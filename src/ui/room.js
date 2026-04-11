@@ -3,12 +3,15 @@
  * 进入房间 = 读取该目录的子目录 + _meta.json → 渲染到 Cytoscape
  */
 
+// 路径 -> 用户可见名称 映射缓存
+var _pathNameMap = {};
+
 /** 加载并渲染某个目录（房间）的内容 */
 function loadRoom(dirPath) {
   currentRoomPath = dirPath === currentKBPath ? null : dirPath;
 
   // 读取该目录的子卡片 + 布局元数据
-  Promise.all([
+  return Promise.all([
     Store.listCards(dirPath),
     Store.readLayout(dirPath)
   ]).then(function(results) {
@@ -27,6 +30,16 @@ function loadRoom(dirPath) {
     // 清空 Cytoscape
     cy.elements().remove();
 
+    // 构建路径->名称映射
+    cards.forEach(function(card) {
+      _pathNameMap[card.path] = card.name || card.path;
+    });
+    // 当前目录的名称
+    if (dirPath) {
+      var metaName = meta.name;
+      if (metaName) _pathNameMap[dirPath] = metaName;
+    }
+
     // 添加节点
     cards.forEach(function(card) {
       var saved = children[card.path] || children[card.name] || {};
@@ -34,11 +47,47 @@ function loadRoom(dirPath) {
         id: card.path,
         label: saved.name || card.name,
         cardPath: card.path,
-        color: saved.color || ''
+        color:        saved.color        || '',
+        fontColor:    saved.fontColor    || '',
+        fontSize:     saved.fontSize     || 0,
+        fontStyle:    saved.fontStyle    || '',
+        textAlign:    saved.textAlign    || '',
+        textWrap:     saved.textWrap !== undefined ? saved.textWrap : true,
+        nodeWidth:    saved.nodeWidth    || '',
+        nodeHeight:   saved.nodeHeight   || '',
+        borderColor:  saved.borderColor  || '',
+        borderWidth:  saved.borderWidth  || 0,
+        nodeShape:    saved.nodeShape    || '',
+        shadowOpacity:saved.shadowOpacity|| 0,
+        nodeOpacity:  saved.nodeOpacity  != null ? saved.nodeOpacity : 1,
       };
       var ele = cy.add({ group: 'nodes', data: data, classes: 'card' });
-      if (data.color) ele.style('background-color', data.color);
-      if (saved.posX !== undefined && saved.posY !== undefined && (saved.posX !== 0 || saved.posY !== 0)) {
+      if (data.color)       ele.style('background-color', data.color);
+      if (data.fontColor)   ele.style('color', data.fontColor);
+      if (data.fontSize)    ele.style('font-size', data.fontSize + 'px');
+      if (data.fontStyle)  {
+        var styles = data.fontStyle.split(' ');
+        if (styles.indexOf('bold') >= 0) ele.style('font-weight', 'bold');
+        if (styles.indexOf('italic') >= 0) ele.style('font-style', 'italic');
+      }
+      if (data.textAlign)   ele.style('text-halign', data.textAlign);
+      if (!data.textWrap)   ele.style('text-wrap', 'none');
+      if (data.nodeWidth)   { ele.style('width', data.nodeWidth + 'px'); ele.style('text-max-width', data.nodeWidth + 'px'); }
+      if (data.nodeHeight)  ele.style('height', data.nodeHeight + 'px');
+      if (data.borderColor && data.borderWidth) {
+        ele.style('border-color', data.borderColor);
+        ele.style('border-width', data.borderWidth + 'px');
+      }
+      if (data.nodeShape)   ele.style('shape', data.nodeShape);
+      if (data.shadowOpacity) {
+        ele.style('shadow-blur', 12); ele.style('shadow-color', '#000');
+        ele.style('shadow-opacity', 0.25);
+        ele.style('shadow-offset-x', 3); ele.style('shadow-offset-y', 3);
+      }
+      if (data.nodeOpacity != null && data.nodeOpacity !== 1) {
+        ele.style('opacity', data.nodeOpacity);
+      }
+      if (saved.posX !== undefined && saved.posY !== undefined) {
         ele.position({ x: saved.posX, y: saved.posY });
       }
     });
@@ -95,8 +144,26 @@ function loadRoom(dirPath) {
     }
 
     updateBreadcrumb();
-    buildNavTree();
     updateRoomTitle();
+
+    // 异步获取每个节点的子节点数和文档状态，完成后更新徽章
+    if (window.NodeBadges) {
+      NodeBadges.clear();
+      var nodeIds = cy.nodes().map(function(n) { return n.id(); });
+      Promise.all(nodeIds.map(function(id) {
+        return Promise.all([
+          Store.listCards(id).catch(function() { return []; }),
+          Store.readMarkdown(id).catch(function() { return ''; })
+        ]).then(function(r) {
+          var node = cy.getElementById(id);
+          if (!node.length) return;
+          node.data('childCount', r[0].length);
+          node.data('hasDoc', r[1] && r[1].trim().length > 0);
+        });
+      })).then(function() {
+        NodeBadges.update();
+      });
+    }
   });
 }
 
@@ -162,6 +229,7 @@ function saveCurrentLayout() {
   var meta = buildCurrentMeta();
   Store.saveLayout(dirPath, meta);
   GitStore.markDirty(currentKBPath);
+  if (window.TabManager) TabManager.markDirty(currentKBPath);
 }
 
 // ===== 面包屑 =====
@@ -176,15 +244,16 @@ function updateBreadcrumb() {
   if (!currentRoomPath) { bc.classList.remove('active'); return; }
   bc.classList.add('active');
 
-  var html = '<span class="bc-link" onclick="goRoot()">🏠 ' + escHtml(_pathBasename(currentKBPath) || '根') + '</span>';
+  var rootName = _pathNameMap[currentKBPath] || _pathBasename(currentKBPath) || '根';
+  var html = '<span class="bc-link" onclick="goRoot()">🏠 ' + escHtml(rootName) + '</span>';
   for (var i = 0; i < roomHistory.length; i++) {
     var p = roomHistory[i];
     if (p === currentKBPath) continue;
-    var name = escHtml(_pathBasename(p));
+    var name = escHtml(_pathNameMap[p] || _pathBasename(p));
     html += '<span class="bc-sep">›</span><span class="bc-link" onclick="goToHistoryLevel(' + i + ')">' + name + '</span>';
   }
   if (currentRoomPath) {
-    var curName = escHtml(_pathBasename(currentRoomPath));
+    var curName = escHtml(_pathNameMap[currentRoomPath] || _pathBasename(currentRoomPath));
     html += '<span class="bc-sep">›</span><span class="bc-current">' + curName + '</span>';
   }
   bc.innerHTML = html;
@@ -193,9 +262,9 @@ function updateBreadcrumb() {
 function updateRoomTitle() {
   var h = document.getElementById('header');
   if (!currentRoomPath) {
-    h.textContent = _pathBasename(currentKBPath) || 'TopoMind';
+    h.textContent = _pathNameMap[currentKBPath] || _pathBasename(currentKBPath) || 'TopoMind';
   } else {
-    h.textContent = _pathBasename(currentRoomPath);
+    h.textContent = _pathNameMap[currentRoomPath] || _pathBasename(currentRoomPath);
   }
 }
 

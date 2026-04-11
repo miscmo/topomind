@@ -101,6 +101,7 @@ var GitUI = (function () {
       btn.disabled = false; btn.textContent = '提交';
       closeCommit();
       GitStore.markClean(_kbPath);
+      if (window.TabManager) TabManager.markClean(_kbPath);
       _setDot(false);
       _refreshHomeBadge(_kbPath);
     }).catch(function (err) {
@@ -459,6 +460,7 @@ var GitUI = (function () {
     GitBackend.conflictComplete(_kbPath).then(function () {
       closeConflict();
       GitStore.markClean(_kbPath);
+      if (window.TabManager) TabManager.markClean(_kbPath);
       _setDot(false);
       _refreshHomeBadge(_kbPath);
     }).catch(function (err) {
@@ -479,7 +481,7 @@ var GitUI = (function () {
       if (!badge) return;
       var label = _gitBadgeLabel(st);
       var cls = 'git-badge git-badge--' + st.state;
-      badge.innerHTML = '<span class="' + cls + '" onclick="event.stopPropagation();GitUI.openForKB(\'' + esc(kbPath) + '\')" title="Git 状态">' + label + '</span>';
+      badge.innerHTML = '<span class="' + cls + '" data-action="open-git" data-kb-path="' + escHtml(kbPath) + '" title="Git 状态">' + label + '</span>';
     }).catch(function () {});
   }
 

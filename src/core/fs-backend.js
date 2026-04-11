@@ -10,8 +10,8 @@ var FSB = (function() {
     return api.invoke('fs:listChildren', parentPath);
   }
 
-  function mkDir(dirPath, meta) {
-    return api.invoke('fs:mkDir', dirPath, meta || {});
+  function mkDir(dirPath, meta, rootDir) {
+    return api.invoke('fs:mkDir', dirPath, meta || {}, rootDir || '');
   }
 
   function rmDir(dirPath) {

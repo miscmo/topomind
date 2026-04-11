@@ -26,7 +26,7 @@ function batchDeleteSelected() {
     });
     Promise.all(promises).then(function() {
       selectedNode = null; showPlaceholder();
-      saveCurrentLayout(); buildNavTree();
+      saveCurrentLayout();
     });
   };
   document.getElementById('confirm-message').textContent = '确定删除选中的 ' + selected.length + ' 个节点？';
@@ -83,8 +83,20 @@ function buildCurrentMeta() {
   var edges = [];
   cy.nodes().forEach(function(n) {
     children[n.id()] = {
-      name: n.data('label'),
-      color: n.data('color') || '',
+      name:         n.data('label'),
+      color:        n.data('color')        || '',
+      fontColor:    n.data('fontColor')    || '',
+      fontSize:     n.data('fontSize')     || 0,
+      fontStyle:    n.data('fontStyle')    || '',
+      textAlign:    n.data('textAlign')    || '',
+      textWrap:     n.data('textWrap') !== undefined ? n.data('textWrap') : true,
+      nodeWidth:    n.data('nodeWidth')    || '',
+      nodeHeight:   n.data('nodeHeight')   || '',
+      borderColor:  n.data('borderColor')  || '',
+      borderWidth:  n.data('borderWidth')  || 0,
+      nodeShape:    n.data('nodeShape')    || '',
+      shadowOpacity:n.data('shadowOpacity')|| 0,
+      nodeOpacity:  n.data('nodeOpacity')  != null ? n.data('nodeOpacity') : 1,
       posX: Math.round(n.position().x),
       posY: Math.round(n.position().y)
     };
@@ -114,9 +126,13 @@ function buildCurrentMeta() {
   console.log('[boot] Store:', typeof Store);
   Store.init().then(function() {
     console.log('[boot] Store 初始化成功，调用 showHome');
+    TabManager.init();
+    NodeBadges.init();
     showHome();
   }).catch(function(err) {
     console.error('[boot] 启动失败:', err);
+    TabManager.init();
+    NodeBadges.init();
     showHome();
   });
 })();
@@ -126,9 +142,25 @@ window.addEventListener('beforeunload', function() {
   if (currentKBPath) {
     var meta = buildCurrentMeta();
     var dirPath = currentRoomPath || currentKBPath;
-    Store.saveLayout(dirPath, meta);
+    // 使用同步 IPC 确保数据在页面卸载前写入
+    try {
+      window.electronAPI.sendSync('save:layout', dirPath, meta);
+    } catch (e) {
+      console.error('[app] beforeunload save failed:', e);
+    }
   }
 });
+
+// ===== 主进程退出前保存通知 =====
+if (window.electronAPI && window.electronAPI.on) {
+  window.electronAPI.on('save:before-quit', function() {
+    if (currentKBPath) {
+      var meta = buildCurrentMeta();
+      var dirPath = currentRoomPath || currentKBPath;
+      Store.saveLayout(dirPath, meta);
+    }
+  });
+}
 
 // ===== 启动提示 =====
 setTimeout(function() {

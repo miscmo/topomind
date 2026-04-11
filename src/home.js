@@ -5,8 +5,6 @@
 function showHome() {
   document.getElementById('home-modal').style.display = '';
   document.getElementById('graph-page').style.display = 'none';
-  currentKBPath = null;
-  currentRoomPath = null;
   refreshKBList();
 }
 
@@ -27,7 +25,7 @@ function refreshKBList() {
           '<h3>还没有知识库</h3>' +
           '<p>点击 ＋ 创建你的第一个知识图谱</p>' +
         '</div>' +
-        '<div class="home-card-add" onclick="createKBPrompt()">' +
+        '<div class="home-card-add" data-action="create-kb">' +
           '<div class="home-card-add-icon">＋</div>' +
           '<div class="home-card-add-text">新建知识库</div>' +
         '</div>';
@@ -48,28 +46,31 @@ function refreshKBList() {
           ? '<img src="' + escHtml(rootDir + '/' + kb.path + '/' + kb.cover) + '">'
           : '<span class="home-card-image-icon">📚</span>';
 
-        html += '<div class="home-card" data-kb-path="' + esc(kb.path) + '" onclick="openKB(\'' + esc(kb.path) + '\')">';
+        html += '<div class="home-card" data-kb-path="' + escHtml(kb.path) + '">';
         html += '<div class="home-card-image">' + imgContent;
-        html += '<button class="home-card-cover-btn" onclick="event.stopPropagation();changeKBCover(\'' + esc(kb.path) + '\')" title="更换封面">📷 更换</button>';
+        html += '<button class="home-card-cover-btn" data-action="change-cover" data-kb-path="' + escHtml(kb.path) + '" title="更换封面">📷 更换</button>';
         html += '<div class="git-status-badge"></div>';
         html += '</div>';
         html += '<div class="home-card-body">';
         html += '<div class="home-card-title">';
         html += '<span>' + escHtml(kb.name) + '</span>';
         html += '<div class="home-card-actions">';
-        html += '<button class="home-card-action-btn danger" onclick="event.stopPropagation();deleteKBConfirm(\'' + esc(kb.path) + '\',\'' + esc(kb.name) + '\')" title="删除">🗑</button>';
+        html += '<button class="home-card-action-btn danger" data-action="delete-kb" data-kb-path="' + escHtml(kb.path) + '" data-kb-name="' + escHtml(kb.name) + '" title="删除">🗑</button>';
         html += '</div></div>';
         html += '<div class="home-card-meta"><span>📊 ' + nodeCount + ' 个节点</span></div>';
-        html += '<div class="home-card-path" onclick="event.stopPropagation();Store.openInFinder(\'' + esc(kb.path) + '\')" title="在 Finder 中打开">📁 ' + escHtml(absPath) + '</div>';
+        html += '<div class="home-card-path" data-action="open-finder" data-kb-path="' + escHtml(kb.path) + '" title="在 Finder 中打开">📁 ' + escHtml(absPath) + '</div>';
         html += '</div></div>';
       });
-      html += '<div class="home-card-add" onclick="createKBPrompt()">';
+      html += '<div class="home-card-add" data-action="create-kb">';
       html += '<div class="home-card-add-icon">＋</div>';
       html += '<div class="home-card-add-text">新建知识库</div>';
       html += '</div>';
       // 隐藏的文件输入
       html += '<input type="file" id="kb-cover-file-input" accept="image/*" style="display:none">';
       grid.innerHTML = html;
+
+      // 绑定事件委托
+      _bindKBGridEvents(grid, kbs);
 
       // 异步注入 git 状态徽标
       GitBackend.statusBatch(kbs.map(function(kb) { return kb.path; })).then(function(statuses) {
@@ -81,12 +82,57 @@ function refreshKBList() {
           if (!badge) return;
           var label = _gitBadgeLabel(st);
           var cls = 'git-badge git-badge--' + st.state;
-          badge.innerHTML = '<span class="' + cls + '" onclick="event.stopPropagation();GitUI.openForKB(\'' + esc(kb.path) + '\')" title="Git 状态">' + label + '</span>';
+          badge.innerHTML = '<span class="' + cls + '" data-action="open-git" data-kb-path="' + escHtml(kb.path) + '" title="Git 状态">' + label + '</span>';
         });
       }).catch(function() {});
     });
   }).catch(function(err) {
     console.error('加载知识库列表失败:', err);
+  });
+}
+
+/** 知识库列表事件委托 */
+function _bindKBGridEvents(grid, kbs) {
+  grid.addEventListener('click', function(e) {
+    // 更换封面按钮
+    var coverBtn = e.target.closest('[data-action="change-cover"]');
+    if (coverBtn) {
+      e.stopPropagation();
+      changeKBCover(coverBtn.dataset.kbPath);
+      return;
+    }
+    // 删除按钮
+    var deleteBtn = e.target.closest('[data-action="delete-kb"]');
+    if (deleteBtn) {
+      e.stopPropagation();
+      deleteKBConfirm(deleteBtn.dataset.kbPath, deleteBtn.dataset.kbName);
+      return;
+    }
+    // Finder 中打开
+    var finderEl = e.target.closest('[data-action="open-finder"]');
+    if (finderEl) {
+      e.stopPropagation();
+      Store.openInFinder(finderEl.dataset.kbPath);
+      return;
+    }
+    // 新建知识库
+    var addBtn = e.target.closest('[data-action="create-kb"]');
+    if (addBtn) {
+      createKBPrompt();
+      return;
+    }
+    // Git 状态徽标
+    var gitBadge = e.target.closest('[data-action="open-git"]');
+    if (gitBadge) {
+      e.stopPropagation();
+      GitUI.openForKB(gitBadge.dataset.kbPath);
+      return;
+    }
+    // 点击知识库卡片 → 打开
+    var card = e.target.closest('.home-card[data-kb-path]');
+    if (card) {
+      openKB(card.dataset.kbPath);
+    }
   });
 }
 
@@ -153,22 +199,35 @@ function kbFormSubmit() {
   var name = document.getElementById('kb-form-name').value.trim();
   if (!name) { document.getElementById('kb-form-name').focus(); return; }
 
-  Store.createKB(name).then(function() {
-    // 保存封面
-    if (_kbCoverBlob) {
-      return Store.saveImage(name, _kbCoverBlob, 'cover.' + (_kbCoverBlob.name || 'png').split('.').pop()).then(function(r) {
-        // 更新 meta 记录封面路径
-        return Store.getKBMeta(name).then(function(meta) {
-          meta.cover = r.markdownRef;
-          return Store.saveKBMeta(name, meta);
-        });
-      });
+  var customDir = document.getElementById('kb-form-dir-display').dataset.customDir || '';
+
+  // 检查同名知识库
+  Store.listKBs().then(function(kbs) {
+    var conflict = kbs.some(function(kb) { return kb.name === name || kb.path === name; });
+    if (conflict) {
+      document.getElementById('kb-form-name').focus();
+      document.getElementById('kb-form-name').style.borderColor = '#e74c3c';
+      setTimeout(function() { document.getElementById('kb-form-name').style.borderColor = ''; }, 2000);
+      return;
     }
-  }).then(function() {
-    kbFormCancel();
-    refreshKBList();
-  }).catch(function(err) {
-    console.error('创建知识库失败:', err);
+
+    return Store.createKB(name, customDir ? { rootDir: customDir } : undefined).then(function() {
+      // 保存封面
+      if (_kbCoverBlob) {
+        return Store.saveImage(name, _kbCoverBlob, 'cover.' + (_kbCoverBlob.name || 'png').split('.').pop()).then(function(r) {
+          // 更新 meta 记录封面路径
+          return Store.getKBMeta(name).then(function(meta) {
+            meta.cover = r.markdownRef;
+            return Store.saveKBMeta(name, meta);
+          });
+        });
+      }
+    }).then(function() {
+      kbFormCancel();
+      refreshKBList();
+    }).catch(function(err) {
+      console.error('创建知识库失败:', err);
+    });
   });
 }
 
@@ -204,18 +263,12 @@ function deleteKBConfirm(kbPath, name) {
 }
 
 function openKB(kbPath) {
-  currentKBPath = kbPath;
-  currentRoomPath = null;
-  roomHistory = [];
-  hideHome();
-  loadRoom(kbPath);
-  // 自动初始化 git（如果可用）
-  GitBackend.checkAvailable().then(function(r) {
-    if (r && r.available) GitBackend.init(kbPath);
-  }).catch(function() {});
+  // 从 DOM 中读取知识库名称
+  var nameEl = document.querySelector('.home-card[data-kb-path="' + kbPath + '"] .home-card-title span');
+  var name = nameEl ? nameEl.textContent.trim() : kbPath;
+  TabManager.open(kbPath, name);
 }
 
-function esc(s) { return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
 function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 function _gitBadgeLabel(st) {

@@ -93,23 +93,14 @@ cy.on('cxttap', function(e) {
 cy.on('cxttap', 'node', function(e) {
   if (_rightDragMoved()) return;
   var selected = cy.nodes(':selected');
-  if (selected.length > 1) {
-    // 多选模式 → 批量菜单
-    showContextMenu('batch-context-menu', e.originalEvent.clientX, e.originalEvent.clientY);
-  }
-  // 单个节点右键由 crud.js 处理（cxttap node）
+  if (selected.length <= 1) return; // 单选由 crud.js 处理
+  // 多选模式 → 批量菜单
+  showContextMenu('batch-context-menu', e.originalEvent.clientX, e.originalEvent.clientY);
 });
 
 // ===== 悬停 =====
-cy.on('mouseover', 'node', function(e) {
-  var n = e.target;
-  var conn = n.connectedEdges(), connN = conn.connectedNodes();
-  cy.elements().addClass('faded');
-  n.removeClass('faded').addClass('highlighted');
-  conn.removeClass('faded').addClass('highlighted');
-  connN.removeClass('faded').addClass('highlighted');
-});
-cy.on('mouseout', 'node', function() { cy.elements().removeClass('faded highlighted'); });
+cy.on('mouseover', 'node', function(e) { e.target.addClass('highlighted'); });
+cy.on('mouseout', 'node', function(e) { e.target.removeClass('highlighted'); });
 
 // ===== 搜索 =====
 document.getElementById('search-input').addEventListener('input', function() {

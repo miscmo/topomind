@@ -1,0 +1,79 @@
+/* ===== 节点徽章层 ===== */
+#node-badges-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.node-badge {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  transform: translate(-50%, 0);
+  white-space: nowrap;
+}
+
+.node-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-size: 9px;
+  line-height: 14px;
+  background: rgba(30, 40, 55, 0.62);
+  color: rgba(255,255,255,0.88);
+  backdrop-filter: blur(2px);
+  letter-spacing: 0.2px;
+}
+
+.node-badge-pill.has-doc {
+  background: rgba(52, 152, 219, 0.72);
+}
+
+.node-badge-pill.has-children {
+  background: rgba(39, 174, 96, 0.72);
+}
+
+/* ===== 节点 Tooltip ===== */
+#node-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 260px;
+  background: #1e2a38;
+  color: #d0dce8;
+  border-radius: 8px;
+  padding: 10px 13px;
+  font-size: 12px;
+  line-height: 1.6;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.28);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  word-break: break-all;
+}
+
+#node-tooltip.visible {
+  opacity: 1;
+}
+
+#node-tooltip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+#node-tooltip-body {
+  color: #a8bfd0;
+  font-size: 11px;
+  line-height: 1.65;
+  max-height: 120px;
+  overflow: hidden;
+}

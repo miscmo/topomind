@@ -9,8 +9,7 @@ function addCardPrompt() {
     Store.createCard(dirPath, name).then(function() {
       loadRoom(dirPath);
       GitStore.markDirty(currentKBPath);
-    });
-  });
+    });  });
 }
 
 // ===== 右键菜单（单个节点） =====
@@ -115,7 +114,6 @@ function confirmDeleteCard(node) {
       if (selectedNode && selectedNode.id() === cardPath) { selectedNode = null; showPlaceholder(); }
       pendingDeleteNode = null;
       saveCurrentLayout();
-      buildNavTree();
     });
   };
   document.getElementById('confirm-message').textContent = '删除「' + node.data('label') + '」及所有子内容？';
@@ -153,7 +151,6 @@ document.getElementById('btn-edit-node').addEventListener('click', function() {
       selectedNode.data('label', newName);
       Store.renameCard(selectedNode.id(), newName);
       saveCurrentLayout();
-      buildNavTree();
     }
   });
 });

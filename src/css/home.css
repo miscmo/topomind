@@ -1,12 +1,9 @@
 /* ===== 主页样式（浅色主题，与图谱页统一） ===== */
 #home-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   background: #f0f2f5;
-  z-index: 9999;
   display: flex;
   flex-direction: column;
   overflow: hidden;

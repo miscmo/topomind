@@ -3,6 +3,20 @@
  */
 marked.setOptions({ breaks: true, gfm: true });
 
+/**
+ * 轻量级 HTML 消毒，防止 Markdown 渲染中的 XSS
+ */
+function sanitizeHtml(html) {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+    .replace(/<embed\b[^>]*>/gi, '')
+    .replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '')
+    .replace(/href\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'href="#"')
+    .replace(/src\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, '');
+}
+
 // 用于追踪当前显示版本，防止竞态条件
 var _detailVersion = 0;
 // 记录当前已创建的 Object URL，切换卡片时统一释放
@@ -22,6 +36,7 @@ function flushEdit() {
     Store.writeMarkdown(selectedNode.id(), ta.value);
     Store.showSaveIndicator();
     GitStore.markDirty(currentKBPath);
+    if (window.TabManager) TabManager.markDirty(currentKBPath);
   }
 }
 
@@ -51,10 +66,10 @@ function showDetail(cardPath) {
   Store.listCards(cardPath).then(function(kids) {
     var childInfo = '';
     if (kids.length > 0) {
-      childInfo = '<div style="margin:12px 0;padding:10px 14px;background:#f5f7fa;border-radius:8px;font-size:12px;color:#666">';
-      childInfo += '<strong style="color:#333">📂 包含 ' + kids.length + ' 个子概念</strong><br>';
+      childInfo = '<div class="child-info-box">';
+      childInfo += '<strong class="child-info-title">📂 包含 ' + kids.length + ' 个子概念</strong><br>';
       kids.forEach(function(kid) {
-      childInfo += '<span style="display:inline-block;margin:3px 4px 3px 0;padding:2px 8px;background:#4a6fa5;color:#fff;border-radius:4px;font-size:11px;cursor:pointer" onclick="drillInto(\'' + esc(kid.path) + '\')">' + escHtml(kid.name || '') + '</span>';
+      childInfo += '<span class="child-tag" data-drill-path="' + escHtml(kid.path) + '">' + escHtml(kid.name || '') + '</span>';
       });
       childInfo += '</div>';
     }
@@ -63,8 +78,14 @@ function showDetail(cardPath) {
     return Store.readMarkdown(cardPath).then(function(md) {
       if (rendered) {
         rendered.style.display = '';
-        rendered.innerHTML = (md ? marked.parse(md) : '<div style="color:#bbb;margin-top:20px">暂无文档内容</div>') + childInfo;
+        rendered.innerHTML = sanitizeHtml(md ? marked.parse(md) : '<div class="placeholder-text" style="color:#bbb;margin-top:20px">暂无文档内容</div>') + childInfo;
         resolveRenderedImages(rendered, cardPath, version);
+        // 子卡片标签点击事件委托
+        rendered.querySelectorAll('.child-tag[data-drill-path]').forEach(function(tag) {
+          tag.addEventListener('click', function() {
+            drillInto(tag.dataset.drillPath);
+          });
+        });
       }
     });
   });

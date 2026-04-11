@@ -43,8 +43,8 @@ function listChildren(parentPath) {
 }
 
 /** 创建目录 */
-function mkDir(dirPath, meta) {
-  var d = abs(dirPath);
+function mkDir(dirPath, meta, customRootDir) {
+  var d = customRootDir ? path.resolve(customRootDir, dirPath) : abs(dirPath);
   ensureDir(d);
   // 写入 _meta.json 如果不存在
   var metaFile = path.join(d, '_meta.json');

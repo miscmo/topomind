@@ -228,8 +228,14 @@ function drawGrid() {
 var _enforcingPan = false;
 var _enforceTimer = null;
 var _zoomIndicator = document.getElementById('zoom-indicator');
+var _gridRafId = null;
 cy.on('zoom pan resize', function() {
-  drawGrid();
+  // 使用 requestAnimationFrame 节流 Canvas 重绘
+  if (_gridRafId) cancelAnimationFrame(_gridRafId);
+  _gridRafId = requestAnimationFrame(function() {
+    _gridRafId = null;
+    drawGrid();
+  });
   if (_zoomIndicator) _zoomIndicator.textContent = Math.round(cy.zoom() * 100) + '%';
   clearTimeout(_enforceTimer);
   _enforceTimer = setTimeout(function() {

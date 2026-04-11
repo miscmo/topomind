@@ -1,12 +1,98 @@
-/* ===== 左侧导航目录 ===== */
-#nav-panel{width:200px;height:100%;background:#fff;border-right:1px solid #e8ecf0;
-  display:flex;flex-direction:column;flex-shrink:0}
-#nav-header{padding:16px;border-bottom:1px solid #e8ecf0;font-size:14px;font-weight:700;
-  color:#1a3a5c;letter-spacing:1px;display:flex;align-items:center;gap:6px}
-#nav-tree{flex:1;overflow-y:auto;padding:8px 0}
-.nav-item{padding:7px 16px;font-size:12.5px;cursor:pointer;transition:all .15s;color:#555;
-  border-left:3px solid transparent}
-.nav-item:hover{background:#f5f7fa;color:#1a3a5c}
-.nav-item.active{background:#edf2fb;color:#1a3a5c;font-weight:600}
-#nav-tree::-webkit-scrollbar{width:4px}
-#nav-tree::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+/* ===== 左侧样式面板 ===== */
+#nav-panel{width:220px;height:100%;background:#fff;border-right:1px solid #e8ecf0;
+  display:flex;flex-direction:column;flex-shrink:0;
+  transition:width .25s ease,opacity .2s ease}
+#nav-panel.collapsed{width:0;opacity:0;overflow:hidden;pointer-events:none}
+
+/* 面板标题栏 */
+#style-panel-header{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 14px 10px;border-bottom:1px solid #e8ecf0;
+  font-size:13px;font-weight:700;color:#1a3a5c;flex-shrink:0}
+#btn-collapse-style{width:26px;height:26px;border:1px solid #e0e4ea;border-radius:5px;
+  background:#fff;cursor:pointer;font-size:11px;color:#999;transition:all .15s}
+#btn-collapse-style:hover{background:#eef2f7;color:#1a3a5c}
+
+/* 展开按钮（面板收起时） */
+#btn-toggle-style{display:none;position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:22px;height:48px;border:1px solid #e0e4ea;border-left:none;
+  border-radius:0 6px 6px 0;background:#fff;cursor:pointer;
+  font-size:11px;color:#999;z-index:10;transition:all .15s;padding:0}
+#btn-toggle-style:hover{background:#eef2f7;color:#1a3a5c;width:26px}
+#btn-toggle-style.visible{display:block}
+
+/* 面板内容区 */
+#style-panel-body{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+#style-panel-body::-webkit-scrollbar{width:4px}
+#style-panel-body::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+
+/* 空状态 */
+.sp-empty{flex:1;display:flex;align-items:center;justify-content:center;
+  color:#bbb;font-size:12px;text-align:center;line-height:1.8;padding:20px}
+
+/* 节点名称 */
+.sp-node-name{padding:10px 14px 4px;font-size:11px;font-weight:600;color:#888;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border-bottom:1px solid #f0f0f0;flex-shrink:0}
+
+/* 分区标题 */
+.sp-section-title{padding:10px 14px 4px;font-size:10px;font-weight:700;
+  color:#aaa;letter-spacing:1px;text-transform:uppercase}
+
+/* 行 */
+.sp-row{display:flex;align-items:center;padding:5px 14px;gap:8px;min-height:30px}
+.sp-label{font-size:11.5px;color:#555;width:40px;flex-shrink:0}
+
+/* 数字输入 */
+.sp-num-wrap{display:flex;align-items:center;gap:4px;flex:1}
+.sp-num-input{width:64px;height:26px;border:1px solid #e0e4ea;border-radius:6px;
+  padding:0 6px;font-size:12px;color:#333;outline:none;text-align:center;
+  transition:border-color .15s;-moz-appearance:textfield}
+.sp-num-input::-webkit-inner-spin-button,.sp-num-input::-webkit-outer-spin-button{-webkit-appearance:none}
+.sp-num-input:focus{border-color:#3498db}
+.sp-num-input::placeholder{color:#ccc;font-size:11px}
+.sp-num-unit{font-size:11px;color:#aaa}
+
+/* 颜色选择 */
+.sp-color-picker-wrap{display:flex;align-items:center;gap:6px;flex:1;flex-wrap:wrap}
+.sp-color-swatch{width:26px;height:26px;border-radius:6px;border:1.5px solid #e0e4ea;
+  cursor:pointer;transition:border-color .15s;flex-shrink:0;position:relative}
+.sp-color-swatch:hover{border-color:#3498db}
+.sp-color-hidden{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;
+  border:none;padding:0}
+
+/* 最近颜色 */
+.sp-recent-inline{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.sp-recent-inline .sp-recent-dot{width:16px;height:16px;border-radius:50%;cursor:pointer;
+  border:1.5px solid transparent;transition:transform .1s,border-color .1s;flex-shrink:0}
+.sp-recent-inline .sp-recent-dot:hover{transform:scale(1.2);border-color:#1a3a5c}
+
+/* 按钮组 */
+.sp-btn-group{display:flex;gap:3px}
+.sp-icon-btn{width:28px;height:26px;border:1px solid #e0e4ea;border-radius:5px;
+  background:#f8f9fb;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  color:#666;transition:all .12s}
+.sp-icon-btn:hover{background:#eef2f7;color:#1a3a5c}
+.sp-icon-btn.active{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
+
+/* Toggle 开关 */
+.sp-toggle{position:relative;display:inline-block;width:34px;height:18px;flex-shrink:0}
+.sp-toggle input{opacity:0;width:0;height:0}
+.sp-toggle-slider{position:absolute;inset:0;background:#ddd;border-radius:9px;
+  cursor:pointer;transition:.2s}
+.sp-toggle-slider::before{content:'';position:absolute;width:14px;height:14px;
+  left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s}
+.sp-toggle input:checked + .sp-toggle-slider{background:#1a3a5c}
+.sp-toggle input:checked + .sp-toggle-slider::before{transform:translateX(16px)}
+
+/* 形状选择网格 */
+.sp-shape-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;flex:1}
+.sp-shape-btn{height:26px;border:1px solid #e0e4ea;border-radius:5px;
+  background:#f8f9fb;cursor:pointer;font-size:13px;color:#666;
+  display:flex;align-items:center;justify-content:center;transition:all .12s;padding:0}
+.sp-shape-btn:hover{background:#eef2f7;color:#1a3a5c}
+.sp-shape-btn.active{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
+
+/* 滑块 */
+.sp-slider-wrap{display:flex;align-items:center;gap:6px;flex:1}
+.sp-slider{flex:1;height:4px;accent-color:#1a3a5c;cursor:pointer}
+.sp-slider-val{font-size:11px;color:#888;width:32px;text-align:right;flex-shrink:0}

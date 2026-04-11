@@ -231,9 +231,9 @@ function generateCommitMessage(kbName, status) {
   if (deleted.length > 0 && created.length === 0) {
     if (deleted.length === 1) {
       var name = deleted[0].split('/').slice(-2, -1)[0] || deleted[0];
-      return 'feat: 删除「' + name + '」';
+      return 'chore: 删除「' + name + '」';
     }
-    return 'feat: 删除 ' + deleted.length + ' 张卡片';
+    return 'chore: 删除 ' + deleted.length + ' 张卡片';
   }
 
   // 仅更新文档

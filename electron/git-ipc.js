@@ -143,9 +143,9 @@ function registerGitIPC(ipcMain, getFileService) {
   });
 }
 
-async function _getRemoteUrl(kbPath, absPath) {
+async function _getRemoteUrl(kbPath, absPathFn) {
   try {
-    var result = await git.getRemote(absPath(kbPath));
+    var result = await git.getRemote(absPathFn(kbPath));
     return result.url || '';
   } catch (e) {
     return '';
