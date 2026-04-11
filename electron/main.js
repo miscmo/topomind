@@ -18,7 +18,12 @@ function createWindow() {
       nodeIntegration: false, contextIsolation: true,
     }
   });
-  win.loadFile(path.join(__dirname, '..', 'index.html'));
+  // 开发模式加载 Vite dev server，生产模式加载打包文件
+  if (process.env.VITE_DEV_SERVER_URL) {
+    win.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  }
   // 转发渲染进程日志到 stdout
   win.webContents.on('console-message', function(e, level, msg, line, src) {
     console.log('[renderer]', msg);

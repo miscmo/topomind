@@ -1,47 +1,35 @@
 {
   "name": "topomind",
-  "version": "4.3.1",
+  "version": "5.0.0",
   "description": "TopoMind — 可漫游拓扑知识大脑",
   "main": "electron/main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
-    "build": "electron-builder"
+    "dev": "vite",
+    "build": "vite build",
+    "build:mac": "vite build && electron-builder --mac",
+    "build:win": "vite build && electron-builder --win",
+    "build:linux": "vite build && electron-builder --linux",
+    "preview": "vite preview"
   },
   "build": {
     "appId": "com.topomind.app",
     "productName": "TopoMind",
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "files": [
-      "index.html",
-      "src/**/*",
-      "vendor/**/*",
-      "electron/**/*",
-      "assets/**/*"
+      "dist/**/*",
+      "electron/**/*"
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "target": [
-        "dmg",
-        "zip"
-      ]
+      "target": ["dmg", "zip"]
     },
     "win": {
-      "target": [
-        "nsis",
-        "zip"
-      ]
+      "target": ["nsis", "zip"]
     },
     "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
+      "target": ["AppImage", "deb"],
       "category": "Office"
     },
     "nsis": {
@@ -50,10 +38,16 @@
     }
   },
   "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
     "electron": "^30.5.1",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "vite": "^5.2.8",
+    "vite-plugin-electron": "^0.28.4",
+    "vite-plugin-electron-renderer": "^0.14.5"
   },
   "dependencies": {
-    "simple-git": "^3.35.2"
+    "pinia": "^2.1.7",
+    "simple-git": "^3.35.2",
+    "vue": "^3.4.21"
   }
 }
