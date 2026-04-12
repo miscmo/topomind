@@ -12,6 +12,7 @@
     <!-- 全局模态框 -->
     <InputModal />
     <ConfirmModal />
+    <GitPanel v-if="gitStore.isOpen" />
   </div>
 </template>
 
@@ -26,9 +27,12 @@ import HomePage from '@/components/HomePage.vue'
 import GraphView from '@/components/GraphView.vue'
 import InputModal from '@/components/modals/InputModal.vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
+import GitPanel from '@/components/GitPanel.vue'
+import { useGitStore } from '@/stores/git'
 
 const appStore = useAppStore()
 const roomStore = useRoomStore()
+const gitStore = useGitStore()
 const { init } = useStorage()
 
 // 监听 Electron 退出前保存事件

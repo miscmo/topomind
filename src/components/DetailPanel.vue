@@ -68,6 +68,7 @@ const editAreaRef = ref(null)
 
 // 竞态保护版本号
 let _version = 0
+let _modeVersion = 0
 // Object URL 追踪
 let _activeUrls = []
 
@@ -104,8 +105,7 @@ watch(() => props.nodeId, async (newId) => {
 }, { immediate: true })
 
 async function loadNodeContent(cardPath) {
-  // 先切回阅读模式
-  if (mode.value === 'edit') flushEdit()
+  // 先切回阅读模式（不要在这里 flush：避免先把空 editContent 覆盖掉磁盘文档）
   mode.value = 'read'
 
   _revokeActiveUrls()
@@ -120,6 +120,7 @@ async function loadNodeContent(cardPath) {
 
   childCards.value = kids || []
   markdownRaw.value = md || ''
+  editContent.value = md || ''
 
   if (bodyRef.value) bodyRef.value.scrollTop = 0
 
@@ -128,23 +129,27 @@ async function loadNodeContent(cardPath) {
   _resolveRenderedImages(cardPath, version)
 }
 
-function setMode(m) {
+async function setMode(m) {
+  const token = ++_modeVersion
+
   if (m === 'edit') {
-    flushEdit() // 先保存当前（如果在编辑中）
-    storage.readMarkdown(props.nodeId).then(md => {
-      editContent.value = md || ''
-      mode.value = 'edit'
-    })
+    await flushEdit() // 先保存当前（如果在编辑中）
+    const md = await storage.readMarkdown(props.nodeId).catch(() => '')
+    // 丢弃过期的模式切换结果
+    if (token !== _modeVersion || props.nodeId == null) return
+    editContent.value = md || ''
+    mode.value = 'edit'
   } else {
-    flushEdit()
+    await flushEdit()
+    if (token !== _modeVersion) return
     mode.value = 'read'
-    if (props.nodeId) loadNodeContent(props.nodeId)
+    if (props.nodeId) await loadNodeContent(props.nodeId)
   }
 }
 
-function flushEdit() {
+async function flushEdit() {
   if (mode.value === 'edit' && props.nodeId && editContent.value !== undefined) {
-    storage.writeMarkdown(props.nodeId, editContent.value)
+    await storage.writeMarkdown(props.nodeId, editContent.value)
     showSaveIndicator()
     if (roomStore.currentKBPath) GitCache.markDirty(roomStore.currentKBPath)
   }
@@ -154,7 +159,7 @@ function flushEdit() {
 let _saveTimer = null
 function debouncedSave() {
   clearTimeout(_saveTimer)
-  _saveTimer = setTimeout(() => { flushEdit() }, 1000)
+  _saveTimer = setTimeout(() => { void flushEdit() }, 1000)
 }
 
 onUnmounted(() => {
@@ -264,8 +269,8 @@ function sanitizeHtml(dirty) {
     const parser = new DOMParser()
     const doc = parser.parseFromString(dirty, 'text/html')
     // 遍历所有节点，清除危险属性和危险元素
-    const危险 = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math']
-    const dangerousTags = doc.querySelectorAll(危险.join(','))
+    const dangerous = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math']
+    const dangerousTags = doc.querySelectorAll(dangerous.join(','))
     dangerousTags.forEach(el => el.remove())
 
     // 清除所有 on* 事件属性和 javascript: href
@@ -278,8 +283,9 @@ function sanitizeHtml(dirty) {
         }
       })
       // 降级 data: 和 javascript: href
-      if (el.href) {
-        const h = el.href.trim()
+      const href = el.getAttribute?.('href')
+      if (href) {
+        const h = href.trim()
         if (/^(javascript:|data:)/i.test(h)) el.setAttribute('href', '#')
       }
     })

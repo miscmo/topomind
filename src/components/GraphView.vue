@@ -137,9 +137,6 @@
       @action="handleContextAction"
     />
 
-    <!-- Git 面板 -->
-    <GitPanel v-if="gitStore.isOpen" />
-
   </div>
 </template>
 
@@ -158,6 +155,7 @@ import DetailPanel from '@/components/DetailPanel.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import GitPanel from '@/components/GitPanel.vue'
+
 
 const appStore = useAppStore()
 const roomStore = useRoomStore()
@@ -288,7 +286,9 @@ function toggleGrid() {
 }
 
 function openGit() {
-  gitStore.openForKB(roomStore.currentKBPath)
+  if (roomStore.currentKBPath) {
+    gitStore.openForKB(roomStore.currentKBPath)
+  }
 }
 
 // ─── 右键菜单动作 ────────────────────────────────────────────
