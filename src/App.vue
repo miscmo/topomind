@@ -1,13 +1,10 @@
 <template>
   <div id="topomind-app">
-    <!-- 标签栏：在图谱页显示 -->
-    <TabBar v-if="appStore.view === 'graph'" />
+    <!-- 标签栏：仅在存在知识库标签时显示（主页作为一个 Tab） -->
+    <TabBar v-if="roomStore.tabs.length > 0" />
 
-    <!-- 首页：标签栏 + 知识库列表 -->
-    <template v-if="appStore.view === 'home'">
-      <TabBar />
-      <HomePage />
-    </template>
+    <!-- 首页 -->
+    <HomePage v-if="appStore.view === 'home'" />
 
     <!-- 图谱页：左侧样式面板 + 中间图谱 + 右侧详情 -->
     <GraphView v-else-if="appStore.view === 'graph'" />

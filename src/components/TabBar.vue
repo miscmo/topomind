@@ -2,16 +2,24 @@
 <template>
   <div id="tab-bar">
     <div
+      v-if="roomStore.tabs.length > 0"
+      class="tab-item home-tab"
+      :class="{ active: appStore.view === 'home' }"
+      @click="appStore.showHome()"
+    >
+      <span class="tab-label">主页</span>
+    </div>
+
+    <div
       v-for="tab in roomStore.tabs"
       :key="tab.id"
       class="tab-item"
-      :class="{ active: tab.id === roomStore.activeTabId }"
-      @click="roomStore.switchTab(tab.id)"
+      :class="{ active: tab.id === roomStore.activeTabId && appStore.view === 'graph' }"
+      @click="openTab(tab.id)"
     >
       <span class="tab-label">{{ tab.label }}</span>
       <button class="tab-close" @click.stop="closeTab(tab.id)" title="关闭">✕</button>
     </div>
-    <button class="tab-home-btn" @click="appStore.showHome()" title="返回首页">🏠</button>
   </div>
 </template>
 
@@ -21,6 +29,11 @@ import { useAppStore } from '@/stores/app'
 
 const roomStore = useRoomStore()
 const appStore = useAppStore()
+
+function openTab(tabId) {
+  roomStore.switchTab(tabId)
+  appStore.showGraph()
+}
 
 function closeTab(tabId) {
   roomStore.closeTab(tabId)
@@ -42,6 +55,10 @@ function closeTab(tabId) {
   flex-shrink: 0;
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+.home-tab {
+  margin-right: 4px;
 }
 
 .tab-item {
