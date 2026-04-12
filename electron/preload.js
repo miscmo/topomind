@@ -66,5 +66,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       var args = Array.prototype.slice.call(arguments, 1);
       fn.apply(null, args);
     });
+  },
+  off: function(channel, fn) {
+    if (!ALLOWED_RECEIVE_CHANNELS.has(channel)) {
+      console.warn('[preload] 忽略未授权的移除通道:', channel);
+      return;
+    }
+    ipcRenderer.off(channel, fn);
   }
 });

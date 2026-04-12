@@ -1,31 +1,49 @@
-<!-- 图谱主页面：左侧样式面板 + 中间图谱 + 右侧详情 -->
+<!-- 图谱主页面：左侧面板 + 中间图谱 + 右侧详情 -->
 <template>
   <div id="graph-page">
-    <div id="app-layout">
+    <div v-if="initPhase === 'error'" class="graph-init-error">
+      <div class="graph-init-error-title">图谱初始化失败</div>
+      <div class="graph-init-error-msg">{{ initError || '未知错误' }}</div>
+      <button class="graph-init-retry-btn" @click="retryInit">重试</button>
+    </div>
 
-      <!-- 展开按钮（样式面板收起时） -->
-      <button v-if="!stylePanel.open" id="btn-toggle-style" @click="stylePanel.open = true" title="展开样式">▶</button>
+    <div v-else id="app-layout">
 
-      <!-- 左侧样式面板 -->
-      <StylePanel
-        v-if="stylePanel.open"
-        :selectedNodeId="appStore.selectedNodeId"
-        :cy="graph.cy.value"
-        @update-style="graph.updateNodeStyle"
-        @update-font-style="graph.updateNodeFontStyle"
-        @collapse="stylePanel.open = false"
-      />
+      <!-- 展开按钮（左侧面板收起时） -->
+      <button v-if="!leftPanel.open" id="btn-toggle-style" @click="leftPanel.open = true" title="展开">▶</button>
+
+      <!-- 左侧面板：样式面板 -->
+      <div v-if="leftPanel.open" id="nav-panel">
+        <div id="style-panel-header">
+          <span class="sp-title">样式</span>
+          <button id="btn-collapse-style" @click="leftPanel.open = false" title="收起">◀</button>
+        </div>
+
+        <!-- 样式面板内容 -->
+        <div id="style-panel-body">
+          <StylePanel
+            :selectedNodeId="appStore.selectedNodeId"
+            :cy="graph.cy.value"
+            @update-style="graph.updateNodeStyle"
+            @update-font-style="graph.updateNodeFontStyle"
+          />
+        </div>
+      </div>
 
       <!-- 中间图谱 -->
       <div id="graph-panel">
-        <!-- 网格背景 -->
+        <!-- 网格背景 canvas -->
         <canvas ref="gridCanvasRef" id="grid-canvas" class="grid-bg"></canvas>
 
         <!-- Cytoscape 容器 -->
         <div ref="cyContainerRef" id="cy"></div>
 
-        <!-- 节点徽标层 -->
-        <div id="node-badges-layer"></div>
+
+        <!-- Tooltip -->
+        <div ref="tooltipRef" id="node-tooltip">
+          <div id="node-tooltip-title"></div>
+          <div id="node-tooltip-body"></div>
+        </div>
 
         <!-- 顶部标题 -->
         <div id="header">{{ currentTitle }}</div>
@@ -72,7 +90,7 @@
           <button @click="promptAddCard">＋ 卡片</button>
           <button @click="startEdgeMode" :class="{ active: appStore.edgeMode }">⤯ 连线</button>
           <div class="sep"></div>
-          <button id="btn-toggle-grid" :class="{ active: gridVisible }" @click="toggleGrid">⊞</button>
+          <button :class="{ active: grid.gridEnabled.value }" @click="toggleGrid">⊞</button>
           <div class="sep"></div>
           <button @click="graph.exportPNG()">↓ 导出</button>
           <button @click="graph.fitView()">↺ 重置</button>
@@ -83,7 +101,7 @@
         </div>
 
         <!-- 保存指示器 -->
-        <div id="save-indicator" :class="{ visible: saveIndicatorVisible }">✓ 已保存</div>
+        <div id="save-indicator" :class="{ visible: saveIndicatorVisible }">{{ saveFailed ? '✗ 保存失败' : '✓ 已保存' }}</div>
 
         <!-- 连线模式提示 -->
         <div id="edge-mode-hint" :class="{ active: appStore.edgeMode }">
@@ -100,10 +118,13 @@
       <div v-if="detailPanel.open" id="detail-resize-handle" @mousedown="startDetailResize"></div>
       <DetailPanel
         v-if="detailPanel.open"
+        ref="detailPanelRef"
         :nodeId="appStore.selectedNodeId"
+        :style="{ width: detailPanelWidth + 'px' }"
         @collapse="detailPanel.open = false"
         @delete="handleDeleteFromDetail"
         @rename="handleRenameFromDetail"
+        @drill="graph.drillInto"
       />
 
     </div>
@@ -123,13 +144,14 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useModalStore } from '@/stores/modal'
 import { useGitStore } from '@/stores/git'
 import { useGraph } from '@/composables/useGraph'
-import { useStorage, saveIndicatorVisible } from '@/composables/useStorage'
+import { useGrid } from '@/composables/useGrid'
+import { useStorage, saveIndicatorVisible, saveFailed } from '@/composables/useStorage'
 
 import StylePanel from '@/components/StylePanel.vue'
 import DetailPanel from '@/components/DetailPanel.vue'
@@ -146,68 +168,113 @@ const storage = useStorage()
 // DOM 引用
 const cyContainerRef = ref(null)
 const gridCanvasRef = ref(null)
+const tooltipRef = ref(null)
+const detailPanelRef = ref(null)
+let _initGridTimer = null
 
 // 面板状态
-const stylePanel = ref({ open: true })
-const detailPanel = ref({ open: true })
-const gridVisible = ref(true)
+const leftPanel = reactive({ open: true })
+const detailPanel = reactive({ open: true })
+const detailPanelWidth = ref(340)
 const searchQuery = ref('')
+const initPhase = ref('idle') // idle | engine | decorators | room | ready | error
+const initError = ref('')
 
-// 初始化 useGraph（图谱引擎）
+// ─── composables ────────────────────────────────────────────
 const graph = useGraph(cyContainerRef)
+const grid = useGrid(gridCanvasRef, () => graph.cy.value)
 
-// 计算当前标题
+// 把 grid 注入到 graph，让 loadRoom 完成后自动调用
+graph.setGrid(grid)
+
+// ─── 计算属性 ────────────────────────────────────────────────
 const currentTitle = computed(() => {
-  if (!roomStore.currentRoomPath || roomStore.currentRoomPath === roomStore.currentKBPath) {
-    return roomStore.pathNameMap[roomStore.currentKBPath] || roomStore.currentKBPath?.split('/').pop() || 'TopoMind'
+  const path = roomStore.currentRoomPath
+  const kbPath = roomStore.currentKBPath
+  if (!path || path === kbPath) {
+    return roomStore.pathNameMap[kbPath] || kbPath?.split('/').pop() || 'TopoMind'
   }
-  return roomStore.pathNameMap[roomStore.currentRoomPath] || roomStore.currentRoomPath?.split('/').pop() || ''
+  return roomStore.pathNameMap[path] || path?.split('/').pop() || ''
 })
 
 // ─── 生命周期 ────────────────────────────────────────────────
 onMounted(async () => {
-  await nextTick()
-  graph.initCy()
-
-  // 加载当前房间
-  if (roomStore.currentRoomPath) {
-    await graph.loadRoom(roomStore.currentRoomPath)
-  }
-
-  // 键盘事件
-  document.addEventListener('keydown', graph.handleKeydown)
-
-  // 退出前同步保存
-  window.addEventListener('beforeunload', handleBeforeUnload)
+  await initializeGraphView()
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', graph.handleKeydown)
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  clearTimeout(_initGridTimer)
 })
 
 // 切换标签页时重新加载房间
 watch(() => roomStore.currentRoomPath, async (newPath) => {
   if (newPath && graph.cy.value) {
-    await graph.loadRoom(newPath)
+    try {
+      initPhase.value = 'room'
+      await graph.loadRoom(newPath)
+      initPhase.value = 'ready'
+    } catch (e) {
+      initPhase.value = 'error'
+      initError.value = e?.message || '切换房间失败'
+      console.error('[GraphView] 切换房间加载失败:', newPath, e)
+    }
   }
 })
 
+async function initializeGraphView() {
+  initError.value = ''
+  try {
+    await nextTick()
+
+    initPhase.value = 'engine'
+    graph.initCy()
+
+    initPhase.value = 'decorators'
+    grid.bindCyEvents()
+
+    initPhase.value = 'room'
+    if (roomStore.currentRoomPath) {
+      await graph.loadRoom(roomStore.currentRoomPath)
+    }
+
+    _initGridTimer = setTimeout(() => grid.drawGrid(), 100)
+
+    document.addEventListener('keydown', graph.handleKeydown)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    initPhase.value = 'ready'
+  } catch (e) {
+    initPhase.value = 'error'
+    initError.value = e?.message || '初始化失败'
+    console.error('[GraphView] mounted 初始化失败:', e)
+  }
+}
+
+function retryInit() {
+  if (graph.cy.value) {
+    graph.cy.value.destroy()
+    graph.cy.value = null
+  }
+  initializeGraphView()
+}
+
 function handleBeforeUnload() {
+  // 先保存正在编辑的 Markdown 内容
+  detailPanelRef.value?.flushEdit()
   const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
   if (!dirPath) return
   const meta = graph.buildCurrentMeta()
   if (meta) storage.saveLayoutSync(dirPath, meta)
 }
 
-// ─── 工具栏操作 ─────────────────────────────────────────────
+// ─── 工具栏 ──────────────────────────────────────────────────
 async function promptAddCard() {
   const name = await modalStore.showInput('新建卡片', '卡片名称...')
-  if (name) {
-    const center = graph.cy.value?.extent()
-    const pos = center ? { x: (center.x1 + center.x2) / 2, y: (center.y1 + center.y2) / 2 } : undefined
-    await graph.addCard(name, pos)
-  }
+  if (!name) return
+  const ext = graph.cy.value?.extent()
+  const pos = ext ? { x: (ext.x1 + ext.x2) / 2, y: (ext.y1 + ext.y2) / 2 } : undefined
+  await graph.addCard(name, pos)
 }
 
 function startEdgeMode() {
@@ -216,8 +283,8 @@ function startEdgeMode() {
 }
 
 function toggleGrid() {
-  gridVisible.value = !gridVisible.value
-  // TODO: 通知 grid composable
+  grid.gridEnabled.value = !grid.gridEnabled.value
+  grid.drawGrid()
 }
 
 function openGit() {
@@ -240,11 +307,11 @@ async function handleContextAction({ action, payload }) {
       break
     case 'edit-md':
       appStore.selectNode(payload.nodeId)
-      detailPanel.value.open = true
+      detailPanel.open = true
       break
     case 'delete': {
-      const node = graph.cy.value.getElementById(payload.nodeId)
-      const ok = await modalStore.showConfirm(`确定删除节点「${node.data('label')}」？`)
+      const node = graph.cy.value?.getElementById(payload.nodeId)
+      const ok = await modalStore.showConfirm(`确定删除节点「${node?.data('label')}」？`)
       if (ok) await graph.deleteCard(payload.nodeId)
       break
     }
@@ -263,8 +330,8 @@ async function handleContextAction({ action, payload }) {
       await graph.goBack()
       break
     case 'batch-delete': {
-      const selected = graph.cy.value.nodes(':selected')
-      const ok = await modalStore.showConfirm(`确定删除选中的 ${selected.length} 个节点？`)
+      const selected = graph.cy.value?.nodes(':selected')
+      const ok = await modalStore.showConfirm(`确定删除选中的 ${selected?.length} 个节点？`)
       if (ok) await graph.batchDelete(selected.map(n => n.id()))
       break
     }
@@ -275,7 +342,7 @@ async function handleContextAction({ action, payload }) {
   graph.contextMenu.value.type = null
 }
 
-// ─── 详情面板操作 ────────────────────────────────────────────
+// ─── 详情面板 ────────────────────────────────────────────────
 async function handleDeleteFromDetail(nodeId) {
   const node = graph.cy.value?.getElementById(nodeId)
   const ok = await modalStore.showConfirm(`确定删除节点「${node?.data('label')}」？`)
@@ -288,15 +355,12 @@ async function handleRenameFromDetail(nodeId) {
   if (newName) await graph.renameCard(nodeId, newName)
 }
 
-// ─── 详情面板拖动调整宽度 ────────────────────────────────────
 function startDetailResize(e) {
-  // 简单的拖动调整宽度实现
   const startX = e.clientX
-  const panel = document.getElementById('detail-panel')
-  const startWidth = panel?.offsetWidth || 340
+  const startWidth = detailPanelWidth.value
   const onMove = (ev) => {
     const diff = startX - ev.clientX
-    if (panel) panel.style.width = Math.max(200, Math.min(600, startWidth + diff)) + 'px'
+    detailPanelWidth.value = Math.max(200, Math.min(600, startWidth + diff))
   }
   const onUp = () => {
     document.removeEventListener('mousemove', onMove)
@@ -320,5 +384,11 @@ function startDetailResize(e) {
   min-height: 0;
   display: flex;
   position: relative;
+}
+
+.sp-title {
+  font-size: 12px;
+  color: #8891aa;
+  padding: 0 4px;
 }
 </style>

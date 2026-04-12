@@ -37,8 +37,10 @@ function listChildren(parentPath) {
     .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
     .map(function(e) {
       var childPath = parentPath ? parentPath + '/' + e.name : e.name;
-      var meta = readMeta(childPath);
-      return Object.assign({ path: childPath, name: meta.name || e.name }, meta);
+      var rawMeta = readMeta(childPath);
+      var meta = (rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)) ? rawMeta : {};
+      var safeName = (typeof meta.name === 'string' && meta.name.trim()) ? meta.name : e.name;
+      return Object.assign({ path: childPath, name: safeName }, meta);
     });
 }
 

@@ -18,6 +18,7 @@ export const useGitStore = defineStore('git', {
     /** 同步状态：'idle' | 'pushing' | 'pulling' | 'done' | 'error' */
     syncState: 'idle',
     syncMessage: '',
+    syncCode: '',
     /** 冲突文件列表 */
     conflictFiles: [],
     /** 当前查看的冲突文件 */

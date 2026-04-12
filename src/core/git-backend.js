@@ -1,33 +1,33 @@
 /**
  * Git IPC 前端调用封装 - ES Module 版本
  */
-const api = window.electronAPI
+const getApi = () => window.electronAPI
 
 export const GitBackend = {
-  checkAvailable: () => api.invoke('git:checkAvailable'),
-  init: (kbPath) => api.invoke('git:init', kbPath),
-  status: (kbPath) => api.invoke('git:status', kbPath),
-  statusBatch: (kbPaths) => api.invoke('git:statusBatch', kbPaths),
-  isDirty: (kbPath) => api.invoke('git:isDirty', kbPath),
-  commit: (kbPath, msg) => api.invoke('git:commit', kbPath, msg),
-  diff: (kbPath, opts) => api.invoke('git:diff', kbPath, opts),
-  diffFiles: (kbPath, opts) => api.invoke('git:diffFiles', kbPath, opts),
-  log: (kbPath, opts) => api.invoke('git:log', kbPath, opts),
-  commitDiffFiles: (kbPath, hash) => api.invoke('git:commitDiffFiles', kbPath, hash),
-  commitFileDiff: (kbPath, hash, fp) => api.invoke('git:commitFileDiff', kbPath, hash, fp),
-  remoteGet: (kbPath) => api.invoke('git:remote:get', kbPath),
-  remoteSet: (kbPath, url) => api.invoke('git:remote:set', kbPath, url),
-  fetch: (kbPath) => api.invoke('git:fetch', kbPath),
-  push: (kbPath) => api.invoke('git:push', kbPath),
-  pull: (kbPath) => api.invoke('git:pull', kbPath),
-  conflictList: (kbPath) => api.invoke('git:conflict:list', kbPath),
-  conflictShow: (kbPath, fp) => api.invoke('git:conflict:show', kbPath, fp),
-  conflictResolve: (kbPath, fp, c) => api.invoke('git:conflict:resolve', kbPath, fp, c),
-  conflictComplete: (kbPath) => api.invoke('git:conflict:complete', kbPath),
-  authSetToken: (kbPath, token) => api.invoke('git:auth:setToken', kbPath, token),
-  authGetSSHKey: () => api.invoke('git:auth:getSSHKey'),
-  authSetType: (kbPath, type) => api.invoke('git:auth:setAuthType', kbPath, type),
-  authGetType: (kbPath) => api.invoke('git:auth:getAuthType', kbPath),
+  checkAvailable: () => getApi().invoke('git:checkAvailable'),
+  init: (kbPath) => getApi().invoke('git:init', kbPath),
+  status: (kbPath) => getApi().invoke('git:status', kbPath),
+  statusBatch: (kbPaths) => getApi().invoke('git:statusBatch', kbPaths),
+  isDirty: (kbPath) => getApi().invoke('git:isDirty', kbPath),
+  commit: (kbPath, msg) => getApi().invoke('git:commit', kbPath, msg),
+  diff: (kbPath, opts) => getApi().invoke('git:diff', kbPath, opts),
+  diffFiles: (kbPath, opts) => getApi().invoke('git:diffFiles', kbPath, opts),
+  log: (kbPath, opts) => getApi().invoke('git:log', kbPath, opts),
+  commitDiffFiles: (kbPath, hash) => getApi().invoke('git:commitDiffFiles', kbPath, hash),
+  commitFileDiff: (kbPath, hash, fp) => getApi().invoke('git:commitFileDiff', kbPath, hash, fp),
+  remoteGet: (kbPath) => getApi().invoke('git:remote:get', kbPath),
+  remoteSet: (kbPath, url) => getApi().invoke('git:remote:set', kbPath, url),
+  fetch: (kbPath) => getApi().invoke('git:fetch', kbPath),
+  push: (kbPath) => getApi().invoke('git:push', kbPath),
+  pull: (kbPath) => getApi().invoke('git:pull', kbPath),
+  conflictList: (kbPath) => getApi().invoke('git:conflict:list', kbPath),
+  conflictShow: (kbPath, fp) => getApi().invoke('git:conflict:show', kbPath, fp),
+  conflictResolve: (kbPath, fp, c) => getApi().invoke('git:conflict:resolve', kbPath, fp, c),
+  conflictComplete: (kbPath) => getApi().invoke('git:conflict:complete', kbPath),
+  authSetToken: (kbPath, token) => getApi().invoke('git:auth:setToken', kbPath, token),
+  authGetSSHKey: () => getApi().invoke('git:auth:getSSHKey'),
+  authSetType: (kbPath, type) => getApi().invoke('git:auth:setAuthType', kbPath, type),
+  authGetType: (kbPath) => getApi().invoke('git:auth:getAuthType', kbPath),
 }
 
 /**

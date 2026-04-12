@@ -17,7 +17,14 @@
       "Bash(npm install:*)",
       "Bash(cat C:\\\\\\\\Users\\\\\\\\75465\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--Code-topomind\\\\\\\\54f390d8-7015-4573-8569-d564ae263584\\\\\\\\tasks\\\\\\\\b2r0ijwox.output)",
       "Bash(npx vite:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git commit:*)",
+      "Bash(ls -lh /d/Code/topomind/src/ui/*.js)",
+      "Bash(awk '{print $9, $5}')",
+      "Bash(cat)",
+      "Read(//tmp/**)"
     ]
   }
 }

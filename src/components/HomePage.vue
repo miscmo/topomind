@@ -30,6 +30,7 @@
           v-for="kb in kbs"
           :key="kb.path"
           class="home-card"
+          :class="{ loading: !kb.nodeCount && !kb.gitStatus }"
           @click="openKB(kb)"
         >
           <div class="home-card-image">
@@ -60,7 +61,8 @@
               </div>
             </div>
             <div class="home-card-meta">
-              <span>📊 {{ kb.nodeCount ?? '...' }} 个节点</span>
+              <span v-if="kb.nodeCount !== null">📊 {{ kb.nodeCount }} 个节点</span>
+              <span v-else class="home-card-loading-skeleton">📊 ··· 个节点</span>
             </div>
             <div
               class="home-card-path"
@@ -182,21 +184,22 @@ async function loadKBList() {
     rootDir.value = dir || ''
     kbs.value = (list || []).map(kb => ({ ...kb, nodeCount: null, gitStatus: null, coverUrl: null }))
 
-    // 异步获取节点数
-    kbs.value.forEach(async (kb, i) => {
-      try {
-        const count = await storage.countChildren(kb.path)
-        kbs.value[i].nodeCount = count
-      } catch (e) {}
-
-      // 加载封面
-      if (kb.cover) {
+    // 并发获取节点数和封面（避免串行 await 导致首页变慢）
+    await Promise.all(
+      kbs.value.map(async (kb, i) => {
         try {
-          const url = await storage.loadImage(kb.path + '/' + kb.cover)
-          kbs.value[i].coverUrl = url
-        } catch (e) {}
-      }
-    })
+          const count = await storage.countChildren(kb.path)
+          kbs.value[i].nodeCount = count
+        } catch (e) { console.warn('[HomePage] 加载节点数失败:', kb.path, e) }
+
+        if (kb.cover) {
+          try {
+            const url = await storage.loadImage(kb.path + '/' + kb.cover)
+            kbs.value[i].coverUrl = url
+          } catch (e) { console.warn('[HomePage] 加载封面失败:', kb.path, e) }
+        }
+      })
+    )
 
     // 异步获取 Git 状态
     if (kbs.value.length > 0) {

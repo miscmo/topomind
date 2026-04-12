@@ -26,7 +26,8 @@
               <input ref="fontColorInput" type="color" v-model="styles.fontColor" class="sp-color-hidden" @input="applyStyle('fontColor', styles.fontColor)" />
             </div>
             <div class="sp-recent-inline">
-              <span v-for="c in recentFontColors" :key="c" class="sp-recent-dot" :style="{ background: c }" @click="applyColor('fontColor', c)"></span>
+              <span v-for="c in recentFontColors" :key="c" class="sp-recent-dot" :style="{ background: c }" @click="applyColor('fontColor', c)" title="使用"></span>
+              <button v-if="recentFontColors.length" class="sp-recent-clear" @click="clearRecentColors('fontColor')" title="清除历史">✕</button>
             </div>
           </div>
         </div>
@@ -72,11 +73,12 @@
         <div class="sp-row">
           <label class="sp-label">背景色</label>
           <div class="sp-color-picker-wrap">
-            <div class="sp-color-swatch" :style="{ background: styles.color }" @click="$refs.bgColorInput.click()">
+            <div class="sp-color-swatch" :style="{ background: styles.color }" @click="bgColorInput.click()">
               <input ref="bgColorInput" type="color" v-model="styles.color" class="sp-color-hidden" @input="applyStyle('color', styles.color)" />
             </div>
             <div class="sp-recent-inline">
-              <span v-for="c in recentBgColors" :key="c" class="sp-recent-dot" :style="{ background: c }" @click="applyColor('color', c)"></span>
+              <span v-for="c in recentBgColors" :key="c" class="sp-recent-dot" :style="{ background: c }" @click="applyColor('color', c)" title="使用"></span>
+              <button v-if="recentBgColors.length" class="sp-recent-clear" @click="clearRecentColors('color')" title="清除历史">✕</button>
             </div>
           </div>
         </div>
@@ -111,7 +113,7 @@
         <div class="sp-row">
           <label class="sp-label">颜色</label>
           <div class="sp-color-picker-wrap">
-            <div class="sp-color-swatch" :style="{ background: styles.borderColor }" @click="$refs.borderColorInput.click()">
+            <div class="sp-color-swatch" :style="{ background: styles.borderColor }" @click="borderColorInput.click()">
               <input ref="borderColorInput" type="color" v-model="styles.borderColor" class="sp-color-hidden" @input="applyStyle('borderColor', styles.borderColor)" />
             </div>
           </div>
@@ -136,15 +138,7 @@
           </div>
         </div>
 
-        <!-- ── 效果 ── -->
-        <div class="sp-section-title">效果</div>
-        <div class="sp-row">
-          <label class="sp-label">阴影</label>
-          <label class="sp-toggle">
-            <input type="checkbox" v-model="styles.shadow" @change="applyStyle('shadowOpacity', styles.shadow ? 0.06 : 0)" />
-            <span class="sp-toggle-slider"></span>
-          </label>
-        </div>
+
       </div>
 
     </div>
@@ -152,7 +146,11 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
+
+const fontColorInput = ref(null)
+const bgColorInput = ref(null)
+const borderColorInput = ref(null)
 
 const props = defineProps({
   selectedNodeId: { type: String, default: null },
@@ -173,11 +171,18 @@ const styles = reactive({
   borderColor: '#3d5d8a',
   borderWidth: 0,
   nodeShape: 'roundrectangle',
-  shadow: false,
 })
 
 const recentBgColors = reactive([])
 const recentFontColors = reactive([])
+
+function clearRecentColors(key) {
+  if (key === 'fontColor') {
+    recentFontColors.splice(0, recentFontColors.length)
+  } else {
+    recentBgColors.splice(0, recentBgColors.length)
+  }
+}
 
 const shapes = [
   { value: 'roundrectangle', label: '圆角矩形', icon: '▭' },
@@ -214,7 +219,6 @@ watch(() => props.selectedNodeId, (id) => {
   styles.borderColor = d.borderColor || '#3d5d8a'
   styles.borderWidth = d.borderWidth || 0
   styles.nodeShape = d.nodeShape || 'roundrectangle'
-  styles.shadow = (d.shadowOpacity || 0) > 0
 })
 
 function applyStyle(key, value) {

@@ -16,27 +16,41 @@
     </div>
 
     <div id="detail-body" ref="bodyRef">
-      <!-- 阅读模式 -->
-      <div v-if="mode === 'read'" class="rendered-content" v-html="renderedHtml" @click="handleRenderedClick"></div>
+      <!-- 阅读模式：渲染 Markdown，图片异步加载 -->
+      <div
+        v-if="mode === 'read'"
+        class="rendered-content"
+        ref="renderedRef"
+        v-html="renderedHtml"
+        @click="handleRenderedClick"
+        @mousedown.prevent
+      ></div>
 
-      <!-- 编辑模式 -->
+      <!-- 编辑模式：支持 paste/drop 图片上传 -->
       <textarea
         v-else
+        ref="editAreaRef"
         id="detail-edit-area"
         class="active"
         v-model="editContent"
-        placeholder="输入 Markdown..."
+        placeholder="输入 Markdown...（可粘贴或拖入图片）"
         @input="debouncedSave"
+        @paste="handlePaste"
+        @drop.prevent="handleDrop"
+        @dragover.prevent
       ></textarea>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
+import { marked } from 'marked'
 import { useStorage, showSaveIndicator } from '@/composables/useStorage'
 import { useRoomStore } from '@/stores/room'
 import { GitCache } from '@/core/git-backend.js'
+
+marked.setOptions({ breaks: true, gfm: true })
 
 const props = defineProps({ nodeId: { type: String, default: null } })
 const emit = defineEmits(['collapse', 'delete', 'rename', 'drill'])
@@ -49,6 +63,8 @@ const markdownRaw = ref('')
 const editContent = ref('')
 const childCards = ref([])
 const bodyRef = ref(null)
+const renderedRef = ref(null)
+const editAreaRef = ref(null)
 
 // 竞态保护版本号
 let _version = 0
@@ -76,7 +92,7 @@ const renderedHtml = computed(() => {
   }
   const md = markdownRaw.value
   const html = md
-    ? sanitizeHtml(window.marked?.parse(md) || md)
+    ? sanitizeHtml(marked.parse(md))
     : '<div class="placeholder-text" style="color:#bbb;margin-top:20px">暂无文档内容</div>'
   return html + childInfo
 })
@@ -106,6 +122,10 @@ async function loadNodeContent(cardPath) {
   markdownRaw.value = md || ''
 
   if (bodyRef.value) bodyRef.value.scrollTop = 0
+
+  // 异步解析渲染内容中的图片（等 DOM 更新后）
+  await nextTick()
+  _resolveRenderedImages(cardPath, version)
 }
 
 function setMode(m) {
@@ -137,6 +157,89 @@ function debouncedSave() {
   _saveTimer = setTimeout(() => { flushEdit() }, 1000)
 }
 
+onUnmounted(() => {
+  clearTimeout(_saveTimer)
+})
+
+// ─── 图片上传（paste / drop）────────────────────────────────
+async function handlePaste(e) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault()
+      const blob = item.getAsFile()
+      if (blob) await _insertImage(blob)
+      return
+    }
+  }
+}
+
+async function handleDrop(e) {
+  const files = e.dataTransfer?.files
+  if (!files?.length) return
+  for (const file of files) {
+    if (file.type.startsWith('image/')) {
+      await _insertImage(file)
+    }
+  }
+}
+
+async function _insertImage(blob) {
+  if (!props.nodeId) return
+  const ext = (blob.name || blob.type.split('/')[1] || 'png').split('.').pop()
+  const filename = `img-${Date.now()}.${ext}`
+  try {
+    const result = await storage.saveImage(props.nodeId, blob, filename)
+    const mdRef = `![](${result.markdownRef})`
+    // 在光标位置插入
+    const ta = editAreaRef.value
+    if (ta) {
+      const start = ta.selectionStart
+      const end = ta.selectionEnd
+      editContent.value = editContent.value.slice(0, start) + mdRef + editContent.value.slice(end)
+      await nextTick()
+      ta.selectionStart = ta.selectionEnd = start + mdRef.length
+    } else {
+      editContent.value += '\n' + mdRef
+    }
+    debouncedSave()
+  } catch (err) {
+    console.error('[DetailPanel] 图片上传失败:', err)
+  }
+}
+
+// ─── 图片异步解析（阅读模式）────────────────────────────────
+async function _resolveRenderedImages(cardPath, version) {
+  const container = renderedRef.value
+  if (!container) return
+  const imgs = container.querySelectorAll('img')
+  for (const img of imgs) {
+    const src = img.getAttribute('src') || ''
+    if (!src.startsWith('images/')) continue
+    const imgPath = cardPath + '/' + src
+    img.style.opacity = '0.3'
+    try {
+      const url = await storage.loadImage(imgPath)
+      if (version !== _version) {
+        if (url) try { URL.revokeObjectURL(url) } catch (e) {}
+        return
+      }
+      if (url) {
+        _activeUrls.push(url)
+        img.src = url
+        img.style.opacity = '1'
+      } else {
+        img.alt = '[图片加载失败]'
+        img.style.opacity = '1'
+      }
+    } catch (e) {
+      img.alt = '[图片加载失败]'
+      img.style.opacity = '1'
+    }
+  }
+}
+
 // 处理渲染内容中的点击（子卡片标签）
 function handleRenderedClick(e) {
   const tag = e.target.closest('[data-drill-path]')
@@ -155,12 +258,35 @@ function _revokeActiveUrls() {
   _activeUrls = []
 }
 
-function sanitizeHtml(html) {
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-    .replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '')
-    .replace(/href\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'href="#"')
+function sanitizeHtml(dirty) {
+  if (!dirty) return ''
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(dirty, 'text/html')
+    // 遍历所有节点，清除危险属性和危险元素
+    const危险 = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math']
+    const dangerousTags = doc.querySelectorAll(危险.join(','))
+    dangerousTags.forEach(el => el.remove())
+
+    // 清除所有 on* 事件属性和 javascript: href
+    const allEls = doc.body.querySelectorAll('*')
+    allEls.forEach(el => {
+      const attrs = [...el.attributes]
+      attrs.forEach(attr => {
+        if (attr.name.startsWith('on') || /^javascript:/i.test(attr.value)) {
+          el.removeAttribute(attr.name)
+        }
+      })
+      // 降级 data: 和 javascript: href
+      if (el.href) {
+        const h = el.href.trim()
+        if (/^(javascript:|data:)/i.test(h)) el.setAttribute('href', '#')
+      }
+    })
+    return doc.body.innerHTML
+  } catch {
+    return ''
+  }
 }
 
 function escHtml(s) {

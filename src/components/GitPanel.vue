@@ -46,9 +46,9 @@
         </div>
         <div class="git-modal-body">
           <div class="git-file-list">
-            <div v-for="f in gitStore.commitFiles" :key="f.file" class="git-file-item">
-              <span class="git-file-status" :class="`git-file-status--${f.status?.toLowerCase()}`">{{ f.status }}</span>
-              <span class="git-file-name">{{ f.file }}</span>
+            <div v-for="f in gitStore.commitFiles" :key="f.path" class="git-file-item">
+              <span class="git-file-status" :class="`git-file-status--${fileStatus(f).toLowerCase()}`">{{ fileStatus(f) }}</span>
+              <span class="git-file-name">{{ f.path }}</span>
             </div>
             <div v-if="!gitStore.commitFiles.length" class="git-empty">没有待提交的变更</div>
           </div>
@@ -82,6 +82,16 @@
               <div v-if="!gitStore.logEntries.length" class="git-empty">暂无提交记录</div>
             </div>
             <div class="git-diff-main">
+              <!-- 文件列表（多文件时） -->
+              <div v-if="logFileList.length > 1" class="git-diff-files">
+                <button
+                  v-for="f in logFileList"
+                  :key="f"
+                  class="git-diff-file-btn"
+                  :class="{ active: selectedLogFile === f }"
+                  @click="viewLogFile(f)"
+                >{{ f }}</button>
+              </div>
               <pre v-if="logDiff" class="git-diff-content">{{ logDiff }}</pre>
               <div v-else class="git-empty">点击左侧提交查看变更</div>
             </div>
@@ -101,13 +111,24 @@
             <div v-else-if="gitStore.syncState === 'pushing'">⏳ 正在推送...</div>
             <div v-else-if="gitStore.syncState === 'pulling'">⏳ 正在拉取...</div>
             <div v-else-if="gitStore.syncState === 'done'" class="git-sync-success">✓ {{ gitStore.syncMessage }}</div>
-            <div v-else-if="gitStore.syncState === 'error'" class="git-sync-error">✕ {{ gitStore.syncMessage }}</div>
+            <div v-else-if="gitStore.syncState === 'error'" class="git-sync-error">
+              ✕ {{ gitStore.syncMessage }}
+              <div v-if="gitStore.syncCode" class="git-sync-code">错误码：{{ gitStore.syncCode }}</div>
+              <div class="git-sync-hint">{{ syncHint }}</div>
+            </div>
+          </div>
+          <div v-if="gitStore.syncState === 'error'" class="git-sync-retry-wrap">
+            <button class="git-btn" @click="doSync(lastSyncAction)">重试上次操作（{{ lastSyncAction === 'push' ? '推送' : '拉取' }}）</button>
           </div>
         </div>
         <div class="git-modal-footer">
           <button class="git-btn" @click="activePanel = 'main'">关闭</button>
-          <button class="git-btn git-btn--primary" @click="doSync('pull')" :disabled="syncing">⬇ 拉取</button>
-          <button class="git-btn git-btn--primary" @click="doSync('push')" :disabled="syncing">⬆ 推送</button>
+          <button class="git-btn git-btn--primary" @click="doSync('pull')" :disabled="syncing">
+            <span v-if="gitStore.syncState === 'pulling'">⏳ </span>{{ syncing && gitStore.syncState === 'pulling' ? '拉取中...' : '⬇ 拉取' }}
+          </button>
+          <button class="git-btn git-btn--primary" @click="doSync('push')" :disabled="syncing">
+            <span v-if="gitStore.syncState === 'pushing'">⏳ </span>{{ syncing && gitStore.syncState === 'pushing' ? '推送中...' : '⬆ 推送' }}
+          </button>
         </div>
       </div>
 
@@ -176,7 +197,7 @@
         </div>
         <div class="git-modal-footer">
           <button class="git-btn" @click="activePanel = 'main'">取消</button>
-          <button class="git-btn git-btn--primary" @click="completeConflict" :disabled="gitStore.conflictFiles.length > 0">完成合并</button>
+          <button class="git-btn git-btn--primary" @click="completeConflict" :disabled="gitStore.conflictFiles.length === 0">完成合并</button>
         </div>
       </div>
 
@@ -199,8 +220,19 @@ const activePanel = ref('main')
 const commitMsg = ref('')
 const selectedLog = ref(null)
 const logDiff = ref('')
+const logFileList = ref([])
+const selectedLogFile = ref('')
 const syncing = computed(() => ['pushing', 'pulling'].includes(gitStore.syncState))
 const hasDirty = computed(() => gitStore.commitFiles.length > 0)
+const lastSyncAction = ref('pull')
+const syncHint = computed(() => {
+  const code = gitStore.syncCode
+  if (code === 'AUTH_FAILED') return '请检查 Token / SSH 密钥与远程仓库权限。'
+  if (code === 'TIMEOUT') return '网络超时，请检查网络后重试。'
+  if (code === 'PUSH_REJECTED') return '远程有新提交，先拉取再推送。'
+  if (code === 'CONFLICT') return '检测到冲突，请进入冲突解决流程。'
+  return '可点击重试；若持续失败请检查远程地址与认证配置。'
+})
 
 const statusState = ref('uninit')
 const statusLabel = computed(() => {
@@ -260,11 +292,22 @@ async function openLog() {
 
 async function viewLogEntry(entry) {
   selectedLog.value = entry
-  const files = await GitBackend.commitDiffFiles(gitStore.kbPath, entry.hash)
-  if (files?.length) {
-    const diff = await GitBackend.commitFileDiff(gitStore.kbPath, entry.hash, files[0])
-    logDiff.value = diff || ''
+  logDiff.value = ''
+  logFileList.value = []
+  const filesRes = await GitBackend.commitDiffFiles(gitStore.kbPath, entry.hash)
+  const files = Array.isArray(filesRes?.files) ? filesRes.files : []
+  logFileList.value = files.map(f => f.path).filter(Boolean)
+  if (logFileList.value.length) {
+    selectedLogFile.value = logFileList.value[0]
+    const diffRes = await GitBackend.commitFileDiff(gitStore.kbPath, entry.hash, selectedLogFile.value)
+    logDiff.value = diffRes?.diff || ''
   }
+}
+
+async function viewLogFile(file) {
+  selectedLogFile.value = file
+  const diffRes = await GitBackend.commitFileDiff(gitStore.kbPath, selectedLog.value.hash, file)
+  logDiff.value = diffRes?.diff || ''
 }
 
 // 同步
@@ -275,6 +318,7 @@ async function openSync() {
 }
 
 async function doSync(action) {
+  lastSyncAction.value = action
   await git.doSync(gitStore.kbPath, action)
 }
 
@@ -321,6 +365,12 @@ async function completeConflict() {
 }
 
 // 工具
+function fileStatus(f) {
+  if (f?.isNew) return 'A'
+  if ((f?.deletions || 0) > 0 && (f?.insertions || 0) === 0) return 'D'
+  return 'M'
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })

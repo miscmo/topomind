@@ -21,6 +21,8 @@ export const useRoomStore = defineStore('room', {
     activeTabId: null,
     /** 当前图谱的 Cytoscape 实例引用（非响应式，用 shallowRef） */
     _cyRef: null,
+    /** 布局保存请求时间戳，变更时触发 useGraph watch */
+    _saveRequestTs: 0,
   }),
 
   getters: {
@@ -144,10 +146,15 @@ export const useRoomStore = defineStore('room', {
       }
     },
 
-    // ─── 布局保存（委托给 useRoomActions composable 调用 Store） ──
+    // ─── 布局保存 ──────────────────────────────────────────
+    /**
+     * 保存当前布局（实际由 useGraph composable 处理）
+     * 此方法仅供 App.vue 的 save:before-quit 事件触发，
+     * 通过 Pinia action 触发响应式更新，实际保存逻辑见 useGraph.saveCurrentLayout
+     */
     saveCurrentLayout() {
-      // 由 GraphView 组件监听并处理，此处仅作为触发信号
-      // 实际保存逻辑在 useGraph composable 中
+      // 触发响应式更新，useGraph watch 会执行实际保存
+      this._saveRequestTs = Date.now()
     },
   },
 })

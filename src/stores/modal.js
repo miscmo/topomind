@@ -5,6 +5,10 @@
  */
 import { defineStore } from 'pinia'
 
+// 模块级 resolve 引用，避免存入 Pinia 响应式 state 导致序列化/this 问题
+let _inputResolve = null
+let _confirmResolve = null
+
 export const useModalStore = defineStore('modal', {
   state: () => ({
     /** 输入框模态 */
@@ -13,14 +17,12 @@ export const useModalStore = defineStore('modal', {
       title: '输入',
       placeholder: '请输入...',
       value: '',
-      _resolve: null,
     },
     /** 确认框模态 */
     confirm: {
       visible: false,
       message: '',
       danger: true,
-      _resolve: null,
     },
   }),
 
@@ -34,7 +36,7 @@ export const useModalStore = defineStore('modal', {
         this.input.title = title
         this.input.placeholder = placeholder
         this.input.value = defaultValue
-        this.input._resolve = resolve
+        _inputResolve = resolve
         this.input.visible = true
       })
     },
@@ -43,16 +45,16 @@ export const useModalStore = defineStore('modal', {
     confirmInput() {
       const val = this.input.value.trim()
       this.input.visible = false
-      this.input._resolve?.(val || null)
-      this.input._resolve = null
+      _inputResolve?.(val || null)
+      _inputResolve = null
       this.input.value = ''
     },
 
     /** 用户取消输入 */
     cancelInput() {
       this.input.visible = false
-      this.input._resolve?.(null)
-      this.input._resolve = null
+      _inputResolve?.(null)
+      _inputResolve = null
       this.input.value = ''
     },
 
@@ -63,7 +65,7 @@ export const useModalStore = defineStore('modal', {
       return new Promise((resolve) => {
         this.confirm.message = message
         this.confirm.danger = danger
-        this.confirm._resolve = resolve
+        _confirmResolve = resolve
         this.confirm.visible = true
       })
     },
@@ -71,15 +73,15 @@ export const useModalStore = defineStore('modal', {
     /** 用户点击确定 */
     confirmAction() {
       this.confirm.visible = false
-      this.confirm._resolve?.(true)
-      this.confirm._resolve = null
+      _confirmResolve?.(true)
+      _confirmResolve = null
     },
 
     /** 用户点击取消 */
     cancelAction() {
       this.confirm.visible = false
-      this.confirm._resolve?.(false)
-      this.confirm._resolve = null
+      _confirmResolve?.(false)
+      _confirmResolve = null
     },
   },
 })

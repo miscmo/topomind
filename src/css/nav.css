@@ -65,6 +65,8 @@
 .sp-recent-inline .sp-recent-dot{width:16px;height:16px;border-radius:50%;cursor:pointer;
   border:1.5px solid transparent;transition:transform .1s,border-color .1s;flex-shrink:0}
 .sp-recent-inline .sp-recent-dot:hover{transform:scale(1.2);border-color:#1a3a5c}
+.sp-recent-clear{background:none;border:none;cursor:pointer;font-size:10px;color:#aaa;padding:0 2px;line-height:1}
+.sp-recent-clear:hover{color:#e74c3c}
 
 /* 按钮组 */
 .sp-btn-group{display:flex;gap:3px}

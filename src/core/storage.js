@@ -4,7 +4,25 @@
  */
 import { FSB } from './fs-backend.js'
 
-let _saveTimer = null
+const _saveTimers = new Map()
+
+const INVALID_NAME_CHARS = /[<>:"/\\|?*\x00-\x1F]/
+
+function normalizeName(name) {
+  return String(name || '').trim()
+}
+
+function ensureValidName(name, label = '名称') {
+  const normalized = normalizeName(name)
+  if (!normalized) throw new Error(`${label}不能为空`)
+  if (INVALID_NAME_CHARS.test(normalized)) {
+    throw new Error(`${label}包含非法字符：\\ / : * ? " < > |`)
+  }
+  if (normalized === '.' || normalized === '..') {
+    throw new Error(`${label}不合法`)
+  }
+  return normalized
+}
 
 export const Store = {
   // ===== 初始化 =====
@@ -20,11 +38,12 @@ export const Store = {
   listKBs: () => FSB.listChildren(''),
 
   createKB(name, meta) {
-    const fullMeta = Object.assign({ name, createdAt: Date.now(), children: {}, edges: [] }, meta || {})
+    const safeName = ensureValidName(name, '知识库名称')
+    const fullMeta = Object.assign({ name: safeName, createdAt: Date.now(), children: {}, edges: [] }, meta || {})
     const rootDir = (meta && meta.rootDir) || ''
     const metaToSave = { ...fullMeta }
     delete metaToSave.rootDir
-    return FSB.mkDir(name, metaToSave, rootDir)
+    return FSB.mkDir(safeName, metaToSave, rootDir)
   },
 
   deleteKB: (name) => FSB.rmDir(name),
@@ -34,20 +53,37 @@ export const Store = {
   // ===== 卡片（子目录） =====
   listCards: (parentPath) => FSB.listChildren(parentPath),
 
-  createCard(parentPath, cardName) {
-    const cardPath = parentPath ? `${parentPath}/${cardName}` : cardName
-    const fullMeta = { name: cardName, createdAt: Date.now(), children: {}, edges: [] }
-    return FSB.mkDir(cardPath, fullMeta).then(() => cardPath)
+  async createCard(parentPath, cardName) {
+    const safeName = ensureValidName(cardName, '卡片名称')
+    const basePath = parentPath || ''
+    const children = await FSB.listChildren(basePath)
+    const duplicated = (children || []).some((c) => (c?.name || '').trim() === safeName)
+    if (duplicated) {
+      throw new Error(`同级下已存在同名卡片：${safeName}`)
+    }
+
+    const cardPath = basePath ? `${basePath}/${safeName}` : safeName
+    const fullMeta = { name: safeName, createdAt: Date.now(), children: {}, edges: [] }
+    await FSB.mkDir(cardPath, fullMeta)
+    return cardPath
   },
 
   deleteCard: (cardPath) => FSB.rmDir(cardPath),
 
-  renameCard(cardPath, newName) {
-    return FSB.getDir(cardPath).then(dir => {
-      if (!dir) return
-      dir.name = newName
-      return FSB.mkDir(cardPath, dir)
-    })
+  async renameCard(cardPath, newName) {
+    const safeName = ensureValidName(newName, '卡片名称')
+    const dir = await FSB.getDir(cardPath)
+    if (!dir) return
+
+    const parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : ''
+    const siblings = await FSB.listChildren(parentPath)
+    const duplicated = (siblings || []).some((s) => s.path !== cardPath && (s?.name || '').trim() === safeName)
+    if (duplicated) {
+      throw new Error(`同级下已存在同名卡片：${safeName}`)
+    }
+
+    dir.name = safeName
+    return FSB.mkDir(cardPath, dir)
   },
 
   // ===== Markdown 文档 =====
@@ -59,11 +95,28 @@ export const Store = {
   saveLayout: (dirPath, meta) => FSB.writeMeta(dirPath, meta),
 
   saveGraphDebounced(dirPath, buildMetaFn, onSaved) {
-    clearTimeout(_saveTimer)
-    _saveTimer = setTimeout(() => {
+    if (!dirPath) return
+    const oldTimer = _saveTimers.get(dirPath)
+    if (oldTimer) clearTimeout(oldTimer)
+
+    const timer = setTimeout(() => {
+      _saveTimers.delete(dirPath)
       const meta = buildMetaFn()
       Store.saveLayout(dirPath, meta).then(() => onSaved?.())
     }, 300)
+
+    _saveTimers.set(dirPath, timer)
+  },
+
+  flushGraphSave(dirPath, buildMetaFn, onSaved) {
+    if (!dirPath) return Promise.resolve()
+    const oldTimer = _saveTimers.get(dirPath)
+    if (oldTimer) {
+      clearTimeout(oldTimer)
+      _saveTimers.delete(dirPath)
+    }
+    const meta = buildMetaFn()
+    return Store.saveLayout(dirPath, meta).then(() => onSaved?.())
   },
 
   // ===== 图片 =====
