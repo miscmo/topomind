@@ -15,7 +15,7 @@ export const useRoomStore = defineStore('room', {
     roomHistory: [],
     /** 路径 → 显示名称的缓存 */
     pathNameMap: {},
-    /** 标签页列表 [{ id, kbPath, label, roomPath, roomHistory }] */
+    /** 标签页列表 [{ id, kbPath, label, roomPath, roomHistory, ui }] */
     tabs: [],
     /** 当前激活的标签页 ID */
     activeTabId: null,
@@ -105,7 +105,22 @@ export const useRoomStore = defineStore('room', {
         return existing.id
       }
       const id = `tab-${Date.now()}`
-      this.tabs.push({ id, kbPath, label: label || kbPath.split('/').pop(), roomPath: kbPath, roomHistory: [] })
+      this.tabs.push({
+        id,
+        kbPath,
+        label: label || kbPath.split('/').pop(),
+        roomPath: kbPath,
+        roomHistory: [],
+        ui: {
+          selectedNodeId: null,
+          edgeMode: false,
+          edgeModeSourceId: null,
+          leftPanelOpen: true,
+          detailPanelOpen: true,
+          detailPanelWidth: 420,
+          searchQuery: '',
+        },
+      })
       this.switchTab(id)
       return id
     },

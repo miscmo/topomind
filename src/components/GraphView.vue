@@ -167,7 +167,7 @@ let _initGridTimer = null
 // 面板状态
 const leftPanel = reactive({ open: true })
 const detailPanel = reactive({ open: true })
-const detailPanelWidth = ref(340)
+const detailPanelWidth = ref(420)
 const detailResizeState = reactive({
   active: false,
   previewLeft: 0,
@@ -175,6 +175,73 @@ const detailResizeState = reactive({
 const searchQuery = ref('')
 const initPhase = ref('idle') // idle | engine | decorators | room | ready | error
 const initError = ref('')
+
+const DETAIL_WIDTH_MIN = 260
+const DETAIL_WIDTH_MAX = 860
+
+function detailWidthKeyForKB(kbPath) {
+  return kbPath ? `topomind:detail-width:${kbPath}` : ''
+}
+
+function clampDetailWidth(w) {
+  const n = Number(w)
+  if (!Number.isFinite(n)) return 420
+  return Math.max(DETAIL_WIDTH_MIN, Math.min(DETAIL_WIDTH_MAX, Math.round(n)))
+}
+
+function restoreDetailWidthForKB(kbPath) {
+  const key = detailWidthKeyForKB(kbPath)
+  if (!key) return
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw == null) return
+    detailPanelWidth.value = clampDetailWidth(raw)
+  } catch (e) {
+    console.warn('[GraphView] 恢复详情宽度失败:', e)
+  }
+}
+
+function persistDetailWidthForKB(kbPath, width) {
+  const key = detailWidthKeyForKB(kbPath)
+  if (!key) return
+  try {
+    localStorage.setItem(key, String(clampDetailWidth(width)))
+  } catch (e) {
+    console.warn('[GraphView] 保存详情宽度失败:', e)
+  }
+}
+
+function saveUiToActiveTab(patch = {}) {
+  const tab = roomStore.activeTab
+  if (!tab) return
+  if (!tab.ui) tab.ui = {}
+  tab.ui = { ...tab.ui, ...patch }
+}
+
+function syncUiFromActiveTab() {
+  const tab = roomStore.activeTab
+  if (!tab) return
+
+  const ui = tab.ui || {}
+  leftPanel.open = ui.leftPanelOpen !== false
+  detailPanel.open = ui.detailPanelOpen !== false
+
+  const restoredWidth = ui.detailPanelWidth ?? detailPanelWidth.value
+  detailPanelWidth.value = clampDetailWidth(restoredWidth)
+  if (roomStore.currentKBPath) {
+    persistDetailWidthForKB(roomStore.currentKBPath, detailPanelWidth.value)
+  }
+
+  searchQuery.value = ui.searchQuery || ''
+  graph.applySearch(searchQuery.value)
+
+  appStore.selectNode(ui.selectedNodeId || null)
+  if (ui.edgeMode && ui.edgeModeSourceId) {
+    appStore.enterEdgeMode(ui.edgeModeSourceId)
+  } else {
+    appStore.exitEdgeMode()
+  }
+}
 
 // ─── composables ────────────────────────────────────────────
 const graph = useGraph(cyContainerRef)
@@ -196,6 +263,7 @@ const currentTitle = computed(() => {
 // ─── 生命周期 ────────────────────────────────────────────────
 onMounted(async () => {
   await initializeGraphView()
+  syncUiFromActiveTab()
 })
 
 onUnmounted(() => {
@@ -217,6 +285,38 @@ watch(() => roomStore.currentRoomPath, async (newPath) => {
       console.error('[GraphView] 切换房间加载失败:', newPath, e)
     }
   }
+})
+
+watch(() => roomStore.activeTabId, () => {
+  syncUiFromActiveTab()
+}, { immediate: true })
+
+watch(() => roomStore.currentKBPath, (kbPath) => {
+  restoreDetailWidthForKB(kbPath)
+})
+
+watch(() => leftPanel.open, (v) => {
+  saveUiToActiveTab({ leftPanelOpen: !!v })
+})
+
+watch(() => detailPanel.open, (v) => {
+  saveUiToActiveTab({ detailPanelOpen: !!v })
+})
+
+watch(searchQuery, (v) => {
+  saveUiToActiveTab({ searchQuery: v || '' })
+})
+
+watch(() => appStore.selectedNodeId, (v) => {
+  saveUiToActiveTab({ selectedNodeId: v || null })
+})
+
+watch(() => appStore.edgeMode, (v) => {
+  saveUiToActiveTab({ edgeMode: !!v })
+})
+
+watch(() => appStore.edgeModeSourceId, (v) => {
+  saveUiToActiveTab({ edgeModeSourceId: v || null })
 })
 
 async function initializeGraphView() {
@@ -369,7 +469,7 @@ function startDetailResize(e) {
   document.body.style.userSelect = 'none'
   document.body.style.cursor = 'col-resize'
 
-  const clampWidth = (w) => Math.max(200, Math.min(600, w))
+  const clampWidth = (w) => clampDetailWidth(w)
   const calcWidthByClientX = (clientX) => {
     const diff = startX - clientX
     return clampWidth(startWidth + diff)
@@ -402,6 +502,8 @@ function startDetailResize(e) {
     ev.preventDefault()
     const nextWidth = calcWidthByClientX(ev.clientX)
     detailPanelWidth.value = nextWidth
+    persistDetailWidthForKB(roomStore.currentKBPath, nextWidth)
+    saveUiToActiveTab({ detailPanelWidth: nextWidth })
     cleanup()
   }
 

@@ -40,6 +40,17 @@
         @dragover.prevent
       ></textarea>
     </div>
+
+    <div v-if="previewVisible" class="image-preview-mask" @click="closeImagePreview" @wheel.prevent="handlePreviewWheel">
+      <div class="image-preview-tip">滚轮可缩放，点击空白处关闭</div>
+      <img
+        class="image-preview-full"
+        :src="previewSrc"
+        :style="{ transform: `scale(${previewScale})` }"
+        alt="preview"
+        @click.stop
+      />
+    </div>
   </div>
 </template>
 
@@ -65,6 +76,9 @@ const childCards = ref([])
 const bodyRef = ref(null)
 const renderedRef = ref(null)
 const editAreaRef = ref(null)
+const previewVisible = ref(false)
+const previewSrc = ref('')
+const previewScale = ref(1)
 
 // 竞态保护版本号
 let _version = 0
@@ -247,8 +261,28 @@ async function _resolveRenderedImages(cardPath, version) {
 
 // 处理渲染内容中的点击（子卡片标签）
 function handleRenderedClick(e) {
+  const img = e.target.closest('img')
+  if (img && img.getAttribute('src')) {
+    previewSrc.value = img.getAttribute('src')
+    previewScale.value = 1
+    previewVisible.value = true
+    return
+  }
+
   const tag = e.target.closest('[data-drill-path]')
   if (tag) emit('drill', tag.dataset.drillPath)
+}
+
+function closeImagePreview() {
+  previewVisible.value = false
+  previewSrc.value = ''
+  previewScale.value = 1
+}
+
+function handlePreviewWheel(e) {
+  const step = e.deltaY < 0 ? 0.1 : -0.1
+  const next = previewScale.value + step
+  previewScale.value = Math.min(4, Math.max(0.2, Number(next.toFixed(2))))
 }
 
 function reset() {

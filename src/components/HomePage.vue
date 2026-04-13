@@ -16,15 +16,6 @@
     <div class="home-content">
       <div class="home-section-title">我的知识库</div>
       <div class="home-grid">
-        <!-- 空状态 -->
-        <template v-if="kbs.length === 0 && !loading">
-          <div class="home-empty">
-            <div class="home-empty-icon">📚</div>
-            <h3>还没有知识库</h3>
-            <p>点击 ＋ 创建你的第一个知识图谱</p>
-          </div>
-        </template>
-
         <!-- 知识库卡片 -->
         <div
           v-for="kb in kbs"
