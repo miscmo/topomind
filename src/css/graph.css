@@ -83,9 +83,21 @@
   background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:11px;transition:all .15s}
 #edge-mode-hint button:hover{background:rgba(255,255,255,.3)}
 
-/* --- 连线箭头手柄 --- */
-.edge-handle{cursor:crosshair;pointer-events:all;transition:r .15s,opacity .15s}
-.edge-handle:hover{opacity:1!important}
+/* --- 节点交互手柄（尺寸调整 / 拖拽连线） --- */
+.node-resize-handle,.edge-handle{
+  position:absolute;z-index:30;display:none;
+  width:12px;height:12px;border-radius:50%;
+  border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);
+  pointer-events:auto;
+}
+.node-resize-handle{background:#3498db;cursor:nwse-resize}
+.edge-handle{background:#27ae60;cursor:crosshair}
+.node-resize-handle.active,.edge-handle.active{display:block}
+
+.connect-preview-line{
+  position:absolute;z-index:29;height:2px;background:#27ae60;
+  transform-origin:0 50%;pointer-events:none;opacity:.9;
+}
 
 /* --- 连线编辑颜色点 --- */
 .ee-color-dot{width:20px;height:20px;border-radius:50%;cursor:pointer;display:inline-block;

@@ -7,28 +7,20 @@
       <button class="graph-init-retry-btn" @click="retryInit">重试</button>
     </div>
 
-    <div v-else id="app-layout">
+    <div v-else id="app-layout" ref="appLayoutRef">
 
       <!-- 展开按钮（左侧面板收起时） -->
-      <button v-if="!leftPanel.open" id="btn-toggle-style" @click="leftPanel.open = true" title="展开">▶</button>
+      <button v-if="!leftPanel.open" id="btn-toggle-style" class="visible" @click="leftPanel.open = true" title="展开">▶</button>
 
       <!-- 左侧面板：样式面板 -->
-      <div v-if="leftPanel.open" id="nav-panel">
-        <div id="style-panel-header">
-          <span class="sp-title">样式</span>
-          <button id="btn-collapse-style" @click="leftPanel.open = false" title="收起">◀</button>
-        </div>
-
-        <!-- 样式面板内容 -->
-        <div id="style-panel-body">
-          <StylePanel
-            :selectedNodeId="appStore.selectedNodeId"
-            :cy="graph.cy.value"
-            @update-style="graph.updateNodeStyle"
-            @update-font-style="graph.updateNodeFontStyle"
-          />
-        </div>
-      </div>
+      <StylePanel
+        v-if="leftPanel.open"
+        :selectedNodeId="appStore.selectedNodeId"
+        :cy="graph.cy.value"
+        @collapse="leftPanel.open = false"
+        @update-style="graph.updateNodeStyle"
+        @update-font-style="graph.updateNodeFontStyle"
+      />
 
       <!-- 中间图谱 -->
       <div id="graph-panel">
@@ -114,13 +106,14 @@
       </div>
 
       <!-- 右侧详情面板 -->
-      <button v-if="!detailPanel.open" id="btn-toggle-detail" @click="detailPanel.open = true" title="展开详情">◀</button>
+      <button v-if="!detailPanel.open" id="btn-toggle-detail" class="visible" @click="detailPanel.open = true" title="展开详情">◀</button>
+      <div v-if="detailPanel.open" id="detail-resize-preview" :class="{ active: detailResizeState.active }" :style="{ left: detailResizeState.previewLeft + 'px' }"></div>
       <div v-if="detailPanel.open" id="detail-resize-handle" @mousedown="startDetailResize"></div>
       <DetailPanel
         v-if="detailPanel.open"
         ref="detailPanelRef"
         :nodeId="appStore.selectedNodeId"
-        :style="{ width: detailPanelWidth + 'px' }"
+        :style="{ width: detailPanelWidth + 'px', pointerEvents: detailResizeState.active ? 'none' : 'auto' }"
         @collapse="detailPanel.open = false"
         @delete="handleDeleteFromDetail"
         @rename="handleRenameFromDetail"
@@ -164,6 +157,7 @@ const gitStore = useGitStore()
 const storage = useStorage()
 
 // DOM 引用
+const appLayoutRef = ref(null)
 const cyContainerRef = ref(null)
 const gridCanvasRef = ref(null)
 const tooltipRef = ref(null)
@@ -174,6 +168,10 @@ let _initGridTimer = null
 const leftPanel = reactive({ open: true })
 const detailPanel = reactive({ open: true })
 const detailPanelWidth = ref(340)
+const detailResizeState = reactive({
+  active: false,
+  previewLeft: 0,
+})
 const searchQuery = ref('')
 const initPhase = ref('idle') // idle | engine | decorators | room | ready | error
 const initError = ref('')
@@ -356,16 +354,57 @@ async function handleRenameFromDetail(nodeId) {
 }
 
 function startDetailResize(e) {
+  if (e.button !== 0) return
+  if (!appLayoutRef.value) return
+
+  e.preventDefault()
+
+  const rect = appLayoutRef.value.getBoundingClientRect()
   const startX = e.clientX
   const startWidth = detailPanelWidth.value
-  const onMove = (ev) => {
-    const diff = startX - ev.clientX
-    detailPanelWidth.value = Math.max(200, Math.min(600, startWidth + diff))
+
+  const prevUserSelect = document.body.style.userSelect
+  const prevCursor = document.body.style.cursor
+
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'col-resize'
+
+  const clampWidth = (w) => Math.max(200, Math.min(600, w))
+  const calcWidthByClientX = (clientX) => {
+    const diff = startX - clientX
+    return clampWidth(startWidth + diff)
   }
-  const onUp = () => {
+
+  const calcPreviewLeft = (width) => {
+    // 预览线在详情面板左边界（紧邻 graph-panel 右侧）
+    return Math.max(0, rect.width - width)
+  }
+
+  detailResizeState.active = true
+  detailResizeState.previewLeft = calcPreviewLeft(startWidth)
+
+  const onMove = (ev) => {
+    ev.preventDefault()
+    const nextWidth = calcWidthByClientX(ev.clientX)
+    detailResizeState.previewLeft = calcPreviewLeft(nextWidth)
+  }
+
+  const cleanup = () => {
+    detailResizeState.active = false
+    document.body.style.userSelect = prevUserSelect
+    document.body.style.cursor = prevCursor
+
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }
+
+  const onUp = (ev) => {
+    ev.preventDefault()
+    const nextWidth = calcWidthByClientX(ev.clientX)
+    detailPanelWidth.value = nextWidth
+    cleanup()
+  }
+
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
 }

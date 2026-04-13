@@ -42,6 +42,9 @@ export function useGraph(containerRef) {
   const cyManager = createCyManager(4)
   const _cyEventsBound = new WeakSet()
   const _domCleanupByCy = new Map()
+  const _handleElsByCy = new Map()
+  let _dragResizeState = null
+  let _dragConnectState = null
 
   function _detachAllDomBindingsExcept(activeCy = null) {
     for (const [cyInst, cleanup] of _domCleanupByCy.entries()) {
@@ -99,7 +102,6 @@ export function useGraph(containerRef) {
           'width': 1, 'line-style': 'dotted', 'line-color': '#ccc',
           'target-arrow-shape': 'none', 'opacity': 0.5, 'curve-style': 'bezier', 'label': '',
         }},
-        { selector: 'node.selected', style: { 'border-width': 3, 'border-color': '#3498db' }},
         { selector: 'node:selected', style: { 'border-width': 3, 'border-color': '#3498db',
           'underlay-color': '#3498db', 'underlay-opacity': 0.12 }},
         { selector: 'node.highlighted', style: { 'border-width': 3, 'border-color': '#f39c12' }},
@@ -444,9 +446,8 @@ export function useGraph(containerRef) {
       // 叶子卡片，显示详情
       const node = cy.value.getElementById(cardPath)
       if (node.length) {
-        cy.value.nodes('.selected').removeClass('selected')
-        node.addClass('selected')
-        appStore.selectNode(cardPath)
+        cy.value.nodes(':selected').unselect()
+        node.select()
       }
       return
     }
@@ -573,34 +574,52 @@ export function useGraph(containerRef) {
     const c = targetCy || cy.value
     if (!c || _cyEventsBound.has(c)) return
 
-    // 节点单击
-    c.on('tap', 'node', async (e) => {
-      if (appStore.edgeMode && appStore.edgeModeSourceId) {
-        const t = e.target
-        if (t.id() === appStore.edgeModeSourceId) return
-        const srcId = appStore.edgeModeSourceId
-        appStore.exitEdgeMode()
-        const relation = await modalStore.showInput('关系类型', '演进 / 依赖 / 相关', '依赖')
-        if (relation) addEdge(srcId, t.id(), relation)
-        return
+    const syncSelectionToStore = () => {
+      const selected = c.nodes(':selected')
+      if (selected.length > 0) {
+        appStore.selectNode(selected[0].id())
+      } else {
+        appStore.clearSelection()
       }
+      _updateNodeHandles(c)
+    }
+
+    // 节点释放后兜底选中：避免 tap 被轻微拖动吞掉、并防止释放时被取消
+    c.on('mouseup', 'node', (e) => {
+      if (_dragConnectState?.active) return
+      if (appStore.edgeMode) return
+
+      const oe = e.originalEvent || {}
+      if (oe.button === 2) return
+
       const node = e.target
-      c.nodes('.selected').removeClass('selected')
-      node.addClass('selected')
-      appStore.selectNode(node.id())
+      const keepMulti = !!(oe.ctrlKey || oe.shiftKey || oe.metaKey)
+
+      requestAnimationFrame(() => {
+        if (!keepMulti) {
+          c.nodes(':selected').unselect()
+        }
+        node.select()
+        syncSelectionToStore()
+      })
+    })
+
+    // 节点单击：连线模式下确认目标
+    c.on('tap', 'node', async (e) => {
+      if (_dragConnectState?.active) return
+      if (!appStore.edgeMode || !appStore.edgeModeSourceId) return
+
+      const t = e.target
+      if (t.id() === appStore.edgeModeSourceId) return
+      const srcId = appStore.edgeModeSourceId
+      appStore.exitEdgeMode()
+      const relation = await modalStore.showInput('关系类型', '演进 / 依赖 / 相关', '依赖')
+      if (relation) addEdge(srcId, t.id(), relation)
     })
 
     // 双击钻入
     c.on('dbltap', 'node', (e) => { drillInto(e.target.id()) })
 
-    // 点击空白取消选择
-    c.on('tap', (e) => {
-      if (e.target === c) {
-        c.nodes('.selected').removeClass('selected')
-        c.nodes().unselect()
-        appStore.clearSelection()
-      }
-    })
 
     // 节点右键菜单（单选）
     c.on('cxttap', 'node', (e) => {
@@ -632,17 +651,23 @@ export function useGraph(containerRef) {
     c.on('mouseout', 'node', (e) => { e.target.removeClass('highlighted') })
 
     // 拖拽完成保存
-    c.on('free', 'node', () => { saveCurrentLayoutDebounced() })
+    c.on('free', 'node', () => { saveCurrentLayoutDebounced(); _updateNodeHandles(c) })
+
+    // 框选/多选变化同步
+    c.on('select unselect', 'node', () => { syncSelectionToStore() })
+
 
     // 缩放联动
     c.on('zoom', () => {
       zoomLevel.value = Math.round(c.zoom() * 100)
       _applyZoomDisplay(c.zoom())
+      _updateNodeHandles(c)
       // 多实例模式下，视口以当前房间 meta 为准，不写会话共享缓存
     })
 
     // 画布平移时记录当前房间状态（严格绑定 activeRoomPath）
     c.on('pan', () => {
+      _updateNodeHandles(c)
       // 多实例模式下，视口以当前房间 meta 为准，不写会话共享缓存
     })
 
@@ -655,6 +680,21 @@ export function useGraph(containerRef) {
     if (_domCleanupByCy.has(c)) return
 
     const container = c.container()
+
+    const resizeHandleEl = document.createElement('div')
+    resizeHandleEl.className = 'node-resize-handle'
+    container.parentElement?.appendChild(resizeHandleEl)
+
+    const connectHandleEl = document.createElement('div')
+    connectHandleEl.className = 'edge-handle'
+    container.parentElement?.appendChild(connectHandleEl)
+
+    const previewLineEl = document.createElement('div')
+    previewLineEl.className = 'connect-preview-line'
+    previewLineEl.style.display = 'none'
+    container.parentElement?.appendChild(previewLineEl)
+
+    _attachHandleElements(c, { resizeHandleEl, connectHandleEl, previewLineEl })
 
     // 右键拖拽画布（实例级隔离，避免父子/跨库互相影响）
     let localPanning = false
@@ -672,6 +712,44 @@ export function useGraph(containerRef) {
       }
     }
     const onMousemove = (e) => {
+      if (_dragResizeState?.active) {
+        const node = c.getElementById(_dragResizeState.nodeId)
+        if (node?.length) {
+          const dx = e.clientX - _dragResizeState.startX
+          const dy = e.clientY - _dragResizeState.startY
+          const nextW = Math.max(40, Math.min(1200, Math.round(_dragResizeState.startW + dx / Math.max(c.zoom(), 0.2))))
+          const nextH = Math.max(30, Math.min(1200, Math.round(_dragResizeState.startH + dy / Math.max(c.zoom(), 0.2))))
+          node.data('nodeWidth', nextW)
+          node.data('nodeHeight', nextH)
+          node.style('width', `${nextW}px`)
+          node.style('height', `${nextH}px`)
+          node.style('text-max-width', `${nextW}px`)
+          _updateNodeHandles(c)
+        }
+        return
+      }
+
+      if (_dragConnectState?.active) {
+        const src = c.getElementById(_dragConnectState.sourceId)
+        const els = _handleElsByCy.get(c)
+        if (src?.length && els?.previewLineEl) {
+          const s = src.renderedPosition()
+          const rect = container.getBoundingClientRect()
+          const tx = e.clientX - rect.left
+          const ty = e.clientY - rect.top
+          const dx = tx - s.x
+          const dy = ty - s.y
+          const len = Math.sqrt(dx * dx + dy * dy)
+          const angle = Math.atan2(dy, dx) * 180 / Math.PI
+          const line = els.previewLineEl
+          line.style.left = `${s.x}px`
+          line.style.top = `${s.y}px`
+          line.style.width = `${len}px`
+          line.style.transform = `rotate(${angle}deg)`
+        }
+        return
+      }
+
       if (!localPanning) return
       const dx = e.clientX - localPanStart.x
       const dy = e.clientY - localPanStart.y
@@ -680,7 +758,32 @@ export function useGraph(containerRef) {
       // 兜底：首次进入房间时若 grid 的 pan 监听尚未就绪，仍确保画布跟随
       _grid?.drawGrid?.()
     }
-    const onMouseup = (e) => {
+    const onMouseup = async (e) => {
+      if (_dragResizeState?.active) {
+        _dragResizeState = null
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+        saveCurrentLayoutDebounced()
+        return
+      }
+
+      if (_dragConnectState?.active) {
+        const sourceId = _dragConnectState.sourceId
+        const target = _hitNodeByClientPoint(c, e.clientX, e.clientY)
+        const els = _handleElsByCy.get(c)
+        if (els?.previewLineEl) els.previewLineEl.style.display = 'none'
+
+        _dragConnectState = null
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+
+        if (target && target.id() !== sourceId) {
+          const relation = await modalStore.showInput('关系类型', '演进 / 依赖 / 相关', '依赖')
+          if (relation) addEdge(sourceId, target.id(), relation)
+        }
+        return
+      }
+
       if (e.button === 2 && localPanning) {
         localPanning = false
         container.style.cursor = ''
@@ -711,7 +814,104 @@ export function useGraph(containerRef) {
       document.removeEventListener('mousemove', onMousemove)
       document.removeEventListener('mouseup', onMouseup)
       container.removeEventListener('wheel', onWheel)
+      resizeHandleEl.remove()
+      connectHandleEl.remove()
+      previewLineEl.remove()
+      _detachHandleElements(c)
     })
+  }
+
+  function _attachHandleElements(c, els) {
+    _handleElsByCy.set(c, els)
+    _updateNodeHandles(c)
+
+    const { resizeHandleEl, connectHandleEl, previewLineEl } = els
+
+    resizeHandleEl.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      const selected = c.nodes(':selected')
+      const node = selected.length ? selected[0] : null
+      if (!node) return
+
+      const startW = Number(node.data('nodeWidth')) || node.renderedWidth()
+      const startH = Number(node.data('nodeHeight')) || node.renderedHeight()
+
+      _dragResizeState = { active: true, nodeId: node.id(), startX: e.clientX, startY: e.clientY, startW, startH }
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'nwse-resize'
+    })
+
+    connectHandleEl.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      const selected = c.nodes(':selected')
+      const node = selected.length ? selected[0] : null
+      if (!node) return
+
+      const p = node.renderedPosition()
+      _dragConnectState = { active: true, sourceId: node.id() }
+      previewLineEl.style.display = 'block'
+      previewLineEl.style.left = `${p.x}px`
+      previewLineEl.style.top = `${p.y}px`
+      previewLineEl.style.width = '0px'
+      previewLineEl.style.transform = 'rotate(0deg)'
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'crosshair'
+    })
+  }
+
+  function _detachHandleElements(c) {
+    _handleElsByCy.delete(c)
+  }
+
+  function _updateNodeHandles(c = cy.value) {
+    if (!c) return
+    const els = _handleElsByCy.get(c)
+    if (!els) return
+
+    const { resizeHandleEl, connectHandleEl } = els
+    const selected = c.nodes(':selected')
+    if (selected.length !== 1) {
+      resizeHandleEl.classList.remove('active')
+      connectHandleEl.classList.remove('active')
+      return
+    }
+
+    const node = selected[0]
+    const p = node.renderedPosition()
+    const w = node.renderedWidth()
+    const h = node.renderedHeight()
+
+    resizeHandleEl.classList.add('active')
+    connectHandleEl.classList.add('active')
+
+    resizeHandleEl.style.left = `${p.x + w / 2 - 6}px`
+    resizeHandleEl.style.top = `${p.y + h / 2 - 6}px`
+
+    connectHandleEl.style.left = `${p.x + w / 2 + 8}px`
+    connectHandleEl.style.top = `${p.y - 6}px`
+  }
+
+  function _hitNodeByClientPoint(c, clientX, clientY) {
+    const container = c.container()
+    if (!container) return null
+
+    const rect = container.getBoundingClientRect()
+    const rx = clientX - rect.left
+    const ry = clientY - rect.top
+
+    const nodes = c.nodes()
+    for (let i = nodes.length - 1; i >= 0; i -= 1) {
+      const n = nodes[i]
+      const bb = n.renderedBoundingBox()
+      if (rx >= bb.x1 && rx <= bb.x2 && ry >= bb.y1 && ry <= bb.y2) {
+        return n
+      }
+    }
+    return null
   }
 
   function _applyZoomDisplay(zoom) {
@@ -763,42 +963,56 @@ export function useGraph(containerRef) {
   // ─── 节点样式更新（供 StylePanel 调用） ─────────────────────
   function updateNodeStyle(nodeId, styles) {
     if (!cy.value) return
-    const node = cy.value.getElementById(nodeId)
-    if (!node.length) return
-    Object.entries(styles).forEach(([key, value]) => {
-      node.data(key, value)
-      // 映射到 Cytoscape 样式
-      const styleMap = {
-        color: () => node.style('background-color', value),
-        fontColor: () => node.style('color', value),
-        fontSize: () => node.style('font-size', value + 'px'),
-        textAlign: () => node.style('text-halign', value),
-        nodeWidth: () => { node.style('width', value ? value + 'px' : 'auto'); node.style('text-max-width', value ? value + 'px' : '100px') },
-        nodeHeight: () => node.style('height', value ? value + 'px' : 'auto'),
-        borderColor: () => node.style('border-color', value),
-        borderWidth: () => node.style('border-width', value + 'px'),
-        nodeShape: () => node.style('shape', value),
-        shadowOpacity: () => {
-          // 当前 Cytoscape 版本不支持 shadow-*，仅保留 data 值用于兼容历史数据
-        },
-        nodeOpacity: () => node.style('opacity', value),
-      }
-      styleMap[key]?.()
+
+    const selected = cy.value.nodes(':selected')
+    const fallback = nodeId ? cy.value.getElementById(nodeId) : cy.value.collection()
+    const targets = selected.length > 1 ? selected : fallback
+    if (!targets.length) return
+
+    targets.forEach((node) => {
+      Object.entries(styles).forEach(([key, value]) => {
+        node.data(key, value)
+        // 映射到 Cytoscape 样式
+        const styleMap = {
+          color: () => node.style('background-color', value),
+          fontColor: () => node.style('color', value),
+          fontSize: () => node.style('font-size', value + 'px'),
+          textAlign: () => node.style('text-halign', value),
+          nodeWidth: () => { node.style('width', value ? value + 'px' : 'auto'); node.style('text-max-width', value ? value + 'px' : '100px') },
+          nodeHeight: () => node.style('height', value ? value + 'px' : 'auto'),
+          borderColor: () => node.style('border-color', value),
+          borderWidth: () => node.style('border-width', value + 'px'),
+          nodeShape: () => node.style('shape', value),
+          shadowOpacity: () => {
+            // 当前 Cytoscape 版本不支持 shadow-*，仅保留 data 值用于兼容历史数据
+          },
+          nodeOpacity: () => node.style('opacity', value),
+        }
+        styleMap[key]?.()
+      })
     })
+
     saveCurrentLayoutDebounced()
   }
 
   function updateNodeFontStyle(nodeId, style, active) {
     if (!cy.value) return
-    const node = cy.value.getElementById(nodeId)
-    if (!node.length) return
-    let current = (node.data('fontStyle') || '').split(' ').filter(Boolean)
-    if (active) { if (!current.includes(style)) current.push(style) }
-    else current = current.filter(s => s !== style)
-    const fontStyle = current.join(' ')
-    node.data('fontStyle', fontStyle)
-    node.style('font-weight', current.includes('bold') ? 'bold' : 'normal')
-    node.style('font-style', current.includes('italic') ? 'italic' : 'normal')
+
+    const selected = cy.value.nodes(':selected')
+    const fallback = nodeId ? cy.value.getElementById(nodeId) : cy.value.collection()
+    const targets = selected.length > 1 ? selected : fallback
+    if (!targets.length) return
+
+    targets.forEach((node) => {
+      let current = (node.data('fontStyle') || '').split(' ').filter(Boolean)
+      if (active) { if (!current.includes(style)) current.push(style) }
+      else current = current.filter(s => s !== style)
+      const fontStyle = current.join(' ')
+      node.data('fontStyle', fontStyle)
+      node.style('font-weight', current.includes('bold') ? 'bold' : 'normal')
+      node.style('font-style', current.includes('italic') ? 'italic' : 'normal')
+    })
+
     saveCurrentLayoutDebounced()
   }
 

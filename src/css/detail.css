@@ -1,5 +1,5 @@
 /* ===== 右侧详情面板 ===== */
-#detail-panel{width:320px;height:100%;display:flex;flex-direction:column;background:#fff;flex-shrink:0;overflow:hidden;transition:width .25s ease,opacity .2s ease}
+#detail-panel{width:320px;height:100%;display:flex;flex-direction:column;background:#fff;flex-shrink:0;overflow:hidden;transition:opacity .2s ease}
 #detail-panel.collapsed{width:0;opacity:0;overflow:hidden;pointer-events:none}
 #detail-panel.resizing{transition:none}
 
@@ -8,23 +8,30 @@
 #detail-resize-handle:hover,#detail-resize-handle.active{background:#3498db}
 #detail-resize-handle.hidden{display:none}
 
+/* 拖拽预览线（仅拖拽时显示，松手后应用真实宽度） */
+#detail-resize-preview{position:absolute;top:0;bottom:0;width:2px;background:#3498db;opacity:0;pointer-events:none;z-index:9;transition:opacity .08s ease}
+#detail-resize-preview.active{opacity:1}
+
 /* 收起按钮（面板标题内） */
 #btn-collapse-detail{width:26px;height:26px;border:1px solid #e0e4ea;border-radius:5px;
-  background:#fff;cursor:pointer;font-size:11px;color:#999;margin-right:8px;flex-shrink:0;transition:all .15s}
+  background:#fff;cursor:pointer;font-size:11px;color:#999;margin-right:8px;flex-shrink:0;
+  transition:background-color .15s,color .15s,border-color .15s}
 #btn-collapse-detail:hover{background:#eef2f7;color:#1a3a5c}
 
 /* 展开按钮（面板收起时显示在右侧边缘） */
 #btn-toggle-detail{display:none;position:absolute;right:0;top:50%;transform:translateY(-50%);
   width:22px;height:48px;border:1px solid #e0e4ea;border-right:none;border-radius:6px 0 0 6px;
-  background:#fff;cursor:pointer;font-size:11px;color:#999;z-index:10;transition:all .15s;padding:0}
-#btn-toggle-detail:hover{background:#eef2f7;color:#1a3a5c;width:26px}
+  background:#fff;cursor:pointer;font-size:11px;color:#999;z-index:10;padding:0;
+  transition:background-color .15s,color .15s,border-color .15s,transform .15s}
+#btn-toggle-detail:hover{background:#eef2f7;color:#1a3a5c;transform:translateY(-50%) scaleX(1.06)}
 #btn-toggle-detail.visible{display:block}
 
 #detail-title{padding:16px 20px 10px;border-bottom:1px solid #e8ecf0;font-size:18px;
   font-weight:700;color:#1a3a5c;flex-shrink:0;border-left:4px solid #ddd;margin-left:0;display:flex;align-items:center}
 #detail-actions{display:flex;gap:5px;padding:6px 20px 0;flex-shrink:0}
 #detail-actions button{height:26px;padding:0 8px;border:1px solid #e0e4ea;border-radius:5px;
-  background:#fff;cursor:pointer;font-size:11px;color:#666;transition:all .12s}
+  background:#fff;cursor:pointer;font-size:11px;color:#666;
+  transition:background-color .12s,color .12s,border-color .12s}
 #detail-actions button:hover{background:#eef2f7;color:#1a3a5c}
 #detail-body{flex:1;overflow-y:auto;padding:12px 20px 40px;line-height:1.75;font-size:13.5px}
 
@@ -62,7 +69,8 @@
 /* --- 编辑/预览切换 --- */
 #detail-mode-toggle{display:none;gap:0;margin-left:auto}
 #detail-mode-toggle button{height:24px;padding:0 10px;border:1px solid #dfe4ea;background:#fff;
-  cursor:pointer;font-size:11px;color:#888;transition:all .12s}
+  cursor:pointer;font-size:11px;color:#888;
+  transition:background-color .12s,color .12s,border-color .12s}
 #detail-mode-toggle button:first-child{border-radius:5px 0 0 5px}
 #detail-mode-toggle button:last-child{border-radius:0 5px 5px 0;border-left:0}
 #detail-mode-toggle button.active{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
