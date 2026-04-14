@@ -45,14 +45,6 @@
           @go-root="graph.goRoot"
         />
 
-        <!-- 图例 -->
-        <div id="legend">
-          <h4>关系</h4>
-          <div class="legend-item"><span class="legend-line" style="background:#5cb85c"></span> 演进</div>
-          <div class="legend-item"><span class="legend-line" style="background:#e8913a"></span> 依赖</div>
-          <div class="legend-item"><span class="legend-dash" style="border-color:#bbb"></span> 相关</div>
-        </div>
-
         <!-- 搜索框 -->
         <div id="search-box">
           <input
