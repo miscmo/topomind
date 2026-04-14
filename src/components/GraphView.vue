@@ -45,17 +45,6 @@
           @go-root="graph.goRoot"
         />
 
-        <!-- 搜索框 -->
-        <div id="search-box">
-          <input
-            id="search-input"
-            type="text"
-            placeholder="搜索..."
-            v-model="searchQuery"
-            @input="graph.applySearch(searchQuery)"
-          />
-        </div>
-
         <!-- 缩放指示 -->
         <div id="zoom-indicator">{{ graph.zoomLevel.value }}%</div>
 
@@ -119,7 +108,6 @@ import StylePanel from '@/components/StylePanel.vue'
 import DetailPanel from '@/components/DetailPanel.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
-import GitPanel from '@/components/GitPanel.vue'
 
 
 const appStore = useAppStore()
@@ -143,7 +131,6 @@ const detailResizeState = reactive({
   active: false,
   previewLeft: 0,
 })
-const searchQuery = ref('')
 const initPhase = ref('idle') // idle | engine | decorators | room | ready | error
 const initError = ref('')
 
@@ -209,9 +196,6 @@ function syncUiFromActiveTab() {
   const restoredWidth = persistedWidth ?? ui.detailPanelWidth ?? detailPanelWidth.value
   detailPanelWidth.value = clampDetailWidth(restoredWidth)
 
-  searchQuery.value = ui.searchQuery || ''
-  graph.applySearch(searchQuery.value)
-
   appStore.selectNode(ui.selectedNodeId || null)
   if (ui.edgeMode && ui.edgeModeSourceId) {
     appStore.enterEdgeMode(ui.edgeModeSourceId)
@@ -270,10 +254,6 @@ watch(() => leftPanel.open, (v) => {
 
 watch(() => detailPanel.open, (v) => {
   saveUiToActiveTab({ detailPanelOpen: !!v })
-})
-
-watch(searchQuery, (v) => {
-  saveUiToActiveTab({ searchQuery: v || '' })
 })
 
 watch(() => appStore.selectedNodeId, (v) => {
