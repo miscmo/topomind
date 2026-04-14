@@ -5,6 +5,8 @@ const fs = require("./file-service");
 const nfs = require("fs");
 const gitIPC = require("./git-ipc");
 let win = null;
+app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
+app.commandLine.appendSwitch("disable-software-rasterizer");
 function createWindow() {
   win = new BrowserWindow({
     width: 1400,
@@ -36,7 +38,9 @@ function registerIPC() {
     return fs.listChildren(p);
   });
   ipcMain.handle("fs:mkDir", function(e, p, m, rootDir) {
-    return fs.mkDir(p, m, rootDir);
+    var abs = fs.mkDir(p, m, rootDir);
+    var rel = path.relative(rootDir || fs.getRootDir(), abs);
+    return rel;
   });
   ipcMain.handle("fs:rmDir", function(e, p) {
     fs.rmDir(p);
@@ -73,6 +77,10 @@ function registerIPC() {
   });
   ipcMain.handle("fs:clearAll", function() {
     fs.clearAll();
+  });
+  ipcMain.handle("fs:setRootDir", function(e, dir) {
+    fs.setRootDir(dir);
+    return fs.getRootDir();
   });
   ipcMain.handle("fs:selectWorkDir", function() {
     var result = dialog.showOpenDialogSync(win, {
@@ -119,7 +127,7 @@ function registerIPC() {
   });
   ipcMain.on("save:layout", function(event, dirPath, meta) {
     try {
-      fs.writeMeta(dirPath, meta);
+      fs.writeGraphMeta(dirPath, meta);
       event.returnValue = true;
     } catch (e) {
       console.error("[main] save:layout 失败:", e);

@@ -9,6 +9,10 @@ const gitIPC = require('./git-ipc');
 
 let win = null;
 
+// 禁用 GPU shader cache，避免 Windows 多进程争抢缓存目录导致的 ERROR
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
@@ -34,7 +38,11 @@ function createWindow() {
 function registerIPC() {
   ipcMain.handle('fs:init',           function()       { fs.ensureDir(fs.getRootDir()); return fs.getRootDir(); });
   ipcMain.handle('fs:listChildren',   function(e, p)   { return fs.listChildren(p); });
-  ipcMain.handle('fs:mkDir',          function(e, p, m, rootDir){ return fs.mkDir(p, m, rootDir); });
+  ipcMain.handle('fs:mkDir',          function(e, p, m, rootDir){
+    var abs = fs.mkDir(p, m, rootDir);
+    var rel = path.relative(rootDir || fs.getRootDir(), abs);
+    return rel;
+  });
   ipcMain.handle('fs:rmDir',          function(e, p)   { fs.rmDir(p); });
   ipcMain.handle('fs:readMeta',       function(e, p)   { return fs.readMeta(p); });
   ipcMain.handle('fs:writeMeta',      function(e, p, m){ fs.writeMeta(p, m); });
@@ -47,6 +55,10 @@ function registerIPC() {
   ipcMain.handle('fs:writeBlobFile',  function(e, p, b){ fs.writeBlobFile(p, b); });
   ipcMain.handle('fs:readBlobFile',   function(e, p)   { return fs.readBlobFile(p); });
   ipcMain.handle('fs:clearAll',       function()       { fs.clearAll(); });
+  ipcMain.handle('fs:setRootDir', function(e, dir) {
+    fs.setRootDir(dir);
+    return fs.getRootDir();
+  });
   ipcMain.handle('fs:selectWorkDir',  function() {
     var result = dialog.showOpenDialogSync(win, {
       title: '选择工作目录', properties: ['openDirectory', 'createDirectory']
@@ -85,7 +97,7 @@ function registerIPC() {
   // ===== 同步保存（beforeunload 时使用）=====
   ipcMain.on('save:layout', function(event, dirPath, meta) {
     try {
-      fs.writeMeta(dirPath, meta);
+      fs.writeGraphMeta(dirPath, meta);
       event.returnValue = true;
     } catch (e) {
       console.error('[main] save:layout 失败:', e);

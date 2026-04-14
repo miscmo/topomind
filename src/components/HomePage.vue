@@ -21,7 +21,7 @@
           v-for="kb in kbs"
           :key="kb.path"
           class="home-card"
-          :class="{ loading: !kb.nodeCount && !kb.gitStatus }"
+          :class="{ loading: kb.nodeCount === null && !kb.gitStatus }"
           @click="openKB(kb)"
         >
           <div class="home-card-image">

@@ -17,9 +17,12 @@ import { normalizeMeta } from '@/core/meta.js'
 import { createCyManager } from '@/core/cy-manager.js'
 import cytoscape from 'cytoscape'
 import elk from 'cytoscape-elk'
+import htmlLabel from 'cytoscape-node-html-label'
 
 // 注册 ELK 布局插件
 cytoscape.use(elk)
+// 注册 HTML 标签插件
+cytoscape.use(htmlLabel)
 
 export function useGraph(containerRef) {
   const appStore = useAppStore()
@@ -60,9 +63,89 @@ export function useGraph(containerRef) {
     return `${kb}::${dirPath || ''}`
   }
 
+  // ─── 节点 HTML 标签生成器（tpl 函数，供 cytoscape-node-html-label 调用）─────
+  function generateNodeLabelHtml(data) {
+    const label = data.label || ''
+    const hasDoc = !!data.hasDoc
+    const childCount = data.childCount || 0
+
+    // 从节点数据读取文字样式
+    const fontSize = Number(data.fontSize) || 12
+    const fontColor = data.fontColor || '#fff'
+    const fontStyle = data.fontStyle || ''
+    const textAlign = data.textAlign || 'center'
+    const textWrap = data.textWrap !== false
+    const fontWeight = fontStyle.includes('bold') ? 'bold' : ''
+    const fontStyleAttr = fontStyle.includes('italic') ? 'italic' : ''
+
+    // DEBUG
+    console.log('[HTML label]生成标签 id=' + data.id + ' fontColor=' + fontColor + ' fontSize=' + fontSize + ' fontStyle=' + fontStyle)
+
+    // 记录时间戳用于调试事件触发顺序
+    if (!window.__labelGenCount) window.__labelGenCount = 0
+    window.__labelGenCount++
+    console.log('[HTML label] 生成次数 #' + window.__labelGenCount + ' id=' + data.id)
+
+    // 文档图标：14x14px 固定尺寸，不随父元素 font-size 缩放
+    const docIcon = hasDoc
+      ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;font-size:0;line-height:0;vertical-align:text-bottom"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="12" rx="1.5" stroke="#fff" stroke-width="1.2" fill="none"/><rect x="4" y="1" width="6" height="5" rx="1" fill="#fff" opacity="0.9"/><line x1="3" y1="8" x2="9" y2="8" stroke="#fff" stroke-width="1" stroke-linecap="round"/><line x1="3" y1="10" x2="9" y2="10" stroke="#fff" stroke-width="1" stroke-linecap="round"/><line x1="3" y1="12" x2="7" y2="12" stroke="#fff" stroke-width="1" stroke-linecap="round"/></svg></span>`
+      : ''
+
+    // 子节点计数：固定 10px，不随节点文字大小变化
+    const childIcon = childCount > 0
+      ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:14px;padding:0 3px;flex-shrink:0;font-size:10px;font-family:-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Roboto,sans-serif;color:#fff;line-height:1;vertical-align:text-bottom;box-sizing:border-box;background:rgba(255,255,255,0.25);border-radius:7px">${childCount}↓</span>`
+      : ''
+
+    const badgeGroup = (docIcon || childIcon)
+      ? `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:5px;flex-shrink:0;vertical-align:text-bottom">${docIcon}${childIcon}</span>`
+      : ''
+
+    // 文字样式：使用节点数据的 fontSize、fontColor、fontStyle、textWrap
+    const textStyles = [
+      'display:inline',
+      'vertical-align:text-bottom',
+      `font-size:${fontSize}px`,
+      `font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif`,
+      `color:${fontColor}`,
+      fontWeight ? `font-weight:${fontWeight}` : '',
+      fontStyleAttr ? `font-style:${fontStyleAttr}` : '',
+      `text-align:${textAlign}`,
+      `white-space:${textWrap ? 'normal' : 'nowrap'}`,
+    ].filter(Boolean).join(';')
+
+    return `<span style="${textStyles}">${badgeGroup}${label}</span>`
+  }
+
+  // ─── 设置 HTML 标签（在 cy.mount() 之后调用）─────────────────────
+  // 使用 cytoscape-node-html-label 插件渲染节点 HTML 标签
+  // 注意：cytoscape-node-html-label 内部会清理旧容器，故可安全重复调用
+  function _setupHtmlLabels(cyInst, forceInit = false) {
+    if (!cyInst) return
+    console.log('[_setupHtmlLabels] 开始设置 forceInit=' + forceInit)
+    const container = cyInst.container()
+    console.log('[_setupHtmlLabels] cy.container()=', container ? '存在' : 'null')
+    cyInst.nodeHtmlLabel([{
+      query: 'node.card',
+      tpl: (data) => generateNodeLabelHtml(data),
+      halign: 'center',
+      valign: 'center',
+    }], { enablePointerEvents: false })
+
+    // 如果 graph 已经有节点了（从缓存激活的旧实例），
+    // 'render' 事件已过，手动触发一次 label 创建
+    if (forceInit || (cyInst.nodes && cyInst.nodes().length > 0)) {
+      try {
+        console.log('[_setupHtmlLabels] 触发 render 事件，节点数=' + cyInst.nodes().length)
+        cyInst.emit('render')
+      } catch (e) {
+        console.error('[_setupHtmlLabels] emit render 失败:', e)
+      }
+    }
+  }
+
   // ─── 初始化 Cytoscape ────────────────────────────────────────
   function _createCyInstance(container = null) {
-    return cytoscape({
+    const instance = cytoscape({
       container: container || containerRef.value || undefined,
       elements: [],
       minZoom: 0.15, maxZoom: 3.5,
@@ -72,17 +155,14 @@ export function useGraph(containerRef) {
       selectionType: 'additive',
       style: [
         { selector: 'node.card', style: {
-          'shape': 'roundrectangle', 'label': (ele) => {
-            const base = ele.data('label') || ''
-            const badge = ele.data('badgeText') || ''
-            return badge ? `${base}\n${badge}` : base
-          },
+          'shape': 'roundrectangle',
           'font-family': '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
           'text-wrap': 'wrap', 'text-max-width': '100px',
           'text-justification': 'center',
           'line-height': 1.2,
           'background-color': '#4a6fa5', 'background-opacity': 0.92,
-          'color': '#fff', 'font-size': '12px',
+          'color': 'transparent', 'text-color': 'transparent',
+          'text-opacity': 0, 'font-size': '0px',
           'text-valign': 'center', 'text-halign': 'center',
           'padding': '14px',
           'underlay-color': '#000', 'underlay-opacity': 0.06, 'underlay-padding': 3,
@@ -112,6 +192,7 @@ export function useGraph(containerRef) {
       ],
     })
 
+    return instance
   }
 
   function initCy() {
@@ -123,6 +204,7 @@ export function useGraph(containerRef) {
       const ctx = cyManager.activate(key, containerRef.value)
       cy.value = ctx?.cy || null
       if (ctx) {
+        _setupHtmlLabels(ctx.cy, true)
         _bindCyEvents(ctx.cy)
         _detachAllDomBindingsExcept(null)
         _bindDOMEvents(ctx.cy)
@@ -138,6 +220,7 @@ export function useGraph(containerRef) {
     cyManager.create(key, instance)
     const ctx = cyManager.activate(key, containerRef.value)
     cy.value = instance
+    _setupHtmlLabels(instance)
     _bindCyEvents(instance)
     _bindDOMEvents(instance)
     if (ctx) cyManager.markEventsBound(key, true)
@@ -153,12 +236,14 @@ export function useGraph(containerRef) {
       if (ctx?.loaded) {
         cy.value = ctx.cy || null
         _detachAllDomBindingsExcept(null)
+        _setupHtmlLabels(ctx.cy, true)
         _bindCyEvents(ctx.cy)
         _bindDOMEvents(ctx.cy)
         cyManager.markEventsBound(key, true)
         _grid?.bindCyEvents?.()
         ctx?.cy?.resize?.()
         _grid?.drawGrid()
+        _restoreSelectedNode()
         return
       }
       // 存在但未加载完成，删除重建避免空实例被复用
@@ -170,6 +255,7 @@ export function useGraph(containerRef) {
       cyManager.create(key, instance)
       const ctx = cyManager.activate(key, containerRef.value)
       cy.value = instance
+      _setupHtmlLabels(instance)
       _bindCyEvents(instance)
       _bindDOMEvents(instance)
       if (ctx) cyManager.markEventsBound(key, true)
@@ -303,9 +389,22 @@ export function useGraph(containerRef) {
       // 异步加载节点徽标数据
       _loadNodeBadges(cards)
       cyManager.markLoaded(key, true)
+
+      // 从 localStorage 恢复选中的节点（仅当节点在当前房间中存在）
+      _restoreSelectedNode()
     } catch (e) {
       console.error('[useGraph] loadRoom 失败:', dirPath, e)
       throw e
+    }
+  }
+
+  function _restoreSelectedNode() {
+    const savedNodeId = appStore.selectedNodeId
+    if (!savedNodeId || !cy.value) return
+    const node = cy.value.getElementById(savedNodeId)
+    if (node.length) {
+      // 确保视觉高亮选中状态
+      node.select()
     }
   }
 
@@ -355,14 +454,10 @@ export function useGraph(containerRef) {
 
       const childCount = children.length
       const hasDoc = !!(md && md.trim().length > 0)
-      const badgeText = `${hasDoc ? '📄 ' : ''}${childCount > 0 ? `${childCount}↓` : ''}`.trim()
 
       node.data('childCount', childCount)
       node.data('hasDoc', hasDoc)
-      node.data('badgeText', badgeText)
     }))
-
-    // 徽标改为节点标签内渲染，不再依赖独立 DOM 跟随层
   }
 
   // ─── 布局保存 ────────────────────────────────────────────────
@@ -495,8 +590,9 @@ export function useGraph(containerRef) {
 
   async function addChildCard(parentPath, name) {
     const cardPath = await storage.createCard(parentPath, name)
-    // 重新加载当前房间以显示新子卡片（进入父节点）
-    roomStore.drillInto(parentPath)
+    // 驱逐当前房间缓存，强制 loadRoom 重新获取最新数据
+    const key = _roomKey(parentPath)
+    cyManager.remove(key)
     await loadRoom(parentPath)
     return cardPath
   }
@@ -505,6 +601,7 @@ export function useGraph(containerRef) {
     await storage.deleteCard(cardPath)
     const node = cy.value.getElementById(cardPath)
     if (node.length) {
+      cy.value.remove(node.connectedEdges())
       cy.value.remove(node)
       appStore.clearSelection()
     }
@@ -512,9 +609,21 @@ export function useGraph(containerRef) {
   }
 
   async function renameCard(cardPath, newName) {
-    await storage.renameCard(cardPath, newName)
+    const actualPath = await storage.renameCard(cardPath, newName)
     const node = cy.value.getElementById(cardPath)
-    if (node.length) node.data('label', newName)
+    if (node.length) {
+      node.data('label', newName)
+      // 如果 mkDir 脱敏/去重导致路径变化，同步更新 graph node ID 和 pathNameMap
+      if (actualPath && actualPath !== cardPath) {
+        node.id(actualPath)
+        // pathNameMap 映射 path → display name，需同步更新
+        const oldName = roomStore.pathNameMap[cardPath]
+        if (oldName !== undefined) {
+          roomStore.setPathName(actualPath, newName)
+          delete roomStore.pathNameMap[cardPath]
+        }
+      }
+    }
     saveCurrentLayoutDebounced()
   }
 
@@ -546,7 +655,9 @@ export function useGraph(containerRef) {
         console.error(`[useGraph] 删除节点失败: ${id}`, err)
       }
     }
-    cy.value.remove(cy.value.nodes(':selected'))
+    const selected = cy.value.nodes(':selected')
+    selected.connectedEdges().remove()
+    selected.remove()
     appStore.clearSelection()
     saveCurrentLayoutDebounced()
   }
@@ -931,37 +1042,25 @@ export function useGraph(containerRef) {
 
   // ─── 键盘事件（由 GraphView 组件调用） ──────────────────────
   async function handleKeydown(e) {
-    const isInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)
-    const hasModal = document.querySelector('.modal-overlay.active')
-
-    if (e.key === 'Escape') {
-      if (appStore.edgeMode) appStore.exitEdgeMode()
-      cy.value?.nodes().unselect()
-      appStore.clearSelection()
-    }
-    if (e.key === 'Backspace' && !isInput && !hasModal && roomStore.currentKBPath) {
-      e.preventDefault()
-      await goBack()
-    }
-    if (e.key === 'Tab' && appStore.selectedNodeId && !isInput && !hasModal) {
-      e.preventDefault()
-      const name = await modalStore.showInput('添加子卡片', '子卡片名称...')
-      if (name) await addChildCard(appStore.selectedNodeId, name)
-    }
-    if (e.key === 'Delete' && !isInput && !hasModal) {
-      e.preventDefault()
-      const selected = cy.value.nodes(':selected')
-      if (selected.length > 1) {
-        const ok = await modalStore.showConfirm(`确定删除选中的 ${selected.length} 个节点？`)
-        if (ok) await batchDelete(selected.map(n => n.id()))
-      } else if (appStore.selectedNodeId) {
-        const ok = await modalStore.showConfirm(`确定删除节点「${cy.value.getElementById(appStore.selectedNodeId).data('label')}」？`)
-        if (ok) await deleteCard(appStore.selectedNodeId)
-      }
-    }
+    // 已移除全局键盘快捷键，避免干扰文本输入
   }
 
   // ─── 节点样式更新（供 StylePanel 调用） ─────────────────────
+  // ─── 强制刷新 HTML 标签（style 变更后调用）─────
+  // cytoscape-node-html-label 插件通过 'data'/'style' 事件更新标签，
+  // 但由于 _setupHtmlLabels 可能被多次调用产生多套事件处理器，
+  // 故在样式变更后显式触发 'data' 事件确保标签刷新。
+  function _refreshHtmlLabels(targetNodes) {
+    if (!cy.value) return
+    const nodes = targetNodes || cy.value.nodes()
+    console.log('[_refreshHtmlLabels] 刷新 ' + nodes.length + ' 个节点')
+    nodes.forEach((n) => {
+      if (n.isNode() && n.hasClass('card')) {
+        try { n.emit('data') } catch (e) {}
+      }
+    })
+  }
+
   function updateNodeStyle(nodeId, styles) {
     if (!cy.value) return
 
@@ -970,8 +1069,10 @@ export function useGraph(containerRef) {
     const targets = selected.length > 1 ? selected : fallback
     if (!targets.length) return
 
+    console.log('[updateNodeStyle] nodeId=' + nodeId + ' styles=', styles)
     targets.forEach((node) => {
       Object.entries(styles).forEach(([key, value]) => {
+        console.log('[updateNodeStyle] setting node=' + node.id() + ' key=' + key + ' value=' + value)
         node.data(key, value)
         // 映射到 Cytoscape 样式
         const styleMap = {
@@ -993,6 +1094,9 @@ export function useGraph(containerRef) {
       })
     })
 
+    // 强制刷新 HTML 标签
+    _refreshHtmlLabels(targets)
+
     saveCurrentLayoutDebounced()
   }
 
@@ -1013,6 +1117,9 @@ export function useGraph(containerRef) {
       node.style('font-weight', current.includes('bold') ? 'bold' : 'normal')
       node.style('font-style', current.includes('italic') ? 'italic' : 'normal')
     })
+
+    // 强制刷新 HTML 标签
+    _refreshHtmlLabels(targets)
 
     saveCurrentLayoutDebounced()
   }

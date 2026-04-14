@@ -83,9 +83,22 @@ function writeJsonFile(filePath, data) {
 function mkDir(dirPath, meta, customRootDir) {
   var parent = customRootDir ? path.resolve(customRootDir) : rootDir;
   ensureDir(parent);
-  var finalName = uniqueFolderName(parent, dirPath);
+
+  var segments = (dirPath || '').split('/').filter(Boolean);
+  if (segments.length === 0) return parent;
+
+  // 除了最后一层，前面的 segment 对应的目录必然已存在，
+  // 只做 ensure（带脱敏），不参与去重
+  for (var i = 0; i < segments.length - 1; i++) {
+    parent = path.join(parent, safeSegment(segments[i]));
+    ensureDir(parent);
+  }
+
+  // 最后一层：去重（可能加 -1/-2 后缀）
+  var finalName = uniqueFolderName(parent, segments[segments.length - 1]);
   var d = path.join(parent, finalName);
   ensureDir(d);
+
   var kbFile = metaFilePath(d, 'kb');
   if (!fs.existsSync(kbFile) || meta) {
     writeJsonFile(kbFile, meta || {});

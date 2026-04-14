@@ -18,7 +18,7 @@
         :class="{ compact: leftPanelWidth < 320 }"
         :selectedNodeId="appStore.selectedNodeId"
         :cy="graph.cy.value"
-        :style="{ width: leftPanelWidth + 'px', flexShrink: 0, position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 20 }"
+        :style="{ width: leftPanelWidth + 'px', flexShrink: 0, position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 5 }"
         @collapse="leftPanel.open = false"
         @update-style="graph.updateNodeStyle"
         @update-font-style="graph.updateNodeFontStyle"
@@ -50,7 +50,7 @@
         />
 
         <!-- 缩放指示 -->
-        <div id="zoom-indicator">{{ graph.zoomLevel.value }}%</div>
+        <div id="zoom-indicator" :style="zoomIndicatorStyle">{{ graph.zoomLevel.value }}%</div>
 
         <!-- 缩放控制 -->
         <div id="controls">
@@ -66,9 +66,6 @@
           <span>🔗 连线模式：点击目标节点</span>
           <button @click="appStore.exitEdgeMode()">取消</button>
         </div>
-
-        <!-- 快捷键提示 -->
-        <button id="shortcut-hint" title="右键拖拽画布 · 左键框选 · Tab 子卡片 · Delete 删除 · Backspace 返回">?</button>
       </div>
 
       <!-- 右侧详情面板 -->
@@ -140,6 +137,9 @@ const detailResizeState = reactive({
   active: false,
   previewLeft: 0,
 })
+const zoomIndicatorStyle = computed(() => ({
+  left: `${Math.max(12, leftPanelWidth.value + 12)}px`,
+}))
 const initPhase = ref('idle') // idle | engine | decorators | room | ready | error
 const initError = ref('')
 
@@ -150,6 +150,10 @@ const DETAIL_WIDTH_MAX = 860
 
 function detailWidthKeyForKB(kbPath) {
   return kbPath ? `topomind:detail-width:${kbPath}` : ''
+}
+
+function detailPanelStateKeyForKB(kbPath) {
+  return kbPath ? `topomind:detail-panel:${kbPath}` : ''
 }
 
 function clampPanelWidth(w, min, max, fallback) {
@@ -179,12 +183,6 @@ function readPersistedDetailWidthForKB(kbPath) {
   }
 }
 
-function restoreDetailWidthForKB(kbPath) {
-  const restored = readPersistedDetailWidthForKB(kbPath)
-  if (restored == null) return
-  detailPanelWidth.value = restored
-}
-
 function persistDetailWidthForKB(kbPath, width) {
   const key = detailWidthKeyForKB(kbPath)
   if (!key) return
@@ -192,6 +190,29 @@ function persistDetailWidthForKB(kbPath, width) {
     localStorage.setItem(key, String(clampDetailWidth(width)))
   } catch (e) {
     console.warn('[GraphView] 保存详情宽度失败:', e)
+  }
+}
+
+function persistDetailPanelStateForKB(kbPath, state) {
+  const key = detailPanelStateKeyForKB(kbPath)
+  if (!key) return
+  try {
+    localStorage.setItem(key, JSON.stringify(state))
+  } catch (e) {
+    console.warn('[GraphView] 保存详情面板状态失败:', e)
+  }
+}
+
+function readPersistedDetailPanelStateForKB(kbPath) {
+  const key = detailPanelStateKeyForKB(kbPath)
+  if (!key) return null
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw == null) return null
+    return JSON.parse(raw)
+  } catch (e) {
+    console.warn('[GraphView] 读取详情面板状态失败:', e)
+    return null
   }
 }
 
@@ -226,8 +247,14 @@ function syncUiFromActiveTab() {
   if (!tab) return
 
   const ui = tab.ui || {}
-  leftPanel.open = ui.leftPanelOpen !== false
-  detailPanel.open = ui.detailPanelOpen !== false
+
+  // 详情面板状态优先从 localStorage 恢复（跨 tab 重启持久化），
+  // 其次读 tab.ui，最后用默认值
+  const persistedDetailState = readPersistedDetailPanelStateForKB(roomStore.currentKBPath)
+
+  leftPanel.open = persistedDetailState?.leftPanelOpen ?? ui.leftPanelOpen ?? true
+
+  detailPanel.open = persistedDetailState?.detailPanelOpen ?? ui.detailPanelOpen ?? true
 
   const persistedStyleWidth = readPersistedStyleWidth()
   const restoredStyleWidth = persistedStyleWidth ?? ui.leftPanelWidth ?? leftPanelWidth.value
@@ -238,7 +265,9 @@ function syncUiFromActiveTab() {
   const restoredWidth = persistedWidth ?? ui.detailPanelWidth ?? detailPanelWidth.value
   detailPanelWidth.value = clampDetailWidth(restoredWidth)
 
-  appStore.selectNode(ui.selectedNodeId || null)
+  // selectedNodeId 也优先从 localStorage 恢复（跨 tab 重启持久化）
+  const restoredNodeId = persistedDetailState?.selectedNodeId ?? ui.selectedNodeId ?? null
+  appStore.selectNode(restoredNodeId)
   if (ui.edgeMode && ui.edgeModeSourceId) {
     appStore.enterEdgeMode(ui.edgeModeSourceId)
   } else {
@@ -286,12 +315,13 @@ watch(() => roomStore.activeTabId, () => {
   syncUiFromActiveTab()
 }, { immediate: true })
 
-watch(() => roomStore.currentKBPath, (kbPath) => {
-  restoreDetailWidthForKB(kbPath)
-})
-
 watch(() => leftPanel.open, (v) => {
   saveUiToActiveTab({ leftPanelOpen: !!v })
+  const kbPath = roomStore.currentKBPath
+  if (kbPath) {
+    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
+    persistDetailPanelStateForKB(kbPath, { ...state, leftPanelOpen: !!v })
+  }
 })
 
 watch(() => leftPanelWidth.value, (v) => {
@@ -301,10 +331,30 @@ watch(() => leftPanelWidth.value, (v) => {
 
 watch(() => detailPanel.open, (v) => {
   saveUiToActiveTab({ detailPanelOpen: !!v })
+  const kbPath = roomStore.currentKBPath
+  if (kbPath) {
+    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
+    persistDetailPanelStateForKB(kbPath, { ...state, detailPanelOpen: !!v })
+  }
+})
+
+watch(() => detailPanelWidth.value, (v) => {
+  saveUiToActiveTab({ detailPanelWidth: clampDetailWidth(v) })
+  persistDetailWidthForKB(roomStore.currentKBPath, v)
+  const kbPath = roomStore.currentKBPath
+  if (kbPath) {
+    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
+    persistDetailPanelStateForKB(kbPath, { ...state, detailPanelWidth: clampDetailWidth(v) })
+  }
 })
 
 watch(() => appStore.selectedNodeId, (v) => {
   saveUiToActiveTab({ selectedNodeId: v || null })
+  const kbPath = roomStore.currentKBPath
+  if (kbPath) {
+    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
+    persistDetailPanelStateForKB(kbPath, { ...state, selectedNodeId: v || null })
+  }
 })
 
 watch(() => appStore.edgeMode, (v) => {
@@ -351,12 +401,12 @@ function retryInit() {
   initializeGraphView()
 }
 
-function handleBeforeUnload() {
+async function handleBeforeUnload() {
   // 先保存正在编辑的 Markdown 内容
   detailPanelRef.value?.flushEdit()
   const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
   if (!dirPath) return
-  const meta = graph.buildCurrentMeta()
+  const meta = await graph.buildCurrentMeta()
   if (meta) storage.saveLayoutSync(dirPath, meta)
 }
 

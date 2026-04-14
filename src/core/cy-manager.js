@@ -80,6 +80,14 @@ export function createCyManager(maxContexts = 4) {
     return target
   }
 
+  function remove(key) {
+    const ctx = contexts.get(key)
+    if (!ctx) return
+    try { ctx.cy?.destroy?.() } catch (e) {}
+    if (activeKey === key) activeKey = null
+    contexts.delete(key)
+  }
+
   function clear() {
     contexts.forEach((ctx) => {
       try { ctx.cy?.destroy?.() } catch (e) {}
@@ -88,5 +96,5 @@ export function createCyManager(maxContexts = 4) {
     activeKey = null
   }
 
-  return { has, get, create, activate, markLoaded, markEventsBound, clear }
+  return { has, get, create, activate, markLoaded, markEventsBound, remove, clear }
 }

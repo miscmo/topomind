@@ -63,8 +63,8 @@ export const Store = {
 
     const cardPath = basePath ? `${basePath}/${safeName}` : safeName
     const fullMeta = { name: safeName, createdAt: Date.now(), children: {}, edges: [] }
-    await FSB.mkDir(cardPath, fullMeta)
-    return cardPath
+    const actualPath = await FSB.mkDir(cardPath, fullMeta)
+    return actualPath || cardPath
   },
 
   deleteCard: (cardPath) => FSB.rmDir(cardPath),
@@ -82,7 +82,8 @@ export const Store = {
     }
 
     dir.name = safeName
-    return FSB.mkDir(cardPath, dir)
+    const actualPath = await FSB.mkDir(cardPath, dir)
+    return actualPath || cardPath
   },
 
   // ===== Markdown 文档 =====
@@ -94,17 +95,23 @@ export const Store = {
   saveLayout: (dirPath, meta) => FSB.writeGraphMeta(dirPath, meta),
 
   saveGraphDebounced(dirPath, buildMetaFn, onSaved) {
-    if (!dirPath) return
+    if (!dirPath) return Promise.resolve()
     const oldTimer = _saveTimers.get(dirPath)
     if (oldTimer) clearTimeout(oldTimer)
 
+    let resolveRef = null
+    const promise = new Promise(resolve => { resolveRef = resolve })
     const timer = setTimeout(() => {
       _saveTimers.delete(dirPath)
       const meta = buildMetaFn()
-      Store.saveLayout(dirPath, meta).then(() => onSaved?.())
+      Store.saveLayout(dirPath, meta).then(() => {
+        onSaved?.()
+        resolveRef()
+      })
     }, 300)
 
     _saveTimers.set(dirPath, timer)
+    return promise
   },
 
   flushGraphSave(dirPath, buildMetaFn, onSaved) {

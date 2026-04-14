@@ -24,7 +24,12 @@
       "Bash(ls -lh /d/Code/topomind/src/ui/*.js)",
       "Bash(awk '{print $9, $5}')",
       "Bash(cat)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(npm run:*)",
+      "Bash(npm search:*)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(npm ls:*)",
+      "Bash(node:*)"
     ]
   }
 }
