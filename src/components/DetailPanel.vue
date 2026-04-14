@@ -18,7 +18,7 @@
     <div id="detail-body" ref="bodyRef">
       <!-- 阅读模式：渲染 Markdown，图片异步加载 -->
       <div
-        v-if="mode === 'read'"
+        v-show="mode === 'read'"
         class="rendered-content"
         ref="renderedRef"
         v-html="renderedHtml"
@@ -26,19 +26,10 @@
         @mousedown.prevent
       ></div>
 
-      <!-- 编辑模式：支持 paste/drop 图片上传 -->
-      <textarea
-        v-else
-        ref="editAreaRef"
-        id="detail-edit-area"
-        class="active"
-        v-model="editContent"
-        placeholder="输入 Markdown...（可粘贴或拖入图片）"
-        @input="debouncedSave"
-        @paste="handlePaste"
-        @drop.prevent="handleDrop"
-        @dragover.prevent
-      ></textarea>
+      <!-- 编辑模式：CodeMirror Markdown 编辑器（常驻，避免切换重建） -->
+      <div v-show="mode === 'edit'" class="md-editor-wrap">
+        <div ref="cmEditorRef" class="md-editor-cm"></div>
+      </div>
     </div>
 
     <div v-if="previewVisible" class="image-preview-mask" @click="closeImagePreview" @wheel.prevent="handlePreviewWheel">
@@ -57,6 +48,13 @@
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { marked } from 'marked'
+import { EditorState } from '@codemirror/state'
+import { EditorView, keymap, drawSelection, highlightActiveLine, placeholder as cmPlaceholder, lineNumbers } from '@codemirror/view'
+import { history, defaultKeymap, historyKeymap } from '@codemirror/commands'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
+import { languages } from '@codemirror/language-data'
+import { GFM } from '@lezer/markdown'
 import { useStorage, showSaveIndicator } from '@/composables/useStorage'
 import { useRoomStore } from '@/stores/room'
 import { GitCache } from '@/core/git-backend.js'
@@ -75,10 +73,12 @@ const editContent = ref('')
 const childCards = ref([])
 const bodyRef = ref(null)
 const renderedRef = ref(null)
-const editAreaRef = ref(null)
+const cmEditorRef = ref(null)
 const previewVisible = ref(false)
 const previewSrc = ref('')
 const previewScale = ref(1)
+
+let _cmView = null
 
 // 竞态保护版本号
 let _version = 0
@@ -112,6 +112,69 @@ const renderedHtml = computed(() => {
   return html + childInfo
 })
 
+function _ensureEditorView(initialDoc = '') {
+  if (!cmEditorRef.value) return
+
+  // 阅读/编辑切换会销毁 v-else 下的 DOM，旧实例可能还在内存但已脱离文档
+  if (_cmView && !_cmView.dom.isConnected) {
+    _cmView.destroy()
+    _cmView = null
+  }
+
+  if (_cmView) return
+
+  _cmView = new EditorView({
+    state: EditorState.create({
+      doc: initialDoc,
+      extensions: [
+        history(),
+        lineNumbers(),
+        drawSelection(),
+        highlightActiveLine(),
+        markdown({
+          base: markdownLanguage,
+          extensions: [GFM],
+          codeLanguages: languages,
+        }),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        cmPlaceholder('输入 Markdown...（可粘贴或拖入图片）'),
+        EditorView.lineWrapping,
+        EditorView.domEventHandlers({
+          paste: (event) => {
+            void handlePaste(event)
+            return false
+          },
+          drop: (event) => {
+            void handleDrop(event)
+            return false
+          },
+          dragover: (event) => {
+            event.preventDefault()
+            return true
+          },
+        }),
+        EditorView.updateListener.of((update) => {
+          if (!update.docChanged) return
+          const value = update.state.doc.toString()
+          editContent.value = value
+          debouncedSave()
+        }),
+      ],
+    }),
+    parent: cmEditorRef.value,
+  })
+}
+
+function _setEditorDoc(text = '') {
+  if (!_cmView) return
+  const current = _cmView.state.doc.toString()
+  if (current === text) return
+  _cmView.dispatch({
+    changes: { from: 0, to: current.length, insert: text },
+  })
+}
+
 // 切换节点时重新加载
 watch(() => props.nodeId, async (newId) => {
   if (!newId) { reset(); return }
@@ -135,6 +198,7 @@ async function loadNodeContent(cardPath) {
   childCards.value = kids || []
   markdownRaw.value = md || ''
   editContent.value = md || ''
+  _setEditorDoc(editContent.value)
 
   if (bodyRef.value) bodyRef.value.scrollTop = 0
 
@@ -153,6 +217,10 @@ async function setMode(m) {
     if (token !== _modeVersion || props.nodeId == null) return
     editContent.value = md || ''
     mode.value = 'edit'
+    await nextTick()
+    _ensureEditorView(editContent.value)
+    _setEditorDoc(editContent.value)
+    _cmView?.focus()
   } else {
     await flushEdit()
     if (token !== _modeVersion) return
@@ -176,8 +244,13 @@ function debouncedSave() {
   _saveTimer = setTimeout(() => { void flushEdit() }, 1000)
 }
 
+
 onUnmounted(() => {
   clearTimeout(_saveTimer)
+  if (_cmView) {
+    _cmView.destroy()
+    _cmView = null
+  }
 })
 
 // ─── 图片上传（paste / drop）────────────────────────────────
@@ -211,17 +284,19 @@ async function _insertImage(blob) {
   try {
     const result = await storage.saveImage(props.nodeId, blob, filename)
     const mdRef = `![](${result.markdownRef})`
-    // 在光标位置插入
-    const ta = editAreaRef.value
-    if (ta) {
-      const start = ta.selectionStart
-      const end = ta.selectionEnd
-      editContent.value = editContent.value.slice(0, start) + mdRef + editContent.value.slice(end)
-      await nextTick()
-      ta.selectionStart = ta.selectionEnd = start + mdRef.length
-    } else {
-      editContent.value += '\n' + mdRef
+
+    if (_cmView) {
+      const range = _cmView.state.selection.main
+      _cmView.dispatch({
+        changes: { from: range.from, to: range.to, insert: mdRef },
+        selection: { anchor: range.from + mdRef.length },
+        scrollIntoView: true,
+      })
+      _cmView.focus()
+      return
     }
+
+    editContent.value += (editContent.value ? '\n' : '') + mdRef
     debouncedSave()
   } catch (err) {
     console.error('[DetailPanel] 图片上传失败:', err)
@@ -259,7 +334,7 @@ async function _resolveRenderedImages(cardPath, version) {
   }
 }
 
-// 处理渲染内容中的点击（子卡片标签）
+// 处理渲染内容中的点击（图片预览 / 外链打开 / 子卡片标签）
 function handleRenderedClick(e) {
   const img = e.target.closest('img')
   if (img && img.getAttribute('src')) {
@@ -267,6 +342,23 @@ function handleRenderedClick(e) {
     previewScale.value = 1
     previewVisible.value = true
     return
+  }
+
+  const link = e.target.closest('a[href]')
+  if (link) {
+    const href = (link.getAttribute('href') || '').trim()
+    if (/^https?:\/\//i.test(href)) {
+      e.preventDefault()
+      // Electron：系统默认浏览器；Web：新标签页打开
+      if (window.electronAPI?.invoke) {
+        window.electronAPI.invoke('app:openExternal', href).catch((err) => {
+          console.error('[DetailPanel] 打开外链失败:', err)
+        })
+      } else {
+        window.open(href, '_blank', 'noopener,noreferrer')
+      }
+      return
+    }
   }
 
   const tag = e.target.closest('[data-drill-path]')
@@ -284,6 +376,7 @@ function handlePreviewWheel(e) {
   const next = previewScale.value + step
   previewScale.value = Math.min(4, Math.max(0.2, Number(next.toFixed(2))))
 }
+
 
 function reset() {
   mode.value = 'read'

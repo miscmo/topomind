@@ -24,13 +24,22 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
-      "target": ["nsis", "zip"]
+      "target": [
+        "nsis",
+        "zip"
+      ]
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Office"
     },
     "nsis": {
@@ -47,12 +56,20 @@
     "vite-plugin-electron-renderer": "^0.14.5"
   },
   "dependencies": {
-    "pinia": "^2.1.7",
-    "simple-git": "^3.35.2",
-    "vue": "^3.4.21",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.41.0",
+    "@lezer/markdown": "^1.6.3",
     "cytoscape": "^3.28.1",
     "cytoscape-elk": "^2.2.0",
     "elkjs": "^0.9.3",
-    "marked": "^12.0.0"
+    "marked": "^12.0.0",
+    "pinia": "^2.1.7",
+    "simple-git": "^3.35.2",
+    "vue": "^3.4.21"
   }
 }

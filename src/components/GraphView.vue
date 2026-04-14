@@ -37,12 +37,9 @@
           <div id="node-tooltip-body"></div>
         </div>
 
-        <!-- 顶部标题 -->
-        <div id="header">{{ currentTitle }}</div>
-
-        <!-- 面包屑 -->
+        <!-- 路径导航（根层显示知识库名，子层显示完整路径） -->
         <Breadcrumb
-          v-if="roomStore.currentRoomPath && roomStore.currentRoomPath !== roomStore.currentKBPath"
+          v-if="roomStore.currentKBPath"
           :crumbs="roomStore.breadcrumbs"
           @jump="graph.jumpToBreadcrumb"
           @go-root="graph.goRoot"
@@ -74,22 +71,6 @@
         <div id="controls">
           <button @click="graph.zoomIn()">＋</button>
           <button @click="graph.zoomOut()">－</button>
-          <button @click="graph.fitView()">⊡</button>
-        </div>
-
-        <!-- 工具栏 -->
-        <div id="toolbar">
-          <button @click="promptAddCard">＋ 卡片</button>
-          <button @click="startEdgeMode" :class="{ active: appStore.edgeMode }">⤯ 连线</button>
-          <div class="sep"></div>
-          <button :class="{ active: grid.gridEnabled.value }" @click="toggleGrid">⊞</button>
-          <div class="sep"></div>
-          <button @click="graph.exportPNG()">↓ 导出</button>
-          <button @click="graph.fitView()">↺ 重置</button>
-          <div class="sep"></div>
-          <button @click="openGit">
-            ⎇ Git<span v-if="gitStore.hasDirtyFiles" class="git-dot"></span>
-          </button>
         </div>
 
         <!-- 保存指示器 -->
@@ -138,7 +119,6 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from
 import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useModalStore } from '@/stores/modal'
-import { useGitStore } from '@/stores/git'
 import { useGraph } from '@/composables/useGraph'
 import { useGrid } from '@/composables/useGrid'
 import { useStorage, saveIndicatorVisible, saveFailed } from '@/composables/useStorage'
@@ -153,7 +133,6 @@ import GitPanel from '@/components/GitPanel.vue'
 const appStore = useAppStore()
 const roomStore = useRoomStore()
 const modalStore = useModalStore()
-const gitStore = useGitStore()
 const storage = useStorage()
 
 // DOM 引用
@@ -189,16 +168,23 @@ function clampDetailWidth(w) {
   return Math.max(DETAIL_WIDTH_MIN, Math.min(DETAIL_WIDTH_MAX, Math.round(n)))
 }
 
-function restoreDetailWidthForKB(kbPath) {
+function readPersistedDetailWidthForKB(kbPath) {
   const key = detailWidthKeyForKB(kbPath)
-  if (!key) return
+  if (!key) return null
   try {
     const raw = localStorage.getItem(key)
-    if (raw == null) return
-    detailPanelWidth.value = clampDetailWidth(raw)
+    if (raw == null) return null
+    return clampDetailWidth(raw)
   } catch (e) {
-    console.warn('[GraphView] 恢复详情宽度失败:', e)
+    console.warn('[GraphView] 读取详情宽度失败:', e)
+    return null
   }
+}
+
+function restoreDetailWidthForKB(kbPath) {
+  const restored = readPersistedDetailWidthForKB(kbPath)
+  if (restored == null) return
+  detailPanelWidth.value = restored
 }
 
 function persistDetailWidthForKB(kbPath, width) {
@@ -226,11 +212,10 @@ function syncUiFromActiveTab() {
   leftPanel.open = ui.leftPanelOpen !== false
   detailPanel.open = ui.detailPanelOpen !== false
 
-  const restoredWidth = ui.detailPanelWidth ?? detailPanelWidth.value
+  const persistedWidth = readPersistedDetailWidthForKB(roomStore.currentKBPath)
+  // 跨重启优先使用持久化宽度，避免 tab.ui 的默认值覆盖用户上次调整
+  const restoredWidth = persistedWidth ?? ui.detailPanelWidth ?? detailPanelWidth.value
   detailPanelWidth.value = clampDetailWidth(restoredWidth)
-  if (roomStore.currentKBPath) {
-    persistDetailWidthForKB(roomStore.currentKBPath, detailPanelWidth.value)
-  }
 
   searchQuery.value = ui.searchQuery || ''
   graph.applySearch(searchQuery.value)
@@ -251,14 +236,6 @@ const grid = useGrid(gridCanvasRef, () => graph.cy.value)
 graph.setGrid(grid)
 
 // ─── 计算属性 ────────────────────────────────────────────────
-const currentTitle = computed(() => {
-  const path = roomStore.currentRoomPath
-  const kbPath = roomStore.currentKBPath
-  if (!path || path === kbPath) {
-    return roomStore.pathNameMap[kbPath] || kbPath?.split('/').pop() || 'TopoMind'
-  }
-  return roomStore.pathNameMap[path] || path?.split('/').pop() || ''
-})
 
 // ─── 生命周期 ────────────────────────────────────────────────
 onMounted(async () => {
@@ -362,31 +339,6 @@ function handleBeforeUnload() {
   if (!dirPath) return
   const meta = graph.buildCurrentMeta()
   if (meta) storage.saveLayoutSync(dirPath, meta)
-}
-
-// ─── 工具栏 ──────────────────────────────────────────────────
-async function promptAddCard() {
-  const name = await modalStore.showInput('新建卡片', '卡片名称...')
-  if (!name) return
-  const ext = graph.cy.value?.extent()
-  const pos = ext ? { x: (ext.x1 + ext.x2) / 2, y: (ext.y1 + ext.y2) / 2 } : undefined
-  await graph.addCard(name, pos)
-}
-
-function startEdgeMode() {
-  if (!appStore.selectedNodeId) return
-  appStore.enterEdgeMode(appStore.selectedNodeId)
-}
-
-function toggleGrid() {
-  grid.gridEnabled.value = !grid.gridEnabled.value
-  grid.drawGrid()
-}
-
-function openGit() {
-  if (roomStore.currentKBPath) {
-    gitStore.openForKB(roomStore.currentKBPath)
-  }
 }
 
 // ─── 右键菜单动作 ────────────────────────────────────────────

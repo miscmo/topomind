@@ -104,6 +104,13 @@ function registerIPC() {
   ipcMain.handle("fs:getRootDir", function() {
     return fs.getRootDir();
   });
+  ipcMain.handle("app:openExternal", function(e, url) {
+    if (typeof url !== "string") return false;
+    var target = url.trim();
+    if (!/^https?:\/\//i.test(target)) return false;
+    shell.openExternal(target);
+    return true;
+  });
   ipcMain.on("save:layout", function(event, dirPath, meta) {
     try {
       fs.writeMeta(dirPath, meta);

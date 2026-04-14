@@ -28,30 +28,22 @@
             <img v-if="kb.coverUrl" :src="kb.coverUrl" />
             <span v-else class="home-card-image-icon">📚</span>
             <button
-              class="home-card-cover-btn"
-              title="更换封面"
-              @click.stop="changeKBCover(kb)"
-            >📷 更换</button>
-            <!-- Git 状态徽标 -->
-            <span
-              v-if="kb.gitStatus"
-              :class="['git-badge', `git-badge--${kb.gitStatus.state}`]"
-              @click.stop="openGit(kb)"
-              :title="`Git 状态: ${kb.gitStatus.state}`"
-            >{{ gitBadgeLabel(kb.gitStatus) }}</span>
+              class="home-card-settings-btn"
+              title="知识库设置"
+              @click.stop="openKBSettings(kb)"
+            >⚙</button>
+
           </div>
           <div class="home-card-body">
             <div class="home-card-title">
               <span>{{ kb.name }}</span>
-              <div class="home-card-actions">
-                <button
-                  class="home-card-action-btn danger"
-                  title="删除"
-                  @click.stop="deleteKBConfirm(kb)"
-                >🗑</button>
-              </div>
             </div>
             <div class="home-card-meta">
+              <span
+                v-if="kb.gitStatus"
+                :class="['home-meta-pill', 'home-meta-pill--git', `home-meta-pill--${kb.gitStatus.state}`]"
+                :title="gitBadgeTitle(kb.gitStatus)"
+              >{{ gitBadgeLabel(kb.gitStatus) }}</span>
               <span v-if="kb.nodeCount !== null">📊 {{ kb.nodeCount }} 个节点</span>
               <span v-else class="home-card-loading-skeleton">📊 ··· 个节点</span>
             </div>
@@ -125,24 +117,87 @@
       </div>
     </div>
 
-    <!-- 更换封面的隐藏文件输入 -->
-    <input ref="changeCoverInputRef" type="file" accept="image/*" style="display:none" @change="changeCoverSelected" />
+    <!-- 知识库设置弹窗 -->
+    <div class="home-form-overlay" :class="{ active: showSettingsForm }">
+      <div class="home-form">
+        <div class="home-form-header">
+          <h3>知识库设置</h3>
+          <button class="home-form-close" @click="closeKBSettings">✕</button>
+        </div>
+        <div class="home-form-body">
+          <div class="home-form-group">
+            <label>知识库名称（显示名）</label>
+            <input
+              type="text"
+              v-model="settingsForm.name"
+              placeholder="输入新名称..."
+              :style="{ borderColor: settingsNameError ? '#e74c3c' : '' }"
+            />
+          </div>
+
+          <div class="home-form-group home-kb-advanced">
+            <label>高级信息（只读）</label>
+            <div class="home-kb-advanced-grid">
+              <div class="home-kb-advanced-row">
+                <span class="k">目录名</span>
+                <span class="v">{{ settingsForm.path || '—' }}</span>
+              </div>
+              <div class="home-kb-advanced-row">
+                <span class="k">完整路径</span>
+                <span class="v" :title="settingsFullPath">{{ settingsFullPath || '—' }}</span>
+              </div>
+              <div class="home-kb-advanced-row">
+                <span class="k">创建时间</span>
+                <span class="v">{{ formatTime(settingsForm.createdAt) }}</span>
+              </div>
+              <div class="home-kb-advanced-row">
+                <span class="k">节点数量</span>
+                <span class="v">{{ settingsForm.nodeCount ?? 0 }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="home-form-group">
+            <label>封面图片</label>
+            <div
+              class="home-image-upload"
+              :class="{ 'has-image': settingsForm.coverPreviewUrl || settingsForm.keepCurrentCover }"
+              @click="selectSettingsCover"
+            >
+              <template v-if="settingsForm.coverPreviewUrl">
+                <img :src="settingsForm.coverPreviewUrl" />
+                <button class="home-remove-image" @click.stop="removeSettingsCover">✕</button>
+              </template>
+              <template v-else>
+                <div class="home-image-upload-text">📷 点击更换封面</div>
+                <div class="home-image-upload-hint">可选，不改则保留原封面</div>
+              </template>
+            </div>
+            <input ref="settingsCoverInputRef" type="file" accept="image/*" style="display:none" @change="settingsCoverChanged" />
+          </div>
+        </div>
+        <div class="home-form-footer">
+          <button class="home-btn home-btn-cancel" @click="closeKBSettings">取消</button>
+          <button class="home-btn home-btn-primary" @click="saveKBSettings">保存</button>
+          <button class="home-btn home-btn-danger" @click="deleteKBFromSettings">删除知识库</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useModalStore } from '@/stores/modal'
-import { useGitStore } from '@/stores/git'
 import { useStorage } from '@/composables/useStorage'
 import { useGit } from '@/composables/useGit'
 
 const appStore = useAppStore()
 const roomStore = useRoomStore()
 const modalStore = useModalStore()
-const gitStore = useGitStore()
 const storage = useStorage()
 const git = useGit()
 
@@ -154,14 +209,32 @@ const showCreateForm = ref(false)
 const nameError = ref(false)
 const nameInputRef = ref(null)
 const coverInputRef = ref(null)
-const changeCoverInputRef = ref(null)
-let _changeCoverKB = null
+
+const showSettingsForm = ref(false)
+const settingsNameError = ref(false)
+const settingsCoverInputRef = ref(null)
+const settingsTargetKB = ref(null)
 
 const newKB = reactive({
   name: '',
   customDir: '',
   coverBlob: null,
   coverPreviewUrl: null,
+})
+
+const settingsForm = reactive({
+  name: '',
+  path: '',
+  createdAt: null,
+  nodeCount: 0,
+  coverBlob: null,
+  coverPreviewUrl: null,
+  keepCurrentCover: false,
+})
+
+const settingsFullPath = computed(() => {
+  if (!settingsForm.path) return ''
+  return rootDir.value ? `${rootDir.value}/${settingsForm.path}` : settingsForm.path
 })
 
 // ─── 生命周期 ──────────────────────────────────────────────────
@@ -210,11 +283,6 @@ async function loadKBList() {
 function openKB(kb) {
   roomStore.openTab(kb.path, kb.name)
   appStore.showGraph()
-}
-
-// ─── 打开 Git 面板 ─────────────────────────────────────────────
-function openGit(kb) {
-  gitStore.openForKB(kb.path)
 }
 
 // ─── 在 Finder 中打开 ─────────────────────────────────────────
@@ -289,47 +357,176 @@ async function submitCreate() {
   }
 }
 
-// ─── 删除知识库 ────────────────────────────────────────────────
-async function deleteKBConfirm(kb) {
-  const ok = await modalStore.showConfirm(`确定删除知识库「${kb.name}」？此操作不可恢复。`)
-  if (!ok) return
-  await storage.deleteKB(kb.path)
+// ─── 知识库设置 ────────────────────────────────────────────────
+async function openKBSettings(kb) {
+  settingsTargetKB.value = kb
+  settingsForm.name = kb?.name || ''
+  settingsForm.path = kb?.path || ''
+  settingsForm.createdAt = kb?.createdAt || null
+  settingsForm.nodeCount = Number.isFinite(kb?.nodeCount) ? kb.nodeCount : 0
+  settingsForm.coverBlob = null
+  settingsForm.coverPreviewUrl = kb?.coverUrl || null
+  settingsForm.keepCurrentCover = !!kb?.cover
+  settingsNameError.value = false
+  showSettingsForm.value = true
+
+  // 打开设置时补充最新统计
+  try {
+    const latestCount = await storage.countChildren(kb.path)
+    settingsForm.nodeCount = Number.isFinite(latestCount) ? latestCount : settingsForm.nodeCount
+  } catch (e) {}
+}
+
+function closeKBSettings() {
+  showSettingsForm.value = false
+  settingsNameError.value = false
+  settingsTargetKB.value = null
+  settingsForm.name = ''
+  settingsForm.path = ''
+  settingsForm.createdAt = null
+  settingsForm.nodeCount = 0
+  settingsForm.coverBlob = null
+  settingsForm.coverPreviewUrl = null
+  settingsForm.keepCurrentCover = false
+  if (settingsCoverInputRef.value) settingsCoverInputRef.value.value = ''
+}
+
+function selectSettingsCover() {
+  settingsCoverInputRef.value?.click()
+}
+
+function settingsCoverChanged(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  settingsForm.coverBlob = file
+  settingsForm.keepCurrentCover = false
+  const reader = new FileReader()
+  reader.onload = (ev) => { settingsForm.coverPreviewUrl = ev.target.result }
+  reader.readAsDataURL(file)
+}
+
+function removeSettingsCover() {
+  settingsForm.coverBlob = null
+  settingsForm.coverPreviewUrl = null
+  settingsForm.keepCurrentCover = false
+  if (settingsCoverInputRef.value) settingsCoverInputRef.value.value = ''
+}
+
+async function saveKBSettings() {
+  const kb = settingsTargetKB.value
+  if (!kb) return
+
+  const newName = (settingsForm.name || '').trim()
+  if (!newName) {
+    settingsNameError.value = true
+    setTimeout(() => { settingsNameError.value = false }, 1800)
+    return
+  }
+
+  const all = await storage.listKBs()
+  const duplicated = all.some(item => item.path !== kb.path && ((item.name || '').trim() === newName || item.path === newName))
+  if (duplicated) {
+    settingsNameError.value = true
+    setTimeout(() => { settingsNameError.value = false }, 1800)
+    return
+  }
+
+  const targetPath = kb.path
+
+  // 当前存储后端以目录名作为知识库路径标识，设置页改名仅修改展示名（meta.name）
+  const baseMeta = await storage.getKBMeta(targetPath)
+  await storage.saveKBMeta(targetPath, { ...(baseMeta || {}), name: newName })
+
+  // 封面处理
+  if (settingsForm.coverBlob) {
+    const ext = (settingsForm.coverBlob.name || 'png').split('.').pop()
+    const r = await storage.saveImage(targetPath, settingsForm.coverBlob, `cover.${ext}`)
+    const meta = await storage.getKBMeta(targetPath)
+    meta.cover = r.markdownRef
+    await storage.saveKBMeta(targetPath, meta)
+  } else if (!settingsForm.keepCurrentCover) {
+    const meta = await storage.getKBMeta(targetPath)
+    delete meta.cover
+    await storage.saveKBMeta(targetPath, meta)
+  }
+
+  closeKBSettings()
   await loadKBList()
 }
 
-// ─── 更换封面 ──────────────────────────────────────────────────
-function changeKBCover(kb) {
-  _changeCoverKB = kb
-  if (changeCoverInputRef.value) changeCoverInputRef.value.value = ''
-  changeCoverInputRef.value?.click()
-}
+async function deleteKBFromSettings() {
+  const kb = settingsTargetKB.value
+  if (!kb) return
 
-async function changeCoverSelected(e) {
-  const file = e.target.files?.[0]
-  if (!file || !_changeCoverKB) return
-  const kb = _changeCoverKB
-  _changeCoverKB = null
-  const ext = (file.name || 'png').split('.').pop()
-  const r = await storage.saveImage(kb.path, file, `cover.${ext}`)
-  const meta = await storage.getKBMeta(kb.path)
-  meta.cover = r.markdownRef
-  await storage.saveKBMeta(kb.path, meta)
+  const confirm1 = await modalStore.showConfirm(`确定删除知识库「${kb.name}」？此操作不可恢复。`)
+  if (!confirm1) return
+  const confirm2 = await modalStore.showConfirm('请再次确认：删除后所有节点与文档将永久丢失。')
+  if (!confirm2) return
+
+  await storage.deleteKB(kb.path)
+  closeKBSettings()
   await loadKBList()
 }
 
 // ─── 工具函数 ──────────────────────────────────────────────────
-function gitBadgeLabel(st) {
-  const map = {
-    'uninit': '○ 未追踪',
-    'dirty': '● 有变更',
-    'clean': '✓ 本地',
-    'ahead': `⬆ ${st.ahead || ''}`,
-    'behind': `⬇ ${st.behind || ''}`,
-    'diverged': '⇅ 分叉',
-    'conflict': '⚡ 冲突',
-    'no-remote': '○ 无远程',
-    'git-unavailable': '— Git 不可用',
+function gitBadgeLabel(st = {}) {
+  const state = st.state || 'uninit'
+  switch (state) {
+    case 'uninit':
+      return '○ 未追踪'
+    case 'conflict':
+      return '⚡ 冲突'
+    case 'dirty':
+      return st.dirtyFiles > 0 ? `● 未提交 ${st.dirtyFiles}` : '● 未提交'
+    case 'diverged':
+      return `⇅ 分叉 ${st.ahead || 0}/${st.behind || 0}`
+    case 'ahead':
+      return `⬆ 未推送 ${st.ahead || 0}`
+    case 'behind':
+      return `⬇ 远程有变更 ${st.behind || 0}`
+    case 'no-remote':
+      return '○ 无远程'
+    case 'git-unavailable':
+      return '— Git 离线'
+    case 'clean':
+      return '✓ 已同步'
+    default:
+      return '… Git 状态'
   }
-  return map[st.state] || st.state
+}
+
+function gitBadgeTitle(st = {}) {
+  const state = st.state || 'uninit'
+  switch (state) {
+    case 'uninit':
+      return 'Git 状态：未初始化仓库'
+    case 'conflict':
+      return `Git 状态：存在冲突（${st.conflictFiles?.length || 0}）`
+    case 'dirty':
+      return `Git 状态：有未提交变更（${st.dirtyFiles || 0}）`
+    case 'diverged':
+      return `Git 状态：本地与远程分叉（ahead ${st.ahead || 0} / behind ${st.behind || 0}）`
+    case 'ahead':
+      return `Git 状态：有未推送提交（${st.ahead || 0}）`
+    case 'behind':
+      return `Git 状态：远程有新提交（${st.behind || 0}）`
+    case 'no-remote':
+      return 'Git 状态：未配置远程仓库'
+    case 'git-unavailable':
+      return 'Git 状态：本机 Git 不可用或离线'
+    case 'clean':
+      return 'Git 状态：工作区干净且与远程同步'
+    default:
+      return `Git 状态：${state}`
+  }
+}
+
+function formatTime(ts) {
+  if (!ts) return '—'
+  try {
+    return new Date(ts).toLocaleString()
+  } catch {
+    return '—'
+  }
 }
 </script>

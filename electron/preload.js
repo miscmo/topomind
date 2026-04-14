@@ -27,6 +27,8 @@ const ALLOWED_CHANNELS = new Set([
   // git: auth
   'git:auth:setToken', 'git:auth:getSSHKey',
   'git:auth:setAuthType', 'git:auth:getAuthType',
+  // app
+  'app:openExternal',
   // save
   'save:layout',
 ]);

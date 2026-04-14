@@ -1,7 +1,10 @@
 <!-- 面包屑导航 -->
 <template>
   <div id="breadcrumb" class="active">
-    <span class="bc-link" @click="$emit('go-root')">🏠 {{ crumbs[0]?.label || '根' }}</span>
+    <span
+      :class="crumbs.length > 1 ? 'bc-link' : 'bc-current bc-root'"
+      @click="crumbs.length > 1 && $emit('go-root')"
+    >🏠 {{ crumbs[0]?.label || '根' }}</span>
     <template v-for="(crumb, i) in crumbs.slice(1)" :key="crumb.path">
       <span class="bc-sep">›</span>
       <span
