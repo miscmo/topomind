@@ -366,7 +366,7 @@ export function useGraph(containerRef) {
   }
 
   // ─── 布局保存 ────────────────────────────────────────────────
-  function buildCurrentMetaFor(dirPath) {
+  async function buildCurrentMetaFor(dirPath) {
     if (!cy.value || !dirPath) return null
 
     const children = {}
@@ -402,7 +402,8 @@ export function useGraph(containerRef) {
       weight: e.data('weight'),
     }))
 
-    const existingMeta = {}
+    const rawMeta = await storage.readLayout(dirPath).catch(() => ({}))
+    const existingMeta = normalizeMeta(rawMeta)
     const viewport = { zoom: cy.value.zoom(), pan: cy.value.pan() }
 
     return {
@@ -418,7 +419,7 @@ export function useGraph(containerRef) {
   async function saveCurrentLayout(targetDirPath = null) {
     const dirPath = targetDirPath || roomStore.currentRoomPath || roomStore.currentKBPath
     if (!dirPath) return
-    const meta = buildCurrentMetaFor(dirPath)
+    const meta = await buildCurrentMetaFor(dirPath)
     if (!meta) return
     await storage.flushGraphSave(dirPath, () => meta)
     if (roomStore.currentKBPath) {
@@ -426,12 +427,12 @@ export function useGraph(containerRef) {
     }
   }
 
-  function saveCurrentLayoutDebounced() {
+  async function saveCurrentLayoutDebounced() {
     const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
     if (!dirPath) return
 
     // 关键：在调度时就冻结快照，避免切房间后把新房间布局误写回旧房间
-    const metaSnapshot = buildCurrentMetaFor(dirPath)
+    const metaSnapshot = await buildCurrentMetaFor(dirPath)
     if (!metaSnapshot) return
     storage.saveGraphDebounced(dirPath, () => metaSnapshot)
   }

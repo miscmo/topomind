@@ -36,7 +36,7 @@ function registerIPC() {
     return fs.listChildren(p);
   });
   ipcMain.handle("fs:mkDir", function(e, p, m, rootDir) {
-    fs.mkDir(p, m, rootDir);
+    return fs.mkDir(p, m, rootDir);
   });
   ipcMain.handle("fs:rmDir", function(e, p) {
     fs.rmDir(p);
@@ -46,6 +46,12 @@ function registerIPC() {
   });
   ipcMain.handle("fs:writeMeta", function(e, p, m) {
     fs.writeMeta(p, m);
+  });
+  ipcMain.handle("fs:readGraphMeta", function(e, p) {
+    return fs.readGraphMeta(p);
+  });
+  ipcMain.handle("fs:writeGraphMeta", function(e, p, m) {
+    fs.writeGraphMeta(p, m);
   });
   ipcMain.handle("fs:getDir", function(e, p) {
     return fs.getDir(p);

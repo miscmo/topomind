@@ -13,6 +13,8 @@ export const FSB = {
   rmDir: (dirPath) => getApi().invoke('fs:rmDir', dirPath),
   readMeta: (dirPath) => getApi().invoke('fs:readMeta', dirPath),
   writeMeta: (dirPath, meta) => getApi().invoke('fs:writeMeta', dirPath, meta),
+  readGraphMeta: (dirPath) => getApi().invoke('fs:readGraphMeta', dirPath),
+  writeGraphMeta: (dirPath, meta) => getApi().invoke('fs:writeGraphMeta', dirPath, meta),
   getDir: (dirPath) => getApi().invoke('fs:getDir', dirPath),
 
   readFile: (filePath) => getApi().invoke('fs:readFile', filePath),

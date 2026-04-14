@@ -8,6 +8,8 @@ const ALLOWED_CHANNELS = /* @__PURE__ */ new Set([
   "fs:rmDir",
   "fs:readMeta",
   "fs:writeMeta",
+  "fs:readGraphMeta",
+  "fs:writeGraphMeta",
   "fs:getDir",
   "fs:readFile",
   "fs:writeFile",

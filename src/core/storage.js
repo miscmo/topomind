@@ -39,10 +39,9 @@ export const Store = {
 
   createKB(name, meta) {
     const safeName = ensureValidName(name, '知识库名称')
-    const fullMeta = Object.assign({ name: safeName, createdAt: Date.now(), children: {}, edges: [] }, meta || {})
+    const fullMeta = Object.assign({ name: safeName, createdAt: Date.now(), cover: '' }, meta || {})
     const rootDir = (meta && meta.rootDir) || ''
-    const metaToSave = { ...fullMeta }
-    delete metaToSave.rootDir
+    const metaToSave = { ...fullMeta, rootDir }
     return FSB.mkDir(safeName, metaToSave, rootDir)
   },
 
@@ -91,8 +90,8 @@ export const Store = {
   writeMarkdown: (cardPath, content) => FSB.writeFile(`${cardPath}/README.md`, content),
 
   // ===== 关系和布局 =====
-  readLayout: (dirPath) => FSB.readMeta(dirPath),
-  saveLayout: (dirPath, meta) => FSB.writeMeta(dirPath, meta),
+  readLayout: (dirPath) => FSB.readGraphMeta(dirPath),
+  saveLayout: (dirPath, meta) => FSB.writeGraphMeta(dirPath, meta),
 
   saveGraphDebounced(dirPath, buildMetaFn, onSaved) {
     if (!dirPath) return
@@ -122,6 +121,14 @@ export const Store = {
   // ===== 图片 =====
   saveImage(cardPath, blob, filename) {
     const imgPath = `${cardPath}/images/${filename}`
+    return FSB.writeBlobFile(imgPath, blob).then(() => ({
+      path: imgPath,
+      markdownRef: `images/${filename}`,
+    }))
+  },
+
+  saveKBImage(kbPath, blob, filename) {
+    const imgPath = `${kbPath}/images/${filename}`
     return FSB.writeBlobFile(imgPath, blob).then(() => ({
       path: imgPath,
       markdownRef: `images/${filename}`,

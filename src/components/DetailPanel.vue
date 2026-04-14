@@ -3,7 +3,10 @@
   <div id="detail-panel">
     <div id="detail-title">
       <button id="btn-collapse-detail" @click="$emit('collapse')" title="收起详情">▶</button>
-      <span class="detail-title-text">{{ nodeLabel || '知识详情' }}</span>
+      <div class="detail-title-main">
+        <span class="detail-title-text">{{ nodeLabel || '知识详情' }}</span>
+        <span class="detail-title-sub">阅读 / 编辑 / 预览</span>
+      </div>
     </div>
 
     <div v-if="nodeId" id="detail-actions">

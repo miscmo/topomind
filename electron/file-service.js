@@ -15,6 +15,23 @@ function ensureDir(d) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 }
 
+function safeSegment(name) {
+  var s = String(name || '').trim().replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/[. ]+$/g, '')
+  if (!s || s === '.' || s === '..') s = 'untitled'
+  return s.slice(0, 80)
+}
+
+function uniqueFolderName(parentDir, desiredName) {
+  var base = safeSegment(desiredName)
+  var candidate = base
+  var i = 1
+  while (fs.existsSync(path.join(parentDir, candidate))) {
+    candidate = base + '-' + i
+    i += 1
+  }
+  return candidate
+}
+
 function abs(relPath) {
   if (!relPath) return rootDir;
   var resolvedRoot = path.resolve(rootDir);
@@ -40,19 +57,46 @@ function listChildren(parentPath) {
       var rawMeta = readMeta(childPath);
       var meta = (rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)) ? rawMeta : {};
       var safeName = (typeof meta.name === 'string' && meta.name.trim()) ? meta.name : e.name;
-      return Object.assign({ path: childPath, name: safeName }, meta);
+      var cover = (typeof meta.cover === 'string' && meta.cover.trim()) ? meta.cover : '';
+      return Object.assign({ path: childPath, name: safeName, cover: cover }, meta);
     });
 }
 
 /** 创建目录 */
+function metaFilePath(dir, kind) {
+  return path.join(dir, kind === 'graph' ? '_graph.json' : '_kb_meta.json');
+}
+
+function legacyMetaFilePath(dir) {
+  return path.join(dir, '_meta.json');
+}
+
+function readJsonFile(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { return null; }
+}
+
+function writeJsonFile(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data || {}, null, 2), 'utf-8');
+}
+
 function mkDir(dirPath, meta, customRootDir) {
-  var d = customRootDir ? path.resolve(customRootDir, dirPath) : abs(dirPath);
+  var parent = customRootDir ? path.resolve(customRootDir) : rootDir;
+  ensureDir(parent);
+  var finalName = uniqueFolderName(parent, dirPath);
+  var d = path.join(parent, finalName);
   ensureDir(d);
-  // 写入 _meta.json 如果不存在
-  var metaFile = path.join(d, '_meta.json');
-  if (!fs.existsSync(metaFile) || meta) {
-    fs.writeFileSync(metaFile, JSON.stringify(meta || {}, null, 2), 'utf-8');
+  var kbFile = metaFilePath(d, 'kb');
+  if (!fs.existsSync(kbFile) || meta) {
+    writeJsonFile(kbFile, meta || {});
   }
+  if (fs.existsSync(legacyMetaFilePath(d))) {
+    migrateLegacyMeta(d);
+  }
+  if (!fs.existsSync(metaFilePath(d, 'graph'))) {
+    writeJsonFile(metaFilePath(d, 'graph'), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
+  }
+  return d;
 }
 
 /** 递归删除目录 */
@@ -61,19 +105,64 @@ function rmDir(dirPath) {
   if (fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true });
 }
 
-/** 读取 _meta.json */
-function readMeta(dirPath) {
-  var f = path.join(abs(dirPath), '_meta.json');
-  if (fs.existsSync(f)) {
-    try { return JSON.parse(fs.readFileSync(f, 'utf-8')); } catch (e) {}
-  }
-  return {};
+/** 读取知识库元数据（优先 _kb_meta.json，兼容 _meta.json） */
+function splitLegacyMeta(legacy) {
+  var meta = legacy && typeof legacy === 'object' && !Array.isArray(legacy) ? legacy : {};
+  var kbMeta = {};
+  var graphMeta = {
+    children: meta.children || {},
+    edges: meta.edges || [],
+    zoom: meta.zoom || null,
+    pan: meta.pan || null,
+    canvasBounds: meta.canvasBounds || null,
+  };
+  Object.keys(meta).forEach(function(key) {
+    if (['children', 'edges', 'zoom', 'pan', 'canvasBounds'].indexOf(key) !== -1) return;
+    kbMeta[key] = meta[key];
+  });
+  return { kbMeta: kbMeta, graphMeta: graphMeta };
 }
 
-/** 写入 _meta.json */
+function migrateLegacyMeta(dir) {
+  var legacyPath = legacyMetaFilePath(dir);
+  if (!fs.existsSync(legacyPath)) return;
+  var legacy = readJsonFile(legacyPath);
+  if (!legacy) return;
+  var split = splitLegacyMeta(legacy);
+  if (!fs.existsSync(metaFilePath(dir, 'kb'))) writeJsonFile(metaFilePath(dir, 'kb'), split.kbMeta);
+  if (!fs.existsSync(metaFilePath(dir, 'graph'))) writeJsonFile(metaFilePath(dir, 'graph'), split.graphMeta);
+}
+
+function readMeta(dirPath) {
+  var d = abs(dirPath);
+  migrateLegacyMeta(d);
+  var kbMeta = readJsonFile(metaFilePath(d, 'kb'));
+  if (kbMeta) return kbMeta;
+  var legacy = readJsonFile(legacyMetaFilePath(d));
+  return legacy ? splitLegacyMeta(legacy).kbMeta : {};
+}
+
+/** 写入知识库元数据 */
 function writeMeta(dirPath, meta) {
-  ensureDir(abs(dirPath));
-  fs.writeFileSync(path.join(abs(dirPath), '_meta.json'), JSON.stringify(meta, null, 2), 'utf-8');
+  var d = abs(dirPath);
+  ensureDir(d);
+  writeJsonFile(metaFilePath(d, 'kb'), meta || {});
+}
+
+function readGraphMeta(dirPath) {
+  var d = abs(dirPath);
+  migrateLegacyMeta(d);
+  var graph = readJsonFile(metaFilePath(d, 'graph'));
+  if (graph) return graph;
+  var legacy = readJsonFile(legacyMetaFilePath(d));
+  if (legacy) return splitLegacyMeta(legacy).graphMeta;
+  return { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
+}
+
+function writeGraphMeta(dirPath, meta) {
+  var d = abs(dirPath);
+  ensureDir(d);
+  writeJsonFile(metaFilePath(d, 'graph'), meta || {});
 }
 
 /** 获取目录信息 */
@@ -130,7 +219,8 @@ function clearAll() {
 module.exports = {
   setRootDir: setRootDir, getRootDir: getRootDir, ensureDir: ensureDir,
   listChildren: listChildren, mkDir: mkDir, rmDir: rmDir,
-  readMeta: readMeta, writeMeta: writeMeta, getDir: getDir,
+  readMeta: readMeta, writeMeta: writeMeta, readGraphMeta: readGraphMeta, writeGraphMeta: writeGraphMeta,
+  getDir: getDir,
   readFile: readFile, writeFile: writeFile, deleteFile: deleteFile,
   writeBlobFile: writeBlobFile, readBlobFile: readBlobFile,
   clearAll: clearAll

@@ -39,13 +39,17 @@
               <span>{{ kb.name }}</span>
             </div>
             <div class="home-card-meta">
-              <span
-                v-if="kb.gitStatus"
-                :class="['home-meta-pill', 'home-meta-pill--git', `home-meta-pill--${kb.gitStatus.state}`]"
-                :title="gitBadgeTitle(kb.gitStatus)"
-              >{{ gitBadgeLabel(kb.gitStatus) }}</span>
-              <span v-if="kb.nodeCount !== null">📊 {{ kb.nodeCount }} 个节点</span>
-              <span v-else class="home-card-loading-skeleton">📊 ··· 个节点</span>
+              <div class="home-card-meta-row">
+                <span
+                  v-if="kb.gitStatus"
+                  :class="['home-meta-pill', 'home-meta-pill--git', `home-meta-pill--${kb.gitStatus.state}`]"
+                  :title="gitBadgeTitle(kb.gitStatus)"
+                >{{ gitBadgeLabel(kb.gitStatus) }}</span>
+              </div>
+              <div class="home-card-meta-row">
+                <span v-if="kb.nodeCount !== null">📊 {{ kb.nodeCount }} 个节点</span>
+                <span v-else class="home-card-loading-skeleton">📊 ··· 个节点</span>
+              </div>
             </div>
             <div
               class="home-card-path"
@@ -258,7 +262,8 @@ async function loadKBList() {
 
         if (kb.cover) {
           try {
-            const url = await storage.loadImage(kb.path + '/' + kb.cover)
+            const imgPath = `${kb.path}/${kb.cover}`
+            const url = await storage.loadImage(imgPath)
             kbs.value[i].coverUrl = url
           } catch (e) { console.warn('[HomePage] 加载封面失败:', kb.path, e) }
         }
@@ -342,13 +347,14 @@ async function submitCreate() {
 
   try {
     await storage.createKB(name, newKB.customDir ? { rootDir: newKB.customDir } : undefined)
+    const kbPath = newKB.customDir ? `${newKB.customDir}/${name}` : name
     // 保存封面
     if (newKB.coverBlob) {
       const ext = (newKB.coverBlob.name || 'png').split('.').pop()
-      const r = await storage.saveImage(name, newKB.coverBlob, `cover.${ext}`)
-      const meta = await storage.getKBMeta(name)
+      const r = await storage.saveKBImage(kbPath, newKB.coverBlob, `cover.${ext}`)
+      const meta = await storage.getKBMeta(kbPath)
       meta.cover = r.markdownRef
-      await storage.saveKBMeta(name, meta)
+      await storage.saveKBMeta(kbPath, meta)
     }
     cancelCreate()
     await loadKBList()
@@ -440,7 +446,7 @@ async function saveKBSettings() {
   // 封面处理
   if (settingsForm.coverBlob) {
     const ext = (settingsForm.coverBlob.name || 'png').split('.').pop()
-    const r = await storage.saveImage(targetPath, settingsForm.coverBlob, `cover.${ext}`)
+    const r = await storage.saveKBImage(targetPath, settingsForm.coverBlob, `cover.${ext}`)
     const meta = await storage.getKBMeta(targetPath)
     meta.cover = r.markdownRef
     await storage.saveKBMeta(targetPath, meta)

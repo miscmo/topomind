@@ -59,6 +59,7 @@ export function useStorage() {
 
     // 图片
     saveImage: (cardPath, blob, filename) => Store.saveImage(cardPath, blob, filename),
+    saveKBImage: (kbPath, blob, filename) => Store.saveKBImage(kbPath, blob, filename),
     loadImage: (imgPath) => Store.loadImage(imgPath),
 
     // 工具

@@ -34,10 +34,12 @@ function createWindow() {
 function registerIPC() {
   ipcMain.handle('fs:init',           function()       { fs.ensureDir(fs.getRootDir()); return fs.getRootDir(); });
   ipcMain.handle('fs:listChildren',   function(e, p)   { return fs.listChildren(p); });
-  ipcMain.handle('fs:mkDir',          function(e, p, m, rootDir){ fs.mkDir(p, m, rootDir); });
+  ipcMain.handle('fs:mkDir',          function(e, p, m, rootDir){ return fs.mkDir(p, m, rootDir); });
   ipcMain.handle('fs:rmDir',          function(e, p)   { fs.rmDir(p); });
   ipcMain.handle('fs:readMeta',       function(e, p)   { return fs.readMeta(p); });
   ipcMain.handle('fs:writeMeta',      function(e, p, m){ fs.writeMeta(p, m); });
+  ipcMain.handle('fs:readGraphMeta',   function(e, p)   { return fs.readGraphMeta(p); });
+  ipcMain.handle('fs:writeGraphMeta',  function(e, p, m){ fs.writeGraphMeta(p, m); });
   ipcMain.handle('fs:getDir',         function(e, p)   { return fs.getDir(p); });
   ipcMain.handle('fs:readFile',       function(e, p)   { return fs.readFile(p); });
   ipcMain.handle('fs:writeFile',      function(e, p, c){ fs.writeFile(p, c); });

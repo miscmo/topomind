@@ -10,17 +10,21 @@
     <div v-else id="app-layout" ref="appLayoutRef">
 
       <!-- 展开按钮（左侧面板收起时） -->
-      <button v-if="!leftPanel.open" id="btn-toggle-style" class="visible" @click="leftPanel.open = true" title="展开">▶</button>
+      <button v-if="!leftPanel.open" id="btn-toggle-style" class="visible" @click="leftPanel.open = true" title="展开样式面板">▶</button>
 
       <!-- 左侧面板：样式面板 -->
       <StylePanel
         v-if="leftPanel.open"
+        :class="{ compact: leftPanelWidth < 320 }"
         :selectedNodeId="appStore.selectedNodeId"
         :cy="graph.cy.value"
+        :style="{ width: leftPanelWidth + 'px', flexShrink: 0, position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 20 }"
         @collapse="leftPanel.open = false"
         @update-style="graph.updateNodeStyle"
         @update-font-style="graph.updateNodeFontStyle"
       />
+      <div v-if="leftPanel.open" id="style-resize-preview" :class="{ active: styleResizeState.active }" :style="{ left: styleResizeState.previewLeft + 'px' }"></div>
+      <div v-if="leftPanel.open" id="style-resize-handle" :style="{ left: Math.max(0, leftPanelWidth - 2) + 'px' }" @mousedown="startStyleResize"></div>
 
       <!-- 中间图谱 -->
       <div id="graph-panel">
@@ -64,11 +68,11 @@
         </div>
 
         <!-- 快捷键提示 -->
-        <div id="shortcut-hint">右键拖拽画布 · 左键框选 · Tab 子卡片 · Delete 删除 · Backspace 返回</div>
+        <button id="shortcut-hint" title="右键拖拽画布 · 左键框选 · Tab 子卡片 · Delete 删除 · Backspace 返回">?</button>
       </div>
 
       <!-- 右侧详情面板 -->
-      <button v-if="!detailPanel.open" id="btn-toggle-detail" class="visible" @click="detailPanel.open = true" title="展开详情">◀</button>
+      <button v-if="!detailPanel.open" id="btn-toggle-detail" class="visible" @click="detailPanel.open = true" title="展开文档详情">◀</button>
       <div v-if="detailPanel.open" id="detail-resize-preview" :class="{ active: detailResizeState.active }" :style="{ left: detailResizeState.previewLeft + 'px' }"></div>
       <div v-if="detailPanel.open" id="detail-resize-handle" @mousedown="startDetailResize"></div>
       <DetailPanel
@@ -126,7 +130,12 @@ let _initGridTimer = null
 // 面板状态
 const leftPanel = reactive({ open: true })
 const detailPanel = reactive({ open: true })
+const leftPanelWidth = ref(300)
 const detailPanelWidth = ref(420)
+const styleResizeState = reactive({
+  active: false,
+  previewLeft: 0,
+})
 const detailResizeState = reactive({
   active: false,
   previewLeft: 0,
@@ -134,6 +143,8 @@ const detailResizeState = reactive({
 const initPhase = ref('idle') // idle | engine | decorators | room | ready | error
 const initError = ref('')
 
+const STYLE_WIDTH_MIN = 300
+const STYLE_WIDTH_MAX = 420
 const DETAIL_WIDTH_MIN = 260
 const DETAIL_WIDTH_MAX = 860
 
@@ -141,10 +152,18 @@ function detailWidthKeyForKB(kbPath) {
   return kbPath ? `topomind:detail-width:${kbPath}` : ''
 }
 
-function clampDetailWidth(w) {
+function clampPanelWidth(w, min, max, fallback) {
   const n = Number(w)
-  if (!Number.isFinite(n)) return 420
-  return Math.max(DETAIL_WIDTH_MIN, Math.min(DETAIL_WIDTH_MAX, Math.round(n)))
+  if (!Number.isFinite(n)) return fallback
+  return Math.max(min, Math.min(max, Math.round(n)))
+}
+
+function clampDetailWidth(w) {
+  return clampPanelWidth(w, DETAIL_WIDTH_MIN, DETAIL_WIDTH_MAX, 420)
+}
+
+function clampStyleWidth(w) {
+  return clampPanelWidth(w, STYLE_WIDTH_MIN, STYLE_WIDTH_MAX, 300)
 }
 
 function readPersistedDetailWidthForKB(kbPath) {
@@ -183,6 +202,25 @@ function saveUiToActiveTab(patch = {}) {
   tab.ui = { ...tab.ui, ...patch }
 }
 
+function readPersistedStyleWidth() {
+  try {
+    const raw = localStorage.getItem('topomind:style-width')
+    if (raw == null) return null
+    return clampStyleWidth(raw)
+  } catch (e) {
+    console.warn('[GraphView] 读取样式宽度失败:', e)
+    return null
+  }
+}
+
+function persistStyleWidth(width) {
+  try {
+    localStorage.setItem('topomind:style-width', String(clampStyleWidth(width)))
+  } catch (e) {
+    console.warn('[GraphView] 保存样式宽度失败:', e)
+  }
+}
+
 function syncUiFromActiveTab() {
   const tab = roomStore.activeTab
   if (!tab) return
@@ -190,6 +228,10 @@ function syncUiFromActiveTab() {
   const ui = tab.ui || {}
   leftPanel.open = ui.leftPanelOpen !== false
   detailPanel.open = ui.detailPanelOpen !== false
+
+  const persistedStyleWidth = readPersistedStyleWidth()
+  const restoredStyleWidth = persistedStyleWidth ?? ui.leftPanelWidth ?? leftPanelWidth.value
+  leftPanelWidth.value = clampStyleWidth(restoredStyleWidth)
 
   const persistedWidth = readPersistedDetailWidthForKB(roomStore.currentKBPath)
   // 跨重启优先使用持久化宽度，避免 tab.ui 的默认值覆盖用户上次调整
@@ -250,6 +292,11 @@ watch(() => roomStore.currentKBPath, (kbPath) => {
 
 watch(() => leftPanel.open, (v) => {
   saveUiToActiveTab({ leftPanelOpen: !!v })
+})
+
+watch(() => leftPanelWidth.value, (v) => {
+  saveUiToActiveTab({ leftPanelWidth: clampStyleWidth(v) })
+  persistStyleWidth(v)
 })
 
 watch(() => detailPanel.open, (v) => {
@@ -375,6 +422,54 @@ async function handleRenameFromDetail(nodeId) {
   const node = graph.cy.value?.getElementById(nodeId)
   const newName = await modalStore.showInput('重命名', '新名称...', node?.data('label') || '')
   if (newName) await graph.renameCard(nodeId, newName)
+}
+
+function startStyleResize(e) {
+  if (e.button !== 0) return
+  if (!appLayoutRef.value) return
+
+  e.preventDefault()
+
+  const rect = appLayoutRef.value.getBoundingClientRect()
+  const startX = e.clientX
+  const startWidth = leftPanelWidth.value
+
+  const prevUserSelect = document.body.style.userSelect
+  const prevCursor = document.body.style.cursor
+
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'col-resize'
+
+  styleResizeState.active = true
+  styleResizeState.previewLeft = Math.max(0, startWidth)
+
+  const calcWidthByClientX = (clientX) => clampStyleWidth(startWidth + (clientX - startX))
+
+  const onMove = (ev) => {
+    ev.preventDefault()
+    const nextWidth = calcWidthByClientX(ev.clientX)
+    styleResizeState.previewLeft = Math.max(0, Math.min(rect.width, nextWidth))
+  }
+
+  const cleanup = () => {
+    styleResizeState.active = false
+    document.body.style.userSelect = prevUserSelect
+    document.body.style.cursor = prevCursor
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+
+  const onUp = (ev) => {
+    ev.preventDefault()
+    const nextWidth = calcWidthByClientX(ev.clientX)
+    leftPanelWidth.value = nextWidth
+    saveUiToActiveTab({ leftPanelWidth: nextWidth })
+    persistStyleWidth(nextWidth)
+    cleanup()
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
 }
 
 function startDetailResize(e) {
