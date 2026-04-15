@@ -1,0 +1,190 @@
+name: Build & Release Electron Apps
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Build platforms (comma-separated: win,mac,linux)'
+        required: false
+        default: 'win,mac,linux'
+  release:
+    types: [ published ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── 前置检查：确保代码可构建 ─────────────────────────────
+  lint:
+    name: Validate & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (test frontend compilation)
+        run: npm run build
+
+      - name: Build Electron main/preload (verify no syntax errors)
+        run: npm run build
+
+  # ─── Windows ────────────────────────────────────────────────
+  build-win:
+    name: Build Windows
+    needs: lint
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron app (Windows)
+        run: npm run build:win
+        env:
+          # electron-builder on Windows
+          ELECTRON_BUILDER.extraMetadata:
+            version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TopoMind-win-${{ github.sha }}
+          path: |
+            release/**/*.exe
+            release/**/*.zip
+          retention-days: 30
+
+  # ─── macOS ─────────────────────────────────────────────────
+  build-mac:
+    name: Build macOS
+    needs: lint
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron app (macOS)
+        run: npm run build:mac
+        env:
+          ELECTRON_BUILDER.extraMetadata:
+            version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TopoMind-mac-${{ github.sha }}
+          path: |
+            release/**/*.dmg
+            release/**/*.zip
+          retention-days: 30
+
+  # ─── Linux ─────────────────────────────────────────────────
+  build-linux:
+    name: Build Linux
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron app (Linux)
+        run: npm run build:linux
+        env:
+          ELECTRON_BUILDER.extraMetadata:
+            version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TopoMind-linux-${{ github.sha }}
+          path: |
+            release/**/*.AppImage
+            release/**/*.deb
+            release/**/*.zip
+          retention-days: 30
+
+  # ─── 创建 GitHub Release（仅在 tag 发布时） ──────────────────
+  release:
+    name: Create GitHub Release
+    needs: [build-win, build-mac, build-linux]
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f | head -50
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.zip
+            artifacts/**/*.dmg
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
