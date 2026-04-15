@@ -26,8 +26,8 @@
 - [x] 8. [中] 梳理并优化自动保存策略 ✅ 图谱 debounced 300ms + 关键操作立即 flush + before-quit 钩子
 - [x] 9. [中] 合并卡片路径显示，只保留一条路径，顶层显示知识库名称 ✅ Breadcrumb 组件已正确实现
 - [x] 10. [中] 主页知识库右上角增加设置按钮，封面设置、删除、重命名统一放弹窗，删除二次确认 ✅ 已添加 hover 显示的设置按钮（⚙）
-- [ ] 11. [中] 封面图片支持拖动裁剪选择区域（类头像裁剪）
-- [ ] 12. [中] 知识库支持自定义排序
+- [x] 11. [中] 封面图片支持拖动裁剪选择区域（类头像裁剪）
+- [x] 12. [中] 知识库支持自定义排序
 - [x] 13. [低] 字体大小设置增加增减步进按钮，每次调整2 ✅ StylePanel.vue 已有 -/+ 按钮
 - [x] 14. [低] 文档、子节点数等标记放到文字最前面同一行，不独占一行 ✅ HTML标签内 childCount 以 inline-flex 形式展示
 - [x] 15. [低] 编辑器第一列与行号之间间距问题修复 ✅ detail.css 添加 gutter padding
@@ -41,7 +41,7 @@
 
 ## 当前进度
 
-当前处理: 功能开发（14/16 完成，待完成 #11 裁剪、#12 排序）
+当前处理: 功能开发（16/16 全部完成，架构优化待执行）
 最后更新: 2026/04/15
 
 ## 功能开发验证说明
@@ -55,6 +55,8 @@
 - #8: storage.js saveGraphDebounced(300ms) + flushGraphSave + before-quit 钩子
 - #9: Breadcrumb.vue + room.js breadcrumbs 已正确实现
 - #10: HomePage.vue 添加设置按钮 + 设置弹窗含删除/重命名
+- #11: HomePage.vue 裁剪弹窗模板 + JS函数（cropRect/onCropMouseDown/Move/Up + apply/cancelCoverCrop） + home.css 裁剪样式
+- #12: file-service.js listChildren 排序 + createKB/importKB 分配 order + HomePage.vue 拖拽排序（dragKBIndex/dragOverIndex + onKBDragStart/Over/Leave/Drop/End） + home.css 拖拽样式
 - #13: StylePanel.vue stepFontSize(-2/+2) 已实现
 - #14: useGraph.js childCount inline-flex 展示
 - #15: detail.css gutter padding 已修复
