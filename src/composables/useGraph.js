@@ -42,6 +42,8 @@ export function useGraph(containerRef) {
   const zoomLevel = ref(100)
   // 搜索关键词
   const searchQuery = ref('')
+  // 当前房间的 meta 数据（用于保存时复用，避免重复读取存储）
+  const currentMeta = ref(null)
   const cyManager = createCyManager(4)
   const _cyEventsBound = new WeakSet()
   const _domCleanupByCy = new Map()
@@ -267,6 +269,7 @@ export function useGraph(containerRef) {
         }),
       ])
       const meta = normalizeMeta(metaRaw)
+      currentMeta.value = meta
       const cards = Array.isArray(cardsRaw)
         ? cardsRaw.filter((card) => card && typeof card === 'object' && card.path)
         : []
