@@ -15,6 +15,8 @@ export const useRoomStore = defineStore('room', {
     roomHistory: [],
     /** 路径 → 显示名称的缓存 */
     pathNameMap: {},
+    /** pathNameMap 版本号（递增触发 DetailPanel 标题更新） */
+    _pathNameMapVersion: 0,
     /** 标签页列表 [{ id, kbPath, label, roomPath, roomHistory, ui }] */
     tabs: [],
     /** 当前激活的标签页 ID */
@@ -93,6 +95,7 @@ export const useRoomStore = defineStore('room', {
     /** 缓存路径的显示名称 */
     setPathName(path, name) {
       this.pathNameMap[path] = name
+      this._pathNameMapVersion++
     },
 
     // ─── 标签页管理 ──────────────────────────────────────────

@@ -2,10 +2,8 @@
 <template>
   <div id="nav-panel">
     <div id="style-panel-header">
-      <span>样式</span>
       <div class="sp-header-actions">
         <button class="sp-header-btn" @click="resetAllStyles" title="恢复全部默认">重置</button>
-        <button id="btn-collapse-style" @click="$emit('collapse')" title="收起">◀</button>
       </div>
     </div>
     <div id="style-panel-body">

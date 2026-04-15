@@ -619,8 +619,58 @@
   .home-header {
     padding: 20px 24px;
   }
-  
+
   .home-content {
     padding: 20px 24px;
   }
+}
+
+/* 导入知识库 */
+.home-import-selected {
+  margin-bottom: 12px;
+}
+
+.home-import-valid,
+.home-import-invalid {
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.home-import-valid {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+}
+
+.home-import-invalid {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+}
+
+.home-import-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #16a34a;
+  margin-bottom: 4px;
+}
+
+.home-import-badge--error {
+  color: #dc2626;
+}
+
+.home-import-info {
+  font-size: 12px;
+  color: #666;
+  word-break: break-all;
+}
+
+.home-import-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #dc2626;
 }

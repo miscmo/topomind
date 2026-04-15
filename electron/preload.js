@@ -11,8 +11,9 @@ const ALLOWED_CHANNELS = new Set([
   'fs:readMeta', 'fs:writeMeta', 'fs:readGraphMeta', 'fs:writeGraphMeta', 'fs:getDir',
   'fs:readFile', 'fs:writeFile', 'fs:deleteFile',
   'fs:writeBlobFile', 'fs:readBlobFile', 'fs:clearAll',
-  'fs:setRootDir', 'fs:getRootDir', 'fs:selectDir',
   'fs:openInFinder', 'fs:countChildren',
+  'fs:getRootDir',
+  'fs:getLastOpenedKB', 'fs:setLastOpenedKB',
   // git: basic
   'git:checkAvailable', 'git:init', 'git:status',
   'git:statusBatch', 'git:isDirty',

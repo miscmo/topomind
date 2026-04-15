@@ -12,7 +12,6 @@
     <!-- 全局模态框 -->
     <InputModal />
     <ConfirmModal />
-    <GitPanel v-if="gitStore.isOpen" />
   </div>
 </template>
 
@@ -27,13 +26,10 @@ import HomePage from '@/components/HomePage.vue'
 import GraphView from '@/components/GraphView.vue'
 import InputModal from '@/components/modals/InputModal.vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
-import GitPanel from '@/components/GitPanel.vue'
-import { useGitStore } from '@/stores/git'
 
 const appStore = useAppStore()
 const roomStore = useRoomStore()
-const gitStore = useGitStore()
-const { init } = useStorage()
+const { init, getLastOpenedKB, listKBs, getKBMeta } = useStorage()
 
 // 监听 Electron 退出前保存事件
 function handleBeforeQuit() {
@@ -49,7 +45,34 @@ onMounted(async () => {
   if (window.electronAPI) {
     window.electronAPI.on('save:before-quit', handleBeforeQuit)
   }
+  // 自动打开上次关闭的知识库
+  await autoOpenLastKB()
 })
+
+/**
+ * 自动打开上次关闭的知识库（如果仍然存在）
+ */
+async function autoOpenLastKB() {
+  try {
+    const lastKBPath = await getLastOpenedKB()
+    if (!lastKBPath) return
+
+    // 验证知识库是否仍然存在
+    const kbs = await listKBs()
+    const exists = (kbs || []).some(kb => kb.path === lastKBPath)
+    if (!exists) return
+
+    // 获取知识库名称
+    const kbMeta = await getKBMeta(lastKBPath)
+    const kbName = (kbMeta && kbMeta.name) ? kbMeta.name : lastKBPath.split('/').pop()
+
+    // 打开知识库
+    roomStore.openTab(lastKBPath, kbName)
+    appStore.showGraph()
+  } catch (e) {
+    console.warn('[App] 自动打开上次知识库失败:', e)
+  }
+}
 
 onUnmounted(() => {
   if (window.electronAPI) {

@@ -10,19 +10,32 @@
     <div v-else id="app-layout" ref="appLayoutRef">
 
       <!-- 展开按钮（左侧面板收起时） -->
-      <button v-if="!leftPanel.open" id="btn-toggle-style" class="visible" @click="leftPanel.open = true" title="展开样式面板">▶</button>
+      <button v-if="!leftPanel.open" id="btn-toggle-style" class="visible" @click="leftPanel.open = true" title="展开面板">▶</button>
 
-      <!-- 左侧面板：样式面板 -->
-      <StylePanel
-        v-if="leftPanel.open"
-        :class="{ compact: leftPanelWidth < 320 }"
-        :selectedNodeId="appStore.selectedNodeId"
-        :cy="graph.cy.value"
-        :style="{ width: leftPanelWidth + 'px', flexShrink: 0, position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 5 }"
-        @collapse="leftPanel.open = false"
-        @update-style="graph.updateNodeStyle"
-        @update-font-style="graph.updateNodeFontStyle"
-      />
+      <!-- 左侧面板：样式/ Git 标签页 -->
+      <div v-if="leftPanel.open" id="left-panel-container"
+        :style="{ width: leftPanelWidth + 'px', flexShrink: 0, position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 5 }">
+        <!-- 面板 Header + Tab 切换 -->
+        <div id="left-panel-header">
+          <div id="left-panel-tabs">
+            <button class="left-panel-tab" :class="{ active: activeLeftTab === 'style' }" @click="activeLeftTab = 'style'">样式</button>
+            <button class="left-panel-tab" :class="{ active: activeLeftTab === 'git' }" @click="activeLeftTab = 'git'">Git</button>
+          </div>
+          <button id="btn-collapse-left-panel" @click="leftPanel.open = false" title="收起">◀</button>
+        </div>
+        <!-- 面板内容 -->
+        <div id="left-panel-body">
+          <StylePanel v-show="activeLeftTab === 'style'"
+            :selectedNodeId="appStore.selectedNodeId"
+            :cy="graph.cy.value"
+            @collapse="leftPanel.open = false"
+            @update-style="graph.updateNodeStyle"
+            @update-font-style="graph.updateNodeFontStyle"
+          />
+          <GitPanel v-show="activeLeftTab === 'git'" :inline="true" />
+        </div>
+      </div>
+
       <div v-if="leftPanel.open" id="style-resize-preview" :class="{ active: styleResizeState.active }" :style="{ left: styleResizeState.previewLeft + 'px' }"></div>
       <div v-if="leftPanel.open" id="style-resize-handle" :style="{ left: Math.max(0, leftPanelWidth - 2) + 'px' }" @mousedown="startStyleResize"></div>
 
@@ -81,6 +94,7 @@
         @delete="handleDeleteFromDetail"
         @rename="handleRenameFromDetail"
         @drill="graph.drillInto"
+        @doc-changed="graph.refreshNodeBadge"
       />
 
     </div>
@@ -101,6 +115,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from
 import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useModalStore } from '@/stores/modal'
+import { useGitStore } from '@/stores/git'
 import { useGraph } from '@/composables/useGraph'
 import { useGrid } from '@/composables/useGrid'
 import { useStorage, saveIndicatorVisible, saveFailed } from '@/composables/useStorage'
@@ -109,11 +124,13 @@ import StylePanel from '@/components/StylePanel.vue'
 import DetailPanel from '@/components/DetailPanel.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
+import GitPanel from '@/components/GitPanel.vue'
 
 
 const appStore = useAppStore()
 const roomStore = useRoomStore()
 const modalStore = useModalStore()
+const gitStore = useGitStore()
 const storage = useStorage()
 
 // DOM 引用
@@ -126,6 +143,7 @@ let _initGridTimer = null
 
 // 面板状态
 const leftPanel = reactive({ open: true })
+const activeLeftTab = ref('style') // 'style' | 'git'
 const detailPanel = reactive({ open: true })
 const leftPanelWidth = ref(300)
 const detailPanelWidth = ref(420)
@@ -223,9 +241,15 @@ function saveUiToActiveTab(patch = {}) {
   tab.ui = { ...tab.ui, ...patch }
 }
 
-function readPersistedStyleWidth() {
+function styleWidthKeyForKB(kbPath) {
+  return kbPath ? `topomind:style-width:${kbPath}` : ''
+}
+
+function readPersistedStyleWidthForKB(kbPath) {
+  const key = styleWidthKeyForKB(kbPath)
+  if (!key) return null
   try {
-    const raw = localStorage.getItem('topomind:style-width')
+    const raw = localStorage.getItem(key)
     if (raw == null) return null
     return clampStyleWidth(raw)
   } catch (e) {
@@ -234,11 +258,45 @@ function readPersistedStyleWidth() {
   }
 }
 
-function persistStyleWidth(width) {
+function persistStyleWidthForKB(kbPath, width) {
+  const key = styleWidthKeyForKB(kbPath)
+  if (!key) return
   try {
-    localStorage.setItem('topomind:style-width', String(clampStyleWidth(width)))
+    localStorage.setItem(key, String(clampStyleWidth(width)))
   } catch (e) {
     console.warn('[GraphView] 保存样式宽度失败:', e)
+  }
+}
+
+// 兼容旧全局 key 的迁移：首次读取时尝试从全局 key 读取并删除
+function readPersistedStyleWidth() {
+  // 优先读 KB 特定 key
+  const kbPath = roomStore.currentKBPath
+  if (kbPath) {
+    const kbVal = readPersistedStyleWidthForKB(kbPath)
+    if (kbVal !== null) return kbVal
+  }
+  // 兜底旧全局 key（仅首次，迁移后删除）
+  try {
+    const raw = localStorage.getItem('topomind:style-width')
+    if (raw == null) return null
+    const val = clampStyleWidth(raw)
+    // 迁移到 KB key 并删除旧 key
+    if (kbPath) {
+      persistStyleWidthForKB(kbPath, val)
+    }
+    localStorage.removeItem('topomind:style-width')
+    return val
+  } catch (e) {
+    console.warn('[GraphView] 读取样式宽度失败:', e)
+    return null
+  }
+}
+
+function persistStyleWidth(width) {
+  const kbPath = roomStore.currentKBPath
+  if (kbPath) {
+    persistStyleWidthForKB(kbPath, width)
   }
 }
 
@@ -363,6 +421,13 @@ watch(() => appStore.edgeMode, (v) => {
 
 watch(() => appStore.edgeModeSourceId, (v) => {
   saveUiToActiveTab({ edgeModeSourceId: v || null })
+})
+
+// 切换到 Git Tab 时自动打开 gitStore
+watch(activeLeftTab, (tab) => {
+  if (tab === 'git') {
+    gitStore.isOpen = true
+  }
 })
 
 async function initializeGraphView() {
@@ -581,7 +646,7 @@ function startDetailResize(e) {
 }
 </script>
 
-<style scoped>
+<style>
 #graph-page {
   flex: 1;
   min-height: 0;
@@ -594,6 +659,274 @@ function startDetailResize(e) {
   min-height: 0;
   display: flex;
   position: relative;
+}
+
+#left-panel-container {
+  display: flex;
+  flex-direction: column;
+  background: #fafbfc;
+  border-right: 1px solid #e8ecf0;
+  overflow: hidden;
+}
+
+#left-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 4px;
+  height: 36px;
+  border-bottom: 1px solid #e8ecf0;
+  background: #fafbfc;
+  flex-shrink: 0;
+}
+
+#left-panel-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.left-panel-tab {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #7b8794;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.left-panel-tab:hover {
+  background: #eef1f5;
+  color: #4a5568;
+}
+
+.left-panel-tab.active {
+  background: #1a3a5c;
+  color: #fff;
+}
+
+#btn-collapse-left-panel {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #999;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+#btn-collapse-left-panel:hover {
+  background: #e8ecf0;
+  color: #333;
+}
+
+#left-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Git inline mode - adjust modal styles */
+#left-panel-body :deep(.git-modal-overlay),
+#left-panel-body :deep(.git-modal-overlay.active) {
+  position: static;
+  width: auto;
+  height: auto;
+  background: transparent;
+  display: block;
+  visibility: visible;
+  opacity: 1;
+  overflow: hidden;
+}
+
+#left-panel-body :deep(.git-modal) {
+  position: static;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#left-panel-body :deep(.git-modal-header) {
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+
+#left-panel-body :deep(.git-modal-header h3) {
+  font-size: 13px;
+}
+
+#left-panel-body :deep(.git-modal-close) {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+
+#left-panel-body :deep(.git-modal-body) {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 12px;
+  overflow-y: auto;
+}
+
+#left-panel-body :deep(.git-modal-footer) {
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+#left-panel-body :deep(.git-action-grid) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+#left-panel-body :deep(.git-action-btn) {
+  padding: 8px 6px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+#left-panel-body :deep(.git-status-summary) {
+  margin-bottom: 10px;
+}
+
+#left-panel-body :deep(.git-status-state) {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+#left-panel-body :deep(.git-btn) {
+  padding: 5px 12px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+
+#left-panel-body :deep(.git-btn--primary) {
+  padding: 5px 12px;
+}
+
+#left-panel-body :deep(.git-form-group) {
+  margin-bottom: 10px;
+}
+
+#left-panel-body :deep(.git-form-label) {
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+#left-panel-body :deep(.git-form-input) {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+#left-panel-body :deep(.git-radio-group) {
+  font-size: 12px;
+}
+
+#left-panel-body :deep(.git-radio-group label) {
+  margin-right: 10px;
+}
+
+#left-panel-body :deep(.git-file-list) {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+#left-panel-body :deep(.git-commit-msg-input) {
+  font-size: 12px;
+  min-height: 60px;
+  border-radius: 6px;
+  padding: 6px 10px;
+  resize: vertical;
+}
+
+#left-panel-body :deep(.git-diff-layout),
+#left-panel-body :deep(.git-conflict-layout) {
+  display: flex;
+  height: 100%;
+}
+
+#left-panel-body :deep(.git-diff-sidebar),
+#left-panel-body :deep(.git-conflict-sidebar) {
+  width: 120px;
+  flex-shrink: 0;
+  border-right: 1px solid #e8ecf0;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+#left-panel-body :deep(.git-diff-main),
+#left-panel-body :deep(.git-conflict-main) {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+#left-panel-body :deep(.git-log-item) {
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+#left-panel-body :deep(.git-log-hash) {
+  font-size: 9px;
+  margin-bottom: 2px;
+}
+
+#left-panel-body :deep(.git-diff-content),
+#left-panel-body :deep(.git-conflict-content) {
+  padding: 8px;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+#left-panel-body :deep(.git-empty) {
+  padding: 12px;
+  font-size: 11px;
+  color: #aaa;
+}
+
+#left-panel-body :deep(.git-sync-summary) {
+  font-size: 12px;
+  padding: 8px 0;
+}
+
+#left-panel-body :deep(.git-conflict-actions) {
+  padding: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+#left-panel-body :deep(.git-conflict-actions .git-btn) {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+#left-panel-body :deep(.git-ssh-pubkey) {
+  font-size: 10px;
+  padding: 6px 8px;
+  word-break: break-all;
+  margin-top: 4px;
+}
+
+#left-panel-body :deep(.git-ssh-copy-btn) {
+  font-size: 10px;
+  padding: 3px 8px;
+  margin-top: 4px;
 }
 
 .sp-title {

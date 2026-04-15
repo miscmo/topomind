@@ -40,9 +40,7 @@ export const Store = {
   createKB(name, meta) {
     const safeName = ensureValidName(name, '知识库名称')
     const fullMeta = Object.assign({ name: safeName, createdAt: Date.now(), cover: '' }, meta || {})
-    const rootDir = (meta && meta.rootDir) || ''
-    const metaToSave = { ...fullMeta, rootDir }
-    return FSB.mkDir(safeName, metaToSave, rootDir)
+    return FSB.mkDir(safeName, fullMeta)
   },
 
   deleteKB: (name) => FSB.rmDir(name),
@@ -150,8 +148,11 @@ export const Store = {
 
   // ===== 工具 =====
   clearAll: () => FSB.clearAll(),
-  selectDir: () => FSB.selectDir(),
+  selectExistingKB: () => FSB.selectExistingKB(),
+  importKB: (sourcePath) => FSB.importKB(sourcePath),
   openInFinder: (p) => FSB.openInFinder(p),
   countChildren: (p) => FSB.countChildren(p),
   getRootDir: () => FSB.getRootDir(),
+  getLastOpenedKB: () => FSB.getLastOpenedKB(),
+  setLastOpenedKB: (kbPath) => FSB.setLastOpenedKB(kbPath),
 }

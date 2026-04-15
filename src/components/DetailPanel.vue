@@ -65,7 +65,7 @@ import { GitCache } from '@/core/git-backend.js'
 marked.setOptions({ breaks: true, gfm: true })
 
 const props = defineProps({ nodeId: { type: String, default: null } })
-const emit = defineEmits(['collapse', 'delete', 'rename', 'drill'])
+const emit = defineEmits(['collapse', 'delete', 'rename', 'drill', 'doc-changed'])
 
 const storage = useStorage()
 const roomStore = useRoomStore()
@@ -90,6 +90,8 @@ let _modeVersion = 0
 let _activeUrls = []
 
 const nodeLabel = computed(() => {
+  // 依赖 _pathNameMapVersion 以响应节点改名事件
+  void roomStore._pathNameMapVersion
   // 从 pathNameMap 获取节点名
   if (!props.nodeId) return ''
   return roomStore.pathNameMap[props.nodeId] || props.nodeId.split('/').pop() || ''
@@ -237,6 +239,8 @@ async function flushEdit() {
     await storage.writeMarkdown(props.nodeId, editContent.value)
     showSaveIndicator()
     if (roomStore.currentKBPath) GitCache.markDirty(roomStore.currentKBPath)
+    // 通知图谱刷新节点文档图标
+    emit('doc-changed', props.nodeId)
   }
 }
 

@@ -27,14 +27,8 @@
           <div class="home-card-image">
             <img v-if="kb.coverUrl" :src="kb.coverUrl" />
             <span v-else class="home-card-image-icon">📚</span>
-            <button
-              class="home-card-settings-btn"
-              title="知识库设置"
-              @click.stop="openKBSettings(kb)"
-            >⚙</button>
-
           </div>
-          <div class="home-card-body">
+          <div class="home-card-body" @contextmenu.prevent="openKBSettings(kb)">
             <div class="home-card-title">
               <span>{{ kb.name }}</span>
             </div>
@@ -64,6 +58,12 @@
           <div class="home-card-add-icon">＋</div>
           <div class="home-card-add-text">新建知识库</div>
         </div>
+
+        <!-- 导入按钮 -->
+        <div class="home-card-add" @click="openImportForm">
+          <div class="home-card-add-icon">📥</div>
+          <div class="home-card-add-text">导入知识库</div>
+        </div>
       </div>
     </div>
 
@@ -87,15 +87,6 @@
             />
           </div>
           <div class="home-form-group">
-            <label>存储位置</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <div
-                style="flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#888;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-              >{{ newKB.customDir || '默认目录' }}</div>
-              <button class="home-btn home-btn-cancel" @click="selectDir" style="white-space:nowrap;padding:10px 14px">📁 选择</button>
-            </div>
-          </div>
-          <div class="home-form-group">
             <label>封面图片</label>
             <div
               class="home-image-upload"
@@ -117,6 +108,53 @@
         <div class="home-form-footer">
           <button class="home-btn home-btn-cancel" @click="cancelCreate">取消</button>
           <button class="home-btn home-btn-primary" @click="submitCreate">创建</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 导入知识库表单 -->
+    <div class="home-form-overlay" :class="{ active: showImportForm }">
+      <div class="home-form">
+        <div class="home-form-header">
+          <h3>导入知识库</h3>
+          <button class="home-form-close" @click="closeImportForm">✕</button>
+        </div>
+        <div class="home-form-body">
+          <div class="home-form-group">
+            <label>选择知识库文件夹</label>
+            <div v-if="importSelected" class="home-import-selected">
+              <template v-if="importSelected.valid">
+                <div class="home-import-valid">
+                  <span class="home-import-badge">✓ 有效知识库</span>
+                  <div class="home-import-info">
+                    <span>📁 {{ importSelected.path }}</span>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <div class="home-import-invalid">
+                  <span class="home-import-badge home-import-badge--error">✕ {{ importSelected.error }}</span>
+                  <div class="home-import-info">
+                    <span>📁 {{ importSelected.path }}</span>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <button class="home-btn home-btn-cancel" @click="doSelectExistingKB" style="width:100%;padding:10px 14px">
+              {{ importSelected ? '重新选择...' : '📂 选择文件夹' }}
+            </button>
+          </div>
+          <div v-if="importError" class="home-import-error">{{ importError }}</div>
+        </div>
+        <div class="home-form-footer">
+          <button class="home-btn home-btn-cancel" @click="closeImportForm">取消</button>
+          <button
+            class="home-btn home-btn-primary"
+            :disabled="!importSelected || !importSelected.valid || importLoading"
+            @click="submitImport"
+          >
+            {{ importLoading ? '导入中...' : '导入' }}
+          </button>
         </div>
       </div>
     </div>
@@ -219,9 +257,13 @@ const settingsNameError = ref(false)
 const settingsCoverInputRef = ref(null)
 const settingsTargetKB = ref(null)
 
+const showImportForm = ref(false)
+const importSelected = ref(null)
+const importLoading = ref(false)
+const importError = ref(null)
+
 const newKB = reactive({
   name: '',
-  customDir: '',
   coverBlob: null,
   coverPreviewUrl: null,
 })
@@ -285,7 +327,8 @@ async function loadKBList() {
 }
 
 // ─── 打开知识库 ────────────────────────────────────────────────
-function openKB(kb) {
+async function openKB(kb) {
+  await storage.setLastOpenedKB(kb.path)
   roomStore.openTab(kb.path, kb.name)
   appStore.showGraph()
 }
@@ -296,11 +339,6 @@ function openInFinder(kb) {
 }
 
 // ─── 新建知识库 ────────────────────────────────────────────────
-async function selectDir() {
-  const dir = await storage.selectDir()
-  if (dir) newKB.customDir = dir
-}
-
 function selectCover() { coverInputRef.value?.click() }
 
 function coverChanged(e) {
@@ -321,7 +359,6 @@ function removeCover() {
 function cancelCreate() {
   showCreateForm.value = false
   newKB.name = ''
-  newKB.customDir = ''
   newKB.coverBlob = null
   newKB.coverPreviewUrl = null
   nameError.value = false
@@ -346,8 +383,8 @@ async function submitCreate() {
   }
 
   try {
-    await storage.createKB(name, newKB.customDir ? { rootDir: newKB.customDir } : undefined)
-    const kbPath = newKB.customDir ? `${newKB.customDir}/${name}` : name
+    await storage.createKB(name)
+    const kbPath = name
     // 保存封面
     if (newKB.coverBlob) {
       const ext = (newKB.coverBlob.name || 'png').split('.').pop()
@@ -472,6 +509,50 @@ async function deleteKBFromSettings() {
   await storage.deleteKB(kb.path)
   closeKBSettings()
   await loadKBList()
+}
+
+// ─── 导入知识库 ────────────────────────────────────────────────
+function openImportForm() {
+  showImportForm.value = true
+  importSelected.value = null
+  importError.value = null
+  importLoading.value = false
+}
+
+function closeImportForm() {
+  showImportForm.value = false
+  importSelected.value = null
+  importError.value = null
+  importLoading.value = false
+}
+
+async function doSelectExistingKB() {
+  importError.value = null
+  const result = await storage.selectExistingKB()
+  importSelected.value = result
+  if (!result) {
+    // 用户取消了选择，不做处理
+  }
+}
+
+async function submitImport() {
+  if (!importSelected.value || !importSelected.value.valid) return
+  importLoading.value = true
+  importError.value = null
+  try {
+    const kbPath = await storage.importKB(importSelected.value.path)
+    closeImportForm()
+    await loadKBList()
+    // 自动打开刚导入的知识库
+    const importedKB = kbs.value.find(kb => kb.path === kbPath)
+    if (importedKB) {
+      await openKB(importedKB)
+    }
+  } catch (err) {
+    importError.value = '导入失败: ' + (err?.message || String(err))
+  } finally {
+    importLoading.value = false
+  }
 }
 
 // ─── 工具函数 ──────────────────────────────────────────────────

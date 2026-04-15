@@ -9,7 +9,7 @@ export const FSB = {
   clearAll: () => getApi().invoke('fs:clearAll'),
 
   listChildren: (parentPath) => getApi().invoke('fs:listChildren', parentPath),
-  mkDir: (dirPath, meta, rootDir) => getApi().invoke('fs:mkDir', dirPath, meta || {}, rootDir || ''),
+  mkDir: (dirPath, meta) => getApi().invoke('fs:mkDir', dirPath, meta || {}),
   rmDir: (dirPath) => getApi().invoke('fs:rmDir', dirPath),
   readMeta: (dirPath) => getApi().invoke('fs:readMeta', dirPath),
   writeMeta: (dirPath, meta) => getApi().invoke('fs:writeMeta', dirPath, meta),
@@ -27,7 +27,11 @@ export const FSB = {
     getApi().invoke('fs:readBlobFile', filePath).then(ab => ab ? new Blob([ab]) : null),
 
   selectDir: () => getApi().invoke('fs:selectDir'),
+  selectExistingKB: () => getApi().invoke('fs:selectExistingKB'),
+  importKB: (sourcePath) => getApi().invoke('fs:importKB', sourcePath),
   openInFinder: (p) => getApi().invoke('fs:openInFinder', p),
   countChildren: (p) => getApi().invoke('fs:countChildren', p),
   getRootDir: () => getApi().invoke('fs:getRootDir'),
+  getLastOpenedKB: () => getApi().invoke('fs:getLastOpenedKB'),
+  setLastOpenedKB: (kbPath) => getApi().invoke('fs:setLastOpenedKB', kbPath),
 }

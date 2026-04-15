@@ -38,9 +38,9 @@ function createWindow() {
 function registerIPC() {
   ipcMain.handle('fs:init',           function()       { fs.ensureDir(fs.getRootDir()); return fs.getRootDir(); });
   ipcMain.handle('fs:listChildren',   function(e, p)   { return fs.listChildren(p); });
-  ipcMain.handle('fs:mkDir',          function(e, p, m, rootDir){
-    var abs = fs.mkDir(p, m, rootDir);
-    var rel = path.relative(rootDir || fs.getRootDir(), abs);
+  ipcMain.handle('fs:mkDir',          function(e, p, m){
+    var abs = fs.mkDir(p, m);
+    var rel = path.relative(fs.getRootDir(), abs);
     return rel;
   });
   ipcMain.handle('fs:rmDir',          function(e, p)   { fs.rmDir(p); });
@@ -55,23 +55,6 @@ function registerIPC() {
   ipcMain.handle('fs:writeBlobFile',  function(e, p, b){ fs.writeBlobFile(p, b); });
   ipcMain.handle('fs:readBlobFile',   function(e, p)   { return fs.readBlobFile(p); });
   ipcMain.handle('fs:clearAll',       function()       { fs.clearAll(); });
-  ipcMain.handle('fs:setRootDir', function(e, dir) {
-    fs.setRootDir(dir);
-    return fs.getRootDir();
-  });
-  ipcMain.handle('fs:selectWorkDir',  function() {
-    var result = dialog.showOpenDialogSync(win, {
-      title: '选择工作目录', properties: ['openDirectory', 'createDirectory']
-    });
-    if (result && result[0]) { fs.setRootDir(result[0]); return result[0]; }
-    return null;
-  });
-  ipcMain.handle('fs:selectDir', function() {
-    var result = dialog.showOpenDialogSync(win, {
-      title: '选择知识库存储位置', properties: ['openDirectory', 'createDirectory']
-    });
-    return (result && result[0]) ? result[0] : null;
-  });
   ipcMain.handle('fs:openInFinder', function(e, dirPath) {
     var absPath = dirPath.startsWith('/') ? dirPath : path.join(fs.getRootDir(), dirPath);
     if (nfs.existsSync(absPath)) shell.openPath(absPath);
@@ -85,6 +68,10 @@ function registerIPC() {
     } catch(err) { return 0; }
   });
   ipcMain.handle('fs:getRootDir', function() { return fs.getRootDir(); });
+  ipcMain.handle('fs:getLastOpenedKB', function() { return fs.getLastOpenedKB(); });
+  ipcMain.handle('fs:setLastOpenedKB', function(e, kbPath) { fs.setLastOpenedKB(kbPath); });
+  ipcMain.handle('fs:selectExistingKB', function() { return fs.selectExistingKB(); });
+  ipcMain.handle('fs:importKB', function(e, sourcePath) { return fs.importKB(sourcePath); });
 
   ipcMain.handle('app:openExternal', function(e, url) {
     if (typeof url !== 'string') return false;
@@ -110,16 +97,6 @@ function registerIPC() {
 function buildMenu() {
   var tpl = [
     { label: '文件', submenu: [
-      { label: '选择工作目录...', click: function() {
-        var result = dialog.showOpenDialogSync(win, {
-          title: '选择工作目录', properties: ['openDirectory', 'createDirectory']
-        });
-        if (result && result[0]) {
-          fs.setRootDir(result[0]);
-          win.webContents.send('root-dir-changed', result[0]);
-        }
-      }},
-      { type: 'separator' },
       { role: 'quit', label: '退出' }
     ]},
     { label: '编辑', submenu: [

@@ -64,9 +64,12 @@ export function useStorage() {
 
     // 工具
     countChildren: (p) => Store.countChildren(p),
-    selectDir: () => Store.selectDir(),
+    selectExistingKB: () => Store.selectExistingKB(),
+    importKB: (sourcePath) => Store.importKB(sourcePath),
     openInFinder: (p) => Store.openInFinder(p),
     getRootDir: () => Store.getRootDir(),
+    getLastOpenedKB: () => Store.getLastOpenedKB(),
+    setLastOpenedKB: (kbPath) => Store.setLastOpenedKB(kbPath),
 
     // 指示器状态
     saveIndicatorVisible,

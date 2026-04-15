@@ -424,10 +424,8 @@ export function useGraph(containerRef) {
       ele.style('text-max-width', data.nodeWidth + 'px')
     }
     if (data.nodeHeight) ele.style('height', data.nodeHeight + 'px')
-    if (data.borderColor && data.borderWidth) {
-      ele.style('border-color', data.borderColor)
-      ele.style('border-width', data.borderWidth + 'px')
-    }
+    if (data.borderColor) ele.style('border-color', data.borderColor)
+    if (data.borderWidth) ele.style('border-width', data.borderWidth + 'px')
     if (data.nodeShape) ele.style('shape', data.nodeShape)
 
     // 当前 Cytoscape 版本不支持 shadow-* 样式属性，跳过运行时阴影写入
@@ -1042,7 +1040,16 @@ export function useGraph(containerRef) {
 
   // ─── 键盘事件（由 GraphView 组件调用） ──────────────────────
   async function handleKeydown(e) {
-    // 已移除全局键盘快捷键，避免干扰文本输入
+    // 拦截 Delete/Backspace 键，避免在图谱空白区域按下时触发意外行为
+    const key = e.key
+    if (key === 'Delete' || key === 'Backspace') {
+      const tag = document.activeElement?.tagName?.toLowerCase()
+      const isEditable = document.activeElement?.isContentEditable
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || isEditable) return
+      // 在图谱区域内按下删除/回退键时，仅阻止浏览器默认行为（避免页面导航）
+      e.preventDefault()
+      return
+    }
   }
 
   // ─── 节点样式更新（供 StylePanel 调用） ─────────────────────
@@ -1161,7 +1168,18 @@ export function useGraph(containerRef) {
     cy.value = null
   })
 
-  // ─── 工具 ────────────────────────────────────────────────────
+  function refreshNodeBadge(nodeId) {
+    if (!cy.value || !nodeId) return
+    const node = cy.value.getElementById(nodeId)
+    if (!node?.length) return
+    storage.readMarkdown(nodeId).then(md => {
+      if (!cy.value) return
+      const n = cy.value.getElementById(nodeId)
+      if (!n?.length) return
+      n.data('hasDoc', !!(md && md.trim().length > 0))
+      try { n.emit('data') } catch (e) {}
+    }).catch(() => {})
+  }
   let _edgeCounter = 0
   function _autoEdgeId() {
     // 数值达到上限时重置（防溢出）
@@ -1203,5 +1221,6 @@ export function useGraph(containerRef) {
     exportPNG,
     handleKeydown,
     setGrid,
+    refreshNodeBadge,
   }
 }
