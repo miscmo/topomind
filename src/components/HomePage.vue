@@ -18,11 +18,17 @@
       <div class="home-grid">
         <!-- 知识库卡片 -->
         <div
-          v-for="kb in kbs"
+          v-for="(kb, idx) in kbs"
           :key="kb.path"
           class="home-card"
-          :class="{ loading: kb.nodeCount === null && !kb.gitStatus }"
+          :class="{ loading: kb.nodeCount === null && !kb.gitStatus, 'drag-over': dragOverIndex === idx, dragging: dragKBIndex === idx }"
+          draggable="true"
           @click="openKB(kb)"
+          @dragstart="onKBDragStart($event, idx)"
+          @dragover.prevent="onKBDragOver($event, idx)"
+          @dragleave="onKBDragLeave"
+          @drop.prevent="onKBDrop($event, idx)"
+          @dragend="onKBDragEnd"
         >
           <div class="home-card-image">
             <img v-if="kb.coverUrl" :src="kb.coverUrl" />
@@ -155,6 +161,29 @@
       </div>
     </div>
 
+    <!-- 封面裁剪弹窗 -->
+    <div class="home-form-overlay" :class="{ active: showCoverCrop }">
+      <div class="home-form home-crop-form">
+        <div class="home-form-header">
+          <h3>裁剪封面</h3>
+          <button class="home-form-close" @click="cancelCoverCrop">✕</button>
+        </div>
+        <div class="home-form-body">
+          <div class="home-crop-container" @mousedown="onCropMouseDown" @mousemove="onCropMouseMove" @mouseup="onCropMouseUp" @mouseleave="onCropMouseUp">
+            <img :src="cropSource.url" class="home-crop-img" />
+            <div class="home-crop-overlay">
+              <div class="home-crop-box" :style="{ left: (cropRect.x / cropSource.width * 100) + '%', top: (cropRect.y / cropSource.height * 100) + '%', width: (cropRect.w / cropSource.width * 100) + '%', height: (cropRect.h / cropSource.height * 100) + '%' }"></div>
+            </div>
+          </div>
+          <p class="home-crop-hint">拖动选框调整裁剪区域</p>
+        </div>
+        <div class="home-form-footer">
+          <button class="home-btn home-btn-cancel" @click="cancelCoverCrop">取消</button>
+          <button class="home-btn home-btn-primary" @click="applyCoverCrop">应用裁剪</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 知识库设置弹窗 -->
     <div class="home-form-overlay" :class="{ active: showSettingsForm }">
       <div class="home-form">
@@ -258,6 +287,17 @@ const importSelected = ref(null)
 const importLoading = ref(false)
 const importError = ref(null)
 
+// 知识库拖拽排序状态
+const dragKBIndex = ref(-1)
+const dragOverIndex = ref(-1)
+
+// 封面裁剪状态
+const showCoverCrop = ref(false)
+const cropSource = ref({ blob: null, url: null, width: 0, height: 0 })
+const cropRect = reactive({ x: 0, y: 0, w: 100, h: 100 })
+const cropDragging = ref(false)
+const cropDragStart = { x: 0, y: 0 }
+
 const newKB = reactive({
   name: '',
   coverBlob: null,
@@ -332,6 +372,53 @@ async function openKB(kb) {
 // ─── 在 Finder 中打开 ─────────────────────────────────────────
 function openInFinder(kb) {
   storage.openInFinder(kb.path)
+}
+
+// ─── 知识库拖拽排序 ───────────────────────────────────────────
+function onKBDragStart(e, idx) {
+  dragKBIndex.value = idx
+  dragOverIndex.value = -1
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', String(idx))
+}
+
+function onKBDragOver(e, idx) {
+  if (dragKBIndex.value === -1 || dragKBIndex.value === idx) return
+  dragOverIndex.value = idx
+  e.dataTransfer.dropEffect = 'move'
+}
+
+function onKBDragLeave(e) {
+  // 只有真正离开卡片时才清除，不在内部移动时清除
+  const rel = e.relatedTarget
+  if (!rel || !e.currentTarget.contains(rel)) {
+    dragOverIndex.value = -1
+  }
+}
+
+async function onKBDrop(e, idx) {
+  const fromIdx = dragKBIndex.value
+  if (fromIdx === -1 || fromIdx === idx) {
+    dragKBIndex.value = -1
+    dragOverIndex.value = -1
+    return
+  }
+  // 执行排序
+  const arr = [...kbs.value]
+  const [item] = arr.splice(fromIdx, 1)
+  arr.splice(idx, 0, item)
+  // 更新 sortOrder
+  arr.forEach((kb, i) => { kb.order = i })
+  kbs.value = arr
+  // 持久化到各 KB 元数据
+  await Promise.all(arr.map(kb => storage.saveKBMeta(kb.path, { order: kb.order })))
+  dragKBIndex.value = -1
+  dragOverIndex.value = -1
+}
+
+function onKBDragEnd() {
+  dragKBIndex.value = -1
+  dragOverIndex.value = -1
 }
 
 // ─── 新建知识库 ────────────────────────────────────────────────
@@ -437,11 +524,70 @@ function selectSettingsCover() {
 function settingsCoverChanged(e) {
   const file = e.target.files?.[0]
   if (!file) return
-  settingsForm.coverBlob = file
-  settingsForm.keepCurrentCover = false
   const reader = new FileReader()
-  reader.onload = (ev) => { settingsForm.coverPreviewUrl = ev.target.result }
+  reader.onload = (ev) => {
+    const url = ev.target.result
+    const img = new Image()
+    img.onload = () => {
+      cropSource.value = { blob: file, url, width: img.width, height: img.height }
+      // 默认选中中央区域（200x200 或更小）
+      const minDim = Math.min(img.width, img.height)
+      const cx = img.width / 2, cy = img.height / 2
+      cropRect.x = cx - minDim / 2
+      cropRect.y = cy - minDim / 2
+      cropRect.w = minDim
+      cropRect.h = minDim
+      showCoverCrop.value = true
+    }
+    img.src = url
+  }
   reader.readAsDataURL(file)
+}
+
+function onCropMouseDown(e) {
+  cropDragging.value = true
+  cropDragStart.x = e.clientX
+  cropDragStart.y = e.clientY
+}
+function onCropMouseMove(e) {
+  if (!cropDragging.value) return
+  const dx = e.clientX - cropDragStart.x
+  const dy = e.clientY - cropDragStart.y
+  cropDragStart.x = e.clientX
+  cropDragStart.y = e.clientY
+  const scaleX = cropSource.value.width / e.currentTarget.offsetWidth
+  const scaleY = cropSource.value.height / e.currentTarget.offsetHeight
+  cropRect.x += dx * scaleX
+  cropRect.y += dy * scaleY
+}
+function onCropMouseUp() { cropDragging.value = false }
+
+function applyCoverCrop() {
+  // 使用 Canvas 裁剪图片
+  const { blob, url, width, height } = cropSource.value
+  if (!blob || !width) return
+  const canvas = document.createElement('canvas')
+  const img = new Image()
+  img.onload = () => {
+    canvas.width = cropRect.w
+    canvas.height = cropRect.h
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, cropRect.x, cropRect.y, cropRect.w, cropRect.h, 0, 0, cropRect.w, cropRect.h)
+    canvas.toBlob((cropBlob) => {
+      if (cropBlob) {
+        settingsForm.coverBlob = new File([cropBlob], blob.name || 'cover.png', { type: 'image/png' })
+        settingsForm.coverPreviewUrl = URL.createObjectURL(cropBlob)
+        settingsForm.keepCurrentCover = false
+      }
+      showCoverCrop.value = false
+    }, 'image/png')
+  }
+  img.src = url
+}
+
+function cancelCoverCrop() {
+  showCoverCrop.value = false
+  cropSource.value = { blob: null, url: null, width: 0, height: 0 }
 }
 
 function removeSettingsCover() {

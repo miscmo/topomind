@@ -102,6 +102,22 @@
   border-radius: 10px;
 }
 
+.home-card.dragging {
+  opacity: 0.45;
+  transform: scale(0.95) rotate(1deg);
+  border-color: #3498db;
+  box-shadow: 0 12px 32px rgba(52,152,219,0.25);
+  z-index: 10;
+}
+
+.home-card.drag-over {
+  border-color: #3498db;
+  border-style: dashed;
+  background: #f0f7ff;
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px rgba(52,152,219,0.2);
+}
+
 .home-card-image {
   width: 100%;
   height: 77px;
@@ -673,4 +689,58 @@
   border-radius: 6px;
   font-size: 12px;
   color: #dc2626;
+}
+
+/* 封面裁剪 */
+.home-crop-form {
+  width: 520px;
+  max-width: 92%;
+}
+
+.home-crop-container {
+  position: relative;
+  width: 100%;
+  max-height: 320px;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: move;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.home-crop-img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.home-crop-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.home-crop-box {
+  position: absolute;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+  border-radius: 2px;
+  pointer-events: none;
+  min-width: 10%;
+  min-height: 10%;
+}
+
+.home-crop-hint {
+  text-align: center;
+  font-size: 12px;
+  color: #888;
+  margin: 10px 0 0;
 }

@@ -34,9 +34,15 @@ export const Store = {
   // ===== 知识库（根级目录） =====
   listKBs: () => FSB.listChildren(''),
 
-  createKB(name, meta) {
+  async createKB(name, meta) {
     const safeName = ensureValidName(name, '知识库名称')
-    const fullMeta = Object.assign({ name: safeName, createdAt: Date.now(), cover: '' }, meta || {})
+    // 分配 sortOrder：取现有 KB 的最大 order + 1
+    const existing = await FSB.listChildren('')
+    let maxOrder = -1
+    for (const kb of existing) {
+      if (Number.isFinite(kb.order) && kb.order > maxOrder) maxOrder = kb.order
+    }
+    const fullMeta = Object.assign({ name: safeName, createdAt: Date.now(), cover: '', order: maxOrder + 1 }, meta || {})
     return FSB.mkDir(safeName, fullMeta)
   },
 

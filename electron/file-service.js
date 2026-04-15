@@ -87,7 +87,7 @@ function abs(relPath) {
 function listChildren(parentPath) {
   var dir = abs(parentPath);
   ensureDir(dir);
-  return fs.readdirSync(dir, { withFileTypes: true })
+  var children = fs.readdirSync(dir, { withFileTypes: true })
     .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
     .map(function(e) {
       var childPath = parentPath ? parentPath + '/' + e.name : e.name;
@@ -97,6 +97,14 @@ function listChildren(parentPath) {
       var cover = (typeof meta.cover === 'string' && meta.cover.trim()) ? meta.cover : '';
       return Object.assign({ path: childPath, name: safeName, cover: cover }, meta);
     });
+  // 排序：order 字段升序，然后按 name 字母升序
+  children.sort(function(a, b) {
+    var orderA = Number.isFinite(a.order) ? a.order : Infinity;
+    var orderB = Number.isFinite(b.order) ? b.order : Infinity;
+    if (orderA !== orderB) return orderA - orderB;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
+  });
+  return children;
 }
 
 /** 创建目录 */
@@ -328,6 +336,16 @@ function importKB(sourcePath) {
   copyDirRecursive(src, dest);
   // 迁移元数据格式（确保是新版 _kb_meta.json + _graph.json）
   migrateLegacyMeta(dest);
+  // 分配 sortOrder
+  var existing = listChildren('');
+  var maxOrder = -1;
+  for (var i = 0; i < existing.length; i++) {
+    var o = existing[i].order;
+    if (Number.isFinite(o) && o > maxOrder) maxOrder = o;
+  }
+  var meta = readMeta(path.relative(rootDir, dest)) || {};
+  meta.order = maxOrder + 1;
+  writeMeta(path.relative(rootDir, dest), meta);
   var relPath = path.relative(rootDir, dest);
   return relPath;
 }
