@@ -3,13 +3,50 @@
  * 目录即结构：每个卡片=一个目录，每个知识库=一个根目录
  */
 const fs = require('fs');
+const nfs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+const { app, dialog } = require('electron');
 
 let rootDir = path.join(app.getPath('documents'), 'TopoMind');
 
-function setRootDir(dir) { rootDir = dir; ensureDir(rootDir); }
+// ===== 配置持久化（自动记录最后打开的知识库） =====
+const _configFilePath = path.join(app.getPath('userData'), 'topomind-config.json');
+let _config = { lastOpenedKB: null };
+
+function _loadConfig() {
+  try {
+    if (fs.existsSync(_configFilePath)) {
+      _config = JSON.parse(fs.readFileSync(_configFilePath, 'utf-8')) || {};
+    }
+    // 如果配置中有 rootDir，使用它
+    if (_config.rootDir && typeof _config.rootDir === 'string' && _config.rootDir.trim()) {
+      rootDir = _config.rootDir;
+      ensureDir(rootDir);
+    }
+  } catch (e) {
+    console.warn('[file-service] 加载配置失败，使用默认目录:', e);
+  }
+}
+
+function _saveConfig() {
+  try {
+    fs.writeFileSync(_configFilePath, JSON.stringify(_config, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[file-service] 保存配置失败:', e);
+  }
+}
+
+_loadConfig();
+
+function setRootDir(dir) { rootDir = dir; ensureDir(rootDir); _config.rootDir = dir; _saveConfig(); }
 function getRootDir() { return rootDir; }
+
+function getLastOpenedKB() { return _config.lastOpenedKB || null; }
+
+function setLastOpenedKB(kbPath) {
+  _config.lastOpenedKB = kbPath || null;
+  _saveConfig();
+}
 
 function ensureDir(d) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -229,12 +266,80 @@ function clearAll() {
   });
 }
 
+/** 打开目录选择框，选择已存在的知识库 */
+function selectExistingKB() {
+  var result = dialog.showOpenDialogSync({
+    title: '选择知识库文件夹',
+    properties: ['openDirectory']
+  });
+  if (!result || !result[0]) return null;
+  var selectedPath = path.resolve(result[0]);
+  // 检查是否是有效知识库（必须有 _kb_meta.json）
+  var kbMetaFile = path.join(selectedPath, '_kb_meta.json');
+  var legacyMetaFile = path.join(selectedPath, '_meta.json');
+  if (!nfs.existsSync(kbMetaFile) && !nfs.existsSync(legacyMetaFile)) {
+    return { valid: false, path: selectedPath, error: '不是有效的知识库目录（缺少 _kb_meta.json）' };
+  }
+  return { valid: true, path: selectedPath, name: path.basename(selectedPath) };
+}
+
+/** 将外部知识库复制到 rootDir（导入） */
+function importKB(sourcePath) {
+  var src = path.resolve(sourcePath);
+  if (!nfs.existsSync(src)) throw new Error('源目录不存在: ' + src);
+  if (!nfs.existsSync(path.join(src, '_kb_meta.json')) &&
+      !nfs.existsSync(path.join(src, '_meta.json'))) {
+    throw new Error('不是有效的知识库目录');
+  }
+  // 读取元数据获取展示名
+  var meta = readJsonFile(path.join(src, '_kb_meta.json')) ||
+             readJsonFile(path.join(src, '_meta.json')) || {};
+  var kbName = (meta.name && typeof meta.name === 'string' && meta.name.trim())
+    ? meta.name.trim()
+    : path.basename(src);
+  // 复制到 rootDir
+  var destName = uniqueFolderName(rootDir, kbName);
+  var dest = path.join(rootDir, destName);
+  ensureDir(dest);
+  // 递归复制（排除 node_modules 等）
+  function copyDirRecursive(srcDir, destDir) {
+    ensureDir(destDir);
+    var entries = nfs.readdirSync(srcDir, { withFileTypes: true });
+    for (var i = 0; i < entries.length; i++) {
+      var entry = entries[i];
+      if (entry.name === 'node_modules') continue;
+      var srcEntry = path.join(srcDir, entry.name);
+      var destEntry = path.join(destDir, entry.name);
+      if (entry.isDirectory()) {
+        copyDirRecursive(srcEntry, destEntry);
+      } else {
+        ensureDir(path.dirname(destEntry));
+        // JSON 和 Markdown 文件用 UTF-8 文本方式复制，其他文件（如图片）用二进制
+        if (/\.(json|md|txt)$/i.test(entry.name)) {
+          var text = fs.readFileSync(srcEntry, 'utf-8');
+          fs.writeFileSync(destEntry, text, 'utf-8');
+        } else {
+          var data = nfs.readFileSync(srcEntry);
+          nfs.writeFileSync(destEntry, data);
+        }
+      }
+    }
+  }
+  copyDirRecursive(src, dest);
+  // 迁移元数据格式（确保是新版 _kb_meta.json + _graph.json）
+  migrateLegacyMeta(dest);
+  var relPath = path.relative(rootDir, dest);
+  return relPath;
+}
+
 module.exports = {
   setRootDir: setRootDir, getRootDir: getRootDir, ensureDir: ensureDir,
+  getLastOpenedKB: getLastOpenedKB, setLastOpenedKB: setLastOpenedKB,
   listChildren: listChildren, mkDir: mkDir, rmDir: rmDir,
   readMeta: readMeta, writeMeta: writeMeta, readGraphMeta: readGraphMeta, writeGraphMeta: writeGraphMeta,
   getDir: getDir,
   readFile: readFile, writeFile: writeFile, deleteFile: deleteFile,
   writeBlobFile: writeBlobFile, readBlobFile: readBlobFile,
-  clearAll: clearAll
+  clearAll: clearAll,
+  selectExistingKB: selectExistingKB, importKB: importKB
 };

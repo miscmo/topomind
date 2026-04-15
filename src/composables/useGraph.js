@@ -1089,8 +1089,18 @@ export function useGraph(containerRef) {
           textAlign: () => node.style('text-halign', value),
           nodeWidth: () => { node.style('width', value ? value + 'px' : 'auto'); node.style('text-max-width', value ? value + 'px' : '100px') },
           nodeHeight: () => node.style('height', value ? value + 'px' : 'auto'),
-          borderColor: () => node.style('border-color', value),
-          borderWidth: () => node.style('border-width', value + 'px'),
+          borderColor: () => {
+            node.style('border-color', value)
+            // Ensure border is visible when color changes (need width > 0)
+            const bw = parseFloat(node.style('border-width')) || 0
+            if (bw === 0) node.style('border-width', '1px')
+          },
+          borderWidth: () => {
+            node.style('border-width', value + 'px')
+            // Sync border color so width change is immediately visible
+            const bc = node.data('borderColor')
+            if (bc) node.style('border-color', bc)
+          },
           nodeShape: () => node.style('shape', value),
           shadowOpacity: () => {
             // 当前 Cytoscape 版本不支持 shadow-*，仅保留 data 值用于兼容历史数据
