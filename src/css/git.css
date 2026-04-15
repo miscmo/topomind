@@ -194,6 +194,32 @@
   padding: 0;
 }
 
+/* 历史面板文件列表 */
+.git-diff-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e8ecf0;
+  background: #f8f9fb;
+}
+.git-diff-file-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #d0d7e0;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.1s;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-diff-file-btn:hover { background: #eef2f7; border-color: #3498db; color: #1a3a5c; }
+.git-diff-file-btn.active { background: #3498db; color: #fff; border-color: #3498db; }
+
 .git-log-item {
   padding: 8px 12px;
   cursor: pointer;

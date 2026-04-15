@@ -8,11 +8,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 const ALLOWED_CHANNELS = new Set([
   // fs
   'fs:init', 'fs:listChildren', 'fs:mkDir', 'fs:rmDir',
-  'fs:readMeta', 'fs:writeMeta', 'fs:getDir',
+  'fs:readMeta', 'fs:writeMeta', 'fs:readGraphMeta', 'fs:writeGraphMeta', 'fs:getDir',
   'fs:readFile', 'fs:writeFile', 'fs:deleteFile',
   'fs:writeBlobFile', 'fs:readBlobFile', 'fs:clearAll',
-  'fs:setRootDir', 'fs:getRootDir', 'fs:selectDir',
   'fs:openInFinder', 'fs:countChildren',
+  'fs:getRootDir',
+  'fs:getLastOpenedKB', 'fs:setLastOpenedKB',
   // git: basic
   'git:checkAvailable', 'git:init', 'git:status',
   'git:statusBatch', 'git:isDirty',
@@ -27,6 +28,8 @@ const ALLOWED_CHANNELS = new Set([
   // git: auth
   'git:auth:setToken', 'git:auth:getSSHKey',
   'git:auth:setAuthType', 'git:auth:getAuthType',
+  // app
+  'app:openExternal',
   // save
   'save:layout',
 ]);
@@ -66,5 +69,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       var args = Array.prototype.slice.call(arguments, 1);
       fn.apply(null, args);
     });
+  },
+  off: function(channel, fn) {
+    if (!ALLOWED_RECEIVE_CHANNELS.has(channel)) {
+      console.warn('[preload] 忽略未授权的移除通道:', channel);
+      return;
+    }
+    ipcRenderer.off(channel, fn);
   }
 });

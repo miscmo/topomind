@@ -1,70 +1,37 @@
 /**
- * 文件系统存储后端（Electron 端）
+ * 文件系统存储后端（Electron 端）ES Module 版本
  * 通过 window.electronAPI (IPC) 调用 Node.js fs
- * 接口与 IDB 后端对齐
  */
-var FSB = (function() {
-  var api = window.electronAPI;
+const getApi = () => window.electronAPI
 
-  function listChildren(parentPath) {
-    return api.invoke('fs:listChildren', parentPath);
-  }
+export const FSB = {
+  open: () => getApi().invoke('fs:init'),
+  clearAll: () => getApi().invoke('fs:clearAll'),
 
-  function mkDir(dirPath, meta, rootDir) {
-    return api.invoke('fs:mkDir', dirPath, meta || {}, rootDir || '');
-  }
+  listChildren: (parentPath) => getApi().invoke('fs:listChildren', parentPath),
+  mkDir: (dirPath, meta) => getApi().invoke('fs:mkDir', dirPath, meta || {}),
+  rmDir: (dirPath) => getApi().invoke('fs:rmDir', dirPath),
+  readMeta: (dirPath) => getApi().invoke('fs:readMeta', dirPath),
+  writeMeta: (dirPath, meta) => getApi().invoke('fs:writeMeta', dirPath, meta),
+  readGraphMeta: (dirPath) => getApi().invoke('fs:readGraphMeta', dirPath),
+  writeGraphMeta: (dirPath, meta) => getApi().invoke('fs:writeGraphMeta', dirPath, meta),
+  getDir: (dirPath) => getApi().invoke('fs:getDir', dirPath),
 
-  function rmDir(dirPath) {
-    return api.invoke('fs:rmDir', dirPath);
-  }
+  readFile: (filePath) => getApi().invoke('fs:readFile', filePath),
+  writeFile: (filePath, content) => getApi().invoke('fs:writeFile', filePath, content),
+  deleteFile: (filePath) => getApi().invoke('fs:deleteFile', filePath),
 
-  function readMeta(dirPath) {
-    return api.invoke('fs:readMeta', dirPath);
-  }
+  writeBlobFile: (filePath, blob) =>
+    blob.arrayBuffer().then(ab => getApi().invoke('fs:writeBlobFile', filePath, ab)),
+  readBlobFile: (filePath) =>
+    getApi().invoke('fs:readBlobFile', filePath).then(ab => ab ? new Blob([ab]) : null),
 
-  function writeMeta(dirPath, meta) {
-    return api.invoke('fs:writeMeta', dirPath, meta);
-  }
-
-  function readFile(filePath) {
-    return api.invoke('fs:readFile', filePath);
-  }
-
-  function writeFile(filePath, content) {
-    return api.invoke('fs:writeFile', filePath, content);
-  }
-
-  function deleteFile(filePath) {
-    return api.invoke('fs:deleteFile', filePath);
-  }
-
-  function writeBlobFile(filePath, blob) {
-    return blob.arrayBuffer().then(function(ab) {
-      return api.invoke('fs:writeBlobFile', filePath, ab);
-    });
-  }
-
-  function readBlobFile(filePath) {
-    return api.invoke('fs:readBlobFile', filePath).then(function(ab) {
-      return ab ? new Blob([ab]) : null;
-    });
-  }
-
-  function getDir(dirPath) {
-    return api.invoke('fs:getDir', dirPath);
-  }
-
-  return {
-    open: function() { return api.invoke('fs:init'); },
-    clearAll: function() { return api.invoke('fs:clearAll'); },
-    listChildren: listChildren, mkDir: mkDir, rmDir: rmDir,
-    readMeta: readMeta, writeMeta: writeMeta,
-    readFile: readFile, writeFile: writeFile, deleteFile: deleteFile,
-    writeBlobFile: writeBlobFile, readBlobFile: readBlobFile,
-    getDir: getDir,
-    selectDir: function() { return api.invoke('fs:selectDir'); },
-    openInFinder: function(p) { return api.invoke('fs:openInFinder', p); },
-    countChildren: function(p) { return api.invoke('fs:countChildren', p); },
-    getRootDir: function() { return api.invoke('fs:getRootDir'); }
-  };
-})();
+  selectDir: () => getApi().invoke('fs:selectDir'),
+  selectExistingKB: () => getApi().invoke('fs:selectExistingKB'),
+  importKB: (sourcePath) => getApi().invoke('fs:importKB', sourcePath),
+  openInFinder: (p) => getApi().invoke('fs:openInFinder', p),
+  countChildren: (p) => getApi().invoke('fs:countChildren', p),
+  getRootDir: () => getApi().invoke('fs:getRootDir'),
+  getLastOpenedKB: () => getApi().invoke('fs:getLastOpenedKB'),
+  setLastOpenedKB: (kbPath) => getApi().invoke('fs:setLastOpenedKB', kbPath),
+}

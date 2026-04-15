@@ -9,6 +9,10 @@ const gitIPC = require('./git-ipc');
 
 let win = null;
 
+// 禁用 GPU shader cache，避免 Windows 多进程争抢缓存目录导致的 ERROR
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
@@ -18,7 +22,12 @@ function createWindow() {
       nodeIntegration: false, contextIsolation: true,
     }
   });
-  win.loadFile(path.join(__dirname, '..', 'index.html'));
+  // 开发模式加载 Vite dev server，生产模式加载打包文件
+  if (process.env.VITE_DEV_SERVER_URL) {
+    win.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  }
   // 转发渲染进程日志到 stdout
   win.webContents.on('console-message', function(e, level, msg, line, src) {
     console.log('[renderer]', msg);
@@ -29,10 +38,16 @@ function createWindow() {
 function registerIPC() {
   ipcMain.handle('fs:init',           function()       { fs.ensureDir(fs.getRootDir()); return fs.getRootDir(); });
   ipcMain.handle('fs:listChildren',   function(e, p)   { return fs.listChildren(p); });
-  ipcMain.handle('fs:mkDir',          function(e, p, m, rootDir){ fs.mkDir(p, m, rootDir); });
+  ipcMain.handle('fs:mkDir',          function(e, p, m){
+    var abs = fs.mkDir(p, m);
+    var rel = path.relative(fs.getRootDir(), abs);
+    return rel;
+  });
   ipcMain.handle('fs:rmDir',          function(e, p)   { fs.rmDir(p); });
   ipcMain.handle('fs:readMeta',       function(e, p)   { return fs.readMeta(p); });
   ipcMain.handle('fs:writeMeta',      function(e, p, m){ fs.writeMeta(p, m); });
+  ipcMain.handle('fs:readGraphMeta',   function(e, p)   { return fs.readGraphMeta(p); });
+  ipcMain.handle('fs:writeGraphMeta',  function(e, p, m){ fs.writeGraphMeta(p, m); });
   ipcMain.handle('fs:getDir',         function(e, p)   { return fs.getDir(p); });
   ipcMain.handle('fs:readFile',       function(e, p)   { return fs.readFile(p); });
   ipcMain.handle('fs:writeFile',      function(e, p, c){ fs.writeFile(p, c); });
@@ -40,19 +55,6 @@ function registerIPC() {
   ipcMain.handle('fs:writeBlobFile',  function(e, p, b){ fs.writeBlobFile(p, b); });
   ipcMain.handle('fs:readBlobFile',   function(e, p)   { return fs.readBlobFile(p); });
   ipcMain.handle('fs:clearAll',       function()       { fs.clearAll(); });
-  ipcMain.handle('fs:selectWorkDir',  function() {
-    var result = dialog.showOpenDialogSync(win, {
-      title: '选择工作目录', properties: ['openDirectory', 'createDirectory']
-    });
-    if (result && result[0]) { fs.setRootDir(result[0]); return result[0]; }
-    return null;
-  });
-  ipcMain.handle('fs:selectDir', function() {
-    var result = dialog.showOpenDialogSync(win, {
-      title: '选择知识库存储位置', properties: ['openDirectory', 'createDirectory']
-    });
-    return (result && result[0]) ? result[0] : null;
-  });
   ipcMain.handle('fs:openInFinder', function(e, dirPath) {
     var absPath = dirPath.startsWith('/') ? dirPath : path.join(fs.getRootDir(), dirPath);
     if (nfs.existsSync(absPath)) shell.openPath(absPath);
@@ -66,11 +68,23 @@ function registerIPC() {
     } catch(err) { return 0; }
   });
   ipcMain.handle('fs:getRootDir', function() { return fs.getRootDir(); });
+  ipcMain.handle('fs:getLastOpenedKB', function() { return fs.getLastOpenedKB(); });
+  ipcMain.handle('fs:setLastOpenedKB', function(e, kbPath) { fs.setLastOpenedKB(kbPath); });
+  ipcMain.handle('fs:selectExistingKB', function() { return fs.selectExistingKB(); });
+  ipcMain.handle('fs:importKB', function(e, sourcePath) { return fs.importKB(sourcePath); });
+
+  ipcMain.handle('app:openExternal', function(e, url) {
+    if (typeof url !== 'string') return false;
+    var target = url.trim();
+    if (!/^https?:\/\//i.test(target)) return false;
+    shell.openExternal(target);
+    return true;
+  });
 
   // ===== 同步保存（beforeunload 时使用）=====
   ipcMain.on('save:layout', function(event, dirPath, meta) {
     try {
-      fs.writeMeta(dirPath, meta);
+      fs.writeGraphMeta(dirPath, meta);
       event.returnValue = true;
     } catch (e) {
       console.error('[main] save:layout 失败:', e);
@@ -83,16 +97,6 @@ function registerIPC() {
 function buildMenu() {
   var tpl = [
     { label: '文件', submenu: [
-      { label: '选择工作目录...', click: function() {
-        var result = dialog.showOpenDialogSync(win, {
-          title: '选择工作目录', properties: ['openDirectory', 'createDirectory']
-        });
-        if (result && result[0]) {
-          fs.setRootDir(result[0]);
-          win.webContents.send('root-dir-changed', result[0]);
-        }
-      }},
-      { type: 'separator' },
       { role: 'quit', label: '退出' }
     ]},
     { label: '编辑', submenu: [

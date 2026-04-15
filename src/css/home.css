@@ -89,6 +89,35 @@
   box-shadow: 0 8px 24px rgba(52,152,219,0.12);
 }
 
+.home-card.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.home-card.loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.4);
+  border-radius: 10px;
+}
+
+.home-card.dragging {
+  opacity: 0.45;
+  transform: scale(0.95) rotate(1deg);
+  border-color: #3498db;
+  box-shadow: 0 12px 32px rgba(52,152,219,0.25);
+  z-index: 10;
+}
+
+.home-card.drag-over {
+  border-color: #3498db;
+  border-style: dashed;
+  background: #f0f7ff;
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px rgba(52,152,219,0.2);
+}
+
 .home-card-image {
   width: 100%;
   height: 77px;
@@ -112,29 +141,29 @@
   object-fit: cover;
 }
 
-.home-card-cover-btn {
+.home-card-settings-btn {
   position: absolute;
-  bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 2px 8px;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   background: rgba(0,0,0,0.55);
   color: #fff;
-  font-size: 9px;
+  font-size: 12px;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.2s;
-  white-space: nowrap;
+  transition: opacity 0.2s, background 0.2s;
   backdrop-filter: blur(4px);
+  z-index: 3;
 }
 
-.home-card:hover .home-card-cover-btn {
+.home-card:hover .home-card-settings-btn {
   opacity: 1;
 }
 
-.home-card-cover-btn:hover {
+.home-card-settings-btn:hover {
   background: rgba(0,0,0,0.75);
 }
 
@@ -152,41 +181,6 @@
   justify-content: space-between;
 }
 
-.home-card-actions {
-  display: flex;
-  gap: 3px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.home-card:hover .home-card-actions {
-  opacity: 1;
-}
-
-.home-card-action-btn {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  border: none;
-  background: #f0f2f5;
-  color: #999;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  transition: all 0.15s;
-}
-
-.home-card-action-btn:hover {
-  background: #e8ecf0;
-  color: #555;
-}
-
-.home-card-action-btn.danger:hover {
-  background: #fdf0f0;
-  color: #e74c3c;
-}
 
 .home-card-path {
   color: #aaa;
@@ -206,16 +200,92 @@
 
 .home-card-meta {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   font-size: 10px;
   color: #999;
   margin-bottom: 1px;
+}
+
+.home-card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .home-card-meta span {
   display: flex;
   align-items: center;
   gap: 3px;
+}
+
+.home-card-loading-skeleton {
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+  color: #ccc;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Git 状态徽标 */
+.git-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 12px);
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.1px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.16);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* 危险（需优先处理） */
+.git-badge--conflict,
+.git-badge--diverged {
+  color: #fff;
+  background: rgba(198, 40, 40, 0.9);
+  border-color: rgba(255, 205, 210, 0.55);
+}
+
+/* 警告（有本地改动/未同步） */
+.git-badge--dirty,
+.git-badge--ahead,
+.git-badge--behind {
+  color: #fff;
+  background: rgba(239, 108, 0, 0.9);
+  border-color: rgba(255, 224, 178, 0.6);
+}
+
+/* 中性（待配置/环境问题） */
+.git-badge--uninit,
+.git-badge--no-remote,
+.git-badge--git-unavailable {
+  color: #2f3b52;
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(180, 192, 209, 0.85);
+}
+
+/* 健康（已同步） */
+.git-badge--clean {
+  color: #fff;
+  background: rgba(46, 125, 50, 0.9);
+  border-color: rgba(200, 230, 201, 0.55);
 }
 
 /* 新建卡片 */
@@ -502,6 +572,46 @@
   box-shadow: 0 2px 8px rgba(26,58,92,0.2);
 }
 
+.home-btn-danger {
+  background: #fff2f2;
+  color: #c62828;
+  border: 1px solid #f5c2c2;
+}
+
+.home-btn-danger:hover {
+  background: #ffe7e7;
+}
+
+.home-kb-advanced {
+  margin-top: 2px;
+}
+
+.home-kb-advanced-grid {
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.home-kb-advanced-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: start;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.home-kb-advanced-row .k {
+  color: #7b8794;
+}
+
+.home-kb-advanced-row .v {
+  color: #27364a;
+  word-break: break-all;
+}
+
 /* 滚动条 */
 .home-content::-webkit-scrollbar {
   width: 6px;
@@ -525,8 +635,112 @@
   .home-header {
     padding: 20px 24px;
   }
-  
+
   .home-content {
     padding: 20px 24px;
   }
+}
+
+/* 导入知识库 */
+.home-import-selected {
+  margin-bottom: 12px;
+}
+
+.home-import-valid,
+.home-import-invalid {
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.home-import-valid {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+}
+
+.home-import-invalid {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+}
+
+.home-import-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #16a34a;
+  margin-bottom: 4px;
+}
+
+.home-import-badge--error {
+  color: #dc2626;
+}
+
+.home-import-info {
+  font-size: 12px;
+  color: #666;
+  word-break: break-all;
+}
+
+.home-import-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+/* 封面裁剪 */
+.home-crop-form {
+  width: 520px;
+  max-width: 92%;
+}
+
+.home-crop-container {
+  position: relative;
+  width: 100%;
+  max-height: 320px;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: move;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.home-crop-img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.home-crop-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.home-crop-box {
+  position: absolute;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+  border-radius: 2px;
+  pointer-events: none;
+  min-width: 10%;
+  min-height: 10%;
+}
+
+.home-crop-hint {
+  text-align: center;
+  font-size: 12px;
+  color: #888;
+  margin: 10px 0 0;
 }

@@ -1,107 +1,159 @@
 /**
- * 统一存储适配器（Electron 桌面端专用）
- * 业务层只调用 Store.xxx()
+ * 统一存储适配器（Electron 桌面端专用）ES Module 版本
+ * 业务层通过 useStorage() composable 调用
  */
-var Store = (function() {
-  var _saveTimer = null;
+import { FSB } from './fs-backend.js'
 
-  function init() {
-    console.log('[Store] 初始化 FSB 后端');
-    return FSB.open().then(function(r) {
-      console.log('[Store] 初始化完成:', r);
-      return r;
-    });
+const _saveTimers = new Map()
+
+function normalizeName(name) {
+  return String(name || '').trim()
+}
+
+function ensureValidName(name, label = '名称') {
+  const normalized = normalizeName(name)
+  if (!normalized) throw new Error(`${label}不能为空`)
+  if (normalized === '.' || normalized === '..') {
+    throw new Error(`${label}不合法`)
   }
+  return normalized
+}
 
-  function be() { return FSB; }
+export const Store = {
+  // ===== 初始化 =====
+  init() {
+    console.log('[Store] 初始化 FSB 后端')
+    return FSB.open().then(r => {
+      console.log('[Store] 初始化完成:', r)
+      return r
+    })
+  },
 
   // ===== 知识库（根级目录） =====
-  function listKBs() { return be().listChildren(''); }
+  listKBs: () => FSB.listChildren(''),
 
-  function createKB(name, meta) {
-    var fullMeta = Object.assign({ name: name, createdAt: Date.now(), children: {}, edges: [] }, meta || {});
-    var rootDir = (meta && meta.rootDir) || '';
-    // 如果有自定义目录，在 meta 中移除 rootDir（不应存储到 _meta.json）
-    var metaToSave = Object.assign({}, fullMeta);
-    delete metaToSave.rootDir;
-    return be().mkDir(name, metaToSave, rootDir);
-  }
+  async createKB(name, meta) {
+    const safeName = ensureValidName(name, '知识库名称')
+    // 分配 sortOrder：取现有 KB 的最大 order + 1
+    const existing = await FSB.listChildren('')
+    let maxOrder = -1
+    for (const kb of existing) {
+      if (Number.isFinite(kb.order) && kb.order > maxOrder) maxOrder = kb.order
+    }
+    const fullMeta = Object.assign({ name: safeName, createdAt: Date.now(), cover: '', order: maxOrder + 1 }, meta || {})
+    return FSB.mkDir(safeName, fullMeta)
+  },
 
-  function deleteKB(name) { return be().rmDir(name); }
-  function getKBMeta(name) { return be().readMeta(name); }
-  function saveKBMeta(name, meta) { return be().writeMeta(name, meta); }
+  deleteKB: (name) => FSB.rmDir(name),
+  getKBMeta: (name) => FSB.readMeta(name),
+  saveKBMeta: (name, meta) => FSB.writeMeta(name, meta),
 
   // ===== 卡片（子目录） =====
-  function listCards(parentPath) { return be().listChildren(parentPath); }
+  listCards: (parentPath) => FSB.listChildren(parentPath),
 
-  function createCard(parentPath, cardName) {
-    var cardPath = parentPath ? parentPath + '/' + cardName : cardName;
-    var fullMeta = { name: cardName, createdAt: Date.now(), children: {}, edges: [] };
-    return be().mkDir(cardPath, fullMeta).then(function() { return cardPath; });
-  }
+  async createCard(parentPath, cardName) {
+    const safeName = ensureValidName(cardName, '卡片名称')
+    const basePath = parentPath || ''
+    const children = await FSB.listChildren(basePath)
+    const duplicated = (children || []).some((c) => (c?.name || '').trim() === safeName)
+    if (duplicated) {
+      throw new Error(`同级下已存在同名卡片：${safeName}`)
+    }
 
-  function deleteCard(cardPath) { return be().rmDir(cardPath); }
+    const cardPath = basePath ? `${basePath}/${safeName}` : safeName
+    const fullMeta = { name: safeName, createdAt: Date.now(), children: {}, edges: [] }
+    const actualPath = await FSB.mkDir(cardPath, fullMeta)
+    return actualPath || cardPath
+  },
 
-  function renameCard(cardPath, newName) {
-    return be().getDir(cardPath).then(function(dir) {
-      if (!dir) return;
-      dir.name = newName;
-      return be().mkDir(cardPath, dir);
-    });
-  }
+  deleteCard: (cardPath) => FSB.rmDir(cardPath),
+
+  async renameCard(cardPath, newName) {
+    const safeName = ensureValidName(newName, '卡片名称')
+    const dir = await FSB.getDir(cardPath)
+    if (!dir) return
+
+    const parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : ''
+    const siblings = await FSB.listChildren(parentPath)
+    const duplicated = (siblings || []).some((s) => s.path !== cardPath && (s?.name || '').trim() === safeName)
+    if (duplicated) {
+      throw new Error(`同级下已存在同名卡片：${safeName}`)
+    }
+
+    dir.name = safeName
+    const actualPath = await FSB.mkDir(cardPath, dir)
+    return actualPath || cardPath
+  },
 
   // ===== Markdown 文档 =====
-  function readMarkdown(cardPath) { return be().readFile(cardPath + '/README.md'); }
-  function writeMarkdown(cardPath, content) { return be().writeFile(cardPath + '/README.md', content); }
+  readMarkdown: (cardPath) => FSB.readFile(`${cardPath}/README.md`),
+  writeMarkdown: (cardPath, content) => FSB.writeFile(`${cardPath}/README.md`, content),
 
   // ===== 关系和布局 =====
-  function readLayout(dirPath) { return be().readMeta(dirPath); }
-  function saveLayout(dirPath, meta) { return be().writeMeta(dirPath, meta); }
+  readLayout: (dirPath) => FSB.readGraphMeta(dirPath),
+  saveLayout: (dirPath, meta) => FSB.writeGraphMeta(dirPath, meta),
 
-  function saveGraphDebounced(dirPath, buildMetaFn) {
-    clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(function() {
-      var meta = buildMetaFn();
-      saveLayout(dirPath, meta).then(showSaveIndicator);
-    }, 300);
-  }
+  saveGraphDebounced(dirPath, buildMetaFn, onSaved) {
+    if (!dirPath) return Promise.resolve()
+    const oldTimer = _saveTimers.get(dirPath)
+    if (oldTimer) clearTimeout(oldTimer)
+
+    let resolveRef = null
+    const promise = new Promise(resolve => { resolveRef = resolve })
+    const timer = setTimeout(() => {
+      _saveTimers.delete(dirPath)
+      const meta = buildMetaFn()
+      Store.saveLayout(dirPath, meta).then(() => {
+        onSaved?.()
+        resolveRef()
+      })
+    }, 300)
+
+    _saveTimers.set(dirPath, timer)
+    return promise
+  },
+
+  flushGraphSave(dirPath, buildMetaFn, onSaved) {
+    if (!dirPath) return Promise.resolve()
+    const oldTimer = _saveTimers.get(dirPath)
+    if (oldTimer) {
+      clearTimeout(oldTimer)
+      _saveTimers.delete(dirPath)
+    }
+    const meta = buildMetaFn()
+    return Store.saveLayout(dirPath, meta).then(() => onSaved?.())
+  },
 
   // ===== 图片 =====
-  function saveImage(cardPath, blob, filename) {
-    var imgPath = cardPath + '/images/' + filename;
-    return be().writeBlobFile(imgPath, blob).then(function() {
-      return { path: imgPath, markdownRef: 'images/' + filename };
-    });
-  }
+  saveImage(cardPath, blob, filename) {
+    const imgPath = `${cardPath}/images/${filename}`
+    return FSB.writeBlobFile(imgPath, blob).then(() => ({
+      path: imgPath,
+      markdownRef: `images/${filename}`,
+    }))
+  },
 
-  function loadImage(imgPath) {
-    return be().readBlobFile(imgPath).then(function(blob) {
-      return blob ? URL.createObjectURL(blob) : '';
-    });
-  }
+  saveKBImage(kbPath, blob, filename) {
+    const imgPath = `${kbPath}/images/${filename}`
+    return FSB.writeBlobFile(imgPath, blob).then(() => ({
+      path: imgPath,
+      markdownRef: `images/${filename}`,
+    }))
+  },
+
+  loadImage(imgPath) {
+    return FSB.readBlobFile(imgPath).then(blob =>
+      blob ? URL.createObjectURL(blob) : ''
+    )
+  },
 
   // ===== 工具 =====
-  function clearAll() { return be().clearAll(); }
-
-  function showSaveIndicator() {
-    var el = document.getElementById('save-indicator');
-    if (!el) return;
-    el.classList.add('visible');
-    setTimeout(function() { el.classList.remove('visible'); }, 1200);
-  }
-
-  return {
-    init: init,
-    listKBs: listKBs, createKB: createKB, deleteKB: deleteKB,
-    getKBMeta: getKBMeta, saveKBMeta: saveKBMeta,
-    listCards: listCards, createCard: createCard, deleteCard: deleteCard, renameCard: renameCard,
-    readMarkdown: readMarkdown, writeMarkdown: writeMarkdown,
-    readLayout: readLayout, saveLayout: saveLayout, saveGraphDebounced: saveGraphDebounced,
-    saveImage: saveImage, loadImage: loadImage,
-    selectDir: function() { return be().selectDir(); },
-    openInFinder: function(p) { return be().openInFinder(p); },
-    countChildren: function(p) { return be().countChildren(p); },
-    getRootDir: function() { return be().getRootDir(); },
-    clearAll: clearAll, showSaveIndicator: showSaveIndicator
-  };
-})();
+  clearAll: () => FSB.clearAll(),
+  selectExistingKB: () => FSB.selectExistingKB(),
+  importKB: (sourcePath) => FSB.importKB(sourcePath),
+  openInFinder: (p) => FSB.openInFinder(p),
+  countChildren: (p) => FSB.countChildren(p),
+  getRootDir: () => FSB.getRootDir(),
+  getLastOpenedKB: () => FSB.getLastOpenedKB(),
+  setLastOpenedKB: (kbPath) => FSB.setLastOpenedKB(kbPath),
+}
