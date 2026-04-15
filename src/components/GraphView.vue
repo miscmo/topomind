@@ -118,6 +118,7 @@ import { useModalStore } from '@/stores/modal'
 import { useGitStore } from '@/stores/git'
 import { useGraph } from '@/composables/useGraph'
 import { useGrid } from '@/composables/useGrid'
+import { useResizeDrag } from '@/composables/useResizeDrag'
 import { useStorage, saveIndicatorVisible, saveFailed } from '@/composables/useStorage'
 
 import StylePanel from '@/components/StylePanel.vue'
@@ -540,109 +541,38 @@ async function handleRenameFromDetail(nodeId) {
 }
 
 function startStyleResize(e) {
-  if (e.button !== 0) return
-  if (!appLayoutRef.value) return
-
-  e.preventDefault()
-
-  const rect = appLayoutRef.value.getBoundingClientRect()
-  const startX = e.clientX
-  const startWidth = leftPanelWidth.value
-
-  const prevUserSelect = document.body.style.userSelect
-  const prevCursor = document.body.style.cursor
-
-  document.body.style.userSelect = 'none'
-  document.body.style.cursor = 'col-resize'
-
-  styleResizeState.active = true
-  styleResizeState.previewLeft = Math.max(0, startWidth)
-
-  const calcWidthByClientX = (clientX) => clampStyleWidth(startWidth + (clientX - startX))
-
-  const onMove = (ev) => {
-    ev.preventDefault()
-    const nextWidth = calcWidthByClientX(ev.clientX)
-    styleResizeState.previewLeft = Math.max(0, Math.min(rect.width, nextWidth))
-  }
-
-  const cleanup = () => {
-    styleResizeState.active = false
-    document.body.style.userSelect = prevUserSelect
-    document.body.style.cursor = prevCursor
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-  }
-
-  const onUp = (ev) => {
-    ev.preventDefault()
-    const nextWidth = calcWidthByClientX(ev.clientX)
-    leftPanelWidth.value = nextWidth
-    saveUiToActiveTab({ leftPanelWidth: nextWidth })
-    persistStyleWidth(nextWidth)
-    cleanup()
-  }
-
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
+  useResizeDrag(
+    e,
+    appLayoutRef.value,
+    leftPanelWidth.value,
+    clampStyleWidth,
+    (width) => Math.max(0, width),
+    (width) => {
+      leftPanelWidth.value = width
+      saveUiToActiveTab({ leftPanelWidth: width })
+      persistStyleWidth(width)
+    },
+    styleResizeState,
+    -1, // drag right = expand (clientX increases → width increases)
+  )
 }
 
 function startDetailResize(e) {
-  if (e.button !== 0) return
-  if (!appLayoutRef.value) return
-
-  e.preventDefault()
-
-  const rect = appLayoutRef.value.getBoundingClientRect()
-  const startX = e.clientX
-  const startWidth = detailPanelWidth.value
-
-  const prevUserSelect = document.body.style.userSelect
-  const prevCursor = document.body.style.cursor
-
-  document.body.style.userSelect = 'none'
-  document.body.style.cursor = 'col-resize'
-
-  const clampWidth = (w) => clampDetailWidth(w)
-  const calcWidthByClientX = (clientX) => {
-    const diff = startX - clientX
-    return clampWidth(startWidth + diff)
-  }
-
-  const calcPreviewLeft = (width) => {
-    // 预览线在详情面板左边界（紧邻 graph-panel 右侧）
-    return Math.max(0, rect.width - width)
-  }
-
-  detailResizeState.active = true
-  detailResizeState.previewLeft = calcPreviewLeft(startWidth)
-
-  const onMove = (ev) => {
-    ev.preventDefault()
-    const nextWidth = calcWidthByClientX(ev.clientX)
-    detailResizeState.previewLeft = calcPreviewLeft(nextWidth)
-  }
-
-  const cleanup = () => {
-    detailResizeState.active = false
-    document.body.style.userSelect = prevUserSelect
-    document.body.style.cursor = prevCursor
-
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-  }
-
-  const onUp = (ev) => {
-    ev.preventDefault()
-    const nextWidth = calcWidthByClientX(ev.clientX)
-    detailPanelWidth.value = nextWidth
-    persistDetailWidthForKB(roomStore.currentKBPath, nextWidth)
-    saveUiToActiveTab({ detailPanelWidth: nextWidth })
-    cleanup()
-  }
-
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
+  const container = appLayoutRef.value
+  useResizeDrag(
+    e,
+    container,
+    detailPanelWidth.value,
+    clampDetailWidth,
+    (width) => Math.max(0, container.getBoundingClientRect().width - width),
+    (width) => {
+      detailPanelWidth.value = width
+      persistDetailWidthForKB(roomStore.currentKBPath, width)
+      saveUiToActiveTab({ detailPanelWidth: width })
+    },
+    detailResizeState,
+    1, // drag left = expand (clientX decreases → width increases)
+  )
 }
 </script>
 

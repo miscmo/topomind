@@ -79,12 +79,12 @@ export function useGraph(containerRef) {
     const fontStyleAttr = fontStyle.includes('italic') ? 'italic' : ''
 
     // DEBUG
-    console.log('[HTML label]生成标签 id=' + data.id + ' fontColor=' + fontColor + ' fontSize=' + fontSize + ' fontStyle=' + fontStyle)
+    // console.log('[HTML label]生成标签 id=' + data.id + ' fontColor=' + fontColor + ' fontSize=' + fontSize + ' fontStyle=' + fontStyle)
 
     // 记录时间戳用于调试事件触发顺序
-    if (!window.__labelGenCount) window.__labelGenCount = 0
-    window.__labelGenCount++
-    console.log('[HTML label] 生成次数 #' + window.__labelGenCount + ' id=' + data.id)
+    // if (!window.__labelGenCount) window.__labelGenCount = 0
+    // window.__labelGenCount++
+    // console.log('[HTML label] 生成次数 #' + window.__labelGenCount + ' id=' + data.id)
 
     // 文档图标：14x14px 固定尺寸，不随父元素 font-size 缩放
     const docIcon = hasDoc
@@ -121,9 +121,7 @@ export function useGraph(containerRef) {
   // 注意：cytoscape-node-html-label 内部会清理旧容器，故可安全重复调用
   function _setupHtmlLabels(cyInst, forceInit = false) {
     if (!cyInst) return
-    console.log('[_setupHtmlLabels] 开始设置 forceInit=' + forceInit)
     const container = cyInst.container()
-    console.log('[_setupHtmlLabels] cy.container()=', container ? '存在' : 'null')
     cyInst.nodeHtmlLabel([{
       query: 'node.card',
       tpl: (data) => generateNodeLabelHtml(data),
@@ -135,7 +133,6 @@ export function useGraph(containerRef) {
     // 'render' 事件已过，手动触发一次 label 创建
     if (forceInit || (cyInst.nodes && cyInst.nodes().length > 0)) {
       try {
-        console.log('[_setupHtmlLabels] 触发 render 事件，节点数=' + cyInst.nodes().length)
         cyInst.emit('render')
       } catch (e) {
         console.error('[_setupHtmlLabels] emit render 失败:', e)
@@ -320,7 +317,6 @@ export function useGraph(containerRef) {
           borderColor: saved.borderColor || '',
           borderWidth: saved.borderWidth || 0,
           nodeShape: saved.nodeShape || '',
-          shadowOpacity: 0,
           nodeOpacity: saved.nodeOpacity != null ? saved.nodeOpacity : 1,
         }
         const ele = cy.value.add({ group: 'nodes', data, classes: 'card' })
@@ -478,8 +474,6 @@ export function useGraph(containerRef) {
         borderColor: d.borderColor || undefined,
         borderWidth: d.borderWidth || undefined,
         nodeShape: d.nodeShape || undefined,
-        // 已下线阴影运行时能力，保留字段兼容旧数据但不再保存
-        shadowOpacity: undefined,
         nodeOpacity: d.nodeOpacity !== 1 ? d.nodeOpacity : undefined,
         posX: pos.x,
         posY: pos.y,
@@ -494,12 +488,10 @@ export function useGraph(containerRef) {
       weight: e.data('weight'),
     }))
 
-    const rawMeta = await storage.readLayout(dirPath).catch(() => ({}))
-    const existingMeta = normalizeMeta(rawMeta)
     const viewport = { zoom: cy.value.zoom(), pan: cy.value.pan() }
 
     return {
-      ...existingMeta,
+      ...(currentMeta.value || {}),
       children,
       edges,
       zoom: viewport.zoom,
@@ -1059,7 +1051,6 @@ export function useGraph(containerRef) {
   function _refreshHtmlLabels(targetNodes) {
     if (!cy.value) return
     const nodes = targetNodes || cy.value.nodes()
-    console.log('[_refreshHtmlLabels] 刷新 ' + nodes.length + ' 个节点')
     nodes.forEach((n) => {
       if (n.isNode() && n.hasClass('card')) {
         try { n.emit('data') } catch (e) {}
@@ -1075,10 +1066,8 @@ export function useGraph(containerRef) {
     const targets = selected.length > 1 ? selected : fallback
     if (!targets.length) return
 
-    console.log('[updateNodeStyle] nodeId=' + nodeId + ' styles=', styles)
     targets.forEach((node) => {
       Object.entries(styles).forEach(([key, value]) => {
-        console.log('[updateNodeStyle] setting node=' + node.id() + ' key=' + key + ' value=' + value)
         node.data(key, value)
         // 映射到 Cytoscape 样式
         const styleMap = {
@@ -1101,9 +1090,6 @@ export function useGraph(containerRef) {
             if (bc) node.style('border-color', bc)
           },
           nodeShape: () => node.style('shape', value),
-          shadowOpacity: () => {
-            // 当前 Cytoscape 版本不支持 shadow-*，仅保留 data 值用于兼容历史数据
-          },
           nodeOpacity: () => node.style('opacity', value),
         }
         styleMap[key]?.()

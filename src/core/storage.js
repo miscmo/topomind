@@ -6,8 +6,6 @@ import { FSB } from './fs-backend.js'
 
 const _saveTimers = new Map()
 
-const INVALID_NAME_CHARS = /[<>:"/\\|?*\x00-\x1F]/
-
 function normalizeName(name) {
   return String(name || '').trim()
 }
