@@ -13,6 +13,7 @@
 - [x] 9. [中等] 切换知识库后图谱样式错乱（灰白、连线粗、节点椭圆）
 - [x] 10. [轻微] 新节点添加文档后图标不实时显示
 - [x] 11. [低] 软件重启后 MD 宽度重置问题
+- [x] 12. [严重] 切换知识库后图谱样式丢失（cy-manager activate 后重新应用 stylesheet）
 
 ## 功能开发
 
@@ -41,8 +42,14 @@
 
 ## 当前进度
 
-当前处理: 架构优化 — 已完成
+当前处理: 全部完成 ✅
 最后更新: 2026/04/15
+
+## Bug 修复 #12 验证说明
+- cy-manager.js: 在 activate() 函数中，mount() 成功后添加 cy.style(GRAPH_STYLE) 防御性重置样式表
+- 根因：切换知识库时 Cytoscape 实例通过 mount/unmount 切换，styles 在某些场景下未被正确应用
+- 修复：activate() 后重新调用 cy.style() 确保 stylesheet 始终生效
+- 已提交: 635a588
 
 ## 架构优化验证说明
 - useGraph.js: 移除所有 debug console.log 语句（generateNodeLabelHtml, _setupHtmlLabels, _refreshHtmlLabels, updateNodeStyle）
