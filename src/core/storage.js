@@ -15,9 +15,6 @@ function normalizeName(name) {
 function ensureValidName(name, label = '名称') {
   const normalized = normalizeName(name)
   if (!normalized) throw new Error(`${label}不能为空`)
-  if (INVALID_NAME_CHARS.test(normalized)) {
-    throw new Error(`${label}包含非法字符：\\ / : * ? " < > |`)
-  }
   if (normalized === '.' || normalized === '..') {
     throw new Error(`${label}不合法`)
   }

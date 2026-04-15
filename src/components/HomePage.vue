@@ -29,6 +29,7 @@
             <span v-else class="home-card-image-icon">📚</span>
           </div>
           <div class="home-card-body" @contextmenu.prevent="openKBSettings(kb)">
+            <button class="home-card-settings-btn" @click.stop="openKBSettings(kb)" title="设置">⚙</button>
             <div class="home-card-title">
               <span>{{ kb.name }}</span>
             </div>
@@ -45,11 +46,6 @@
                 <span v-else class="home-card-loading-skeleton">📊 ··· 个节点</span>
               </div>
             </div>
-            <div
-              class="home-card-path"
-              title="在 Finder 中打开"
-              @click.stop="openInFinder(kb)"
-            >📁 {{ rootDir }}/{{ kb.path }}</div>
           </div>
         </div>
 

@@ -75,8 +75,8 @@
 .md-editor-cm .cm-scroller{font-family:"SF Mono",Consolas,monospace;font-size:12px;line-height:1.6}
 .md-editor-cm .cm-content{padding:12px 20px 40px}
 .md-editor-cm .cm-focused{outline:none}
-.md-editor-cm .cm-gutters{border-right:1px solid #e6ebf2;background:#f6f8fb}
-.md-editor-cm .cm-lineNumbers .cm-gutterElement{color:#9aa5b1}
+.md-editor-cm .cm-gutters{border-right:1px solid #e6ebf2;background:#f6f8fb;padding-right:4px}
+.md-editor-cm .cm-lineNumbers .cm-gutterElement{color:#9aa5b1;padding-left:4px}
 .md-editor-cm .cm-activeLine{background:rgba(52,152,219,.12)}
 .md-editor-cm .cm-selectionBackground{background:rgba(52,152,219,.22)!important}
 
