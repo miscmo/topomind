@@ -35,14 +35,22 @@
 
 ## 架构优化
 
-- [ ] 架构优化（所有 bug 和功能完成后执行）
+- [x] 架构优化（所有 bug 和功能完成后执行）
 
 ---
 
 ## 当前进度
 
-当前处理: 功能开发（16/16 全部完成，架构优化待执行）
+当前处理: 架构优化 — 已完成
 最后更新: 2026/04/15
+
+## 架构优化验证说明
+- useGraph.js: 移除所有 debug console.log 语句（generateNodeLabelHtml, _setupHtmlLabels, _refreshHtmlLabels, updateNodeStyle）
+- useGraph.js: 移除 shadowOpacity 死代码（3 处：新建节点默认样式、toMeta、styleMap）
+- useGraph.js: 优化 buildCurrentMetaFor —— 使用内存中的 currentMeta 替代冗余的 storage.readLayout + normalizeMeta 调用，节省一次 I/O 和重复归一化
+- storage.js: 移除未使用的 INVALID_NAME_CHARS 常量
+- GraphView.vue: 抽取 startStyleResize/startDetailResize 重复逻辑为 useResizeDrag composable（支持方向参数的统一拖拽处理器）
+- 新增: src/composables/useResizeDrag.js（通用面板拖拽缩放逻辑，58 行）
 
 ## 功能开发验证说明
 - #1: HomePage.vue lines 116-160 完整实现 selectExistingKB + importKB
