@@ -410,8 +410,11 @@ async function onKBDrop(e, idx) {
   // 更新 sortOrder
   arr.forEach((kb, i) => { kb.order = i })
   kbs.value = arr
-  // 持久化到各 KB 元数据
-  await Promise.all(arr.map(kb => storage.saveKBMeta(kb.path, { order: kb.order })))
+  // 持久化到各 KB 元数据（保留原有 meta，避免覆盖 cover / createdAt 等字段）
+  await Promise.all(arr.map(async (kb) => {
+    const meta = await storage.getKBMeta(kb.path)
+    await storage.saveKBMeta(kb.path, { ...(meta || {}), order: kb.order })
+  }))
   dragKBIndex.value = -1
   dragOverIndex.value = -1
 }

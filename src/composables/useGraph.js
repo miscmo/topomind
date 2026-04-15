@@ -50,6 +50,7 @@ export function useGraph(containerRef) {
   const _handleElsByCy = new Map()
   let _dragResizeState = null
   let _dragConnectState = null
+  let _loadRoomSeq = 0
 
   function _detachAllDomBindingsExcept(activeCy = null) {
     for (const [cyInst, cleanup] of _domCleanupByCy.entries()) {
@@ -66,8 +67,17 @@ export function useGraph(containerRef) {
   }
 
   // ─── 节点 HTML 标签生成器（tpl 函数，供 cytoscape-node-html-label 调用）─────
+  function escapeHtml(text) {
+    return String(text ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
   function generateNodeLabelHtml(data) {
-    const label = data.label || ''
+    const label = escapeHtml(data.label || '')
     const hasDoc = !!data.hasDoc
     const childCount = data.childCount || 0
 
@@ -199,19 +209,7 @@ export function useGraph(containerRef) {
     const key = _roomKey(dirPath)
 
     if (cyManager.has(key)) {
-      const ctx = cyManager.activate(key, containerRef.value)
-      cy.value = ctx?.cy || null
-      if (ctx) {
-        _setupHtmlLabels(ctx.cy, true)
-        _bindCyEvents(ctx.cy)
-        _detachAllDomBindingsExcept(null)
-        _bindDOMEvents(ctx.cy)
-        cyManager.markEventsBound(key, true)
-      }
-      _grid?.bindCyEvents?.()
-      ctx?.cy?.resize?.()
-      _grid?.drawGrid?.()
-      return
+      cyManager.remove(key)
     }
 
     const instance = _createCyInstance(containerRef.value)
@@ -222,30 +220,19 @@ export function useGraph(containerRef) {
     _bindCyEvents(instance)
     _bindDOMEvents(instance)
     if (ctx) cyManager.markEventsBound(key, true)
+    _grid?.bindCyEvents?.()
+    ctx?.cy?.resize?.()
+    _grid?.drawGrid?.()
   }
 
   // ─── 加载房间 ────────────────────────────────────────────────
   async function loadRoom(dirPath) {
     if (!containerRef.value) return
 
+    const loadSeq = ++_loadRoomSeq
     const key = _roomKey(dirPath)
     if (cyManager.has(key)) {
-      const ctx = cyManager.activate(key, containerRef.value)
-      if (ctx?.loaded) {
-        cy.value = ctx.cy || null
-        _detachAllDomBindingsExcept(null)
-        _setupHtmlLabels(ctx.cy, true)
-        _bindCyEvents(ctx.cy)
-        _bindDOMEvents(ctx.cy)
-        cyManager.markEventsBound(key, true)
-        _grid?.bindCyEvents?.()
-        ctx?.cy?.resize?.()
-        _grid?.drawGrid()
-        _restoreSelectedNode()
-        return
-      }
-      // 存在但未加载完成，删除重建避免空实例被复用
-      try { ctx?.cy?.destroy?.() } catch (e) {}
+      cyManager.remove(key)
     }
 
     try {
@@ -253,11 +240,12 @@ export function useGraph(containerRef) {
       cyManager.create(key, instance)
       const ctx = cyManager.activate(key, containerRef.value)
       cy.value = instance
-      _setupHtmlLabels(instance)
-      _bindCyEvents(instance)
-      _bindDOMEvents(instance)
+      const cyInst = instance
+      _setupHtmlLabels(cyInst)
+      _bindCyEvents(cyInst)
+      _bindDOMEvents(cyInst)
       if (ctx) cyManager.markEventsBound(key, true)
-      _detachAllDomBindingsExcept(instance)
+      _detachAllDomBindingsExcept(cyInst)
       const [cardsRaw, metaRaw] = await Promise.all([
         storage.listCards(dirPath).catch((e) => {
           console.error('[useGraph] listCards 失败:', dirPath, e)
@@ -268,11 +256,19 @@ export function useGraph(containerRef) {
           return {}
         }),
       ])
+      if (loadSeq !== _loadRoomSeq) return
       const meta = normalizeMeta(metaRaw)
       currentMeta.value = meta
       const cards = Array.isArray(cardsRaw)
         ? cardsRaw.filter((card) => card && typeof card === 'object' && card.path)
         : []
+      const uniqueCards = []
+      const seenCardPaths = new Set()
+      for (const card of cards) {
+        if (seenCardPaths.has(card.path)) continue
+        seenCardPaths.add(card.path)
+        uniqueCards.push(card)
+      }
       const children = meta.children
       const edges = meta.edges
 
@@ -285,9 +281,11 @@ export function useGraph(containerRef) {
 
       // 清空图谱
       cy.value.elements().remove()
+      cy.value.nodes().forEach((n) => n.removeStyle())
+      cy.value.edges().forEach((e) => e.removeStyle())
 
       // 缓存路径名称
-      cards.forEach((card) => {
+      uniqueCards.forEach((card) => {
         const safeName = (typeof card.name === 'string' && card.name.trim())
           ? card.name
           : (card.path.split('/').pop() || card.path)
@@ -298,7 +296,7 @@ export function useGraph(containerRef) {
       }
 
       // 添加节点
-      cards.forEach((card) => {
+      uniqueCards.forEach((card) => {
         const legacyKey = (typeof card.name === 'string' && card.name.trim()) ? card.name : null
         const saved = children[card.path] || (legacyKey ? children[legacyKey] : null) || {}
         const displayName = (typeof saved.name === 'string' && saved.name.trim())
@@ -327,14 +325,18 @@ export function useGraph(containerRef) {
       })
 
       // 添加边
+      const seenEdgeIds = new Set()
       edges.forEach((e) => {
         if (!e) return
         const source = e.source || e.from
         const target = e.target || e.to
         if (!source || !target) return
+        const edgeId = e.id || _autoEdgeId()
+        if (seenEdgeIds.has(edgeId)) return
         if (cy.value.getElementById(source).length && cy.value.getElementById(target).length) {
+          seenEdgeIds.add(edgeId)
           cy.value.add({ group: 'edges', data: {
-            id: e.id || _autoEdgeId(),
+            id: edgeId,
             source,
             target,
             relation: e.relation || '相关',
@@ -344,7 +346,7 @@ export function useGraph(containerRef) {
       })
 
     // 判断是否需要自动布局（基于保存数据，而不是当前渲染结果）
-    const hasSavedPositions = cards.some((card) => {
+    const hasSavedPositions = uniqueCards.some((card) => {
       const saved = children[card.path] || children[card.name] || {}
       return Number.isFinite(saved.posX) && Number.isFinite(saved.posY)
     })
@@ -353,6 +355,7 @@ export function useGraph(containerRef) {
 
     const keepZoom = cy.value.zoom()
 
+    if (loadSeq !== _loadRoomSeq) return
     if (!hasSavedPositions && cards.length > 0) {
       cy.value.nodes().layout({
         name: 'elk',

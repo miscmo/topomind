@@ -46,6 +46,17 @@ export function createCyManager(maxContexts = 4) {
     { selector: 'node.search-match', style: { 'border-width': 3, 'border-color': '#f1c40f' }},
   ]
 
+  function cloneGraphStyle() {
+    return GRAPH_STYLE.map((entry) => ({
+      selector: entry.selector,
+      style: { ...entry.style },
+    }))
+  }
+
+  function getGraphStyle() {
+    return cloneGraphStyle()
+  }
+
   function has(key) {
     return contexts.has(key)
   }
@@ -111,8 +122,14 @@ export function createCyManager(maxContexts = 4) {
 
     if (target.cy?.mount && container) {
       try { target.cy.mount(container) } catch (e) {}
-      // 防御性：重新应用样式表，防止切换知识库后样式丢失
-      try { target.cy.style(GRAPH_STYLE) } catch (e) {}
+    }
+
+    if (target.cy?.style) {
+      try { target.cy.style(getGraphStyle()) } catch (e) {}
+    }
+
+    if (target.cy?.elements) {
+      try { target.cy.elements().removeStyle() } catch (e) {}
     }
 
     target.lastActiveAt = Date.now()
