@@ -69,9 +69,8 @@ jobs:
       - name: Build Electron app (Windows)
         run: npm run build:win
         env:
-          # electron-builder on Windows
-          ELECTRON_BUILDER.extraMetadata:
-            version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+          # electron-builder version override
+          ELECTRON_BUILDER_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -106,8 +105,7 @@ jobs:
       - name: Build Electron app (macOS)
         run: npm run build:mac
         env:
-          ELECTRON_BUILDER.extraMetadata:
-            version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+          ELECTRON_BUILDER_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -142,8 +140,7 @@ jobs:
       - name: Build Electron app (Linux)
         run: npm run build:linux
         env:
-          ELECTRON_BUILDER.extraMetadata:
-            version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+          ELECTRON_BUILDER_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
