@@ -425,7 +425,7 @@ watch(() => gitStore.isOpen, async (open) => {
 // 在 inline 模式下，切换到该 Tab 时自动打开
 watch(() => props.inline, (inline) => {
   if (inline && !gitStore.isOpen) {
-    gitStore.isOpen = true
+    gitStore.openForKB(gitStore.kbPath || roomStore.currentKBPath || '')
   }
 })
 
@@ -456,11 +456,15 @@ async function openCommit() {
 }
 
 async function doCommit() {
-  const kbPath = gitStore.kbPath || roomStore.currentKBPath
-  await git.doCommit(kbPath, commitMsg.value)
-  commitMsg.value = ''
-  activePanel.value = 'main'
-  await refreshStatus()
+  try {
+    const kbPath = gitStore.kbPath || roomStore.currentKBPath
+    await git.doCommit(kbPath, commitMsg.value)
+    commitMsg.value = ''
+    activePanel.value = 'main'
+    await refreshStatus()
+  } catch (e) {
+    console.warn('[GitPanel] 提交失败:', e)
+  }
 }
 
 // 历史
@@ -494,8 +498,7 @@ async function viewLogFile(file) {
 
 // 同步
 async function openSync() {
-  gitStore.syncState = 'idle'
-  gitStore.syncMessage = ''
+  gitStore.setSyncState('idle', '')
   activePanel.value = 'sync'
 }
 
@@ -517,9 +520,13 @@ async function openRemote() {
 }
 
 async function saveRemote() {
-  const kbPath = gitStore.kbPath || roomStore.currentKBPath
-  await git.saveRemote(kbPath, remoteForm.url, remoteForm.token, remoteForm.authType)
-  activePanel.value = 'main'
+  try {
+    const kbPath = gitStore.kbPath || roomStore.currentKBPath
+    await git.saveRemote(kbPath, remoteForm.url, remoteForm.token, remoteForm.authType)
+    activePanel.value = 'main'
+  } catch (e) {
+    console.warn('[GitPanel] 保存远程配置失败:', e)
+  }
 }
 
 async function copySSHKey() {
@@ -541,16 +548,24 @@ async function viewConflict(file) {
 }
 
 async function resolveConflict(resolution) {
-  const kbPath = gitStore.kbPath || roomStore.currentKBPath
-  if (!gitStore.currentConflictFile) return
-  await git.resolveConflict(kbPath, gitStore.currentConflictFile, resolution)
+  try {
+    const kbPath = gitStore.kbPath || roomStore.currentKBPath
+    if (!gitStore.currentConflictFile) return
+    await git.resolveConflict(kbPath, gitStore.currentConflictFile, resolution)
+  } catch (e) {
+    console.warn('[GitPanel] 解决冲突失败:', e)
+  }
 }
 
 async function completeConflict() {
-  const kbPath = gitStore.kbPath || roomStore.currentKBPath
-  await git.completeConflict(kbPath)
-  activePanel.value = 'main'
-  await refreshStatus()
+  try {
+    const kbPath = gitStore.kbPath || roomStore.currentKBPath
+    await git.completeConflict(kbPath)
+    activePanel.value = 'main'
+    await refreshStatus()
+  } catch (e) {
+    console.warn('[GitPanel] 完成冲突合并失败:', e)
+  }
 }
 
 // 工具

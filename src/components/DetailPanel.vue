@@ -126,6 +126,7 @@ let _cmView = null
 // 竞态保护版本号
 let _version = 0
 let _modeVersion = 0
+let _prevRenderedEl = null
 // Object URL 追踪
 let _activeUrls = []
 
@@ -345,10 +346,6 @@ async function loadNodeContent(cardPath) {
   await nextTick()
   buildTocItems()
   updateActiveHeading()
-  if (renderedRef.value) {
-    renderedRef.value.removeEventListener('scroll', updateActiveHeading)
-    renderedRef.value.addEventListener('scroll', updateActiveHeading, { passive: true })
-  }
   _resolveRenderedImages(cardPath, version)
 }
 
@@ -398,8 +395,9 @@ onUnmounted(() => {
     _cmView.destroy()
     _cmView = null
   }
-  if (renderedRef.value) {
-    renderedRef.value.removeEventListener('scroll', updateActiveHeading)
+  if (_prevRenderedEl) {
+    _prevRenderedEl.removeEventListener('scroll', updateActiveHeading)
+    _prevRenderedEl = null
   }
 })
 
@@ -449,7 +447,7 @@ async function _insertImage(blob) {
     editContent.value += (editContent.value ? '\n' : '') + mdRef
     debouncedSave()
   } catch (err) {
-    console.error('[DetailPanel] 图片上传失败:', err)
+    console.warn('[DetailPanel] 图片上传失败:', err)
   }
 }
 
@@ -502,7 +500,7 @@ function handleRenderedClick(e) {
       // Electron：系统默认浏览器；Web：新标签页打开
       if (window.electronAPI?.invoke) {
         window.electronAPI.invoke('app:openExternal', href).catch((err) => {
-          console.error('[DetailPanel] 打开外链失败:', err)
+          console.warn('[DetailPanel] 打开外链失败:', err)
         })
       } else {
         window.open(href, '_blank', 'noopener,noreferrer')
@@ -550,7 +548,7 @@ function sanitizeHtml(dirty) {
     const parser = new DOMParser()
     const doc = parser.parseFromString(dirty, 'text/html')
     // 遍历所有节点，清除危险属性和危险元素
-    const dangerous = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math']
+    const dangerous = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math', 'form', 'input', 'button', 'textarea', 'select']
     const dangerousTags = doc.querySelectorAll(dangerous.join(','))
     dangerousTags.forEach(el => el.remove())
 
@@ -601,15 +599,14 @@ watch(() => mode.value, (m) => {
   if (m !== 'read') tocOpen.value = false
 })
 
-watch(renderedRef, () => {
-  if (renderedRef.value) {
-    renderedRef.value.removeEventListener('scroll', updateActiveHeading)
-    renderedRef.value.addEventListener('scroll', updateActiveHeading, { passive: true })
+watch(renderedRef, (el) => {
+  if (_prevRenderedEl) {
+    _prevRenderedEl.removeEventListener('scroll', updateActiveHeading)
   }
-})
-
-watch(() => bodyRef.value?.scrollTop, () => {
-  updateActiveHeading()
+  if (el) {
+    el.addEventListener('scroll', updateActiveHeading, { passive: true })
+  }
+  _prevRenderedEl = el || null
 })
 
 // 暴露 flushEdit 给父组件调用（路由切换时）

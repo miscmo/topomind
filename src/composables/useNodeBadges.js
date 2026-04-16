@@ -120,7 +120,7 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
       try {
         if (selector) _boundCy.off(eventName, selector, handler)
         else _boundCy.off(eventName, handler)
-      } catch (e) {}
+      } catch (e) { console.warn('[useNodeBadges] 解除事件绑定失败:', e) }
     })
     _cyHandlers = []
     _boundCy = null

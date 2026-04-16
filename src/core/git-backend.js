@@ -3,31 +3,44 @@
  */
 const getApi = () => window.electronAPI
 
+/**
+ * 空安全的 IPC 调用封装
+ * 与 fs-backend.js 保持一致，防止 electronAPI 未就绪时抛出 NPE
+ */
+const _call = (channel, ...args) => {
+  const api = getApi()
+  if (!api) {
+    console.warn(`[GitBackend] IPC API 未就绪，无法调用 ${channel}`)
+    return Promise.reject(new Error(`IPC API 未就绪: ${channel}`))
+  }
+  return api.invoke(channel, ...args)
+}
+
 export const GitBackend = {
-  checkAvailable: () => getApi().invoke('git:checkAvailable'),
-  init: (kbPath) => getApi().invoke('git:init', kbPath),
-  status: (kbPath) => getApi().invoke('git:status', kbPath),
-  statusBatch: (kbPaths) => getApi().invoke('git:statusBatch', kbPaths),
-  isDirty: (kbPath) => getApi().invoke('git:isDirty', kbPath),
-  commit: (kbPath, msg) => getApi().invoke('git:commit', kbPath, msg),
-  diff: (kbPath, opts) => getApi().invoke('git:diff', kbPath, opts),
-  diffFiles: (kbPath, opts) => getApi().invoke('git:diffFiles', kbPath, opts),
-  log: (kbPath, opts) => getApi().invoke('git:log', kbPath, opts),
-  commitDiffFiles: (kbPath, hash) => getApi().invoke('git:commitDiffFiles', kbPath, hash),
-  commitFileDiff: (kbPath, hash, fp) => getApi().invoke('git:commitFileDiff', kbPath, hash, fp),
-  remoteGet: (kbPath) => getApi().invoke('git:remote:get', kbPath),
-  remoteSet: (kbPath, url) => getApi().invoke('git:remote:set', kbPath, url),
-  fetch: (kbPath) => getApi().invoke('git:fetch', kbPath),
-  push: (kbPath) => getApi().invoke('git:push', kbPath),
-  pull: (kbPath) => getApi().invoke('git:pull', kbPath),
-  conflictList: (kbPath) => getApi().invoke('git:conflict:list', kbPath),
-  conflictShow: (kbPath, fp) => getApi().invoke('git:conflict:show', kbPath, fp),
-  conflictResolve: (kbPath, fp, c) => getApi().invoke('git:conflict:resolve', kbPath, fp, c),
-  conflictComplete: (kbPath) => getApi().invoke('git:conflict:complete', kbPath),
-  authSetToken: (kbPath, token) => getApi().invoke('git:auth:setToken', kbPath, token),
-  authGetSSHKey: () => getApi().invoke('git:auth:getSSHKey'),
-  authSetType: (kbPath, type) => getApi().invoke('git:auth:setAuthType', kbPath, type),
-  authGetType: (kbPath) => getApi().invoke('git:auth:getAuthType', kbPath),
+  checkAvailable: () => _call('git:checkAvailable'),
+  init: (kbPath) => _call('git:init', kbPath),
+  status: (kbPath) => _call('git:status', kbPath),
+  statusBatch: (kbPaths) => _call('git:statusBatch', kbPaths),
+  isDirty: (kbPath) => _call('git:isDirty', kbPath),
+  commit: (kbPath, msg) => _call('git:commit', kbPath, msg),
+  diff: (kbPath, opts) => _call('git:diff', kbPath, opts),
+  diffFiles: (kbPath, opts) => _call('git:diffFiles', kbPath, opts),
+  log: (kbPath, opts) => _call('git:log', kbPath, opts),
+  commitDiffFiles: (kbPath, hash) => _call('git:commitDiffFiles', kbPath, hash),
+  commitFileDiff: (kbPath, hash, fp) => _call('git:commitFileDiff', kbPath, hash, fp),
+  remoteGet: (kbPath) => _call('git:remote:get', kbPath),
+  remoteSet: (kbPath, url) => _call('git:remote:set', kbPath, url),
+  fetch: (kbPath) => _call('git:fetch', kbPath),
+  push: (kbPath) => _call('git:push', kbPath),
+  pull: (kbPath) => _call('git:pull', kbPath),
+  conflictList: (kbPath) => _call('git:conflict:list', kbPath),
+  conflictShow: (kbPath, fp) => _call('git:conflict:show', kbPath, fp),
+  conflictResolve: (kbPath, fp, c) => _call('git:conflict:resolve', kbPath, fp, c),
+  conflictComplete: (kbPath) => _call('git:conflict:complete', kbPath),
+  authSetToken: (kbPath, token) => _call('git:auth:setToken', kbPath, token),
+  authGetSSHKey: () => _call('git:auth:getSSHKey'),
+  authSetType: (kbPath, type) => _call('git:auth:setAuthType', kbPath, type),
+  authGetType: (kbPath) => _call('git:auth:getAuthType', kbPath),
 }
 
 /**
@@ -78,5 +91,5 @@ export const GitCache = {
 
 function _notify(kbPath) {
   const status = _cache[kbPath]?.status || null
-  _listeners.forEach(fn => { try { fn(kbPath, status) } catch (e) {} })
+  _listeners.forEach(fn => { try { fn(kbPath, status) } catch (e) { console.warn('[GitCache] 监听器通知失败:', e) } })
 }

@@ -51,5 +51,38 @@ export const useGitStore = defineStore('git', {
     setDirtyCount(count) {
       this.dirtyCount = count
     },
+    setCommitFiles(files) {
+      this.commitFiles = files || []
+    },
+    setSyncState(state, message = '', code = '') {
+      this.syncState = state
+      this.syncMessage = message
+      this.syncCode = code
+    },
+    setConflictFiles(files) {
+      this.conflictFiles = files || []
+    },
+    setLogEntries(entries) {
+      this.logEntries = entries || []
+    },
+    setRemote(url, authType) {
+      this.remoteUrl = url || ''
+      this.authType = authType || 'token'
+    },
+    setSSHKey(publicKey) {
+      this.sshPublicKey = publicKey || ''
+    },
+    setConflictContent(file, content) {
+      this.currentConflictFile = file
+      this.conflictContent = content || ''
+    },
+    removeConflictFile(file) {
+      const idx = this.conflictFiles.indexOf(file)
+      if (idx !== -1) this.conflictFiles.splice(idx, 1)
+      if (this.currentConflictFile === file) {
+        this.currentConflictFile = null
+        this.conflictContent = ''
+      }
+    },
   },
 })

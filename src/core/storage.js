@@ -22,11 +22,7 @@ function ensureValidName(name, label = '名称') {
 export const Store = {
   // ===== 初始化 =====
   init() {
-    console.log('[Store] 初始化 FSB 后端')
-    return FSB.open().then(r => {
-      console.log('[Store] 初始化完成:', r)
-      return r
-    })
+    return FSB.open()
   },
 
   // ===== 知识库（根级目录） =====

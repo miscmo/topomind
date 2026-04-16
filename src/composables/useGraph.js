@@ -90,14 +90,6 @@ export function useGraph(containerRef) {
     const fontWeight = fontStyle.includes('bold') ? 'bold' : ''
     const fontStyleAttr = fontStyle.includes('italic') ? 'italic' : ''
 
-    // DEBUG
-    // console.log('[HTML label]生成标签 id=' + data.id + ' fontColor=' + fontColor + ' fontSize=' + fontSize + ' fontStyle=' + fontStyle)
-
-    // 记录时间戳用于调试事件触发顺序
-    // if (!window.__labelGenCount) window.__labelGenCount = 0
-    // window.__labelGenCount++
-    // console.log('[HTML label] 生成次数 #' + window.__labelGenCount + ' id=' + data.id)
-
     // 文档图标：14x14px 固定尺寸，不随父元素 font-size 缩放
     const docIcon = hasDoc
       ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;font-size:0;line-height:0;vertical-align:text-bottom"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="12" rx="1.5" stroke="#fff" stroke-width="1.2" fill="none"/><rect x="4" y="1" width="6" height="5" rx="1" fill="#fff" opacity="0.9"/><line x1="3" y1="8" x2="9" y2="8" stroke="#fff" stroke-width="1" stroke-linecap="round"/><line x1="3" y1="10" x2="9" y2="10" stroke="#fff" stroke-width="1" stroke-linecap="round"/><line x1="3" y1="12" x2="7" y2="12" stroke="#fff" stroke-width="1" stroke-linecap="round"/></svg></span>`
@@ -147,7 +139,7 @@ export function useGraph(containerRef) {
       try {
         cyInst.emit('render')
       } catch (e) {
-        console.error('[_setupHtmlLabels] emit render 失败:', e)
+        console.warn('[_setupHtmlLabels] emit render 失败:', e)
       }
     }
   }
@@ -248,11 +240,11 @@ export function useGraph(containerRef) {
       _detachAllDomBindingsExcept(cyInst)
       const [cardsRaw, metaRaw] = await Promise.all([
         storage.listCards(dirPath).catch((e) => {
-          console.error('[useGraph] listCards 失败:', dirPath, e)
+          console.warn('[useGraph] listCards 失败:', dirPath, e)
           return []
         }),
         storage.readLayout(dirPath).catch((e) => {
-          console.error('[useGraph] readLayout 失败:', dirPath, e)
+          console.warn('[useGraph] readLayout 失败:', dirPath, e)
           return {}
         }),
       ])
@@ -394,7 +386,7 @@ export function useGraph(containerRef) {
       // 从 localStorage 恢复选中的节点（仅当节点在当前房间中存在）
       _restoreSelectedNode()
     } catch (e) {
-      console.error('[useGraph] loadRoom 失败:', dirPath, e)
+      console.warn('[useGraph] loadRoom 失败:', dirPath, e)
       throw e
     }
   }
@@ -531,18 +523,26 @@ export function useGraph(containerRef) {
   // ─── 钻入/返回 ──────────────────────────────────────────────
   async function drillInto(cardPath) {
     const prevPath = roomStore.currentRoomPath || roomStore.currentKBPath
-    await saveCurrentLayout(prevPath)
-    const kids = await storage.listCards(cardPath)
-    if (kids.length === 0) {
-      // 叶子卡片，显示详情
-      const node = cy.value.getElementById(cardPath)
-      if (node.length) {
-        cy.value.nodes(':selected').unselect()
-        node.select()
-      }
-      return
+    try {
+      await saveCurrentLayout(prevPath)
+    } catch (e) {
+      console.warn('[useGraph] 保存布局失败:', e)
     }
-    roomStore.drillInto(cardPath)
+    try {
+      const kids = await storage.listCards(cardPath)
+      if (kids.length === 0) {
+        // 叶子卡片，显示详情
+        const node = cy.value.getElementById(cardPath)
+        if (node.length) {
+          cy.value.nodes(':selected').unselect()
+          node.select()
+        }
+        return
+      }
+      roomStore.drillInto(cardPath)
+    } catch (e) {
+      console.warn('[useGraph] 加载子卡片失败:', e)
+    }
   }
 
   async function goBack() {
@@ -551,19 +551,31 @@ export function useGraph(containerRef) {
       return
     }
     const prevPath = roomStore.currentRoomPath || roomStore.currentKBPath
-    await saveCurrentLayout(prevPath)
+    try {
+      await saveCurrentLayout(prevPath)
+    } catch (e) {
+      console.warn('[useGraph] 保存布局失败:', e)
+    }
     roomStore.goBack()
   }
 
   async function goRoot() {
     const prevPath = roomStore.currentRoomPath || roomStore.currentKBPath
-    await saveCurrentLayout(prevPath)
+    try {
+      await saveCurrentLayout(prevPath)
+    } catch (e) {
+      console.warn('[useGraph] 保存布局失败:', e)
+    }
     roomStore.jumpTo(roomStore.currentKBPath)
   }
 
   async function jumpToBreadcrumb(path) {
     const prevPath = roomStore.currentRoomPath || roomStore.currentKBPath
-    await saveCurrentLayout(prevPath)
+    try {
+      await saveCurrentLayout(prevPath)
+    } catch (e) {
+      console.warn('[useGraph] 保存布局失败:', e)
+    }
     roomStore.jumpTo(path)
   }
 
@@ -623,17 +635,21 @@ export function useGraph(containerRef) {
   }
 
   function addEdge(sourceId, targetId, relation) {
-    cy.value.add({
-      group: 'edges',
-      data: {
-        id: _autoEdgeId(),
-        source: sourceId,
-        target: targetId,
-        relation,
-        weight: relation === '相关' ? 'minor' : 'main',
-      },
-    })
-    saveCurrentLayoutDebounced()
+    try {
+      cy.value.add({
+        group: 'edges',
+        data: {
+          id: _autoEdgeId(),
+          source: sourceId,
+          target: targetId,
+          relation,
+          weight: relation === '相关' ? 'minor' : 'main',
+        },
+      })
+      saveCurrentLayoutDebounced()
+    } catch (e) {
+      console.warn('[useGraph] 添加边失败:', sourceId, targetId, e)
+    }
   }
 
   function deleteEdge(edgeId) {
@@ -647,7 +663,7 @@ export function useGraph(containerRef) {
       try {
         await storage.deleteCard(id)
       } catch (err) {
-        console.error(`[useGraph] 删除节点失败: ${id}`, err)
+        console.warn(`[useGraph] 删除节点失败: ${id}`, err)
       }
     }
     const selected = cy.value.nodes(':selected')

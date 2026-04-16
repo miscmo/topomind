@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { useStorage } from '@/composables/useStorage'
 import { useRoomStore } from '@/stores/room'
 
@@ -41,6 +41,7 @@ async function loadCards() {
     const list = await storage.listCards(dirPath)
     cards.value = (list || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   } catch (e) {
+    console.warn('[NavTree] 加载卡片列表失败:', e)
     cards.value = []
   }
 }
@@ -63,6 +64,10 @@ function handleClick(path) {
     emit('select', path)
   }, 300)
 }
+
+onUnmounted(() => {
+  clearTimeout(_clickTimer)
+})
 </script>
 
 <style scoped>
