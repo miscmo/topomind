@@ -18,6 +18,9 @@ import { createCyManager } from '@/core/cy-manager.js'
 import cytoscape from 'cytoscape'
 import elk from 'cytoscape-elk'
 import htmlLabel from 'cytoscape-node-html-label'
+import { logger } from '@/core/logger.js'
+import { GraphConstants } from '@/core/graph-constants.js'
+import { getNodeHtmlLabelConfig } from '@/core/graph-labels.js'
 
 // 注册 ELK 布局插件
 cytoscape.use(elk)
@@ -44,7 +47,7 @@ export function useGraph(containerRef) {
   const searchQuery = ref('')
   // 当前房间的 meta 数据（用于保存时复用，避免重复读取存储）
   const currentMeta = ref(null)
-  const cyManager = createCyManager(4)
+  const cyManager = createCyManager(GraphConstants.CY_INSTANCE_POOL_SIZE)
   const _cyEventsBound = new WeakSet()
   const _domCleanupByCy = new Map()
   const _handleElsByCy = new Map()
@@ -66,72 +69,15 @@ export function useGraph(containerRef) {
     return `${kb}::${dirPath || ''}`
   }
 
-  // ─── 节点 HTML 标签生成器（tpl 函数，供 cytoscape-node-html-label 调用）─────
-  function escapeHtml(text) {
-    return String(text ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-  }
-
-  function generateNodeLabelHtml(data) {
-    const label = escapeHtml(data.label || '')
-    const hasDoc = !!data.hasDoc
-    const childCount = data.childCount || 0
-
-    // 从节点数据读取文字样式
-    const fontSize = Number(data.fontSize) || 12
-    const fontColor = data.fontColor || '#fff'
-    const fontStyle = data.fontStyle || ''
-    const textAlign = data.textAlign || 'center'
-    const textWrap = data.textWrap !== false
-    const fontWeight = fontStyle.includes('bold') ? 'bold' : ''
-    const fontStyleAttr = fontStyle.includes('italic') ? 'italic' : ''
-
-    // 文档图标：14x14px 固定尺寸，不随父元素 font-size 缩放
-    const docIcon = hasDoc
-      ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;font-size:0;line-height:0;vertical-align:text-bottom"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="12" rx="1.5" stroke="#fff" stroke-width="1.2" fill="none"/><rect x="4" y="1" width="6" height="5" rx="1" fill="#fff" opacity="0.9"/><line x1="3" y1="8" x2="9" y2="8" stroke="#fff" stroke-width="1" stroke-linecap="round"/><line x1="3" y1="10" x2="9" y2="10" stroke="#fff" stroke-width="1" stroke-linecap="round"/><line x1="3" y1="12" x2="7" y2="12" stroke="#fff" stroke-width="1" stroke-linecap="round"/></svg></span>`
-      : ''
-
-    // 子节点计数：固定 10px，不随节点文字大小变化
-    const childIcon = childCount > 0
-      ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:14px;padding:0 3px;flex-shrink:0;font-size:10px;font-family:-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Roboto,sans-serif;color:#fff;line-height:1;vertical-align:text-bottom;box-sizing:border-box;background:rgba(255,255,255,0.25);border-radius:7px">${childCount}↓</span>`
-      : ''
-
-    const badgeGroup = (docIcon || childIcon)
-      ? `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:5px;flex-shrink:0;vertical-align:text-bottom">${docIcon}${childIcon}</span>`
-      : ''
-
-    // 文字样式：使用节点数据的 fontSize、fontColor、fontStyle、textWrap
-    const textStyles = [
-      'display:inline',
-      'vertical-align:text-bottom',
-      `font-size:${fontSize}px`,
-      `font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif`,
-      `color:${fontColor}`,
-      fontWeight ? `font-weight:${fontWeight}` : '',
-      fontStyleAttr ? `font-style:${fontStyleAttr}` : '',
-      `text-align:${textAlign}`,
-      `white-space:${textWrap ? 'normal' : 'nowrap'}`,
-    ].filter(Boolean).join(';')
-
-    return `<span style="${textStyles}">${badgeGroup}${label}</span>`
-  }
+  // ─── 节点 HTML 标签生成器（已提取至 @/core/graph-labels.js）─────────────────
+  // 导入自 @/core/graph-labels.js
 
   // ─── 设置 HTML 标签（在 cy.mount() 之后调用）─────────────────────
   // 使用 cytoscape-node-html-label 插件渲染节点 HTML 标签
   // 注意：cytoscape-node-html-label 内部会清理旧容器，故可安全重复调用
   function _setupHtmlLabels(cyInst, forceInit = false) {
     if (!cyInst) return
-    const container = cyInst.container()
-    cyInst.nodeHtmlLabel([{
-      query: 'node.card',
-      tpl: (data) => generateNodeLabelHtml(data),
-      halign: 'center',
-      valign: 'center',
-    }], { enablePointerEvents: false })
+    cyInst.nodeHtmlLabel(getNodeHtmlLabelConfig(), { enablePointerEvents: false })
 
     // 如果 graph 已经有节点了（从缓存激活的旧实例），
     // 'render' 事件已过，手动触发一次 label 创建
@@ -139,7 +85,7 @@ export function useGraph(containerRef) {
       try {
         cyInst.emit('render')
       } catch (e) {
-        console.warn('[_setupHtmlLabels] emit render 失败:', e)
+        logger.catch('useGraph', 'emit render')
       }
     }
   }
@@ -149,7 +95,7 @@ export function useGraph(containerRef) {
     const instance = cytoscape({
       container: container || containerRef.value || undefined,
       elements: [],
-      minZoom: 0.15, maxZoom: 3.5,
+      minZoom: GraphConstants.ZOOM_MIN, maxZoom: GraphConstants.ZOOM_MAX,
       userZoomingEnabled: false,
       userPanningEnabled: false,
       boxSelectionEnabled: true,
@@ -243,11 +189,11 @@ export function useGraph(containerRef) {
       _detachAllDomBindingsExcept(cyInst)
       const [cardsRaw, metaRaw] = await Promise.all([
         storage.listCards(dirPath).catch((e) => {
-          console.warn('[useGraph] listCards 失败:', dirPath, e)
+          logger.catch('useGraph', 'listCards', e)
           return []
         }),
         storage.readLayout(dirPath).catch((e) => {
-          console.warn('[useGraph] readLayout 失败:', dirPath, e)
+          logger.catch('useGraph', 'readLayout', e)
           return {}
         }),
       ])
@@ -358,7 +304,7 @@ export function useGraph(containerRef) {
           algorithm: 'layered', 'elk.direction': 'RIGHT',
           'elk.spacing.nodeNode': 60,
           'elk.layered.spacing.nodeNodeBetweenLayers': 80,
-          'elk.padding': '[top=40,left=30,bottom=30,right=30]',
+          'elk.padding': `[top=${GraphConstants.ELK_PADDING_TOP},left=${GraphConstants.ELK_PADDING_SIDES},bottom=${GraphConstants.ELK_PADDING_SIDES},right=${GraphConstants.ELK_PADDING_SIDES}]`,
         },
         fit: false, animate: false,
         stop: () => {
@@ -389,7 +335,7 @@ export function useGraph(containerRef) {
       // 从 localStorage 恢复选中的节点（仅当节点在当前房间中存在）
       _restoreSelectedNode()
     } catch (e) {
-      console.warn('[useGraph] loadRoom 失败:', dirPath, e)
+      logger.catch('useGraph', 'loadRoom', e)
       throw e
     }
   }
@@ -440,8 +386,8 @@ export function useGraph(containerRef) {
     const nodeIds = cy.value.nodes().map(n => n.id())
     await Promise.all(nodeIds.map(async (id) => {
       const [children, md] = await Promise.all([
-        storage.listCards(id).catch((e) => { console.warn('[useGraph] listCards 失败:', id, e); return [] }),
-        storage.readMarkdown(id).catch((e) => { console.warn('[useGraph] readMarkdown 失败:', id, e); return '' }),
+        storage.listCards(id).catch((e) => { logger.catch('useGraph', 'listCards', e); return [] }),
+        storage.readMarkdown(id).catch((e) => { logger.catch('useGraph', 'readMarkdown', e); return '' }),
       ])
       const node = cy.value?.getElementById(id)
       if (!node?.length) return
@@ -529,7 +475,7 @@ export function useGraph(containerRef) {
     try {
       await saveCurrentLayout(prevPath)
     } catch (e) {
-      console.warn('[useGraph] 保存布局失败:', e)
+      logger.catch('useGraph', '保存布局', e)
     }
     try {
       const kids = await storage.listCards(cardPath)
@@ -544,7 +490,7 @@ export function useGraph(containerRef) {
       }
       roomStore.drillInto(cardPath)
     } catch (e) {
-      console.warn('[useGraph] 加载子卡片失败:', e)
+      logger.catch('useGraph', '加载子卡片', e)
     }
   }
 
@@ -557,7 +503,7 @@ export function useGraph(containerRef) {
     try {
       await saveCurrentLayout(prevPath)
     } catch (e) {
-      console.warn('[useGraph] 保存布局失败:', e)
+      logger.catch('useGraph', '保存布局', e)
     }
     roomStore.goBack()
   }
@@ -567,7 +513,7 @@ export function useGraph(containerRef) {
     try {
       await saveCurrentLayout(prevPath)
     } catch (e) {
-      console.warn('[useGraph] 保存布局失败:', e)
+      logger.catch('useGraph', '保存布局', e)
     }
     roomStore.jumpTo(roomStore.currentKBPath)
   }
@@ -577,7 +523,7 @@ export function useGraph(containerRef) {
     try {
       await saveCurrentLayout(prevPath)
     } catch (e) {
-      console.warn('[useGraph] 保存布局失败:', e)
+      logger.catch('useGraph', '保存布局', e)
     }
     roomStore.jumpTo(path)
   }
@@ -663,7 +609,7 @@ export function useGraph(containerRef) {
       })
       saveCurrentLayoutDebounced()
     } catch (e) {
-      console.warn('[useGraph] 添加边失败:', sourceId, targetId, e)
+      logger.warn('useGraph', `添加边失败:`, sourceId, targetId, e)
     }
   }
 
@@ -678,7 +624,7 @@ export function useGraph(containerRef) {
       try {
         await storage.deleteCard(id)
       } catch (err) {
-        console.warn(`[useGraph] 删除节点失败: ${id}`, err)
+        logger.warn('useGraph', `删除节点失败: ${id}`, err)
       }
     }
     const selected = cy.value.nodes(':selected')
@@ -704,7 +650,7 @@ export function useGraph(containerRef) {
   // ─── 缩放 ────────────────────────────────────────────────────
   function zoomIn() { cy.value?.animate({ zoom: cy.value.zoom() * 1.3 }, { duration: 200 }) }
   function zoomOut() { cy.value?.animate({ zoom: cy.value.zoom() / 1.3 }, { duration: 200 }) }
-  function fitView() { cy.value?.animate({ fit: { padding: 50 } }, { duration: 300 }) }
+  function fitView() { cy.value?.animate({ fit: { padding: GraphConstants.FIT_PADDING } }, { duration: GraphConstants.FIT_ANIMATION_DURATION_MS }) }
   function resetZoom() { cy.value?.zoom(1); cy.value?.center() }
 
   // ─── 事件绑定 ────────────────────────────────────────────────
@@ -855,8 +801,8 @@ export function useGraph(containerRef) {
         if (node?.length) {
           const dx = e.clientX - _dragResizeState.startX
           const dy = e.clientY - _dragResizeState.startY
-          const nextW = Math.max(40, Math.min(1200, Math.round(_dragResizeState.startW + dx / Math.max(c.zoom(), 0.2))))
-          const nextH = Math.max(30, Math.min(1200, Math.round(_dragResizeState.startH + dy / Math.max(c.zoom(), 0.2))))
+          const nextW = Math.max(GraphConstants.NODE_WIDTH_MIN, Math.min(GraphConstants.NODE_WIDTH_MAX, Math.round(_dragResizeState.startW + dx / Math.max(c.zoom(), 0.2))))
+          const nextH = Math.max(GraphConstants.NODE_HEIGHT_MIN, Math.min(GraphConstants.NODE_HEIGHT_MAX, Math.round(_dragResizeState.startH + dy / Math.max(c.zoom(), 0.2))))
           node.data('nodeWidth', nextW)
           node.data('nodeHeight', nextH)
           node.style('width', `${nextW}px`)
@@ -937,7 +883,7 @@ export function useGraph(containerRef) {
     // 滚轮缩放
     const onWheel = (e) => {
       e.preventDefault()
-      const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08
+      const factor = e.deltaY < 0 ? GraphConstants.ZOOM_WHEEL_FACTOR : 1 / GraphConstants.ZOOM_WHEEL_FACTOR
       let newZoom = c.zoom() * factor
       newZoom = Math.max(c.minZoom(), Math.min(c.maxZoom(), newZoom))
       const rect = container.getBoundingClientRect()
