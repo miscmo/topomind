@@ -97,6 +97,7 @@ import { languages } from '@codemirror/language-data'
 import { GFM } from '@lezer/markdown'
 import { useStorage, showSaveIndicator } from '@/composables/useStorage'
 import { useRoomStore } from '@/stores/room'
+import { logger } from '@/core/logger.js'
 import { GitCache } from '@/core/git-backend.js'
 
 marked.setOptions({ breaks: true, gfm: true })
@@ -447,7 +448,7 @@ async function _insertImage(blob) {
     editContent.value += (editContent.value ? '\n' : '') + mdRef
     debouncedSave()
   } catch (err) {
-    console.warn('[DetailPanel] 图片上传失败:', err)
+    logger.catch('DetailPanel', '图片上传', err)
   }
 }
 
@@ -500,7 +501,7 @@ function handleRenderedClick(e) {
       // Electron：系统默认浏览器；Web：新标签页打开
       if (window.electronAPI?.invoke) {
         window.electronAPI.invoke('app:openExternal', href).catch((err) => {
-          console.warn('[DetailPanel] 打开外链失败:', err)
+          logger.catch('DetailPanel', '打开外链', err)
         })
       } else {
         window.open(href, '_blank', 'noopener,noreferrer')

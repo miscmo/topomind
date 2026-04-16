@@ -265,6 +265,7 @@ import { useRoomStore } from '@/stores/room'
 import { useModalStore } from '@/stores/modal'
 import { useStorage } from '@/composables/useStorage'
 import { useGit } from '@/composables/useGit'
+import { logger } from '@/core/logger.js'
 
 const appStore = useAppStore()
 const roomStore = useRoomStore()
@@ -348,14 +349,14 @@ async function loadKBList() {
         try {
           const count = await storage.countChildren(kb.path)
           kbs.value[i].nodeCount = count
-        } catch (e) { console.warn('[HomePage] 加载节点数失败:', kb.path, e) }
+        } catch (e) { logger.warn('HomePage', '加载节点数失败:', kb.path, e) }
 
         if (kb.cover) {
           try {
             const imgPath = `${kb.path}/${kb.cover}`
             const url = await storage.loadImage(imgPath)
             kbs.value[i].coverUrl = url
-          } catch (e) { console.warn('[HomePage] 加载封面失败:', kb.path, e) }
+          } catch (e) { logger.warn('HomePage', '加载封面失败:', kb.path, e) }
         }
       })
     )
@@ -368,7 +369,7 @@ async function loadKBList() {
       })
     }
   } catch (err) {
-    console.warn('[HomePage] 加载知识库列表失败:', err)
+    logger.catch('HomePage', '加载知识库列表', err)
   } finally {
     loading.value = false
   }
@@ -379,7 +380,7 @@ async function openKB(kb) {
   try {
     await storage.setLastOpenedKB(kb.path)
   } catch (e) {
-    console.warn('[HomePage] 设置最近打开失败:', e)
+    logger.catch('HomePage', '设置最近打开', e)
   }
   roomStore.openTab(kb.path, kb.name)
   appStore.showGraph()
@@ -498,7 +499,7 @@ async function submitCreate() {
     cancelCreate()
     await loadKBList()
   } catch (err) {
-    console.warn('[HomePage] 创建知识库失败:', err)
+    logger.catch('HomePage', '创建知识库', err)
   }
 }
 
@@ -520,7 +521,7 @@ async function openKBSettings(kb) {
     const latestCount = await storage.countChildren(kb.path)
     settingsForm.nodeCount = Number.isFinite(latestCount) ? latestCount : settingsForm.nodeCount
   } catch (e) {
-    console.warn('[HomePage] 读取节点数失败:', kb.path, e)
+    logger.warn('HomePage', '读取节点数失败:', kb.path, e)
   }
 }
 
@@ -660,7 +661,7 @@ async function saveKBSettings() {
     closeKBSettings()
     await loadKBList()
   } catch (e) {
-    console.warn('[HomePage] 保存知识库设置失败:', e)
+    logger.catch('HomePage', '保存知识库设置', e)
   }
 }
 

@@ -5,6 +5,7 @@
 import { useGitStore } from '@/stores/git'
 import { GitBackend, GitCache } from '@/core/git-backend.js'
 import { unwrapGitResult } from '@/core/git-result.js'
+import { logger } from '@/core/logger.js'
 
 export function useGit() {
   const gitStore = useGitStore()
@@ -19,7 +20,7 @@ export function useGit() {
       gitStore.setDirtyCount(normalized.hasUncommitted ? (normalized.dirtyFiles || 1) : 0)
       return normalized
     } catch (e) {
-      console.warn('[useGit] loadStatus 失败:', e)
+      logger.catch('useGit', 'loadStatus', e)
       return null
     }
   }
@@ -31,7 +32,7 @@ export function useGit() {
       gitStore.setCommitFiles(files)
       return files
     } catch (e) {
-      console.warn('[useGit] loadCommitFiles 失败:', e)
+      logger.catch('useGit', 'loadCommitFiles', e)
       gitStore.setCommitFiles([])
       return []
     }
@@ -79,7 +80,7 @@ export function useGit() {
       const urlRes = await GitBackend.remoteGet(kbPath)
       const typeRes = await GitBackend.authGetType(kbPath)
       gitStore.setRemote(urlRes?.url || '', typeRes?.authType || 'token')
-    } catch (e) { console.warn('[useGit] loadRemote 失败:', e) }
+    } catch (e) { logger.warn('useGit', 'loadRemote 失败:', e) }
   }
 
   async function saveRemote(kbPath, url, token, authType) {
@@ -90,7 +91,7 @@ export function useGit() {
         unwrapGitResult(await GitBackend.authSetToken(kbPath, token), { requireOk: true, errorMessage: '保存 Token 失败' })
       }
     } catch (e) {
-      console.warn('[useGit] saveRemote 失败:', e)
+      logger.warn('useGit', 'saveRemote 失败:', e)
     }
   }
 
@@ -98,7 +99,7 @@ export function useGit() {
     try {
       const res = await GitBackend.authGetSSHKey()
       gitStore.setSSHKey(res?.publicKey || '')
-    } catch (e) { console.warn('[useGit] loadSSHKey 失败:', e) }
+    } catch (e) { logger.warn('useGit', 'loadSSHKey 失败:', e) }
   }
 
   async function loadConflicts(kbPath) {
@@ -114,7 +115,7 @@ export function useGit() {
     try {
       const res = await GitBackend.conflictShow(kbPath, file)
       gitStore.setConflictContent(file, res?.current || '')
-    } catch (e) { console.warn('[useGit] showConflict 失败:', e) }
+    } catch (e) { logger.warn('useGit', 'showConflict 失败:', e) }
   }
 
   async function resolveConflict(kbPath, file, resolution) {
@@ -123,7 +124,7 @@ export function useGit() {
       // 从列表中移除已解决的文件
       gitStore.removeConflictFile(file)
     } catch (e) {
-      console.warn('[useGit] resolveConflict 失败:', e)
+      logger.warn('useGit', 'resolveConflict 失败:', e)
     }
   }
 

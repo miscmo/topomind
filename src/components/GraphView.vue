@@ -126,6 +126,7 @@ import DetailPanel from '@/components/DetailPanel.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import GitPanel from '@/components/GitPanel.vue'
+import { logger } from '@/core/logger.js'
 
 
 const appStore = useAppStore()
@@ -197,7 +198,7 @@ function readPersistedDetailWidthForKB(kbPath) {
     if (raw == null) return null
     return clampDetailWidth(raw)
   } catch (e) {
-    console.warn('[GraphView] 读取详情宽度失败:', e)
+    logger.catch('GraphView', '读取详情宽度', e)
     return null
   }
 }
@@ -208,7 +209,7 @@ function persistDetailWidthForKB(kbPath, width) {
   try {
     localStorage.setItem(key, String(clampDetailWidth(width)))
   } catch (e) {
-    console.warn('[GraphView] 保存详情宽度失败:', e)
+    logger.catch('GraphView', '保存详情宽度', e)
   }
 }
 
@@ -218,7 +219,7 @@ function persistDetailPanelStateForKB(kbPath, state) {
   try {
     localStorage.setItem(key, JSON.stringify(state))
   } catch (e) {
-    console.warn('[GraphView] 保存详情面板状态失败:', e)
+    logger.catch('GraphView', '保存详情面板状态', e)
   }
 }
 
@@ -230,7 +231,7 @@ function readPersistedDetailPanelStateForKB(kbPath) {
     if (raw == null) return null
     return JSON.parse(raw)
   } catch (e) {
-    console.warn('[GraphView] 读取详情面板状态失败:', e)
+    logger.catch('GraphView', '读取详情面板状态', e)
     return null
   }
 }
@@ -254,7 +255,7 @@ function readPersistedStyleWidthForKB(kbPath) {
     if (raw == null) return null
     return clampStyleWidth(raw)
   } catch (e) {
-    console.warn('[GraphView] 读取样式宽度失败:', e)
+    logger.catch('GraphView', '读取样式宽度', e)
     return null
   }
 }
@@ -265,7 +266,7 @@ function persistStyleWidthForKB(kbPath, width) {
   try {
     localStorage.setItem(key, String(clampStyleWidth(width)))
   } catch (e) {
-    console.warn('[GraphView] 保存样式宽度失败:', e)
+    logger.catch('GraphView', '保存样式宽度', e)
   }
 }
 
@@ -289,7 +290,7 @@ function readPersistedStyleWidth() {
     localStorage.removeItem('topomind:style-width')
     return val
   } catch (e) {
-    console.warn('[GraphView] 读取样式宽度失败:', e)
+    logger.catch('GraphView', '读取样式宽度', e)
     return null
   }
 }
@@ -365,7 +366,7 @@ watch(() => roomStore.currentRoomPath, async (newPath) => {
     } catch (e) {
       initPhase.value = 'error'
       initError.value = e?.message || '切换房间失败'
-      console.warn('[GraphView] 切换房间加载失败:', newPath, e)
+      logger.warn('GraphView', '切换房间加载失败:', newPath, e)
     }
   }
 })
@@ -455,7 +456,7 @@ async function initializeGraphView() {
   } catch (e) {
     initPhase.value = 'error'
     initError.value = e?.message || '初始化失败'
-    console.warn('[GraphView] mounted 初始化失败:', e)
+    logger.catch('GraphView', 'mounted 初始化', e)
   }
 }
 
@@ -477,7 +478,7 @@ async function handleBeforeUnload() {
     try {
       storage.saveLayoutSync(dirPath, meta)
     } catch (e) {
-      console.warn('[GraphView] 保存布局失败:', e)
+      logger.catch('GraphView', '保存布局', e)
     }
   }
 }

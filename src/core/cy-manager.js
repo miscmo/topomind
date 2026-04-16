@@ -1,3 +1,5 @@
+import { logger } from './logger.js'
+
 /**
  * CyManager（最小版）
  * - 按 roomKey 缓存 Cytoscape 实例
@@ -105,7 +107,7 @@ export function createCyManager(maxContexts = 4) {
 
     if (!victimKey) return
     const victim = contexts.get(victimKey)
-    try { victim?.cy?.destroy?.() } catch (e) { console.warn('[CyManager] 销毁上下文失败:', e) }
+    try { victim?.cy?.destroy?.() } catch (e) { logger.warn('CyManager', '销毁上下文失败:', e) }
     contexts.delete(victimKey)
   }
 
@@ -116,20 +118,20 @@ export function createCyManager(maxContexts = 4) {
     if (activeKey && activeKey !== key) {
       const prev = contexts.get(activeKey)
       if (prev?.cy?.unmount) {
-        try { prev.cy.unmount() } catch (e) { console.warn('[CyManager] 卸载前一个实例失败:', e) }
+        try { prev.cy.unmount() } catch (e) { logger.warn('CyManager', '卸载前一个实例失败:', e) }
       }
     }
 
     if (target.cy?.mount && container) {
-      try { target.cy.mount(container) } catch (e) { console.warn('[CyManager] 挂载实例失败:', e) }
+      try { target.cy.mount(container) } catch (e) { logger.warn('CyManager', '挂载实例失败:', e) }
     }
 
     if (target.cy?.style) {
-      try { target.cy.style(getGraphStyle()) } catch (e) { console.warn('[CyManager] 应用样式失败:', e) }
+      try { target.cy.style(getGraphStyle()) } catch (e) { logger.warn('CyManager', '应用样式失败:', e) }
     }
 
     if (target.cy?.elements) {
-      try { target.cy.elements().removeStyle() } catch (e) { console.warn('[CyManager] 清除元素样式失败:', e) }
+      try { target.cy.elements().removeStyle() } catch (e) { logger.warn('CyManager', '清除元素样式失败:', e) }
     }
 
     target.lastActiveAt = Date.now()
@@ -140,14 +142,14 @@ export function createCyManager(maxContexts = 4) {
   function remove(key) {
     const ctx = contexts.get(key)
     if (!ctx) return
-    try { ctx.cy?.destroy?.() } catch (e) { console.warn('[CyManager] 销毁实例失败:', e) }
+    try { ctx.cy?.destroy?.() } catch (e) { logger.warn('CyManager', '销毁实例失败:', e) }
     if (activeKey === key) activeKey = null
     contexts.delete(key)
   }
 
   function clear() {
     contexts.forEach((ctx) => {
-      try { ctx.cy?.destroy?.() } catch (e) { console.warn('[CyManager] 销毁实例失败:', e) }
+      try { ctx.cy?.destroy?.() } catch (e) { logger.warn('CyManager', '销毁实例失败:', e) }
     })
     contexts.clear()
     activeKey = null

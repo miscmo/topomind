@@ -371,6 +371,7 @@ import { useGitStore } from '@/stores/git'
 import { useRoomStore } from '@/stores/room'
 import { useGit } from '@/composables/useGit'
 import { GitBackend } from '@/core/git-backend.js'
+import { logger } from '@/core/logger.js'
 
 const props = defineProps({
   inline: { type: Boolean, default: false }
@@ -463,7 +464,7 @@ async function doCommit() {
     activePanel.value = 'main'
     await refreshStatus()
   } catch (e) {
-    console.warn('[GitPanel] 提交失败:', e)
+    logger.catch('GitPanel', '提交', e)
   }
 }
 
@@ -525,7 +526,7 @@ async function saveRemote() {
     await git.saveRemote(kbPath, remoteForm.url, remoteForm.token, remoteForm.authType)
     activePanel.value = 'main'
   } catch (e) {
-    console.warn('[GitPanel] 保存远程配置失败:', e)
+    logger.catch('GitPanel', '保存远程配置', e)
   }
 }
 
@@ -553,7 +554,7 @@ async function resolveConflict(resolution) {
     if (!gitStore.currentConflictFile) return
     await git.resolveConflict(kbPath, gitStore.currentConflictFile, resolution)
   } catch (e) {
-    console.warn('[GitPanel] 解决冲突失败:', e)
+    logger.catch('GitPanel', '解决冲突', e)
   }
 }
 
@@ -564,7 +565,7 @@ async function completeConflict() {
     activePanel.value = 'main'
     await refreshStatus()
   } catch (e) {
-    console.warn('[GitPanel] 完成冲突合并失败:', e)
+    logger.catch('GitPanel', '完成冲突合并', e)
   }
 }
 

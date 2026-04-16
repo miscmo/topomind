@@ -1,3 +1,5 @@
+import { logger } from './logger.js'
+
 /**
  * Git IPC 前端调用封装 - ES Module 版本
  */
@@ -10,7 +12,7 @@ const getApi = () => window.electronAPI
 const _call = (channel, ...args) => {
   const api = getApi()
   if (!api) {
-    console.warn(`[GitBackend] IPC API 未就绪，无法调用 ${channel}`)
+    logger.warn('GitBackend', `IPC API 未就绪，无法调用 ${channel}`)
     return Promise.reject(new Error(`IPC API 未就绪: ${channel}`))
   }
   return api.invoke(channel, ...args)
@@ -91,5 +93,5 @@ export const GitCache = {
 
 function _notify(kbPath) {
   const status = _cache[kbPath]?.status || null
-  _listeners.forEach(fn => { try { fn(kbPath, status) } catch (e) { console.warn('[GitCache] 监听器通知失败:', e) } })
+  _listeners.forEach(fn => { try { fn(kbPath, status) } catch (e) { logger.warn('GitBackend', '监听器通知失败:', e) } })
 }

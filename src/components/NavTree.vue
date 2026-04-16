@@ -24,6 +24,7 @@
 import { ref, watch, onUnmounted } from 'vue'
 import { useStorage } from '@/composables/useStorage'
 import { useRoomStore } from '@/stores/room'
+import { logger } from '@/core/logger.js'
 
 const props = defineProps({
   selectedNodeId: { type: String, default: null },
@@ -41,7 +42,7 @@ async function loadCards() {
     const list = await storage.listCards(dirPath)
     cards.value = (list || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   } catch (e) {
-    console.warn('[NavTree] 加载卡片列表失败:', e)
+    logger.catch('NavTree', '加载卡片列表', e)
     cards.value = []
   }
 }

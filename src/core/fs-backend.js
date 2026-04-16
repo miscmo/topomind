@@ -1,3 +1,5 @@
+import { logger } from './logger.js'
+
 /**
  * 文件系统存储后端（Electron 端）ES Module 版本
  * 通过 window.electronAPI (IPC) 调用 Node.js fs
@@ -7,7 +9,7 @@ const getApi = () => window.electronAPI
 const _call = (channel, ...args) => {
   const api = getApi()
   if (!api) {
-    console.warn(`[FSB] IPC API 未就绪，无法调用 ${channel}`)
+    logger.warn('FSB', `IPC API 未就绪，无法调用 ${channel}`)
     return Promise.reject(new Error(`IPC API 未就绪: ${channel}`))
   }
   return api.invoke(channel, ...args)

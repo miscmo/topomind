@@ -22,6 +22,7 @@ import { onMounted, onUnmounted, nextTick } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useStorage } from '@/composables/useStorage'
+import { logger } from '@/core/logger.js'
 
 import WorkDirPage from '@/components/WorkDirPage.vue'
 import TabBar from '@/components/TabBar.vue'
@@ -83,7 +84,7 @@ async function autoOpenLastKB() {
     roomStore.openTab(lastKBPath, kbName)
     appStore.showGraph()
   } catch (e) {
-    console.warn('[App] 自动打开上次知识库失败:', e)
+    logger.catch('App', '自动打开上次知识库', e)
   }
 }
 

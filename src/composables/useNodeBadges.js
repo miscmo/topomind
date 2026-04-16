@@ -5,6 +5,7 @@
  */
 import { onUnmounted } from 'vue'
 import { useStorage } from '@/composables/useStorage'
+import { logger } from '@/core/logger.js'
 
 export function useNodeBadges(layerRef, tooltipRef, getCy) {
   const storage = useStorage()
@@ -120,7 +121,7 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
       try {
         if (selector) _boundCy.off(eventName, selector, handler)
         else _boundCy.off(eventName, handler)
-      } catch (e) { console.warn('[useNodeBadges] 解除事件绑定失败:', e) }
+      } catch (e) { logger.warn('useNodeBadges', '解除事件绑定失败:', e) }
     })
     _cyHandlers = []
     _boundCy = null
@@ -172,7 +173,7 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
       const text = (md || '').replace(/^#+\s+.*/gm, '').replace(/[*_`>#\-\[\]]/g, '').trim()
       ttBody.textContent = text.slice(0, 150) + (text.length > 150 ? '…' : '')
     }).catch((e) => {
-      console.warn('[useNodeBadges] 读取文档失败:', cardPath, e)
+      logger.warn('useNodeBadges', '读取文档失败:', cardPath, e)
       if (ttBody) ttBody.textContent = ''
     })
   }

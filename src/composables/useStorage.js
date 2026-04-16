@@ -4,6 +4,7 @@
  */
 import { ref } from 'vue'
 import { Store } from '@/core/storage.js'
+import { logger } from '@/core/logger.js'
 
 // 保存指示器状态（全局单例）
 export const saveIndicatorVisible = ref(false)
@@ -45,7 +46,7 @@ export function useStorage() {
     readLayout: (dirPath) => Store.readLayout(dirPath),
     saveLayout: (dirPath, meta) => Store.saveLayout(dirPath, meta)
       .then(() => showSaveIndicator(false))
-      .catch((e) => { console.warn('[useStorage] saveLayout 失败:', dirPath, e); showSaveIndicator(true) }),
+      .catch((e) => { logger.warn('useStorage', 'saveLayout 失败:', dirPath, e); showSaveIndicator(true) }),
     saveLayoutSync: (dirPath, meta) => {
       if (window.electronAPI?.sendSync) {
         window.electronAPI.sendSync('save:layout', dirPath, meta)
