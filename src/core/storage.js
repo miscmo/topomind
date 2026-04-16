@@ -7,6 +7,8 @@ import { normalizeMeta } from './meta.js'
 import { logger } from './logger.js'
 
 const _saveTimers = new Map()
+/** 追踪 loadImage 创建的 Blob URL，防止内存泄漏 */
+const _blobUrlRegistry = new Map()
 
 function normalizeName(name) {
   return String(name || '').trim()
@@ -257,11 +259,28 @@ export const Store = {
   async loadImage(imgPath) {
     try {
       const blob = await FSB.readBlobFile(imgPath)
-      return blob ? URL.createObjectURL(blob) : ''
+      if (!blob) return ''
+      // 先撤销旧 URL（同一路径可能多次调用）
+      const existing = _blobUrlRegistry.get(imgPath)
+      if (existing) {
+        try { URL.revokeObjectURL(existing) } catch (e) {}
+        _blobUrlRegistry.delete(imgPath)
+      }
+      const url = URL.createObjectURL(blob)
+      _blobUrlRegistry.set(imgPath, url)
+      return url
     } catch (e) {
       logger.catch('Store.loadImage', `加载图片失败: ${imgPath}`, e)
       throw e
     }
+  },
+
+  /** 撤销所有 loadImage 创建的 Blob URL（HomePage 列表刷新时调用） */
+  revokeAllImageUrls() {
+    for (const [path, url] of _blobUrlRegistry) {
+      try { URL.revokeObjectURL(url) } catch (e) {}
+    }
+    _blobUrlRegistry.clear()
   },
 
   // ===== 工具 =====

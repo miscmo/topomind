@@ -61,6 +61,7 @@ export function useStorage() {
     saveImage: (cardPath, blob, filename) => Store.saveImage(cardPath, blob, filename),
     saveKBImage: (kbPath, blob, filename) => Store.saveKBImage(kbPath, blob, filename),
     loadImage: (imgPath) => Store.loadImage(imgPath),
+    revokeAllImageUrls: () => Store.revokeAllImageUrls(),
 
     // 工具
     countChildren: (p) => Store.countChildren(p),

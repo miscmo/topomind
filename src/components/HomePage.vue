@@ -172,6 +172,8 @@ async function loadKBList() {
   try {
     const [list, dir] = await Promise.all([storage.listKBs(), storage.getRootDir()])
     workDir.value = dir || ''
+    // 加载新列表前清理旧的 Blob URL，防止内存泄漏
+    await storage.revokeAllImageUrls()
     kbs.value = (list || []).map(kb => ({ ...kb, nodeCount: null, gitStatus: null, coverUrl: null }))
 
     await Promise.all(
@@ -233,14 +235,15 @@ function onKBDragLeave(e) {
 async function onKBDrop(e, idx) {
   const fromIdx = dragKBIndex.value
   if (fromIdx === -1 || fromIdx === idx) { dragKBIndex.value = -1; dragOverIndex.value = -1; return }
-  const arr = [...kbs.value]
-  const [item] = arr.splice(fromIdx, 1)
-  arr.splice(idx, 0, item)
-  arr.forEach((kb, i) => { kb.order = i })
-  kbs.value = arr
-  await Promise.all(arr.map(async (kb) => {
+  // 模拟 splice 操作生成新数组，不突变原始 KB 对象
+  const oldArr = kbs.value
+  const removed = oldArr[fromIdx]
+  const filtered = oldArr.filter((_, i) => i !== fromIdx)
+  const newArr = [...filtered.slice(0, idx), removed, ...filtered.slice(idx)]
+  kbs.value = newArr
+  await Promise.all(newArr.map(async (kb, i) => {
     const meta = await storage.getKBMeta(kb.path)
-    await storage.saveKBMeta(kb.path, { ...(meta || {}), order: kb.order })
+    await storage.saveKBMeta(kb.path, { ...(meta || {}), order: i })
   }))
   dragKBIndex.value = -1
   dragOverIndex.value = -1
@@ -270,6 +273,9 @@ async function submitCreate({ name, coverBlob }) {
     }
     showCreateSheet.value = false
     await loadKBList()
+    // 创建后自动打开，与导入流程保持一致
+    const newKB = kbs.value.find(kb => kb.path === kbPath)
+    if (newKB) await openKB(newKB)
   } catch (err) { logger.catch('HomePage', '创建知识库', err) }
 }
 
