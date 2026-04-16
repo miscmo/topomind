@@ -20,14 +20,51 @@
 
     <div id="detail-body" ref="bodyRef">
       <!-- 阅读模式：渲染 Markdown，图片异步加载 -->
-      <div
-        v-show="mode === 'read'"
-        class="rendered-content"
-        ref="renderedRef"
-        v-html="renderedHtml"
-        @click="handleRenderedClick"
-        @mousedown.prevent
-      ></div>
+      <div v-show="mode === 'read'" class="read-mode-wrap">
+        <teleport to="body">
+          <button
+            v-if="tocItems.length > 0 && !tocOpen"
+            class="toc-icon-toggle"
+            :style="tocAnchorStyle"
+            title="显示目录"
+            @click="tocOpen = true"
+            aria-label="显示目录"
+          >
+            <span class="toc-icon" aria-hidden="true">
+              <i></i><i></i><i></i>
+            </span>
+          </button>
+        </teleport>
+
+        <div
+          class="rendered-content"
+          ref="renderedRef"
+          v-html="renderedHtml"
+          @click="handleRenderedClick"
+          @mousedown.prevent
+        ></div>
+      </div>
+
+      <teleport to="body">
+        <div v-if="tocOpen && tocItems.length > 0" class="toc-float-panel" :style="tocPanelStyle" @mousedown.stop>
+          <div class="toc-float-header">
+            <span>目录</span>
+            <button class="toc-float-close" @click="tocOpen = false">×</button>
+          </div>
+          <div class="toc-float-body">
+            <button
+              v-for="item in tocItems"
+              :key="item.id"
+              class="toc-item"
+              :class="[ `level-${item.level}`, { active: activeTocId === item.id } ]"
+              @mousedown="handleTocMouseDown"
+              @click.stop="handleTocClick(item.id)"
+            >
+              {{ item.text }}
+            </button>
+          </div>
+        </div>
+      </teleport>
 
       <!-- 编辑模式：CodeMirror Markdown 编辑器（常驻，避免切换重建） -->
       <div v-show="mode === 'edit'" class="md-editor-wrap">
@@ -74,6 +111,9 @@ const mode = ref('read')
 const markdownRaw = ref('')
 const editContent = ref('')
 const childCards = ref([])
+const tocItems = ref([])
+const tocOpen = ref(false)
+const activeTocId = ref('')
 const bodyRef = ref(null)
 const renderedRef = ref(null)
 const cmEditorRef = ref(null)
@@ -86,6 +126,7 @@ let _cmView = null
 // 竞态保护版本号
 let _version = 0
 let _modeVersion = 0
+let _prevRenderedEl = null
 // Object URL 追踪
 let _activeUrls = []
 
@@ -115,6 +156,99 @@ const renderedHtml = computed(() => {
     ? sanitizeHtml(marked.parse(md))
     : '<div class="placeholder-text" style="color:#bbb;margin-top:20px">暂无文档内容</div>'
   return html + childInfo
+})
+
+function buildTocItems() {
+  const container = renderedRef.value
+  if (!container) {
+    tocItems.value = []
+    return
+  }
+  const headings = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6'))
+  const seen = new Map()
+  tocItems.value = headings.map((h, idx) => {
+    const level = Number(h.tagName.slice(1)) || 1
+    const text = (h.textContent || '').trim()
+    const slug = (text || `heading-${idx + 1}`)
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w\-\u4e00-\u9fa5]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || `heading-${idx + 1}`
+    const count = (seen.get(slug) || 0) + 1
+    seen.set(slug, count)
+    const id = count > 1 ? `${slug}-${count}` : slug
+    h.id = id
+    return { id, text, level }
+  }).filter(item => item.text)
+  if (tocItems.value.length > 0 && !activeTocId.value) {
+    activeTocId.value = tocItems.value[0].id
+  }
+}
+
+function scrollToHeading(id) {
+  const container = renderedRef.value
+  if (!container || !id) return
+  const target = container.querySelector(`[id="${CSS.escape(id)}"]`)
+  if (!target) return
+  activeTocId.value = id
+  target.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' })
+  requestAnimationFrame(() => {
+    tocOpen.value = true
+  })
+}
+
+function handleTocClick(id) {
+  scrollToHeading(id)
+}
+
+function handleTocMouseDown(e) {
+  e.preventDefault()
+}
+
+function updateActiveHeading() {
+  const content = renderedRef.value
+  const body = bodyRef.value
+  if (!content || !body) return
+  const headings = Array.from(content.querySelectorAll('h1, h2, h3, h4, h5, h6'))
+  if (!headings.length) {
+    activeTocId.value = ''
+    return
+  }
+
+  const probeTop = body.scrollTop + 120
+  let current = headings[0]
+
+  for (const heading of headings) {
+    const headingTop = heading.offsetTop
+    if (headingTop <= probeTop) {
+      current = heading
+    } else {
+      break
+    }
+  }
+
+  activeTocId.value = current.id || ''
+}
+
+const tocAnchorStyle = computed(() => {
+  const body = bodyRef.value
+  if (!body) return {}
+  const rect = body.getBoundingClientRect()
+  return {
+    top: `${Math.max(56, Math.round(rect.top + 12))}px`,
+    right: `${Math.max(12, Math.round(window.innerWidth - rect.right + 12))}px`,
+  }
+})
+
+const tocPanelStyle = computed(() => {
+  const body = bodyRef.value
+  if (!body) return {}
+  const rect = body.getBoundingClientRect()
+  return {
+    top: `${Math.max(56, Math.round(rect.top + 12))}px`,
+    right: `${Math.max(12, Math.round(window.innerWidth - rect.right + 12))}px`,
+  }
 })
 
 function _ensureEditorView(initialDoc = '') {
@@ -189,6 +323,7 @@ watch(() => props.nodeId, async (newId) => {
 async function loadNodeContent(cardPath) {
   // 先切回阅读模式（不要在这里 flush：避免先把空 editContent 覆盖掉磁盘文档）
   mode.value = 'read'
+  tocOpen.value = false
 
   _revokeActiveUrls()
   const version = ++_version
@@ -209,6 +344,8 @@ async function loadNodeContent(cardPath) {
 
   // 异步解析渲染内容中的图片（等 DOM 更新后）
   await nextTick()
+  buildTocItems()
+  updateActiveHeading()
   _resolveRenderedImages(cardPath, version)
 }
 
@@ -258,6 +395,10 @@ onUnmounted(() => {
     _cmView.destroy()
     _cmView = null
   }
+  if (_prevRenderedEl) {
+    _prevRenderedEl.removeEventListener('scroll', updateActiveHeading)
+    _prevRenderedEl = null
+  }
 })
 
 // ─── 图片上传（paste / drop）────────────────────────────────
@@ -306,7 +447,7 @@ async function _insertImage(blob) {
     editContent.value += (editContent.value ? '\n' : '') + mdRef
     debouncedSave()
   } catch (err) {
-    console.error('[DetailPanel] 图片上传失败:', err)
+    console.warn('[DetailPanel] 图片上传失败:', err)
   }
 }
 
@@ -359,7 +500,7 @@ function handleRenderedClick(e) {
       // Electron：系统默认浏览器；Web：新标签页打开
       if (window.electronAPI?.invoke) {
         window.electronAPI.invoke('app:openExternal', href).catch((err) => {
-          console.error('[DetailPanel] 打开外链失败:', err)
+          console.warn('[DetailPanel] 打开外链失败:', err)
         })
       } else {
         window.open(href, '_blank', 'noopener,noreferrer')
@@ -390,6 +531,9 @@ function reset() {
   markdownRaw.value = ''
   editContent.value = ''
   childCards.value = []
+  tocItems.value = []
+  tocOpen.value = false
+  activeTocId.value = ''
   _revokeActiveUrls()
 }
 
@@ -404,7 +548,7 @@ function sanitizeHtml(dirty) {
     const parser = new DOMParser()
     const doc = parser.parseFromString(dirty, 'text/html')
     // 遍历所有节点，清除危险属性和危险元素
-    const dangerous = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math']
+    const dangerous = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math', 'form', 'input', 'button', 'textarea', 'select']
     const dangerousTags = doc.querySelectorAll(dangerous.join(','))
     dangerousTags.forEach(el => el.remove())
 
@@ -434,6 +578,154 @@ function escHtml(s) {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+watch(renderedHtml, async () => {
+  await nextTick()
+  buildTocItems()
+  updateActiveHeading()
+})
+
+watch(() => bodyRef.value?.scrollTop, () => {
+  updateActiveHeading()
+}, { flush: 'post' })
+
+watch(tocOpen, async (open) => {
+  if (open) {
+    await nextTick()
+    updateActiveHeading()
+  }
+})
+
+watch(() => mode.value, (m) => {
+  if (m !== 'read') tocOpen.value = false
+})
+
+watch(renderedRef, (el) => {
+  if (_prevRenderedEl) {
+    _prevRenderedEl.removeEventListener('scroll', updateActiveHeading)
+  }
+  if (el) {
+    el.addEventListener('scroll', updateActiveHeading, { passive: true })
+  }
+  _prevRenderedEl = el || null
+})
+
 // 暴露 flushEdit 给父组件调用（路由切换时）
 defineExpose({ flushEdit })
 </script>
+
+<style>
+#detail-panel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-left: 1px solid #e8ecf0;
+  box-shadow: -2px 0 8px rgba(0,0,0,.03);
+}
+
+.read-mode-wrap {
+  position: relative;
+  height: 100%;
+}
+
+.toc-icon-toggle {
+  position: fixed;
+  z-index: 40;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 4px 18px rgba(26, 58, 92, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.toc-icon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.toc-icon i {
+  display: block;
+  width: 14px;
+  height: 2px;
+  background: #1a3a5c;
+  border-radius: 999px;
+}
+
+.toc-float-panel {
+  position: fixed;
+  z-index: 39;
+  width: 280px;
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #dce3ea;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.toc-float-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 13px;
+  font-weight: 700;
+  color: #243447;
+}
+
+.toc-float-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: #f3f6fa;
+  cursor: pointer;
+}
+
+.toc-float-body {
+  padding: 8px;
+  overflow: auto;
+}
+
+.toc-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #334155;
+  cursor: pointer;
+}
+
+.toc-item:hover {
+  background: #eef4fb;
+}
+
+.toc-item.active {
+  background: #e8f0fb;
+  color: #1a3a5c;
+  font-weight: 700;
+}
+
+.toc-item.level-2 { padding-left: 18px; }
+.toc-item.level-3 { padding-left: 28px; font-size: 11px; }
+.toc-item.level-4 { padding-left: 38px; font-size: 11px; }
+.toc-item.level-5 { padding-left: 48px; font-size: 11px; }
+.toc-item.level-6 { padding-left: 58px; font-size: 11px; }
+</style>

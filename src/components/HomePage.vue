@@ -356,7 +356,7 @@ async function loadKBList() {
       })
     }
   } catch (err) {
-    console.error('[HomePage] 加载知识库列表失败:', err)
+    console.warn('[HomePage] 加载知识库列表失败:', err)
   } finally {
     loading.value = false
   }
@@ -364,7 +364,11 @@ async function loadKBList() {
 
 // ─── 打开知识库 ────────────────────────────────────────────────
 async function openKB(kb) {
-  await storage.setLastOpenedKB(kb.path)
+  try {
+    await storage.setLastOpenedKB(kb.path)
+  } catch (e) {
+    console.warn('[HomePage] 设置最近打开失败:', e)
+  }
   roomStore.openTab(kb.path, kb.name)
   appStore.showGraph()
 }
@@ -482,7 +486,7 @@ async function submitCreate() {
     cancelCreate()
     await loadKBList()
   } catch (err) {
-    console.error('[HomePage] 创建知识库失败:', err)
+    console.warn('[HomePage] 创建知识库失败:', err)
   }
 }
 
@@ -503,7 +507,9 @@ async function openKBSettings(kb) {
   try {
     const latestCount = await storage.countChildren(kb.path)
     settingsForm.nodeCount = Number.isFinite(latestCount) ? latestCount : settingsForm.nodeCount
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[HomePage] 读取节点数失败:', kb.path, e)
+  }
 }
 
 function closeKBSettings() {
@@ -621,25 +627,29 @@ async function saveKBSettings() {
 
   const targetPath = kb.path
 
-  // 当前存储后端以目录名作为知识库路径标识，设置页改名仅修改展示名（meta.name）
-  const baseMeta = await storage.getKBMeta(targetPath)
-  await storage.saveKBMeta(targetPath, { ...(baseMeta || {}), name: newName })
+  try {
+    // 当前存储后端以目录名作为知识库路径标识，设置页改名仅修改展示名（meta.name）
+    const baseMeta = await storage.getKBMeta(targetPath)
+    await storage.saveKBMeta(targetPath, { ...(baseMeta || {}), name: newName })
 
-  // 封面处理
-  if (settingsForm.coverBlob) {
-    const ext = (settingsForm.coverBlob.name || 'png').split('.').pop()
-    const r = await storage.saveKBImage(targetPath, settingsForm.coverBlob, `cover.${ext}`)
-    const meta = await storage.getKBMeta(targetPath)
-    meta.cover = r.markdownRef
-    await storage.saveKBMeta(targetPath, meta)
-  } else if (!settingsForm.keepCurrentCover) {
-    const meta = await storage.getKBMeta(targetPath)
-    delete meta.cover
-    await storage.saveKBMeta(targetPath, meta)
+    // 封面处理
+    if (settingsForm.coverBlob) {
+      const ext = (settingsForm.coverBlob.name || 'png').split('.').pop()
+      const r = await storage.saveKBImage(targetPath, settingsForm.coverBlob, `cover.${ext}`)
+      const meta = await storage.getKBMeta(targetPath)
+      meta.cover = r.markdownRef
+      await storage.saveKBMeta(targetPath, meta)
+    } else if (!settingsForm.keepCurrentCover) {
+      const meta = await storage.getKBMeta(targetPath)
+      delete meta.cover
+      await storage.saveKBMeta(targetPath, meta)
+    }
+
+    closeKBSettings()
+    await loadKBList()
+  } catch (e) {
+    console.warn('[HomePage] 保存知识库设置失败:', e)
   }
-
-  closeKBSettings()
-  await loadKBList()
 }
 
 async function deleteKBFromSettings() {

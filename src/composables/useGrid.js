@@ -12,12 +12,6 @@ export function useGrid(canvasRef, getCy) {
   let _rafId = null
   let _resizeBound = false
 
-  function setCanvasBounds() {}
-  function getCanvasBounds() { return null }
-  function expandCanvasIfNeeded() { return false }
-  function shrinkCanvas() {}
-  function enforcePanBounds() {}
-
   function drawGrid() {
     const canvas = canvasRef.value
     const cy = getCy()
@@ -100,11 +94,6 @@ export function useGrid(canvasRef, getCy) {
   return {
     gridEnabled,
     drawGrid,
-    setCanvasBounds,
-    getCanvasBounds,
-    expandCanvasIfNeeded,
-    shrinkCanvas,
-    enforcePanBounds,
     bindCyEvents,
   }
 }

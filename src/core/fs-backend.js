@@ -4,34 +4,43 @@
  */
 const getApi = () => window.electronAPI
 
+const _call = (channel, ...args) => {
+  const api = getApi()
+  if (!api) {
+    console.warn(`[FSB] IPC API 未就绪，无法调用 ${channel}`)
+    return Promise.reject(new Error(`IPC API 未就绪: ${channel}`))
+  }
+  return api.invoke(channel, ...args)
+}
+
 export const FSB = {
-  open: () => getApi().invoke('fs:init'),
-  clearAll: () => getApi().invoke('fs:clearAll'),
+  open: () => _call('fs:init'),
+  clearAll: () => _call('fs:clearAll'),
 
-  listChildren: (parentPath) => getApi().invoke('fs:listChildren', parentPath),
-  mkDir: (dirPath, meta) => getApi().invoke('fs:mkDir', dirPath, meta || {}),
-  rmDir: (dirPath) => getApi().invoke('fs:rmDir', dirPath),
-  readMeta: (dirPath) => getApi().invoke('fs:readMeta', dirPath),
-  writeMeta: (dirPath, meta) => getApi().invoke('fs:writeMeta', dirPath, meta),
-  readGraphMeta: (dirPath) => getApi().invoke('fs:readGraphMeta', dirPath),
-  writeGraphMeta: (dirPath, meta) => getApi().invoke('fs:writeGraphMeta', dirPath, meta),
-  getDir: (dirPath) => getApi().invoke('fs:getDir', dirPath),
+  listChildren: (parentPath) => _call('fs:listChildren', parentPath),
+  mkDir: (dirPath, meta) => _call('fs:mkDir', dirPath, meta || {}),
+  rmDir: (dirPath) => _call('fs:rmDir', dirPath),
+  readMeta: (dirPath) => _call('fs:readMeta', dirPath),
+  writeMeta: (dirPath, meta) => _call('fs:writeMeta', dirPath, meta),
+  readGraphMeta: (dirPath) => _call('fs:readGraphMeta', dirPath),
+  writeGraphMeta: (dirPath, meta) => _call('fs:writeGraphMeta', dirPath, meta),
+  getDir: (dirPath) => _call('fs:getDir', dirPath),
 
-  readFile: (filePath) => getApi().invoke('fs:readFile', filePath),
-  writeFile: (filePath, content) => getApi().invoke('fs:writeFile', filePath, content),
-  deleteFile: (filePath) => getApi().invoke('fs:deleteFile', filePath),
+  readFile: (filePath) => _call('fs:readFile', filePath),
+  writeFile: (filePath, content) => _call('fs:writeFile', filePath, content),
+  deleteFile: (filePath) => _call('fs:deleteFile', filePath),
 
   writeBlobFile: (filePath, blob) =>
-    blob.arrayBuffer().then(ab => getApi().invoke('fs:writeBlobFile', filePath, ab)),
+    blob.arrayBuffer().then(ab => _call('fs:writeBlobFile', filePath, ab)),
   readBlobFile: (filePath) =>
-    getApi().invoke('fs:readBlobFile', filePath).then(ab => ab ? new Blob([ab]) : null),
+    _call('fs:readBlobFile', filePath).then(ab => ab ? new Blob([ab]) : null),
 
-  selectDir: () => getApi().invoke('fs:selectDir'),
-  selectExistingKB: () => getApi().invoke('fs:selectExistingKB'),
-  importKB: (sourcePath) => getApi().invoke('fs:importKB', sourcePath),
-  openInFinder: (p) => getApi().invoke('fs:openInFinder', p),
-  countChildren: (p) => getApi().invoke('fs:countChildren', p),
-  getRootDir: () => getApi().invoke('fs:getRootDir'),
-  getLastOpenedKB: () => getApi().invoke('fs:getLastOpenedKB'),
-  setLastOpenedKB: (kbPath) => getApi().invoke('fs:setLastOpenedKB', kbPath),
+  selectDir: () => _call('fs:selectDir'),
+  selectExistingKB: () => _call('fs:selectExistingKB'),
+  importKB: (sourcePath) => _call('fs:importKB', sourcePath),
+  openInFinder: (p) => _call('fs:openInFinder', p),
+  countChildren: (p) => _call('fs:countChildren', p),
+  getRootDir: () => _call('fs:getRootDir'),
+  getLastOpenedKB: () => _call('fs:getLastOpenedKB'),
+  setLastOpenedKB: (kbPath) => _call('fs:setLastOpenedKB', kbPath),
 }

@@ -365,7 +365,7 @@ watch(() => roomStore.currentRoomPath, async (newPath) => {
     } catch (e) {
       initPhase.value = 'error'
       initError.value = e?.message || '切换房间失败'
-      console.error('[GraphView] 切换房间加载失败:', newPath, e)
+      console.warn('[GraphView] 切换房间加载失败:', newPath, e)
     }
   }
 })
@@ -427,7 +427,7 @@ watch(() => appStore.edgeModeSourceId, (v) => {
 // 切换到 Git Tab 时自动打开 gitStore
 watch(activeLeftTab, (tab) => {
   if (tab === 'git') {
-    gitStore.isOpen = true
+    gitStore.openForKB(gitStore.kbPath || roomStore.currentKBPath || '')
   }
 })
 
@@ -455,7 +455,7 @@ async function initializeGraphView() {
   } catch (e) {
     initPhase.value = 'error'
     initError.value = e?.message || '初始化失败'
-    console.error('[GraphView] mounted 初始化失败:', e)
+    console.warn('[GraphView] mounted 初始化失败:', e)
   }
 }
 
@@ -473,7 +473,13 @@ async function handleBeforeUnload() {
   const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
   if (!dirPath) return
   const meta = await graph.buildCurrentMeta()
-  if (meta) storage.saveLayoutSync(dirPath, meta)
+  if (meta) {
+    try {
+      storage.saveLayoutSync(dirPath, meta)
+    } catch (e) {
+      console.warn('[GraphView] 保存布局失败:', e)
+    }
+  }
 }
 
 // ─── 右键菜单动作 ────────────────────────────────────────────
@@ -857,11 +863,5 @@ function startDetailResize(e) {
   font-size: 10px;
   padding: 3px 8px;
   margin-top: 4px;
-}
-
-.sp-title {
-  font-size: 12px;
-  color: #8891aa;
-  padding: 0 4px;
 }
 </style>
