@@ -29,7 +29,8 @@
       "Bash(npm search:*)",
       "Bash(curl -s http://localhost:5173)",
       "Bash(npm ls:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "mcp__plugin_everything-claude-code_github__get_file_contents"
     ]
   }
 }

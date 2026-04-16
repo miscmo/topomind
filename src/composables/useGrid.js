@@ -11,6 +11,22 @@ export function useGrid(canvasRef, getCy) {
   let _ctx = null
   let _rafId = null
   let _resizeBound = false
+  let _canvasBounds = { x: -750, y: -500, w: 1500, h: 1000 }
+
+  function setCanvasBounds(bounds) {
+    if (!bounds || typeof bounds !== 'object') return
+    const x = Number(bounds.x)
+    const y = Number(bounds.y)
+    const w = Number(bounds.w)
+    const h = Number(bounds.h)
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) return
+    _canvasBounds = { x, y, w, h }
+    drawGrid()
+  }
+
+  function getCanvasBounds() {
+    return { ..._canvasBounds }
+  }
 
   function drawGrid() {
     const canvas = canvasRef.value
@@ -49,14 +65,17 @@ export function useGrid(canvasRef, getCy) {
       if (step <= 0) step = 20
 
       const bigStep = step * 5
-      const offX = ((pan.x % step) + step) % step
-      const offY = ((pan.y % step) + step) % step
+      const bounds = _canvasBounds || { x: 0, y: 0, w, h }
+      const startX = Math.max(0, Math.floor((bounds.x - pan.x) / step) * step + pan.x)
+      const startY = Math.max(0, Math.floor((bounds.y - pan.y) / step) * step + pan.y)
+      const endX = Math.min(w, bounds.x + bounds.w - pan.x)
+      const endY = Math.min(h, bounds.y + bounds.h - pan.y)
       const offBigX = ((pan.x % bigStep) + bigStep) % bigStep
       const offBigY = ((pan.y % bigStep) + bigStep) % bigStep
 
       _ctx.fillStyle = 'rgba(160,170,185,0.12)'
-      for (let x = offX; x < w; x += step) {
-        for (let y = offY; y < h; y += step) {
+      for (let x = startX; x < endX; x += step) {
+        for (let y = startY; y < endY; y += step) {
           _ctx.beginPath(); _ctx.arc(x, y, 0.8, 0, Math.PI * 2); _ctx.fill()
         }
       }
@@ -95,5 +114,7 @@ export function useGrid(canvasRef, getCy) {
     gridEnabled,
     drawGrid,
     bindCyEvents,
+    setCanvasBounds,
+    getCanvasBounds,
   }
 }

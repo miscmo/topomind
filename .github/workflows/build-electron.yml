@@ -106,7 +106,7 @@ jobs:
       - name: Build Electron app (macOS)
         run: npm run build:mac
         env:
-          ELECTRON_BUILDER.extraMetadata:
+          'ELECTRON_BUILDER.extraMetadata':
             version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
 
       - name: Upload macOS artifacts
@@ -142,7 +142,7 @@ jobs:
       - name: Build Electron app (Linux)
         run: npm run build:linux
         env:
-          ELECTRON_BUILDER.extraMetadata:
+          'ELECTRON_BUILDER.extraMetadata':
             version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
 
       - name: Upload Linux artifacts
