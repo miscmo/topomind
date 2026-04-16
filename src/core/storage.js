@@ -40,14 +40,18 @@ export const Store = {
 
   async createKB(name, meta) {
     const safeName = ensureValidName(name, '知识库名称')
-    // 分配 sortOrder：取现有 KB 的最大 order + 1
     const existing = await FSB.listChildren('')
     let maxOrder = -1
     for (const kb of existing) {
       if (Number.isFinite(kb.order) && kb.order > maxOrder) maxOrder = kb.order
     }
-    const fullMeta = Object.assign({ name: safeName, createdAt: Date.now(), cover: '', order: maxOrder + 1 }, meta || {})
-    return FSB.mkDir(safeName, fullMeta)
+    const newOrder = maxOrder + 1
+    // Create directory (only creates _graph.json)
+    const actualPath = await FSB.mkDir(safeName, null)
+    // Write name to KB's _graph.json and save order to _config.json.orders
+    await FSB.writeKBName(actualPath, safeName)
+    await FSB.saveKBOrder(actualPath, newOrder)
+    return actualPath || safeName
   },
 
   deleteKB: (name) => FSB.rmDir(name),
@@ -67,18 +71,15 @@ export const Store = {
     }
 
     const cardPath = basePath ? `${basePath}/${safeName}` : safeName
-    const fullMeta = { name: safeName, createdAt: Date.now(), children: {}, edges: [] }
-    const actualPath = await FSB.mkDir(cardPath, fullMeta)
-    return actualPath || cardPath
+    // 惰性创建：目录在写入文档、添加子节点或进入房间时才会被创建
+    // 卡片路径通过 saveLayoutDebounced 被添加到父级的 children map 中
+    return cardPath
   },
 
   deleteCard: (cardPath) => FSB.rmDir(cardPath),
 
   async renameCard(cardPath, newName) {
     const safeName = ensureValidName(newName, '卡片名称')
-    const dir = await FSB.getDir(cardPath)
-    if (!dir) return
-
     const parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : ''
     const siblings = await FSB.listChildren(parentPath)
     const duplicated = (siblings || []).some((s) => s.path !== cardPath && (s?.name || '').trim() === safeName)
@@ -86,14 +87,19 @@ export const Store = {
       throw new Error(`同级下已存在同名卡片：${safeName}`)
     }
 
-    dir.name = safeName
-    const actualPath = await FSB.mkDir(cardPath, dir)
-    return actualPath || cardPath
+    // Update parent's _graph.json and rename the directory
+    const newPath = await FSB.updateCardMeta(cardPath, safeName)
+    return newPath || cardPath
   },
 
   // ===== Markdown 文档 =====
   readMarkdown: (cardPath) => FSB.readFile(`${cardPath}/README.md`),
-  writeMarkdown: (cardPath, content) => FSB.writeFile(`${cardPath}/README.md`, content),
+  writeMarkdown: (cardPath, content) => {
+    // 惰性创建：首次写入文档时创建目录
+    return FSB.ensureCardDir(cardPath).then(() =>
+      FSB.writeFile(`${cardPath}/README.md`, content)
+    )
+  },
 
   // ===== 关系和布局 =====
   readLayout(dirPath) {
@@ -163,4 +169,7 @@ export const Store = {
   getRootDir: () => FSB.getRootDir(),
   getLastOpenedKB: () => FSB.getLastOpenedKB(),
   setLastOpenedKB: (kbPath) => FSB.setLastOpenedKB(kbPath),
+
+  // 惰性目录创建
+  ensureCardDir: (cardPath) => FSB.ensureCardDir(cardPath),
 }

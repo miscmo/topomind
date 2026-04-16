@@ -71,6 +71,7 @@ export function useStorage() {
     getRootDir: () => Store.getRootDir(),
     getLastOpenedKB: () => Store.getLastOpenedKB(),
     setLastOpenedKB: (kbPath) => Store.setLastOpenedKB(kbPath),
+    ensureCardDir: (cardPath) => Store.ensureCardDir(cardPath),
 
     // 指示器状态
     saveIndicatorVisible,

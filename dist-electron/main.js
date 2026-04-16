@@ -1,7 +1,1544 @@
-"use strict";const{app:j,BrowserWindow:te,ipcMain:f,dialog:ue,Menu:Y,shell:Z,safeStorage:L}=require("electron"),s=require("path"),a=require("fs"),{simpleGit:ae}=require("simple-git"),{execFile:re}=require("child_process");let p="",I={lastOpenedKB:null};function $(t){return s.join(t||p,"app-config.json")}function fe(t){try{var e=$(t);a.existsSync(e)&&(I=JSON.parse(a.readFileSync(e,"utf-8"))||{lastOpenedKB:null})}catch{I={lastOpenedKB:null}}}function K(){try{O(p),a.writeFileSync($(),JSON.stringify(I,null,2),"utf-8")}catch{}}function se(t){try{return a.existsSync(t)?a.readdirSync(t).length===0:!0}catch{return!1}}function ce(t){try{if(!t||!a.existsSync(t))return!1;var e=a.statSync(t);return e.isDirectory()?a.existsSync(s.join(t,"app-config.json")):!1}catch{return!1}}function O(t){a.existsSync(t)||a.mkdirSync(t,{recursive:!0})}function ie(t){var e=String(t||"").trim().replace(/[<>:"/\\|?*\x00-\x1F]/g,"_").replace(/[. ]+$/g,"");return(!e||e==="."||e==="..")&&(e="untitled"),e.slice(0,80)}function Q(t,e){for(var n=ie(e),r=n,i=1;a.existsSync(s.join(t,r));)r=n+"-"+i,i+=1;return r}function w(t){if(!t)return p;var e=s.resolve(p),n=s.resolve(e,t),r=s.relative(e,n);if(r.startsWith("..")||s.isAbsolute(r))throw new Error("路径越界: "+t);return n}function G(t){if(!a.existsSync(t))return null;try{return JSON.parse(a.readFileSync(t,"utf-8"))}catch{return null}}function B(t,e){a.writeFileSync(t,JSON.stringify(e||{},null,2),"utf-8")}function q(t){var e=t&&typeof t=="object"&&!Array.isArray(t)?t:{},n={};return Object.keys(e).forEach(function(r){["children","edges","zoom","pan","canvasBounds"].indexOf(r)===-1&&(n[r]=e[r])}),n}function E(t,e){return s.join(t,e==="graph"?"_graph.json":"_kb_meta.json")}var C={setRootDir:function(t){p=t,O(p),I={lastOpenedKB:null},K()},getRootDir:function(){return p},getLastOpenedKB:function(){return I.lastOpenedKB||null},setLastOpenedKB:function(t){I.lastOpenedKB=t||null,K()},createWorkDir:function(t){var e=s.resolve(t);if(a.existsSync(e)&&!se(e))throw new Error("工作目录必须是空目录");return O(e),p=e,I={lastOpenedKB:null},K(),{valid:!0,path:p}},selectWorkDirCandidate:function(){var t=ue.showOpenDialogSync({title:"选择工作目录",properties:["openDirectory"]});return!t||!t[0]?{valid:!1,path:null,error:"已取消选择"}:{valid:!0,path:s.resolve(t[0])}},selectExistingWorkDir:function(t){var e=t;if(!e){var n=C.selectWorkDirCandidate();if(!n.valid)return n;e=n.path}return e=s.resolve(e),ce(e)?(p=e,fe(e),{valid:!0,path:p}):{valid:!1,path:e,error:"不是有效的工作目录（缺少 app-config.json）"}},initWorkDir:function(){return p?(O(p),a.existsSync($())||(I={lastOpenedKB:null},K()),{valid:!0,path:p}):{valid:!1,path:null,error:"未选择工作目录"}},listChildren:function(t){var e=w(t);O(e);var n=a.readdirSync(e,{withFileTypes:!0}).filter(function(r){return r.isDirectory()&&!r.name.startsWith(".")&&r.name!=="images"}).map(function(r){var i=t?t+"/"+r.name:r.name,o=C.readMeta(i),u=o&&typeof o=="object"&&!Array.isArray(o)?o:{},c=typeof u.name=="string"&&u.name.trim()?u.name:r.name,g=typeof u.cover=="string"&&u.cover.trim()?u.cover:"";return Object.assign({path:i,name:c,cover:g},u)});return n.sort(function(r,i){var o=Number.isFinite(r.order)?r.order:1/0,u=Number.isFinite(i.order)?i.order:1/0;return o!==u?o-u:String(r.name||"").localeCompare(String(i.name||""),"zh-CN")}),n},mkDir:function(t,e,n){var r=n?s.resolve(n):p;O(r);var i=(t||"").split("/").filter(Boolean);if(i.length===0)return r;for(var o=0;o<i.length-1;o++)r=s.join(r,ie(i[o])),O(r);var u=Q(r,i[i.length-1]),c=s.join(r,u);O(c);var g=E(c,"kb");return(!a.existsSync(g)||e)&&B(g,q(e)),a.existsSync(E(c,"graph"))||B(E(c,"graph"),{children:{},edges:[],zoom:null,pan:null,canvasBounds:null}),c},rmDir:function(t){var e=w(t);a.existsSync(e)&&a.rmSync(e,{recursive:!0,force:!0})},readMeta:function(t){var e=w(t),n=G(E(e,"kb"));return n||{}},writeMeta:function(t,e){var n=w(t);O(n),B(E(n,"kb"),q(e))},readGraphMeta:function(t){var e=w(t),n=G(E(e,"graph"));return n||{children:{},edges:[],zoom:null,pan:null,canvasBounds:null}},writeGraphMeta:function(t,e){var n=w(t);O(n);var r=e&&typeof e=="object"&&!Array.isArray(e)?e:{};B(E(n,"graph"),r),B(E(n,"kb"),q(G(E(n,"kb"))||{}))},getDir:function(t){var e=w(t);if(!a.existsSync(e))return null;var n=C.readMeta(t);return Object.assign({path:t},n)},readFile:function(t){var e=w(t);return a.existsSync(e)?a.readFileSync(e,"utf-8"):""},writeFile:function(t,e){var n=w(t);O(s.dirname(n)),a.writeFileSync(n,e,"utf-8")},deleteFile:function(t){var e=w(t);a.existsSync(e)&&a.unlinkSync(e)},writeBlobFile:function(t,e){var n=w(t);O(s.dirname(n)),a.writeFileSync(n,Buffer.from(e))},readBlobFile:function(t){var e=w(t);if(!a.existsSync(e))return null;var n=a.readFileSync(e);return n.buffer.slice(n.byteOffset,n.byteOffset+n.byteLength)},clearAll:function(){var t=s.resolve(p);if(!a.existsSync(t)){O(t);return}a.readdirSync(t,{withFileTypes:!0}).forEach(function(e){e.isDirectory()&&!e.name.startsWith(".")&&a.rmSync(s.join(t,e.name),{recursive:!0,force:!0})})},importKB:function(t){var e=s.resolve(t);if(!a.existsSync(e))throw new Error("源目录不存在: "+e);if(!a.existsSync(s.join(e,"_kb_meta.json"))&&!a.existsSync(s.join(e,"_meta.json")))throw new Error("不是有效的知识库目录");var n=G(s.join(e,"_kb_meta.json"))||G(s.join(e,"_meta.json"))||{},r=n.name&&typeof n.name=="string"&&n.name.trim()?n.name.trim():s.basename(e),i=Q(p,r),o=s.join(p,i);O(o);function u(D,F){O(F);for(var T=a.readdirSync(D,{withFileTypes:!0}),S=0;S<T.length;S++){var R=T[S];if(R.name!=="node_modules"){var b=s.join(D,R.name),A=s.join(F,R.name);if(R.isDirectory())u(b,A);else if(O(s.dirname(A)),/\.(json|md|txt)$/i.test(R.name)){var J=a.readFileSync(b,"utf-8");a.writeFileSync(A,J,"utf-8")}else{var M=a.readFileSync(b);a.writeFileSync(A,M)}}}}u(e,o);function c(D){var F=[];try{F=a.readdirSync(D,{withFileTypes:!0})}catch{return}for(var T=0;T<F.length;T++){var S=F[T];!S.isDirectory()||S.name==="node_modules"||S.name.startsWith(".")||c(s.join(D,S.name))}var R=s.join(D,"_meta.json");if(a.existsSync(R)){var b=G(R);if(b){var A={},J={children:b.children||{},edges:b.edges||[],zoom:b.zoom||null,pan:b.pan||null,canvasBounds:b.canvasBounds||null};Object.keys(b).forEach(function(M){["children","edges","zoom","pan","canvasBounds"].indexOf(M)===-1&&(A[M]=b[M])}),B(E(D,"kb"),A),B(E(D,"graph"),J);try{a.unlinkSync(R)}catch{}}}}c(o);for(var g=C.listChildren(""),y=-1,l=0;l<g.length;l++){var d=g[l].order;Number.isFinite(d)&&d>y&&(y=d)}var v=C.readMeta(s.relative(p,o))||{};return v.order=y+1,C.writeMeta(s.relative(p,o),v),s.relative(p,o)}},z=null;function _(){return z!==null?Promise.resolve(z):new Promise(function(t){re("git",["--version"],{timeout:5e3},function(e,n){e?(z=!1,t(!1)):(z=!0,t(!0))})})}function P(t,e,n){var r=new Promise(function(i,o){setTimeout(function(){o(new Error((n||"git")+" 超时（"+e/1e3+"s）"))},e)});return Promise.race([t,r])}function U(t){return t.split(s.sep).join("/")}function k(t,e){return ae(t).env(Object.assign({},process.env,e||{}))}var m={checkGitAvailable:function(){return _()},initRepo:function(t){return _().then(function(e){if(!e)return{ok:!1,code:"GIT_NOT_FOUND"};var n=k(t);return n.checkIsRepo().catch(function(){return!1}).then(function(r){return r?{ok:!0,alreadyInit:!0}:n.init().then(function(){var i=s.join(t,".gitignore");return a.existsSync(i)||a.writeFileSync(i,["# TopoMind auto-generated",".DS_Store","Thumbs.db","*.tmp",".git-credentials"].join(`
-`),"utf-8"),n.add(".")}).then(function(){return n.status()}).then(function(i){return i.isClean()?null:n.commit("init: initialize TopoMind knowledge base")}).then(function(){return{ok:!0,alreadyInit:!1}})})})},getStatus:function(t){return _().then(function(e){if(!e)return{state:"git-unavailable",ahead:0,behind:0};var n=k(t);return n.checkIsRepo().catch(function(){return!1}).then(function(r){return r?n.raw(["rev-list","--count","HEAD"]).then(function(i){return parseInt(i.trim())>0}).catch(function(){return!1}):{state:"uninit",ahead:0,behind:0}}).then(function(r){return r?n.status().then(function(i){var o=i.conflicted||[],u=i.files.length,c=!i.isClean();return o.length>0?{state:"conflict",ahead:0,behind:0,hasUncommitted:!0,dirtyFiles:u,conflictFiles:o}:c?X(n).then(function(g){return Object.assign({state:"dirty",dirtyFiles:u,hasUncommitted:!0,conflictFiles:[]},g)}):n.getRemotes(!1).catch(function(){return[]}).then(function(g){return g.length===0?{state:"no-remote",ahead:0,behind:0,hasUncommitted:!1,dirtyFiles:0,conflictFiles:[]}:n.raw(["rev-parse","--abbrev-ref","--symbolic-full-name","@{u}"]).catch(function(){return""}).then(function(y){return y.trim()?X(n).then(function(l){var d;return l.ahead>0&&l.behind>0?d="diverged":l.ahead>0?d="ahead":l.behind>0?d="behind":d="clean",Object.assign({state:d,hasUncommitted:!1,dirtyFiles:0,conflictFiles:[]},l)}):{state:"no-remote",ahead:0,behind:0,hasUncommitted:!1,dirtyFiles:0,conflictFiles:[]}})})}):{state:"uninit",ahead:0,behind:0}})})},getStatusBatch:function(t){var e={},n=3,r=function(i){if(i>=t.length)return Promise.resolve();var o=t.slice(i,i+n);return Promise.allSettled(o.map(function(u){return m.getStatus(u).then(function(c){return[u,c]})})).then(function(u){return u.forEach(function(c){c.status==="fulfilled"&&(e[c.value[0]]=c.value[1])}),r(i+n)})};return r(0).then(function(){return e})},isDirty:function(t){return _().then(function(e){if(!e)return!1;var n=k(t);return n.checkIsRepo().catch(function(){return!1}).then(function(r){return r?n.status().catch(function(){return{isClean:function(){return!0}}}).then(function(i){return!i.isClean()}):!1})})},commit:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};var r=k(t);return r.checkIsRepo().catch(function(){return!1}).then(function(i){return i?r.status().then(function(o){if(o.isClean())return{ok:!0,skipped:!0,message:"无变更可提交"};var u=s.basename(t),c=e||le(u,o);return r.add(".").then(function(){return r.commit(c)}).then(function(g){return{ok:!0,hash:g.commit,message:c}})}):{ok:!1,code:"NOT_GIT_REPO",error:"尚未初始化 Git，请先初始化。"}})})},getDiff:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};e=e||{};var r=k(t),i=[];return e.from&&e.to?i.push(e.from+".."+e.to):i.push("HEAD"),e.file&&i.push("--",U(e.file)),r.diff(i).catch(function(){return""}).then(function(o){return!e.from&&!e.to?r.diff(["--cached"].concat(i.slice(1))).catch(function(){return""}).then(function(u){return{ok:!0,diff:(u+`
-`+o).trim()}}):{ok:!0,diff:o}})})},getDiffStat:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};e=e||{};var r=k(t),i=["--stat"];return e.from&&e.to?i.unshift(e.from+".."+e.to):i.unshift("HEAD"),r.diff(i).catch(function(){return""}).then(function(o){return r.diff(["--cached","--stat",e.from||"HEAD"]).catch(function(){return""}).then(function(u){return{ok:!0,stat:(u+`
-`+o).trim()}})})})},getDiffFiles:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};e=e||{};var r=k(t),i=["--numstat"];return e.from&&e.to?i.unshift(e.from+".."+e.to):i.unshift("HEAD"),r.diff(i).catch(function(){return""}).then(function(o){return r.diff(["--cached","--numstat",e.from||"HEAD"]).catch(function(){return""}).then(function(u){var c=(u+`
-`+o).trim();if(!c)return{ok:!0,files:[]};var g=[],y={};return c.split(`
-`).forEach(function(l){if(l=l.trim(),!!l){var d=l.split("	");if(!(d.length<3)){var v=parseInt(d[0])||0,D=parseInt(d[1])||0,F=d[2];if(y[F]){y[F].insertions+=v,y[F].deletions+=D;return}var T={path:F,insertions:v,deletions:D,isMeta:F.endsWith("_meta.json"),isDoc:F.endsWith("README.md"),isImage:/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(F)};y[F]=T,g.push(T)}}}),r.status().then(function(l){return(l.not_added||[]).forEach(function(d){if(!y[d]){var v={path:d,insertions:0,deletions:0,isNew:!0,isMeta:d.endsWith("_meta.json"),isDoc:d.endsWith("README.md"),isImage:/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(d)};y[d]=v,g.push(v)}}),{ok:!0,files:g}})})})})},getLog:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};e=e||{};var r=k(t);return r.checkIsRepo().catch(function(){return!1}).then(function(i){return i?r.raw(["rev-list","--count","HEAD"]).then(function(o){return parseInt(o.trim())>0}).catch(function(){return!1}):{ok:!0,commits:[]}}).then(function(i){return i?r.log({maxCount:e.limit||20}).then(function(o){return{ok:!0,commits:(o.all||[]).map(function(u){return{hash:u.hash,shortHash:u.hash.slice(0,7),message:u.message,date:u.date,author:u.author_name}})}}):{ok:!0,commits:[]}})})},getCommitDiffFiles:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};var r=k(t);return r.raw(["diff","--numstat",e+"^",e]).catch(function(){return r.raw(["show","--numstat","--format=",e]).catch(function(){return""})}).then(function(i){var o=[];return(i||"").trim().split(`
-`).forEach(function(u){if(u=u.trim(),!!u){var c=u.split("	");c.length<3||o.push({path:c[2],insertions:parseInt(c[0])||0,deletions:parseInt(c[1])||0,isMeta:c[2].endsWith("_meta.json"),isDoc:c[2].endsWith("README.md"),isImage:/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(c[2])})}}),{ok:!0,files:o}})})},getCommitFileDiff:function(t,e,n){return _().then(function(r){if(!r)return{ok:!1,code:"GIT_NOT_FOUND"};var i=k(t);return i.raw(["diff",e+"^",e,"--",U(n)]).catch(function(){return i.raw(["show",e,"--",U(n)]).catch(function(){return""})}).then(function(o){return{ok:!0,diff:o}})})},getRemote:function(t){return _().then(function(e){if(!e)return{ok:!1,code:"GIT_NOT_FOUND"};var n=k(t);return n.getRemotes(!0).catch(function(){return[]}).then(function(r){var i=r.find(function(o){return o.name==="origin"});return{ok:!0,url:i&&(i.fs.fetch||i.fs.push)||""}})})},setRemote:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};var r=k(t);return r.getRemotes(!1).catch(function(){return[]}).then(function(i){var o=i.some(function(u){return u.name==="origin"});return o?r.remote(["set-url","origin",e]):r.addRemote("origin",e)}).then(function(){return{ok:!0}})})},fetchRemote:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};var r=k(t,e||{});return P(r.fetch(),15e3,"git fetch").then(function(){return{ok:!0}}).catch(function(i){return i.message.includes("超时")?{ok:!1,code:"TIMEOUT",error:i.message}:/Authentication|authentication|auth/i.test(i.message)?{ok:!1,code:"AUTH_FAILED",error:"认证失败，请检查 Token 是否有效。"}:{ok:!1,code:"FETCH_ERROR",error:i.message}})})},push:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};var r=k(t,e||{});return r.raw(["symbolic-ref","--short","HEAD"]).catch(function(){return"main"}).then(function(i){return i=i.trim(),P(r.push("origin",i,["--set-upstream"]),6e4,"git push")}).then(function(){return{ok:!0}}).catch(function(i){return i.message.includes("超时")?{ok:!1,code:"TIMEOUT",error:i.message}:/rejected|non-fast-forward/i.test(i.message)?{ok:!1,code:"PUSH_REJECTED",error:"推送被拒绝，远程有新提交，请先拉取再推送。"}:/Authentication|authentication|auth/i.test(i.message)?{ok:!1,code:"AUTH_FAILED",error:"认证失败，请检查 Token 或 SSH 密钥。"}:{ok:!1,code:"PUSH_ERROR",error:i.message}})})},pull:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};var r=k(t,e||{});return P(r.pull(),6e4,"git pull").then(function(){return{ok:!0}}).catch(function(i){return i.message.includes("超时")?{ok:!1,code:"TIMEOUT",error:i.message}:/CONFLICT|conflict/i.test(i.message)?{ok:!1,code:"CONFLICT",error:"拉取后出现冲突，请手动解决。"}:/Authentication|authentication|auth/i.test(i.message)?{ok:!1,code:"AUTH_FAILED",error:"认证失败，请检查 Token 或 SSH 密钥。"}:{ok:!1,code:"PULL_ERROR",error:i.message}})})},getConflictList:function(t){return _().then(function(e){if(!e)return{ok:!1,code:"GIT_NOT_FOUND"};var n=k(t);return n.status().then(function(r){return{ok:!0,files:r.conflicted||[]}})})},getConflictContent:function(t,e){return _().then(function(n){if(!n)return{ok:!1,code:"GIT_NOT_FOUND"};var r=k(t),i=U(e),o=s.join(t,e),u=/\.(png|jpg|jpeg|gif|webp|svg|pdf|zip|mp4|mp3)$/i.test(e),c="",g="",y="";return u?Promise.resolve({ok:!0,ours:c,theirs:g,current:y,isBinary:u}):r.show(["HEAD:"+i]).catch(function(){return""}).then(function(l){return c=l,r.show(["MERGE_HEAD:"+i]).catch(function(){return""})}).then(function(l){return g=l,new Promise(function(d){h.readFile(o,"utf-8",function(v,D){d(v?"":D)})})}).then(function(l){return y=l,{ok:!0,ours:c,theirs:g,current:y,isBinary:u}})})},resolveConflict:function(t,e,n){return _().then(function(r){if(!r)return{ok:!1,code:"GIT_NOT_FOUND"};var i=s.join(t,e);a.writeFileSync(i,n,"utf-8");var o=k(t);return o.add(U(e)).then(function(){return{ok:!0}})})},completeConflictResolution:function(t){return _().then(function(e){if(!e)return{ok:!1,code:"GIT_NOT_FOUND"};var n=k(t);return n.status().then(function(r){return r.conflicted.length>0?{ok:!1,code:"STILL_CONFLICTED",error:"还有 "+r.conflicted.length+" 个文件未解决。"}:n.commit("merge: resolve conflicts manually").then(function(i){return{ok:!0,hash:i.commit}})})})},autoMergeMetaJson:function(t,e){try{let l=function(d){(d||[]).forEach(function(v){var D=(v.source||v.from)+"::"+(v.target||v.to);u[D]||(u[D]=v)})};var n=l,r=JSON.parse(t),i=JSON.parse(e),o=Object.assign({},i.children||{},r.children||{}),u={};l(i.edges),l(r.edges);var c=Object.values(u),g=r.canvasBounds||i.canvasBounds||null;r.canvasBounds&&i.canvasBounds&&(g={x:Math.min(r.canvasBounds.x,i.canvasBounds.x),y:Math.min(r.canvasBounds.y,i.canvasBounds.y),w:Math.max(r.canvasBounds.w,i.canvasBounds.w),h:Math.max(r.canvasBounds.h,i.canvasBounds.h)});var y=Object.assign({},i,r,{children:o,edges:c,canvasBounds:g,zoom:r.zoom!==void 0?r.zoom:i.zoom,pan:r.pan!==void 0?r.pan:i.pan});return{ok:!0,merged:JSON.stringify(y,null,2)}}catch(l){return{ok:!1,error:l.message}}}};function X(t){return t.raw(["rev-list","--left-right","--count","HEAD...@{u}"]).then(function(e){var n=e.trim().split(/\s+/);return{ahead:parseInt(n[0])||0,behind:parseInt(n[1])||0}}).catch(function(){return{ahead:0,behind:0}})}function le(t,e){var n=(e.not_added||[]).filter(function(S){return S.endsWith("README.md")}),r=(e.deleted||[]).filter(function(S){return S.endsWith("README.md")}),i=e.modified||[],o=e.renamed||[];if(n.length>0&&r.length===0){if(n.length===1){var u=n[0].split("/").slice(-2,-1)[0]||n[0];return"feat: 新增「"+u+"」"}return"feat: 新增 "+n.length+" 张卡片"}if(r.length>0&&n.length===0){if(r.length===1){var c=r[0].split("/").slice(-2,-1)[0]||r[0];return"chore: 删除「"+c+"」"}return"chore: 删除 "+r.length+" 张卡片"}var g=(e.files||[]).every(function(S){return S.path.endsWith("README.md")});if(g&&i.length>0){var y=i.slice(0,2).map(function(S){return"「"+(S.split("/").slice(-2,-1)[0]||S)+"」"}),l=i.length>2?" 等 "+i.length+" 个":"";return"docs: 更新 "+y.join("、")+l}var d=(e.files||[]).every(function(S){return S.path.endsWith("_meta.json")});if(d)return"chore: 调整节点布局（"+(e.files||[]).length+" 处）";if(o.length>0){var v=o[0],D=(v.from||"").split("/").slice(-2,-1)[0]||v.from,F=(v.to||"").split("/").slice(-2,-1)[0]||v.to;return"refactor: 重命名「"+D+"」→「"+F+"」"}var T=[];return(e.not_added||[]).length&&T.push("+"+e.not_added.length),i.length&&T.push("~"+i.length),(e.deleted||[]).length&&T.push("-"+e.deleted.length),"update: "+T.join(" ")+" 个文件"}var V=null,W=null;function oe(){return V||(V=s.join(j.getPath("userData"),"git-auth.json")),V}function H(){if(W)return W;try{var t=a.readFileSync(oe(),"utf-8");W=JSON.parse(t)}catch{W={}}return W}function ee(){a.writeFileSync(oe(),JSON.stringify(W||{},null,2),"utf-8")}var N={saveToken:function(t,e){return Promise.resolve().then(function(){var n=H();if(n[t]||(n[t]={}),!L.isEncryptionAvailable())return{ok:!1,error:"系统安全存储不可用，无法保存 Token。请确保系统密钥链服务正常运行。"};try{return n[t].token=L.encryptString(e).toString("base64"),n[t].tokenEncrypted=!0,ee(),{ok:!0}}catch(r){return{ok:!1,error:"加密 Token 失败: "+r.message}}})},getToken:function(t){return Promise.resolve().then(function(){var e=H(),n=e[t];if(!n||!n.token)return null;try{return n.tokenEncrypted&&L.isEncryptionAvailable()?L.decryptString(Buffer.from(n.token,"base64")):n.tokenEncrypted?null:Buffer.from(n.token,"base64").toString("utf-8")}catch{return null}})},setAuthType:function(t,e){return Promise.resolve().then(function(){var n=H();return n[t]||(n[t]={}),n[t].authType=e,ee(),{ok:!0}})},getAuthType:function(t){return Promise.resolve().then(function(){var e=H(),n=e[t];return{ok:!0,authType:n&&n.authType||"token"}})},ensureSSHKey:function(){var t=s.join(j.getPath("userData"),"topomind-git-key"),e=t+".pub";return a.existsSync(t)&&a.existsSync(e)?Promise.resolve({privPath:t,pubPath:e}):new Promise(function(n,r){re("ssh-keygen",["-t","ed25519","-C","topomind-sync@"+require("os").hostname(),"-f",t,"-N",""],function(i){i?r(i):n({privPath:t,pubPath:e})})})},getSSHPublicKey:function(){return N.ensureSSHKey().then(function(t){var e=a.readFileSync(t.pubPath,"utf-8").trim();return{ok:!0,publicKey:e}}).catch(function(t){return{ok:!1,error:t.message}})},buildGitEnv:function(t,e){return Promise.resolve().then(function(){if(!e)return{};var n=e.startsWith("git@")||e.startsWith("ssh://"),r=H(),i=r[t]||{},o=i.authType||(n?"ssh":"token");return o==="ssh"||n?N.ensureSSHKey().then(function(u){return{GIT_SSH_COMMAND:'ssh -i "'+u.privPath+'" -o StrictHostKeyChecking=accept-new -o BatchMode=yes'}}).catch(function(){return{}}):N.getToken(t).then(function(u){return u?{GIT_ASKPASS:"echo",GIT_USERNAME:"oauth2",GIT_PASSWORD:u}:{}})})}},h=C;function he(){f.handle("fs:init",function(){return h.initWorkDir()}),f.handle("fs:listChildren",function(e,n){return h.listChildren(n)}),f.handle("fs:mkDir",function(e,n,r){var i=h.mkDir(n,r);return s.relative(h.getRootDir(),i)}),f.handle("fs:rmDir",function(e,n){h.rmDir(n)}),f.handle("fs:readMeta",function(e,n){return h.readMeta(n)}),f.handle("fs:writeMeta",function(e,n,r){h.writeMeta(n,r)}),f.handle("fs:readGraphMeta",function(e,n){return h.readGraphMeta(n)}),f.handle("fs:writeGraphMeta",function(e,n,r){h.writeGraphMeta(n,r)}),f.handle("fs:getDir",function(e,n){return h.getDir(n)}),f.handle("fs:readFile",function(e,n){return h.readFile(n)}),f.handle("fs:writeFile",function(e,n,r){h.writeFile(n,r)}),f.handle("fs:deleteFile",function(e,n){h.deleteFile(n)}),f.handle("fs:writeBlobFile",function(e,n,r){h.writeBlobFile(n,r)}),f.handle("fs:readBlobFile",function(e,n){return h.readBlobFile(n)}),f.handle("fs:clearAll",function(){h.clearAll()}),f.handle("fs:openInFinder",function(e,n){var r=s.isAbsolute(n)?n:s.join(h.getRootDir(),n);a.existsSync(r)&&Z.openPath(r)}),f.handle("fs:countChildren",function(e,n){var r=n?s.join(h.getRootDir(),n):h.getRootDir();if(!a.existsSync(r))return 0;try{return a.readdirSync(r,{withFileTypes:!0}).filter(function(i){return i.isDirectory()&&!i.name.startsWith(".")&&i.name!=="images"}).length}catch{return 0}}),f.handle("fs:getRootDir",function(){return h.getRootDir()}),f.handle("fs:getLastOpenedKB",function(){return h.getLastOpenedKB()}),f.handle("fs:setLastOpenedKB",function(e,n){h.setLastOpenedKB(n)}),f.handle("fs:selectExistingWorkDir",function(e,n){return h.selectExistingWorkDir(n)}),f.handle("fs:selectWorkDirCandidate",function(){return h.selectWorkDirCandidate()}),f.handle("fs:createWorkDir",function(e,n){return h.createWorkDir(n)}),f.handle("fs:importKB",function(e,n){return h.importKB(n)}),f.handle("app:openExternal",function(e,n){if(typeof n!="string")return!1;var r=n.trim();return/^https?:\/\//i.test(r)?(Z.openExternal(r),!0):!1}),f.on("save:layout",function(e,n,r){try{h.writeGraphMeta(n,r),e.returnValue=!0}catch{e.returnValue=!1}});function t(e){var n=h.getRootDir();return e?s.resolve(n,e):n}f.handle("git:checkAvailable",function(){return m.checkGitAvailable().then(function(e){return{ok:!0,available:e}})}),f.handle("git:init",function(e,n){return m.initRepo(t(n))}),f.handle("git:status",function(e,n){return m.getStatus(t(n))}),f.handle("git:statusBatch",function(e,n){var r=(n||[]).map(function(i){return t(i)});return m.getStatusBatch(r).then(function(i){var o={};return n.forEach(function(u,c){o[u]=i[r[c]]||{state:"uninit",ahead:0,behind:0}}),o})}),f.handle("git:isDirty",function(e,n){return m.isDirty(t(n)).then(function(r){return{ok:!0,dirty:r}})}),f.handle("git:commit",function(e,n,r){return m.commit(t(n),r)}),f.handle("git:diff",function(e,n,r){return m.getDiff(t(n),r)}),f.handle("git:diffFiles",function(e,n,r){return m.getDiffFiles(t(n),r)}),f.handle("git:log",function(e,n,r){return m.getLog(t(n),r)}),f.handle("git:commitDiffFiles",function(e,n,r){return m.getCommitDiffFiles(t(n),r)}),f.handle("git:commitFileDiff",function(e,n,r,i){return m.getCommitFileDiff(t(n),r,i)}),f.handle("git:remote:get",function(e,n){return m.getRemote(t(n))}),f.handle("git:remote:set",function(e,n,r){return m.setRemote(t(n),r)}),f.handle("git:fetch",function(e,n){return m.getRemote(t(n)).then(function(r){return N.buildGitEnv(n,r.url||"")}).then(function(r){return m.fetchRemote(t(n),r)})}),f.handle("git:push",function(e,n){return m.getRemote(t(n)).then(function(r){return N.buildGitEnv(n,r.url||"")}).then(function(r){return m.push(t(n),r)})}),f.handle("git:pull",function(e,n){return m.getRemote(t(n)).then(function(r){return N.buildGitEnv(n,r.url||"")}).then(function(r){return m.pull(t(n),r)})}),f.handle("git:conflict:list",function(e,n){return m.getConflictList(t(n))}),f.handle("git:conflict:show",function(e,n,r){return m.getConflictContent(t(n),r).then(function(i){if(i.ok&&!i.isBinary&&r.endsWith("_meta.json")){var o=m.autoMergeMetaJson(i.ours,i.theirs);i.autoMerge=o.ok?o.merged:null}return i})}),f.handle("git:conflict:resolve",function(e,n,r,i){return m.resolveConflict(t(n),r,i)}),f.handle("git:conflict:complete",function(e,n){return m.completeConflictResolution(t(n))}),f.handle("git:auth:setToken",function(e,n,r){return N.saveToken(n,r)}),f.handle("git:auth:getSSHKey",function(){return N.getSSHPublicKey()}),f.handle("git:auth:setAuthType",function(e,n,r){return N.setAuthType(n,r)}),f.handle("git:auth:getAuthType",function(e,n){return N.getAuthType(n)})}var x=null;j.commandLine.appendSwitch("disable-gpu-shader-disk-cache");j.commandLine.appendSwitch("disable-software-rasterizer");process.env.TOPOMIND_PROFILE&&process.env.TOPOMIND_PROFILE!=="prod"&&j.setName("TopoMind-"+process.env.TOPOMIND_PROFILE);function ne(){x=new te({width:1400,height:900,minWidth:900,minHeight:600,title:"TopoMind",webPreferences:{preload:s.join(__dirname,"preload.js"),nodeIntegration:!1,contextIsolation:!0}}),process.env.VITE_DEV_SERVER_URL?x.loadURL(process.env.VITE_DEV_SERVER_URL):x.loadFile(s.join(__dirname,"..","dist","index.html")),x.webContents.on("console-message",function(t,e,n,r,i){console.log("[renderer]",n)})}function de(){var t=[{label:"文件",submenu:[{role:"quit",label:"退出"}]},{label:"编辑",submenu:[{role:"undo"},{role:"redo"},{type:"separator"},{role:"cut"},{role:"copy"},{role:"paste"},{role:"selectAll"}]},{label:"视图",submenu:[{role:"reload"},{role:"toggleDevTools"},{type:"separator"},{role:"zoomIn"},{role:"zoomOut"},{role:"resetZoom"},{type:"separator"},{role:"togglefullscreen"}]}];process.platform==="darwin"&&t.unshift({label:j.getName(),submenu:[{role:"about"},{type:"separator"},{role:"hide"},{role:"hideOthers"},{role:"unhide"},{type:"separator"},{role:"quit"}]}),Y.setApplicationMenu(Y.buildFromTemplate(t))}j.whenReady().then(function(){he(),de(),ne(),j.on("activate",function(){te.getAllWindows().length===0&&ne()})});j.on("window-all-closed",function(){process.platform!=="darwin"&&j.quit()});j.on("before-quit",function(){x&&!x.isDestroyed()&&x.webContents.send("save:before-quit")});
+"use strict";
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, safeStorage } = require("electron");
+const path = require("path");
+const nodeFs = require("fs");
+const { simpleGit } = require("simple-git");
+const { execFile } = require("child_process");
+let _fs_rootDir = "";
+let _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+function _fs_appConfigPath(dir) {
+  return path.join(dir || _fs_rootDir, "_config.json");
+}
+function _fs_loadAppConfig(dir) {
+  try {
+    var cfgPath = _fs_appConfigPath(dir);
+    if (nodeFs.existsSync(cfgPath)) {
+      var loaded = JSON.parse(nodeFs.readFileSync(cfgPath, "utf-8")) || {};
+      _fs_config = {
+        lastOpenedKB: loaded.lastOpenedKB || null,
+        orders: loaded.orders && typeof loaded.orders === "object" ? loaded.orders : {},
+        covers: loaded.covers && typeof loaded.covers === "object" ? loaded.covers : {}
+      };
+    } else {
+      _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+    }
+  } catch (e) {
+    _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+  }
+}
+function _fs_saveAppConfig() {
+  try {
+    _fs_ensureDir(_fs_rootDir);
+    nodeFs.writeFileSync(_fs_appConfigPath(), JSON.stringify(_fs_config, null, 2), "utf-8");
+  } catch (e) {
+  }
+}
+function _fs_isDirEmpty(dirPath) {
+  try {
+    if (!nodeFs.existsSync(dirPath)) return true;
+    return nodeFs.readdirSync(dirPath).length === 0;
+  } catch (e) {
+    return false;
+  }
+}
+function _fs_isValidWorkDir(dirPath) {
+  try {
+    if (!dirPath || !nodeFs.existsSync(dirPath)) return false;
+    var stat = nodeFs.statSync(dirPath);
+    if (!stat.isDirectory()) return false;
+    return nodeFs.existsSync(path.join(dirPath, "_config.json"));
+  } catch (e) {
+    return false;
+  }
+}
+function _fs_ensureDir(d) {
+  if (!nodeFs.existsSync(d)) nodeFs.mkdirSync(d, { recursive: true });
+}
+function _fs_safeSegment(name) {
+  var s = String(name || "").trim().replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/[. ]+$/g, "");
+  if (!s || s === "." || s === "..") s = "untitled";
+  return s.slice(0, 80);
+}
+function _fs_migrateAppConfig(dir) {
+  var oldPath = path.join(dir, "app-config.json");
+  var newPath = path.join(dir, "_config.json");
+  if (nodeFs.existsSync(oldPath) && !nodeFs.existsSync(newPath)) {
+    try {
+      var data = nodeFs.readFileSync(oldPath, "utf-8");
+      nodeFs.writeFileSync(newPath, data, "utf-8");
+      nodeFs.unlinkSync(oldPath);
+    } catch (e) {
+    }
+  }
+}
+function _fs_migrateKbMeta(dir) {
+  dir = dir || _fs_rootDir;
+  var absDir = path.resolve(dir);
+  var entries = [];
+  try {
+    entries = nodeFs.readdirSync(absDir, { withFileTypes: true });
+  } catch (e) {
+    return;
+  }
+  for (var i = 0; i < entries.length; i++) {
+    var entry = entries[i];
+    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "images") continue;
+    var childDir = path.join(absDir, entry.name);
+    _fs_migrateKbMeta(childDir);
+    var kbMetaPath = path.join(childDir, "_kb_meta.json");
+    if (nodeFs.existsSync(kbMetaPath)) {
+      try {
+        var meta = JSON.parse(nodeFs.readFileSync(kbMetaPath, "utf-8")) || {};
+        var relPath = path.relative(_fs_rootDir, childDir).split(path.sep).join("/");
+        var graphPath = path.join(childDir, "_graph.json");
+        var graph = _fs_readJsonFile(graphPath) || { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
+        if (typeof meta.name === "string" && meta.name.trim()) {
+          graph.name = meta.name.trim();
+          _fs_writeJsonFile(graphPath, graph);
+        }
+        if (Number.isFinite(meta.order)) {
+          _fs_config.orders[relPath] = meta.order;
+        }
+        if (typeof meta.cover === "string" && meta.cover.trim()) {
+          _fs_config.covers[relPath] = meta.cover.trim();
+        }
+        nodeFs.unlinkSync(kbMetaPath);
+      } catch (e) {
+      }
+    }
+  }
+  if (Object.keys(_fs_config.orders).length > 0 || Object.keys(_fs_config.covers).length > 0) {
+    _fs_saveAppConfig();
+  }
+}
+function _fs_uniqueFolderName(parentDir, desiredName) {
+  var base = _fs_safeSegment(desiredName);
+  var candidate = base;
+  var i = 1;
+  while (nodeFs.existsSync(path.join(parentDir, candidate))) {
+    candidate = base + "-" + i;
+    i += 1;
+  }
+  return candidate;
+}
+function _fs_abs(relPath) {
+  if (!relPath) return _fs_rootDir;
+  var resolvedRoot = path.resolve(_fs_rootDir);
+  var result = path.resolve(resolvedRoot, relPath);
+  var rel = path.relative(resolvedRoot, result);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error("路径越界: " + relPath);
+  }
+  return result;
+}
+function _fs_readJsonFile(filePath) {
+  if (!nodeFs.existsSync(filePath)) return null;
+  try {
+    return JSON.parse(nodeFs.readFileSync(filePath, "utf-8"));
+  } catch (e) {
+    return null;
+  }
+}
+function _fs_writeJsonFile(filePath, data) {
+  nodeFs.writeFileSync(filePath, JSON.stringify(data || {}, null, 2), "utf-8");
+}
+function _fs_metaFilePath(dir, kind) {
+  return path.join(dir, kind === "graph" ? "_graph.json" : "_kb_meta.json");
+}
+var fileService = {
+  setRootDir: function(dir) {
+    _fs_rootDir = dir;
+    _fs_ensureDir(_fs_rootDir);
+    _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+    _fs_saveAppConfig();
+  },
+  getRootDir: function() {
+    return _fs_rootDir;
+  },
+  getLastOpenedKB: function() {
+    return _fs_config.lastOpenedKB || null;
+  },
+  setLastOpenedKB: function(kbPath) {
+    _fs_config.lastOpenedKB = kbPath || null;
+    _fs_saveAppConfig();
+  },
+  createWorkDir: function(dirPath) {
+    var dir = path.resolve(dirPath);
+    if (nodeFs.existsSync(dir) && !_fs_isDirEmpty(dir)) {
+      throw new Error("工作目录必须是空目录");
+    }
+    _fs_ensureDir(dir);
+    _fs_rootDir = dir;
+    _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+    _fs_saveAppConfig();
+    return { valid: true, path: _fs_rootDir };
+  },
+  selectWorkDirCandidate: function() {
+    var result = dialog.showOpenDialogSync({
+      title: "选择工作目录",
+      properties: ["openDirectory"]
+    });
+    if (!result || !result[0]) return { valid: false, path: null, error: "已取消选择" };
+    return { valid: true, path: path.resolve(result[0]) };
+  },
+  selectExistingWorkDir: function(dirPath) {
+    var dir = dirPath;
+    if (!dir) {
+      var picked = fileService.selectWorkDirCandidate();
+      if (!picked.valid) return picked;
+      dir = picked.path;
+    }
+    dir = path.resolve(dir);
+    _fs_migrateAppConfig(dir);
+    if (!_fs_isValidWorkDir(dir)) {
+      return { valid: false, path: dir, error: "不是有效的工作目录（缺少 _config.json）" };
+    }
+    _fs_rootDir = dir;
+    _fs_loadAppConfig(dir);
+    _fs_migrateKbMeta(_fs_rootDir);
+    return { valid: true, path: _fs_rootDir };
+  },
+  initWorkDir: function() {
+    if (!_fs_rootDir) return { valid: false, path: null, error: "未选择工作目录" };
+    _fs_ensureDir(_fs_rootDir);
+    _fs_migrateAppConfig(_fs_rootDir);
+    _fs_migrateKbMeta(_fs_rootDir);
+    if (!nodeFs.existsSync(_fs_appConfigPath())) {
+      _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+      _fs_saveAppConfig();
+    }
+    return { valid: true, path: _fs_rootDir };
+  },
+  listChildren: function(parentPath) {
+    var dir = _fs_abs(parentPath);
+    _fs_ensureDir(dir);
+    var parentGraph = _fs_readJsonFile(_fs_metaFilePath(dir, "graph")) || { children: {} };
+    var parentChildren = parentGraph.children || {};
+    var children = nodeFs.readdirSync(dir, { withFileTypes: true }).filter(function(e) {
+      return e.isDirectory() && !e.name.startsWith(".") && e.name !== "images";
+    }).map(function(e) {
+      var childPath = parentPath ? parentPath + "/" + e.name : e.name;
+      var childGraphEntry = parentChildren[childPath];
+      var safeName = childGraphEntry && typeof childGraphEntry.name === "string" && childGraphEntry.name.trim() ? childGraphEntry.name.trim() : e.name;
+      var cover = "images/cover.png";
+      var order = Number.isFinite(_fs_config.orders[childPath]) ? _fs_config.orders[childPath] : Infinity;
+      return {
+        path: childPath,
+        name: safeName,
+        cover,
+        order
+      };
+    });
+    children.sort(function(a, b) {
+      var orderA = Number.isFinite(a.order) ? a.order : Infinity;
+      var orderB = Number.isFinite(b.order) ? b.order : Infinity;
+      if (orderA !== orderB) return orderA - orderB;
+      return String(a.name || "").localeCompare(String(b.name || ""), "zh-CN");
+    });
+    return children;
+  },
+  mkDir: function(dirPath, meta, customRootDir) {
+    var parent = customRootDir ? path.resolve(customRootDir) : _fs_rootDir;
+    _fs_ensureDir(parent);
+    var segments = (dirPath || "").split("/").filter(Boolean);
+    if (segments.length === 0) return parent;
+    for (var i = 0; i < segments.length - 1; i++) {
+      parent = path.join(parent, _fs_safeSegment(segments[i]));
+      _fs_ensureDir(parent);
+    }
+    var finalName = _fs_uniqueFolderName(parent, segments[segments.length - 1]);
+    var d = path.join(parent, finalName);
+    _fs_ensureDir(d);
+    if (!nodeFs.existsSync(_fs_metaFilePath(d, "graph"))) {
+      _fs_writeJsonFile(_fs_metaFilePath(d, "graph"), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
+    }
+    return d;
+  },
+  rmDir: function(dirPath) {
+    var d = _fs_abs(dirPath);
+    if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
+  },
+  readMeta: function(dirPath) {
+    var d = _fs_abs(dirPath);
+    var graph = _fs_readJsonFile(_fs_metaFilePath(d, "graph"));
+    if (graph && typeof graph.name === "string" && graph.name.trim()) {
+      return { name: graph.name.trim() };
+    }
+    var kbMeta = _fs_readJsonFile(_fs_metaFilePath(d, "kb"));
+    if (kbMeta) return kbMeta;
+    return {};
+  },
+  writeMeta: function(dirPath, meta) {
+    var d = _fs_abs(dirPath);
+    _fs_ensureDir(d);
+    var graph = _fs_readJsonFile(_fs_metaFilePath(d, "graph")) || { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
+    if (meta && typeof meta === "object") {
+      if (typeof meta.name === "string" && meta.name.trim()) {
+        graph.name = meta.name.trim();
+      }
+    }
+    _fs_writeJsonFile(_fs_metaFilePath(d, "graph"), graph);
+  },
+  writeKBName: function(kbPath, name) {
+    var d = _fs_abs(kbPath);
+    _fs_ensureDir(d);
+    var graph = _fs_readJsonFile(_fs_metaFilePath(d, "graph")) || { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
+    graph.name = String(name || "").trim();
+    _fs_writeJsonFile(_fs_metaFilePath(d, "graph"), graph);
+  },
+  saveKBOrder: function(kbPath, order) {
+    var relPath = kbPath;
+    _fs_config.orders[relPath] = Number.isFinite(order) ? order : 0;
+    _fs_saveAppConfig();
+  },
+  readGraphMeta: function(dirPath) {
+    var d = _fs_abs(dirPath);
+    var graph = _fs_readJsonFile(_fs_metaFilePath(d, "graph"));
+    if (graph) return graph;
+    return { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
+  },
+  // 创建卡片目录和 _graph.json（惰性创建，由 writeGraphMeta/addChildCard 调用）
+  ensureCardDir: function(cardPath) {
+    if (!cardPath) return;
+    var d = _fs_abs(cardPath);
+    if (nodeFs.existsSync(d)) return;
+    var segments = cardPath.split("/").filter(Boolean);
+    var parent = _fs_rootDir;
+    for (var i = 0; i < segments.length - 1; i++) {
+      parent = path.join(parent, _fs_safeSegment(segments[i]));
+      _fs_ensureDir(parent);
+    }
+    var finalName = _fs_uniqueFolderName(parent, segments[segments.length - 1]);
+    d = path.join(parent, finalName);
+    _fs_ensureDir(d);
+    if (!nodeFs.existsSync(_fs_metaFilePath(d, "graph"))) {
+      _fs_writeJsonFile(_fs_metaFilePath(d, "graph"), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
+    }
+  },
+  writeGraphMeta: function(dirPath, meta) {
+    var d = _fs_abs(dirPath);
+    if (!nodeFs.existsSync(d) || !nodeFs.existsSync(_fs_metaFilePath(d, "graph"))) {
+      fileService.ensureCardDir(dirPath);
+    }
+    _fs_ensureDir(d);
+    var graphMeta = meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {};
+    _fs_writeJsonFile(_fs_metaFilePath(d, "graph"), graphMeta);
+  },
+  updateCardMeta: function(cardPath, newName) {
+    var d = _fs_abs(cardPath);
+    if (!nodeFs.existsSync(d)) return null;
+    var parentPath = cardPath.includes("/") ? cardPath.slice(0, cardPath.lastIndexOf("/")) : "";
+    var parentDir = _fs_abs(parentPath);
+    var newSafeName = _fs_safeSegment(newName);
+    var newDirName = _fs_uniqueFolderName(parentDir, newSafeName);
+    var oldDirName = path.basename(d);
+    var newDir = path.join(parentDir, newDirName);
+    if (oldDirName !== newDirName) {
+      nodeFs.renameSync(d, newDir);
+    }
+    var graphPath = _fs_metaFilePath(parentDir, "graph");
+    var graph = _fs_readJsonFile(graphPath) || { children: {}, edges: [] };
+    var children = graph.children || {};
+    var entry = children[cardPath];
+    if (entry) {
+      var newCardPath = parentPath ? parentPath + "/" + newDirName : newDirName;
+      delete children[cardPath];
+      children[newCardPath] = Object.assign({}, entry, { name: newSafeName });
+      graph.children = children;
+      _fs_writeJsonFile(graphPath, graph);
+      return newCardPath;
+    }
+    return cardPath;
+  },
+  getDir: function(dirPath) {
+    var d = _fs_abs(dirPath);
+    if (!nodeFs.existsSync(d)) return null;
+    var meta = fileService.readMeta(dirPath);
+    return Object.assign({ path: dirPath }, meta);
+  },
+  readFile: function(filePath) {
+    var f = _fs_abs(filePath);
+    if (nodeFs.existsSync(f)) return nodeFs.readFileSync(f, "utf-8");
+    return "";
+  },
+  writeFile: function(filePath, content) {
+    var f = _fs_abs(filePath);
+    _fs_ensureDir(path.dirname(f));
+    nodeFs.writeFileSync(f, content, "utf-8");
+  },
+  deleteFile: function(filePath) {
+    var f = _fs_abs(filePath);
+    if (nodeFs.existsSync(f)) nodeFs.unlinkSync(f);
+  },
+  writeBlobFile: function(filePath, arrayBuffer) {
+    var f = _fs_abs(filePath);
+    _fs_ensureDir(path.dirname(f));
+    nodeFs.writeFileSync(f, Buffer.from(arrayBuffer));
+  },
+  readBlobFile: function(filePath) {
+    var f = _fs_abs(filePath);
+    if (!nodeFs.existsSync(f)) return null;
+    var buf = nodeFs.readFileSync(f);
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  },
+  clearAll: function() {
+    var rootAbs = path.resolve(_fs_rootDir);
+    if (!nodeFs.existsSync(rootAbs)) {
+      _fs_ensureDir(rootAbs);
+      return;
+    }
+    nodeFs.readdirSync(rootAbs, { withFileTypes: true }).forEach(function(e) {
+      if (e.isDirectory() && !e.name.startsWith(".")) {
+        nodeFs.rmSync(path.join(rootAbs, e.name), { recursive: true, force: true });
+      }
+    });
+  },
+  importKB: function(sourcePath) {
+    var src = path.resolve(sourcePath);
+    if (!nodeFs.existsSync(src)) throw new Error("源目录不存在: " + src);
+    if (!nodeFs.existsSync(path.join(src, "_kb_meta.json")) && !nodeFs.existsSync(path.join(src, "_meta.json")) && !nodeFs.existsSync(path.join(src, "_graph.json"))) {
+      throw new Error("不是有效的知识库目录");
+    }
+    var meta = _fs_readJsonFile(path.join(src, "_kb_meta.json")) || _fs_readJsonFile(path.join(src, "_meta.json")) || {};
+    var kbName = meta.name && typeof meta.name === "string" && meta.name.trim() ? meta.name.trim() : path.basename(src);
+    var destName = _fs_uniqueFolderName(_fs_rootDir, kbName);
+    var dest = path.join(_fs_rootDir, destName);
+    _fs_ensureDir(dest);
+    function copyDirRecursive(srcDir, destDir) {
+      _fs_ensureDir(destDir);
+      var entries = nodeFs.readdirSync(srcDir, { withFileTypes: true });
+      for (var i2 = 0; i2 < entries.length; i2++) {
+        var entry = entries[i2];
+        if (entry.name === "node_modules") continue;
+        var srcEntry = path.join(srcDir, entry.name);
+        var destEntry = path.join(destDir, entry.name);
+        if (entry.isDirectory()) {
+          copyDirRecursive(srcEntry, destEntry);
+        } else {
+          _fs_ensureDir(path.dirname(destEntry));
+          if (/\.(json|md|txt)$/i.test(entry.name)) {
+            var text = nodeFs.readFileSync(srcEntry, "utf-8");
+            nodeFs.writeFileSync(destEntry, text, "utf-8");
+          } else {
+            var data = nodeFs.readFileSync(srcEntry);
+            nodeFs.writeFileSync(destEntry, data);
+          }
+        }
+      }
+    }
+    copyDirRecursive(src, dest);
+    function migrateLegacyMeta(dir) {
+      var entries = [];
+      try {
+        entries = nodeFs.readdirSync(dir, { withFileTypes: true });
+      } catch (e) {
+        return;
+      }
+      for (var i2 = 0; i2 < entries.length; i2++) {
+        var entry = entries[i2];
+        if (!entry.isDirectory() || entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+        migrateLegacyMeta(path.join(dir, entry.name));
+      }
+      var metaFile = path.join(dir, "_meta.json");
+      if (nodeFs.existsSync(metaFile)) {
+        var legacy = _fs_readJsonFile(metaFile);
+        if (legacy) {
+          var graphMeta = {
+            children: legacy.children || {},
+            edges: legacy.edges || [],
+            zoom: legacy.zoom || null,
+            pan: legacy.pan || null,
+            canvasBounds: legacy.canvasBounds || null
+          };
+          if (legacy.name) graphMeta.name = legacy.name;
+          _fs_writeJsonFile(_fs_metaFilePath(dir, "graph"), graphMeta);
+          try {
+            nodeFs.unlinkSync(metaFile);
+          } catch (e) {
+          }
+        }
+      }
+    }
+    migrateLegacyMeta(dest);
+    var existing = fileService.listChildren("");
+    var maxOrder = -1;
+    for (var i = 0; i < existing.length; i++) {
+      var o = existing[i].order;
+      if (Number.isFinite(o) && o > maxOrder) maxOrder = o;
+    }
+    var relDest = path.relative(_fs_rootDir, dest).split(path.sep).join("/");
+    _fs_config.orders[relDest] = maxOrder + 1;
+    _fs_saveAppConfig();
+    return path.relative(_fs_rootDir, dest);
+  }
+};
+var _gitAvailable = null;
+function _git_checkAvailable() {
+  if (_gitAvailable !== null) return Promise.resolve(_gitAvailable);
+  return new Promise(function(resolve) {
+    execFile("git", ["--version"], { timeout: 5e3 }, function(err, stdout) {
+      if (err) {
+        _gitAvailable = false;
+        resolve(false);
+      } else {
+        _gitAvailable = true;
+        resolve(true);
+      }
+    });
+  });
+}
+function _git_withTimeout(promise, ms, operation) {
+  var timeout = new Promise(function(_, reject) {
+    setTimeout(function() {
+      reject(new Error((operation || "git") + " 超时（" + ms / 1e3 + "s）"));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]);
+}
+function _git_toGitPath(p) {
+  return p.split(path.sep).join("/");
+}
+function _git_sg(absPath, env) {
+  return simpleGit(absPath).env(Object.assign({}, process.env, env || {}));
+}
+var gitService = {
+  checkGitAvailable: function() {
+    return _git_checkAvailable();
+  },
+  initRepo: function(absKbPath) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath);
+      return git.checkIsRepo().catch(function() {
+        return false;
+      }).then(function(isRepo) {
+        if (isRepo) return { ok: true, alreadyInit: true };
+        return git.init().then(function() {
+          var gitignorePath = path.join(absKbPath, ".gitignore");
+          if (!nodeFs.existsSync(gitignorePath)) {
+            nodeFs.writeFileSync(gitignorePath, [
+              "# TopoMind auto-generated",
+              ".DS_Store",
+              "Thumbs.db",
+              "*.tmp",
+              ".git-credentials"
+            ].join("\n"), "utf-8");
+          }
+          return git.add(".");
+        }).then(function() {
+          return git.status();
+        }).then(function(status) {
+          if (!status.isClean()) return git.commit("init: initialize TopoMind knowledge base");
+          return null;
+        }).then(function() {
+          return { ok: true, alreadyInit: false };
+        });
+      });
+    });
+  },
+  getStatus: function(absKbPath) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { state: "git-unavailable", ahead: 0, behind: 0 };
+      var git = _git_sg(absKbPath);
+      return git.checkIsRepo().catch(function() {
+        return false;
+      }).then(function(isRepo) {
+        if (!isRepo) return { state: "uninit", ahead: 0, behind: 0 };
+        return git.raw(["rev-list", "--count", "HEAD"]).then(function(o) {
+          return parseInt(o.trim()) > 0;
+        }).catch(function() {
+          return false;
+        });
+      }).then(function(hasCommits) {
+        if (!hasCommits) return { state: "uninit", ahead: 0, behind: 0 };
+        return git.status().then(function(status) {
+          var conflictFiles = status.conflicted || [];
+          var dirtyFiles = status.files.length;
+          var hasUncommitted = !status.isClean();
+          if (conflictFiles.length > 0) {
+            return {
+              state: "conflict",
+              ahead: 0,
+              behind: 0,
+              hasUncommitted: true,
+              dirtyFiles,
+              conflictFiles
+            };
+          }
+          if (hasUncommitted) {
+            return _git_getRemoteState(git).then(function(remoteState) {
+              return Object.assign({
+                state: "dirty",
+                dirtyFiles,
+                hasUncommitted: true,
+                conflictFiles: []
+              }, remoteState);
+            });
+          }
+          return git.getRemotes(false).catch(function() {
+            return [];
+          }).then(function(remotes) {
+            if (remotes.length === 0) {
+              return {
+                state: "no-remote",
+                ahead: 0,
+                behind: 0,
+                hasUncommitted: false,
+                dirtyFiles: 0,
+                conflictFiles: []
+              };
+            }
+            return git.raw(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).catch(function() {
+              return "";
+            }).then(function(tracking) {
+              if (!tracking.trim()) {
+                return {
+                  state: "no-remote",
+                  ahead: 0,
+                  behind: 0,
+                  hasUncommitted: false,
+                  dirtyFiles: 0,
+                  conflictFiles: []
+                };
+              }
+              return _git_getRemoteState(git).then(function(remoteState) {
+                var state;
+                if (remoteState.ahead > 0 && remoteState.behind > 0) state = "diverged";
+                else if (remoteState.ahead > 0) state = "ahead";
+                else if (remoteState.behind > 0) state = "behind";
+                else state = "clean";
+                return Object.assign({
+                  state,
+                  hasUncommitted: false,
+                  dirtyFiles: 0,
+                  conflictFiles: []
+                }, remoteState);
+              });
+            });
+          });
+        });
+      });
+    });
+  },
+  getStatusBatch: function(absKbPaths) {
+    var results = {};
+    var CONCURRENCY = 3;
+    var process2 = function(i) {
+      if (i >= absKbPaths.length) return Promise.resolve();
+      var chunk = absKbPaths.slice(i, i + CONCURRENCY);
+      return Promise.allSettled(
+        chunk.map(function(p) {
+          return gitService.getStatus(p).then(function(s) {
+            return [p, s];
+          });
+        })
+      ).then(function(chunkResults) {
+        chunkResults.forEach(function(r) {
+          if (r.status === "fulfilled") {
+            results[r.value[0]] = r.value[1];
+          }
+        });
+        return process2(i + CONCURRENCY);
+      });
+    };
+    return process2(0).then(function() {
+      return results;
+    });
+  },
+  isDirty: function(absKbPath) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return false;
+      var git = _git_sg(absKbPath);
+      return git.checkIsRepo().catch(function() {
+        return false;
+      }).then(function(isRepo) {
+        if (!isRepo) return false;
+        return git.status().catch(function() {
+          return { isClean: function() {
+            return true;
+          } };
+        }).then(function(status) {
+          return !status.isClean();
+        });
+      });
+    });
+  },
+  commit: function(absKbPath, message) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath);
+      return git.checkIsRepo().catch(function() {
+        return false;
+      }).then(function(isRepo) {
+        if (!isRepo) return { ok: false, code: "NOT_GIT_REPO", error: "尚未初始化 Git，请先初始化。" };
+        return git.status().then(function(status) {
+          if (status.isClean()) return { ok: true, skipped: true, message: "无变更可提交" };
+          var kbName = path.basename(absKbPath);
+          var msg = message || _git_generateCommitMessage(kbName, status);
+          return git.add(".").then(function() {
+            return git.commit(msg);
+          }).then(function(result) {
+            return { ok: true, hash: result.commit, message: msg };
+          });
+        });
+      });
+    });
+  },
+  getDiff: function(absKbPath, opts) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      opts = opts || {};
+      var git = _git_sg(absKbPath);
+      var args = [];
+      if (opts.from && opts.to) {
+        args.push(opts.from + ".." + opts.to);
+      } else {
+        args.push("HEAD");
+      }
+      if (opts.file) args.push("--", _git_toGitPath(opts.file));
+      return git.diff(args).catch(function() {
+        return "";
+      }).then(function(diffText) {
+        if (!opts.from && !opts.to) {
+          return git.diff(["--cached"].concat(args.slice(1))).catch(function() {
+            return "";
+          }).then(function(untrackedDiff) {
+            return { ok: true, diff: (untrackedDiff + "\n" + diffText).trim() };
+          });
+        }
+        return { ok: true, diff: diffText };
+      });
+    });
+  },
+  getDiffStat: function(absKbPath, opts) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      opts = opts || {};
+      var git = _git_sg(absKbPath);
+      var args = ["--stat"];
+      if (opts.from && opts.to) args.unshift(opts.from + ".." + opts.to);
+      else args.unshift("HEAD");
+      return git.diff(args).catch(function() {
+        return "";
+      }).then(function(stat) {
+        return git.diff(["--cached", "--stat", opts.from || "HEAD"]).catch(function() {
+          return "";
+        }).then(function(statCached) {
+          return { ok: true, stat: (statCached + "\n" + stat).trim() };
+        });
+      });
+    });
+  },
+  getDiffFiles: function(absKbPath, opts) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      opts = opts || {};
+      var git = _git_sg(absKbPath);
+      var args = ["--numstat"];
+      if (opts.from && opts.to) args.unshift(opts.from + ".." + opts.to);
+      else args.unshift("HEAD");
+      return git.diff(args).catch(function() {
+        return "";
+      }).then(function(numstat) {
+        return git.diff(["--cached", "--numstat", opts.from || "HEAD"]).catch(function() {
+          return "";
+        }).then(function(numstatCached) {
+          var combined = (numstatCached + "\n" + numstat).trim();
+          if (!combined) return { ok: true, files: [] };
+          var files = [];
+          var seen = {};
+          combined.split("\n").forEach(function(line) {
+            line = line.trim();
+            if (!line) return;
+            var parts = line.split("	");
+            if (parts.length < 3) return;
+            var ins = parseInt(parts[0]) || 0;
+            var del = parseInt(parts[1]) || 0;
+            var fp = parts[2];
+            if (seen[fp]) {
+              seen[fp].insertions += ins;
+              seen[fp].deletions += del;
+              return;
+            }
+            var fileInfo = {
+              path: fp,
+              insertions: ins,
+              deletions: del,
+              isMeta: fp.endsWith("_meta.json"),
+              isDoc: fp.endsWith("README.md"),
+              isImage: /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fp)
+            };
+            seen[fp] = fileInfo;
+            files.push(fileInfo);
+          });
+          return git.status().then(function(status) {
+            (status.not_added || []).forEach(function(fp) {
+              if (!seen[fp]) {
+                var fileInfo = {
+                  path: fp,
+                  insertions: 0,
+                  deletions: 0,
+                  isNew: true,
+                  isMeta: fp.endsWith("_meta.json"),
+                  isDoc: fp.endsWith("README.md"),
+                  isImage: /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fp)
+                };
+                seen[fp] = fileInfo;
+                files.push(fileInfo);
+              }
+            });
+            return { ok: true, files };
+          });
+        });
+      });
+    });
+  },
+  getLog: function(absKbPath, opts) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      opts = opts || {};
+      var git = _git_sg(absKbPath);
+      return git.checkIsRepo().catch(function() {
+        return false;
+      }).then(function(isRepo) {
+        if (!isRepo) return { ok: true, commits: [] };
+        return git.raw(["rev-list", "--count", "HEAD"]).then(function(o) {
+          return parseInt(o.trim()) > 0;
+        }).catch(function() {
+          return false;
+        });
+      }).then(function(hasCommits) {
+        if (!hasCommits) return { ok: true, commits: [] };
+        return git.log({ maxCount: opts.limit || 20 }).then(function(log) {
+          return {
+            ok: true,
+            commits: (log.all || []).map(function(c) {
+              return {
+                hash: c.hash,
+                shortHash: c.hash.slice(0, 7),
+                message: c.message,
+                date: c.date,
+                author: c.author_name
+              };
+            })
+          };
+        });
+      });
+    });
+  },
+  getCommitDiffFiles: function(absKbPath, hash) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath);
+      return git.raw(["diff", "--numstat", hash + "^", hash]).catch(function() {
+        return git.raw(["show", "--numstat", "--format=", hash]).catch(function() {
+          return "";
+        });
+      }).then(function(numstat) {
+        var files = [];
+        (numstat || "").trim().split("\n").forEach(function(line) {
+          line = line.trim();
+          if (!line) return;
+          var parts = line.split("	");
+          if (parts.length < 3) return;
+          files.push({
+            path: parts[2],
+            insertions: parseInt(parts[0]) || 0,
+            deletions: parseInt(parts[1]) || 0,
+            isMeta: parts[2].endsWith("_meta.json"),
+            isDoc: parts[2].endsWith("README.md"),
+            isImage: /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(parts[2])
+          });
+        });
+        return { ok: true, files };
+      });
+    });
+  },
+  getCommitFileDiff: function(absKbPath, hash, filePath) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath);
+      return git.raw(["diff", hash + "^", hash, "--", _git_toGitPath(filePath)]).catch(function() {
+        return git.raw(["show", hash, "--", _git_toGitPath(filePath)]).catch(function() {
+          return "";
+        });
+      }).then(function(diffText) {
+        return { ok: true, diff: diffText };
+      });
+    });
+  },
+  getRemote: function(absKbPath) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath);
+      return git.getRemotes(true).catch(function() {
+        return [];
+      }).then(function(remotes) {
+        var origin = remotes.find(function(r) {
+          return r.name === "origin";
+        });
+        return { ok: true, url: origin ? origin.fs.fetch || origin.fs.push || "" : "" };
+      });
+    });
+  },
+  setRemote: function(absKbPath, url) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath);
+      return git.getRemotes(false).catch(function() {
+        return [];
+      }).then(function(remotes) {
+        var hasOrigin = remotes.some(function(r) {
+          return r.name === "origin";
+        });
+        if (hasOrigin) return git.remote(["set-url", "origin", url]);
+        return git.addRemote("origin", url);
+      }).then(function() {
+        return { ok: true };
+      });
+    });
+  },
+  fetchRemote: function(absKbPath, env) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath, env || {});
+      return _git_withTimeout(git.fetch(), 15e3, "git fetch").then(function() {
+        return { ok: true };
+      }).catch(function(e) {
+        if (e.message.includes("超时")) return { ok: false, code: "TIMEOUT", error: e.message };
+        if (/Authentication|authentication|auth/i.test(e.message)) {
+          return { ok: false, code: "AUTH_FAILED", error: "认证失败，请检查 Token 是否有效。" };
+        }
+        return { ok: false, code: "FETCH_ERROR", error: e.message };
+      });
+    });
+  },
+  push: function(absKbPath, env) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath, env || {});
+      return git.raw(["symbolic-ref", "--short", "HEAD"]).catch(function() {
+        return "main";
+      }).then(function(branch) {
+        branch = branch.trim();
+        return _git_withTimeout(git.push("origin", branch, ["--set-upstream"]), 6e4, "git push");
+      }).then(function() {
+        return { ok: true };
+      }).catch(function(e) {
+        if (e.message.includes("超时")) return { ok: false, code: "TIMEOUT", error: e.message };
+        if (/rejected|non-fast-forward/i.test(e.message)) {
+          return { ok: false, code: "PUSH_REJECTED", error: "推送被拒绝，远程有新提交，请先拉取再推送。" };
+        }
+        if (/Authentication|authentication|auth/i.test(e.message)) {
+          return { ok: false, code: "AUTH_FAILED", error: "认证失败，请检查 Token 或 SSH 密钥。" };
+        }
+        return { ok: false, code: "PUSH_ERROR", error: e.message };
+      });
+    });
+  },
+  pull: function(absKbPath, env) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath, env || {});
+      return _git_withTimeout(git.pull(), 6e4, "git pull").then(function() {
+        return { ok: true };
+      }).catch(function(e) {
+        if (e.message.includes("超时")) return { ok: false, code: "TIMEOUT", error: e.message };
+        if (/CONFLICT|conflict/i.test(e.message)) {
+          return { ok: false, code: "CONFLICT", error: "拉取后出现冲突，请手动解决。" };
+        }
+        if (/Authentication|authentication|auth/i.test(e.message)) {
+          return { ok: false, code: "AUTH_FAILED", error: "认证失败，请检查 Token 或 SSH 密钥。" };
+        }
+        return { ok: false, code: "PULL_ERROR", error: e.message };
+      });
+    });
+  },
+  getConflictList: function(absKbPath) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath);
+      return git.status().then(function(status) {
+        return { ok: true, files: status.conflicted || [] };
+      });
+    });
+  },
+  getConflictContent: function(absKbPath, filePath) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath);
+      var gitFp = _git_toGitPath(filePath);
+      var absFilePath = path.join(absKbPath, filePath);
+      var isBinary = /\.(png|jpg|jpeg|gif|webp|svg|pdf|zip|mp4|mp3)$/i.test(filePath);
+      var ours = "", theirs = "", current = "";
+      if (!isBinary) {
+        return git.show(["HEAD:" + gitFp]).catch(function() {
+          return "";
+        }).then(function(oursVal) {
+          ours = oursVal;
+          return git.show(["MERGE_HEAD:" + gitFp]).catch(function() {
+            return "";
+          });
+        }).then(function(theirsVal) {
+          theirs = theirsVal;
+          return new Promise(function(resolve) {
+            fs.readFile(absFilePath, "utf-8", function(err, data) {
+              resolve(err ? "" : data);
+            });
+          });
+        }).then(function(currentVal) {
+          current = currentVal;
+          return { ok: true, ours, theirs, current, isBinary };
+        });
+      }
+      return Promise.resolve({ ok: true, ours, theirs, current, isBinary });
+    });
+  },
+  resolveConflict: function(absKbPath, filePath, resolvedContent) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var absFilePath = path.join(absKbPath, filePath);
+      nodeFs.writeFileSync(absFilePath, resolvedContent, "utf-8");
+      var git = _git_sg(absKbPath);
+      return git.add(_git_toGitPath(filePath)).then(function() {
+        return { ok: true };
+      });
+    });
+  },
+  completeConflictResolution: function(absKbPath) {
+    return _git_checkAvailable().then(function(available) {
+      if (!available) return { ok: false, code: "GIT_NOT_FOUND" };
+      var git = _git_sg(absKbPath);
+      return git.status().then(function(status) {
+        if (status.conflicted.length > 0) {
+          return { ok: false, code: "STILL_CONFLICTED", error: "还有 " + status.conflicted.length + " 个文件未解决。" };
+        }
+        return git.commit("merge: resolve conflicts manually").then(function(result) {
+          return { ok: true, hash: result.commit };
+        });
+      });
+    });
+  },
+  autoMergeMetaJson: function(oursStr, theirsStr) {
+    try {
+      let addEdges2 = function(edges) {
+        (edges || []).forEach(function(e) {
+          var key = (e.source || e.from) + "::" + (e.target || e.to);
+          if (!edgeMap[key]) edgeMap[key] = e;
+        });
+      };
+      var addEdges = addEdges2;
+      var ours = JSON.parse(oursStr);
+      var theirs = JSON.parse(theirsStr);
+      var mergedChildren = Object.assign({}, theirs.children || {}, ours.children || {});
+      var edgeMap = {};
+      addEdges2(theirs.edges);
+      addEdges2(ours.edges);
+      var mergedEdges = Object.values(edgeMap);
+      var cb = ours.canvasBounds || theirs.canvasBounds || null;
+      if (ours.canvasBounds && theirs.canvasBounds) {
+        cb = {
+          x: Math.min(ours.canvasBounds.x, theirs.canvasBounds.x),
+          y: Math.min(ours.canvasBounds.y, theirs.canvasBounds.y),
+          w: Math.max(ours.canvasBounds.w, theirs.canvasBounds.w),
+          h: Math.max(ours.canvasBounds.h, theirs.canvasBounds.h)
+        };
+      }
+      var merged = Object.assign({}, theirs, ours, {
+        children: mergedChildren,
+        edges: mergedEdges,
+        canvasBounds: cb,
+        zoom: ours.zoom !== void 0 ? ours.zoom : theirs.zoom,
+        pan: ours.pan !== void 0 ? ours.pan : theirs.pan
+      });
+      return { ok: true, merged: JSON.stringify(merged, null, 2) };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+};
+function _git_getRemoteState(git) {
+  return git.raw(["rev-list", "--left-right", "--count", "HEAD...@{u}"]).then(function(out) {
+    var parts = out.trim().split(/\s+/);
+    return { ahead: parseInt(parts[0]) || 0, behind: parseInt(parts[1]) || 0 };
+  }).catch(function() {
+    return { ahead: 0, behind: 0 };
+  });
+}
+function _git_generateCommitMessage(kbName, status) {
+  var created = (status.not_added || []).filter(function(f) {
+    return f.endsWith("README.md");
+  });
+  var deleted = (status.deleted || []).filter(function(f) {
+    return f.endsWith("README.md");
+  });
+  var modified = status.modified || [];
+  var renamed = status.renamed || [];
+  if (created.length > 0 && deleted.length === 0) {
+    if (created.length === 1) {
+      var name = created[0].split("/").slice(-2, -1)[0] || created[0];
+      return "feat: 新增「" + name + "」";
+    }
+    return "feat: 新增 " + created.length + " 张卡片";
+  }
+  if (deleted.length > 0 && created.length === 0) {
+    if (deleted.length === 1) {
+      var name2 = deleted[0].split("/").slice(-2, -1)[0] || deleted[0];
+      return "chore: 删除「" + name2 + "」";
+    }
+    return "chore: 删除 " + deleted.length + " 张卡片";
+  }
+  var onlyDocs = (status.files || []).every(function(f) {
+    return f.path.endsWith("README.md");
+  });
+  if (onlyDocs && modified.length > 0) {
+    var docNames = modified.slice(0, 2).map(function(f) {
+      return "「" + (f.split("/").slice(-2, -1)[0] || f) + "」";
+    });
+    var suffix = modified.length > 2 ? " 等 " + modified.length + " 个" : "";
+    return "docs: 更新 " + docNames.join("、") + suffix;
+  }
+  var onlyMeta = (status.files || []).every(function(f) {
+    return f.path.endsWith("_meta.json");
+  });
+  if (onlyMeta) {
+    return "chore: 调整节点布局（" + (status.files || []).length + " 处）";
+  }
+  if (renamed.length > 0) {
+    var r = renamed[0];
+    var fromName = (r.from || "").split("/").slice(-2, -1)[0] || r.from;
+    var toName = (r.to || "").split("/").slice(-2, -1)[0] || r.to;
+    return "refactor: 重命名「" + fromName + "」→「" + toName + "」";
+  }
+  var parts = [];
+  if ((status.not_added || []).length) parts.push("+" + status.not_added.length);
+  if (modified.length) parts.push("~" + modified.length);
+  if ((status.deleted || []).length) parts.push("-" + status.deleted.length);
+  return "update: " + parts.join(" ") + " 个文件";
+}
+var _ga_storePath = null;
+var _ga_store = null;
+function _ga_getStorePath() {
+  if (!_ga_storePath) _ga_storePath = path.join(app.getPath("userData"), "git-auth.json");
+  return _ga_storePath;
+}
+function _ga_loadStore() {
+  if (_ga_store) return _ga_store;
+  try {
+    var data = nodeFs.readFileSync(_ga_getStorePath(), "utf-8");
+    _ga_store = JSON.parse(data);
+  } catch (e) {
+    _ga_store = {};
+  }
+  return _ga_store;
+}
+function _ga_saveStore() {
+  nodeFs.writeFileSync(_ga_getStorePath(), JSON.stringify(_ga_store || {}, null, 2), "utf-8");
+}
+var gitAuth = {
+  saveToken: function(kbPath, token) {
+    return Promise.resolve().then(function() {
+      var store = _ga_loadStore();
+      if (!store[kbPath]) store[kbPath] = {};
+      if (!safeStorage.isEncryptionAvailable()) {
+        return { ok: false, error: "系统安全存储不可用，无法保存 Token。请确保系统密钥链服务正常运行。" };
+      }
+      try {
+        store[kbPath].token = safeStorage.encryptString(token).toString("base64");
+        store[kbPath].tokenEncrypted = true;
+        _ga_saveStore();
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: "加密 Token 失败: " + e.message };
+      }
+    });
+  },
+  getToken: function(kbPath) {
+    return Promise.resolve().then(function() {
+      var store = _ga_loadStore();
+      var entry = store[kbPath];
+      if (!entry || !entry.token) return null;
+      try {
+        if (entry.tokenEncrypted && safeStorage.isEncryptionAvailable()) {
+          return safeStorage.decryptString(Buffer.from(entry.token, "base64"));
+        }
+        if (!entry.tokenEncrypted) {
+          return Buffer.from(entry.token, "base64").toString("utf-8");
+        }
+        return null;
+      } catch (e) {
+        return null;
+      }
+    });
+  },
+  setAuthType: function(kbPath, authType) {
+    return Promise.resolve().then(function() {
+      var store = _ga_loadStore();
+      if (!store[kbPath]) store[kbPath] = {};
+      store[kbPath].authType = authType;
+      _ga_saveStore();
+      return { ok: true };
+    });
+  },
+  getAuthType: function(kbPath) {
+    return Promise.resolve().then(function() {
+      var store = _ga_loadStore();
+      var entry = store[kbPath];
+      return { ok: true, authType: entry ? entry.authType || "token" : "token" };
+    });
+  },
+  ensureSSHKey: function() {
+    var privPath = path.join(app.getPath("userData"), "topomind-git-key");
+    var pubPath = privPath + ".pub";
+    if (nodeFs.existsSync(privPath) && nodeFs.existsSync(pubPath)) {
+      return Promise.resolve({ privPath, pubPath });
+    }
+    return new Promise(function(resolve, reject) {
+      execFile("ssh-keygen", [
+        "-t",
+        "ed25519",
+        "-C",
+        "topomind-sync@" + require("os").hostname(),
+        "-f",
+        privPath,
+        "-N",
+        ""
+      ], function(err) {
+        if (err) reject(err);
+        else resolve({ privPath, pubPath });
+      });
+    });
+  },
+  getSSHPublicKey: function() {
+    return gitAuth.ensureSSHKey().then(function(paths) {
+      var pub = nodeFs.readFileSync(paths.pubPath, "utf-8").trim();
+      return { ok: true, publicKey: pub };
+    }).catch(function(e) {
+      return { ok: false, error: e.message };
+    });
+  },
+  buildGitEnv: function(kbPath, remoteUrl) {
+    return Promise.resolve().then(function() {
+      if (!remoteUrl) return {};
+      var isSSH = remoteUrl.startsWith("git@") || remoteUrl.startsWith("ssh://");
+      var store = _ga_loadStore();
+      var entry = store[kbPath] || {};
+      var authType = entry.authType || (isSSH ? "ssh" : "token");
+      if (authType === "ssh" || isSSH) {
+        return gitAuth.ensureSSHKey().then(function(paths) {
+          return {
+            GIT_SSH_COMMAND: 'ssh -i "' + paths.privPath + '" -o StrictHostKeyChecking=accept-new -o BatchMode=yes'
+          };
+        }).catch(function() {
+          return {};
+        });
+      }
+      return gitAuth.getToken(kbPath).then(function(token) {
+        if (token) {
+          return { GIT_ASKPASS: "echo", GIT_USERNAME: "oauth2", GIT_PASSWORD: token };
+        }
+        return {};
+      });
+    });
+  }
+};
+var fs = fileService;
+function registerIPC() {
+  ipcMain.handle("fs:init", function() {
+    return fs.initWorkDir();
+  });
+  ipcMain.handle("fs:listChildren", function(e, p) {
+    return fs.listChildren(p);
+  });
+  ipcMain.handle("fs:mkDir", function(e, p, m) {
+    var abs = fs.mkDir(p, m);
+    return path.relative(fs.getRootDir(), abs);
+  });
+  ipcMain.handle("fs:rmDir", function(e, p) {
+    fs.rmDir(p);
+  });
+  ipcMain.handle("fs:readMeta", function(e, p) {
+    return fs.readMeta(p);
+  });
+  ipcMain.handle("fs:writeMeta", function(e, p, m) {
+    fs.writeMeta(p, m);
+  });
+  ipcMain.handle("fs:writeKBName", function(e, p, n) {
+    fs.writeKBName(p, n);
+  });
+  ipcMain.handle("fs:saveKBOrder", function(e, p, o) {
+    fs.saveKBOrder(p, o);
+  });
+  ipcMain.handle("fs:readGraphMeta", function(e, p) {
+    return fs.readGraphMeta(p);
+  });
+  ipcMain.handle("fs:writeGraphMeta", function(e, p, m) {
+    fs.writeGraphMeta(p, m);
+  });
+  ipcMain.handle("fs:ensureCardDir", function(e, p) {
+    fs.ensureCardDir(p);
+  });
+  ipcMain.handle("fs:getDir", function(e, p) {
+    return fs.getDir(p);
+  });
+  ipcMain.handle("fs:updateCardMeta", function(e, p, n) {
+    return fs.updateCardMeta(p, n);
+  });
+  ipcMain.handle("fs:readFile", function(e, p) {
+    return fs.readFile(p);
+  });
+  ipcMain.handle("fs:writeFile", function(e, p, c) {
+    fs.writeFile(p, c);
+  });
+  ipcMain.handle("fs:deleteFile", function(e, p) {
+    fs.deleteFile(p);
+  });
+  ipcMain.handle("fs:writeBlobFile", function(e, p, b) {
+    fs.writeBlobFile(p, b);
+  });
+  ipcMain.handle("fs:readBlobFile", function(e, p) {
+    return fs.readBlobFile(p);
+  });
+  ipcMain.handle("fs:clearAll", function() {
+    fs.clearAll();
+  });
+  ipcMain.handle("fs:openInFinder", function(e, dirPath) {
+    var absPath = path.isAbsolute(dirPath) ? dirPath : path.join(fs.getRootDir(), dirPath);
+    if (nodeFs.existsSync(absPath)) shell.openPath(absPath);
+  });
+  ipcMain.handle("fs:countChildren", function(e, dirPath) {
+    var d = dirPath ? path.join(fs.getRootDir(), dirPath) : fs.getRootDir();
+    if (!nodeFs.existsSync(d)) return 0;
+    try {
+      return nodeFs.readdirSync(d, { withFileTypes: true }).filter(function(e2) {
+        return e2.isDirectory() && !e2.name.startsWith(".") && e2.name !== "images";
+      }).length;
+    } catch (err) {
+      return 0;
+    }
+  });
+  ipcMain.handle("fs:getRootDir", function() {
+    return fs.getRootDir();
+  });
+  ipcMain.handle("fs:getLastOpenedKB", function() {
+    return fs.getLastOpenedKB();
+  });
+  ipcMain.handle("fs:setLastOpenedKB", function(e, kbPath) {
+    fs.setLastOpenedKB(kbPath);
+  });
+  ipcMain.handle("fs:selectExistingWorkDir", function(e, dirPath) {
+    return fs.selectExistingWorkDir(dirPath);
+  });
+  ipcMain.handle("fs:selectWorkDirCandidate", function() {
+    return fs.selectWorkDirCandidate();
+  });
+  ipcMain.handle("fs:createWorkDir", function(e, dirPath) {
+    return fs.createWorkDir(dirPath);
+  });
+  ipcMain.handle("fs:importKB", function(e, sourcePath) {
+    return fs.importKB(sourcePath);
+  });
+  ipcMain.handle("app:openExternal", function(e, url) {
+    if (typeof url !== "string") return false;
+    var target = url.trim();
+    if (!/^https?:\/\//i.test(target)) return false;
+    shell.openExternal(target);
+    return true;
+  });
+  ipcMain.on("save:layout", function(event, dirPath, meta) {
+    try {
+      fs.writeGraphMeta(dirPath, meta);
+      event.returnValue = true;
+    } catch (e) {
+      event.returnValue = false;
+    }
+  });
+  function absKbPath(kbPath) {
+    var root = fs.getRootDir();
+    if (!kbPath) return root;
+    return path.resolve(root, kbPath);
+  }
+  ipcMain.handle("git:checkAvailable", function() {
+    return gitService.checkGitAvailable().then(function(available) {
+      return { ok: true, available };
+    });
+  });
+  ipcMain.handle("git:init", function(e, kbPath) {
+    return gitService.initRepo(absKbPath(kbPath));
+  });
+  ipcMain.handle("git:status", function(e, kbPath) {
+    return gitService.getStatus(absKbPath(kbPath));
+  });
+  ipcMain.handle("git:statusBatch", function(e, kbPaths) {
+    var absPaths = (kbPaths || []).map(function(p) {
+      return absKbPath(p);
+    });
+    return gitService.getStatusBatch(absPaths).then(function(results) {
+      var out = {};
+      kbPaths.forEach(function(rel, i) {
+        out[rel] = results[absPaths[i]] || { state: "uninit", ahead: 0, behind: 0 };
+      });
+      return out;
+    });
+  });
+  ipcMain.handle("git:isDirty", function(e, kbPath) {
+    return gitService.isDirty(absKbPath(kbPath)).then(function(dirty) {
+      return { ok: true, dirty };
+    });
+  });
+  ipcMain.handle("git:commit", function(e, kbPath, message) {
+    return gitService.commit(absKbPath(kbPath), message);
+  });
+  ipcMain.handle("git:diff", function(e, kbPath, opts) {
+    return gitService.getDiff(absKbPath(kbPath), opts);
+  });
+  ipcMain.handle("git:diffFiles", function(e, kbPath, opts) {
+    return gitService.getDiffFiles(absKbPath(kbPath), opts);
+  });
+  ipcMain.handle("git:log", function(e, kbPath, opts) {
+    return gitService.getLog(absKbPath(kbPath), opts);
+  });
+  ipcMain.handle("git:commitDiffFiles", function(e, kbPath, hash) {
+    return gitService.getCommitDiffFiles(absKbPath(kbPath), hash);
+  });
+  ipcMain.handle("git:commitFileDiff", function(e, kbPath, hash, filePath) {
+    return gitService.getCommitFileDiff(absKbPath(kbPath), hash, filePath);
+  });
+  ipcMain.handle("git:remote:get", function(e, kbPath) {
+    return gitService.getRemote(absKbPath(kbPath));
+  });
+  ipcMain.handle("git:remote:set", function(e, kbPath, url) {
+    return gitService.setRemote(absKbPath(kbPath), url);
+  });
+  ipcMain.handle("git:fetch", function(e, kbPath) {
+    return gitService.getRemote(absKbPath(kbPath)).then(function(r) {
+      return gitAuth.buildGitEnv(kbPath, r.url || "");
+    }).then(function(env) {
+      return gitService.fetchRemote(absKbPath(kbPath), env);
+    });
+  });
+  ipcMain.handle("git:push", function(e, kbPath) {
+    return gitService.getRemote(absKbPath(kbPath)).then(function(r) {
+      return gitAuth.buildGitEnv(kbPath, r.url || "");
+    }).then(function(env) {
+      return gitService.push(absKbPath(kbPath), env);
+    });
+  });
+  ipcMain.handle("git:pull", function(e, kbPath) {
+    return gitService.getRemote(absKbPath(kbPath)).then(function(r) {
+      return gitAuth.buildGitEnv(kbPath, r.url || "");
+    }).then(function(env) {
+      return gitService.pull(absKbPath(kbPath), env);
+    });
+  });
+  ipcMain.handle("git:conflict:list", function(e, kbPath) {
+    return gitService.getConflictList(absKbPath(kbPath));
+  });
+  ipcMain.handle("git:conflict:show", function(e, kbPath, filePath) {
+    return gitService.getConflictContent(absKbPath(kbPath), filePath).then(function(result) {
+      if (result.ok && !result.isBinary && filePath.endsWith("_meta.json")) {
+        var autoMerge = gitService.autoMergeMetaJson(result.ours, result.theirs);
+        result.autoMerge = autoMerge.ok ? autoMerge.merged : null;
+      }
+      return result;
+    });
+  });
+  ipcMain.handle("git:conflict:resolve", function(e, kbPath, filePath, content) {
+    return gitService.resolveConflict(absKbPath(kbPath), filePath, content);
+  });
+  ipcMain.handle("git:conflict:complete", function(e, kbPath) {
+    return gitService.completeConflictResolution(absKbPath(kbPath));
+  });
+  ipcMain.handle("git:auth:setToken", function(e, kbPath, token) {
+    return gitAuth.saveToken(kbPath, token);
+  });
+  ipcMain.handle("git:auth:getSSHKey", function() {
+    return gitAuth.getSSHPublicKey();
+  });
+  ipcMain.handle("git:auth:setAuthType", function(e, kbPath, authType) {
+    return gitAuth.setAuthType(kbPath, authType);
+  });
+  ipcMain.handle("git:auth:getAuthType", function(e, kbPath) {
+    return gitAuth.getAuthType(kbPath);
+  });
+}
+var win = null;
+app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
+app.commandLine.appendSwitch("disable-software-rasterizer");
+if (process.env.TOPOMIND_PROFILE && process.env.TOPOMIND_PROFILE !== "prod") {
+  app.setName("TopoMind-" + process.env.TOPOMIND_PROFILE);
+}
+function createWindow() {
+  win = new BrowserWindow({
+    width: 1400,
+    height: 900,
+    minWidth: 900,
+    minHeight: 600,
+    title: "TopoMind",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+  if (process.env.VITE_DEV_SERVER_URL) {
+    win.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+  }
+  win.webContents.on("console-message", function(e, level, msg, line, src) {
+    console.log("[renderer]", msg);
+  });
+}
+function buildMenu() {
+  var tpl = [
+    { label: "文件", submenu: [{ role: "quit", label: "退出" }] },
+    { label: "编辑", submenu: [
+      { role: "undo" },
+      { role: "redo" },
+      { type: "separator" },
+      { role: "cut" },
+      { role: "copy" },
+      { role: "paste" },
+      { role: "selectAll" }
+    ] },
+    { label: "视图", submenu: [
+      { role: "reload" },
+      { role: "toggleDevTools" },
+      { type: "separator" },
+      { role: "zoomIn" },
+      { role: "zoomOut" },
+      { role: "resetZoom" },
+      { type: "separator" },
+      { role: "togglefullscreen" }
+    ] }
+  ];
+  if (process.platform === "darwin") {
+    tpl.unshift({ label: app.getName(), submenu: [
+      { role: "about" },
+      { type: "separator" },
+      { role: "hide" },
+      { role: "hideOthers" },
+      { role: "unhide" },
+      { type: "separator" },
+      { role: "quit" }
+    ] });
+  }
+  Menu.setApplicationMenu(Menu.buildFromTemplate(tpl));
+}
+app.whenReady().then(function() {
+  registerIPC();
+  buildMenu();
+  createWindow();
+  app.on("activate", function() {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+app.on("window-all-closed", function() {
+  if (process.platform !== "darwin") app.quit();
+});
+app.on("before-quit", function() {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send("save:before-quit");
+  }
+});

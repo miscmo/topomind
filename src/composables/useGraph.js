@@ -227,6 +227,9 @@ export function useGraph(containerRef) {
       cyManager.remove(key)
     }
 
+    // 惰性创建：如果房间目录不存在，先创建它和 _graph.json
+    await storage.ensureCardDir(dirPath)
+
     try {
       const instance = _createCyInstance(containerRef.value)
       cyManager.create(key, instance)
@@ -591,16 +594,28 @@ export function useGraph(containerRef) {
       position: pos || { x: 0, y: 0 },
     })
     if (!pos) cy.value.center(node)
-    saveCurrentLayoutDebounced()
+    // 同步保存：确保父级的 _graph.json 立即更新，持久化新卡片
+    await saveCurrentLayout(dirPath)
     return cardPath
   }
 
   async function addChildCard(parentPath, name) {
+    // 惰性创建：先确保父级目录存在，再创建子卡片
+    await storage.ensureCardDir(parentPath)
     const cardPath = await storage.createCard(parentPath, name)
-    // 驱逐当前房间缓存，强制 loadRoom 重新获取最新数据
-    const key = _roomKey(parentPath)
-    cyManager.remove(key)
-    await loadRoom(parentPath)
+    // 立即添加到当前 Cytoscape 图谱中（同步保存后 loadRoom 会再次添加，需防重）
+    const existing = cy.value.getElementById(cardPath)
+    if (!existing.length) {
+      cy.value.add({
+        group: 'nodes',
+        data: { id: cardPath, label: name, cardPath },
+        classes: 'card',
+        position: { x: 0, y: 0 },
+      })
+      cy.value.center()
+    }
+    // 同步保存：确保父级的 _graph.json 立即更新，持久化新卡片
+    await saveCurrentLayout(parentPath)
     return cardPath
   }
 

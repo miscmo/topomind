@@ -23,9 +23,12 @@ export const FSB = {
   rmDir: (dirPath) => _call('fs:rmDir', dirPath),
   readMeta: (dirPath) => _call('fs:readMeta', dirPath),
   writeMeta: (dirPath, meta) => _call('fs:writeMeta', dirPath, meta),
+  writeKBName: (kbPath, name) => _call('fs:writeKBName', kbPath, name),
+  saveKBOrder: (kbPath, order) => _call('fs:saveKBOrder', kbPath, order),
   readGraphMeta: (dirPath) => _call('fs:readGraphMeta', dirPath),
   writeGraphMeta: (dirPath, meta) => _call('fs:writeGraphMeta', dirPath, meta),
   getDir: (dirPath) => _call('fs:getDir', dirPath),
+  updateCardMeta: (cardPath, newName) => _call('fs:updateCardMeta', cardPath, newName),
 
   readFile: (filePath) => _call('fs:readFile', filePath),
   writeFile: (filePath, content) => _call('fs:writeFile', filePath, content),
@@ -37,6 +40,7 @@ export const FSB = {
     _call('fs:readBlobFile', filePath).then(ab => ab ? new Blob([ab]) : null),
 
   selectExistingWorkDir: (dirPath) => _call('fs:selectExistingWorkDir', dirPath),
+  ensureCardDir: (cardPath) => _call('fs:ensureCardDir', cardPath),
   selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate'),
   createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath),
   importKB: (sourcePath) => _call('fs:importKB', sourcePath),
