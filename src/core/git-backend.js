@@ -52,6 +52,7 @@ const _cache = {}
 const _dirty = {}
 const _listeners = []
 const CACHE_TTL = 30000
+const MAX_CACHE_SIZE = 50
 
 export const GitCache = {
   markDirty(kbPath) {
@@ -68,8 +69,16 @@ export const GitCache = {
     _notify(kbPath)
   },
   setStatus(kbPath, status) {
+    if (!kbPath) return
     _cache[kbPath] = { status, timestamp: Date.now() }
     if (status.hasUncommitted || status.state === 'dirty') _dirty[kbPath] = true
+    // LRU eviction: trim to MAX_CACHE_SIZE when over limit
+    const keys = Object.keys(_cache)
+    if (keys.length > MAX_CACHE_SIZE) {
+      const sorted = keys.sort((a, b) => _cache[a].timestamp - _cache[b].timestamp)
+      const toRemove = sorted.slice(0, keys.length - MAX_CACHE_SIZE + 1)
+      toRemove.forEach(k => { delete _cache[k]; delete _dirty[k] })
+    }
     _notify(kbPath)
   },
   getStatus(kbPath) {
@@ -78,6 +87,7 @@ export const GitCache = {
   },
   invalidate(kbPath) {
     delete _cache[kbPath]
+    delete _dirty[kbPath]
   },
   isDirty(kbPath) {
     return !!_dirty[kbPath]

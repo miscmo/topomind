@@ -46,7 +46,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -97,4 +97,9 @@ function submit() {
   }
   emit('submit', { name, coverBlob: localCoverBlob.value })
 }
+
+onUnmounted(() => {
+  // Data URLs from FileReader.readAsDataURL don't need revocation.
+  // Blob URLs (if ever added) must be revoked here.
+})
 </script>

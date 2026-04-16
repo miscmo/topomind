@@ -153,9 +153,11 @@ const renderedHtml = computed(() => {
     childInfo += '</div>'
   }
   const md = markdownRaw.value
-  const html = md
-    ? sanitizeHtml(marked.parse(md))
-    : '<div class="placeholder-text" style="color:#bbb;margin-top:20px">暂无文档内容</div>'
+  let parsed = ''
+  if (md) {
+    try { parsed = marked.parse(md) } catch { parsed = '' }
+  }
+  const html = parsed ? sanitizeHtml(parsed) : '<div class="placeholder-text" style="color:#bbb;margin-top:20px">暂无文档内容</div>'
   return html + childInfo
 })
 
