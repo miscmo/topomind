@@ -153,7 +153,7 @@ export function useGraph(containerRef) {
       const cyInst = instance
       _setupHtmlLabels(cyInst)
       _bindCyEvents(cyInst)
-      _bindDOMEvents(cyInst)
+      dom.bindDOMEvents(cyInst)
       if (ctx) cyManager.markEventsBound(key, true)
       dom.cleanupDOMEventsExcept(cyInst)
       const [cardsRaw, metaRaw] = await Promise.all([
