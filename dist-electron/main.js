@@ -287,7 +287,7 @@ var fileService = {
     _fs_writeJsonFile(_fs_metaFilePath(d, "graph"), graph);
   },
   saveKBOrder: function(kbPath, order) {
-    var relPath = kbPath;
+    var relPath = path.relative(_fs_rootDir, kbPath).split(path.sep).join("/");
     _fs_config.orders[relPath] = Number.isFinite(order) ? order : 0;
     _fs_saveAppConfig();
   },
@@ -317,10 +317,15 @@ var fileService = {
   },
   writeGraphMeta: function(dirPath, meta) {
     var d = _fs_abs(dirPath);
-    if (!nodeFs.existsSync(d) || !nodeFs.existsSync(_fs_metaFilePath(d, "graph"))) {
-      fileService.ensureCardDir(dirPath);
+    if (!nodeFs.existsSync(d)) {
+      var segments = dirPath.split("/").filter(Boolean);
+      var parent = _fs_rootDir;
+      for (var i = 0; i < segments.length - 1; i++) {
+        parent = path.join(parent, _fs_safeSegment(segments[i]));
+        _fs_ensureDir(parent);
+      }
+      _fs_ensureDir(d);
     }
-    _fs_ensureDir(d);
     var graphMeta = meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {};
     _fs_writeJsonFile(_fs_metaFilePath(d, "graph"), graphMeta);
   },
