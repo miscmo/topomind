@@ -1149,7 +1149,7 @@ var gitAuth = {
           return safeStorage.decryptString(Buffer.from(entry.token, 'base64'));
         }
         if (!entry.tokenEncrypted) {
-          return Buffer.from(entry.token, 'base64').toString('utf-8');
+          return null;
         }
         return null;
       } catch (e) { return null; }
@@ -1258,6 +1258,8 @@ function registerIPC() {
   ipcMain.handle('fs:clearAll',       function()        { fs.clearAll(); });
   ipcMain.handle('fs:openInFinder', function(e, dirPath) {
     var absPath = path.isAbsolute(dirPath) ? dirPath : path.join(fs.getRootDir(), dirPath);
+    var rootDir = path.normalize(fs.getRootDir());
+    if (!path.normalize(absPath).startsWith(rootDir)) return;
     if (nodeFs.existsSync(absPath)) shell.openPath(absPath);
   });
   ipcMain.handle('fs:countChildren', function(e, dirPath) {

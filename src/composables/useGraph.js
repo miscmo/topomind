@@ -857,7 +857,7 @@ export function useGraph(containerRef) {
   )
 
   onUnmounted(() => {
-    _detachAllDomBindingsExcept(null)
+    dom.cleanupDOMEventsExcept(null)
     cyManager.clear()
     cy.value = null
   })
