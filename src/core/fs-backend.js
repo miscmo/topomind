@@ -16,6 +16,7 @@ const _call = (channel, ...args) => {
 export const FSB = {
   open: () => _call('fs:init'),
   clearAll: () => _call('fs:clearAll'),
+  initWorkDir: () => _call('fs:init'),
 
   listChildren: (parentPath) => _call('fs:listChildren', parentPath),
   mkDir: (dirPath, meta) => _call('fs:mkDir', dirPath, meta || {}),
@@ -35,8 +36,9 @@ export const FSB = {
   readBlobFile: (filePath) =>
     _call('fs:readBlobFile', filePath).then(ab => ab ? new Blob([ab]) : null),
 
-  selectDir: () => _call('fs:selectDir'),
-  selectExistingKB: () => _call('fs:selectExistingKB'),
+  selectExistingWorkDir: (dirPath) => _call('fs:selectExistingWorkDir', dirPath),
+  selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate'),
+  createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath),
   importKB: (sourcePath) => _call('fs:importKB', sourcePath),
   openInFinder: (p) => _call('fs:openInFinder', p),
   countChildren: (p) => _call('fs:countChildren', p),

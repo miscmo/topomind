@@ -171,7 +171,7 @@ const borderColorInput = ref(null)
 
 const props = defineProps({
   selectedNodeId: { type: String, default: null },
-  cy: { type: Object, default: null },
+  cy: { type: [Object, null], default: null },
 })
 const emit = defineEmits(['collapse', 'update-style', 'update-font-style'])
 

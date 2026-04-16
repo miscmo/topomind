@@ -47,7 +47,6 @@ export function useStorage() {
       .then(() => showSaveIndicator(false))
       .catch((e) => { console.warn('[useStorage] saveLayout 失败:', dirPath, e); showSaveIndicator(true) }),
     saveLayoutSync: (dirPath, meta) => {
-      // 退出前同步保存（使用 sendSync IPC）
       if (window.electronAPI?.sendSync) {
         window.electronAPI.sendSync('save:layout', dirPath, meta)
       }
@@ -64,7 +63,9 @@ export function useStorage() {
 
     // 工具
     countChildren: (p) => Store.countChildren(p),
-    selectExistingKB: () => Store.selectExistingKB(),
+    selectExistingWorkDir: (dirPath) => Store.selectExistingWorkDir(dirPath),
+    selectWorkDirCandidate: () => Store.selectWorkDirCandidate(),
+    createWorkDir: (dirPath) => Store.createWorkDir(dirPath),
     importKB: (sourcePath) => Store.importKB(sourcePath),
     openInFinder: (p) => Store.openInFinder(p),
     getRootDir: () => Store.getRootDir(),

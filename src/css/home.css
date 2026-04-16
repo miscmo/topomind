@@ -42,6 +42,38 @@
   font-weight: 400;
 }
 
+.home-workdir-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-workdir-path {
+  color: #666;
+  font-size: 12px;
+  font-family: monospace;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-workdir-switch {
+  padding: 4px 12px;
+  border: 1px solid #d0d5dc;
+  border-radius: 6px;
+  background: #fff;
+  color: #555;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.home-workdir-switch:hover {
+  border-color: #3498db;
+  color: #3498db;
+}
+
 .home-content {
   flex: 1;
   padding: 28px 48px;

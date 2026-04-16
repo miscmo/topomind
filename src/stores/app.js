@@ -7,8 +7,8 @@ import { defineStore } from 'pinia'
 
 export const useAppStore = defineStore('app', {
   state: () => ({
-    /** 当前视图：'home' | 'graph' */
-    view: 'home',
+    /** 当前视图：'setup' | 'home' | 'graph' */
+    view: 'setup',
     /** 当前选中的节点 ID（不存 Cytoscape 对象，避免响应式污染） */
     selectedNodeId: null,
     /** 是否处于连线模式 */

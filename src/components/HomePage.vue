@@ -1,4 +1,4 @@
-<!-- 首页：知识库列表 -->
+<!-- 工作目录主页：当前工作目录下的知识库列表 -->
 <template>
   <div id="home-modal">
     <!-- 头部 -->
@@ -9,6 +9,10 @@
           <h1>TopoMind</h1>
           <span>可漫游拓扑知识大脑</span>
         </div>
+      </div>
+      <div class="home-workdir-bar" v-if="workDir">
+        <span class="home-workdir-path" :title="workDir">📂 {{ truncatedWorkDir }}</span>
+        <button class="home-workdir-switch" @click="switchWorkDir" title="切换工作目录">切换</button>
       </div>
     </div>
 
@@ -271,7 +275,7 @@ const git = useGit()
 // ─── 状态 ──────────────────────────────────────────────────────
 const loading = ref(false)
 const kbs = ref([])
-const rootDir = ref('')
+const workDir = ref('')
 const showCreateForm = ref(false)
 const nameError = ref(false)
 const nameInputRef = ref(null)
@@ -316,7 +320,15 @@ const settingsForm = reactive({
 
 const settingsFullPath = computed(() => {
   if (!settingsForm.path) return ''
-  return rootDir.value ? `${rootDir.value}/${settingsForm.path}` : settingsForm.path
+  return workDir.value ? `${workDir.value}/${settingsForm.path}` : settingsForm.path
+})
+
+const truncatedWorkDir = computed(() => {
+  if (!workDir.value) return ''
+  const p = workDir.value
+  if (p.length <= 48) return p
+  // 显示: 前12字符 + "..." + 后32字符
+  return p.slice(0, 12) + '...' + p.slice(-32)
 })
 
 // ─── 生命周期 ──────────────────────────────────────────────────
@@ -327,7 +339,7 @@ async function loadKBList() {
   loading.value = true
   try {
     const [list, dir] = await Promise.all([storage.listKBs(), storage.getRootDir()])
-    rootDir.value = dir || ''
+    workDir.value = dir || ''
     kbs.value = (list || []).map(kb => ({ ...kb, nodeCount: null, gitStatus: null, coverUrl: null }))
 
     // 并发获取节点数和封面（避免串行 await 导致首页变慢）
@@ -683,10 +695,16 @@ function closeImportForm() {
 
 async function doSelectExistingKB() {
   importError.value = null
-  const result = await storage.selectExistingKB()
-  importSelected.value = result
-  if (!result) {
-    // 用户取消了选择，不做处理
+  try {
+    const result = await storage.selectWorkDirCandidate()
+    importSelected.value = result
+    if (!result) {
+      // 用户取消了选择，不做处理
+    }
+  } catch (e) {
+    // 用户取消或关闭选择框时，保持静默，避免误报
+    if (String(e?.message || '').includes('取消')) return
+    importError.value = e?.message || '选择知识库失败'
   }
 }
 
@@ -770,5 +788,16 @@ function formatTime(ts) {
   } catch {
     return '—'
   }
+}
+
+// ─── 切换工作目录 ──────────────────────────────────────────────
+async function switchWorkDir() {
+  // 1. 选择并验证新工作目录
+  const res = await storage.selectExistingWorkDir()
+  if (!res?.valid) return
+  // 2. 关闭所有已打开的标签页（知识库属于旧工作目录）
+  roomStore.tabs.slice().forEach(tab => roomStore.closeTab(tab.id))
+  // 3. 重置首页视图（工作目录已通过 file-service 更新，loadKBList 会读取新 rootDir）
+  await loadKBList()
 }
 </script>

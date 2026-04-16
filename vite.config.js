@@ -10,10 +10,30 @@ export default defineConfig({
       main: {
         // Electron 主进程入口
         entry: 'electron/main.js',
+        vite: {
+          build: {
+            rollupOptions: {
+              output: {
+                // 确保所有依赖内联到单个文件中，不拆分 chunk
+                inlineDynamicImports: true,
+              },
+            },
+          },
+        },
       },
       preload: {
         // 预加载脚本
         input: 'electron/preload.js',
+        vite: {
+          build: {
+            rollupOptions: {
+              output: {
+                inlineDynamicImports: true,
+                preserveEntrySignatures: 'exports-only',
+              },
+            },
+          },
+        },
       },
       // 渲染进程可以使用 Node.js API（通过 preload 暴露）
       renderer: {},

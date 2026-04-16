@@ -3,6 +3,7 @@
  * 业务层通过 useStorage() composable 调用
  */
 import { FSB } from './fs-backend.js'
+import { normalizeMeta } from './meta.js'
 
 const _saveTimers = new Map()
 
@@ -22,7 +23,16 @@ function ensureValidName(name, label = '名称') {
 export const Store = {
   // ===== 初始化 =====
   init() {
-    return FSB.open()
+    return FSB.initWorkDir()
+  },
+  selectExistingWorkDir(dirPath) {
+    return FSB.selectExistingWorkDir(dirPath)
+  },
+  selectWorkDirCandidate() {
+    return FSB.selectWorkDirCandidate()
+  },
+  createWorkDir(dirPath) {
+    return FSB.createWorkDir(dirPath)
   },
 
   // ===== 知识库（根级目录） =====
@@ -86,8 +96,10 @@ export const Store = {
   writeMarkdown: (cardPath, content) => FSB.writeFile(`${cardPath}/README.md`, content),
 
   // ===== 关系和布局 =====
-  readLayout: (dirPath) => FSB.readGraphMeta(dirPath),
-  saveLayout: (dirPath, meta) => FSB.writeGraphMeta(dirPath, meta),
+  readLayout(dirPath) {
+    return FSB.readGraphMeta(dirPath).then(normalizeMeta)
+  },
+  saveLayout: (dirPath, meta) => FSB.writeGraphMeta(dirPath, normalizeMeta(meta)),
 
   saveGraphDebounced(dirPath, buildMetaFn, onSaved) {
     if (!dirPath) return Promise.resolve()
@@ -99,7 +111,7 @@ export const Store = {
     const timer = setTimeout(() => {
       _saveTimers.delete(dirPath)
       const meta = buildMetaFn()
-      Store.saveLayout(dirPath, meta).then(() => {
+      Store.saveLayout(dirPath, normalizeMeta(meta)).then(() => {
         onSaved?.()
         resolveRef()
       })
@@ -117,7 +129,7 @@ export const Store = {
       _saveTimers.delete(dirPath)
     }
     const meta = buildMetaFn()
-    return Store.saveLayout(dirPath, meta).then(() => onSaved?.())
+    return Store.saveLayout(dirPath, normalizeMeta(meta)).then(() => onSaved?.())
   },
 
   // ===== 图片 =====
@@ -145,7 +157,6 @@ export const Store = {
 
   // ===== 工具 =====
   clearAll: () => FSB.clearAll(),
-  selectExistingKB: () => FSB.selectExistingKB(),
   importKB: (sourcePath) => FSB.importKB(sourcePath),
   openInFinder: (p) => FSB.openInFinder(p),
   countChildren: (p) => FSB.countChildren(p),
