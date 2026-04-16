@@ -2,6 +2,10 @@
   "name": "topomind",
   "version": "5.0.0",
   "description": "TopoMind — 可漫游拓扑知识大脑",
+  "author": {
+    "name": "TopoMind",
+    "email": "support@topomind.app"
+  },
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -40,7 +44,8 @@
         "AppImage",
         "deb"
       ],
-      "category": "Office"
+      "category": "Office",
+      "maintainer": "TopoMind <support@topomind.app>"
     },
     "nsis": {
       "oneClick": false,

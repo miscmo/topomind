@@ -7,10 +7,16 @@ const nfs = require('fs');
 const path = require('path');
 const { app, dialog } = require('electron');
 
-let rootDir = path.join(app.getPath('documents'), 'TopoMind');
+const _profile = String(process.env.TOPOMIND_PROFILE || process.env.NODE_ENV || 'prod').toLowerCase();
+const _isDevProfile = _profile !== 'prod';
+const _defaultRootDir = _isDevProfile
+  ? path.join(app.getPath('documents'), 'TopoMind-dev')
+  : path.join(app.getPath('documents'), 'TopoMind');
+
+let rootDir = _defaultRootDir;
 
 // ===== 配置持久化（自动记录最后打开的知识库） =====
-const _configFilePath = path.join(app.getPath('userData'), 'topomind-config.json');
+const _configFilePath = path.join(app.getPath('userData'), `topomind-config${_isDevProfile ? '.dev' : ''}.json`);
 let _config = { lastOpenedKB: null };
 
 function _loadConfig() {
