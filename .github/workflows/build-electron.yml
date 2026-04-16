@@ -70,7 +70,7 @@ jobs:
         run: npm run build:win
         env:
           # electron-builder on Windows
-          ELECTRON_BUILDER.extraMetadata:
+          'ELECTRON_BUILDER.extraMetadata':
             version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
 
       - name: Upload Windows artifacts
