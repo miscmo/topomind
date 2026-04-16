@@ -29,7 +29,6 @@ export default defineConfig({
             rollupOptions: {
               output: {
                 inlineDynamicImports: true,
-                preserveEntrySignatures: 'exports-only',
               },
             },
           },
@@ -47,5 +46,20 @@ export default defineConfig({
   // 让 Vite 把 vendor 中的库打进 bundle（或直接 import npm 包）
   optimizeDeps: {
     include: ['vue', 'pinia'],
+  },
+  // 拆分 cytoscape / elkjs vendor chunk
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('cytoscape') || id.includes('elkjs')) {
+              return 'vendor-cytoscape'
+            }
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 500,
   },
 })
