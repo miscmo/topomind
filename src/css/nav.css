@@ -1,8 +1,8 @@
 /* ===== 左侧样式面板 ===== */
 /* NOTE: width, position, height, and display are managed by GraphView's layout container.
-   nav.css no longer sets these for #nav-panel. */
-/* Legacy collapsed state - used by StylePanel */
-#nav-panel.collapsed{width:0;opacity:0;overflow:hidden;pointer-events:none}
+   nav.css no longer sets these for #style-panel. */
+/* Collapsed state - used by StylePanel */
+#style-panel.collapsed{width:0;opacity:0;overflow:hidden;pointer-events:none}
 
 /* Resize handle: left position is managed by GraphView's inline style.
    nav.css only provides structural styles and interaction states. */

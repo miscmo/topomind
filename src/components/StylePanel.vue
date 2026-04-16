@@ -1,6 +1,6 @@
 <!-- 左侧样式面板：节点样式编辑 -->
 <template>
-  <div id="nav-panel">
+  <div id="style-panel">
     <div id="style-panel-header">
       <div class="sp-header-actions">
         <button class="sp-header-btn" @click="resetAllStyles" title="恢复全部默认">重置</button>

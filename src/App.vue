@@ -1,17 +1,20 @@
 <template>
   <div id="topomind-app">
-    <WorkDirPage v-if="appStore.view === 'setup'" @opened="handleWorkDirOpened" @created="handleWorkDirCreated" />
+    <ErrorBoundary>
+      <!-- 工作目录设置页 -->
+      <WorkDirPage v-if="appStore.view === 'setup'" @opened="handleWorkDirOpened" @created="handleWorkDirCreated" />
 
-    <!-- 标签栏：仅在存在知识库标签时显示（主页作为一个 Tab） -->
-    <TabBar v-if="appStore.view !== 'setup' && roomStore.tabs.length > 0" />
+      <!-- 标签栏：仅在存在知识库标签时显示（主页作为一个 Tab） -->
+      <TabBar v-if="appStore.view !== 'setup' && roomStore.tabs.length > 0" />
 
-    <!-- 首页 -->
-    <HomePage v-if="appStore.view === 'home'" />
+      <!-- 首页 -->
+      <HomePage v-if="appStore.view === 'home'" />
 
-    <!-- 图谱页：左侧样式面板 + 中间图谱 + 右侧详情 -->
-    <GraphView v-else-if="appStore.view === 'graph'" />
+      <!-- 图谱页：左侧样式面板 + 中间图谱 + 右侧详情 -->
+      <GraphView v-else-if="appStore.view === 'graph'" />
+    </ErrorBoundary>
 
-    <!-- 全局模态框 -->
+    <!-- 全局模态框（不受 ErrorBoundary 保护，避免错误级联） -->
     <InputModal />
     <ConfirmModal />
   </div>
@@ -25,6 +28,7 @@ import { useStorage } from '@/composables/useStorage'
 import { logger } from '@/core/logger.js'
 
 import WorkDirPage from '@/components/WorkDirPage.vue'
+import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import TabBar from '@/components/TabBar.vue'
 import HomePage from '@/components/HomePage.vue'
 import GraphView from '@/components/GraphView.vue'

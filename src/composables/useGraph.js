@@ -20,7 +20,9 @@ import elk from 'cytoscape-elk'
 import htmlLabel from 'cytoscape-node-html-label'
 import { logger } from '@/core/logger.js'
 import { GraphConstants } from '@/core/graph-constants.js'
+import { cloneGraphStyle } from '@/core/graph-style.js'
 import { getNodeHtmlLabelConfig } from '@/core/graph-labels.js'
+import { useGraphDOM } from '@/composables/useGraphDOM.js'
 
 // 注册 ELK 布局插件
 cytoscape.use(elk)
@@ -37,8 +39,8 @@ export function useGraph(containerRef) {
   const cy = shallowRef(null)
   // 外部注入的 grid composable 引用
   let _grid = null
-  // 右键拖拽状态（仅用于菜单抑制；实际拖拽状态按实例在 _bindDOMEvents 内隔离）
-  let _rightDragMoved = false
+  // 右键拖拽状态（ref 传给 useGraphDOM）
+  const rightDragMoved = ref(false)
   // 右键菜单目标（传给 ContextMenu 组件）
   const contextMenu = ref({ type: null, x: 0, y: 0, nodeId: null, bgPos: null })
   // 当前缩放值（用于显示）
@@ -49,20 +51,22 @@ export function useGraph(containerRef) {
   const currentMeta = ref(null)
   const cyManager = createCyManager(GraphConstants.CY_INSTANCE_POOL_SIZE)
   const _cyEventsBound = new WeakSet()
-  const _domCleanupByCy = new Map()
-  const _handleElsByCy = new Map()
-  let _dragResizeState = null
-  let _dragConnectState = null
+  // 拖拽状态（ref 传给 useGraphDOM）
+  const dragResizeState = ref(null)
+  const dragConnectState = ref(null)
   let _loadRoomSeq = 0
 
-  function _detachAllDomBindingsExcept(activeCy = null) {
-    for (const [cyInst, cleanup] of _domCleanupByCy.entries()) {
-      if (!activeCy || cyInst !== activeCy) {
-        try { cleanup?.() } catch (e) {}
-        _domCleanupByCy.delete(cyInst)
-      }
-    }
-  }
+  // DOM 事件管理器（已提取至 useGraphDOM.js）
+  const dom = useGraphDOM({
+    cyRef: cy,
+    gridRef: { get value() { return _grid } },
+    dragResizeRef: dragResizeState,
+    dragConnectRef: dragConnectState,
+    rightDragMovedRef: rightDragMoved,
+    saveLayout: () => saveCurrentLayout(),
+    addEdge,
+    modalInput: (title, placeholder, defaultVal) => modalStore.showInput(title, placeholder, defaultVal),
+  })
 
   function _roomKey(dirPath) {
     const kb = roomStore.currentKBPath || ''
@@ -100,42 +104,7 @@ export function useGraph(containerRef) {
       userPanningEnabled: false,
       boxSelectionEnabled: true,
       selectionType: 'additive',
-      style: [
-        { selector: 'node.card', style: {
-          'shape': 'roundrectangle',
-          'font-family': '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
-          'text-wrap': 'wrap', 'text-max-width': '100px',
-          'text-justification': 'center',
-          'line-height': 1.2,
-          'background-color': '#4a6fa5', 'background-opacity': 0.92,
-          'color': 'transparent', 'text-opacity': 0, 'font-size': '0px',
-          'text-valign': 'center', 'text-halign': 'center',
-          'padding': '14px',
-          'underlay-color': '#000', 'underlay-opacity': 0.06, 'underlay-padding': 3,
-          'transition-property': 'border-color,border-width,opacity',
-          'transition-duration': '0.2s',
-        }},
-        { selector: 'edge[weight="main"]', style: {
-          'width': 2, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle', 'arrow-scale': 1,
-          'line-color': '#999', 'target-arrow-color': '#999',
-          'label': 'data(relation)', 'font-size': '8px', 'color': '#999',
-          'text-rotation': 'autorotate', 'text-margin-y': -8,
-          'text-background-color': '#f8f9fb', 'text-background-opacity': 0.9, 'text-background-padding': '2px',
-        }},
-        { selector: 'edge[relation="演进"]', style: { 'line-color': '#5cb85c', 'target-arrow-color': '#5cb85c' }},
-        { selector: 'edge[relation="依赖"]', style: { 'line-color': '#e8913a', 'target-arrow-color': '#e8913a' }},
-        { selector: 'edge[weight="minor"]', style: {
-          'width': 1, 'line-style': 'dotted', 'line-color': '#ccc',
-          'target-arrow-shape': 'none', 'opacity': 0.5, 'curve-style': 'bezier', 'label': '',
-        }},
-        { selector: 'node:selected', style: { 'border-width': 3, 'border-color': '#3498db',
-          'underlay-color': '#3498db', 'underlay-opacity': 0.12 }},
-        { selector: 'node.highlighted', style: { 'border-width': 3, 'border-color': '#f39c12' }},
-        { selector: 'edge.highlighted', style: { 'width': 3, 'opacity': 1, 'z-index': 999 }},
-        { selector: 'node.faded', style: { 'opacity': 0.1 }},
-        { selector: 'edge.faded', style: { 'opacity': 0.03 }},
-        { selector: 'node.search-match', style: { 'border-width': 3, 'border-color': '#f1c40f' }},
-      ],
+      style: cloneGraphStyle(),
     })
 
     return instance
@@ -156,7 +125,7 @@ export function useGraph(containerRef) {
     cy.value = instance
     _setupHtmlLabels(instance)
     _bindCyEvents(instance)
-    _bindDOMEvents(instance)
+    dom.bindDOMEvents(instance)
     if (ctx) cyManager.markEventsBound(key, true)
     _grid?.bindCyEvents?.()
     ctx?.cy?.resize?.()
@@ -186,7 +155,7 @@ export function useGraph(containerRef) {
       _bindCyEvents(cyInst)
       _bindDOMEvents(cyInst)
       if (ctx) cyManager.markEventsBound(key, true)
-      _detachAllDomBindingsExcept(cyInst)
+      dom.cleanupDOMEventsExcept(cyInst)
       const [cardsRaw, metaRaw] = await Promise.all([
         storage.listCards(dirPath).catch((e) => {
           logger.catch('useGraph', 'listCards', e)
@@ -665,12 +634,12 @@ export function useGraph(containerRef) {
       } else {
         appStore.clearSelection()
       }
-      _updateNodeHandles(c)
+      dom.updateNodeHandles(c)
     }
 
     // 节点释放后兜底选中：避免 tap 被轻微拖动吞掉、并防止释放时被取消
     c.on('mouseup', 'node', (e) => {
-      if (_dragConnectState?.active) return
+      if (dragConnectState.value?.active) return
       if (appStore.edgeMode) return
 
       const oe = e.originalEvent || {}
@@ -690,7 +659,7 @@ export function useGraph(containerRef) {
 
     // 节点单击：连线模式下确认目标
     c.on('tap', 'node', async (e) => {
-      if (_dragConnectState?.active) return
+      if (dragConnectState.value?.active) return
       if (!appStore.edgeMode || !appStore.edgeModeSourceId) return
 
       const t = e.target
@@ -707,7 +676,7 @@ export function useGraph(containerRef) {
 
     // 节点右键菜单（单选）
     c.on('cxttap', 'node', (e) => {
-      if (_rightDragMoved) return
+      if (rightDragMoved.value) return
       const selected = c.nodes(':selected')
       if (selected.length > 1) {
         contextMenu.value = { type: 'batch', x: e.originalEvent.clientX, y: e.originalEvent.clientY }
@@ -718,13 +687,13 @@ export function useGraph(containerRef) {
 
     // 边右键菜单
     c.on('cxttap', 'edge', (e) => {
-      if (_rightDragMoved) return
+      if (rightDragMoved.value) return
       contextMenu.value = { type: 'edge', x: e.originalEvent.clientX, y: e.originalEvent.clientY, edgeId: e.target.id() }
     })
 
     // 背景右键菜单
     c.on('cxttap', (e) => {
-      if (_rightDragMoved) return
+      if (rightDragMoved.value) return
       if (e.target === c) {
         contextMenu.value = { type: 'bg', x: e.originalEvent.clientX, y: e.originalEvent.clientY, bgPos: e.position }
       }
@@ -744,273 +713,20 @@ export function useGraph(containerRef) {
     // 缩放联动
     c.on('zoom', () => {
       zoomLevel.value = Math.round(c.zoom() * 100)
-      _applyZoomDisplay(c.zoom())
-      _updateNodeHandles(c)
+      dom.applyZoomDisplay(c.zoom())
+      dom.updateNodeHandles(c)
       // 多实例模式下，视口以当前房间 meta 为准，不写会话共享缓存
     })
 
     // 画布平移时记录当前房间状态（严格绑定 activeRoomPath）
     c.on('pan', () => {
-      _updateNodeHandles(c)
+      dom.updateNodeHandles(c)
       // 多实例模式下，视口以当前房间 meta 为准，不写会话共享缓存
     })
 
     _cyEventsBound.add(c)
   }
 
-  function _bindDOMEvents(targetCy = null) {
-    const c = targetCy || cy.value
-    if (!c) return
-    if (_domCleanupByCy.has(c)) return
-
-    const container = c.container()
-
-    const resizeHandleEl = document.createElement('div')
-    resizeHandleEl.className = 'node-resize-handle'
-    container.parentElement?.appendChild(resizeHandleEl)
-
-    const connectHandleEl = document.createElement('div')
-    connectHandleEl.className = 'edge-handle'
-    container.parentElement?.appendChild(connectHandleEl)
-
-    const previewLineEl = document.createElement('div')
-    previewLineEl.className = 'connect-preview-line'
-    previewLineEl.style.display = 'none'
-    container.parentElement?.appendChild(previewLineEl)
-
-    _attachHandleElements(c, { resizeHandleEl, connectHandleEl, previewLineEl })
-
-    // 右键拖拽画布（实例级隔离，避免父子/跨库互相影响）
-    let localPanning = false
-    let localPanStart = { x: 0, y: 0 }
-    let localPanOrigin = { x: 0, y: 0 }
-
-    const onMousedown = (e) => {
-      if (e.button === 2) {
-        localPanning = true
-        _rightDragMoved = false
-        localPanStart = { x: e.clientX, y: e.clientY }
-        localPanOrigin = { x: c.pan().x, y: c.pan().y }
-        container.style.cursor = 'grabbing'
-        e.preventDefault()
-      }
-    }
-    const onMousemove = (e) => {
-      if (_dragResizeState?.active) {
-        const node = c.getElementById(_dragResizeState.nodeId)
-        if (node?.length) {
-          const dx = e.clientX - _dragResizeState.startX
-          const dy = e.clientY - _dragResizeState.startY
-          const nextW = Math.max(GraphConstants.NODE_WIDTH_MIN, Math.min(GraphConstants.NODE_WIDTH_MAX, Math.round(_dragResizeState.startW + dx / Math.max(c.zoom(), 0.2))))
-          const nextH = Math.max(GraphConstants.NODE_HEIGHT_MIN, Math.min(GraphConstants.NODE_HEIGHT_MAX, Math.round(_dragResizeState.startH + dy / Math.max(c.zoom(), 0.2))))
-          node.data('nodeWidth', nextW)
-          node.data('nodeHeight', nextH)
-          node.style('width', `${nextW}px`)
-          node.style('height', `${nextH}px`)
-          node.style('text-max-width', `${nextW}px`)
-          _updateNodeHandles(c)
-        }
-        return
-      }
-
-      if (_dragConnectState?.active) {
-        const src = c.getElementById(_dragConnectState.sourceId)
-        const els = _handleElsByCy.get(c)
-        if (src?.length && els?.previewLineEl) {
-          const s = src.renderedPosition()
-          const rect = container.getBoundingClientRect()
-          const tx = e.clientX - rect.left
-          const ty = e.clientY - rect.top
-          const dx = tx - s.x
-          const dy = ty - s.y
-          const len = Math.sqrt(dx * dx + dy * dy)
-          const angle = Math.atan2(dy, dx) * 180 / Math.PI
-          const line = els.previewLineEl
-          line.style.left = `${s.x}px`
-          line.style.top = `${s.y}px`
-          line.style.width = `${len}px`
-          line.style.transform = `rotate(${angle}deg)`
-        }
-        return
-      }
-
-      if (!localPanning) return
-      const dx = e.clientX - localPanStart.x
-      const dy = e.clientY - localPanStart.y
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _rightDragMoved = true
-      c.pan({ x: localPanOrigin.x + dx, y: localPanOrigin.y + dy })
-      // 兜底：首次进入房间时若 grid 的 pan 监听尚未就绪，仍确保画布跟随
-      _grid?.drawGrid?.()
-    }
-    const onMouseup = async (e) => {
-      if (_dragResizeState?.active) {
-        _dragResizeState = null
-        document.body.style.userSelect = ''
-        document.body.style.cursor = ''
-        saveCurrentLayoutDebounced()
-        return
-      }
-
-      if (_dragConnectState?.active) {
-        const sourceId = _dragConnectState.sourceId
-        const target = _hitNodeByClientPoint(c, e.clientX, e.clientY)
-        const els = _handleElsByCy.get(c)
-        if (els?.previewLineEl) els.previewLineEl.style.display = 'none'
-
-        _dragConnectState = null
-        document.body.style.userSelect = ''
-        document.body.style.cursor = ''
-
-        if (target && target.id() !== sourceId) {
-          const relation = await modalStore.showInput('关系类型', '演进 / 依赖 / 相关', '依赖')
-          if (relation) addEdge(sourceId, target.id(), relation)
-        }
-        return
-      }
-
-      if (e.button === 2 && localPanning) {
-        localPanning = false
-        container.style.cursor = ''
-      }
-    }
-    // 保存 contextmenu 拦截引用以便清理
-    const onContextmenu = (e) => e.preventDefault()
-    container.addEventListener('contextmenu', onContextmenu)
-    container.addEventListener('mousedown', onMousedown)
-    document.addEventListener('mousemove', onMousemove)
-    document.addEventListener('mouseup', onMouseup)
-
-    // 滚轮缩放
-    const onWheel = (e) => {
-      e.preventDefault()
-      const factor = e.deltaY < 0 ? GraphConstants.ZOOM_WHEEL_FACTOR : 1 / GraphConstants.ZOOM_WHEEL_FACTOR
-      let newZoom = c.zoom() * factor
-      newZoom = Math.max(c.minZoom(), Math.min(c.maxZoom(), newZoom))
-      const rect = container.getBoundingClientRect()
-      c.zoom({ level: newZoom, renderedPosition: { x: e.clientX - rect.left, y: e.clientY - rect.top } })
-    }
-    container.addEventListener('wheel', onWheel, { passive: false })
-
-    // 保存 cleanup 函数（按 cy 实例隔离）
-    _domCleanupByCy.set(c, () => {
-      container.removeEventListener('contextmenu', onContextmenu)
-      container.removeEventListener('mousedown', onMousedown)
-      document.removeEventListener('mousemove', onMousemove)
-      document.removeEventListener('mouseup', onMouseup)
-      container.removeEventListener('wheel', onWheel)
-      resizeHandleEl.remove()
-      connectHandleEl.remove()
-      previewLineEl.remove()
-      _detachHandleElements(c)
-    })
-  }
-
-  function _attachHandleElements(c, els) {
-    _handleElsByCy.set(c, els)
-    _updateNodeHandles(c)
-
-    const { resizeHandleEl, connectHandleEl, previewLineEl } = els
-
-    resizeHandleEl.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return
-      e.preventDefault()
-      e.stopPropagation()
-      const selected = c.nodes(':selected')
-      const node = selected.length ? selected[0] : null
-      if (!node) return
-
-      const startW = Number(node.data('nodeWidth')) || node.renderedWidth()
-      const startH = Number(node.data('nodeHeight')) || node.renderedHeight()
-
-      _dragResizeState = { active: true, nodeId: node.id(), startX: e.clientX, startY: e.clientY, startW, startH }
-      document.body.style.userSelect = 'none'
-      document.body.style.cursor = 'nwse-resize'
-    })
-
-    connectHandleEl.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return
-      e.preventDefault()
-      e.stopPropagation()
-      const selected = c.nodes(':selected')
-      const node = selected.length ? selected[0] : null
-      if (!node) return
-
-      const p = node.renderedPosition()
-      _dragConnectState = { active: true, sourceId: node.id() }
-      previewLineEl.style.display = 'block'
-      previewLineEl.style.left = `${p.x}px`
-      previewLineEl.style.top = `${p.y}px`
-      previewLineEl.style.width = '0px'
-      previewLineEl.style.transform = 'rotate(0deg)'
-      document.body.style.userSelect = 'none'
-      document.body.style.cursor = 'crosshair'
-    })
-  }
-
-  function _detachHandleElements(c) {
-    _handleElsByCy.delete(c)
-  }
-
-  function _updateNodeHandles(c = cy.value) {
-    if (!c) return
-    const els = _handleElsByCy.get(c)
-    if (!els) return
-
-    const { resizeHandleEl, connectHandleEl } = els
-    const selected = c.nodes(':selected')
-    if (selected.length !== 1) {
-      resizeHandleEl.classList.remove('active')
-      connectHandleEl.classList.remove('active')
-      return
-    }
-
-    const node = selected[0]
-    const p = node.renderedPosition()
-    const w = node.renderedWidth()
-    const h = node.renderedHeight()
-
-    resizeHandleEl.classList.add('active')
-    connectHandleEl.classList.add('active')
-
-    resizeHandleEl.style.left = `${p.x + w / 2 - 6}px`
-    resizeHandleEl.style.top = `${p.y + h / 2 - 6}px`
-
-    connectHandleEl.style.left = `${p.x + w / 2 + 8}px`
-    connectHandleEl.style.top = `${p.y - 6}px`
-  }
-
-  function _hitNodeByClientPoint(c, clientX, clientY) {
-    const container = c.container()
-    if (!container) return null
-
-    const rect = container.getBoundingClientRect()
-    const rx = clientX - rect.left
-    const ry = clientY - rect.top
-
-    const nodes = c.nodes()
-    for (let i = nodes.length - 1; i >= 0; i -= 1) {
-      const n = nodes[i]
-      const bb = n.renderedBoundingBox()
-      if (rx >= bb.x1 && rx <= bb.x2 && ry >= bb.y1 && ry <= bb.y2) {
-        return n
-      }
-    }
-    return null
-  }
-
-  function _applyZoomDisplay(zoom) {
-    if (!cy.value) return
-    if (zoom < 0.6) {
-      cy.value.edges('[weight="main"]').style('label', '')
-      cy.value.edges('[weight="minor"]').style('display', 'none')
-    } else if (zoom < 0.8) {
-      cy.value.edges('[weight="main"]').style('label', e => e.data('relation') || '')
-      cy.value.edges('[weight="minor"]').style('display', 'none')
-    } else {
-      cy.value.edges('[weight="main"]').style('label', e => e.data('relation') || '')
-      cy.value.edges('[weight="minor"]').style('display', 'element')
-    }
-  }
 
   // ─── 键盘事件（由 GraphView 组件调用） ──────────────────────
   async function handleKeydown(e) {

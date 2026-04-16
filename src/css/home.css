@@ -262,59 +262,50 @@
   50% { opacity: 1; }
 }
 
-/* Git 状态徽标 */
-.git-badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 2;
+/* Git 状态徽章 */
+.home-meta-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  max-width: calc(100% - 12px);
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid transparent;
   font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.1px;
-  backdrop-filter: blur(6px);
-  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.16);
+  font-weight: 600;
+  line-height: 1.4;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
+}
+
+.home-meta-pill--git {
+  border: 1px solid transparent;
 }
 
 /* 危险（需优先处理） */
-.git-badge--conflict,
-.git-badge--diverged {
+.home-meta-pill--conflict,
+.home-meta-pill--diverged {
   color: #fff;
   background: rgba(198, 40, 40, 0.9);
   border-color: rgba(255, 205, 210, 0.55);
 }
 
 /* 警告（有本地改动/未同步） */
-.git-badge--dirty,
-.git-badge--ahead,
-.git-badge--behind {
+.home-meta-pill--dirty,
+.home-meta-pill--ahead,
+.home-meta-pill--behind {
   color: #fff;
   background: rgba(239, 108, 0, 0.9);
   border-color: rgba(255, 224, 178, 0.6);
 }
 
 /* 中性（待配置/环境问题） */
-.git-badge--uninit,
-.git-badge--no-remote,
-.git-badge--git-unavailable {
+.home-meta-pill--uninit,
+.home-meta-pill--no-remote,
+.home-meta-pill--git-unavailable {
   color: #2f3b52;
   background: rgba(255, 255, 255, 0.9);
   border-color: rgba(180, 192, 209, 0.85);
 }
 
 /* 健康（已同步） */
-.git-badge--clean {
+.home-meta-pill--clean {
   color: #fff;
   background: rgba(46, 125, 50, 0.9);
   border-color: rgba(200, 230, 201, 0.55);
