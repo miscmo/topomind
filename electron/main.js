@@ -1390,7 +1390,7 @@ function createWindow() {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
   win.webContents.on('console-message', function(e, level, msg, line, src) {
-    console.log('[renderer]', msg);
+    if (process.env.VITE_DEV_SERVER_URL) console.log('[renderer]', msg);
   });
 }
 

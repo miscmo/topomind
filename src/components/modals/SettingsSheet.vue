@@ -68,7 +68,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -85,6 +85,7 @@ const emit = defineEmits(['cancel', 'save', 'delete', 'crop'])
 const localName = ref('')
 const localCoverBlob = ref(null)
 const localCoverPreview = ref(null)
+const _blobUrl = ref(null)
 const keepCurrentCover = ref(false)
 const nameError = ref(false)
 const coverInputRef = ref(null)
@@ -108,6 +109,8 @@ watch(() => props.visible, (v) => {
   }
 })
 
+onUnmounted(() => { if (_blobUrl.value) URL.revokeObjectURL(_blobUrl.value) })
+
 function triggerCoverSelect() { coverInputRef.value?.click() }
 
 function coverChanged(e) {
@@ -128,14 +131,18 @@ function coverChanged(e) {
 
 function removeCover() {
   localCoverBlob.value = null
+  if (_blobUrl.value) URL.revokeObjectURL(_blobUrl.value)
+  _blobUrl.value = null
   localCoverPreview.value = null
   keepCurrentCover.value = false
   if (coverInputRef.value) coverInputRef.value.value = ''
 }
 
 function applyCroppedFile(file) {
+  if (_blobUrl.value) URL.revokeObjectURL(_blobUrl.value)
   localCoverBlob.value = file
-  localCoverPreview.value = URL.createObjectURL(file)
+  _blobUrl.value = URL.createObjectURL(file)
+  localCoverPreview.value = _blobUrl.value
   keepCurrentCover.value = false
 }
 
