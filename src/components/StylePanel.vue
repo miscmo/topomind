@@ -195,9 +195,9 @@ const recentFontColors = reactive([])
 
 function clearRecentColors(key) {
   if (key === 'fontColor') {
-    recentFontColors.splice(0, recentFontColors.length)
+    recentFontColors.length = 0
   } else {
-    recentBgColors.splice(0, recentBgColors.length)
+    recentBgColors.length = 0
   }
 }
 
@@ -264,7 +264,6 @@ function normalizeBorderWidth(value) {
 
 function stepFontSize(delta) {
   const next = clampFontSize((Number(styles.fontSize) || 12) + delta)
-  styles.fontSize = next
   applyStyle('fontSize', next)
 }
 

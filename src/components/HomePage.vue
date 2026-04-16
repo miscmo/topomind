@@ -176,22 +176,32 @@ async function loadKBList() {
     await storage.revokeAllImageUrls()
     kbs.value = (list || []).map(kb => ({ ...kb, nodeCount: null, gitStatus: null, coverUrl: null }))
 
-    await Promise.all(
-      kbs.value.map(async (kb, i) => {
+    const countResults = await Promise.all(
+      kbs.value.map(async (kb) => {
         try {
-          const count = await storage.countChildren(kb.path)
-          kbs.value[i].nodeCount = count
-        } catch (e) { logger.warn('HomePage', '加载节点数失败:', kb.path, e) }
-
-        if (kb.cover) {
-          try {
-            const imgPath = `${kb.path}/${kb.cover}`
-            const url = await storage.loadImage(imgPath)
-            kbs.value[i].coverUrl = url
-          } catch (e) { logger.warn('HomePage', '加载封面失败:', kb.path, e) }
-        }
+          return { path: kb.path, count: await storage.countChildren(kb.path) }
+        } catch (e) { logger.warn('HomePage', '加载节点数失败:', kb.path, e); return { path: kb.path, count: null } }
       })
     )
+    countResults.forEach(({ path, count }) => {
+      const idx = kbs.value.findIndex(kb => kb.path === path)
+      if (idx !== -1) kbs.value[idx].nodeCount = count
+    })
+
+    const coverResults = await Promise.all(
+      kbs.value.map(async (kb) => {
+        if (!kb.cover) return { path: kb.path, url: null }
+        try {
+          const imgPath = `${kb.path}/${kb.cover}`
+          const url = await storage.loadImage(imgPath)
+          return { path: kb.path, url }
+        } catch (e) { logger.warn('HomePage', '加载封面失败:', kb.path, e); return { path: kb.path, url: null } }
+      })
+    )
+    coverResults.forEach(({ path, url }) => {
+      const idx = kbs.value.findIndex(kb => kb.path === path)
+      if (idx !== -1 && url) kbs.value[idx].coverUrl = url
+    })
 
     if (kbs.value.length > 0) {
       const statuses = await git.statusBatch(kbs.value.map(kb => kb.path))

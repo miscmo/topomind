@@ -461,6 +461,7 @@ async function initializeGraphView() {
 }
 
 function retryInit() {
+  clearTimeout(_initGridTimer)
   if (graph.cy.value) {
     graph.cy.value.destroy()
     graph.cy.value = null
@@ -473,13 +474,13 @@ async function handleBeforeUnload() {
   detailPanelRef.value?.flushEdit()
   const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
   if (!dirPath) return
-  const meta = await graph.buildCurrentMeta()
-  if (meta) {
-    try {
+  try {
+    const meta = await graph.buildCurrentMeta()
+    if (meta) {
       storage.saveLayoutSync(dirPath, meta)
-    } catch (e) {
-      logger.catch('GraphView', '保存布局', e)
     }
+  } catch (e) {
+    logger.catch('GraphView', '保存布局', e)
   }
 }
 
