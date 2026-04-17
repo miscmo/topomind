@@ -131,7 +131,7 @@ export const useRoomStore = defineStore('room', {
           detailPanelWidth: 420,
           searchQuery: '',
         },
-      })
+      }
       this.tabs = [...this.tabs, newTab]
       this.switchTab(id)
       return id
