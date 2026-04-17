@@ -85,8 +85,7 @@ async function autoOpenLastKB() {
     const exists = (kbs || []).some(kb => kb.path === lastKBPath)
     if (!exists) return
 
-    const kbMeta = await storage.getKBMeta(lastKBPath)
-    const kbName = (kbMeta && kbMeta.name) ? kbMeta.name : lastKBPath.split('/').pop()
+    const kbName = lastKBPath.split('/').pop()
     roomStore.openTab(lastKBPath, kbName)
     appStore.showGraph()
   } catch (e) {

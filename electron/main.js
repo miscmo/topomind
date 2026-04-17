@@ -72,60 +72,6 @@ function _fs_safeSegment(name) {
   return s.slice(0, 80);
 }
 
-function _fs_migrateAppConfig(dir) {
-  var oldPath = path.join(dir, 'app-config.json');
-  var newPath = path.join(dir, '_config.json');
-  if (nodeFs.existsSync(oldPath) && !nodeFs.existsSync(newPath)) {
-    try {
-      var data = nodeFs.readFileSync(oldPath, 'utf-8');
-      nodeFs.writeFileSync(newPath, data, 'utf-8');
-      nodeFs.unlinkSync(oldPath);
-    } catch (e) { /* ignore migration errors */ }
-  }
-}
-
-// 迁移旧的 _kb_meta.json 到新结构：name -> _graph.json, order/cover -> _config.json
-function _fs_migrateKbMeta(dir) {
-  dir = dir || _fs_rootDir;
-  var absDir = path.resolve(dir);
-  var entries = [];
-  try { entries = nodeFs.readdirSync(absDir, { withFileTypes: true }); } catch (e) { return; }
-  for (var i = 0; i < entries.length; i++) {
-    var entry = entries[i];
-    if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'images') continue;
-    var childDir = path.join(absDir, entry.name);
-    _fs_migrateKbMeta(childDir);
-    var kbMetaPath = path.join(childDir, '_kb_meta.json');
-    if (nodeFs.existsSync(kbMetaPath)) {
-      try {
-        var meta = JSON.parse(nodeFs.readFileSync(kbMetaPath, 'utf-8')) || {};
-        var relPath = path.relative(_fs_rootDir, childDir).split(path.sep).join('/');
-        // Migrate name to _graph.json
-        var graphPath = path.join(childDir, '_graph.json');
-        var graph = _fs_readJsonFile(graphPath) || { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
-        if (typeof meta.name === 'string' && meta.name.trim()) {
-          graph.name = meta.name.trim();
-          _fs_writeJsonFile(graphPath, graph);
-        }
-        // Migrate order to _config.json.orders
-        if (Number.isFinite(meta.order)) {
-          _fs_config.orders[relPath] = meta.order;
-        }
-        // Migrate cover to _config.json.covers
-        if (typeof meta.cover === 'string' && meta.cover.trim()) {
-          _fs_config.covers[relPath] = meta.cover.trim();
-        }
-        // Delete old _kb_meta.json
-        nodeFs.unlinkSync(kbMetaPath);
-      } catch (e) { /* ignore migration errors */ }
-    }
-  }
-  // Save migrated orders/covers to _config.json
-  if (Object.keys(_fs_config.orders).length > 0 || Object.keys(_fs_config.covers).length > 0) {
-    _fs_saveAppConfig();
-  }
-}
-
 function _fs_uniqueFolderName(parentDir, desiredName) {
   var base = _fs_safeSegment(desiredName);
   var candidate = base;
@@ -157,18 +103,8 @@ function _fs_writeJsonFile(filePath, data) {
   nodeFs.writeFileSync(filePath, JSON.stringify(data || {}, null, 2), 'utf-8');
 }
 
-function _fs_stripGraphFields(meta) {
-  var base = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
-  var kbMeta = {};
-  Object.keys(base).forEach(function(key) {
-    if (['children', 'edges', 'zoom', 'pan', 'canvasBounds'].indexOf(key) !== -1) return;
-    kbMeta[key] = base[key];
-  });
-  return kbMeta;
-}
-
-function _fs_metaFilePath(dir, kind) {
-  return path.join(dir, kind === 'graph' ? '_graph.json' : '_kb_meta.json');
+function _fs_graphFilePath(dir) {
+  return path.join(dir, '_graph.json');
 }
 
 // Public file-service API
@@ -212,20 +148,16 @@ var fileService = {
       dir = picked.path;
     }
     dir = path.resolve(dir);
-    _fs_migrateAppConfig(dir);
     if (!_fs_isValidWorkDir(dir)) {
       return { valid: false, path: dir, error: '不是有效的工作目录（缺少 _config.json）' };
     }
     _fs_rootDir = dir;
     _fs_loadAppConfig(dir);
-    _fs_migrateKbMeta(_fs_rootDir);
     return { valid: true, path: _fs_rootDir };
   },
   initWorkDir: function() {
     if (!_fs_rootDir) return { valid: false, path: null, error: '未选择工作目录' };
     _fs_ensureDir(_fs_rootDir);
-    _fs_migrateAppConfig(_fs_rootDir);
-    _fs_migrateKbMeta(_fs_rootDir);
     if (!nodeFs.existsSync(_fs_appConfigPath())) {
       _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
       _fs_saveAppConfig();
@@ -236,7 +168,7 @@ var fileService = {
     var dir = _fs_abs(parentPath);
     _fs_ensureDir(dir);
     // Read parent graph for child display names
-    var parentGraph = _fs_readJsonFile(_fs_metaFilePath(dir, 'graph')) || { children: {} };
+    var parentGraph = _fs_readJsonFile(_fs_graphFilePath(dir)) || { children: {} };
     var parentChildren = parentGraph.children || {};
     var children = nodeFs.readdirSync(dir, { withFileTypes: true })
       .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
@@ -278,8 +210,8 @@ var fileService = {
     var d = path.join(parent, finalName);
     _fs_ensureDir(d);
     // Only write _graph.json; name/order are stored in parent's _graph.json and _config.json
-    if (!nodeFs.existsSync(_fs_metaFilePath(d, 'graph'))) {
-      _fs_writeJsonFile(_fs_metaFilePath(d, 'graph'), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
+    if (!nodeFs.existsSync(_fs_graphFilePath(d))) {
+      _fs_writeJsonFile(_fs_graphFilePath(d), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
     }
     return d;
   },
@@ -287,45 +219,56 @@ var fileService = {
     var d = _fs_abs(dirPath);
     if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
   },
-  readMeta: function(dirPath) {
-    var d = _fs_abs(dirPath);
-    // Primary: read name from _graph.json
-    var graph = _fs_readJsonFile(_fs_metaFilePath(d, 'graph'));
-    if (graph && typeof graph.name === 'string' && graph.name.trim()) {
-      return { name: graph.name.trim() };
-    }
-    // Fallback: read from _kb_meta.json for backward compat
-    var kbMeta = _fs_readJsonFile(_fs_metaFilePath(d, 'kb'));
-    if (kbMeta) return kbMeta;
-    return {};
-  },
-  writeMeta: function(dirPath, meta) {
-    var d = _fs_abs(dirPath);
-    _fs_ensureDir(d);
-    // Write name to _graph.json
-    var graph = _fs_readJsonFile(_fs_metaFilePath(d, 'graph')) || { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
-    if (meta && typeof meta === 'object') {
-      if (typeof meta.name === 'string' && meta.name.trim()) {
-        graph.name = meta.name.trim();
-      }
-    }
-    _fs_writeJsonFile(_fs_metaFilePath(d, 'graph'), graph);
-  },
-  writeKBName: function(kbPath, name) {
-    var d = _fs_abs(kbPath);
-    _fs_ensureDir(d);
-    var graph = _fs_readJsonFile(_fs_metaFilePath(d, 'graph')) || { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
-    graph.name = String(name || '').trim();
-    _fs_writeJsonFile(_fs_metaFilePath(d, 'graph'), graph);
-  },
   saveKBOrder: function(kbPath, order) {
     var relPath = path.relative(_fs_rootDir, kbPath).split(path.sep).join('/');
     _fs_config.orders[relPath] = Number.isFinite(order) ? order : 0;
     _fs_saveAppConfig();
   },
+  getKBCover: function(kbPath) {
+    var relPath = path.relative(_fs_rootDir, kbPath).split(path.sep).join('/');
+    return _fs_config.covers[relPath] || null;
+  },
+  saveKBCover: function(kbPath, coverPath) {
+    var relPath = path.relative(_fs_rootDir, kbPath).split(path.sep).join('/');
+    if (coverPath) {
+      _fs_config.covers[relPath] = coverPath;
+    } else {
+      delete _fs_config.covers[relPath];
+    }
+    _fs_saveAppConfig();
+  },
+  renameKB: function(kbPath, newName) {
+    var d = _fs_abs(kbPath);
+    if (!nodeFs.existsSync(d)) return null;
+    var parentDir = _fs_rootDir;
+    var newSafeName = _fs_safeSegment(newName);
+    var newDirName = _fs_uniqueFolderName(parentDir, newSafeName);
+    var oldDirName = path.basename(d);
+    var newDir = path.join(parentDir, newDirName);
+    var oldRelPath = path.relative(_fs_rootDir, d).split(path.sep).join('/');
+    // Rename directory in place
+    if (oldDirName !== newDirName) {
+      nodeFs.renameSync(d, newDir);
+    }
+    // Update _config.json.orders with new relative path
+    var newRelPath = path.relative(_fs_rootDir, newDir).split(path.sep).join('/');
+    if (oldRelPath !== newRelPath) {
+      var orderVal = _fs_config.orders[oldRelPath];
+      delete _fs_config.orders[oldRelPath];
+      _fs_config.orders[newRelPath] = orderVal;
+      if (_fs_config.lastOpenedKB) {
+        var lastRel = path.relative(_fs_rootDir, _fs_abs(_fs_config.lastOpenedKB)).split(path.sep).join('/');
+        if (lastRel === oldRelPath) {
+          _fs_config.lastOpenedKB = newDir;
+        }
+      }
+      _fs_saveAppConfig();
+    }
+    return newRelPath;
+  },
   readGraphMeta: function(dirPath) {
     var d = _fs_abs(dirPath);
-    var graph = _fs_readJsonFile(_fs_metaFilePath(d, 'graph'));
+    var graph = _fs_readJsonFile(_fs_graphFilePath(d));
     if (graph) return graph;
     return { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
   },
@@ -343,8 +286,8 @@ var fileService = {
     var finalName = _fs_uniqueFolderName(parent, segments[segments.length - 1]);
     d = path.join(parent, finalName);
     _fs_ensureDir(d);
-    if (!nodeFs.existsSync(_fs_metaFilePath(d, 'graph'))) {
-      _fs_writeJsonFile(_fs_metaFilePath(d, 'graph'), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
+    if (!nodeFs.existsSync(_fs_graphFilePath(d))) {
+      _fs_writeJsonFile(_fs_graphFilePath(d), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
     }
   },
   writeGraphMeta: function(dirPath, meta) {
@@ -360,43 +303,26 @@ var fileService = {
       _fs_ensureDir(d);
     }
     var graphMeta = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
-    _fs_writeJsonFile(_fs_metaFilePath(d, 'graph'), graphMeta);
+    _fs_writeJsonFile(_fs_graphFilePath(d), graphMeta);
   },
   updateCardMeta: function(cardPath, newName) {
-    var d = _fs_abs(cardPath);
-    if (!nodeFs.existsSync(d)) return null;
     var parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : '';
     var parentDir = _fs_abs(parentPath);
-    var newSafeName = _fs_safeSegment(newName);
-    var newDirName = _fs_uniqueFolderName(parentDir, newSafeName);
-    var oldDirName = path.basename(d);
-    var newDir = path.join(parentDir, newDirName);
-
-    // Rename directory in place
-    if (oldDirName !== newDirName) {
-      nodeFs.renameSync(d, newDir);
-    }
-
-    // Update parent's _graph.json: update path key and name
-    var graphPath = _fs_metaFilePath(parentDir, 'graph');
+    var graphPath = _fs_graphFilePath(parentDir);
     var graph = _fs_readJsonFile(graphPath) || { children: {}, edges: [] };
     var children = graph.children || {};
     var entry = children[cardPath];
     if (entry) {
-      var newCardPath = parentPath ? parentPath + '/' + newDirName : newDirName;
-      delete children[cardPath];
-      children[newCardPath] = Object.assign({}, entry, { name: newSafeName });
+      children[cardPath] = Object.assign({}, entry, { name: newName });
       graph.children = children;
       _fs_writeJsonFile(graphPath, graph);
-      return newCardPath;
     }
     return cardPath;
   },
   getDir: function(dirPath) {
     var d = _fs_abs(dirPath);
     if (!nodeFs.existsSync(d)) return null;
-    var meta = fileService.readMeta(dirPath);
-    return Object.assign({ path: dirPath }, meta);
+    return { path: dirPath };
   },
   readFile: function(filePath) {
     var f = _fs_abs(filePath);
@@ -435,16 +361,10 @@ var fileService = {
   importKB: function(sourcePath) {
     var src = path.resolve(sourcePath);
     if (!nodeFs.existsSync(src)) throw new Error('源目录不存在: ' + src);
-    if (!nodeFs.existsSync(path.join(src, '_kb_meta.json')) &&
-        !nodeFs.existsSync(path.join(src, '_meta.json')) &&
-        !nodeFs.existsSync(path.join(src, '_graph.json'))) {
+    if (!nodeFs.existsSync(path.join(src, '_graph.json'))) {
       throw new Error('不是有效的知识库目录');
     }
-    var meta = _fs_readJsonFile(path.join(src, '_kb_meta.json')) ||
-               _fs_readJsonFile(path.join(src, '_meta.json')) || {};
-    var kbName = (meta.name && typeof meta.name === 'string' && meta.name.trim())
-      ? meta.name.trim()
-      : path.basename(src);
+    var kbName = path.basename(src);
     var destName = _fs_uniqueFolderName(_fs_rootDir, kbName);
     var dest = path.join(_fs_rootDir, destName);
     _fs_ensureDir(dest);
@@ -471,36 +391,7 @@ var fileService = {
         }
       }
     }
-    copyDirRecursive(src, dest);
-
-    // 迁移旧 _meta.json 格式到 _graph.json（_kb_meta.json 不再使用）
-    function migrateLegacyMeta(dir) {
-      var entries = [];
-      try { entries = nodeFs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
-      for (var i = 0; i < entries.length; i++) {
-        var entry = entries[i];
-        if (!entry.isDirectory() || entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
-        migrateLegacyMeta(path.join(dir, entry.name));
-      }
-      var metaFile = path.join(dir, '_meta.json');
-      if (nodeFs.existsSync(metaFile)) {
-        var legacy = _fs_readJsonFile(metaFile);
-        if (legacy) {
-          var graphMeta = {
-            children: legacy.children || {},
-            edges: legacy.edges || [],
-            zoom: legacy.zoom || null,
-            pan: legacy.pan || null,
-            canvasBounds: legacy.canvasBounds || null,
-          };
-          if (legacy.name) graphMeta.name = legacy.name;
-          _fs_writeJsonFile(_fs_metaFilePath(dir, 'graph'), graphMeta);
-          // _kb_meta.json is no longer used — name is stored in _graph.json, order in _config.json
-          try { nodeFs.unlinkSync(metaFile); } catch (e) { /* ignore */ }
-        }
-      }
-    }
-    migrateLegacyMeta(dest);
+        copyDirRecursive(src, dest);
 
     // 分配 sortOrder 写入 _config.json.orders
     var existing = fileService.listChildren('');
@@ -764,7 +655,7 @@ var gitService = {
                 }
                 var fileInfo = {
                   path: fp, insertions: ins, deletions: del,
-                  isMeta: fp.endsWith('_meta.json'),
+                  isMeta: fp.endsWith('_graph.json'),
                   isDoc: fp.endsWith('README.md'),
                   isImage: /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fp),
                 };
@@ -776,7 +667,7 @@ var gitService = {
                   if (!seen[fp]) {
                     var fileInfo = {
                       path: fp, insertions: 0, deletions: 0, isNew: true,
-                      isMeta: fp.endsWith('_meta.json'),
+                      isMeta: fp.endsWith('_graph.json'),
                       isDoc: fp.endsWith('README.md'),
                       isImage: /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fp),
                     };
@@ -839,7 +730,7 @@ var gitService = {
               path: parts[2],
               insertions: parseInt(parts[0]) || 0,
               deletions: parseInt(parts[1]) || 0,
-              isMeta: parts[2].endsWith('_meta.json'),
+              isMeta: parts[2].endsWith('_graph.json'),
               isDoc: parts[2].endsWith('README.md'),
               isImage: /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(parts[2]),
             });
@@ -1079,7 +970,7 @@ function _git_generateCommitMessage(kbName, status) {
     var suffix = modified.length > 2 ? ' 等 ' + modified.length + ' 个' : '';
     return 'docs: 更新 ' + docNames.join('、') + suffix;
   }
-  var onlyMeta = (status.files || []).every(function(f) { return f.path.endsWith('_meta.json'); });
+  var onlyMeta = (status.files || []).every(function(f) { return f.path.endsWith('_graph.json'); });
   if (onlyMeta) {
     return 'chore: 调整节点布局（' + (status.files || []).length + ' 处）';
   }
@@ -1241,10 +1132,10 @@ function registerIPC() {
     return path.relative(fs.getRootDir(), abs);
   });
   ipcMain.handle('fs:rmDir',          function(e, p)    { fs.rmDir(p); });
-  ipcMain.handle('fs:readMeta',       function(e, p)    { return fs.readMeta(p); });
-  ipcMain.handle('fs:writeMeta',      function(e, p, m){ fs.writeMeta(p, m); });
-  ipcMain.handle('fs:writeKBName',     function(e, p, n){ fs.writeKBName(p, n); });
   ipcMain.handle('fs:saveKBOrder',     function(e, p, o){ fs.saveKBOrder(p, o); });
+  ipcMain.handle('fs:getKBCover',      function(e, p)    { return fs.getKBCover(p); });
+  ipcMain.handle('fs:saveKBCover',     function(e, p, c){ fs.saveKBCover(p, c); });
+  ipcMain.handle('fs:renameKB',        function(e, p, n){ return fs.renameKB(p, n); });
   ipcMain.handle('fs:readGraphMeta',   function(e, p)   { return fs.readGraphMeta(p); });
   ipcMain.handle('fs:writeGraphMeta',  function(e, p, m){ fs.writeGraphMeta(p, m); });
   ipcMain.handle('fs:ensureCardDir',  function(e, p)    { fs.ensureCardDir(p); });
@@ -1346,7 +1237,7 @@ function registerIPC() {
   ipcMain.handle('git:conflict:show', function(e, kbPath, filePath) {
     return gitService.getConflictContent(absKbPath(kbPath), filePath)
       .then(function(result) {
-        if (result.ok && !result.isBinary && filePath.endsWith('_meta.json')) {
+        if (result.ok && !result.isBinary && filePath.endsWith('_graph.json')) {
           var autoMerge = gitService.autoMergeMetaJson(result.ours, result.theirs);
           result.autoMerge = autoMerge.ok ? autoMerge.merged : null;
         }

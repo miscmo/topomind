@@ -71,7 +71,6 @@ export const Store = {
       }
       const newOrder = maxOrder + 1
       const actualPath = await FSB.mkDir(safeName, null)
-      await FSB.writeKBName(actualPath, safeName)
       await FSB.saveKBOrder(actualPath, newOrder)
       return actualPath || safeName
     } catch (e) {
@@ -89,20 +88,21 @@ export const Store = {
     }
   },
 
-  async getKBMeta(name) {
+    async saveKBCover(kbPath, coverPath) {
     try {
-      return await FSB.readMeta(name)
+      return await FSB.saveKBCover(kbPath, coverPath)
     } catch (e) {
-      logger.catch('Store.getKBMeta', `读取知识库元数据失败: ${name}`, e)
+      logger.catch('Store.saveKBCover', `保存知识库封面失败: ${kbPath}`, e)
       throw e
     }
   },
 
-  async saveKBMeta(name, meta) {
+  async renameKB(kbPath, newName) {
+    const safeName = ensureValidName(newName, '知识库名称')
     try {
-      return await FSB.writeMeta(name, meta)
+      return await FSB.renameKB(kbPath, safeName)
     } catch (e) {
-      logger.catch('Store.saveKBMeta', `保存知识库元数据失败: ${name}`, e)
+      logger.catch('Store.renameKB', `重命名知识库失败: ${kbPath} -> ${newName}`, e)
       throw e
     }
   },

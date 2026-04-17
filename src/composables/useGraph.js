@@ -202,9 +202,6 @@ export function useGraph(containerRef) {
           : (card.path.split('/').pop() || card.path)
         roomStore.setPathName(card.path, safeName)
       })
-      if (dirPath && meta.name) {
-        roomStore.setPathName(dirPath, meta.name)
-      }
 
       // 添加节点
       uniqueCards.forEach((card) => {

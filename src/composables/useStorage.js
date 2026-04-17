@@ -29,8 +29,9 @@ export function useStorage() {
     listKBs: () => Store.listKBs(),
     createKB: (name, meta) => Store.createKB(name, meta),
     deleteKB: (name) => Store.deleteKB(name),
-    getKBMeta: (name) => Store.getKBMeta(name),
-    saveKBMeta: (name, meta) => Store.saveKBMeta(name, meta),
+    getKBCover: (kbPath) => Store.getKBCover(kbPath),
+    saveKBCover: (kbPath, coverPath) => Store.saveKBCover(kbPath, coverPath),
+    renameKB: (kbPath, newName) => Store.renameKB(kbPath, newName),
 
     // 卡片
     listCards: (parentPath) => Store.listCards(parentPath),

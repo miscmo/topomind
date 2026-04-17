@@ -253,8 +253,7 @@ async function onKBDrop(e, idx) {
   kbs.value = newArr
   try {
     await Promise.all(newArr.map(async (kb, i) => {
-      const meta = await storage.getKBMeta(kb.path)
-      await storage.saveKBMeta(kb.path, { ...(meta || {}), order: i })
+      await storage.saveKBOrder(kb.path, i)
     }))
   } catch (e) {
     logger.catch('HomePage', '保存知识库排序', e)
@@ -282,9 +281,7 @@ async function submitCreate({ name, coverBlob }) {
     if (coverBlob) {
       const ext = (coverBlob.name || 'png').split('.').pop()
       const r = await storage.saveKBImage(kbPath, coverBlob, `cover.${ext}`)
-      const meta = await storage.getKBMeta(kbPath)
-      const updatedMeta = { ...(meta || {}), cover: r.markdownRef }
-      await storage.saveKBMeta(kbPath, updatedMeta)
+      await storage.saveKBCover(kbPath, r.markdownRef)
     }
     showCreateSheet.value = false
     await loadKBList()
@@ -348,14 +345,16 @@ async function saveSettings(name, coverBlob) {
 
   try {
     const targetPath = kb.path
-    const baseMeta = await storage.getKBMeta(targetPath)
-    const updatedMeta = { ...(baseMeta || {}), name }
+    // 重命名知识库（目录改名）
+    if (name !== kb.name) {
+      await storage.renameKB(targetPath, name)
+    }
+    // 保存封面
     if (coverBlob) {
       const ext = (coverBlob.name || 'png').split('.').pop()
       const r = await storage.saveKBImage(targetPath, coverBlob, `cover.${ext}`)
-      updatedMeta.cover = r.markdownRef
+      await storage.saveKBCover(targetPath, r.markdownRef)
     }
-    await storage.saveKBMeta(targetPath, updatedMeta)
     closeSettings()
     await loadKBList()
   } catch (e) { logger.catch('HomePage', '保存知识库设置', e) }

@@ -261,7 +261,7 @@
 .git-diff-line--del .git-diff-line-content { color: #b91c1c; }
 .git-diff-line--ctx .git-diff-line-content { color: #374151; }
 
-/* 友好视图（_meta.json） */
+/* 友好视图（_graph.json） */
 .git-meta-friendly {
   padding: 10px 16px;
   font-size: 12px;
