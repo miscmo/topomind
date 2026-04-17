@@ -271,7 +271,7 @@ export const Store = {
       // 先撤销旧 URL（同一路径可能多次调用）
       const existing = _blobUrlRegistry.get(imgPath)
       if (existing) {
-        try { URL.revokeObjectURL(existing) } catch (e) {}
+        try { URL.revokeObjectURL(existing) } catch (e) { logger.warn('Store', `revokeImageUrl ${imgPath}`, e) }
         _blobUrlRegistry.delete(imgPath)
       }
       const url = URL.createObjectURL(blob)
@@ -286,7 +286,7 @@ export const Store = {
   /** 撤销所有 loadImage 创建的 Blob URL（HomePage 列表刷新时调用） */
   revokeAllImageUrls() {
     for (const [path, url] of _blobUrlRegistry) {
-      try { URL.revokeObjectURL(url) } catch (e) {}
+      try { URL.revokeObjectURL(url) } catch (e) { logger.warn('Store', `revokeImageUrl ${path}`, e) }
     }
     _blobUrlRegistry.clear()
   },

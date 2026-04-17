@@ -120,6 +120,7 @@ import { useGraph } from '@/composables/useGraph'
 import { useGrid } from '@/composables/useGrid'
 import { useResizeDrag } from '@/composables/useResizeDrag'
 import { useStorage, saveIndicatorVisible, saveFailed } from '@/composables/useStorage'
+import { usePanelState } from '@/composables/usePanelState.js'
 
 import StylePanel from '@/components/StylePanel.vue'
 import DetailPanel from '@/components/DetailPanel.vue'
@@ -163,143 +164,11 @@ const zoomIndicatorStyle = computed(() => ({
 const initPhase = ref('idle') // idle | engine | decorators | room | ready | error
 const initError = ref('')
 
-const STYLE_WIDTH_MIN = 300
-const STYLE_WIDTH_MAX = 420
-const DETAIL_WIDTH_MIN = 260
-const DETAIL_WIDTH_MAX = 860
-
-function detailWidthKeyForKB(kbPath) {
-  return kbPath ? `topomind:detail-width:${kbPath}` : ''
-}
-
-function detailPanelStateKeyForKB(kbPath) {
-  return kbPath ? `topomind:detail-panel:${kbPath}` : ''
-}
-
-function clampPanelWidth(w, min, max, fallback) {
-  const n = Number(w)
-  if (!Number.isFinite(n)) return fallback
-  return Math.max(min, Math.min(max, Math.round(n)))
-}
-
-function clampDetailWidth(w) {
-  return clampPanelWidth(w, DETAIL_WIDTH_MIN, DETAIL_WIDTH_MAX, 420)
-}
-
-function clampStyleWidth(w) {
-  return clampPanelWidth(w, STYLE_WIDTH_MIN, STYLE_WIDTH_MAX, 300)
-}
-
-function readPersistedDetailWidthForKB(kbPath) {
-  const key = detailWidthKeyForKB(kbPath)
-  if (!key) return null
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw == null) return null
-    return clampDetailWidth(raw)
-  } catch (e) {
-    logger.catch('GraphView', '读取详情宽度', e)
-    return null
-  }
-}
-
-function persistDetailWidthForKB(kbPath, width) {
-  const key = detailWidthKeyForKB(kbPath)
-  if (!key) return
-  try {
-    localStorage.setItem(key, String(clampDetailWidth(width)))
-  } catch (e) {
-    logger.catch('GraphView', '保存详情宽度', e)
-  }
-}
-
-function persistDetailPanelStateForKB(kbPath, state) {
-  const key = detailPanelStateKeyForKB(kbPath)
-  if (!key) return
-  try {
-    localStorage.setItem(key, JSON.stringify(state))
-  } catch (e) {
-    logger.catch('GraphView', '保存详情面板状态', e)
-  }
-}
-
-function readPersistedDetailPanelStateForKB(kbPath) {
-  const key = detailPanelStateKeyForKB(kbPath)
-  if (!key) return null
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw == null) return null
-    return JSON.parse(raw)
-  } catch (e) {
-    logger.catch('GraphView', '读取详情面板状态', e)
-    return null
-  }
-}
-
 function saveUiToActiveTab(patch = {}) {
   const tab = roomStore.activeTab
   if (!tab) return
   if (!tab.ui) tab.ui = {}
   tab.ui = { ...tab.ui, ...patch }
-}
-
-function styleWidthKeyForKB(kbPath) {
-  return kbPath ? `topomind:style-width:${kbPath}` : ''
-}
-
-function readPersistedStyleWidthForKB(kbPath) {
-  const key = styleWidthKeyForKB(kbPath)
-  if (!key) return null
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw == null) return null
-    return clampStyleWidth(raw)
-  } catch (e) {
-    logger.catch('GraphView', '读取样式宽度', e)
-    return null
-  }
-}
-
-function persistStyleWidthForKB(kbPath, width) {
-  const key = styleWidthKeyForKB(kbPath)
-  if (!key) return
-  try {
-    localStorage.setItem(key, String(clampStyleWidth(width)))
-  } catch (e) {
-    logger.catch('GraphView', '保存样式宽度', e)
-  }
-}
-
-// 兼容旧全局 key 的迁移：首次读取时尝试从全局 key 读取并删除
-function readPersistedStyleWidth() {
-  // 优先读 KB 特定 key
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const kbVal = readPersistedStyleWidthForKB(kbPath)
-    if (kbVal !== null) return kbVal
-  }
-  // 兜底旧全局 key（仅首次，迁移后删除）
-  try {
-    const raw = localStorage.getItem('topomind:style-width')
-    if (raw == null) return null
-    const val = clampStyleWidth(raw)
-    // 迁移到 KB key 并删除旧 key
-    if (kbPath) {
-      persistStyleWidthForKB(kbPath, val)
-    }
-    localStorage.removeItem('topomind:style-width')
-    return val
-  } catch (e) {
-    logger.catch('GraphView', '读取样式宽度', e)
-    return null
-  }
-}
-
-function persistStyleWidth(width) {
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    persistStyleWidthForKB(kbPath, width)
-  }
 }
 
 function syncUiFromActiveTab() {
@@ -310,20 +179,20 @@ function syncUiFromActiveTab() {
 
   // 详情面板状态优先从 localStorage 恢复（跨 tab 重启持久化），
   // 其次读 tab.ui，最后用默认值
-  const persistedDetailState = readPersistedDetailPanelStateForKB(roomStore.currentKBPath)
+  const persistedDetailState = panelState.readPersistedDetailPanelState()
 
   leftPanel.open = persistedDetailState?.leftPanelOpen ?? ui.leftPanelOpen ?? true
 
   detailPanel.open = persistedDetailState?.detailPanelOpen ?? ui.detailPanelOpen ?? true
 
-  const persistedStyleWidth = readPersistedStyleWidth()
+  const persistedStyleWidth = panelState.readPersistedStyleWidth()
   const restoredStyleWidth = persistedStyleWidth ?? ui.leftPanelWidth ?? leftPanelWidth.value
-  leftPanelWidth.value = clampStyleWidth(restoredStyleWidth)
+  leftPanelWidth.value = panelState.clampStyleWidth(restoredStyleWidth)
 
-  const persistedWidth = readPersistedDetailWidthForKB(roomStore.currentKBPath)
+  const persistedWidth = panelState.readPersistedDetailWidth()
   // 跨重启优先使用持久化宽度，避免 tab.ui 的默认值覆盖用户上次调整
   const restoredWidth = persistedWidth ?? ui.detailPanelWidth ?? detailPanelWidth.value
-  detailPanelWidth.value = clampDetailWidth(restoredWidth)
+  detailPanelWidth.value = panelState.clampDetailWidth(restoredWidth)
 
   // selectedNodeId 也优先从 localStorage 恢复（跨 tab 重启持久化）
   const restoredNodeId = persistedDetailState?.selectedNodeId ?? ui.selectedNodeId ?? null
@@ -336,6 +205,7 @@ function syncUiFromActiveTab() {
 }
 
 // ─── composables ────────────────────────────────────────────
+const panelState = usePanelState(() => roomStore.currentKBPath)
 const graph = useGraph(cyContainerRef)
 const grid = useGrid(gridCanvasRef, () => graph.cy.value)
 
@@ -384,44 +254,28 @@ watch(() => roomStore.activeTabId, () => {
 
 watch(() => leftPanel.open, (v) => {
   saveUiToActiveTab({ leftPanelOpen: !!v })
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
-    persistDetailPanelStateForKB(kbPath, { ...state, leftPanelOpen: !!v })
-  }
+  panelState.persistDetailPanelState({ leftPanelOpen: !!v })
 })
 
 watch(() => leftPanelWidth.value, (v) => {
-  saveUiToActiveTab({ leftPanelWidth: clampStyleWidth(v) })
-  persistStyleWidth(v)
+  saveUiToActiveTab({ leftPanelWidth: panelState.clampStyleWidth(v) })
+  panelState.persistStyleWidth(v)
 })
 
 watch(() => detailPanel.open, (v) => {
   saveUiToActiveTab({ detailPanelOpen: !!v })
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
-    persistDetailPanelStateForKB(kbPath, { ...state, detailPanelOpen: !!v })
-  }
+  panelState.persistDetailPanelState({ detailPanelOpen: !!v })
 })
 
 watch(() => detailPanelWidth.value, (v) => {
-  saveUiToActiveTab({ detailPanelWidth: clampDetailWidth(v) })
-  persistDetailWidthForKB(roomStore.currentKBPath, v)
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
-    persistDetailPanelStateForKB(kbPath, { ...state, detailPanelWidth: clampDetailWidth(v) })
-  }
+  saveUiToActiveTab({ detailPanelWidth: panelState.clampDetailWidth(v) })
+  panelState.persistDetailWidth(v)
+  panelState.persistDetailPanelState({ detailPanelWidth: panelState.clampDetailWidth(v) })
 })
 
 watch(() => appStore.selectedNodeId, (v) => {
   saveUiToActiveTab({ selectedNodeId: v || null })
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
-    persistDetailPanelStateForKB(kbPath, { ...state, selectedNodeId: v || null })
-  }
+  panelState.persistDetailPanelState({ selectedNodeId: v || null })
 })
 
 watch(() => appStore.edgeMode, (v) => {
@@ -570,12 +424,12 @@ function startStyleResize(e) {
     e,
     appLayoutRef.value,
     leftPanelWidth.value,
-    clampStyleWidth,
+    panelState.clampStyleWidth,
     (width) => Math.max(0, width),
     (width) => {
       leftPanelWidth.value = width
       saveUiToActiveTab({ leftPanelWidth: width })
-      persistStyleWidth(width)
+      panelState.persistStyleWidth(width)
     },
     styleResizeState,
     -1, // drag right = expand (clientX increases → width increases)
@@ -588,11 +442,11 @@ function startDetailResize(e) {
     e,
     container,
     detailPanelWidth.value,
-    clampDetailWidth,
+    panelState.clampDetailWidth,
     (width) => Math.max(0, container.getBoundingClientRect().width - width),
     (width) => {
       detailPanelWidth.value = width
-      persistDetailWidthForKB(roomStore.currentKBPath, width)
+      panelState.persistDetailWidth(width)
       saveUiToActiveTab({ detailPanelWidth: width })
     },
     detailResizeState,

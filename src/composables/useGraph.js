@@ -345,8 +345,6 @@ export function useGraph(containerRef) {
     if (data.borderWidth) ele.style('border-width', data.borderWidth + 'px')
     if (data.nodeShape) ele.style('shape', data.nodeShape)
 
-    // 当前 Cytoscape 版本不支持 shadow-* 样式属性，跳过运行时阴影写入
-
     if (data.nodeOpacity != null && data.nodeOpacity !== 1) {
       ele.style('opacity', data.nodeOpacity)
     }
@@ -355,7 +353,7 @@ export function useGraph(containerRef) {
     }
   }
 
-  async function _loadNodeBadges(cards) {
+  async function _loadNodeBadges() {
     if (!cy.value) return
 
     const nodeIds = cy.value.nodes().map(n => n.id())
@@ -524,18 +522,8 @@ export function useGraph(containerRef) {
     // 惰性创建：先确保父级目录存在，再创建子卡片
     await storage.ensureCardDir(parentPath)
     const cardPath = await storage.createCard(parentPath, name)
-    // 立即添加到当前 Cytoscape 图谱中（同步保存后 loadRoom 会再次添加，需防重）
-    const existing = cy.value.getElementById(cardPath)
-    if (!existing.length) {
-      cy.value.add({
-        group: 'nodes',
-        data: { id: cardPath, label: name, cardPath },
-        classes: 'card',
-        position: { x: 0, y: 0 },
-      })
-      cy.value.center()
-    }
     // 同步保存：确保父级的 _graph.json 立即更新，持久化新卡片
+    // loadRoom 会在下次加载时自动加载新卡片，无需手动添加到 cytoscape
     await saveCurrentLayout(parentPath)
     return cardPath
   }
@@ -591,7 +579,7 @@ export function useGraph(containerRef) {
       })
       saveCurrentLayoutDebounced()
     } catch (e) {
-      logger.catch('useGraph', `添加边失败:`, sourceId, targetId, e)
+      logger.catch('useGraph', `添加边失败 (${sourceId} -> ${targetId})`, e)
     }
   }
 
@@ -617,6 +605,7 @@ export function useGraph(containerRef) {
   }
 
   async function deleteAllNodes() {
+    if (!cy.value) return
     const nodeIds = cy.value.nodes().map(n => n.id())
     for (const id of nodeIds) {
       try {
@@ -625,6 +614,7 @@ export function useGraph(containerRef) {
         logger.catch('useGraph', `删除节点失败: ${id}`, err)
       }
     }
+    if (!cy.value) return
     cy.value.edges().remove()
     cy.value.nodes().remove()
     appStore.clearSelection()
@@ -761,7 +751,7 @@ export function useGraph(containerRef) {
     const nodes = targetNodes || cy.value.nodes()
     nodes.forEach((n) => {
       if (n.isNode() && n.hasClass('card')) {
-        try { n.emit('data') } catch (e) {}
+        try { n.emit('data') } catch (e) { logger.warn('useGraph', 'emit data event', e) }
       }
     })
   }
@@ -879,16 +869,16 @@ export function useGraph(containerRef) {
     cy.value = null
   })
 
-  function refreshNodeBadge(nodeId) {
-    if (!cy.value || !nodeId) return
-    const node = cy.value.getElementById(nodeId)
+  function refreshNodeBadge(id) {
+    if (!cy.value || !id) return
+    const node = cy.value.getElementById(id)
     if (!node?.length) return
-    storage.readMarkdown(nodeId).then(md => {
+    storage.readMarkdown(id).then(md => {
       if (!cy.value) return
-      const n = cy.value.getElementById(nodeId)
+      const n = cy.value.getElementById(id)
       if (!n?.length) return
       n.data('hasDoc', !!(md && md.trim().length > 0))
-      try { n.emit('data') } catch (e) {}
+      try { n.emit('data') } catch (e) { logger.warn('useGraph', 'emit data event', e) }
     }).catch((e) => { logger.catch('useGraph', 'updateNodeHasDoc', e) })
   }
   let _edgeCounter = 0

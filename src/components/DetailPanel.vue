@@ -480,7 +480,7 @@ async function _resolveRenderedImages(cardPath, signal) {
     try {
       const url = await storage.loadImage(imgPath)
       if (signal?.aborted) {
-        if (url) try { URL.revokeObjectURL(url) } catch (e) {}
+        if (url) try { URL.revokeObjectURL(url) } catch (e) { logger.warn('DetailPanel', 'revokeImageUrl', e) }
         return
       }
       if (url) _activeUrls.push(url)
@@ -554,7 +554,7 @@ function reset() {
 }
 
 function _revokeActiveUrls() {
-  _activeUrls.forEach(url => { try { URL.revokeObjectURL(url) } catch (e) {} })
+  _activeUrls.forEach(url => { try { URL.revokeObjectURL(url) } catch (e) { logger.warn('DetailPanel', 'revokeImageUrl', e) } })
   _activeUrls = []
 }
 
