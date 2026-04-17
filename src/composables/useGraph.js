@@ -889,7 +889,7 @@ export function useGraph(containerRef) {
       if (!n?.length) return
       n.data('hasDoc', !!(md && md.trim().length > 0))
       try { n.emit('data') } catch (e) {}
-    }).catch(() => {})
+    }).catch((e) => { logger.catch('useGraph', 'updateNodeHasDoc', e) })
   }
   let _edgeCounter = 0
   function _autoEdgeId() {
