@@ -477,7 +477,8 @@ async function handleBeforeUnload() {
   try {
     const meta = await graph.buildCurrentMeta()
     if (meta) {
-      storage.saveLayoutSync(dirPath, meta)
+      // 使用异步保存而非 sendSync，确保数据完整写入
+      storage.saveLayout(dirPath, meta)
     }
   } catch (e) {
     logger.catch('GraphView', '保存布局', e)

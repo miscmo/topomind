@@ -200,88 +200,103 @@ export function useGraphDOM({
     }
 
     const onMousemove = (e) => {
-      if (dragResizeRef?.value?.active) {
-        const node = c.getElementById(dragResizeRef.value.nodeId)
-        if (node?.length) {
-          const dx = e.clientX - dragResizeRef.value.startX
-          const dy = e.clientY - dragResizeRef.value.startY
-          const nextW = Math.max(
-            GraphConstants.NODE_WIDTH_MIN,
-            Math.min(GraphConstants.NODE_WIDTH_MAX, Math.round(dragResizeRef.value.startW + dx / Math.max(c.zoom(), 0.2))),
-          )
-          const nextH = Math.max(
-            GraphConstants.NODE_HEIGHT_MIN,
-            Math.min(GraphConstants.NODE_HEIGHT_MAX, Math.round(dragResizeRef.value.startH + dy / Math.max(c.zoom(), 0.2))),
-          )
-          node.data('nodeWidth', nextW)
-          node.data('nodeHeight', nextH)
-          node.style('width', `${nextW}px`)
-          node.style('height', `${nextH}px`)
-          node.style('text-max-width', `${nextW}px`)
-          updateNodeHandles(c)
+      try {
+        if (dragResizeRef?.value?.active) {
+          const node = c.getElementById(dragResizeRef.value.nodeId)
+          if (node?.length) {
+            const dx = e.clientX - dragResizeRef.value.startX
+            const dy = e.clientY - dragResizeRef.value.startY
+            const nextW = Math.max(
+              GraphConstants.NODE_WIDTH_MIN,
+              Math.min(GraphConstants.NODE_WIDTH_MAX, Math.round(dragResizeRef.value.startW + dx / Math.max(c.zoom(), 0.2))),
+            )
+            const nextH = Math.max(
+              GraphConstants.NODE_HEIGHT_MIN,
+              Math.min(GraphConstants.NODE_HEIGHT_MAX, Math.round(dragResizeRef.value.startH + dy / Math.max(c.zoom(), 0.2))),
+            )
+            node.data('nodeWidth', nextW)
+            node.data('nodeHeight', nextH)
+            node.style('width', `${nextW}px`)
+            node.style('height', `${nextH}px`)
+            node.style('text-max-width', `${nextW}px`)
+            updateNodeHandles(c)
+          }
+          return
         }
-        return
-      }
 
-      if (dragConnectRef?.value?.active) {
-        const src = c.getElementById(dragConnectRef.value.sourceId)
-        const els = _handleElsByCy.get(c)
-        if (src?.length && els?.previewLineEl) {
-          const s = src.renderedPosition()
-          const rect = container.getBoundingClientRect()
-          const tx = e.clientX - rect.left
-          const ty = e.clientY - rect.top
-          const dx = tx - s.x
-          const dy = ty - s.y
-          const len = Math.sqrt(dx * dx + dy * dy)
-          const angle = Math.atan2(dy, dx) * 180 / Math.PI
-          els.previewLineEl.style.left = `${s.x}px`
-          els.previewLineEl.style.top = `${s.y}px`
-          els.previewLineEl.style.width = `${len}px`
-          els.previewLineEl.style.transform = `rotate(${angle}deg)`
+        if (dragConnectRef?.value?.active) {
+          const src = c.getElementById(dragConnectRef.value.sourceId)
+          const els = _handleElsByCy.get(c)
+          if (src?.length && els?.previewLineEl) {
+            const s = src.renderedPosition()
+            const rect = container.getBoundingClientRect()
+            const tx = e.clientX - rect.left
+            const ty = e.clientY - rect.top
+            const dx = tx - s.x
+            const dy = ty - s.y
+            const len = Math.sqrt(dx * dx + dy * dy)
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI
+            els.previewLineEl.style.left = `${s.x}px`
+            els.previewLineEl.style.top = `${s.y}px`
+            els.previewLineEl.style.width = `${len}px`
+            els.previewLineEl.style.transform = `rotate(${angle}deg)`
+          }
+          return
         }
-        return
-      }
 
-      if (!localPanning) return
-      const dx = e.clientX - localPanStart.x
-      const dy = e.clientY - localPanStart.y
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-        if (rightDragMovedRef) rightDragMovedRef.value = true
+        if (!localPanning) return
+        const dx = e.clientX - localPanStart.x
+        const dy = e.clientY - localPanStart.y
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          if (rightDragMovedRef) rightDragMovedRef.value = true
+        }
+        c.pan({ x: localPanOrigin.x + dx, y: localPanOrigin.y + dy })
+        gridRef?.drawGrid?.()
+      } catch (err) {
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+        console.error('[useGraphDOM] mousemove error:', err)
       }
-      c.pan({ x: localPanOrigin.x + dx, y: localPanOrigin.y + dy })
-      gridRef?.drawGrid?.()
     }
 
     const onMouseup = async (e) => {
-      if (dragResizeRef?.value?.active) {
-        dragResizeRef.value = null
-        document.body.style.userSelect = ''
-        document.body.style.cursor = ''
-        saveLayout?.()
-        return
-      }
-
-      if (dragConnectRef?.value?.active) {
-        const sourceId = dragConnectRef.value.sourceId
-        const target = hitNodeByClientPoint(c, e.clientX, e.clientY)
-        const els = _handleElsByCy.get(c)
-        if (els?.previewLineEl) els.previewLineEl.style.display = 'none'
-
-        dragConnectRef.value = null
-        document.body.style.userSelect = ''
-        document.body.style.cursor = ''
-
-        if (target && target.id() !== sourceId) {
-          const relation = await modalInput('关系类型', '演进 / 依赖 / 相关', '依赖')
-          if (relation) addEdge?.(sourceId, target.id(), relation)
+      try {
+        if (dragResizeRef?.value?.active) {
+          dragResizeRef.value = null
+          document.body.style.userSelect = ''
+          document.body.style.cursor = ''
+          saveLayout?.()
+          return
         }
-        return
-      }
 
-      if (e.button === 2 && localPanning) {
-        localPanning = false
-        container.style.cursor = ''
+        if (dragConnectRef?.value?.active) {
+          const sourceId = dragConnectRef.value.sourceId
+          const target = hitNodeByClientPoint(c, e.clientX, e.clientY)
+          const els = _handleElsByCy.get(c)
+          if (els?.previewLineEl) els.previewLineEl.style.display = 'none'
+
+          dragConnectRef.value = null
+          document.body.style.userSelect = ''
+          document.body.style.cursor = ''
+
+          if (target && target.id() !== sourceId) {
+            const relation = await modalInput('关系类型', '演进 / 依赖 / 相关', '依赖')
+            if (relation) addEdge?.(sourceId, target.id(), relation)
+          }
+          return
+        }
+
+        if (e.button === 2 && localPanning) {
+          localPanning = false
+          container.style.cursor = ''
+        }
+      } catch (err) {
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+        console.error('[useGraphDOM] mouseup error:', err)
+      } finally {
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
       }
     }
 

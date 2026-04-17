@@ -394,6 +394,7 @@ function debouncedSave() {
 
 onUnmounted(() => {
   clearTimeout(_saveTimer)
+  _revokeActiveUrls()
   if (_cmView) {
     _cmView.destroy()
     _cmView = null
