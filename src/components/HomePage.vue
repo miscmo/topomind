@@ -283,8 +283,8 @@ async function submitCreate({ name, coverBlob }) {
       const ext = (coverBlob.name || 'png').split('.').pop()
       const r = await storage.saveKBImage(kbPath, coverBlob, `cover.${ext}`)
       const meta = await storage.getKBMeta(kbPath)
-      meta.cover = r.markdownRef
-      await storage.saveKBMeta(kbPath, meta)
+      const updatedMeta = { ...(meta || {}), cover: r.markdownRef }
+      await storage.saveKBMeta(kbPath, updatedMeta)
     }
     showCreateSheet.value = false
     await loadKBList()
@@ -349,15 +349,13 @@ async function saveSettings(name, coverBlob) {
   try {
     const targetPath = kb.path
     const baseMeta = await storage.getKBMeta(targetPath)
-    await storage.saveKBMeta(targetPath, { ...(baseMeta || {}), name })
-
+    const updatedMeta = { ...(baseMeta || {}), name }
     if (coverBlob) {
       const ext = (coverBlob.name || 'png').split('.').pop()
       const r = await storage.saveKBImage(targetPath, coverBlob, `cover.${ext}`)
-      const meta = await storage.getKBMeta(targetPath)
-      meta.cover = r.markdownRef
-      await storage.saveKBMeta(targetPath, meta)
+      updatedMeta.cover = r.markdownRef
     }
+    await storage.saveKBMeta(targetPath, updatedMeta)
     closeSettings()
     await loadKBList()
   } catch (e) { logger.catch('HomePage', '保存知识库设置', e) }

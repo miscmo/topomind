@@ -2,7 +2,7 @@
  * 面板拖拽缩放通用逻辑
  * 抽取 startStyleResize 和 startDetailResize 中的重复代码
  */
-import { onUnmounted } from 'vue'
+import { onUnmounted, onScopeDispose } from 'vue'
 
 /**
  * @param {MouseEvent} e - mousedown 事件
@@ -55,5 +55,5 @@ export function useResizeDrag(e, container, startWidth, clampWidth, calcPreviewL
 
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
-  onUnmounted(cleanup)
+  onScopeDispose(cleanup)
 }

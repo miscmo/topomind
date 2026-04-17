@@ -24,7 +24,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -96,10 +96,4 @@ function apply() {
 
 // Expose init for parent to call when crop data is set
 defineExpose({ initCrop })
-
-onUnmounted(() => {
-  if (props.crop.url && props.crop.url.startsWith('blob:')) {
-    URL.revokeObjectURL(props.crop.url)
-  }
-})
 </script>

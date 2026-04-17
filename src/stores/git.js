@@ -77,8 +77,7 @@ export const useGitStore = defineStore('git', {
       this.conflictContent = content || ''
     },
     removeConflictFile(file) {
-      const idx = this.conflictFiles.indexOf(file)
-      if (idx !== -1) this.conflictFiles.splice(idx, 1)
+      this.conflictFiles = this.conflictFiles.filter(f => f !== file)
       if (this.currentConflictFile === file) {
         this.currentConflictFile = null
         this.conflictContent = ''
