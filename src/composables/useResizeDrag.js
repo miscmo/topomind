@@ -2,7 +2,7 @@
  * 面板拖拽缩放通用逻辑
  * 抽取 startStyleResize 和 startDetailResize 中的重复代码
  */
-import { onUnmounted, onScopeDispose } from 'vue'
+import { onScopeDispose } from 'vue'
 
 /**
  * @param {MouseEvent} e - mousedown 事件
