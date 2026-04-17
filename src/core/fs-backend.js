@@ -9,7 +9,7 @@ const getApi = () => window.electronAPI
 const _call = (channel, ...args) => {
   const api = getApi()
   if (!api) {
-    logger.warn('FSB', `IPC API 未就绪，无法调用 ${channel}`)
+    logger.catch('FSB', `IPC API 未就绪，无法调用 ${channel}`)
     return Promise.reject(new Error(`IPC API 未就绪: ${channel}`))
   }
   return api.invoke(channel, ...args)

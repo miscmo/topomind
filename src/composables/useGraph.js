@@ -587,7 +587,7 @@ export function useGraph(containerRef) {
       })
       saveCurrentLayoutDebounced()
     } catch (e) {
-      logger.warn('useGraph', `添加边失败:`, sourceId, targetId, e)
+      logger.catch('useGraph', `添加边失败:`, sourceId, targetId, e)
     }
   }
 
@@ -602,7 +602,7 @@ export function useGraph(containerRef) {
       try {
         await storage.deleteCard(id)
       } catch (err) {
-        logger.warn('useGraph', `删除节点失败: ${id}`, err)
+        logger.catch('useGraph', `删除节点失败: ${id}`, err)
       }
     }
     const selected = cy.value.nodes(':selected')
