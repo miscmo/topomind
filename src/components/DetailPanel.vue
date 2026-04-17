@@ -551,7 +551,7 @@ function sanitizeHtml(dirty) {
     const parser = new DOMParser()
     const doc = parser.parseFromString(dirty, 'text/html')
     // 遍历所有节点，清除危险属性和危险元素
-    const dangerous = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math', 'form', 'input', 'button', 'textarea', 'select']
+    const dangerous = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math', 'form', 'input', 'button', 'textarea', 'select', 'meta', 'base', 'applet']
     const dangerousTags = doc.querySelectorAll(dangerous.join(','))
     dangerousTags.forEach(el => el.remove())
 
@@ -560,16 +560,27 @@ function sanitizeHtml(dirty) {
     allEls.forEach(el => {
       const attrs = [...el.attributes]
       attrs.forEach(attr => {
+        // 移除事件处理器和危险协议
         if (attr.name.startsWith('on') || /^javascript:/i.test(attr.value)) {
           el.removeAttribute(attr.name)
+          return
+        }
+        // 过滤 style 属性中的危险 CSS 表达式
+        if (attr.name === 'style') {
+          const val = attr.value
+          if (/expression\s*\(|url\s*\(|import\s+/i.test(val)) {
+            el.removeAttribute('style')
+            return
+          }
+        }
+        // 过滤 data: / javascript: 在 href 和 src 属性
+        if (attr.name === 'href' || attr.name === 'src') {
+          const h = attr.value.trim()
+          if (/^(javascript:|data:)/i.test(h)) {
+            el.removeAttribute(attr.name)
+          }
         }
       })
-      // 降级 data: 和 javascript: href
-      const href = el.getAttribute?.('href')
-      if (href) {
-        const h = href.trim()
-        if (/^(javascript:|data:)/i.test(h)) el.setAttribute('href', '#')
-      }
     })
     return doc.body.innerHTML
   } catch {

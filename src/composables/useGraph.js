@@ -125,6 +125,7 @@ export function useGraph(containerRef) {
     cy.value = instance
     _setupHtmlLabels(instance)
     _bindCyEvents(instance)
+    dom.cleanupDOMEventsExcept(instance)
     dom.bindDOMEvents(instance)
     if (ctx) cyManager.markEventsBound(key, true)
     _grid?.bindCyEvents?.()
@@ -277,12 +278,14 @@ export function useGraph(containerRef) {
         },
         fit: false, animate: false,
         error: (e) => {
+          if (loadSeq !== _loadRoomSeq) return
           logger.warn('useGraph', 'ELK布局失败，回退到中心化:', e)
           cy.value.nodes().positions(n => ({ x: 0, y: 0 }))
           cy.value.center()
           _grid?.drawGrid()
         },
         stop: () => {
+          if (loadSeq !== _loadRoomSeq) return
           if (targetViewport) {
             cy.value.zoom(targetViewport.zoom)
             cy.value.pan(targetViewport.pan)

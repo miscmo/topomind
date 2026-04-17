@@ -425,7 +425,7 @@ watch(() => gitStore.isOpen, async (open) => {
 
 // 在 inline 模式下，切换到该 Tab 时自动打开
 watch(() => props.inline, (_inline) => {
-  if (inline && !gitStore.isOpen) {
+  if (props.inline && !gitStore.isOpen) {
     gitStore.openForKB(gitStore.kbPath || roomStore.currentKBPath || '')
   }
 })

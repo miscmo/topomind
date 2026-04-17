@@ -39,11 +39,16 @@ export function useGit() {
   }
 
   async function doCommit(kbPath, msg) {
-    const res = await GitBackend.commit(kbPath, msg)
-    unwrapGitResult(res, { requireOk: true, errorMessage: '提交失败' })
-    GitCache.markClean(kbPath)
-    gitStore.setDirtyCount(0)
-    await loadStatus(kbPath)
+    try {
+      const res = await GitBackend.commit(kbPath, msg)
+      unwrapGitResult(res, { requireOk: true, errorMessage: '提交失败' })
+      GitCache.markClean(kbPath)
+      gitStore.setDirtyCount(0)
+      await loadStatus(kbPath)
+    } catch (e) {
+      logger.catch('useGit', 'doCommit', e)
+      throw e
+    }
   }
 
   async function doSync(kbPath, action) {
@@ -63,6 +68,7 @@ export function useGit() {
       }
     } catch (e) {
       gitStore.setSyncState('error', e.message || '操作失败', e?.code || '')
+      logger.catch('useGit', 'doSync', e)
     }
   }
 
