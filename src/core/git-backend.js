@@ -53,6 +53,7 @@ const _dirty = {}
 const _listeners = []
 const CACHE_TTL = 30000
 const MAX_CACHE_SIZE = 50
+const CLEANUP_INTERVAL = 60000 // 60s 定期清理过期条目
 
 export const GitCache = {
   markDirty(kbPath) {
@@ -104,4 +105,36 @@ export const GitCache = {
 function _notify(kbPath) {
   const status = _cache[kbPath]?.status || null
   _listeners.forEach(fn => { try { fn(kbPath, status) } catch (e) { logger.warn('GitBackend', '监听器通知失败:', e) } })
+}
+
+let _cleanupTimer = null
+
+function _cleanupExpired() {
+  const now = Date.now()
+  let cleaned = 0
+  for (const kbPath of Object.keys(_cache)) {
+    const entry = _cache[kbPath]
+    if (entry && now - entry.timestamp >= CACHE_TTL) {
+      delete _cache[kbPath]
+      delete _dirty[kbPath]
+      cleaned++
+    }
+  }
+  if (cleaned > 0) {
+    logger.debug('GitBackend', `_cleanupExpired 清理了 ${cleaned} 条过期缓存`)
+  }
+}
+
+export function startGitCacheCleanup() {
+  if (_cleanupTimer) return
+  _cleanupTimer = setInterval(_cleanupExpired, CLEANUP_INTERVAL)
+  logger.debug('GitBackend', 'GitCache 过期清理定时器已启动')
+}
+
+export function stopGitCacheCleanup() {
+  if (_cleanupTimer) {
+    clearInterval(_cleanupTimer)
+    _cleanupTimer = null
+    logger.debug('GitBackend', 'GitCache 过期清理定时器已停止')
+  }
 }

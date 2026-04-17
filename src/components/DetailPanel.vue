@@ -148,7 +148,7 @@ const renderedHtml = computed(() => {
   if (childCards.value.length > 0) {
     childInfo = `<div class="child-info-box"><strong class="child-info-title">📂 包含 ${childCards.value.length} 个子概念</strong><br>`
     childCards.value.forEach(kid => {
-      childInfo += `<span class="child-tag" data-drill-path="${escHtml(kid.path)}">${escHtml(kid.name || '')}</span>`
+      childInfo += `<span class="child-tag" data-drill-path="${escHtml(kid.path).replace(/"/g, '&quot;')}">${escHtml(kid.name || '')}</span>`
     })
     childInfo += '</div>'
   }

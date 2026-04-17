@@ -98,6 +98,12 @@ export const useRoomStore = defineStore('room', {
       this._pathNameMapVersion++
     },
 
+    /** 移除路径的显示名称缓存 */
+    removePathName(path) {
+      delete this.pathNameMap[path]
+      this._pathNameMapVersion++
+    },
+
     // ─── 标签页管理 ──────────────────────────────────────────
 
     /** 打开或切换到一个知识库标签页 */

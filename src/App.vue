@@ -26,6 +26,7 @@ import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useStorage } from '@/composables/useStorage'
 import { logger } from '@/core/logger.js'
+import { startGitCacheCleanup, stopGitCacheCleanup } from '@/core/git-backend.js'
 
 import WorkDirPage from '@/components/WorkDirPage.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
@@ -59,6 +60,7 @@ async function ensureAutoOpenLastKB() {
 onMounted(async () => {
   // 初始化工作目录
   const workDir = await storage.init()
+  startGitCacheCleanup()
   if (!workDir?.valid) {
     appStore.view = 'setup'
   } else {
@@ -106,6 +108,7 @@ onUnmounted(() => {
   if (window.electronAPI) {
     window.electronAPI.off('save:before-quit', handleBeforeQuit)
   }
+  stopGitCacheCleanup()
 })
 </script>
 

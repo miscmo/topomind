@@ -52,6 +52,7 @@ export const logger = {
    */
   catch(module, context, err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.warn(..._format(module, 'warn', `${context}失败:`, message))
+    const stack = err instanceof Error ? err.stack : null
+    console.error(..._format(module, 'error', `${context}失败:`, message), ...(stack ? ['\n', stack] : []))
   },
 }

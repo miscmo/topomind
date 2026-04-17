@@ -251,12 +251,17 @@ async function onKBDrop(e, idx) {
   const filtered = oldArr.filter((_, i) => i !== fromIdx)
   const newArr = [...filtered.slice(0, idx), removed, ...filtered.slice(idx)]
   kbs.value = newArr
-  await Promise.all(newArr.map(async (kb, i) => {
-    const meta = await storage.getKBMeta(kb.path)
-    await storage.saveKBMeta(kb.path, { ...(meta || {}), order: i })
-  }))
-  dragKBIndex.value = -1
-  dragOverIndex.value = -1
+  try {
+    await Promise.all(newArr.map(async (kb, i) => {
+      const meta = await storage.getKBMeta(kb.path)
+      await storage.saveKBMeta(kb.path, { ...(meta || {}), order: i })
+    }))
+  } catch (e) {
+    logger.catch('HomePage', '保存知识库排序', e)
+  } finally {
+    dragKBIndex.value = -1
+    dragOverIndex.value = -1
+  }
 }
 
 function onKBDragEnd() { dragKBIndex.value = -1; dragOverIndex.value = -1 }

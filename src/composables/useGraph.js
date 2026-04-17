@@ -24,10 +24,13 @@ import { cloneGraphStyle } from '@/core/graph-style.js'
 import { getNodeHtmlLabelConfig } from '@/core/graph-labels.js'
 import { useGraphDOM } from '@/composables/useGraphDOM.js'
 
-// 注册 ELK 布局插件
-cytoscape.use(elk)
-// 注册 HTML 标签插件
-cytoscape.use(htmlLabel)
+// 注册插件（模块级标志防止 HMR 重复注册）
+const _pluginsRegistered = /** @type {boolean} */ (globalThis.__cytoscapePluginsRegistered__)
+if (!_pluginsRegistered) {
+  cytoscape.use(elk)
+  cytoscape.use(htmlLabel)
+  globalThis.__cytoscapePluginsRegistered__ = true
+}
 
 export function useGraph(containerRef) {
   const appStore = useAppStore()
@@ -557,7 +560,7 @@ export function useGraph(containerRef) {
         const oldName = roomStore.pathNameMap[cardPath]
         if (oldName !== undefined) {
           roomStore.setPathName(actualPath, newName)
-          delete roomStore.pathNameMap[cardPath]
+          roomStore.removePathName(cardPath)
         }
       }
     }
@@ -565,6 +568,12 @@ export function useGraph(containerRef) {
   }
 
   function addEdge(sourceId, targetId, relation) {
+    if (sourceId === targetId) return
+    // 防止重复添加同向边
+    const existing = cy.value.edges().filter(
+      e => e.data('source') === sourceId && e.data('target') === targetId
+    )
+    if (existing.length) return
     try {
       cy.value.add({
         group: 'edges',
@@ -838,11 +847,15 @@ export function useGraph(containerRef) {
   // 导出为 PNG
   function exportPNG() {
     if (!cy.value) return
-    const png = cy.value.png({ scale: 2, full: true, bg: '#f8f9fb' })
-    const a = document.createElement('a')
-    a.href = png
-    a.download = 'topomind-export.png'
-    a.click()
+    try {
+      const png = cy.value.png({ scale: 2, full: true, bg: '#f8f9fb' })
+      const a = document.createElement('a')
+      a.href = png
+      a.download = 'topomind-export.png'
+      a.click()
+    } catch (err) {
+      logger.catch('useGraph', 'exportPNG 失败', err)
+    }
   }
 
   // ─── 清理 ────────────────────────────────────────────────────
@@ -859,6 +872,10 @@ export function useGraph(containerRef) {
   onUnmounted(() => {
     dom.cleanupDOMEventsExcept(null)
     cyManager.clear()
+    // 显式销毁 Cytoscape 实例，防止内存泄漏
+    if (cy.value && !cy.value.destroyed) {
+      cy.value.destroy()
+    }
     cy.value = null
   })
 
