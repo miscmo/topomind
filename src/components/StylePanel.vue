@@ -195,9 +195,9 @@ const recentFontColors = reactive([])
 
 function clearRecentColors(key) {
   if (key === 'fontColor') {
-    recentFontColors.length = 0
+    recentFontColors.splice(0, recentFontColors.length)
   } else {
-    recentBgColors.length = 0
+    recentBgColors.splice(0, recentBgColors.length)
   }
 }
 
@@ -337,9 +337,8 @@ function resetAllStyles() {
 function toggleFontStyle(style) {
   const parts = styles.fontStyle.split(' ').filter(Boolean)
   const idx = parts.indexOf(style)
-  if (idx >= 0) parts.splice(idx, 1)
-  else parts.push(style)
-  styles.fontStyle = parts.join(' ')
+  const newParts = idx >= 0 ? parts.filter((_, i) => i !== idx) : [...parts, style]
+  styles.fontStyle = newParts.join(' ')
   emit('update-font-style', props.selectedNodeId, style, idx < 0)
 }
 </script>

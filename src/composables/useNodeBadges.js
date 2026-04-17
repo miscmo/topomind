@@ -3,7 +3,7 @@
  * 节点徽标层 + 文档预览 Tooltip
  * 完整迁移自 badges.js
  */
-import { onUnmounted } from 'vue'
+import { onScopeDispose } from 'vue'
 import { useStorage } from '@/composables/useStorage'
 import { logger } from '@/core/logger.js'
 
@@ -200,7 +200,7 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
     if (tt?.classList.contains('visible')) _positionTooltip()
   }
 
-  onUnmounted(() => {
+  onScopeDispose(() => {
     _unbindCyEvents()
     document.removeEventListener('mousemove', _onMouseMove)
     clearTimeout(_hoverTimer)

@@ -96,8 +96,7 @@ export const GitCache = {
   onStatusChange(fn) {
     _listeners.push(fn)
     return () => {
-      const idx = _listeners.indexOf(fn)
-      if (idx !== -1) _listeners.splice(idx, 1)
+      _listeners = _listeners.filter(cb => cb !== fn)
     }
   },
 }

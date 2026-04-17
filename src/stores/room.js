@@ -156,7 +156,7 @@ export const useRoomStore = defineStore('room', {
     closeTab(tabId) {
       const idx = this.tabs.findIndex(t => t.id === tabId)
       if (idx === -1) return
-      this.tabs.splice(idx, 1)
+      this.tabs = this.tabs.filter((_, i) => i !== idx)
       if (this.activeTabId === tabId) {
         if (this.tabs.length > 0) {
           const next = this.tabs[Math.max(0, idx - 1)]
