@@ -106,8 +106,16 @@ export function useGraphDOM({
     }
   }
 
+  // AbortController per cy instance — aborts stale handle listeners on re-attach
+  const _handleAbortByCy = new Map()
+
   // ─── 内部：附加手柄元素 ────────────────────────────────────────
   function attachHandleElements(c, els) {
+    // Abort any previous listeners on this cy instance before adding new ones.
+    // This prevents listener accumulation when updateNodeHandles re-attaches.
+    _handleAbortByCy.get(c)?.abort()
+    const ac = new AbortController()
+    _handleAbortByCy.set(c, ac)
     _handleElsByCy.set(c, els)
     updateNodeHandles(c)
 
@@ -129,7 +137,7 @@ export function useGraphDOM({
       }
       document.body.style.userSelect = 'none'
       document.body.style.cursor = 'nwse-resize'
-    })
+    }, { signal: ac.signal })
 
     connectHandleEl?.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return
@@ -152,11 +160,13 @@ export function useGraphDOM({
       }
       document.body.style.userSelect = 'none'
       document.body.style.cursor = 'crosshair'
-    })
+    }, { signal: ac.signal })
   }
 
   // ─── 内部：分离手柄元素 ────────────────────────────────────────
   function detachHandleElements(c) {
+    _handleAbortByCy.get(c)?.abort()
+    _handleAbortByCy.delete(c)
     _handleElsByCy.delete(c)
   }
 
