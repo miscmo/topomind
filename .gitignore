@@ -4,3 +4,4 @@ Thumbs.db
 .codebuddy/
 node_modules/
 dist/
+dist-electron/
