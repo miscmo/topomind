@@ -7,7 +7,7 @@
  *   - 布局保存
  *   - 交互事件（点击、双击、右键、缩放、拖拽）
  */
-import { ref, shallowRef, onUnmounted, watch } from 'vue'
+import { ref, shallowRef, onScopeDispose, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useModalStore } from '@/stores/modal'
@@ -636,106 +636,87 @@ export function useGraph(containerRef) {
   function resetZoom() { cy.value?.zoom(1); cy.value?.center() }
 
   // ─── 事件绑定 ────────────────────────────────────────────────
+
+  // 同步选中状态到 Pinia store
+  const syncSelectionToStore = (c) => {
+    const selected = c.nodes(':selected')
+    if (selected.length > 0) {
+      appStore.selectNode(selected[0].id())
+    } else {
+      appStore.clearSelection()
+    }
+    dom.updateNodeHandles(c)
+  }
+
+  // 节点释放（mouseup）：兜底选中，避免 tap 被轻微拖动吞掉
+  const _onNodeMouseUp = (c, e) => {
+    if (dragConnectState.value?.active) return
+    if (appStore.edgeMode) return
+    const oe = e.originalEvent || {}
+    if (oe.button === 2) return
+    const node = e.target
+    const keepMulti = !!(oe.ctrlKey || oe.shiftKey || oe.metaKey)
+    requestAnimationFrame(() => {
+      if (!keepMulti) c.nodes(':selected').unselect()
+      node.select()
+      syncSelectionToStore(c)
+    })
+  }
+
+  // 节点单击（tap）：连线模式下确认目标节点
+  const _onNodeTap = async (c, e) => {
+    if (dragConnectState.value?.active) return
+    if (!appStore.edgeMode || !appStore.edgeModeSourceId) return
+    const t = e.target
+    if (t.id() === appStore.edgeModeSourceId) return
+    const srcId = appStore.edgeModeSourceId
+    appStore.exitEdgeMode()
+    const relation = await modalStore.showInput('关系类型', '演进 / 依赖 / 相关', '依赖')
+    if (relation) addEdge(srcId, t.id(), relation)
+  }
+
+  // 节点右键（cxttap）：打开节点/批量操作右键菜单
+  const _onNodeContextTap = (c, e) => {
+    if (rightDragMoved.value) return
+    const selected = c.nodes(':selected')
+    if (selected.length > 1) {
+      contextMenu.value = { type: 'batch', x: e.originalEvent.clientX, y: e.originalEvent.clientY }
+    } else {
+      contextMenu.value = { type: 'node', x: e.originalEvent.clientX, y: e.originalEvent.clientY, nodeId: e.target.id() }
+    }
+  }
+
+  // 背景右键（cxttap）：打开空白区域右键菜单
+  const _onBgContextTap = (c, e) => {
+    if (rightDragMoved.value) return
+    if (e.target === c) {
+      contextMenu.value = { type: 'bg', x: e.originalEvent.clientX, y: e.originalEvent.clientY, bgPos: e.position }
+    }
+  }
+
   function _bindCyEvents(targetCy = null) {
     const c = targetCy || cy.value
     if (!c || _cyEventsBound.has(c)) return
 
-    const syncSelectionToStore = () => {
-      const selected = c.nodes(':selected')
-      if (selected.length > 0) {
-        appStore.selectNode(selected[0].id())
-      } else {
-        appStore.clearSelection()
-      }
-      dom.updateNodeHandles(c)
-    }
-
-    // 节点释放后兜底选中：避免 tap 被轻微拖动吞掉、并防止释放时被取消
-    c.on('mouseup', 'node', (e) => {
-      if (dragConnectState.value?.active) return
-      if (appStore.edgeMode) return
-
-      const oe = e.originalEvent || {}
-      if (oe.button === 2) return
-
-      const node = e.target
-      const keepMulti = !!(oe.ctrlKey || oe.shiftKey || oe.metaKey)
-
-      requestAnimationFrame(() => {
-        if (!keepMulti) {
-          c.nodes(':selected').unselect()
-        }
-        node.select()
-        syncSelectionToStore()
-      })
-    })
-
-    // 节点单击：连线模式下确认目标
-    c.on('tap', 'node', async (e) => {
-      if (dragConnectState.value?.active) return
-      if (!appStore.edgeMode || !appStore.edgeModeSourceId) return
-
-      const t = e.target
-      if (t.id() === appStore.edgeModeSourceId) return
-      const srcId = appStore.edgeModeSourceId
-      appStore.exitEdgeMode()
-      const relation = await modalStore.showInput('关系类型', '演进 / 依赖 / 相关', '依赖')
-      if (relation) addEdge(srcId, t.id(), relation)
-    })
-
-    // 双击钻入
+    c.on('mouseup', 'node', (e) => _onNodeMouseUp(c, e))
+    c.on('tap', 'node', (e) => _onNodeTap(c, e))
     c.on('dbltap', 'node', (e) => { drillInto(e.target.id()) })
-
-
-    // 节点右键菜单（单选）
-    c.on('cxttap', 'node', (e) => {
-      if (rightDragMoved.value) return
-      const selected = c.nodes(':selected')
-      if (selected.length > 1) {
-        contextMenu.value = { type: 'batch', x: e.originalEvent.clientX, y: e.originalEvent.clientY }
-      } else {
-        contextMenu.value = { type: 'node', x: e.originalEvent.clientX, y: e.originalEvent.clientY, nodeId: e.target.id() }
-      }
-    })
-
-    // 边右键菜单
+    c.on('cxttap', 'node', (e) => _onNodeContextTap(c, e))
     c.on('cxttap', 'edge', (e) => {
       if (rightDragMoved.value) return
       contextMenu.value = { type: 'edge', x: e.originalEvent.clientX, y: e.originalEvent.clientY, edgeId: e.target.id() }
     })
-
-    // 背景右键菜单
-    c.on('cxttap', (e) => {
-      if (rightDragMoved.value) return
-      if (e.target === c) {
-        contextMenu.value = { type: 'bg', x: e.originalEvent.clientX, y: e.originalEvent.clientY, bgPos: e.position }
-      }
-    })
-
-    // 悬停高亮
+    c.on('cxttap', (e) => _onBgContextTap(c, e))
     c.on('mouseover', 'node', (e) => { e.target.addClass('highlighted') })
     c.on('mouseout', 'node', (e) => { e.target.removeClass('highlighted') })
-
-    // 拖拽完成保存
     c.on('free', 'node', () => { saveCurrentLayoutDebounced(); dom.updateNodeHandles(c) })
-
-    // 框选/多选变化同步
-    c.on('select unselect', 'node', () => { syncSelectionToStore() })
-
-
-    // 缩放联动
+    c.on('select unselect', 'node', () => { syncSelectionToStore(c) })
     c.on('zoom', () => {
       zoomLevel.value = Math.round(c.zoom() * 100)
       dom.applyZoomDisplay(c.zoom())
       dom.updateNodeHandles(c)
-      // 多实例模式下，视口以当前房间 meta 为准，不写会话共享缓存
     })
-
-    // 画布平移时记录当前房间状态（严格绑定 activeRoomPath）
-    c.on('pan', () => {
-      dom.updateNodeHandles(c)
-      // 多实例模式下，视口以当前房间 meta 为准，不写会话共享缓存
-    })
+    c.on('pan', () => { dom.updateNodeHandles(c) })
 
     _cyEventsBound.add(c)
   }
@@ -873,7 +854,7 @@ export function useGraph(containerRef) {
     }
   )
 
-  onUnmounted(() => {
+  onScopeDispose(() => {
     dom.cleanupDOMEventsExcept(null)
     cyManager.clear()
     // 显式销毁 Cytoscape 实例，防止内存泄漏

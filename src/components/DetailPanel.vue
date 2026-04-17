@@ -124,8 +124,8 @@ const previewScale = ref(1)
 
 let _cmView = null
 
-// 竞态保护版本号
-let _version = 0
+// 竞态保护：AbortController
+let _abortController = null
 let _modeVersion = 0
 let _prevRenderedEl = null
 // Object URL 追踪
@@ -329,27 +329,39 @@ async function loadNodeContent(cardPath) {
   tocOpen.value = false
 
   _revokeActiveUrls()
-  const version = ++_version
 
-  const [kids, md] = await Promise.all([
-    storage.listCards(cardPath).catch(() => []),
-    storage.readMarkdown(cardPath).catch(() => ''),
-  ])
+  // 取消之前的请求
+  if (_abortController) {
+    _abortController.abort()
+  }
+  _abortController = new AbortController()
+  const signal = _abortController.signal
 
-  if (version !== _version) return // 已切换到其他节点
+  try {
+    const [kids, md] = await Promise.all([
+      storage.listCards(cardPath).catch(() => []),
+      storage.readMarkdown(cardPath).catch(() => ''),
+    ])
 
-  childCards.value = kids || []
-  markdownRaw.value = md || ''
-  editContent.value = md || ''
-  _setEditorDoc(editContent.value)
+    // 检查是否已中止
+    if (signal.aborted) return
 
-  if (bodyRef.value) bodyRef.value.scrollTop = 0
+    childCards.value = kids || []
+    markdownRaw.value = md || ''
+    editContent.value = md || ''
+    _setEditorDoc(editContent.value)
 
-  // 异步解析渲染内容中的图片（等 DOM 更新后）
-  await nextTick()
-  buildTocItems()
-  updateActiveHeading()
-  _resolveRenderedImages(cardPath, version)
+    if (bodyRef.value) bodyRef.value.scrollTop = 0
+
+    // 异步解析渲染内容中的图片（等 DOM 更新后）
+    await nextTick()
+    buildTocItems()
+    updateActiveHeading()
+    _resolveRenderedImages(cardPath, signal)
+  } catch (e) {
+    if (e.name === 'AbortError') return
+    logger.catch('DetailPanel', 'loadNodeContent', e)
+  }
 }
 
 async function setMode(m) {
@@ -456,7 +468,7 @@ async function _insertImage(blob) {
 }
 
 // ─── 图片异步解析（阅读模式）────────────────────────────────
-async function _resolveRenderedImages(cardPath, version) {
+async function _resolveRenderedImages(cardPath, signal) {
   const container = renderedRef.value
   if (!container) return
   const imgs = container.querySelectorAll('img')
@@ -467,7 +479,7 @@ async function _resolveRenderedImages(cardPath, version) {
     img.style.opacity = '0.3'
     try {
       const url = await storage.loadImage(imgPath)
-      if (version !== _version) {
+      if (signal?.aborted) {
         if (url) try { URL.revokeObjectURL(url) } catch (e) {}
         return
       }

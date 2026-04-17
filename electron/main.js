@@ -42,7 +42,7 @@ function _fs_saveAppConfig() {
     _fs_ensureDir(_fs_rootDir);
     nodeFs.writeFileSync(_fs_appConfigPath(), JSON.stringify(_fs_config, null, 2), 'utf-8');
   } catch (e) {
-    // silently fail
+    console.error('[main] 保存应用配置失败:', e.message);
   }
 }
 
@@ -352,11 +352,15 @@ var fileService = {
   clearAll: function() {
     var rootAbs = path.resolve(_fs_rootDir);
     if (!nodeFs.existsSync(rootAbs)) { _fs_ensureDir(rootAbs); return; }
-    nodeFs.readdirSync(rootAbs, { withFileTypes: true }).forEach(function(e) {
-      if (e.isDirectory() && !e.name.startsWith('.')) {
-        nodeFs.rmSync(path.join(rootAbs, e.name), { recursive: true, force: true });
-      }
-    });
+    try {
+      nodeFs.readdirSync(rootAbs, { withFileTypes: true }).forEach(function(e) {
+        if (e.isDirectory() && !e.name.startsWith('.')) {
+          nodeFs.rmSync(path.join(rootAbs, e.name), { recursive: true, force: true });
+        }
+      });
+    } catch (e) {
+      console.error('[main] clearAll 删除目录失败:', e.message);
+    }
   },
   importKB: function(sourcePath) {
     var src = path.resolve(sourcePath);
@@ -942,7 +946,10 @@ function _git_getRemoteState(git) {
       var parts = out.trim().split(/\s+/);
       return { ahead: parseInt(parts[0]) || 0, behind: parseInt(parts[1]) || 0 };
     })
-    .catch(function() { return { ahead: 0, behind: 0 }; });
+    .catch(function(e) {
+      console.error('[main] 获取远程同步状态失败:', e.message);
+      return { ahead: 0, behind: 0 };
+    });
 }
 
 function _git_generateCommitMessage(kbName, status) {

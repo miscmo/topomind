@@ -59,6 +59,7 @@ const localCoverPreview = ref(null)
 const nameError = ref(false)
 const nameInputRef = ref(null)
 const coverInputRef = ref(null)
+let _nameErrorTimer = null
 
 // Reset on open
 watch(() => props.visible, (v) => {
@@ -92,13 +93,15 @@ function submit() {
   if (!name) {
     nameError.value = true
     nameInputRef.value?.focus()
-    setTimeout(() => { nameError.value = false }, 2000)
+  clearTimeout(_nameErrorTimer)
+  _nameErrorTimer = setTimeout(() => { nameError.value = false }, 2000)
     return
   }
   emit('submit', { name, coverBlob: localCoverBlob.value })
 }
 
 onUnmounted(() => {
+  clearTimeout(_nameErrorTimer)
   // Data URLs from FileReader.readAsDataURL don't need revocation.
   // Blob URLs (if ever added) must be revoked here.
 })

@@ -9,6 +9,8 @@ import { logger } from './logger.js'
 const _saveTimers = new Map()
 /** 追踪 loadImage 创建的 Blob URL，防止内存泄漏 */
 const _blobUrlRegistry = new Map()
+/** 单张图片最大尺寸：5MB */
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 function normalizeName(name) {
   return String(name || '').trim()
@@ -235,6 +237,9 @@ export const Store = {
 
   // ===== 图片 =====
   async saveImage(cardPath, blob, filename) {
+    if (blob.size > MAX_IMAGE_SIZE) {
+      throw new Error(`图片大小超过限制（最大 5MB），当前 ${(blob.size / 1024 / 1024).toFixed(1)}MB`)
+    }
     const imgPath = `${cardPath}/images/${filename}`
     try {
       await FSB.writeBlobFile(imgPath, blob)
@@ -246,6 +251,9 @@ export const Store = {
   },
 
   async saveKBImage(kbPath, blob, filename) {
+    if (blob.size > MAX_IMAGE_SIZE) {
+      throw new Error(`图片大小超过限制（最大 5MB），当前 ${(blob.size / 1024 / 1024).toFixed(1)}MB`)
+    }
     const imgPath = `${kbPath}/images/${filename}`
     try {
       await FSB.writeBlobFile(imgPath, blob)

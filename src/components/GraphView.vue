@@ -354,11 +354,18 @@ onUnmounted(() => {
   document.removeEventListener('keydown', graph.handleKeydown)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   clearTimeout(_initGridTimer)
+  clearTimeout(_roomWatchTimer)
 })
 
-// 切换标签页时重新加载房间
+let _roomWatchTimer = null
+
+// 切换标签页时重新加载房间（带防抖）
 watch(() => roomStore.currentRoomPath, async (newPath) => {
-  if (newPath && graph.cy.value) {
+  if (!newPath || !graph.cy.value) return
+
+  // 清除之前的定时器
+  clearTimeout(_roomWatchTimer)
+  _roomWatchTimer = setTimeout(async () => {
     try {
       initPhase.value = 'room'
       await graph.loadRoom(newPath)
@@ -368,7 +375,7 @@ watch(() => roomStore.currentRoomPath, async (newPath) => {
       initError.value = e?.message || '切换房间失败'
       logger.warn('GraphView', '切换房间加载失败:', newPath, e)
     }
-  }
+  }, 300) // 防抖 300ms
 })
 
 watch(() => roomStore.activeTabId, () => {
@@ -469,6 +476,9 @@ function retryInit() {
   initializeGraphView()
 }
 
+// 注意：beforeunload 是同步事件，浏览器不会等待 async/Promise 完成。
+// flushEdit() 和 saveLayout() 以 fire-and-forget 方式调用，数据最多丢失 1 秒（debouncedSave 间隔）。
+// 真正的安全网是 debouncedSave（每 1 秒自动保存）。
 async function handleBeforeUnload() {
   // 先保存正在编辑的 Markdown 内容
   detailPanelRef.value?.flushEdit()

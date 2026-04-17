@@ -90,7 +90,33 @@ export function useGit() {
     } catch (e) { logger.catch('useGit', 'loadRemote 失败', e) }
   }
 
+/** 验证 Git 远程 URL 格式（支持 HTTPS 和 SSH） */
+function isValidGitRemoteUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  const trimmed = url.trim()
+  // HTTPS URL
+  if (trimmed.startsWith('https://') || trimmed.startsWith('http://')) {
+    try {
+      const parsed = new URL(trimmed)
+      return parsed.hostname.length > 0 && parsed.pathname.length > 1
+    } catch { return false }
+  }
+  // SSH URL: git@host:path
+  if (/^git@[a-z0-9.-]+:.+$/i.test(trimmed)) return true
+  // SSH 协议: ssh://host/path
+  if (/^ssh:\/\//.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed)
+      return parsed.hostname.length > 0
+    } catch { return false }
+  }
+  return false
+}
+
   async function saveRemote(kbPath, url, token, authType) {
+    if (url && !isValidGitRemoteUrl(url)) {
+      throw new Error('无效的远程仓库 URL，请输入 https://... 或 git@host:path 格式的地址')
+    }
     try {
       unwrapGitResult(await GitBackend.remoteSet(kbPath, url), { requireOk: true, errorMessage: '保存远程地址失败' })
       unwrapGitResult(await GitBackend.authSetType(kbPath, authType), { requireOk: true, errorMessage: '保存认证方式失败' })

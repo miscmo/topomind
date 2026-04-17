@@ -69,14 +69,16 @@ export const useRoomStore = defineStore('room', {
 
     /** 钻入子房间 */
     drillInto(path) {
-      this.roomHistory.push(this.currentRoomPath)
+      this.roomHistory = [...this.roomHistory, this.currentRoomPath]
       this.currentRoomPath = path
     },
 
     /** 返回上一层 */
     goBack() {
       if (this.roomHistory.length > 0) {
-        this.currentRoomPath = this.roomHistory.pop()
+        const last = this.roomHistory[this.roomHistory.length - 1]
+        this.roomHistory = this.roomHistory.slice(0, -1)
+        this.currentRoomPath = last
       }
     },
 
@@ -114,7 +116,7 @@ export const useRoomStore = defineStore('room', {
         return existing.id
       }
       const id = `tab-${Date.now()}`
-      this.tabs.push({
+      const newTab = {
         id,
         kbPath,
         label: label || kbPath.split('/').pop(),
@@ -130,6 +132,7 @@ export const useRoomStore = defineStore('room', {
           searchQuery: '',
         },
       })
+      this.tabs = [...this.tabs, newTab]
       this.switchTab(id)
       return id
     },

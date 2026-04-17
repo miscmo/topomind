@@ -9,6 +9,7 @@
  *   - 节点手柄元素（resize / connect）定位与事件
  */
 import { GraphConstants } from '@/core/graph-constants.js'
+import { logger } from '@/core/logger.js'
 
 /**
  * 创建并返回 DOM 事件绑定函数及手柄元素管理器。
@@ -255,7 +256,7 @@ export function useGraphDOM({
       } catch (err) {
         document.body.style.userSelect = ''
         document.body.style.cursor = ''
-        console.error('[useGraphDOM] mousemove error:', err)
+        logger.catch('useGraphDOM mousemove', 'mousemove 事件处理失败', err)
       }
     }
 
@@ -293,7 +294,7 @@ export function useGraphDOM({
       } catch (err) {
         document.body.style.userSelect = ''
         document.body.style.cursor = ''
-        console.error('[useGraphDOM] mouseup error:', err)
+        logger.catch('useGraphDOM mouseup', 'mouseup 事件处理失败', err)
       } finally {
         document.body.style.userSelect = ''
         document.body.style.cursor = ''
