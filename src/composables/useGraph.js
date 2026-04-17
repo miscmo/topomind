@@ -18,10 +18,10 @@ import { createCyManager } from '@/core/cy-manager.js'
 import cytoscape from 'cytoscape'
 import elk from 'cytoscape-elk'
 import htmlLabel from 'cytoscape-node-html-label'
-import { logger } from '@/core/logger.js'
 import { GraphConstants } from '@/core/graph-constants.js'
 import { cloneGraphStyle } from '@/core/graph-style.js'
 import { getNodeHtmlLabelConfig } from '@/core/graph-labels.js'
+import { logger } from '@/core/logger.js'
 import { useGraphDOM } from '@/composables/useGraphDOM.js'
 
 // 注册插件（模块级标志防止 HMR 重复注册）
@@ -75,9 +75,6 @@ export function useGraph(containerRef) {
     const kb = roomStore.currentKBPath || ''
     return `${kb}::${dirPath || ''}`
   }
-
-  // ─── 节点 HTML 标签生成器（已提取至 @/core/graph-labels.js）─────────────────
-  // 导入自 @/core/graph-labels.js
 
   // ─── 设置 HTML 标签（在 cy.mount() 之后调用）─────────────────────
   // 使用 cytoscape-node-html-label 插件渲染节点 HTML 标签
