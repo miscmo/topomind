@@ -466,11 +466,11 @@ async function _resolveRenderedImages(cardPath, version) {
     img.style.opacity = '0.3'
     try {
       const url = await storage.loadImage(imgPath)
-      if (url) _activeUrls.push(url)
       if (version !== _version) {
         if (url) try { URL.revokeObjectURL(url) } catch (e) {}
         return
       }
+      if (url) _activeUrls.push(url)
       if (url) {
         img.src = url
         img.style.opacity = '1'

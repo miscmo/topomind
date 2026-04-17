@@ -276,6 +276,12 @@ export function useGraph(containerRef) {
           'elk.padding': `[top=${GraphConstants.ELK_PADDING_TOP},left=${GraphConstants.ELK_PADDING_SIDES},bottom=${GraphConstants.ELK_PADDING_SIDES},right=${GraphConstants.ELK_PADDING_SIDES}]`,
         },
         fit: false, animate: false,
+        error: (e) => {
+          logger.warn('useGraph', 'ELK布局失败，回退到中心化:', e)
+          cy.value.nodes().positions(n => ({ x: 0, y: 0 }))
+          cy.value.center()
+          _grid?.drawGrid()
+        },
         stop: () => {
           if (targetViewport) {
             cy.value.zoom(targetViewport.zoom)
@@ -566,6 +572,7 @@ export function useGraph(containerRef) {
 
   function addEdge(sourceId, targetId, relation) {
     if (sourceId === targetId) return
+    if (!cy.value.getElementById(sourceId)?.length || !cy.value.getElementById(targetId)?.length) return
     // 防止重复添加同向边
     const existing = cy.value.edges().filter(
       e => e.data('source') === sourceId && e.data('target') === targetId
@@ -710,7 +717,7 @@ export function useGraph(containerRef) {
     c.on('mouseout', 'node', (e) => { e.target.removeClass('highlighted') })
 
     // 拖拽完成保存
-    c.on('free', 'node', () => { saveCurrentLayoutDebounced(); _updateNodeHandles(c) })
+    c.on('free', 'node', () => { saveCurrentLayoutDebounced(); dom.updateNodeHandles(c) })
 
     // 框选/多选变化同步
     c.on('select unselect', 'node', () => { syncSelectionToStore() })

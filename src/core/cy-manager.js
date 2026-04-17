@@ -26,6 +26,7 @@ export function createCyManager(maxContexts = 4) {
       lastActiveAt: Date.now(),
       loaded: false,
       eventsBound: false,
+      cleanup: extra?.cleanup || null,
       ...extra,
     }
     contexts.set(key, ctx)
@@ -59,6 +60,7 @@ export function createCyManager(maxContexts = 4) {
 
     if (!victimKey) return
     const victim = contexts.get(victimKey)
+    try { victim?.cleanup?.() } catch (e) { logger.warn('CyManager', '清理DOM事件失败:', e) }
     try { victim?.cy?.destroy?.() } catch (e) { logger.warn('CyManager', '销毁上下文失败:', e) }
     contexts.delete(victimKey)
   }
@@ -94,6 +96,7 @@ export function createCyManager(maxContexts = 4) {
   function remove(key) {
     const ctx = contexts.get(key)
     if (!ctx) return
+    try { ctx.cleanup?.() } catch (e) { logger.warn('CyManager', '清理DOM事件失败:', e) }
     try { ctx.cy?.destroy?.() } catch (e) { logger.warn('CyManager', '销毁实例失败:', e) }
     if (activeKey === key) activeKey = null
     contexts.delete(key)
