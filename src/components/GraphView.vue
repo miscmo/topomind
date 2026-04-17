@@ -539,6 +539,12 @@ async function handleContextAction({ action, payload }) {
       if (ok) await graph.batchDelete(selected.map(n => n.id()))
       break
     }
+    case 'delete-all': {
+      const count = graph.cy.value?.nodes().length || 0
+      const ok = await modalStore.showConfirm(`确定删除当前房间的全部 ${count} 个节点？此操作不可撤销。`)
+      if (ok) await graph.deleteAllNodes()
+      break
+    }
     case 'batch-color':
       graph.batchSetColor(payload.color)
       break

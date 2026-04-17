@@ -616,6 +616,21 @@ export function useGraph(containerRef) {
     saveCurrentLayoutDebounced()
   }
 
+  async function deleteAllNodes() {
+    const nodeIds = cy.value.nodes().map(n => n.id())
+    for (const id of nodeIds) {
+      try {
+        await storage.deleteCard(id)
+      } catch (err) {
+        logger.catch('useGraph', `删除节点失败: ${id}`, err)
+      }
+    }
+    cy.value.edges().remove()
+    cy.value.nodes().remove()
+    appStore.clearSelection()
+    saveCurrentLayoutDebounced()
+  }
+
   // ─── 搜索 ────────────────────────────────────────────────────
   function applySearch(q) {
     if (!cy.value) return
@@ -906,6 +921,7 @@ export function useGraph(containerRef) {
     addEdge,
     deleteEdge,
     batchDelete,
+    deleteAllNodes,
     batchSetColor,
     updateNodeStyle,
     updateNodeFontStyle,

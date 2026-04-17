@@ -36,6 +36,8 @@
       <div class="ctx-sep"></div>
       <div class="ctx-item" @click="emit('action', { action: 'fit-view', payload: {} })">⊡ 适应视图</div>
       <div class="ctx-item" @click="emit('action', { action: 'go-back', payload: {} })">← 返回上级</div>
+      <div class="ctx-sep"></div>
+      <div class="ctx-item danger" @click="emit('action', { action: 'delete-all', payload: {} })">🗑 清空全部</div>
     </div>
 
     <!-- 点击外部关闭 -->
