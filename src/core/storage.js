@@ -90,7 +90,7 @@ export const Store = {
     }
   },
 
-    async saveKBCover(kbPath, coverPath) {
+  async saveKBCover(kbPath, coverPath) {
     try {
       return await FSB.saveKBCover(kbPath, coverPath)
     } catch (e) {

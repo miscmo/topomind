@@ -93,8 +93,8 @@ function submit() {
   if (!name) {
     nameError.value = true
     nameInputRef.value?.focus()
-  clearTimeout(_nameErrorTimer)
-  _nameErrorTimer = setTimeout(() => { nameError.value = false }, 2000)
+    clearTimeout(_nameErrorTimer)
+    _nameErrorTimer = setTimeout(() => { nameError.value = false }, 2000)
     return
   }
   emit('submit', { name, coverBlob: localCoverBlob.value })
