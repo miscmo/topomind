@@ -7,7 +7,7 @@
  *   - 布局保存
  *   - 交互事件（点击、双击、右键、缩放、拖拽）
  */
-import { ref, shallowRef, onScopeDispose, watch } from 'vue'
+import { ref, shallowRef, onScopeDispose, watch, getCurrentScope } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useModalStore } from '@/stores/modal'
@@ -639,15 +639,17 @@ export function useGraph(containerRef) {
     }
   )
 
-  onScopeDispose(() => {
-    dom.cleanupDOMEventsExcept(null)
-    cyManager.clear()
-    // 显式销毁 Cytoscape 实例，防止内存泄漏
-    if (cy.value && !cy.value.destroyed) {
-      cy.value.destroy()
-    }
-    cy.value = null
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      dom.cleanupDOMEventsExcept(null)
+      cyManager.clear()
+      // 显式销毁 Cytoscape 实例，防止内存泄漏
+      if (cy.value && !cy.value.destroyed) {
+        cy.value.destroy()
+      }
+      cy.value = null
+    })
+  }
 
   function refreshNodeBadge(id) {
     if (!cy.value || !id) return

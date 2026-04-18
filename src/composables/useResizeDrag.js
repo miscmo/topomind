@@ -2,7 +2,7 @@
  * 面板拖拽缩放通用逻辑
  * 抽取 startStyleResize 和 startDetailResize 中的重复代码
  */
-import { onScopeDispose } from 'vue'
+import { onScopeDispose, getCurrentScope } from 'vue'
 
 /**
  * @param {MouseEvent} e - mousedown 事件
@@ -55,5 +55,11 @@ export function useResizeDrag(e, container, startWidth, clampWidth, calcPreviewL
 
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
-  onScopeDispose(cleanup)
+
+  // 仅在有活跃 effect scope 时注册（setup 中调用时有，事件处理器中调用时无）
+  if (getCurrentScope()) {
+    onScopeDispose(cleanup)
+  }
+
+  return cleanup
 }

@@ -14,6 +14,7 @@
         <span class="home-workdir-path" :title="workDir">📂 {{ truncatedWorkDir }}</span>
         <button class="home-workdir-switch" @click="switchWorkDir" title="切换工作目录">切换</button>
       </div>
+      <div v-if="workDirMessage" class="home-workdir-msg" :class="{ error: workDirMessageError }">{{ workDirMessage }}</div>
     </div>
 
     <!-- 知识库列表 -->
@@ -147,6 +148,10 @@ const showCreateSheet = ref(false)
 const showImportSheet = ref(false)
 const showSettingsSheet = ref(false)
 const showCoverCrop = ref(false)
+
+// 切换工作目录消息
+const workDirMessage = ref('')
+const workDirMessageError = ref(false)
 
 // Settings 相关状态
 const settingsTarget = ref(null)
@@ -413,9 +418,28 @@ function gitBadgeTitle(st = {}) {
 
 // ─── 切换工作目录 ──────────────────────────────────────────────
 async function switchWorkDir() {
+  workDirMessage.value = ''
+  workDirMessageError.value = false
   const res = await storage.selectExistingWorkDir()
-  if (!res?.valid) return
+  if (!res?.valid) {
+    if (res?.error) {
+      workDirMessageError.value = true
+      workDirMessage.value = res.error
+    }
+    return
+  }
   roomStore.tabs.slice().forEach(tab => roomStore.closeTab(tab.id))
   await loadKBList()
 }
 </script>
+
+<style scoped>
+.home-workdir-msg {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #666);
+  padding: 4px 0;
+}
+.home-workdir-msg.error {
+  color: var(--color-error, #d32f2f);
+}
+</style>

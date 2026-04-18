@@ -2,7 +2,7 @@
  * useGrid composable
  * 无限画布系统：网格绘制、平移管理
  */
-import { ref, onScopeDispose } from 'vue'
+import { ref, onScopeDispose, getCurrentScope } from 'vue'
 
 const GRID_SIZE = 20
 
@@ -109,11 +109,13 @@ export function useGrid(canvasRef, getCy) {
     _resizeTimer = setTimeout(drawGrid, 50)
   }
 
-  onScopeDispose(() => {
-    window.removeEventListener('resize', onResize)
-    clearTimeout(_resizeTimer)
-    if (_rafId) cancelAnimationFrame(_rafId)
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      window.removeEventListener('resize', onResize)
+      clearTimeout(_resizeTimer)
+      if (_rafId) cancelAnimationFrame(_rafId)
+    })
+  }
 
   return {
     gridEnabled,

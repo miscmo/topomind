@@ -3,7 +3,7 @@
  * 节点徽标层 + 文档预览 Tooltip
  * 完整迁移自 badges.js
  */
-import { onScopeDispose } from 'vue'
+import { onScopeDispose, getCurrentScope } from 'vue'
 import { useStorage } from '@/composables/useStorage'
 import { logger } from '@/core/logger.js'
 
@@ -207,12 +207,14 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
     _positionTooltip()
   }
 
-  onScopeDispose(() => {
-    _unbindCyEvents()
-    document.removeEventListener('mousemove', _onMouseMove)
-    clearTimeout(_hoverTimer)
-    clearTimeout(_hideTimer)
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      _unbindCyEvents()
+      document.removeEventListener('mousemove', _onMouseMove)
+      clearTimeout(_hoverTimer)
+      clearTimeout(_hideTimer)
+    })
+  }
 
   return { init, update, clear }
 }

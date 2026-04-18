@@ -42,7 +42,7 @@ function _fs_saveAppConfig() {
     _fs_ensureDir(_fs_rootDir);
     nodeFs.writeFileSync(_fs_appConfigPath(), JSON.stringify(_fs_config, null, 2), 'utf-8');
   } catch (e) {
-    console.error('[main] 保存应用配置失败:', e.message);
+    // 静默处理：配置保存失败不影响应用运行
   }
 }
 
@@ -359,7 +359,7 @@ var fileService = {
         }
       });
     } catch (e) {
-      console.error('[main] clearAll 删除目录失败:', e.message);
+      // 静默处理：目录删除失败不影响 clearAll 后续流程
     }
   },
   importKB: function(sourcePath) {
@@ -440,6 +440,9 @@ function _git_toGitPath(p) {
 }
 
 function _git_sg(absPath, env) {
+  if (!nodeFs.existsSync(absPath)) {
+    throw new Error('Directory does not exist: ' + absPath);
+  }
   return simpleGit(absPath).env(Object.assign({}, process.env, env || {}));
 }
 
@@ -947,7 +950,7 @@ function _git_getRemoteState(git) {
       return { ahead: parseInt(parts[0]) || 0, behind: parseInt(parts[1]) || 0 };
     })
     .catch(function(e) {
-      console.error('[main] 获取远程同步状态失败:', e.message);
+      // 静默处理：分支未配置上游时无需报告错误
       return { ahead: 0, behind: 0 };
     });
 }
