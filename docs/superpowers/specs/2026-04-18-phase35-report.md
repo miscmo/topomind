@@ -19,25 +19,45 @@
 
 ---
 
-## 二、本轮发现的微小问题
+## 二、本轮修复的问题
 
-### 1. CreateKBSheet.vue — 缩进不一致（Cosmetic）
+### 1. CreateKBSheet.vue — submit() 逻辑错误修复
 
-**位置**: `src/components/modals/CreateKBSheet.vue` 第 96 行附近
+**问题**: `submit()` 函数中，`clearTimeout(_nameErrorTimer)` 和 `_nameErrorTimer = setTimeout(...)` 的缩进与 `if (!name)` 块不一致。由于 JavaScript 使用大括号界定代码块而非缩进，这两行实际上位于 `if` 块**之外**——导致错误清除定时器在每次 submit 调用时都被重置，而不是仅在名称为空时重置。
 
-**问题**: `submit()` 函数的 catch 块中，`clearTimeout` 有 4 个多余的空格缩进，与同文件其他 clearTimeout 调用（2 空格）不一致。
+**修复**: 将这两行正确缩进到 `if (!name)` 块内，与 `nameError.value = true` 和 `nameInputRef.value?.focus()` 保持一致。
 
-**影响**: 无功能性影响，仅影响代码美观。
+```javascript
+// 修复前（逻辑错误）
+if (!name) {
+  nameError.value = true
+  nameInputRef.value?.focus()
+clearTimeout(_nameErrorTimer)     // ← 实际在 if 块外
+_nameErrorTimer = setTimeout(...) // ← 实际在 if 块外
+  return
+}
+
+// 修复后（逻辑正确）
+if (!name) {
+  nameError.value = true
+  nameInputRef.value?.focus()
+  clearTimeout(_nameErrorTimer)   // ← 在 if 块内
+  _nameErrorTimer = setTimeout(...)
+  return
+}
+```
+
+**影响**: 修复了错误提示定时器逻辑，现在仅在名称为空时重置定时器，符合预期 UX 行为。
 
 ---
 
-### 2. storage.js — 缩进不一致（Cosmetic）
+### 2. storage.js — saveKBCover 缩进修复
 
-**位置**: `src/core/storage.js` 第 93 行附近
+**问题**: `saveKBCover` 方法使用 4 空格缩进，而同文件其他方法均使用 2 空格缩进。
 
-**问题**: `saveKBCover` 方法使用 4 空格缩进，而同文件其他方法使用 2 空格缩进。
+**修复**: 将 `async saveKBCover(kbPath, coverPath) {` 缩进从 4 空格修正为 2 空格。
 
-**影响**: 无功能性影响，仅影响代码美观。
+**影响**: 无功能性影响，代码风格与同文件其他方法保持一致。
 
 ---
 
@@ -229,7 +249,7 @@ src/
 | 性能优化 | 优秀 | RAF 节流、LRU 驱逐、HiDPI，vendor chunk 待优化 |
 | 可维护性 | 优秀 | 日志系统、常量提取、类型定义完善 |
 
-**本轮修复**: 2 个微小 cosmetic 缩进问题（无功能性影响）
+**本轮修复**: 2 个问题（1 个逻辑错误 + 1 个缩进不一致）
 **Phase 32/34 确认**: 全部完成
 **功能 Bug**: 0 个
 
@@ -240,5 +260,4 @@ src/
 ## 七、后续优化建议（非阻塞）
 
 1. **[性能]** 配置 Vite `build.rollupOptions.output.manualChunks` 将 cytoscape 及其扩展拆分为独立 vendor chunk，添加长期缓存策略
-2. **[Cosmetic]** 修正 CreateKBSheet.vue 第 96 行和 storage.js 第 93 行的缩进不一致（可选）
-3. **[可维护性]** DetailPanel.vue 当前 758 行，接近 800 行阈值，后续可考虑按功能拆分（fetch 管理、图片预览、编辑表单等）
+2. **[可维护性]** DetailPanel.vue 当前 758 行，接近 800 行阈值，后续可考虑按功能拆分（fetch 管理、图片预览、编辑表单等）
