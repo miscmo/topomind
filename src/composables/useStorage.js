@@ -47,7 +47,7 @@ export function useStorage() {
     readLayout: (dirPath) => Store.readLayout(dirPath),
     saveLayout: (dirPath, meta) => Store.saveLayout(dirPath, meta)
       .then(() => showSaveIndicator(false))
-      .catch((e) => { logger.catch('useStorage', 'saveLayout 失败:', dirPath, e); showSaveIndicator(true) }),
+      .catch((e) => { logger.catch('useStorage', `saveLayout 失败: ${dirPath}`, e); showSaveIndicator(true) }),
     saveLayoutSync: (dirPath, meta) => {
       if (window.electronAPI?.sendSync) {
         window.electronAPI.sendSync('save:layout', dirPath, meta)

@@ -4,6 +4,7 @@
  * 所有需要 cy/storage/logger 的函数通过参数传入。
  */
 import { GraphConstants } from '@/core/graph-constants.js'
+import { logger } from '@/core/logger.js'
 
 // ─── 边 ID 生成器 ─────────────────────────────────────────────
 let _edgeCounter = 0
@@ -183,7 +184,6 @@ export function batchSetColor(cy, targets, color) {
 // ─── 加载节点徽标数据 ─────────────────────────────────────────
 export async function loadNodeBadges(cy, storage) {
   if (!cy) return
-  const logger = (await import('@/core/logger.js')).logger
   const nodeIds = cy.nodes().map(n => n.id())
   await Promise.all(nodeIds.map(async (id) => {
     const [children, md] = await Promise.all([
@@ -241,9 +241,8 @@ export function buildCurrentMeta(cy, currentMeta, grid) {
 }
 
 // ─── 强制刷新 HTML 标签 ────────────────────────────────────────
-export async function refreshHtmlLabels(cy, nodes) {
+export function refreshHtmlLabels(cy, nodes) {
   if (!cy) return
-  const logger = (await import('@/core/logger.js')).logger
   const targets = nodes || cy.nodes()
   targets.forEach((n) => {
     if (n.isNode() && n.hasClass('card')) {

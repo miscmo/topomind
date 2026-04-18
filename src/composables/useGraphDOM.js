@@ -364,7 +364,5 @@ export function useGraphDOM({
     updateNodeHandles,
     refreshAllHandles,
     applyZoomDisplay,
-    _handleElsByCy,
-    _domCleanupByCy,
   }
 }

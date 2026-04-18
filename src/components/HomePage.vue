@@ -18,6 +18,12 @@
 
     <!-- 知识库列表 -->
     <div class="home-content">
+      <!-- 加载指示器 -->
+      <div v-if="loading" class="home-loading-overlay">
+        <div class="home-loading-spinner"></div>
+        <span>加载中...</span>
+      </div>
+
       <div class="home-section-title">我的知识库</div>
       <div class="home-grid">
         <!-- 知识库卡片 -->

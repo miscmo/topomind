@@ -33,6 +33,8 @@ export const useRoomStore = defineStore('room', {
 
     /** 面包屑路径数组 [{ label, path }] */
     breadcrumbs: (state) => {
+      // 显式依赖 _pathNameMapVersion 以便在路径名缓存变更时重新计算
+      void state._pathNameMapVersion
       if (!state.currentKBPath) return []
       const crumbs = []
       const kbName = state.pathNameMap[state.currentKBPath] ||
@@ -139,11 +141,12 @@ export const useRoomStore = defineStore('room', {
 
     /** 切换标签页 */
     switchTab(tabId) {
-      // 保存当前标签页状态
+      // 保存当前标签页状态（不可变更新）
       const current = this.tabs.find(t => t.id === this.activeTabId)
       if (current) {
-        current.roomPath = this.currentRoomPath
-        current.roomHistory = [...this.roomHistory]
+        this.tabs = this.tabs.map(t => t.id === current.id
+          ? { ...t, roomPath: this.currentRoomPath, roomHistory: [...this.roomHistory] }
+          : t)
       }
       // 恢复目标标签页状态
       const target = this.tabs.find(t => t.id === tabId)

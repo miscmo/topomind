@@ -14,6 +14,8 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
   let _mouseX = 0, _mouseY = 0
   let _boundCy = null
   let _cyHandlers = []
+  let _lastMoveTime = 0
+  const MOVE_THROTTLE_MS = 50
 
   // ─── 初始化（cy 就绪后调用）────────────────────────────────
   function init() {
@@ -196,8 +198,13 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
   function _onMouseMove(e) {
     _mouseX = e.clientX
     _mouseY = e.clientY
+    // 节流：tooltip 可见时才更新位置，避免每像素都重绘
     const tt = tooltipRef?.value
-    if (tt?.classList.contains('visible')) _positionTooltip()
+    if (!tt?.classList.contains('visible')) return
+    const now = Date.now()
+    if (now - _lastMoveTime < MOVE_THROTTLE_MS) return
+    _lastMoveTime = now
+    _positionTooltip()
   }
 
   onScopeDispose(() => {
