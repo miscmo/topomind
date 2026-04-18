@@ -338,6 +338,7 @@ export function useGraph(containerRef) {
     const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
     if (!dirPath) return
     const cardPath = await storage.createCard(dirPath, name)
+    await storage.ensureCardDir(cardPath)
     const node = cy.value.add({
       group: 'nodes',
       data: { id: cardPath, label: name, cardPath },

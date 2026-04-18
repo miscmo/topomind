@@ -129,7 +129,8 @@ export const Store = {
         throw new Error(`同级下已存在同名卡片：${safeName}`)
       }
       const cardPath = basePath ? `${basePath}/${safeName}` : safeName
-      return cardPath
+      const actualPath = await FSB.mkDir(cardPath, null)
+      return actualPath
     } catch (e) {
       logger.catch('Store.createCard', `创建卡片失败: ${parentPath}/${cardName}`, e)
       throw e
