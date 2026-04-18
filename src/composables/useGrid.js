@@ -109,7 +109,7 @@ export function useGrid(canvasRef, getCy) {
     _resizeTimer = setTimeout(drawGrid, 50)
   }
 
-    onScopeDispose(() => {
+  onScopeDispose(() => {
     window.removeEventListener('resize', onResize)
     clearTimeout(_resizeTimer)
     if (_rafId) cancelAnimationFrame(_rafId)

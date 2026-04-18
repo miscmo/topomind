@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, watch, onScopeDispose } from 'vue'
 import { useStorage } from '@/composables/useStorage'
 import { useRoomStore } from '@/stores/room'
 import { logger } from '@/core/logger.js'
@@ -66,7 +66,7 @@ function handleClick(path) {
   }, 300)
 }
 
-onUnmounted(() => {
+onScopeDispose(() => {
   clearTimeout(_clickTimer)
 })
 </script>

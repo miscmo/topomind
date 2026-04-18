@@ -85,7 +85,6 @@ const emit = defineEmits(['cancel', 'save', 'delete', 'crop'])
 const localName = ref('')
 const localCoverBlob = ref(null)
 const localCoverPreview = ref(null)
-const _blobUrl = ref(null)
 const keepCurrentCover = ref(false)
 const nameError = ref(false)
 const coverInputRef = ref(null)
@@ -101,6 +100,8 @@ const formattedTime = computed(() => {
 // Init on open
 watch(() => props.visible, (v) => {
   if (v) {
+    _blobUrls.forEach(url => { try { URL.revokeObjectURL(url) } catch (e) {} })
+    _blobUrls.length = 0
     localName.value = props.kbName
     localCoverBlob.value = null
     localCoverPreview.value = props.currentCoverUrl
@@ -109,7 +110,14 @@ watch(() => props.visible, (v) => {
   }
 })
 
-onUnmounted(() => { if (_blobUrl.value) URL.revokeObjectURL(_blobUrl.value) })
+let _saveTimer = null
+const _blobUrls = []
+
+onUnmounted(() => {
+  _blobUrls.forEach(url => { try { URL.revokeObjectURL(url) } catch (e) {} })
+  _blobUrls.length = 0
+  clearTimeout(_saveTimer)
+})
 
 function triggerCoverSelect() { coverInputRef.value?.click() }
 
@@ -131,18 +139,18 @@ function coverChanged(e) {
 
 function removeCover() {
   localCoverBlob.value = null
-  if (_blobUrl.value) URL.revokeObjectURL(_blobUrl.value)
-  _blobUrl.value = null
+  _blobUrls.forEach(url => { try { URL.revokeObjectURL(url) } catch (e) {} })
+  _blobUrls.length = 0
   localCoverPreview.value = null
   keepCurrentCover.value = false
   if (coverInputRef.value) coverInputRef.value.value = ''
 }
 
 function applyCroppedFile(file) {
-  if (_blobUrl.value) URL.revokeObjectURL(_blobUrl.value)
   localCoverBlob.value = file
-  _blobUrl.value = URL.createObjectURL(file)
-  localCoverPreview.value = _blobUrl.value
+  const newUrl = URL.createObjectURL(file)
+  _blobUrls.push(newUrl)
+  localCoverPreview.value = newUrl
   keepCurrentCover.value = false
 }
 
