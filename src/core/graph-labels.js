@@ -85,14 +85,14 @@ export function generateNodeLabelHtml(data) {
 
 /**
  * 返回 cytoscape-node-html-label 配置对象
- * @returns {Array<{query: string, html: Function, valmap?: Function}>}
+ * 注意：插件使用 `tpl`（非 `html`）作为模板函数属性
+ * @returns {Array<{query: string, tpl: Function, halign: string, valign: string}>}
  */
 export function getNodeHtmlLabelConfig() {
   return [{
     query: 'node.card',
-    html: generateNodeLabelHtml,
-    // 禁用自动内容映射，避免覆盖节点 data 对象中的原始值
-    // valmap 仅用于标签内容映射，不改变 data 对象
-    valmap: (data) => ({ ...data }),
+    tpl: generateNodeLabelHtml,
+    halign: 'center',
+    valign: 'center',
   }]
 }
