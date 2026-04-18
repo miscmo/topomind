@@ -11,26 +11,28 @@ import { ref, shallowRef, onScopeDispose, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useModalStore } from '@/stores/modal'
-import { useStorage, showSaveIndicator } from '@/composables/useStorage'
+import { useStorage } from '@/composables/useStorage'
 import { GitCache } from '@/core/git-backend.js'
 import { normalizeMeta } from '@/core/meta.js'
 import { createCyManager } from '@/core/cy-manager.js'
-import cytoscape from 'cytoscape'
-import elk from 'cytoscape-elk'
-import htmlLabel from 'cytoscape-node-html-label'
+import { createCyInstance, setupHtmlLabels } from '@/core/cy-init.js'
+import {
+  autoEdgeId,
+  deduplicateCards,
+  deduplicateEdges,
+  extractDisplayName,
+  buildCardData,
+  applyNodeStyle,
+  updateNodeStyle as applyNodeStyleToCy,
+  updateNodeFontStyle as applyFontStyleToCy,
+  batchSetColor as applyBatchColorToCy,
+  loadNodeBadges,
+  buildCurrentMeta,
+  refreshHtmlLabels,
+} from '@/core/graph-utils.js'
 import { GraphConstants } from '@/core/graph-constants.js'
-import { cloneGraphStyle } from '@/core/graph-style.js'
-import { getNodeHtmlLabelConfig } from '@/core/graph-labels.js'
 import { logger } from '@/core/logger.js'
 import { useGraphDOM } from '@/composables/useGraphDOM.js'
-
-// 注册插件（模块级标志防止 HMR 重复注册）
-const _pluginsRegistered = /** @type {boolean} */ (globalThis.__cytoscapePluginsRegistered__)
-if (!_pluginsRegistered) {
-  cytoscape.use(elk)
-  cytoscape.use(htmlLabel)
-  globalThis.__cytoscapePluginsRegistered__ = true
-}
 
 export function useGraph(containerRef) {
   const appStore = useAppStore()
@@ -76,40 +78,6 @@ export function useGraph(containerRef) {
     return `${kb}::${dirPath || ''}`
   }
 
-  // ─── 设置 HTML 标签（在 cy.mount() 之后调用）─────────────────────
-  // 使用 cytoscape-node-html-label 插件渲染节点 HTML 标签
-  // 注意：cytoscape-node-html-label 内部会清理旧容器，故可安全重复调用
-  function _setupHtmlLabels(cyInst, forceInit = false) {
-    if (!cyInst) return
-    cyInst.nodeHtmlLabel(getNodeHtmlLabelConfig(), { enablePointerEvents: false })
-
-    // 如果 graph 已经有节点了（从缓存激活的旧实例），
-    // 'render' 事件已过，手动触发一次 label 创建
-    if (forceInit || (cyInst.nodes && cyInst.nodes().length > 0)) {
-      try {
-        cyInst.emit('render')
-      } catch (e) {
-        logger.catch('useGraph', 'emit render')
-      }
-    }
-  }
-
-  // ─── 初始化 Cytoscape ────────────────────────────────────────
-  function _createCyInstance(container = null) {
-    const instance = cytoscape({
-      container: container || containerRef.value || undefined,
-      elements: [],
-      minZoom: GraphConstants.ZOOM_MIN, maxZoom: GraphConstants.ZOOM_MAX,
-      userZoomingEnabled: false,
-      userPanningEnabled: false,
-      boxSelectionEnabled: true,
-      selectionType: 'additive',
-      style: cloneGraphStyle(),
-    })
-
-    return instance
-  }
-
   function initCy() {
     if (!containerRef.value) return
     const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath || '__root__'
@@ -119,11 +87,11 @@ export function useGraph(containerRef) {
       cyManager.remove(key)
     }
 
-    const instance = _createCyInstance(containerRef.value)
+    const instance = createCyInstance(containerRef.value)
     cyManager.create(key, instance)
     const ctx = cyManager.activate(key, containerRef.value)
     cy.value = instance
-    _setupHtmlLabels(instance)
+    setupHtmlLabels(instance)
     _bindCyEvents(instance)
     dom.cleanupDOMEventsExcept(instance)
     dom.bindDOMEvents(instance)
@@ -147,12 +115,12 @@ export function useGraph(containerRef) {
     await storage.ensureCardDir(dirPath)
 
     try {
-      const instance = _createCyInstance(containerRef.value)
+      const instance = createCyInstance(containerRef.value)
       cyManager.create(key, instance)
       const ctx = cyManager.activate(key, containerRef.value)
       cy.value = instance
       const cyInst = instance
-      _setupHtmlLabels(cyInst)
+      setupHtmlLabels(cyInst)
       _bindCyEvents(cyInst)
       dom.bindDOMEvents(cyInst)
       if (ctx) cyManager.markEventsBound(key, true)
@@ -170,16 +138,7 @@ export function useGraph(containerRef) {
       if (loadSeq !== _loadRoomSeq) return
       const meta = normalizeMeta(metaRaw)
       currentMeta.value = meta
-      const cards = Array.isArray(cardsRaw)
-        ? cardsRaw.filter((card) => card && typeof card === 'object' && card.path)
-        : []
-      const uniqueCards = []
-      const seenCardPaths = new Set()
-      for (const card of cards) {
-        if (seenCardPaths.has(card.path)) continue
-        seenCardPaths.add(card.path)
-        uniqueCards.push(card)
-      }
+      const uniqueCards = deduplicateCards(cardsRaw)
       const children = meta.children
       const edges = meta.edges
 
@@ -205,51 +164,18 @@ export function useGraph(containerRef) {
 
       // 添加节点
       uniqueCards.forEach((card) => {
-        const legacyKey = (typeof card.name === 'string' && card.name.trim()) ? card.name : null
+        const legacyKey = card.name?.trim() || null
         const saved = children[card.path] || (legacyKey ? children[legacyKey] : null) || {}
-        const displayName = (typeof saved.name === 'string' && saved.name.trim())
-          ? saved.name
-          : ((typeof card.name === 'string' && card.name.trim()) ? card.name : (card.path.split('/').pop() || '未命名卡片'))
-
-        const data = {
-          id: card.path,
-          label: displayName,
-          cardPath: card.path,
-          color: saved.color || '',
-          fontColor: saved.fontColor || '',
-          fontSize: saved.fontSize || 0,
-          fontStyle: saved.fontStyle || '',
-          textAlign: saved.textAlign || '',
-          textWrap: saved.textWrap !== undefined ? saved.textWrap : true,
-          nodeWidth: saved.nodeWidth || '',
-          nodeHeight: saved.nodeHeight || '',
-          borderColor: saved.borderColor || '',
-          borderWidth: saved.borderWidth || 0,
-          nodeShape: saved.nodeShape || '',
-          nodeOpacity: saved.nodeOpacity != null ? saved.nodeOpacity : 1,
-        }
+        const data = buildCardData(card, saved)
         const ele = cy.value.add({ group: 'nodes', data, classes: 'card' })
-        _applyNodeStyle(ele, data, saved)
+        applyNodeStyle(ele, data, saved)
       })
 
       // 添加边
-      const seenEdgeIds = new Set()
-      edges.forEach((e) => {
-        if (!e) return
-        const source = e.source || e.from
-        const target = e.target || e.to
-        if (!source || !target) return
-        const edgeId = e.id || _autoEdgeId()
-        if (seenEdgeIds.has(edgeId)) return
+      deduplicateEdges(edges, (edgeData) => {
+        const { source, target } = edgeData
         if (cy.value.getElementById(source).length && cy.value.getElementById(target).length) {
-          seenEdgeIds.add(edgeId)
-          cy.value.add({ group: 'edges', data: {
-            id: edgeId,
-            source,
-            target,
-            relation: e.relation || '相关',
-            weight: e.weight || 'minor',
-          }})
+          cy.value.add({ group: 'edges', data: edgeData })
         }
       })
 
@@ -264,7 +190,7 @@ export function useGraph(containerRef) {
     const keepZoom = cy.value.zoom()
 
     if (loadSeq !== _loadRoomSeq) return
-    if (!hasSavedPositions && cards.length > 0) {
+    if (!hasSavedPositions && uniqueCards.length > 0) {
       cy.value.nodes().layout({
         name: 'elk',
         elk: {
@@ -304,7 +230,7 @@ export function useGraph(containerRef) {
     }
 
       // 异步加载节点徽标数据
-      _loadNodeBadges(cards)
+      loadNodeBadges(cy.value, storage)
       cyManager.markLoaded(key, true)
 
       // 从 localStorage 恢复选中的节点（仅当节点在当前房间中存在）
@@ -325,105 +251,11 @@ export function useGraph(containerRef) {
     }
   }
 
-  function _applyNodeStyle(ele, data, saved) {
-    if (data.color) ele.style('background-color', data.color)
-    if (data.fontColor) ele.style('color', data.fontColor)
-    if (data.fontSize) ele.style('font-size', data.fontSize + 'px')
-    if (data.fontStyle) {
-      const styles = data.fontStyle.split(' ')
-      if (styles.includes('bold')) ele.style('font-weight', 'bold')
-      if (styles.includes('italic')) ele.style('font-style', 'italic')
-    }
-    if (data.textAlign) ele.style('text-halign', data.textAlign)
-    if (!data.textWrap) ele.style('text-wrap', 'none')
-    if (data.nodeWidth) {
-      ele.style('width', data.nodeWidth + 'px')
-      ele.style('text-max-width', data.nodeWidth + 'px')
-    }
-    if (data.nodeHeight) ele.style('height', data.nodeHeight + 'px')
-    if (data.borderColor) ele.style('border-color', data.borderColor)
-    if (data.borderWidth) ele.style('border-width', data.borderWidth + 'px')
-    if (data.nodeShape) ele.style('shape', data.nodeShape)
-
-    if (data.nodeOpacity != null && data.nodeOpacity !== 1) {
-      ele.style('opacity', data.nodeOpacity)
-    }
-    if (saved.posX !== undefined && saved.posY !== undefined) {
-      ele.position({ x: saved.posX, y: saved.posY })
-    }
-  }
-
-  async function _loadNodeBadges() {
-    if (!cy.value) return
-
-    const nodeIds = cy.value.nodes().map(n => n.id())
-    await Promise.all(nodeIds.map(async (id) => {
-      const [children, md] = await Promise.all([
-        storage.listCards(id).catch((e) => { logger.catch('useGraph', 'listCards', e); return [] }),
-        storage.readMarkdown(id).catch((e) => { logger.catch('useGraph', 'readMarkdown', e); return '' }),
-      ])
-      const node = cy.value?.getElementById(id)
-      if (!node?.length) return
-
-      const childCount = children.length
-      const hasDoc = !!(md && md.trim().length > 0)
-
-      node.data('childCount', childCount)
-      node.data('hasDoc', hasDoc)
-    }))
-  }
-
   // ─── 布局保存 ────────────────────────────────────────────────
-  async function buildCurrentMetaFor(dirPath) {
-    if (!cy.value || !dirPath) return null
-
-    const children = {}
-    cy.value.nodes().forEach(n => {
-      const d = n.data()
-      const pos = n.position()
-      children[d.cardPath || d.id] = {
-        name: d.label,
-        color: d.color || undefined,
-        fontColor: d.fontColor || undefined,
-        fontSize: d.fontSize || undefined,
-        fontStyle: d.fontStyle || undefined,
-        textAlign: d.textAlign || undefined,
-        textWrap: d.textWrap !== false ? undefined : false,
-        nodeWidth: d.nodeWidth || undefined,
-        nodeHeight: d.nodeHeight || undefined,
-        borderColor: d.borderColor || undefined,
-        borderWidth: d.borderWidth || undefined,
-        nodeShape: d.nodeShape || undefined,
-        nodeOpacity: d.nodeOpacity !== 1 ? d.nodeOpacity : undefined,
-        posX: pos.x,
-        posY: pos.y,
-      }
-    })
-
-    const edges = cy.value.edges().map(e => ({
-      id: e.id(),
-      source: e.data('source'),
-      target: e.data('target'),
-      relation: e.data('relation'),
-      weight: e.data('weight'),
-    }))
-
-    const viewport = { zoom: cy.value.zoom(), pan: cy.value.pan() }
-
-    return {
-      ...(currentMeta.value || {}),
-      children,
-      edges,
-      zoom: viewport.zoom,
-      pan: viewport.pan,
-      canvasBounds: _grid?.getCanvasBounds(),
-    }
-  }
-
   async function saveCurrentLayout(targetDirPath = null) {
     const dirPath = targetDirPath || roomStore.currentRoomPath || roomStore.currentKBPath
     if (!dirPath) return
-    const meta = await buildCurrentMetaFor(dirPath)
+    const meta = buildCurrentMeta(cy.value, currentMeta.value, _grid)
     if (!meta) return
     await storage.flushGraphSave(dirPath, () => meta)
     if (roomStore.currentKBPath) {
@@ -436,7 +268,7 @@ export function useGraph(containerRef) {
     if (!dirPath) return
 
     // 关键：在调度时就冻结快照，避免切房间后把新房间布局误写回旧房间
-    const metaSnapshot = await buildCurrentMetaFor(dirPath)
+    const metaSnapshot = buildCurrentMeta(cy.value, currentMeta.value, _grid)
     if (!metaSnapshot) return
     storage.saveGraphDebounced(dirPath, () => metaSnapshot)
   }
@@ -570,7 +402,7 @@ export function useGraph(containerRef) {
       cy.value.add({
         group: 'edges',
         data: {
-          id: _autoEdgeId(),
+          id: autoEdgeId(),
           source: sourceId,
           target: targetId,
           relation,
@@ -741,19 +573,12 @@ export function useGraph(containerRef) {
     }
   }
 
-  // ─── 节点样式更新（供 StylePanel 调用） ─────────────────────
-  // ─── 强制刷新 HTML 标签（style 变更后调用）─────
+  // 强制刷新 HTML 标签（style 变更后调用）
   // cytoscape-node-html-label 插件通过 'data'/'style' 事件更新标签，
   // 但由于 _setupHtmlLabels 可能被多次调用产生多套事件处理器，
   // 故在样式变更后显式触发 'data' 事件确保标签刷新。
   function _refreshHtmlLabels(targetNodes) {
-    if (!cy.value) return
-    const nodes = targetNodes || cy.value.nodes()
-    nodes.forEach((n) => {
-      if (n.isNode() && n.hasClass('card')) {
-        try { n.emit('data') } catch (e) { logger.warn('useGraph', 'emit data event', e) }
-      }
-    })
+    refreshHtmlLabels(cy.value, targetNodes)
   }
 
   function updateNodeStyle(nodeId, styles) {
@@ -764,38 +589,7 @@ export function useGraph(containerRef) {
     const targets = selected.length > 1 ? selected : fallback
     if (!targets.length) return
 
-    targets.forEach((node) => {
-      Object.entries(styles).forEach(([key, value]) => {
-        node.data(key, value)
-        // 映射到 Cytoscape 样式
-        const styleMap = {
-          color: () => node.style('background-color', value),
-          fontColor: () => node.style('color', value),
-          fontSize: () => node.style('font-size', value + 'px'),
-          textAlign: () => node.style('text-halign', value),
-          nodeWidth: () => { node.style('width', value ? value + 'px' : 'auto'); node.style('text-max-width', value ? value + 'px' : '100px') },
-          nodeHeight: () => node.style('height', value ? value + 'px' : 'auto'),
-          borderColor: () => {
-            node.style('border-color', value)
-            // Ensure border is visible when color changes (need width > 0)
-            const bw = parseFloat(node.style('border-width')) || 0
-            if (bw === 0) node.style('border-width', '1px')
-          },
-          borderWidth: () => {
-            node.style('border-width', value + 'px')
-            // Sync border color so width change is immediately visible
-            const bc = node.data('borderColor')
-            if (bc) node.style('border-color', bc)
-          },
-          nodeShape: () => node.style('shape', value),
-          nodeOpacity: () => node.style('opacity', value),
-        }
-        styleMap[key]?.()
-      })
-    })
-
-    // 强制刷新 HTML 标签
-    _refreshHtmlLabels(targets)
+    applyNodeStyleToCy(cy.value, targets, styles, _refreshHtmlLabels)
 
     saveCurrentLayoutDebounced()
   }
@@ -808,18 +602,7 @@ export function useGraph(containerRef) {
     const targets = selected.length > 1 ? selected : fallback
     if (!targets.length) return
 
-    targets.forEach((node) => {
-      let current = (node.data('fontStyle') || '').split(' ').filter(Boolean)
-      if (active) { if (!current.includes(style)) current.push(style) }
-      else current = current.filter(s => s !== style)
-      const fontStyle = current.join(' ')
-      node.data('fontStyle', fontStyle)
-      node.style('font-weight', current.includes('bold') ? 'bold' : 'normal')
-      node.style('font-style', current.includes('italic') ? 'italic' : 'normal')
-    })
-
-    // 强制刷新 HTML 标签
-    _refreshHtmlLabels(targets)
+    applyFontStyleToCy(cy.value, targets, style, active, _refreshHtmlLabels)
 
     saveCurrentLayoutDebounced()
   }
@@ -827,10 +610,7 @@ export function useGraph(containerRef) {
   // 批量改色
   function batchSetColor(color) {
     if (!cy.value) return
-    cy.value.nodes(':selected').forEach(node => {
-      node.data('color', color)
-      node.style('background-color', color)
-    })
+    applyBatchColorToCy(cy.value, cy.value.nodes(':selected'), color)
     saveCurrentLayoutDebounced()
   }
 
@@ -881,12 +661,6 @@ export function useGraph(containerRef) {
       try { n.emit('data') } catch (e) { logger.warn('useGraph', 'emit data event', e) }
     }).catch((e) => { logger.catch('useGraph', 'updateNodeHasDoc', e) })
   }
-  let _edgeCounter = 0
-  function _autoEdgeId() {
-    // 数值达到上限时重置（防溢出）
-    if (_edgeCounter > 9999) _edgeCounter = 0
-    return `e-${Date.now()}-${_edgeCounter++}`
-  }
 
   // 注入外部 composable
   function setGrid(g) { _grid = g }
@@ -898,7 +672,7 @@ export function useGraph(containerRef) {
     searchQuery,
     initCy,
     loadRoom,
-    buildCurrentMeta: () => buildCurrentMetaFor(roomStore.currentRoomPath || roomStore.currentKBPath),
+    buildCurrentMeta: () => buildCurrentMeta(cy.value, currentMeta.value, _grid),
     saveCurrentLayout,
     drillInto,
     goBack,
