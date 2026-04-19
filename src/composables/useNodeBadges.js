@@ -3,8 +3,9 @@
  * 节点徽标层 + 文档预览 Tooltip
  * 完整迁移自 badges.js
  */
-import { onUnmounted } from 'vue'
+import { onScopeDispose, getCurrentScope } from 'vue'
 import { useStorage } from '@/composables/useStorage'
+import { logger } from '@/core/logger.js'
 
 export function useNodeBadges(layerRef, tooltipRef, getCy) {
   const storage = useStorage()
@@ -13,6 +14,8 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
   let _mouseX = 0, _mouseY = 0
   let _boundCy = null
   let _cyHandlers = []
+  let _lastMoveTime = 0
+  const MOVE_THROTTLE_MS = 50
 
   // ─── 初始化（cy 就绪后调用）────────────────────────────────
   function init() {
@@ -120,7 +123,7 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
       try {
         if (selector) _boundCy.off(eventName, selector, handler)
         else _boundCy.off(eventName, handler)
-      } catch (e) { console.warn('[useNodeBadges] 解除事件绑定失败:', e) }
+      } catch (e) { logger.warn('useNodeBadges', '解除事件绑定失败:', e) }
     })
     _cyHandlers = []
     _boundCy = null
@@ -172,7 +175,7 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
       const text = (md || '').replace(/^#+\s+.*/gm, '').replace(/[*_`>#\-\[\]]/g, '').trim()
       ttBody.textContent = text.slice(0, 150) + (text.length > 150 ? '…' : '')
     }).catch((e) => {
-      console.warn('[useNodeBadges] 读取文档失败:', cardPath, e)
+      logger.warn('useNodeBadges', '读取文档失败:', cardPath, e)
       if (ttBody) ttBody.textContent = ''
     })
   }
@@ -195,16 +198,23 @@ export function useNodeBadges(layerRef, tooltipRef, getCy) {
   function _onMouseMove(e) {
     _mouseX = e.clientX
     _mouseY = e.clientY
+    // 节流：tooltip 可见时才更新位置，避免每像素都重绘
     const tt = tooltipRef?.value
-    if (tt?.classList.contains('visible')) _positionTooltip()
+    if (!tt?.classList.contains('visible')) return
+    const now = Date.now()
+    if (now - _lastMoveTime < MOVE_THROTTLE_MS) return
+    _lastMoveTime = now
+    _positionTooltip()
   }
 
-  onUnmounted(() => {
-    _unbindCyEvents()
-    document.removeEventListener('mousemove', _onMouseMove)
-    clearTimeout(_hoverTimer)
-    clearTimeout(_hideTimer)
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      _unbindCyEvents()
+      document.removeEventListener('mousemove', _onMouseMove)
+      clearTimeout(_hoverTimer)
+      clearTimeout(_hideTimer)
+    })
+  }
 
   return { init, update, clear }
 }

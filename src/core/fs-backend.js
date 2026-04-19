@@ -1,3 +1,5 @@
+import { logger } from './logger.js'
+
 /**
  * 文件系统存储后端（Electron 端）ES Module 版本
  * 通过 window.electronAPI (IPC) 调用 Node.js fs
@@ -7,7 +9,7 @@ const getApi = () => window.electronAPI
 const _call = (channel, ...args) => {
   const api = getApi()
   if (!api) {
-    console.warn(`[FSB] IPC API 未就绪，无法调用 ${channel}`)
+    logger.catch('FSB', `IPC API 未就绪，无法调用 ${channel}`)
     return Promise.reject(new Error(`IPC API 未就绪: ${channel}`))
   }
   return api.invoke(channel, ...args)
@@ -16,15 +18,19 @@ const _call = (channel, ...args) => {
 export const FSB = {
   open: () => _call('fs:init'),
   clearAll: () => _call('fs:clearAll'),
+  initWorkDir: () => _call('fs:init'),
 
   listChildren: (parentPath) => _call('fs:listChildren', parentPath),
   mkDir: (dirPath, meta) => _call('fs:mkDir', dirPath, meta || {}),
   rmDir: (dirPath) => _call('fs:rmDir', dirPath),
-  readMeta: (dirPath) => _call('fs:readMeta', dirPath),
-  writeMeta: (dirPath, meta) => _call('fs:writeMeta', dirPath, meta),
+  saveKBOrder: (kbPath, order) => _call('fs:saveKBOrder', kbPath, order),
+  getKBCover: (kbPath) => _call('fs:getKBCover', kbPath),
+  saveKBCover: (kbPath, coverPath) => _call('fs:saveKBCover', kbPath, coverPath),
+  renameKB: (kbPath, newName) => _call('fs:renameKB', kbPath, newName),
   readGraphMeta: (dirPath) => _call('fs:readGraphMeta', dirPath),
   writeGraphMeta: (dirPath, meta) => _call('fs:writeGraphMeta', dirPath, meta),
   getDir: (dirPath) => _call('fs:getDir', dirPath),
+  updateCardMeta: (cardPath, newName) => _call('fs:updateCardMeta', cardPath, newName),
 
   readFile: (filePath) => _call('fs:readFile', filePath),
   writeFile: (filePath, content) => _call('fs:writeFile', filePath, content),
@@ -35,8 +41,10 @@ export const FSB = {
   readBlobFile: (filePath) =>
     _call('fs:readBlobFile', filePath).then(ab => ab ? new Blob([ab]) : null),
 
-  selectDir: () => _call('fs:selectDir'),
-  selectExistingKB: () => _call('fs:selectExistingKB'),
+  selectExistingWorkDir: (dirPath) => _call('fs:selectExistingWorkDir', dirPath),
+  ensureCardDir: (cardPath) => _call('fs:ensureCardDir', cardPath),
+  selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate'),
+  createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath),
   importKB: (sourcePath) => _call('fs:importKB', sourcePath),
   openInFinder: (p) => _call('fs:openInFinder', p),
   countChildren: (p) => _call('fs:countChildren', p),

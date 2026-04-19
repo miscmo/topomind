@@ -1,6 +1,6 @@
 <!-- 左侧样式面板：节点样式编辑 -->
 <template>
-  <div id="nav-panel">
+  <div id="style-panel">
     <div id="style-panel-header">
       <div class="sp-header-actions">
         <button class="sp-header-btn" @click="resetAllStyles" title="恢复全部默认">重置</button>
@@ -171,7 +171,7 @@ const borderColorInput = ref(null)
 
 const props = defineProps({
   selectedNodeId: { type: String, default: null },
-  cy: { type: Object, default: null },
+  cy: { type: [Object, null], default: null },
 })
 const emit = defineEmits(['collapse', 'update-style', 'update-font-style'])
 
@@ -195,9 +195,9 @@ const recentFontColors = reactive([])
 
 function clearRecentColors(key) {
   if (key === 'fontColor') {
-    recentFontColors.splice(0, recentFontColors.length)
+    recentFontColors.length = 0
   } else {
-    recentBgColors.splice(0, recentBgColors.length)
+    recentBgColors.length = 0
   }
 }
 
@@ -264,7 +264,6 @@ function normalizeBorderWidth(value) {
 
 function stepFontSize(delta) {
   const next = clampFontSize((Number(styles.fontSize) || 12) + delta)
-  styles.fontSize = next
   applyStyle('fontSize', next)
 }
 
@@ -338,9 +337,8 @@ function resetAllStyles() {
 function toggleFontStyle(style) {
   const parts = styles.fontStyle.split(' ').filter(Boolean)
   const idx = parts.indexOf(style)
-  if (idx >= 0) parts.splice(idx, 1)
-  else parts.push(style)
-  styles.fontStyle = parts.join(' ')
+  const newParts = idx >= 0 ? parts.filter((_, i) => i !== idx) : [...parts, style]
+  styles.fontStyle = newParts.join(' ')
   emit('update-font-style', props.selectedNodeId, style, idx < 0)
 }
 </script>

@@ -3,58 +3,6 @@
  * 包含：状态徽标、Commit 面板、Diff 查看器、远程设置、冲突解决
  */
 
-/* ===== 状态徽标 ===== */
-
-.git-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.5;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
-  white-space: nowrap;
-  user-select: none;
-  border: none;
-  outline: none;
-}
-.git-badge:hover { opacity: 0.82; transform: scale(1.04); }
-.git-badge:active { transform: scale(0.97); }
-
-.git-badge--uninit    { background: #e9ecef; color: #6c757d; }
-.git-badge--dirty     { background: #fff3cd; color: #856404; }
-.git-badge--clean     { background: #d1e7dd; color: #0a3622; }
-.git-badge--ahead     { background: #cfe2ff; color: #084298; }
-.git-badge--behind    { background: #fff3cd; color: #664d03; }
-.git-badge--diverged  { background: #e2d9f3; color: #432874; }
-.git-badge--conflict  { background: #f8d7da; color: #842029; }
-.git-badge--no-remote { background: #e9ecef; color: #6c757d; }
-.git-badge--unavailable { background: #e9ecef; color: #adb5bd; cursor: default; }
-
-/* 首页卡片上的徽标容器 */
-.home-card .git-status-badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 3;
-}
-
-/* 工具栏 Git 按钮红点 */
-#btn-git-status { position: relative; }
-#btn-git-status .git-dot {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 7px;
-  height: 7px;
-  background: #e8913a;
-  border-radius: 50%;
-  border: 1.5px solid #fff;
-}
-
 /* ===== 通用 Git Modal 样式 ===== */
 
 .git-modal-overlay {
@@ -313,7 +261,7 @@
 .git-diff-line--del .git-diff-line-content { color: #b91c1c; }
 .git-diff-line--ctx .git-diff-line-content { color: #374151; }
 
-/* 友好视图（_meta.json） */
+/* 友好视图（_graph.json） */
 .git-meta-friendly {
   padding: 10px 16px;
   font-size: 12px;

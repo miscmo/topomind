@@ -8,12 +8,16 @@ const { contextBridge, ipcRenderer } = require('electron');
 const ALLOWED_CHANNELS = new Set([
   // fs
   'fs:init', 'fs:listChildren', 'fs:mkDir', 'fs:rmDir',
-  'fs:readMeta', 'fs:writeMeta', 'fs:readGraphMeta', 'fs:writeGraphMeta', 'fs:getDir',
+  'fs:readGraphMeta', 'fs:writeGraphMeta', 'fs:getDir',
+  'fs:updateCardMeta', 'fs:saveKBOrder',
+  'fs:getKBCover', 'fs:saveKBCover', 'fs:renameKB',
   'fs:readFile', 'fs:writeFile', 'fs:deleteFile',
   'fs:writeBlobFile', 'fs:readBlobFile', 'fs:clearAll',
   'fs:openInFinder', 'fs:countChildren',
+  'fs:ensureCardDir',
   'fs:getRootDir',
   'fs:getLastOpenedKB', 'fs:setLastOpenedKB',
+  'fs:selectExistingWorkDir', 'fs:selectWorkDirCandidate', 'fs:createWorkDir', 'fs:importKB',
   // git: basic
   'git:checkAvailable', 'git:init', 'git:status',
   'git:statusBatch', 'git:isDirty',

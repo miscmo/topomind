@@ -1,3 +1,5 @@
+import { logger } from './logger.js'
+
 /**
  * Git IPC 前端调用封装 - ES Module 版本
  */
@@ -10,7 +12,7 @@ const getApi = () => window.electronAPI
 const _call = (channel, ...args) => {
   const api = getApi()
   if (!api) {
-    console.warn(`[GitBackend] IPC API 未就绪，无法调用 ${channel}`)
+    logger.catch('GitBackend', `IPC API 未就绪，无法调用 ${channel}`)
     return Promise.reject(new Error(`IPC API 未就绪: ${channel}`))
   }
   return api.invoke(channel, ...args)
@@ -50,6 +52,8 @@ const _cache = {}
 const _dirty = {}
 const _listeners = []
 const CACHE_TTL = 30000
+const MAX_CACHE_SIZE = 50
+const CLEANUP_INTERVAL = 60000 // 60s 定期清理过期条目
 
 export const GitCache = {
   markDirty(kbPath) {
@@ -66,8 +70,16 @@ export const GitCache = {
     _notify(kbPath)
   },
   setStatus(kbPath, status) {
+    if (!kbPath) return
     _cache[kbPath] = { status, timestamp: Date.now() }
     if (status.hasUncommitted || status.state === 'dirty') _dirty[kbPath] = true
+    // LRU eviction: trim to MAX_CACHE_SIZE when over limit
+    const keys = Object.keys(_cache)
+    if (keys.length > MAX_CACHE_SIZE) {
+      const sorted = keys.sort((a, b) => _cache[a].timestamp - _cache[b].timestamp)
+      const toRemove = sorted.slice(0, keys.length - MAX_CACHE_SIZE + 1)
+      toRemove.forEach(k => { delete _cache[k]; delete _dirty[k] })
+    }
     _notify(kbPath)
   },
   getStatus(kbPath) {
@@ -76,6 +88,7 @@ export const GitCache = {
   },
   invalidate(kbPath) {
     delete _cache[kbPath]
+    delete _dirty[kbPath]
   },
   isDirty(kbPath) {
     return !!_dirty[kbPath]
@@ -83,13 +96,44 @@ export const GitCache = {
   onStatusChange(fn) {
     _listeners.push(fn)
     return () => {
-      const idx = _listeners.indexOf(fn)
-      if (idx !== -1) _listeners.splice(idx, 1)
+      _listeners = _listeners.filter(cb => cb !== fn)
     }
   },
 }
 
 function _notify(kbPath) {
   const status = _cache[kbPath]?.status || null
-  _listeners.forEach(fn => { try { fn(kbPath, status) } catch (e) { console.warn('[GitCache] 监听器通知失败:', e) } })
+  _listeners.forEach(fn => { try { fn(kbPath, status) } catch (e) { logger.warn('GitBackend', '监听器通知失败:', e) } })
+}
+
+let _cleanupTimer = null
+
+function _cleanupExpired() {
+  const now = Date.now()
+  let cleaned = 0
+  for (const kbPath of Object.keys(_cache)) {
+    const entry = _cache[kbPath]
+    if (entry && now - entry.timestamp >= CACHE_TTL) {
+      delete _cache[kbPath]
+      delete _dirty[kbPath]
+      cleaned++
+    }
+  }
+  if (cleaned > 0) {
+    logger.debug('GitBackend', `_cleanupExpired 清理了 ${cleaned} 条过期缓存`)
+  }
+}
+
+export function startGitCacheCleanup() {
+  if (_cleanupTimer) return
+  _cleanupTimer = setInterval(_cleanupExpired, CLEANUP_INTERVAL)
+  logger.debug('GitBackend', 'GitCache 过期清理定时器已启动')
+}
+
+export function stopGitCacheCleanup() {
+  if (_cleanupTimer) {
+    clearInterval(_cleanupTimer)
+    _cleanupTimer = null
+    logger.debug('GitBackend', 'GitCache 过期清理定时器已停止')
+  }
 }

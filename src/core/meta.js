@@ -27,8 +27,6 @@ export function normalizeMeta(metaRaw) {
     .filter(Boolean)
 
   return {
-    name: (typeof meta.name === 'string' && meta.name.trim()) ? meta.name : '',
-    cover: (typeof meta.cover === 'string' && meta.cover.trim()) ? meta.cover : '',
     children: (meta.children && typeof meta.children === 'object' && !Array.isArray(meta.children)) ? meta.children : {},
     edges,
     zoom,

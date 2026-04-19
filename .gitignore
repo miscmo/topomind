@@ -1,6 +1,10 @@
+.claude/
 .DS_Store
 Thumbs.db
 *.log
 .codebuddy/
 node_modules/
 dist/
+dist-electron/
+docs/
+auto_tasks/

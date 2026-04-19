@@ -5,6 +5,7 @@
 import { useGitStore } from '@/stores/git'
 import { GitBackend, GitCache } from '@/core/git-backend.js'
 import { unwrapGitResult } from '@/core/git-result.js'
+import { logger } from '@/core/logger.js'
 
 export function useGit() {
   const gitStore = useGitStore()
@@ -19,7 +20,7 @@ export function useGit() {
       gitStore.setDirtyCount(normalized.hasUncommitted ? (normalized.dirtyFiles || 1) : 0)
       return normalized
     } catch (e) {
-      console.warn('[useGit] loadStatus 失败:', e)
+      logger.catch('useGit', 'loadStatus', e)
       return null
     }
   }
@@ -31,18 +32,23 @@ export function useGit() {
       gitStore.setCommitFiles(files)
       return files
     } catch (e) {
-      console.warn('[useGit] loadCommitFiles 失败:', e)
+      logger.catch('useGit', 'loadCommitFiles', e)
       gitStore.setCommitFiles([])
       return []
     }
   }
 
   async function doCommit(kbPath, msg) {
-    const res = await GitBackend.commit(kbPath, msg)
-    unwrapGitResult(res, { requireOk: true, errorMessage: '提交失败' })
-    GitCache.markClean(kbPath)
-    gitStore.setDirtyCount(0)
-    await loadStatus(kbPath)
+    try {
+      const res = await GitBackend.commit(kbPath, msg)
+      unwrapGitResult(res, { requireOk: true, errorMessage: '提交失败' })
+      GitCache.markClean(kbPath)
+      gitStore.setDirtyCount(0)
+      await loadStatus(kbPath)
+    } catch (e) {
+      logger.catch('useGit', 'doCommit', e)
+      throw e
+    }
   }
 
   async function doSync(kbPath, action) {
@@ -62,6 +68,7 @@ export function useGit() {
       }
     } catch (e) {
       gitStore.setSyncState('error', e.message || '操作失败', e?.code || '')
+      logger.catch('useGit', 'doSync', e)
     }
   }
 
@@ -71,6 +78,7 @@ export function useGit() {
       gitStore.setLogEntries(unwrapGitResult(res, { dataKey: 'commits', fallback: [] }))
     } catch (e) {
       gitStore.setLogEntries([])
+      logger.catch('useGit', '加载提交日志', e)
     }
   }
 
@@ -79,10 +87,36 @@ export function useGit() {
       const urlRes = await GitBackend.remoteGet(kbPath)
       const typeRes = await GitBackend.authGetType(kbPath)
       gitStore.setRemote(urlRes?.url || '', typeRes?.authType || 'token')
-    } catch (e) { console.warn('[useGit] loadRemote 失败:', e) }
+    } catch (e) { logger.catch('useGit', 'loadRemote 失败', e) }
   }
 
+/** 验证 Git 远程 URL 格式（支持 HTTPS 和 SSH） */
+function isValidGitRemoteUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  const trimmed = url.trim()
+  // HTTPS URL
+  if (trimmed.startsWith('https://') || trimmed.startsWith('http://')) {
+    try {
+      const parsed = new URL(trimmed)
+      return parsed.hostname.length > 0 && parsed.pathname.length > 1
+    } catch { return false }
+  }
+  // SSH URL: git@host:path
+  if (/^git@[a-z0-9.-]+:.+$/i.test(trimmed)) return true
+  // SSH 协议: ssh://host/path
+  if (/^ssh:\/\//.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed)
+      return parsed.hostname.length > 0
+    } catch { return false }
+  }
+  return false
+}
+
   async function saveRemote(kbPath, url, token, authType) {
+    if (url && !isValidGitRemoteUrl(url)) {
+      throw new Error('无效的远程仓库 URL，请输入 https://... 或 git@host:path 格式的地址')
+    }
     try {
       unwrapGitResult(await GitBackend.remoteSet(kbPath, url), { requireOk: true, errorMessage: '保存远程地址失败' })
       unwrapGitResult(await GitBackend.authSetType(kbPath, authType), { requireOk: true, errorMessage: '保存认证方式失败' })
@@ -90,7 +124,7 @@ export function useGit() {
         unwrapGitResult(await GitBackend.authSetToken(kbPath, token), { requireOk: true, errorMessage: '保存 Token 失败' })
       }
     } catch (e) {
-      console.warn('[useGit] saveRemote 失败:', e)
+      logger.catch('useGit', 'saveRemote 失败', e)
     }
   }
 
@@ -98,7 +132,7 @@ export function useGit() {
     try {
       const res = await GitBackend.authGetSSHKey()
       gitStore.setSSHKey(res?.publicKey || '')
-    } catch (e) { console.warn('[useGit] loadSSHKey 失败:', e) }
+    } catch (e) { logger.catch('useGit', 'loadSSHKey 失败', e) }
   }
 
   async function loadConflicts(kbPath) {
@@ -114,7 +148,7 @@ export function useGit() {
     try {
       const res = await GitBackend.conflictShow(kbPath, file)
       gitStore.setConflictContent(file, res?.current || '')
-    } catch (e) { console.warn('[useGit] showConflict 失败:', e) }
+    } catch (e) { logger.catch('useGit', 'showConflict 失败', e) }
   }
 
   async function resolveConflict(kbPath, file, resolution) {
@@ -123,14 +157,18 @@ export function useGit() {
       // 从列表中移除已解决的文件
       gitStore.removeConflictFile(file)
     } catch (e) {
-      console.warn('[useGit] resolveConflict 失败:', e)
+      logger.catch('useGit', 'resolveConflict 失败', e)
     }
   }
 
   async function completeConflict(kbPath) {
-    unwrapGitResult(await GitBackend.conflictComplete(kbPath), { requireOk: true, errorMessage: '完成冲突合并失败' })
-    gitStore.setConflictFiles([])
-    await loadStatus(kbPath)
+    try {
+      unwrapGitResult(await GitBackend.conflictComplete(kbPath), { requireOk: true, errorMessage: '完成冲突合并失败' })
+      gitStore.setConflictFiles([])
+      await loadStatus(kbPath)
+    } catch (e) {
+      logger.catch('useGit', 'completeConflict 失败', e)
+    }
   }
 
   // 批量获取多个知识库的 Git 状态（首页用）
@@ -139,6 +177,7 @@ export function useGit() {
       const res = await GitBackend.statusBatch(kbPaths)
       return (res && typeof res === 'object') ? res : {}
     } catch (e) {
+      logger.catch('useGit', 'statusBatch 失败', e)
       return {}
     }
   }

@@ -33,6 +33,8 @@ export const useRoomStore = defineStore('room', {
 
     /** 面包屑路径数组 [{ label, path }] */
     breadcrumbs: (state) => {
+      // 显式依赖 _pathNameMapVersion 以便在路径名缓存变更时重新计算
+      void state._pathNameMapVersion
       if (!state.currentKBPath) return []
       const crumbs = []
       const kbName = state.pathNameMap[state.currentKBPath] ||
@@ -69,14 +71,16 @@ export const useRoomStore = defineStore('room', {
 
     /** 钻入子房间 */
     drillInto(path) {
-      this.roomHistory.push(this.currentRoomPath)
+      this.roomHistory = [...this.roomHistory, this.currentRoomPath]
       this.currentRoomPath = path
     },
 
     /** 返回上一层 */
     goBack() {
       if (this.roomHistory.length > 0) {
-        this.currentRoomPath = this.roomHistory.pop()
+        const last = this.roomHistory[this.roomHistory.length - 1]
+        this.roomHistory = this.roomHistory.slice(0, -1)
+        this.currentRoomPath = last
       }
     },
 
@@ -98,6 +102,12 @@ export const useRoomStore = defineStore('room', {
       this._pathNameMapVersion++
     },
 
+    /** 移除路径的显示名称缓存 */
+    removePathName(path) {
+      delete this.pathNameMap[path]
+      this._pathNameMapVersion++
+    },
+
     // ─── 标签页管理 ──────────────────────────────────────────
 
     /** 打开或切换到一个知识库标签页 */
@@ -108,7 +118,7 @@ export const useRoomStore = defineStore('room', {
         return existing.id
       }
       const id = `tab-${Date.now()}`
-      this.tabs.push({
+      const newTab = {
         id,
         kbPath,
         label: label || kbPath.split('/').pop(),
@@ -123,18 +133,20 @@ export const useRoomStore = defineStore('room', {
           detailPanelWidth: 420,
           searchQuery: '',
         },
-      })
+      }
+      this.tabs = [...this.tabs, newTab]
       this.switchTab(id)
       return id
     },
 
     /** 切换标签页 */
     switchTab(tabId) {
-      // 保存当前标签页状态
+      // 保存当前标签页状态（不可变更新）
       const current = this.tabs.find(t => t.id === this.activeTabId)
       if (current) {
-        current.roomPath = this.currentRoomPath
-        current.roomHistory = [...this.roomHistory]
+        this.tabs = this.tabs.map(t => t.id === current.id
+          ? { ...t, roomPath: this.currentRoomPath, roomHistory: [...this.roomHistory] }
+          : t)
       }
       // 恢复目标标签页状态
       const target = this.tabs.find(t => t.id === tabId)
@@ -150,7 +162,7 @@ export const useRoomStore = defineStore('room', {
     closeTab(tabId) {
       const idx = this.tabs.findIndex(t => t.id === tabId)
       if (idx === -1) return
-      this.tabs.splice(idx, 1)
+      this.tabs = this.tabs.filter((_, i) => i !== idx)
       if (this.activeTabId === tabId) {
         if (this.tabs.length > 0) {
           const next = this.tabs[Math.max(0, idx - 1)]

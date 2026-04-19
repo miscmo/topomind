@@ -120,12 +120,14 @@ import { useGraph } from '@/composables/useGraph'
 import { useGrid } from '@/composables/useGrid'
 import { useResizeDrag } from '@/composables/useResizeDrag'
 import { useStorage, saveIndicatorVisible, saveFailed } from '@/composables/useStorage'
+import { usePanelState } from '@/composables/usePanelState.js'
 
 import StylePanel from '@/components/StylePanel.vue'
 import DetailPanel from '@/components/DetailPanel.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import GitPanel from '@/components/GitPanel.vue'
+import { logger } from '@/core/logger.js'
 
 
 const appStore = useAppStore()
@@ -162,143 +164,11 @@ const zoomIndicatorStyle = computed(() => ({
 const initPhase = ref('idle') // idle | engine | decorators | room | ready | error
 const initError = ref('')
 
-const STYLE_WIDTH_MIN = 300
-const STYLE_WIDTH_MAX = 420
-const DETAIL_WIDTH_MIN = 260
-const DETAIL_WIDTH_MAX = 860
-
-function detailWidthKeyForKB(kbPath) {
-  return kbPath ? `topomind:detail-width:${kbPath}` : ''
-}
-
-function detailPanelStateKeyForKB(kbPath) {
-  return kbPath ? `topomind:detail-panel:${kbPath}` : ''
-}
-
-function clampPanelWidth(w, min, max, fallback) {
-  const n = Number(w)
-  if (!Number.isFinite(n)) return fallback
-  return Math.max(min, Math.min(max, Math.round(n)))
-}
-
-function clampDetailWidth(w) {
-  return clampPanelWidth(w, DETAIL_WIDTH_MIN, DETAIL_WIDTH_MAX, 420)
-}
-
-function clampStyleWidth(w) {
-  return clampPanelWidth(w, STYLE_WIDTH_MIN, STYLE_WIDTH_MAX, 300)
-}
-
-function readPersistedDetailWidthForKB(kbPath) {
-  const key = detailWidthKeyForKB(kbPath)
-  if (!key) return null
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw == null) return null
-    return clampDetailWidth(raw)
-  } catch (e) {
-    console.warn('[GraphView] 读取详情宽度失败:', e)
-    return null
-  }
-}
-
-function persistDetailWidthForKB(kbPath, width) {
-  const key = detailWidthKeyForKB(kbPath)
-  if (!key) return
-  try {
-    localStorage.setItem(key, String(clampDetailWidth(width)))
-  } catch (e) {
-    console.warn('[GraphView] 保存详情宽度失败:', e)
-  }
-}
-
-function persistDetailPanelStateForKB(kbPath, state) {
-  const key = detailPanelStateKeyForKB(kbPath)
-  if (!key) return
-  try {
-    localStorage.setItem(key, JSON.stringify(state))
-  } catch (e) {
-    console.warn('[GraphView] 保存详情面板状态失败:', e)
-  }
-}
-
-function readPersistedDetailPanelStateForKB(kbPath) {
-  const key = detailPanelStateKeyForKB(kbPath)
-  if (!key) return null
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw == null) return null
-    return JSON.parse(raw)
-  } catch (e) {
-    console.warn('[GraphView] 读取详情面板状态失败:', e)
-    return null
-  }
-}
-
 function saveUiToActiveTab(patch = {}) {
   const tab = roomStore.activeTab
   if (!tab) return
   if (!tab.ui) tab.ui = {}
   tab.ui = { ...tab.ui, ...patch }
-}
-
-function styleWidthKeyForKB(kbPath) {
-  return kbPath ? `topomind:style-width:${kbPath}` : ''
-}
-
-function readPersistedStyleWidthForKB(kbPath) {
-  const key = styleWidthKeyForKB(kbPath)
-  if (!key) return null
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw == null) return null
-    return clampStyleWidth(raw)
-  } catch (e) {
-    console.warn('[GraphView] 读取样式宽度失败:', e)
-    return null
-  }
-}
-
-function persistStyleWidthForKB(kbPath, width) {
-  const key = styleWidthKeyForKB(kbPath)
-  if (!key) return
-  try {
-    localStorage.setItem(key, String(clampStyleWidth(width)))
-  } catch (e) {
-    console.warn('[GraphView] 保存样式宽度失败:', e)
-  }
-}
-
-// 兼容旧全局 key 的迁移：首次读取时尝试从全局 key 读取并删除
-function readPersistedStyleWidth() {
-  // 优先读 KB 特定 key
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const kbVal = readPersistedStyleWidthForKB(kbPath)
-    if (kbVal !== null) return kbVal
-  }
-  // 兜底旧全局 key（仅首次，迁移后删除）
-  try {
-    const raw = localStorage.getItem('topomind:style-width')
-    if (raw == null) return null
-    const val = clampStyleWidth(raw)
-    // 迁移到 KB key 并删除旧 key
-    if (kbPath) {
-      persistStyleWidthForKB(kbPath, val)
-    }
-    localStorage.removeItem('topomind:style-width')
-    return val
-  } catch (e) {
-    console.warn('[GraphView] 读取样式宽度失败:', e)
-    return null
-  }
-}
-
-function persistStyleWidth(width) {
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    persistStyleWidthForKB(kbPath, width)
-  }
 }
 
 function syncUiFromActiveTab() {
@@ -309,20 +179,20 @@ function syncUiFromActiveTab() {
 
   // 详情面板状态优先从 localStorage 恢复（跨 tab 重启持久化），
   // 其次读 tab.ui，最后用默认值
-  const persistedDetailState = readPersistedDetailPanelStateForKB(roomStore.currentKBPath)
+  const persistedDetailState = panelState.readPersistedDetailPanelState()
 
   leftPanel.open = persistedDetailState?.leftPanelOpen ?? ui.leftPanelOpen ?? true
 
   detailPanel.open = persistedDetailState?.detailPanelOpen ?? ui.detailPanelOpen ?? true
 
-  const persistedStyleWidth = readPersistedStyleWidth()
+  const persistedStyleWidth = panelState.readPersistedStyleWidth()
   const restoredStyleWidth = persistedStyleWidth ?? ui.leftPanelWidth ?? leftPanelWidth.value
-  leftPanelWidth.value = clampStyleWidth(restoredStyleWidth)
+  leftPanelWidth.value = panelState.clampStyleWidth(restoredStyleWidth)
 
-  const persistedWidth = readPersistedDetailWidthForKB(roomStore.currentKBPath)
+  const persistedWidth = panelState.readPersistedDetailWidth()
   // 跨重启优先使用持久化宽度，避免 tab.ui 的默认值覆盖用户上次调整
   const restoredWidth = persistedWidth ?? ui.detailPanelWidth ?? detailPanelWidth.value
-  detailPanelWidth.value = clampDetailWidth(restoredWidth)
+  detailPanelWidth.value = panelState.clampDetailWidth(restoredWidth)
 
   // selectedNodeId 也优先从 localStorage 恢复（跨 tab 重启持久化）
   const restoredNodeId = persistedDetailState?.selectedNodeId ?? ui.selectedNodeId ?? null
@@ -335,6 +205,7 @@ function syncUiFromActiveTab() {
 }
 
 // ─── composables ────────────────────────────────────────────
+const panelState = usePanelState(() => roomStore.currentKBPath)
 const graph = useGraph(cyContainerRef)
 const grid = useGrid(gridCanvasRef, () => graph.cy.value)
 
@@ -353,11 +224,18 @@ onUnmounted(() => {
   document.removeEventListener('keydown', graph.handleKeydown)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   clearTimeout(_initGridTimer)
+  clearTimeout(_roomWatchTimer)
 })
 
-// 切换标签页时重新加载房间
+let _roomWatchTimer = null
+
+// 切换标签页时重新加载房间（带防抖）
 watch(() => roomStore.currentRoomPath, async (newPath) => {
-  if (newPath && graph.cy.value) {
+  if (!newPath || !graph.cy.value) return
+
+  // 清除之前的定时器
+  clearTimeout(_roomWatchTimer)
+  _roomWatchTimer = setTimeout(async () => {
     try {
       initPhase.value = 'room'
       await graph.loadRoom(newPath)
@@ -365,9 +243,9 @@ watch(() => roomStore.currentRoomPath, async (newPath) => {
     } catch (e) {
       initPhase.value = 'error'
       initError.value = e?.message || '切换房间失败'
-      console.warn('[GraphView] 切换房间加载失败:', newPath, e)
+      logger.warn('GraphView', '切换房间加载失败:', newPath, e)
     }
-  }
+  }, 300) // 防抖 300ms
 })
 
 watch(() => roomStore.activeTabId, () => {
@@ -376,44 +254,28 @@ watch(() => roomStore.activeTabId, () => {
 
 watch(() => leftPanel.open, (v) => {
   saveUiToActiveTab({ leftPanelOpen: !!v })
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
-    persistDetailPanelStateForKB(kbPath, { ...state, leftPanelOpen: !!v })
-  }
+  panelState.persistDetailPanelState({ leftPanelOpen: !!v })
 })
 
 watch(() => leftPanelWidth.value, (v) => {
-  saveUiToActiveTab({ leftPanelWidth: clampStyleWidth(v) })
-  persistStyleWidth(v)
+  saveUiToActiveTab({ leftPanelWidth: panelState.clampStyleWidth(v) })
+  panelState.persistStyleWidth(v)
 })
 
 watch(() => detailPanel.open, (v) => {
   saveUiToActiveTab({ detailPanelOpen: !!v })
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
-    persistDetailPanelStateForKB(kbPath, { ...state, detailPanelOpen: !!v })
-  }
+  panelState.persistDetailPanelState({ detailPanelOpen: !!v })
 })
 
 watch(() => detailPanelWidth.value, (v) => {
-  saveUiToActiveTab({ detailPanelWidth: clampDetailWidth(v) })
-  persistDetailWidthForKB(roomStore.currentKBPath, v)
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
-    persistDetailPanelStateForKB(kbPath, { ...state, detailPanelWidth: clampDetailWidth(v) })
-  }
+  saveUiToActiveTab({ detailPanelWidth: panelState.clampDetailWidth(v) })
+  panelState.persistDetailWidth(v)
+  panelState.persistDetailPanelState({ detailPanelWidth: panelState.clampDetailWidth(v) })
 })
 
 watch(() => appStore.selectedNodeId, (v) => {
   saveUiToActiveTab({ selectedNodeId: v || null })
-  const kbPath = roomStore.currentKBPath
-  if (kbPath) {
-    const state = readPersistedDetailPanelStateForKB(kbPath) || {}
-    persistDetailPanelStateForKB(kbPath, { ...state, selectedNodeId: v || null })
-  }
+  panelState.persistDetailPanelState({ selectedNodeId: v || null })
 })
 
 watch(() => appStore.edgeMode, (v) => {
@@ -455,11 +317,12 @@ async function initializeGraphView() {
   } catch (e) {
     initPhase.value = 'error'
     initError.value = e?.message || '初始化失败'
-    console.warn('[GraphView] mounted 初始化失败:', e)
+    logger.catch('GraphView', 'mounted 初始化', e)
   }
 }
 
 function retryInit() {
+  clearTimeout(_initGridTimer)
   if (graph.cy.value) {
     graph.cy.value.destroy()
     graph.cy.value = null
@@ -467,18 +330,22 @@ function retryInit() {
   initializeGraphView()
 }
 
+// 注意：beforeunload 是同步事件，浏览器不会等待 async/Promise 完成。
+// flushEdit() 和 saveLayout() 以 fire-and-forget 方式调用，数据最多丢失 1 秒（debouncedSave 间隔）。
+// 真正的安全网是 debouncedSave（每 1 秒自动保存）。
 async function handleBeforeUnload() {
   // 先保存正在编辑的 Markdown 内容
   detailPanelRef.value?.flushEdit()
   const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
   if (!dirPath) return
-  const meta = await graph.buildCurrentMeta()
-  if (meta) {
-    try {
-      storage.saveLayoutSync(dirPath, meta)
-    } catch (e) {
-      console.warn('[GraphView] 保存布局失败:', e)
+  try {
+    const meta = await graph.buildCurrentMeta()
+    if (meta) {
+      // 使用异步保存而非 sendSync，确保数据完整写入
+      storage.saveLayout(dirPath, meta)
     }
+  } catch (e) {
+    logger.catch('GraphView', '保存布局', e)
   }
 }
 
@@ -526,6 +393,12 @@ async function handleContextAction({ action, payload }) {
       if (ok) await graph.batchDelete(selected.map(n => n.id()))
       break
     }
+    case 'delete-all': {
+      const count = graph.cy.value?.nodes().length || 0
+      const ok = await modalStore.showConfirm(`确定删除当前房间的全部 ${count} 个节点？此操作不可撤销。`)
+      if (ok) await graph.deleteAllNodes()
+      break
+    }
     case 'batch-color':
       graph.batchSetColor(payload.color)
       break
@@ -551,12 +424,12 @@ function startStyleResize(e) {
     e,
     appLayoutRef.value,
     leftPanelWidth.value,
-    clampStyleWidth,
+    panelState.clampStyleWidth,
     (width) => Math.max(0, width),
     (width) => {
       leftPanelWidth.value = width
       saveUiToActiveTab({ leftPanelWidth: width })
-      persistStyleWidth(width)
+      panelState.persistStyleWidth(width)
     },
     styleResizeState,
     -1, // drag right = expand (clientX increases → width increases)
@@ -569,11 +442,11 @@ function startDetailResize(e) {
     e,
     container,
     detailPanelWidth.value,
-    clampDetailWidth,
+    panelState.clampDetailWidth,
     (width) => Math.max(0, container.getBoundingClientRect().width - width),
     (width) => {
       detailPanelWidth.value = width
-      persistDetailWidthForKB(roomStore.currentKBPath, width)
+      panelState.persistDetailWidth(width)
       saveUiToActiveTab({ detailPanelWidth: width })
     },
     detailResizeState,
@@ -668,200 +541,4 @@ function startDetailResize(e) {
   overflow-x: hidden;
 }
 
-/* Git inline mode - adjust modal styles */
-#left-panel-body :deep(.git-modal-overlay),
-#left-panel-body :deep(.git-modal-overlay.active) {
-  position: static;
-  width: auto;
-  height: auto;
-  background: transparent;
-  display: block;
-  visibility: visible;
-  opacity: 1;
-  overflow: hidden;
-}
-
-#left-panel-body :deep(.git-modal) {
-  position: static;
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
-  border: none;
-  box-shadow: none;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-#left-panel-body :deep(.git-modal-header) {
-  padding: 10px 12px;
-  flex-shrink: 0;
-}
-
-#left-panel-body :deep(.git-modal-header h3) {
-  font-size: 13px;
-}
-
-#left-panel-body :deep(.git-modal-close) {
-  width: 22px;
-  height: 22px;
-  font-size: 12px;
-}
-
-#left-panel-body :deep(.git-modal-body) {
-  flex: 1;
-  min-height: 0;
-  padding: 10px 12px;
-  overflow-y: auto;
-}
-
-#left-panel-body :deep(.git-modal-footer) {
-  padding: 8px 12px;
-  flex-shrink: 0;
-}
-
-#left-panel-body :deep(.git-action-grid) {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-#left-panel-body :deep(.git-action-btn) {
-  padding: 8px 6px;
-  font-size: 11px;
-  border-radius: 6px;
-}
-
-#left-panel-body :deep(.git-status-summary) {
-  margin-bottom: 10px;
-}
-
-#left-panel-body :deep(.git-status-state) {
-  font-size: 11px;
-  padding: 4px 8px;
-}
-
-#left-panel-body :deep(.git-btn) {
-  padding: 5px 12px;
-  font-size: 11px;
-  border-radius: 5px;
-}
-
-#left-panel-body :deep(.git-btn--primary) {
-  padding: 5px 12px;
-}
-
-#left-panel-body :deep(.git-form-group) {
-  margin-bottom: 10px;
-}
-
-#left-panel-body :deep(.git-form-label) {
-  font-size: 11px;
-  margin-bottom: 4px;
-}
-
-#left-panel-body :deep(.git-form-input) {
-  padding: 6px 10px;
-  font-size: 12px;
-  border-radius: 6px;
-}
-
-#left-panel-body :deep(.git-radio-group) {
-  font-size: 12px;
-}
-
-#left-panel-body :deep(.git-radio-group label) {
-  margin-right: 10px;
-}
-
-#left-panel-body :deep(.git-file-list) {
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-#left-panel-body :deep(.git-commit-msg-input) {
-  font-size: 12px;
-  min-height: 60px;
-  border-radius: 6px;
-  padding: 6px 10px;
-  resize: vertical;
-}
-
-#left-panel-body :deep(.git-diff-layout),
-#left-panel-body :deep(.git-conflict-layout) {
-  display: flex;
-  height: 100%;
-}
-
-#left-panel-body :deep(.git-diff-sidebar),
-#left-panel-body :deep(.git-conflict-sidebar) {
-  width: 120px;
-  flex-shrink: 0;
-  border-right: 1px solid #e8ecf0;
-  overflow-y: auto;
-  padding: 4px;
-}
-
-#left-panel-body :deep(.git-diff-main),
-#left-panel-body :deep(.git-conflict-main) {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-}
-
-#left-panel-body :deep(.git-log-item) {
-  padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  margin-bottom: 2px;
-}
-
-#left-panel-body :deep(.git-log-hash) {
-  font-size: 9px;
-  margin-bottom: 2px;
-}
-
-#left-panel-body :deep(.git-diff-content),
-#left-panel-body :deep(.git-conflict-content) {
-  padding: 8px;
-  font-size: 10px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-#left-panel-body :deep(.git-empty) {
-  padding: 12px;
-  font-size: 11px;
-  color: #aaa;
-}
-
-#left-panel-body :deep(.git-sync-summary) {
-  font-size: 12px;
-  padding: 8px 0;
-}
-
-#left-panel-body :deep(.git-conflict-actions) {
-  padding: 8px;
-  display: flex;
-  gap: 6px;
-}
-
-#left-panel-body :deep(.git-conflict-actions .git-btn) {
-  padding: 4px 10px;
-  font-size: 11px;
-}
-
-#left-panel-body :deep(.git-ssh-pubkey) {
-  font-size: 10px;
-  padding: 6px 8px;
-  word-break: break-all;
-  margin-top: 4px;
-}
-
-#left-panel-body :deep(.git-ssh-copy-btn) {
-  font-size: 10px;
-  padding: 3px 8px;
-  margin-top: 4px;
-}
 </style>

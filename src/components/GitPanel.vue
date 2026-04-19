@@ -371,6 +371,7 @@ import { useGitStore } from '@/stores/git'
 import { useRoomStore } from '@/stores/room'
 import { useGit } from '@/composables/useGit'
 import { GitBackend } from '@/core/git-backend.js'
+import { logger } from '@/core/logger.js'
 
 const props = defineProps({
   inline: { type: Boolean, default: false }
@@ -423,8 +424,8 @@ watch(() => gitStore.isOpen, async (open) => {
 }, { immediate: true })
 
 // 在 inline 模式下，切换到该 Tab 时自动打开
-watch(() => props.inline, (inline) => {
-  if (inline && !gitStore.isOpen) {
+watch(() => props.inline, (_inline) => {
+  if (props.inline && !gitStore.isOpen) {
     gitStore.openForKB(gitStore.kbPath || roomStore.currentKBPath || '')
   }
 })
@@ -463,7 +464,7 @@ async function doCommit() {
     activePanel.value = 'main'
     await refreshStatus()
   } catch (e) {
-    console.warn('[GitPanel] 提交失败:', e)
+    logger.catch('GitPanel', '提交', e)
   }
 }
 
@@ -525,7 +526,7 @@ async function saveRemote() {
     await git.saveRemote(kbPath, remoteForm.url, remoteForm.token, remoteForm.authType)
     activePanel.value = 'main'
   } catch (e) {
-    console.warn('[GitPanel] 保存远程配置失败:', e)
+    logger.catch('GitPanel', '保存远程配置', e)
   }
 }
 
@@ -553,7 +554,7 @@ async function resolveConflict(resolution) {
     if (!gitStore.currentConflictFile) return
     await git.resolveConflict(kbPath, gitStore.currentConflictFile, resolution)
   } catch (e) {
-    console.warn('[GitPanel] 解决冲突失败:', e)
+    logger.catch('GitPanel', '解决冲突', e)
   }
 }
 
@@ -564,7 +565,7 @@ async function completeConflict() {
     activePanel.value = 'main'
     await refreshStatus()
   } catch (e) {
-    console.warn('[GitPanel] 完成冲突合并失败:', e)
+    logger.catch('GitPanel', '完成冲突合并', e)
   }
 }
 
@@ -580,263 +581,3 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 </script>
-
-<style>
-/* 内联模式样式 */
-.git-inline-panel {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.git-panel-section {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
-.git-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 10px;
-  border-bottom: 1px solid #e8ecf0;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a3a5c;
-  flex-shrink: 0;
-}
-
-.git-inline-back {
-  border: none;
-  background: transparent;
-  color: #3498db;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.git-inline-back:hover {
-  background: #e8f4fc;
-}
-
-.git-panel-footer {
-  padding: 8px 10px;
-  border-top: 1px solid #e8ecf0;
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.git-inline-panel .git-status-summary {
-  margin-bottom: 8px;
-}
-
-.git-inline-panel .git-action-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
-}
-
-.git-inline-panel .git-action-btn {
-  padding: 8px 6px;
-  font-size: 11px;
-  border-radius: 6px;
-}
-
-.git-inline-panel .git-status-state {
-  font-size: 11px;
-  padding: 4px 8px;
-}
-
-.git-inline-panel .git-form-group {
-  margin-bottom: 8px;
-}
-
-.git-inline-panel .git-form-label {
-  font-size: 11px;
-  margin-bottom: 3px;
-  color: #7b8794;
-}
-
-.git-inline-panel .git-form-input {
-  padding: 6px 8px;
-  font-size: 12px;
-  border-radius: 6px;
-  border: 1px solid #e0e4ea;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.git-inline-panel .git-radio-group {
-  font-size: 12px;
-}
-
-.git-inline-panel .git-radio-group label {
-  margin-right: 8px;
-}
-
-.git-inline-panel .git-file-list {
-  max-height: 100px;
-  overflow-y: auto;
-  margin-bottom: 8px;
-}
-
-.git-inline-panel .git-commit-msg-input {
-  font-size: 12px;
-  min-height: 50px;
-  border-radius: 6px;
-  padding: 6px 8px;
-  resize: vertical;
-  border: 1px solid #e0e4ea;
-  width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 8px;
-}
-
-.git-inline-panel .git-diff-layout {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.git-inline-panel .git-diff-sidebar {
-  width: 100px;
-  flex-shrink: 0;
-  border-right: 1px solid #e8ecf0;
-  overflow-y: auto;
-  padding: 4px;
-}
-
-.git-inline-panel .git-diff-main {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 4px;
-}
-
-.git-inline-panel .git-log-item {
-  padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  margin-bottom: 2px;
-  cursor: pointer;
-}
-
-.git-inline-panel .git-log-item:hover {
-  background: #f0f2f5;
-}
-
-.git-inline-panel .git-log-item.active {
-  background: #e8f4fc;
-}
-
-.git-inline-panel .git-log-hash {
-  font-size: 9px;
-  color: #888;
-  margin-bottom: 2px;
-}
-
-.git-inline-panel .git-log-msg {
-  color: #333;
-  word-break: break-all;
-}
-
-.git-inline-panel .git-diff-content {
-  font-size: 10px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
-  padding: 4px;
-}
-
-.git-inline-panel .git-sync-summary {
-  padding: 8px 0;
-  font-size: 12px;
-  color: #333;
-}
-
-.git-inline-panel .git-conflict-layout {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.git-inline-panel .git-conflict-sidebar {
-  width: 80px;
-  flex-shrink: 0;
-  border-right: 1px solid #e8ecf0;
-  overflow-y: auto;
-  padding: 4px;
-}
-
-.git-inline-panel .git-conflict-main {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-}
-
-.git-inline-panel .git-conflict-file-item {
-  padding: 6px 8px;
-  font-size: 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  word-break: break-all;
-}
-
-.git-inline-panel .git-conflict-file-item:hover {
-  background: #f0f2f5;
-}
-
-.git-inline-panel .git-conflict-file-item.active {
-  background: #e8f4fc;
-}
-
-.git-inline-panel .git-conflict-actions {
-  padding: 6px;
-  display: flex;
-  gap: 6px;
-}
-
-.git-inline-panel .git-conflict-actions .git-btn {
-  padding: 4px 8px;
-  font-size: 11px;
-}
-
-.git-inline-panel .git-conflict-content {
-  padding: 8px;
-  font-size: 10px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.git-inline-panel .git-empty {
-  padding: 12px;
-  font-size: 11px;
-  color: #aaa;
-  text-align: center;
-}
-
-.git-inline-panel .git-ssh-pubkey {
-  font-size: 9px;
-  padding: 6px;
-  word-break: break-all;
-  background: #f5f5f5;
-  border-radius: 4px;
-  margin-top: 4px;
-}
-
-.git-inline-panel .git-ssh-copy-btn {
-  font-size: 10px;
-  padding: 3px 8px;
-  margin-top: 4px;
-}
-</style>

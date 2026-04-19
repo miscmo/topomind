@@ -4,6 +4,7 @@
  */
 import { ref } from 'vue'
 import { Store } from '@/core/storage.js'
+import { logger } from '@/core/logger.js'
 
 // 保存指示器状态（全局单例）
 export const saveIndicatorVisible = ref(false)
@@ -28,8 +29,9 @@ export function useStorage() {
     listKBs: () => Store.listKBs(),
     createKB: (name, meta) => Store.createKB(name, meta),
     deleteKB: (name) => Store.deleteKB(name),
-    getKBMeta: (name) => Store.getKBMeta(name),
-    saveKBMeta: (name, meta) => Store.saveKBMeta(name, meta),
+    getKBCover: (kbPath) => Store.getKBCover(kbPath),
+    saveKBCover: (kbPath, coverPath) => Store.saveKBCover(kbPath, coverPath),
+    renameKB: (kbPath, newName) => Store.renameKB(kbPath, newName),
 
     // 卡片
     listCards: (parentPath) => Store.listCards(parentPath),
@@ -45,9 +47,8 @@ export function useStorage() {
     readLayout: (dirPath) => Store.readLayout(dirPath),
     saveLayout: (dirPath, meta) => Store.saveLayout(dirPath, meta)
       .then(() => showSaveIndicator(false))
-      .catch((e) => { console.warn('[useStorage] saveLayout 失败:', dirPath, e); showSaveIndicator(true) }),
+      .catch((e) => { logger.catch('useStorage', `saveLayout 失败: ${dirPath}`, e); showSaveIndicator(true) }),
     saveLayoutSync: (dirPath, meta) => {
-      // 退出前同步保存（使用 sendSync IPC）
       if (window.electronAPI?.sendSync) {
         window.electronAPI.sendSync('save:layout', dirPath, meta)
       }
@@ -61,15 +62,19 @@ export function useStorage() {
     saveImage: (cardPath, blob, filename) => Store.saveImage(cardPath, blob, filename),
     saveKBImage: (kbPath, blob, filename) => Store.saveKBImage(kbPath, blob, filename),
     loadImage: (imgPath) => Store.loadImage(imgPath),
+    revokeAllImageUrls: () => Store.revokeAllImageUrls(),
 
     // 工具
     countChildren: (p) => Store.countChildren(p),
-    selectExistingKB: () => Store.selectExistingKB(),
+    selectExistingWorkDir: (dirPath) => Store.selectExistingWorkDir(dirPath),
+    selectWorkDirCandidate: () => Store.selectWorkDirCandidate(),
+    createWorkDir: (dirPath) => Store.createWorkDir(dirPath),
     importKB: (sourcePath) => Store.importKB(sourcePath),
     openInFinder: (p) => Store.openInFinder(p),
     getRootDir: () => Store.getRootDir(),
     getLastOpenedKB: () => Store.getLastOpenedKB(),
     setLastOpenedKB: (kbPath) => Store.setLastOpenedKB(kbPath),
+    ensureCardDir: (cardPath) => Store.ensureCardDir(cardPath),
 
     // 指示器状态
     saveIndicatorVisible,

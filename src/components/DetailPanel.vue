@@ -97,6 +97,7 @@ import { languages } from '@codemirror/language-data'
 import { GFM } from '@lezer/markdown'
 import { useStorage, showSaveIndicator } from '@/composables/useStorage'
 import { useRoomStore } from '@/stores/room'
+import { logger } from '@/core/logger.js'
 import { GitCache } from '@/core/git-backend.js'
 
 marked.setOptions({ breaks: true, gfm: true })
@@ -123,8 +124,8 @@ const previewScale = ref(1)
 
 let _cmView = null
 
-// 竞态保护版本号
-let _version = 0
+// 竞态保护：AbortController
+let _abortController = null
 let _modeVersion = 0
 let _prevRenderedEl = null
 // Object URL 追踪
@@ -147,14 +148,16 @@ const renderedHtml = computed(() => {
   if (childCards.value.length > 0) {
     childInfo = `<div class="child-info-box"><strong class="child-info-title">📂 包含 ${childCards.value.length} 个子概念</strong><br>`
     childCards.value.forEach(kid => {
-      childInfo += `<span class="child-tag" data-drill-path="${escHtml(kid.path)}">${escHtml(kid.name || '')}</span>`
+      childInfo += `<span class="child-tag" data-drill-path="${escHtml(kid.path).replace(/"/g, '&quot;')}">${escHtml(kid.name || '')}</span>`
     })
     childInfo += '</div>'
   }
   const md = markdownRaw.value
-  const html = md
-    ? sanitizeHtml(marked.parse(md))
-    : '<div class="placeholder-text" style="color:#bbb;margin-top:20px">暂无文档内容</div>'
+  let parsed = ''
+  if (md) {
+    try { parsed = marked.parse(md) } catch { parsed = '' }
+  }
+  const html = parsed ? sanitizeHtml(parsed) : '<div class="placeholder-text" style="color:#bbb;margin-top:20px">暂无文档内容</div>'
   return html + childInfo
 })
 
@@ -326,27 +329,39 @@ async function loadNodeContent(cardPath) {
   tocOpen.value = false
 
   _revokeActiveUrls()
-  const version = ++_version
 
-  const [kids, md] = await Promise.all([
-    storage.listCards(cardPath).catch(() => []),
-    storage.readMarkdown(cardPath).catch(() => ''),
-  ])
+  // 取消之前的请求
+  if (_abortController) {
+    _abortController.abort()
+  }
+  _abortController = new AbortController()
+  const signal = _abortController.signal
 
-  if (version !== _version) return // 已切换到其他节点
+  try {
+    const [kids, md] = await Promise.all([
+      storage.listCards(cardPath).catch(() => []),
+      storage.readMarkdown(cardPath).catch(() => ''),
+    ])
 
-  childCards.value = kids || []
-  markdownRaw.value = md || ''
-  editContent.value = md || ''
-  _setEditorDoc(editContent.value)
+    // 检查是否已中止
+    if (signal.aborted) return
 
-  if (bodyRef.value) bodyRef.value.scrollTop = 0
+    childCards.value = kids || []
+    markdownRaw.value = md || ''
+    editContent.value = md || ''
+    _setEditorDoc(editContent.value)
 
-  // 异步解析渲染内容中的图片（等 DOM 更新后）
-  await nextTick()
-  buildTocItems()
-  updateActiveHeading()
-  _resolveRenderedImages(cardPath, version)
+    if (bodyRef.value) bodyRef.value.scrollTop = 0
+
+    // 异步解析渲染内容中的图片（等 DOM 更新后）
+    await nextTick()
+    buildTocItems()
+    updateActiveHeading()
+    _resolveRenderedImages(cardPath, signal)
+  } catch (e) {
+    if (e.name === 'AbortError') return
+    logger.catch('DetailPanel', 'loadNodeContent', e)
+  }
 }
 
 async function setMode(m) {
@@ -391,6 +406,7 @@ function debouncedSave() {
 
 onUnmounted(() => {
   clearTimeout(_saveTimer)
+  _revokeActiveUrls()
   if (_cmView) {
     _cmView.destroy()
     _cmView = null
@@ -447,12 +463,12 @@ async function _insertImage(blob) {
     editContent.value += (editContent.value ? '\n' : '') + mdRef
     debouncedSave()
   } catch (err) {
-    console.warn('[DetailPanel] 图片上传失败:', err)
+    logger.catch('DetailPanel', '图片上传', err)
   }
 }
 
 // ─── 图片异步解析（阅读模式）────────────────────────────────
-async function _resolveRenderedImages(cardPath, version) {
+async function _resolveRenderedImages(cardPath, signal) {
   const container = renderedRef.value
   if (!container) return
   const imgs = container.querySelectorAll('img')
@@ -463,11 +479,11 @@ async function _resolveRenderedImages(cardPath, version) {
     img.style.opacity = '0.3'
     try {
       const url = await storage.loadImage(imgPath)
-      if (url) _activeUrls.push(url)
-      if (version !== _version) {
-        if (url) try { URL.revokeObjectURL(url) } catch (e) {}
+      if (signal?.aborted) {
+        if (url) try { URL.revokeObjectURL(url) } catch (e) { logger.warn('DetailPanel', 'revokeImageUrl', e) }
         return
       }
+      if (url) _activeUrls.push(url)
       if (url) {
         img.src = url
         img.style.opacity = '1'
@@ -500,7 +516,7 @@ function handleRenderedClick(e) {
       // Electron：系统默认浏览器；Web：新标签页打开
       if (window.electronAPI?.invoke) {
         window.electronAPI.invoke('app:openExternal', href).catch((err) => {
-          console.warn('[DetailPanel] 打开外链失败:', err)
+          logger.catch('DetailPanel', '打开外链', err)
         })
       } else {
         window.open(href, '_blank', 'noopener,noreferrer')
@@ -538,7 +554,7 @@ function reset() {
 }
 
 function _revokeActiveUrls() {
-  _activeUrls.forEach(url => { try { URL.revokeObjectURL(url) } catch (e) {} })
+  _activeUrls.forEach(url => { try { URL.revokeObjectURL(url) } catch (e) { logger.warn('DetailPanel', 'revokeImageUrl', e) } })
   _activeUrls = []
 }
 
@@ -548,7 +564,7 @@ function sanitizeHtml(dirty) {
     const parser = new DOMParser()
     const doc = parser.parseFromString(dirty, 'text/html')
     // 遍历所有节点，清除危险属性和危险元素
-    const dangerous = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math', 'form', 'input', 'button', 'textarea', 'select']
+    const dangerous = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'svg', 'math', 'form', 'input', 'button', 'textarea', 'select', 'meta', 'base', 'applet']
     const dangerousTags = doc.querySelectorAll(dangerous.join(','))
     dangerousTags.forEach(el => el.remove())
 
@@ -557,16 +573,27 @@ function sanitizeHtml(dirty) {
     allEls.forEach(el => {
       const attrs = [...el.attributes]
       attrs.forEach(attr => {
+        // 移除事件处理器和危险协议
         if (attr.name.startsWith('on') || /^javascript:/i.test(attr.value)) {
           el.removeAttribute(attr.name)
+          return
+        }
+        // 过滤 style 属性中的危险 CSS 表达式
+        if (attr.name === 'style') {
+          const val = attr.value
+          if (/expression\s*\(|url\s*\(|import\s+/i.test(val)) {
+            el.removeAttribute('style')
+            return
+          }
+        }
+        // 过滤 data: / javascript: 在 href 和 src 属性
+        if (attr.name === 'href' || attr.name === 'src') {
+          const h = attr.value.trim()
+          if (/^(javascript:|data:)/i.test(h)) {
+            el.removeAttribute(attr.name)
+          }
         }
       })
-      // 降级 data: 和 javascript: href
-      const href = el.getAttribute?.('href')
-      if (href) {
-        const h = href.trim()
-        if (/^(javascript:|data:)/i.test(h)) el.setAttribute('href', '#')
-      }
     })
     return doc.body.innerHTML
   } catch {
