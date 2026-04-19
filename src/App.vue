@@ -1,27 +1,33 @@
 <template>
   <div id="topomind-app">
-    <ErrorBoundary>
-      <!-- 工作目录设置页 -->
-      <WorkDirPage v-if="appStore.view === 'setup'" @opened="handleWorkDirOpened" @created="handleWorkDirCreated" />
+    <!-- 监控窗口路由 -->
+    <LogMonitorView v-if="isMonitorView" />
 
-      <!-- 标签栏：仅在存在知识库标签时显示（主页作为一个 Tab） -->
-      <TabBar v-if="appStore.view !== 'setup' && roomStore.tabs.length > 0" />
+    <!-- 正常应用路由 -->
+    <template v-else>
+      <ErrorBoundary>
+        <!-- 工作目录设置页 -->
+        <WorkDirPage v-if="appStore.view === 'setup'" @opened="handleWorkDirOpened" @created="handleWorkDirCreated" />
 
-      <!-- 首页 -->
-      <HomePage v-if="appStore.view === 'home'" />
+        <!-- 标签栏：仅在存在知识库标签时显示（主页作为一个 Tab） -->
+        <TabBar v-if="appStore.view !== 'setup' && roomStore.tabs.length > 0" />
 
-      <!-- 图谱页：左侧样式面板 + 中间图谱 + 右侧详情 -->
-      <GraphView v-else-if="appStore.view === 'graph'" />
-    </ErrorBoundary>
+        <!-- 首页 -->
+        <HomePage v-if="appStore.view === 'home'" />
 
-    <!-- 全局模态框（不受 ErrorBoundary 保护，避免错误级联） -->
-    <InputModal />
-    <ConfirmModal />
+        <!-- 图谱页：左侧样式面板 + 中间图谱 + 右侧详情 -->
+        <GraphView v-else-if="appStore.view === 'graph'" />
+      </ErrorBoundary>
+
+      <!-- 全局模态框（不受 ErrorBoundary 保护，避免错误级联） -->
+      <InputModal />
+      <ConfirmModal />
+    </template>
   </div>
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, nextTick } from 'vue'
+import { onMounted, onUnmounted, nextTick, ref, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useRoomStore } from '@/stores/room'
 import { useStorage } from '@/composables/useStorage'
@@ -35,10 +41,13 @@ import HomePage from '@/components/HomePage.vue'
 import GraphView from '@/components/GraphView.vue'
 import InputModal from '@/components/modals/InputModal.vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
+import LogMonitorView from '@/components/monitor/LogMonitorView.vue'
 
 const appStore = useAppStore()
 const roomStore = useRoomStore()
 const storage = useStorage()
+
+const isMonitorView = computed(() => window.location.hash === '#/monitor')
 
 let autoOpenPromise = null
 

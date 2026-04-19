@@ -61,14 +61,23 @@ const ALLOWED_CHANNELS = /* @__PURE__ */ new Set([
   // app
   "app:openExternal",
   // save
-  "save:layout"
+  "save:layout",
+  // log
+  "log:write",
+  "log:getBuffer",
+  "log:query",
+  "log:setLevel",
+  "log:clear",
+  "log:getAvailableDates",
+  "log:getLogDir"
 ]);
 const ALLOWED_SEND_SYNC_CHANNELS = /* @__PURE__ */ new Set([
   "save:layout"
 ]);
 const ALLOWED_RECEIVE_CHANNELS = /* @__PURE__ */ new Set([
   "app:menu-action",
-  "save:before-quit"
+  "save:before-quit",
+  "log:entry"
 ]);
 contextBridge.exposeInMainWorld("electronAPI", {
   isElectron: true,
@@ -86,6 +95,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }
     var args = Array.prototype.slice.call(arguments, 1);
     return ipcRenderer.sendSync.apply(ipcRenderer, [channel].concat(args));
+  },
+  send: function(channel) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    ipcRenderer.send.apply(ipcRenderer, [channel].concat(args));
   },
   on: function(channel, fn) {
     if (!ALLOWED_RECEIVE_CHANNELS.has(channel)) {

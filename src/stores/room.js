@@ -4,6 +4,7 @@
  * 以及原 tabs.js 中的 TabManager
  */
 import { defineStore } from 'pinia'
+import { loggerEnhanced as logger, Action } from '@/core/logger-enhanced.js'
 
 export const useRoomStore = defineStore('room', {
   state: () => ({
@@ -64,6 +65,7 @@ export const useRoomStore = defineStore('room', {
 
     /** 打开一个知识库（重置房间状态） */
     openKB(kbPath) {
+      logger.info('useRoomStore', Action.KB_OPEN, `打开知识库: ${kbPath}`)
       this.currentKBPath = kbPath
       this.currentRoomPath = kbPath
       this.roomHistory = []
@@ -71,6 +73,7 @@ export const useRoomStore = defineStore('room', {
 
     /** 钻入子房间 */
     drillInto(path) {
+      logger.info('useRoomStore', Action.ROOM_DRILL_INTO, `钻入子房间: ${path}`)
       this.roomHistory = [...this.roomHistory, this.currentRoomPath]
       this.currentRoomPath = path
     },
@@ -79,6 +82,7 @@ export const useRoomStore = defineStore('room', {
     goBack() {
       if (this.roomHistory.length > 0) {
         const last = this.roomHistory[this.roomHistory.length - 1]
+        logger.info('useRoomStore', Action.ROOM_GO_BACK, `返回上一层: ${last}`)
         this.roomHistory = this.roomHistory.slice(0, -1)
         this.currentRoomPath = last
       }
@@ -86,6 +90,7 @@ export const useRoomStore = defineStore('room', {
 
     /** 跳转到指定房间（面包屑点击） */
     jumpTo(path) {
+      logger.info('useRoomStore', Action.ROOM_JUMP_TO, `面包屑跳转: ${path}`)
       // 从历史中截断到 path 之前
       const idx = this.roomHistory.indexOf(path)
       if (idx !== -1) {
@@ -118,6 +123,7 @@ export const useRoomStore = defineStore('room', {
         return existing.id
       }
       const id = `tab-${Date.now()}`
+      logger.info('useRoomStore', Action.TAB_OPEN, `新建标签页: ${label || kbPath}`, { kbPath, label })
       const newTab = {
         id,
         kbPath,
@@ -141,6 +147,10 @@ export const useRoomStore = defineStore('room', {
 
     /** 切换标签页 */
     switchTab(tabId) {
+      const target = this.tabs.find(t => t.id === tabId)
+      if (target) {
+        logger.info('useRoomStore', Action.TAB_SWITCH, `切换标签页: ${target.label || tabId}`, { tabId, kbPath: target.kbPath })
+      }
       // 保存当前标签页状态（不可变更新）
       const current = this.tabs.find(t => t.id === this.activeTabId)
       if (current) {
@@ -149,7 +159,6 @@ export const useRoomStore = defineStore('room', {
           : t)
       }
       // 恢复目标标签页状态
-      const target = this.tabs.find(t => t.id === tabId)
       if (target) {
         this.activeTabId = tabId
         this.currentKBPath = target.kbPath
@@ -162,6 +171,8 @@ export const useRoomStore = defineStore('room', {
     closeTab(tabId) {
       const idx = this.tabs.findIndex(t => t.id === tabId)
       if (idx === -1) return
+      const tab = this.tabs[idx]
+      logger.info('useRoomStore', Action.TAB_CLOSE, `关闭标签页: ${tab.label || tabId}`, { tabId, kbPath: tab.kbPath })
       this.tabs = this.tabs.filter((_, i) => i !== idx)
       if (this.activeTabId === tabId) {
         if (this.tabs.length > 0) {
