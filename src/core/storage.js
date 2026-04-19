@@ -88,11 +88,11 @@ export const Store = {
    * @param {string} dirPath 工作目录路径
    * @returns {Promise<object>} 工作目录选择结果
    */
-  selectExistingWorkDir(dirPath) {
+  setWorkDir(dirPath) {
     try {
-      return FSB.selectExistingWorkDir(dirPath)
+      return FSB.setWorkDir(dirPath)
     } catch (e) {
-      logger.catch('Store.selectExistingWorkDir', '选择已存在的工作目录失败', e)
+      logger.catch('Store.setWorkDir', '设置工作目录失败', e)
       throw e
     }
   },

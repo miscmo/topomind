@@ -140,13 +140,10 @@ function createFileService() {
       return { valid: true, nodePath: nodePath.resolve(result[0]) };
     },
 
-    selectExistingWorkDir: function(dirPath) {
+    setWorkDir: function(dirPath) {
       var dir = dirPath;
       if (!dir) {
-        var picked = fileService.selectWorkDirCandidate();
-        if (!picked.valid) return picked;
-        dir = picked.nodePath;
-      }
+        return { valid: false, nodePath: null, error: '未指定工作目录路径' };      }
       dir = nodePath.resolve(dir);
       if (!_fs_isValidWorkDir(dir)) {
         return { valid: false, nodePath: dir, error: '不是有效的工作目录（缺少 _config.json）' };

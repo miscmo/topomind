@@ -8,7 +8,7 @@ export function useStorage() {
   return {
     // Initialization
     init: () => Store.init(),
-    selectExistingWorkDir: (dirPath: string) => Store.selectExistingWorkDir(dirPath),
+    setWorkDir: (dirPath: string) => Store.setWorkDir(dirPath),
     selectWorkDirCandidate: () => Store.selectWorkDirCandidate(),
     createWorkDir: (dirPath: string) => Store.createWorkDir(dirPath),
     getRootDir: () => Store.getRootDir(),

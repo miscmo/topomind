@@ -79,7 +79,7 @@ export const FSB = {
 
   // ===== 工作目录辅助能力 =====
   /** 选择已有工作目录。 */
-  selectExistingWorkDir: (dirPath) => _call('fs:selectExistingWorkDir', dirPath),
+  setWorkDir: (dirPath) => _call('fs:setWorkDir', dirPath),
   /** 确保卡片目录存在。 */
   ensureCardDir: (cardPath) => _call('fs:ensureCardDir', cardPath),
   /** 打开系统目录选择器选择工作目录。 */

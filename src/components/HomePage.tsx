@@ -87,7 +87,9 @@ export default function HomePage() {
 
   async function switchWorkDir() {
     setMessage('')
-    const res = await FSB.selectExistingWorkDir('')
+    const picked = await FSB.selectWorkDirCandidate()
+    if (!picked?.valid) return
+    const res = await FSB.setWorkDir(picked.path)
     if (!res?.valid) {
       if (res?.error) {
         setMessageError(true)

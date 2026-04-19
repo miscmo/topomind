@@ -17,7 +17,7 @@ const ALLOWED_CHANNELS = new Set([
   'fs:ensureCardDir',
   'fs:getRootDir',
   'fs:getLastOpenedKB', 'fs:setLastOpenedKB',
-  'fs:selectExistingWorkDir', 'fs:selectWorkDirCandidate', 'fs:createWorkDir', 'fs:importKB',
+  'fs:setWorkDir', 'fs:selectWorkDirCandidate', 'fs:createWorkDir', 'fs:importKB',
   // git: basic
   'git:checkAvailable', 'git:init', 'git:status',
   'git:statusBatch', 'git:isDirty',

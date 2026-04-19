@@ -752,7 +752,7 @@ return (
 | `fs:getRootDir` | 获取根目录 |
 | `fs:getLastOpenedKB` | 获取上次打开的 KB |
 | `fs:setLastOpenedKB` | 设置上次打开的 KB |
-| `fs:selectExistingWorkDir` | 选择已存在的工作目录 |
+| `fs:setWorkDir` | 验证并设置工作目录 |
 | `fs:selectWorkDirCandidate` | 选择工作目录候选 |
 | `fs:createWorkDir` | 创建工作目录 |
 | `fs:importKB` | 导入知识库 |
@@ -898,7 +898,7 @@ return (
 ### B.2 Zustand Store 模式选择
 
 - **`appStore`**：使用 `create` 创建，支持组件内直接 `useStore()` 订阅。
-- **`roomStore`**：使用 vanilla `createStore` 创建，支持外部 `getState()` 调用（用于在非 React 上下文中获取状态，如 `FSB.selectExistingWorkDir` 回调中）。
+- **`roomStore`**：使用 vanilla `createStore` 创建，支持外部 `getState()` 调用。
 
 ```typescript
 // roomStore.ts

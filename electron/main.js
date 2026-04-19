@@ -84,7 +84,7 @@ function registerIPC() {
   ipcMain.handle('fs:getRootDir', function() { return fileService.getRootDir(); });
   ipcMain.handle('fs:getLastOpenedKB', function() { return fileService.getLastOpenedKB(); });
   ipcMain.handle('fs:setLastOpenedKB', function(e, kbPath) { fileService.setLastOpenedKB(kbPath); });
-  ipcMain.handle('fs:selectExistingWorkDir', function(e, dirPath) { return fileService.selectExistingWorkDir(dirPath); });
+  ipcMain.handle('fs:setWorkDir', function(e, dirPath) { return fileService.setWorkDir(dirPath); });
   ipcMain.handle('fs:selectWorkDirCandidate', function() { return fileService.selectWorkDirCandidate(); });
   ipcMain.handle('fs:createWorkDir', function(e, dirPath) { return fileService.createWorkDir(dirPath); });
   ipcMain.handle('fs:importKB', function(e, sourcePath) { return fileService.importKB(sourcePath); });

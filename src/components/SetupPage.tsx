@@ -18,7 +18,7 @@ export default function SetupPage() {
     try {
       const picked = await FSB.selectWorkDirCandidate()
       if (!picked?.valid) return
-      const res = await FSB.selectExistingWorkDir(picked.path)
+      const res = await FSB.setWorkDir(picked.path)
       if (!res?.valid) {
         setIsError(true)
         setMessage(res?.error || '不是有效的工作目录')
