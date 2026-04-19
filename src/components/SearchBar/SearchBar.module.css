@@ -1,0 +1,58 @@
+/**
+ * SearchBar styles
+ */
+.searchBox {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+}
+
+.input {
+  width: 170px;
+  height: 32px;
+  border: 1px solid #e0e4ea;
+  border-radius: 8px;
+  padding: 0 32px 0 12px;
+  font-size: 12px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.06);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  color: #333;
+}
+
+.input:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.12), 0 2px 8px rgba(16, 24, 40, 0.06);
+}
+
+.input::placeholder {
+  color: #bbb;
+}
+
+.clearBtn {
+  position: absolute;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: #ccc;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: background-color 0.15s;
+}
+
+.clearBtn:hover {
+  background: #999;
+}

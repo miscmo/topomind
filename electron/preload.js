@@ -2,7 +2,7 @@
  * Electron 预加载脚本
  * 暴露统一的 IPC invoke 接口给渲染进程
  */
-const { contextBridge, ipcRenderer } = require('electron');
+import { contextBridge, ipcRenderer } from 'electron';
 
 // IPC 通道白名单，只允许渲染进程调用这些通道
 const ALLOWED_CHANNELS = new Set([

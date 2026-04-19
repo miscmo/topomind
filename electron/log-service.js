@@ -9,9 +9,9 @@
  * 5. 响应 renderer 发来的日志 IPC 请求
  */
 
-const { ipcMain, app } = require('electron');
-const path = require('path');
-const fs = require('fs');
+import { ipcMain, app } from 'electron';
+import path from 'path';
+import fs from 'fs';
 
 // ============================================================
 // 1. 配置
@@ -384,4 +384,4 @@ function getAvailableDates() {
   }
 }
 
-module.exports = { init, write, getLogDir, getAvailableDates, getBuffer, query, setLevel: setLevel, clear };
+export default { init, write, getLogDir, getAvailableDates, getBuffer, query, setLevel, clear };

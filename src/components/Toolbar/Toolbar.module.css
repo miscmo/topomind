@@ -1,0 +1,49 @@
+/**
+ * Toolbar styles
+ */
+.toolbar {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #e0e4ea;
+  border-radius: 8px;
+  padding: 4px 8px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
+}
+
+.toolbar button {
+  height: 28px;
+  border: 1px solid #e0e4ea;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  color: #555;
+  padding: 0 10px;
+  transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.toolbar button:hover {
+  background: #eef2f7;
+  color: #1a3a5c;
+}
+
+.toolbar button.active {
+  background: #1a3a5c;
+  color: #fff;
+  border-color: #1a3a5c;
+}
+
+.sep {
+  width: 1px;
+  background: #e0e4ea;
+  margin: 2px 2px;
+  align-self: stretch;
+}

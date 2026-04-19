@@ -1,0 +1,50 @@
+/**
+ * ContextMenu styles
+ */
+.menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 140px;
+  background: #fff;
+  border: 1px solid #e0e4ea;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(16, 24, 40, 0.12);
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+.item {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12.5px;
+  color: #333;
+  transition: background-color 0.1s;
+}
+
+.item:hover {
+  background: #eef2f7;
+}
+
+.item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.danger {
+  color: #e74c3c;
+}
+
+.danger:hover {
+  background: #fef0ef;
+}
+
+.sep {
+  height: 1px;
+  background: #e8ecf0;
+  margin: 4px 8px;
+}

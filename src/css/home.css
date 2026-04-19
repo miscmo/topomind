@@ -767,31 +767,3 @@
   color: #888;
   margin: 10px 0 0;
 }
-
-/* 加载指示器 */
-.home-loading-overlay {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: 8px;
-  font-size: 13px;
-  color: #2563eb;
-}
-
-.home-loading-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(59, 130, 246, 0.2);
-  border-top-color: #2563eb;
-  border-radius: 50%;
-  animation: home-loading-spin 0.7s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes home-loading-spin {
-  to { transform: rotate(360deg); }
-}

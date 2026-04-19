@@ -3,8 +3,36 @@
  * 业务层通过 useStorage() composable 调用
  */
 import { FSB } from './fs-backend.js'
-import { normalizeMeta } from './meta.js'
 import { logger } from './logger.js'
+
+/** 将原始图元数据规范化为稳定结构（内联自原 meta.js） */
+function normalizeMeta(metaRaw) {
+  const meta = (metaRaw && typeof metaRaw === 'object' && !Array.isArray(metaRaw)) ? metaRaw : {}
+  const zoom = (typeof meta.zoom === 'number' && Number.isFinite(meta.zoom)) ? meta.zoom : null
+  const pan = (meta.pan && typeof meta.pan === 'object' && Number.isFinite(meta.pan.x) && Number.isFinite(meta.pan.y))
+    ? { x: meta.pan.x, y: meta.pan.y }
+    : null
+  const canvasBounds = (meta.canvasBounds && typeof meta.canvasBounds === 'object') ? meta.canvasBounds : null
+
+  const rawEdges = Array.isArray(meta.edges) ? meta.edges : []
+  const edges = rawEdges
+    .map((e) => {
+      if (!e || typeof e !== 'object') return null
+      const source = e.source || e.from || ''
+      const target = e.target || e.to || ''
+      if (!source || !target) return null
+      return { id: e.id, source, target, relation: e.relation || '相关', weight: e.weight || 'minor' }
+    })
+    .filter(Boolean)
+
+  return {
+    children: (meta.children && typeof meta.children === 'object' && !Array.isArray(meta.children)) ? meta.children : {},
+    edges,
+    zoom,
+    pan,
+    canvasBounds,
+  }
+}
 
 const _saveTimers = new Map()
 /** 追踪 loadImage 创建的 Blob URL，防止内存泄漏 */
