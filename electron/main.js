@@ -7,6 +7,7 @@ const path = require('path');
 const nodeFs = require('fs');
 const { simpleGit } = require('simple-git');
 const { execFile } = require('child_process');
+const LogService = require('./log-service.js');
 
 // ============================================================
 // 1. FILE-SERVICE（from electron/file-service.js）
@@ -1264,12 +1265,30 @@ function registerIPC() {
   ipcMain.handle('git:auth:getSSHKey', function() { return gitAuth.getSSHPublicKey(); });
   ipcMain.handle('git:auth:setAuthType', function(e, kbPath, authType) { return gitAuth.setAuthType(kbPath, authType); });
   ipcMain.handle('git:auth:getAuthType', function(e, kbPath) { return gitAuth.getAuthType(kbPath); });
+
+  // ===== Log handlers =====
+  ipcMain.handle('log:write', function(e, entry) {
+    LogService.write(entry);
+    return true;
+  });
+  ipcMain.handle('log:getBuffer', function() { return LogService.getBuffer(); });
+  ipcMain.handle('log:query', function(e, opts) { return LogService.query(opts); });
+  ipcMain.handle('log:setLevel', function(e, level) { return LogService.setLevel(level); });
+  ipcMain.handle('log:clear', function() { return LogService.clear(); });
+  ipcMain.handle('log:getAvailableDates', function() { return LogService.getAvailableDates(); });
+  ipcMain.handle('log:getLogDir', function() { return LogService.getLogDir(); });
+  ipcMain.handle('monitor:open', function() {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('app:menu-action', 'open-monitor');
+    }
+  });
 }
 
 // ============================================================
 // 5. APP LIFECYCLE
 // ============================================================
 var win = null;
+var monitorWin = null;
 
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('disable-software-rasterizer');
@@ -1297,6 +1316,35 @@ function createWindow() {
   });
 }
 
+function createMonitorWindow() {
+  if (monitorWin && !monitorWin.isDestroyed()) {
+    monitorWin.focus();
+    return;
+  }
+  monitorWin = new BrowserWindow({
+    width: 1200, height: 700, minWidth: 800, minHeight: 500,
+    title: '日志性能监控 - TopoMind',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false, contextIsolation: true,
+    },
+  });
+  var monitorUrl = process.env.VITE_DEV_SERVER_URL
+    ? process.env.VITE_DEV_SERVER_URL + '#/monitor'
+    : 'file://' + path.join(__dirname, '..', 'dist', 'index.html') + '#/monitor';
+  monitorWin.loadURL(monitorUrl);
+  monitorWin.on('closed', function() { monitorWin = null; });
+}
+
+function toggleMonitorWindow() {
+  if (monitorWin && !monitorWin.isDestroyed()) {
+    monitorWin.close();
+    monitorWin = null;
+  } else {
+    createMonitorWindow();
+  }
+}
+
 function buildMenu() {
   var tpl = [
     { label: '文件', submenu: [{ role: 'quit', label: '退出' }] },
@@ -1308,6 +1356,8 @@ function buildMenu() {
       { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' },
       { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'resetZoom' },
       { type: 'separator' }, { role: 'togglefullscreen' },
+      { type: 'separator' },
+      { label: '日志性能监控', click: function() { toggleMonitorWindow(); } },
     ]},
   ];
   if (process.platform === 'darwin') {
@@ -1321,6 +1371,7 @@ function buildMenu() {
 
 app.whenReady().then(function() {
   registerIPC();
+  LogService.init(app.getPath('userData'));
   buildMenu();
   createWindow();
   app.on('activate', function() { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
@@ -1331,5 +1382,8 @@ app.on('window-all-closed', function() { if (process.platform !== 'darwin') app.
 app.on('before-quit', function() {
   if (win && !win.isDestroyed()) {
     win.webContents.send('save:before-quit');
+  }
+  if (monitorWin && !monitorWin.isDestroyed()) {
+    monitorWin.destroy();
   }
 });

@@ -36,6 +36,9 @@ const ALLOWED_CHANNELS = new Set([
   'app:openExternal',
   // save
   'save:layout',
+  // log
+  'log:write', 'log:getBuffer', 'log:query', 'log:setLevel', 'log:clear',
+  'log:getAvailableDates', 'log:getLogDir',
 ]);
 
 const ALLOWED_SEND_SYNC_CHANNELS = new Set([
@@ -45,6 +48,7 @@ const ALLOWED_SEND_SYNC_CHANNELS = new Set([
 const ALLOWED_RECEIVE_CHANNELS = new Set([
   'app:menu-action',
   'save:before-quit',
+  'log:entry',
 ]);
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -63,6 +67,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
     var args = Array.prototype.slice.call(arguments, 1);
     return ipcRenderer.sendSync.apply(ipcRenderer, [channel].concat(args));
+  },
+  send: function(channel) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    ipcRenderer.send.apply(ipcRenderer, [channel].concat(args));
   },
   on: function(channel, fn) {
     if (!ALLOWED_RECEIVE_CHANNELS.has(channel)) {

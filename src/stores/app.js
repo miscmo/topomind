@@ -4,6 +4,7 @@
  *   selectedNode, edgeMode, edgeModeSource, autoIdCounter, _pendingConfirmAction
  */
 import { defineStore } from 'pinia'
+import { loggerEnhanced as logger, Action } from '@/core/logger-enhanced.js'
 
 export const useAppStore = defineStore('app', {
   state: () => ({
@@ -27,11 +28,13 @@ export const useAppStore = defineStore('app', {
 
     /** 进入图谱视图 */
     showGraph() {
+      logger.info('useAppStore', Action.ROOM_ENTER, '进入图谱视图')
       this.view = 'graph'
     },
 
     /** 返回首页 */
     showHome() {
+      logger.info('useAppStore', Action.ROOM_ENTER, '返回首页')
       this.view = 'home'
       this.selectedNodeId = null
       this.edgeMode = false
@@ -50,12 +53,14 @@ export const useAppStore = defineStore('app', {
 
     /** 进入连线模式 */
     enterEdgeMode(sourceId) {
+      logger.info('useAppStore', Action.EDGE_ADD, `进入连线模式: ${sourceId}`, { sourceId })
       this.edgeMode = true
       this.edgeModeSourceId = sourceId
     },
 
     /** 退出连线模式 */
     exitEdgeMode() {
+      logger.info('useAppStore', Action.EDGE_ADD, '退出连线模式')
       this.edgeMode = false
       this.edgeModeSourceId = null
     },
