@@ -75,3 +75,41 @@
   border-radius: 10px;
   flex-shrink: 0;
 }
+
+.colorDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.addButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 8px 2px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1.5px dashed #c0cdd8;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: #7a8fa6;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.addButton:hover {
+  border-color: #3498db;
+  color: #3498db;
+  background: #f0f7ff;
+}
+
+.addIcon {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.addText {
+  font-size: 12px;
+}

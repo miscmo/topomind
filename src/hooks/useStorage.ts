@@ -6,6 +6,7 @@
  * This prevents unnecessary re-renders from wrapper object recreation.
  */
 import { Store } from '../core/storage'
+import type { DirEntry } from '../core/storage'
 import type { KBListItem } from '../types'
 
 // Stable reference to the Store API (singleton pattern)
@@ -18,7 +19,16 @@ const storeApi = {
   getRootDir: () => Store.getRootDir(),
 
   // Knowledge bases
-  listKBs: (): Promise<KBListItem[]> => Store.listKBs() as Promise<KBListItem[]>,
+  listKBs: async (): Promise<KBListItem[]> => {
+    const entries: DirEntry[] = await Store.listKBs()
+    return entries
+      .filter((d) => d.isDir)
+      .map((d, i) => ({
+        path: d.path,
+        name: d.name,
+        order: i,
+      }))
+  },
   createKB: (name: string, meta?: object) => Store.createKB(name, meta),
   deleteKB: (name: string) => Store.deleteKB(name),
   renameKB: (kbPath: string, newName: string) => Store.renameKB(kbPath, newName),

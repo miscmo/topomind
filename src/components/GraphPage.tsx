@@ -3,7 +3,7 @@
  * 左侧面板 + 中间 React Flow 图谱 + 右侧详情面板
  */
 import { useEffect, useRef, useState } from 'react'
-import { ReactFlow, useReactFlow, type Node, type NodeTypes } from '@xyflow/react'
+import { ReactFlow, type Node, type NodeTypes, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore } from '../stores/roomStore'
@@ -119,8 +119,11 @@ export default function GraphPage() {
 
   const prevRoomPathRef = useRef<string | null>(null)
 
+  const { selectNode } = useAppStore((s) => ({ selectNode: s.selectNode }))
+
   // Context menu
   const { contextMenu, showEdgeCM, hideCM } = useContextMenu()
+  const { fitView } = useReactFlow()
 
   // Single useGraph instance — passed to GraphContextProvider for sharing
   const graph = useGraph()
@@ -184,6 +187,20 @@ export default function GraphPage() {
     graph.deleteEdge(edgeId)
   }
 
+  const handleFocus = (nodeId: string) => {
+    selectNode(nodeId)
+    const node = graph.nodes.find((n) => n.id === nodeId)
+    if (node) {
+      fitView({ nodes: [node], padding: 0.3, duration: 300 })
+    }
+    logAction('节点:聚焦', 'GraphPage', { nodeId })
+  }
+
+  const handleProperties = (nodeId: string) => {
+    selectNode(nodeId)
+    logAction('节点:属性', 'GraphPage', { nodeId })
+  }
+
   if (view !== 'graph') return null
 
   return (
@@ -231,6 +248,8 @@ export default function GraphPage() {
           onRename={handleRename}
           onDelete={handleDelete}
           onEdgeDelete={handleEdgeDelete}
+          onFocus={handleFocus}
+          onProperties={handleProperties}
           onClose={hideCM}
         />
       </div>

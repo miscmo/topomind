@@ -9,7 +9,6 @@ import { useAppStore } from '../../stores/appStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
 import styles from './DetailPanel.module.css'
-import { FSB } from '../../core/fs-backend'
 import { logAction } from '../../core/log-backend'
 
 marked.setOptions({ breaks: true, gfm: true })
@@ -25,7 +24,6 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
 
   const [editMode, setEditMode] = useState(false)
   const [markdown, setMarkdown] = useState('')
-  const [saving, setSaving] = useState(false)
   const [renameMode, setRenameMode] = useState(false)
   const [newName, setNewName] = useState('')
   const [childTags, setChildTags] = useState<Array<{ path: string; name: string }>>([])
@@ -40,6 +38,7 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
     setEditMode(false)
     setMarkdown('')
     setRenameMode(false)
+    setNewName('')
 
     if (!selectedNodeId) return
 
@@ -56,7 +55,7 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
       return
     }
 
-    FSB.listChildren(nodePath).then((children: Array<{ path: string; name: string; isDir: boolean }>) => {
+    storage.listCards(nodePath).then((children: Array<{ path: string; name: string; isDir: boolean }>) => {
       const dirs = (children || []).filter((c: { isDir: boolean }) => c.isDir)
       setChildTags(dirs)
     })
@@ -197,8 +196,8 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
           </>
         ) : (
           <>
-            <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
-              {saving ? '保存中...' : '保存'}
+            <button className={styles.saveBtn} onClick={handleSave}>
+              保存
             </button>
             <button
               onClick={() => {

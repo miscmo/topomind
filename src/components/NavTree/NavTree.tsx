@@ -6,8 +6,10 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '../../stores/appStore'
 import { useRoomStore } from '../../stores/roomStore'
 import { useStorage } from '../../hooks/useStorage'
+import { logAction } from '../../core/log-backend'
 import { logger } from '../../core/logger'
 import type { KBListItem } from '../../types'
+import { DOMAIN_COLORS } from '../../types'
 import styles from './NavTree.module.css'
 
 export default function NavTree() {
@@ -35,6 +37,16 @@ export default function NavTree() {
     showGraph()
   }
 
+  const handleNewCard = () => {
+    const name = window.prompt('请输入知识库名称：')
+    if (!name?.trim()) return
+    logAction('知识库:创建', 'NavTree', { kbName: name.trim() })
+    storage.createKB(name.trim()).then(async () => {
+      const list = await storage.listKBs()
+      setKbs(list)
+    })
+  }
+
   return (
     <div className={styles.navTree}>
       <div className={styles.header}>知识库</div>
@@ -42,13 +54,17 @@ export default function NavTree() {
         {kbs.length === 0 && (
           <div className={styles.empty}>暂无知识库</div>
         )}
-        {kbs.map((kb) => (
+        {kbs.map((kb, i) => (
           <div
             key={kb.path}
             className={styles.item}
             onClick={() => handleKBOpen(kb)}
             title={kb.path}
           >
+            <span
+              className={styles.colorDot}
+              style={{ background: DOMAIN_COLORS[i % DOMAIN_COLORS.length] }}
+            />
             <span className={styles.icon}>◎</span>
             <span className={styles.name}>{kb.name}</span>
             {kb.childCount !== undefined && (
@@ -56,6 +72,16 @@ export default function NavTree() {
             )}
           </div>
         ))}
+
+        {/* 新建知识库按钮 */}
+        <div
+          className={styles.addButton}
+          onClick={handleNewCard}
+          title="新建知识库"
+        >
+          <span className={styles.addIcon}>+</span>
+          <span className={styles.addText}>新建卡片</span>
+        </div>
       </div>
     </div>
   )

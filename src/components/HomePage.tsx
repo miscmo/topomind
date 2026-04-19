@@ -5,8 +5,7 @@
 import { useState, useEffect } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
-import { FSB } from '../core/fs-backend'
-import { Store } from '../core/storage'
+import { useStorage } from '../hooks/useStorage'
 import { logAction } from '../core/log-backend'
 import { logger } from '../core/logger'
 import styles from './HomePage.module.css'
@@ -22,6 +21,7 @@ interface KBItem {
 
 export default function HomePage() {
   const showGraph = useAppStore((s) => s.showGraph)
+  const storage = useStorage()
   const [loading, setLoading] = useState(false)
   const [kbs, setKbs] = useState<KBItem[]>([])
   const [workDir, setWorkDir] = useState('')
@@ -48,13 +48,13 @@ export default function HomePage() {
     setLoading(true)
     try {
       const [list, dir] = await Promise.all([
-        FSB.listChildren(''),
-        FSB.getRootDir(),
+        storage.listKBs(),
+        storage.getRootDir(),
       ])
       setWorkDir(dir || '')
-      // 过滤出目录（知识库）
-      const kbList = (list || []).filter((d: { name: string; isDir: boolean }) => d.isDir)
-      const initial: KBItem[] = kbList.map((kb: { path: string; name: string; order?: number }) => ({
+      // listKBs() already returns only KB directories as KBListItem[]
+      const kbList = list || []
+      const initial: KBItem[] = kbList.map((kb) => ({
         path: kb.path,
         name: kb.name,
         order: kb.order ?? 0,
@@ -67,7 +67,7 @@ export default function HomePage() {
       const counts = await Promise.all(
         initial.map(async (kb) => {
           try {
-            return await FSB.countChildren(kb.path)
+            return await storage.countChildren(kb.path)
           } catch {
             return 0
           }
@@ -83,7 +83,7 @@ export default function HomePage() {
 
   async function openKB(kb: KBItem) {
     try {
-      await FSB.setLastOpenedKB(kb.path)
+      await storage.setLastOpenedKB(kb.path)
     } catch { /* ignore */ }
     roomStore.getState().setCurrentKB(kb.path)
     showGraph()
@@ -92,9 +92,9 @@ export default function HomePage() {
 
   async function switchWorkDir() {
     setMessage('')
-    const picked = await FSB.selectWorkDirCandidate()
+    const picked = await storage.selectWorkDirCandidate()
     if (!picked?.valid) return
-    const res = await FSB.setWorkDir(picked.nodePath!)
+    const res = await storage.setWorkDir(picked.nodePath!)
     if (!res?.valid) {
       if (res?.error) {
         setMessageError(true)
@@ -121,7 +121,7 @@ export default function HomePage() {
     setCreateError('')
     setCreateLoading(true)
     try {
-      await Store.createKB(name)
+      await storage.createKB(name)
       logAction('知识库:创建', 'HomePage', { kbName: name })
       setShowCreateSheet(false)
       setCreateName('')
@@ -136,7 +136,7 @@ export default function HomePage() {
 
   // ===== 导入知识库 =====
   async function handleSelectImportDir() {
-    const res = await FSB.selectWorkDirCandidate()
+    const res = await storage.selectWorkDirCandidate()
     if (res?.valid) {
       setImportDir(res.nodePath || '')
       setImportError('')
@@ -151,7 +151,7 @@ export default function HomePage() {
     setImportError('')
     setImportLoading(true)
     try {
-      await Store.importKB(importDir)
+      await storage.importKB(importDir)
       logAction('知识库:导入', 'HomePage', { sourcePath: importDir })
       setShowImportSheet(false)
       setImportDir('')

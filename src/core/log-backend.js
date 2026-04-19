@@ -51,6 +51,11 @@ const _call = (channel, ...args) => {
   return api.invoke(channel, ...args)
 }
 
+const _warn = (...args) => {
+  // Use console directly to avoid circular dependency with logger -> log-backend
+  console.warn('[log-backend]', ...args)
+}
+
 // ============================================================
 // 日志读写
 // ============================================================
@@ -64,7 +69,7 @@ export async function logWrite(entry) {
   try {
     return await _call('log:write', entry)
   } catch (e) {
-    console.warn('[log-backend] log:write failed:', e.message)
+    _warn('log:write failed:', e.message)
     return false
   }
 }
@@ -77,7 +82,7 @@ export async function logGetBuffer() {
   try {
     return await _call('log:getBuffer')
   } catch (e) {
-    console.warn('[log-backend] log:getBuffer failed:', e.message)
+    _warn('log:getBuffer failed:', e.message)
     return []
   }
 }
@@ -91,7 +96,7 @@ export async function logQuery(opts = {}) {
   try {
     return await _call('log:query', opts)
   } catch (e) {
-    console.warn('[log-backend] log:query failed:', e.message)
+    _warn('log:query failed:', e.message)
     return []
   }
 }
@@ -105,7 +110,7 @@ export async function logSetLevel(level) {
   try {
     return await _call('log:setLevel', level)
   } catch (e) {
-    console.warn('[log-backend] log:setLevel failed:', e.message)
+    _warn('log:setLevel failed:', e.message)
     return false
   }
 }
@@ -118,7 +123,7 @@ export async function logClear() {
   try {
     return await _call('log:clear')
   } catch (e) {
-    console.warn('[log-backend] log:clear failed:', e.message)
+    _warn('log:clear failed:', e.message)
     return false
   }
 }
@@ -131,7 +136,7 @@ export async function logGetAvailableDates() {
   try {
     return await _call('log:getAvailableDates')
   } catch (e) {
-    console.warn('[log-backend] log:getAvailableDates failed:', e.message)
+    _warn('log:getAvailableDates failed:', e.message)
     return []
   }
 }
@@ -144,7 +149,7 @@ export async function logGetLogDir() {
   try {
     return await _call('log:getLogDir')
   } catch (e) {
-    console.warn('[log-backend] log:getLogDir failed:', e.message)
+    _warn('log:getLogDir failed:', e.message)
     return null
   }
 }

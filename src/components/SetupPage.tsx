@@ -4,11 +4,12 @@
  */
 import { useState } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { FSB } from '../core/fs-backend'
+import { useStorage } from '../hooks/useStorage'
 import styles from './SetupPage.module.css'
 
 export default function SetupPage() {
   const showHome = useAppStore((s) => s.showHome)
+  const storage = useStorage()
   const [message, setMessage] = useState('')
   const [isError, setIsError] = useState(false)
 
@@ -16,9 +17,9 @@ export default function SetupPage() {
     setMessage('')
     setIsError(false)
     try {
-      const picked = await FSB.selectWorkDirCandidate()
+      const picked = await storage.selectWorkDirCandidate()
       if (!picked?.valid) return
-      const res = await FSB.setWorkDir(picked.nodePath!)
+      const res = await storage.setWorkDir(picked.nodePath!)
       if (!res?.valid) {
         setIsError(true)
         setMessage(res?.error || '不是有效的工作目录')
@@ -34,13 +35,13 @@ export default function SetupPage() {
   async function createNew() {
     setMessage('')
     try {
-      const picked = await FSB.selectWorkDirCandidate()
+      const picked = await storage.selectWorkDirCandidate()
       if (!picked?.valid) {
         setIsError(true)
         setMessage(picked?.error || '请选择一个空目录作为新的工作目录')
         return
       }
-      const res = await FSB.createWorkDir(picked.nodePath!)
+      const res = await storage.createWorkDir(picked.nodePath!)
       if (!res?.valid) {
         setIsError(true)
         setMessage(res?.error || '创建工作目录失败')

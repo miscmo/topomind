@@ -445,7 +445,7 @@ export function useGraph() {
         const newPath = await storage.createCard(targetPath, name)
         logAction('节点:创建', 'useGraph', { nodeName: name, parentPath: targetPath, newPath: newPath ?? undefined })
         // Reload room to get updated children
-        await loadRoom(currentRoomPath ?? '')
+        await loadRoom(currentRoomPath || '')
         return newPath
       } catch (e) {
         logger.catch('useGraph', 'createChildNode', e)

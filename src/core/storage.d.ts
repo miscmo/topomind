@@ -1,6 +1,21 @@
-import type { FSB, FSBGraphMeta } from './fs-backend'
+import type { FSBGraphMeta } from './fs-backend'
 
 // Store - Unified Storage Adapter
+
+/** Result of a directory picker dialog */
+export interface DirDialogResult {
+  valid: boolean
+  nodePath?: string
+  error?: string
+}
+
+/** A child entry returned by listKBs / listCards */
+export interface DirEntry {
+  path: string
+  name: string
+  isDir: boolean
+}
+
 export interface SaveImageResult {
   path: string
   markdownRef: string
@@ -8,15 +23,15 @@ export interface SaveImageResult {
 
 export interface Store {
   init: () => Promise<unknown>
-  setWorkDir: (dirPath: string) => Promise<unknown>
-  selectWorkDirCandidate: () => Promise<unknown>
-  createWorkDir: (dirPath: string) => Promise<unknown>
-  listKBs: () => Promise<unknown[]>
+  setWorkDir: (dirPath: string) => Promise<DirDialogResult>
+  selectWorkDirCandidate: () => Promise<DirDialogResult>
+  createWorkDir: (dirPath: string) => Promise<DirDialogResult>
+  listKBs: () => Promise<DirEntry[]>
   createKB: (name: string, meta?: object) => Promise<string>
   deleteKB: (name: string) => Promise<unknown>
   renameKB: (kbPath: string, newName: string) => Promise<string>
   saveKBCover: (kbPath: string, coverPath: string | null) => Promise<unknown>
-  listCards: (parentPath: string) => Promise<unknown[]>
+  listCards: (parentPath: string) => Promise<DirEntry[]>
   createCard: (parentPath: string, cardName: string) => Promise<string>
   deleteCard: (cardPath: string) => Promise<unknown>
   renameCard: (cardPath: string, newName: string) => Promise<string>

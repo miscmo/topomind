@@ -19,8 +19,19 @@ export default function Toolbar() {
   const graph = useGraphContext()
   const { fitView, zoomIn, zoomOut } = useReactFlow()
 
+  const handleReset = () => {
+    fitView({ padding: 0.15, duration: 300 })
+  }
+
   return (
     <div id="toolbar" className={styles.toolbar}>
+      {/* 重置视图 */}
+      <button title="重置视图（恢复默认缩放和位置）" onClick={handleReset}>
+        ↺ 重置
+      </button>
+
+      <div className={styles.sep} />
+
       {/* 连线模式 */}
       <button
         className={edgeMode ? styles.active : ''}

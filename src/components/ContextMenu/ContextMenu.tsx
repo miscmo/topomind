@@ -40,6 +40,8 @@ interface ContextMenuProps {
   onRename: (nodeId: string) => void
   onDelete: (nodeId: string) => void
   onEdgeDelete: (edgeId: string) => void
+  onFocus: (nodeId: string) => void
+  onProperties: (nodeId: string) => void
   onClose: () => void
 }
 
@@ -53,6 +55,8 @@ export default function ContextMenu({
   onRename,
   onDelete,
   onEdgeDelete,
+  onFocus,
+  onProperties,
   onClose,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -105,9 +109,23 @@ export default function ContextMenu({
           },
         },
         {
+          label: '聚焦节点',
+          action: () => {
+            onFocus(targetId)
+            onClose()
+          },
+        },
+        {
           label: '重命名',
           action: () => {
             onRename(targetId)
+            onClose()
+          },
+        },
+        {
+          label: '属性',
+          action: () => {
+            onProperties(targetId)
             onClose()
           },
         },

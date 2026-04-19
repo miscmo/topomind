@@ -81,21 +81,26 @@ export function useLayout() {
         'elk.padding': '[top=30, left=30, bottom=30, right=30]',
       }
 
+// ELK input/output types — elkjs bundled lacks complete type definitions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ELKArgument = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ELKOptions = Record<string, any>
+
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = await elk.layout(
           {
             id: 'root',
-            layoutOptions: layoutOptions as any,
-            children: elkNodes as any,
-            edges: elkEdges as any,
-          } as any,
+            layoutOptions,
+            children: elkNodes,
+            edges: elkEdges,
+          } as ELKArgument,
           {
             layoutOptions: {
               ...layoutOptions,
               'elk.layered.compaction.postCompaction.strategy': 'LEFTWARD',
-            } as any,
-          }
+            },
+          } as ELKOptions
         )
 
         const positions: Record<string, { x: number; y: number }> = {}
@@ -113,7 +118,7 @@ export function useLayout() {
 
         return positions
       } catch (e) {
-        logger.error('useLayout', 'ELK layout failed:', e)
+        logger.catch('useLayout', 'ELK layout failed', e)
         return {}
       }
     },
