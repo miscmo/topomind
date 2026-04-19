@@ -35,10 +35,18 @@ export function useGraphDOM({
   addEdge,
   modalInput,
 }) {
+  /** DOM 手柄元素缓存：按 cy 实例保存 resize/connect/preview 元素。 */
   const _handleElsByCy = new Map()
   const _domCleanupByCy = new Map()
 
   // ─── 节点手柄定位 ──────────────────────────────────────────────
+  /**
+   * 根据当前选中节点更新 resize / connect 手柄位置。
+   * 仅在单选节点时显示手柄，其他情况下隐藏。
+   *
+   * @param {import('cytoscape').Core|null} [c=null] 目标 cy 实例
+   * @returns {void}
+   */
   function updateNodeHandles(c = null) {
     const inst = c || cyRef.value
     if (!inst) return
@@ -72,6 +80,14 @@ export function useGraphDOM({
   }
 
   // ─── 点命中检测 ─────────────────────────────────────────────────
+  /**
+   * 根据浏览器坐标命中检测当前鼠标下方的节点。
+   *
+   * @param {import('cytoscape').Core} c 目标 cy 实例
+   * @param {number} clientX 浏览器横坐标
+   * @param {number} clientY 浏览器纵坐标
+   * @returns {import('cytoscape').NodeSingular|null} 命中的节点
+   */
   function hitNodeByClientPoint(c, clientX, clientY) {
     const container = c.container()
     if (!container) return null
@@ -92,6 +108,12 @@ export function useGraphDOM({
   }
 
   // ─── 缩放显示控制 ────────────────────────────────────────────────
+  /**
+   * 根据当前缩放级别切换边标签与次要边显示策略。
+   *
+   * @param {number} zoom 当前缩放值
+   * @returns {void}
+   */
   function applyZoomDisplay(zoom) {
     if (!cyRef.value) return
     if (zoom < 0.6) {
@@ -110,6 +132,13 @@ export function useGraphDOM({
   const _handleAbortByCy = new Map()
 
   // ─── 内部：附加手柄元素 ────────────────────────────────────────
+  /**
+   * 为指定 cy 实例挂接节点手柄 DOM 事件，并替换旧监听器。
+   *
+   * @param {import('cytoscape').Core} c 目标 cy 实例
+   * @param {{resizeHandleEl: HTMLDivElement, connectHandleEl: HTMLDivElement, previewLineEl: HTMLDivElement}} els 手柄元素集合
+   * @returns {void}
+   */
   function attachHandleElements(c, els) {
     // Abort any previous listeners on this cy instance before adding new ones.
     // This prevents listener accumulation when updateNodeHandles re-attaches.
@@ -164,6 +193,12 @@ export function useGraphDOM({
   }
 
   // ─── 内部：分离手柄元素 ────────────────────────────────────────
+  /**
+   * 解除指定实例上绑定的手柄监听器并移除缓存引用。
+   *
+   * @param {import('cytoscape').Core} c 目标 cy 实例
+   * @returns {void}
+   */
   function detachHandleElements(c) {
     _handleAbortByCy.get(c)?.abort()
     _handleAbortByCy.delete(c)
@@ -171,6 +206,13 @@ export function useGraphDOM({
   }
 
   // ─── 核心：绑定 DOM 事件 ────────────────────────────────────────
+  /**
+   * 为指定 cy 实例绑定 DOM 层事件，包括右键平移、拖拽缩放、连线和滚轮缩放。
+   * 同一实例只会绑定一次，重复调用会直接返回。
+   *
+   * @param {import('cytoscape').Core|null} [targetCy=null] 目标 cy 实例
+   * @returns {void}
+   */
   function bindDOMEvents(targetCy = null) {
     const c = targetCy || cyRef.value
     if (!c) return
@@ -342,6 +384,12 @@ export function useGraphDOM({
   }
 
   // ─── 批量清理除指定实例外的所有 DOM 绑定 ────────────────────────
+  /**
+   * 清理除指定实例外的所有 DOM 事件与手柄元素。
+   *
+   * @param {import('cytoscape').Core|null} [activeCy=null] 需要保留的 cy 实例
+   * @returns {void}
+   */
   function cleanupDOMEventsExcept(activeCy = null) {
     for (const [cyInst, cleanup] of _domCleanupByCy.entries()) {
       if (!activeCy || cyInst !== activeCy) {
@@ -352,6 +400,11 @@ export function useGraphDOM({
   }
 
   // ─── 强制刷新所有实例的手柄位置 ────────────────────────────────
+  /**
+   * 刷新所有已注册实例的节点手柄位置。
+   *
+   * @returns {void}
+   */
   function refreshAllHandles() {
     for (const cyInst of _handleElsByCy.keys()) {
       updateNodeHandles(cyInst)

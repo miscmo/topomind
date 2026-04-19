@@ -7,10 +7,20 @@ import { GitBackend, GitCache } from '@/core/git-backend.js'
 import { unwrapGitResult } from '@/core/git-result.js'
 import { logger } from '@/core/logger.js'
 
+/**
+ * 提供 Git 相关的统一操作入口，负责连接 `GitBackend` 与 `gitStore`。
+ *
+ * @returns {object} Git 操作方法集合
+ */
 export function useGit() {
   const gitStore = useGitStore()
 
-
+  /**
+   * 加载单个知识库的 Git 状态，并同步更新缓存与 store。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @returns {Promise<object|null>} 标准化后的状态对象
+   */
   async function loadStatus(kbPath) {
     try {
       const statusRes = await GitBackend.status(kbPath)
@@ -25,6 +35,12 @@ export function useGit() {
     }
   }
 
+  /**
+   * 加载当前工作区中待提交文件列表，并写入 store。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @returns {Promise<Array<object>>} 待提交文件列表
+   */
   async function loadCommitFiles(kbPath) {
     try {
       const res = await GitBackend.diffFiles(kbPath)
@@ -38,6 +54,13 @@ export function useGit() {
     }
   }
 
+  /**
+   * 提交当前知识库中的改动，并在完成后刷新状态。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @param {string} msg 提交信息
+   * @returns {Promise<void>} 提交完成结果
+   */
   async function doCommit(kbPath, msg) {
     try {
       const res = await GitBackend.commit(kbPath, msg)
@@ -51,6 +74,14 @@ export function useGit() {
     }
   }
 
+  /**
+   * 执行推送或拉取同步，并将结果同步到 store。
+   * 拉取成功后会额外刷新冲突文件列表。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @param {'push'|'pull'} action 同步动作
+   * @returns {Promise<void>} 同步结果
+   */
   async function doSync(kbPath, action) {
     gitStore.setSyncState(action === 'push' ? 'pushing' : 'pulling')
     try {
@@ -72,6 +103,12 @@ export function useGit() {
     }
   }
 
+  /**
+   * 加载知识库提交历史并写入 store。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @returns {Promise<void>} 加载结果
+   */
   async function loadLog(kbPath) {
     try {
       const res = await GitBackend.log(kbPath, { limit: 50 })
@@ -82,6 +119,12 @@ export function useGit() {
     }
   }
 
+  /**
+   * 加载远程仓库地址和认证方式，并同步到 store。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @returns {Promise<void>} 加载结果
+   */
   async function loadRemote(kbPath) {
     try {
       const urlRes = await GitBackend.remoteGet(kbPath)
@@ -90,8 +133,13 @@ export function useGit() {
     } catch (e) { logger.catch('useGit', 'loadRemote 失败', e) }
   }
 
-/** 验证 Git 远程 URL 格式（支持 HTTPS 和 SSH） */
-function isValidGitRemoteUrl(url) {
+  /**
+   * 校验 Git 远程仓库地址格式，支持 HTTPS 与 SSH 两种常见形式。
+   *
+   * @param {string} url 远程仓库地址
+   * @returns {boolean} 地址是否合法
+   */
+  function isValidGitRemoteUrl(url) {
   if (!url || typeof url !== 'string') return false
   const trimmed = url.trim()
   // HTTPS URL
@@ -113,6 +161,15 @@ function isValidGitRemoteUrl(url) {
   return false
 }
 
+  /**
+   * 保存远程仓库地址、认证方式以及可选的访问 Token。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @param {string} url 远程仓库地址
+   * @param {string} token 访问 Token
+   * @param {string} authType 认证方式
+   * @returns {Promise<void>} 保存结果
+   */
   async function saveRemote(kbPath, url, token, authType) {
     if (url && !isValidGitRemoteUrl(url)) {
       throw new Error('无效的远程仓库 URL，请输入 https://... 或 git@host:path 格式的地址')
@@ -128,6 +185,11 @@ function isValidGitRemoteUrl(url) {
     }
   }
 
+  /**
+   * 加载当前应用维护的 SSH 公钥，并写入 store。
+   *
+   * @returns {Promise<void>} 加载结果
+   */
   async function loadSSHKey() {
     try {
       const res = await GitBackend.authGetSSHKey()
@@ -135,6 +197,12 @@ function isValidGitRemoteUrl(url) {
     } catch (e) { logger.catch('useGit', 'loadSSHKey 失败', e) }
   }
 
+  /**
+   * 加载当前知识库的冲突文件列表。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @returns {Promise<void>} 加载结果
+   */
   async function loadConflicts(kbPath) {
     try {
       const res = await GitBackend.conflictList(kbPath)
@@ -144,6 +212,13 @@ function isValidGitRemoteUrl(url) {
     }
   }
 
+  /**
+   * 加载指定冲突文件的当前内容，并写入 store 供界面展示。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @param {string} file 冲突文件路径
+   * @returns {Promise<void>} 加载结果
+   */
   async function showConflict(kbPath, file) {
     try {
       const res = await GitBackend.conflictShow(kbPath, file)
@@ -151,6 +226,14 @@ function isValidGitRemoteUrl(url) {
     } catch (e) { logger.catch('useGit', 'showConflict 失败', e) }
   }
 
+  /**
+   * 提交某个冲突文件的解决结果，并从冲突列表中移除。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @param {string} file 冲突文件路径
+   * @param {string} resolution 解决后的内容
+   * @returns {Promise<void>} 处理结果
+   */
   async function resolveConflict(kbPath, file, resolution) {
     try {
       unwrapGitResult(await GitBackend.conflictResolve(kbPath, file, resolution), { requireOk: true, errorMessage: '冲突解决失败' })
@@ -161,6 +244,12 @@ function isValidGitRemoteUrl(url) {
     }
   }
 
+  /**
+   * 完成冲突合并流程，清空冲突列表并刷新仓库状态。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @returns {Promise<void>} 处理结果
+   */
   async function completeConflict(kbPath) {
     try {
       unwrapGitResult(await GitBackend.conflictComplete(kbPath), { requireOk: true, errorMessage: '完成冲突合并失败' })
@@ -171,7 +260,12 @@ function isValidGitRemoteUrl(url) {
     }
   }
 
-  // 批量获取多个知识库的 Git 状态（首页用）
+  /**
+   * 批量获取多个知识库的 Git 状态，主要用于首页列表展示。
+   *
+   * @param {string[]} kbPaths 知识库路径列表
+   * @returns {Promise<Record<string, object>>} 状态映射表
+   */
   async function statusBatch(kbPaths) {
     try {
       const res = await GitBackend.statusBatch(kbPaths)

@@ -18,9 +18,12 @@ if (!_pluginsRegistered) {
 }
 
 /**
- * 创建 Cytoscape 实例
- * @param {HTMLElement|null} container
- * @param {object} options - 覆盖默认选项
+ * 创建一个带有项目默认配置的 Cytoscape 实例。
+ * 默认禁用 Cytoscape 自带的缩放和平移，统一由上层 DOM 交互逻辑接管。
+ *
+ * @param {HTMLElement|null} container 挂载容器
+ * @param {object} options 用于覆盖默认配置的附加选项
+ * @returns {import('cytoscape').Core} Cytoscape 实例
  */
 export function createCyInstance(container = null, options = {}) {
   return cytoscape({
@@ -38,10 +41,12 @@ export function createCyInstance(container = null, options = {}) {
 }
 
 /**
- * 设置 HTML 标签（在 cy.mount() 之后调用）
- * cytoscape-node-html-label 内部会清理旧容器，故可安全重复调用
- * @param {object} cyInst - Cytoscape 实例
- * @param {boolean} forceInit - 强制触发初始化（已有节点时）
+ * 为 Cytoscape 实例启用 HTML Label 插件配置。
+ * 当实例来自缓存且已存在节点时，可通过 `forceInit` 主动触发一次渲染事件。
+ *
+ * @param {import('cytoscape').Core} cyInst Cytoscape 实例
+ * @param {boolean} [forceInit=false] 是否强制触发初始化渲染
+ * @returns {void}
  */
 export function setupHtmlLabels(cyInst, forceInit = false) {
   if (!cyInst) return

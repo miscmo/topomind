@@ -5,6 +5,11 @@
  */
 import { defineStore } from 'pinia'
 
+/**
+ * 管理 Git 面板、同步状态、冲突处理和远程配置的全局 store。
+ *
+ * @returns {import('pinia').StoreDefinition} Git store 定义
+ */
 export const useGitStore = defineStore('git', {
   state: () => ({
     /** 当前操作的知识库路径 */
@@ -36,18 +41,23 @@ export const useGitStore = defineStore('git', {
   }),
 
   getters: {
+    /** 当前知识库是否存在未提交改动。 */
     hasDirtyFiles: (state) => state.dirtyCount > 0,
+    /** 当前知识库是否存在冲突文件。 */
     hasConflicts: (state) => state.conflictFiles.length > 0,
   },
 
   actions: {
+    /** 打开指定知识库的 Git 面板。 */
     openForKB(kbPath) {
       this.kbPath = kbPath
       this.isOpen = true
     },
+    /** 关闭 Git 面板。 */
     close() {
       this.isOpen = false
     },
+    /** 更新未提交变更数量。 */
     setDirtyCount(count) {
       this.dirtyCount = count
     },

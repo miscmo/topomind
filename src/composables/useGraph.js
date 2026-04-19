@@ -34,6 +34,12 @@ import { GraphConstants } from '@/core/graph-constants.js'
 import { loggerEnhanced as logger, Action } from '@/core/logger-enhanced.js'
 import { useGraphDOM } from '@/composables/useGraphDOM.js'
 
+/**
+ * 管理图谱页面中的 Cytoscape 实例、房间加载、节点边操作与交互事件。
+ *
+ * @param {{ value: HTMLElement | null }} containerRef 图谱容器引用
+ * @returns {object} 图谱状态与操作方法集合
+ */
 export function useGraph(containerRef) {
   const appStore = useAppStore()
   const roomStore = useRoomStore()
@@ -78,6 +84,12 @@ export function useGraph(containerRef) {
     return `${kb}::${dirPath || ''}`
   }
 
+  /**
+   * 初始化 Cytoscape 实例，并绑定 DOM 与图事件。
+   * 若当前房间已有实例，会先移除旧实例后重建。
+   *
+   * @returns {void}
+   */
   function initCy() {
     if (!containerRef.value) return
     const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath || '__root__'
@@ -102,6 +114,13 @@ export function useGraph(containerRef) {
   }
 
   // ─── 加载房间 ────────────────────────────────────────────────
+  /**
+   * 加载指定目录对应的图谱房间，并恢复节点、边、画布边界与视口状态。
+   * 通过序号机制避免异步并发加载导致旧结果覆盖新房间。
+   *
+   * @param {string} dirPath 房间目录相对路径
+   * @returns {Promise<void>} 加载结果
+   */
   async function loadRoom(dirPath) {
     if (!containerRef.value) return
 
@@ -255,6 +274,13 @@ export function useGraph(containerRef) {
   }
 
   // ─── 布局保存 ────────────────────────────────────────────────
+  /**
+   * 立即保存当前图谱布局到指定目录或当前房间目录。
+   * 保存成功后会把当前知识库标记为存在未提交改动。
+   *
+   * @param {string|null} [targetDirPath=null] 可选目标目录路径
+   * @returns {Promise<void>} 保存结果
+   */
   async function saveCurrentLayout(targetDirPath = null) {
     const dirPath = targetDirPath || roomStore.currentRoomPath || roomStore.currentKBPath
     if (!dirPath) return
@@ -266,6 +292,12 @@ export function useGraph(containerRef) {
     }
   }
 
+  /**
+   * 以防抖方式保存当前图谱布局。
+   * 在调度时冻结元数据快照，避免切换房间后写回错误目录。
+   *
+   * @returns {Promise<void>} 调度结果
+   */
   async function saveCurrentLayoutDebounced() {
     const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
     if (!dirPath) return
@@ -343,6 +375,13 @@ export function useGraph(containerRef) {
   }
 
   // ─── 节点/边 CRUD ────────────────────────────────────────────
+  /**
+   * 在当前房间中新增卡片节点，并立即持久化父级布局。
+   *
+   * @param {string} name 卡片名称
+   * @param {{x:number,y:number}} [pos] 节点初始位置
+   * @returns {Promise<string|undefined>} 新卡片路径
+   */
   async function addCard(name, pos) {
     const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
     if (!dirPath) return
@@ -405,6 +444,14 @@ export function useGraph(containerRef) {
     saveCurrentLayoutDebounced()
   }
 
+  /**
+   * 在两个节点之间新增一条关系边，并避免重复添加同向边。
+   *
+   * @param {string} sourceId 源节点 ID
+   * @param {string} targetId 目标节点 ID
+   * @param {string} relation 关系类型
+   * @returns {void}
+   */
   function addEdge(sourceId, targetId, relation) {
     if (sourceId === targetId) return
     if (!cy.value.getElementById(sourceId)?.length || !cy.value.getElementById(targetId)?.length) return
@@ -576,6 +623,12 @@ export function useGraph(containerRef) {
     }
   }
 
+  /**
+   * 为指定 Cytoscape 实例绑定图交互事件，并确保每个实例仅绑定一次。
+   *
+   * @param {object|null} [targetCy=null] 目标 Cytoscape 实例
+   * @returns {void}
+   */
   function _bindCyEvents(targetCy = null) {
     const c = targetCy || cy.value
     if (!c || _cyEventsBound.has(c)) return
@@ -606,6 +659,12 @@ export function useGraph(containerRef) {
 
 
   // ─── 键盘事件（由 GraphView 组件调用） ──────────────────────
+  /**
+   * 处理图谱区域键盘事件，主要用于拦截删除类按键的默认浏览器行为。
+   *
+   * @param {KeyboardEvent} e 键盘事件
+   * @returns {Promise<void>} 处理结果
+   */
   async function handleKeydown(e) {
     // 拦截 Delete/Backspace 键，避免在图谱空白区域按下时触发意外行为
     const key = e.key
@@ -697,6 +756,12 @@ export function useGraph(containerRef) {
     })
   }
 
+  /**
+   * 根据卡片文档内容刷新节点的徽标显示状态。
+   *
+   * @param {string} id 节点 ID / 卡片路径
+   * @returns {void}
+   */
   function refreshNodeBadge(id) {
     if (!cy.value || !id) return
     const node = cy.value.getElementById(id)
@@ -711,6 +776,12 @@ export function useGraph(containerRef) {
   }
 
   // 注入外部 composable
+  /**
+   * 注入外部网格控制对象，供布局恢复、画布边界和辅助线能力复用。
+   *
+   * @param {object} g grid composable 返回对象
+   * @returns {void}
+   */
   function setGrid(g) { _grid = g }
 
   return {
