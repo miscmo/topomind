@@ -7,6 +7,7 @@ import { useCallback } from 'react'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import type { Node } from '@xyflow/react'
 import { LAYOUT } from '../types'
+import { logger } from '../core/logger'
 
 const elk = new ELK()
 
@@ -112,8 +113,7 @@ export function useLayout() {
 
         return positions
       } catch (e) {
-        console.error('[useLayout] ELK layout failed:', e)
-        // Fallback: return empty positions (nodes stay at their current positions)
+        logger.error('useLayout', 'ELK layout failed:', e)
         return {}
       }
     },

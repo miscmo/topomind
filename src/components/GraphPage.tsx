@@ -18,6 +18,7 @@ import SearchBar from './SearchBar/SearchBar'
 import DetailPanel from './DetailPanel/DetailPanel'
 import Breadcrumb from './Breadcrumb/Breadcrumb'
 import ContextMenu from './ContextMenu/ContextMenu'
+import GitPanel from './GitPanel/GitPanel'
 import { Background, type BackgroundVariant } from '@xyflow/react'
 import { logAction } from '../core/log-backend'
 import styles from './GraphPage.module.css'
@@ -30,6 +31,32 @@ function GraphCanvas() {
   const graph = useGraphContext()
   const { showCM, showEdgeCM } = useContextMenu()
   const [zoomLevel, setZoomLevel] = useState(1)
+
+  // Double-click detection: track click timing/position via onPaneClick
+  const lastPaneClickRef = useRef<{ time: number; x: number; y: number } | null>(null)
+
+  const handlePaneClick = (event: React.MouseEvent) => {
+    const now = Date.now()
+    const { clientX, clientY } = event
+
+    if (lastPaneClickRef.current) {
+      const elapsed = now - lastPaneClickRef.current.time
+      const dx = Math.abs(clientX - lastPaneClickRef.current.x)
+      const dy = Math.abs(clientY - lastPaneClickRef.current.y)
+      if (elapsed < 400 && dx < 10 && dy < 10) {
+        // Double-click on empty canvas: create new top-level node
+        lastPaneClickRef.current = null
+        const name = window.prompt('请输入新节点名称：')
+        if (!name?.trim()) return
+        logAction('节点:创建', 'GraphPage', { nodeName: name.trim(), source: 'double-click-canvas' })
+        graph.createChildNode(name.trim())
+        return
+      }
+    }
+
+    lastPaneClickRef.current = { time: now, x: clientX, y: clientY }
+    graph.onPaneClick(event)
+  }
 
   return (
     <>
@@ -48,7 +75,7 @@ function GraphCanvas() {
             showCM(node.id, e)
           }
         }}
-        onPaneClick={graph.onPaneClick}
+        onPaneClick={handlePaneClick}
         onEdgeContextMenu={(e, edge) => {
           if (edge) {
             showEdgeCM(edge.id, e)
@@ -98,9 +125,6 @@ export default function GraphPage() {
   // Single useGraph instance — passed to GraphContextProvider for sharing
   const graph = useGraph()
 
-  // Rename dialog state
-  const [renameDialog, setRenameDialog] = useState<{ nodeId: string; name: string } | null>(null)
-
   // Load room when room path changes
   useEffect(() => {
     if (prevRoomPathRef.current !== currentRoomPath) {
@@ -121,6 +145,12 @@ export default function GraphPage() {
       if (!window.confirm(`确定要删除 "${graph.selectedNode?.data.label}" 吗？`)) return
       graph.deleteChildNode(selectedNodeId)
     },
+    onAddChild: (parentId: string) => {
+      const name = window.prompt('请输入新节点名称：')
+      if (!name?.trim()) return
+      logAction('节点:创建', 'GraphPage', { parentId, nodeName: name.trim(), source: 'keyboard-tab' })
+      graph.createChildNode(name.trim(), parentId)
+    },
   })
 
   // Context menu handlers
@@ -128,7 +158,7 @@ export default function GraphPage() {
     const name = window.prompt('请输入新节点名称：')
     if (!name?.trim()) return
     logAction('节点:创建', 'GraphPage', { nodeId, nodeName: name.trim(), source: 'context-menu' })
-    graph.createChildNode(name.trim())
+    graph.createChildNode(name.trim(), nodeId)
   }
 
   const handleRename = (nodeId: string) => {
@@ -154,13 +184,6 @@ export default function GraphPage() {
     graph.deleteEdge(edgeId)
   }
 
-  // Rename dialog confirm
-  const handleRenameConfirm = () => {
-    if (!renameDialog?.name.trim() || !renameDialog?.nodeId) return
-    graph.renameNode(renameDialog.nodeId, renameDialog.name.trim())
-    setRenameDialog(null)
-  }
-
   if (view !== 'graph') return null
 
   return (
@@ -184,6 +207,9 @@ export default function GraphPage() {
             <SearchBar />
 
             <GraphCanvas />
+
+            {/* Git 面板 */}
+            <GitPanel />
           </div>
 
           {/* 右侧面板 */}

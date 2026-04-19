@@ -27,6 +27,7 @@ interface RoomState {
   clearRoom: () => void
   setLoading: (loading: boolean) => void
   setCurrentKB: (kbPath: string) => void
+  navigateToHistoryIndex: (index: number) => void
 
   // Computed-like helpers
   isInRoom: () => boolean
@@ -135,6 +136,34 @@ const roomStoreCreator = (set: RoomStateSetter, get: () => RoomState): RoomState
     currentRoomName: '全局',
     roomHistory: [],
   }),
+
+  /** Navigate to a specific point in history by index.
+   * Items before index remain in history (truncated after index).
+   * Item at index becomes the current room.
+   */
+  navigateToHistoryIndex: (index: number) => {
+    const state = get()
+    const history = state.roomHistory
+    if (index < 0 || index >= history.length) return
+
+    const target = history[index]
+    const newHistory = history.slice(0, index)
+    if (newHistory.length === 0) {
+      set({
+        currentRoomPath: null,
+        currentKBPath: target.room.kbPath,
+        currentRoomName: '全局',
+        roomHistory: [],
+      })
+    } else {
+      set({
+        currentRoomPath: target.room.path,
+        currentKBPath: target.room.kbPath,
+        currentRoomName: target.room.name,
+        roomHistory: newHistory,
+      })
+    }
+  },
 
   clearRoom: () => set({
     currentKBPath: null,

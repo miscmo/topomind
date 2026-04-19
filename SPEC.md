@@ -1,8 +1,8 @@
 # TopoMind 规范文档
 
 **项目**：TopoMind — 可漫游拓扑知识大脑
-**版本**：v5.1.0
-**最后更新**：2026-04-19
+**版本**：v5.1.1
+**最后更新**：2026-04-20
 **状态**：已实现
 
 ---
@@ -100,9 +100,12 @@ topomind_cc/
     │   ├── SearchBar/           # 搜索框
     │   │   ├── SearchBar.tsx
     │   │   └── SearchBar.module.css
-    │   └── ContextMenu/         # 右键菜单
-    │       ├── ContextMenu.tsx
-    │       └── ContextMenu.module.css
+    │   ├── ContextMenu/         # 右键菜单
+    │   │   ├── ContextMenu.tsx
+    │   │   └── ContextMenu.module.css
+    │   └── GitPanel/           # Git 状态面板（底部弹出）
+    │       ├── GitPanel.tsx
+    │       └── GitPanel.module.css
     └── styles/
         └── base.css             # 全局基础样式（Markdown 渲染、字体等）
 ```
@@ -326,8 +329,9 @@ interface KBEdge {
 | 单击节点 | 图谱节点 | 选中节点，右侧显示 Markdown 详情，导航树同步高亮 |
 | 双击节点 | 图谱节点 | 有子节点→钻入房间；叶子→选中并显示详情 |
 | 单击空白 | 图谱背景 | 取消选中，显示占位提示 |
-| 双击空白 | 图谱背景 | 弹出输入框，在当前房间创建新卡片 |
+| 双击空白 | 图谱背景 | 弹出输入框，在当前房间创建新卡片（400ms 内同一位置两次点击触发） |
 | 右击节点 | 图谱节点 | 弹出节点右键菜单 |
+| 右击边 | 图谱边 | 弹出边右键菜单（编辑关系 / 删除） |
 | 悬停节点 | 图谱节点 | 高亮该节点及关联边/邻居，其他元素淡化 |
 | 拖拽节点 | 图谱节点 | 移动位置，释放后自动保存 |
 | 滚轮 | 图谱 | 缩放画布（范围 15%~350%） |
@@ -339,10 +343,10 @@ interface KBEdge {
 
 | 按键 | 前提条件 | 效果 |
 |------|---------|------|
-| `Esc` | 任何时候 | 关闭所有模态框；取消连线模式；清空搜索；关闭详情面板收起 |
-| `Backspace` | 不在输入框/模态框中，且在某房间内 | 返回上一层 |
+| `Escape` | 任何时候 | 关闭所有模态框；取消连线模式；清空搜索；关闭详情面板收起；输入框失焦 |
 | `Tab` | 有选中节点，不在输入框/模态框中 | 弹出输入框为选中节点添加子概念 |
-| `Delete` | 有选中节点，不在输入框/模态框中 | 弹出删除确认 |
+| `Delete` | 有选中节点，不在输入框/模态框中 | 弹出删除确认，删除选中节点 |
+| `Backspace` | 有选中节点，不在输入框/模态框中 | 同 Delete — 弹出删除确认，删除选中节点 |
 
 ---
 
@@ -536,11 +540,23 @@ interface KBEdge {
 
 #### Git 面板 UI
 
-- 显示当前 KB 的 Git 状态（clean / dirty / uninit / no-remote / ahead / behind / diverged / conflict）
-- 显示未提交变更文件数
-- 一键提交（commit）按钮
-- push / pull / fetch 操作
-- 冲突文件列表和解决入口
+Git 面板是底部弹出的可折叠面板，通过工具栏 Git 按钮展开/收起。面板结构：
+
+- **标题栏**：左侧显示 "Git" 标签 + 状态徽章（修改数/未跟踪数/已删除数） + 工作状态指示器（● dirty / ✓ clean）；右侧显示远程 URL + 操作按钮组（Fetch / Pull / Push / Commit）
+- **状态徽章**：修改数（橙）、未跟踪数（绿）、已删除数（红）
+- **提交框**（点击 Commit 按钮展开）：显示变更文件列表 + 提交信息 textarea + 确认/取消按钮
+- **按钮状态**：无远程仓库时 Fetch/Pull/Push 禁用；无变更时 Commit 禁用；操作进行中所有按钮禁用
+
+#### Git 功能列表
+
+| 按钮 | 功能 |
+|------|------|
+| ↓ Fetch | 获取远程引用（不合并） |
+| ↓ Pull | 拉取远程变更并合并 |
+| ↑ Push | 推送本地提交到远程 |
+| ✓ Commit | 展开提交框，输入提交信息后确认提交 |
+
+---
 
 ---
 
@@ -701,6 +717,36 @@ interface KBEdge {
 | `authType` | `'token' \| 'ssh'` | 认证类型 |
 | `SSHKey` | `string` | SSH 公钥 |
 
+### 8.5 GraphContext
+
+`GraphContext` 是图谱状态的单例共享机制，避免多个 `useGraph()` 调用导致状态碎片化。
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `nodes` | `KnowledgeNode[]` | 当前可见节点列表 |
+| `edges` | `KnowledgeEdge[]` | 当前可见边列表 |
+| `loading` | `boolean` | 是否正在加载房间 |
+| `selectedNode` | `KnowledgeNode \| null` | 当前选中的节点 |
+| `loadRoom(dirPath)` | `Promise<void>` | 加载指定房间 |
+| `navigateBack()` | `Promise<void>` | 返回上一层 |
+| `navigateToRoom(index)` | `Promise<void>` | 跳转到历史栈中的指定房间 |
+| `onNodesChange` | `(changes) => void` | React Flow 节点变更 |
+| `onEdgesChange` | `(changes) => void` | React Flow 边变更 |
+| `onConnect` | `(connection) => void` | React Flow 新建连线 |
+| `onNodeClick` | `(event, node) => void` | 单击节点 |
+| `onPaneClick` | `(event) => void` | 单击画布 |
+| `onNodeDoubleClick` | `(event, node) => void` | 双击节点 |
+| `onNodeContextMenu` | `(event, node) => void` | 右键节点 |
+| `createChildNode` | `(name, parentId?) => Promise<string \| null>` | 创建子节点 |
+| `deleteChildNode` | `(nodeId) => Promise<boolean>` | 删除节点 |
+| `renameNode` | `(nodeId, newName) => Promise<boolean>` | 重命名节点 |
+| `deleteEdge` | `(edgeId) => Promise<boolean>` | 删除边 |
+| `updateEdgeRelation` | `(edgeId, relation, weight) => void` | 更新边关系 |
+| `layoutNodes` | `(direction?) => Promise<void>` | 执行布局 |
+| `highlightSearch` | `(query) => void` | 高亮搜索匹配 |
+
+**重要**：所有需要访问图谱状态的组件必须使用 `useGraphContext()` 而非直接调用 `useGraph()`。`GraphContextProvider` 在 `GraphPage` 根级别挂载，单次调用 `useGraph()` 实例后通过 Context 共享。
+
 ### 8.4 ReactFlowProvider 放置原则
 
 ⚠️ **重要**：`ReactFlowProvider` 必须位于 `App.tsx` 根级别，包裹所有视图组件。
@@ -843,6 +889,7 @@ return (
 |------|------|----------|
 | v5.0.0 | 2026-04-17 | **架构大重构**：Vite + Vue 3 + Pinia 构建系统替代纯 HTML/CDN；纯文件系统存储（移除 IndexedDB），使用 `_graph.json` 和 `_config.json`；目录即结构（KB=目录，Card=子目录）；项目结构重组为 `composables/` + `core/` + `components/` + `stores/`；Electron 主进程合并为单文件；内置 Git 版本控制；移除 vendor/、docs/ 等旧目录 |
 | v5.1.0 | 2026-04-19 | **Vue 3 → React 18 + React Flow + Zustand 迁移**：渲染进程从 Vue 3 迁移到 React 18 + TypeScript + React Flow；状态管理从 Pinia 迁移到 Zustand（`appStore` 使用 `create`，`roomStore` 使用 vanilla `createStore` 支持外部 `getState()`）；样式从全局 CSS 迁移到 CSS Modules；`ReactFlowProvider` 移动到 App.tsx 根级别；移除 `vendor/` 和 `src/css/` 遗留文件；修复多处 stale closure 和 async/await bug |
+| v5.1.1 | 2026-04-20 | **BUG 修复与架构优化**：修复双击画布创建节点（实现 `onPaneClick` 双击检测）、Tab 添加子节点（stale closure 修复）、面包屑显示完整历史链、Git 面板 `statusClass` TS 错误；添加 Git 面板组件（底部弹出式，状态徽章 + Fetch/Pull/Push/Commit）；新增 `GraphContext` 单例共享；补充 SPEC.md Git 面板 UI 规范和项目结构 |
 
 ---
 

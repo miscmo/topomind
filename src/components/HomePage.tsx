@@ -8,6 +8,7 @@ import { useRoomStore, roomStore } from '../stores/roomStore'
 import { FSB } from '../core/fs-backend'
 import { Store } from '../core/storage'
 import { logAction } from '../core/log-backend'
+import { logger } from '../core/logger'
 import styles from './HomePage.module.css'
 
 interface KBItem {
@@ -74,7 +75,7 @@ export default function HomePage() {
       )
       setKbs(initial.map((kb, i) => ({ ...kb, nodeCount: counts[i] })))
     } catch (err) {
-      console.error('[HomePage] loadKBList error:', err)
+      logger.catch('HomePage', 'loadKBList', err)
     } finally {
       setLoading(false)
     }

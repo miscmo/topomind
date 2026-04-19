@@ -1,37 +1,11 @@
 /* ===== TopoMind 基础样式 ===== */
+/* 注意：Tab 栏、页面容器等旧布局样式已移除（React 组件各自管理） */
+
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   background:#f0f2f5;color:#2d3436}
 body{display:flex;flex-direction:column}
-
-/* ===== Tab 栏 ===== */
-#tab-bar{display:flex;height:36px;background:#f8f9fb;flex-shrink:0;border-bottom:1px solid #e0e4ea;
-  align-items:center;padding:0 4px;gap:0;
-  overflow-x:auto;overflow-y:hidden;user-select:none}
-#tab-bar::-webkit-scrollbar{height:3px}
-#tab-bar::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
-
-.tab-item{display:flex;align-items:center;gap:6px;height:28px;
-  padding:0 12px 0 14px;border-radius:6px 6px 0 0;cursor:pointer;
-  font-size:12px;color:#666;flex-shrink:0;max-width:180px;
-  transition:all .15s;border:1px solid transparent;border-bottom:none;
-  position:relative}
-.tab-item:hover{background:#fff;color:#333}
-.tab-item.active{background:#fff;color:#1a3a5c;font-weight:500;border-color:#e0e4ea}
-.tab-item.active::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:2px;background:#1a3a5c}
-.tab-item-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.tab-item-close{width:16px;height:16px;display:flex;align-items:center;justify-content:center;
-  border-radius:3px;font-size:10px;color:#999;flex-shrink:0;transition:all .12s;opacity:.6}
-.tab-item-close:hover{background:#fee2e2;color:#e74c3c;opacity:1}
-.tab-item.dirty .tab-item-label::after{content:' ●';color:#f39c12;font-size:8px;vertical-align:middle}
-
-/* ===== 页面容器 ===== */
-#page-container{flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column}
-#graph-page{flex:1;min-height:0;display:flex;flex-direction:column}
-
-/* ===== 主三栏布局 ===== */
-#app{display:flex;width:100%;flex:1;min-height:0;position:relative}
 
 /* ===== 通用按钮 ===== */
 .btn{height:32px;padding:0 16px;border-radius:7px;font-size:12px;cursor:pointer;border:1px solid #ddd;background:#fff;color:#555;transition:all .12s;display:inline-flex;align-items:center}
@@ -46,7 +20,3 @@ body{display:flex;flex-direction:column}
 .form-group label{display:block;font-size:12px;font-weight:500;color:#555;margin-bottom:4px}
 .form-group input,.form-group select{width:100%;height:34px;border:1px solid #ddd;border-radius:7px;padding:0 10px;font-size:12px;outline:none}
 .form-group input:focus,.form-group select:focus{border-color:#3498db}
-
-/* ===== 占位提示 ===== */
-.placeholder-text{color:#aaa;font-size:14px;margin-top:25vh;text-align:center}
-.placeholder-text span{display:block;font-size:40px;margin-bottom:10px}

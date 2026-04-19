@@ -15,6 +15,7 @@ import { useRoomStore, roomStore } from '../stores/roomStore'
 import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
 import { logAction } from '../core/log-backend'
+import { logger } from '../core/logger'
 import type { KnowledgeNodeData, KnowledgeNode, KnowledgeEdge, GraphMeta, EdgeRelation, EdgeWeight } from '../types'
 import { DOMAIN_COLORS } from '../types'
 
@@ -26,6 +27,26 @@ function generateId(prefix: string): string {
     id += AUTO_ID_CHARS[Math.floor(Math.random() * AUTO_ID_CHARS.length)]
   }
   return id
+}
+
+/** Shared serialization: convert nodes+edges to _graph.json format */
+function buildMetaFromNodesEdges(
+  nodes: KnowledgeNode[],
+  edges: KnowledgeEdge[]
+): { children: Record<string, { name: string }>; edges: Array<{ id: string; source: string; target: string; relation: string; weight: string }> } {
+  const children: Record<string, { name: string }> = {}
+  for (const node of nodes) {
+    const childName = node.id.includes('/') ? node.id.split('/').pop()! : node.id
+    children[childName] = { name: node.data.label }
+  }
+  const graphEdges = edges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    relation: e.data?.relation ?? '相关',
+    weight: e.data?.weight ?? 'minor',
+  }))
+  return { children, edges: graphEdges }
 }
 
 export interface GraphState {
@@ -56,8 +77,8 @@ export function useGraph() {
     selectedNode: null,
   })
 
-  const // Node internal map for O(1) access
-    nodesMapRef = useRef<Map<string, KnowledgeNode>>(new Map())
+  // Node internal maps for O(1) access
+  const nodesMapRef = useRef<Map<string, KnowledgeNode>>(new Map())
   const edgesMapRef = useRef<Map<string, KnowledgeEdge>>(new Map())
   const savePendingRef = useRef(false)
   // Refs for stable closure access to current nodes/edges
@@ -204,7 +225,7 @@ export function useGraph() {
           selectedNode: null,
         })
       } catch (e) {
-        console.error('[useGraph] loadRoom failed:', e)
+        logger.catch('useGraph', 'loadRoom', e)
         setState((s) => ({ ...s, loading: false }))
       }
     },
@@ -216,27 +237,7 @@ export function useGraph() {
   const saveLayoutToDisk = useCallback(
     async (dirPath: string, nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => {
       if (!dirPath) return
-
-      // Build children map from nodes
-      const children: Record<string, { name: string }> = {}
-      for (const node of nodes) {
-        const childName = node.id.includes('/') ? node.id.split('/').pop()! : node.id
-        children[childName] = { name: node.data.label }
-      }
-
-      // Build edges array
-      const graphEdges = edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        relation: e.data?.relation ?? '相关',
-        weight: e.data?.weight ?? 'minor',
-      }))
-
-      await storage.saveLayout(dirPath, {
-        children,
-        edges: graphEdges,
-      })
+      await storage.saveLayout(dirPath, buildMetaFromNodesEdges(nodes, edges))
     },
     [storage]
   )
@@ -268,8 +269,6 @@ export function useGraph() {
     [currentRoomPath, computeLayout, rebuildMaps, saveLayoutToDisk]
   )
 
-  // ===== Apply layout =====
-
   const scheduleDebouncedSave = useCallback(
     (dirPath: string) => {
       if (savePendingRef.current) return
@@ -277,23 +276,10 @@ export function useGraph() {
 
       storage.saveGraphDebounced(
         dirPath,
-        () => {
-          const nodes = Array.from(nodesMapRef.current.values())
-          const edges = Array.from(edgesMapRef.current.values())
-          const children: Record<string, { name: string }> = {}
-          for (const node of nodes) {
-            const childName = node.id.includes('/') ? node.id.split('/').pop()! : node.id
-            children[childName] = { name: node.data.label }
-          }
-          const graphEdges = edges.map((e) => ({
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            relation: e.data?.relation ?? '相关',
-            weight: e.data?.weight ?? 'minor',
-          }))
-          return { children, edges: graphEdges }
-        },
+        () => buildMetaFromNodesEdges(
+          Array.from(nodesMapRef.current.values()),
+          Array.from(edgesMapRef.current.values())
+        ),
         () => {
           savePendingRef.current = false
         }
@@ -422,26 +408,11 @@ export function useGraph() {
       // Save current room layout before leaving
       if (currentRoomPath) {
         await storage.flushGraphSave(
-          currentRoomPath!,
-          () => {
-            const nodes = Array.from(nodesMapRef.current.values())
-            const edges = Array.from(edgesMapRef.current.values())
-            const children: Record<string, { name: string }> = {}
-            for (const node of nodes) {
-              const childName = node.id.includes('/')
-                ? node.id.split('/').pop()!
-                : node.id
-              children[childName] = { name: node.data.label }
-            }
-            const graphEdges = edges.map((e) => ({
-              id: e.id,
-              source: e.source,
-              target: e.target,
-              relation: e.data?.relation ?? '相关',
-              weight: e.data?.weight ?? 'minor',
-            }))
-            return { children, edges: graphEdges }
-          }
+          currentRoomPath,
+          () => buildMetaFromNodesEdges(
+            Array.from(nodesMapRef.current.values()),
+            Array.from(edgesMapRef.current.values())
+          )
         )
       }
 
@@ -464,18 +435,20 @@ export function useGraph() {
   // ===== Node CRUD =====
 
   const createChildNode = useCallback(
-    async (name: string): Promise<string | null> => {
-      if (!currentRoomPath) return null
+    async (name: string, parentId?: string): Promise<string | null> => {
+      // If parentId is provided, create inside that node's directory
+      // Otherwise create in the current room (top-level node)
+      const targetPath = parentId ?? currentRoomPath
+      if (!targetPath) return null
 
       try {
-        const newPath = await storage.createCard(currentRoomPath, name)
-        logAction('节点:创建', 'useGraph', { nodeName: name, parentPath: currentRoomPath, newPath: newPath ?? undefined })
-
+        const newPath = await storage.createCard(targetPath, name)
+        logAction('节点:创建', 'useGraph', { nodeName: name, parentPath: targetPath, newPath: newPath ?? undefined })
         // Reload room to get updated children
-        await loadRoom(currentRoomPath)
+        await loadRoom(currentRoomPath ?? '')
         return newPath
       } catch (e) {
-        console.error('[useGraph] createChildNode failed:', e)
+        logger.catch('useGraph', 'createChildNode', e)
         return null
       }
     },
@@ -494,7 +467,7 @@ export function useGraph() {
         }
         return true
       } catch (e) {
-        console.error('[useGraph] deleteChildNode failed:', e)
+        logger.catch('useGraph', 'deleteChildNode', e)
         return false
       }
     },
@@ -523,7 +496,7 @@ export function useGraph() {
         }
         return true
       } catch (e) {
-        console.error('[useGraph] renameNode failed:', e)
+        logger.catch('useGraph', 'renameNode', e)
         return false
       }
     },
@@ -576,30 +549,46 @@ export function useGraph() {
     if (currentRoomPath) {
       await storage.flushGraphSave(
         currentRoomPath,
-        () => {
-          const nodes = Array.from(nodesMapRef.current.values())
-          const edges = Array.from(edgesMapRef.current.values())
-          const children: Record<string, { name: string }> = {}
-          for (const node of nodes) {
-            const childName = node.id.includes('/') ? node.id.split('/').pop()! : node.id
-            children[childName] = { name: node.data.label }
-          }
-          const graphEdges = edges.map((e) => ({
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            relation: e.data?.relation ?? '相关',
-            weight: e.data?.weight ?? 'minor',
-          }))
-          return { children, edges: graphEdges }
-        }
+        () => buildMetaFromNodesEdges(
+          Array.from(nodesMapRef.current.values()),
+          Array.from(edgesMapRef.current.values())
+        )
       )
     }
 
     clearSelection()
     logAction('房间:返回', 'useGraph', { fromRoom: currentRoomPath })
     goBack()
-  }, [currentRoomPath, storage, goBack, clearSelection])
+    // Load the new room immediately after store update
+    const newPath = roomStore.getState().currentRoomPath || ''
+    await loadRoom(newPath)
+  }, [currentRoomPath, storage, goBack, clearSelection, loadRoom])
+
+  /** Navigate to a specific room by history index. Truncates history and loads target room. */
+  const navigateToRoom = useCallback(
+    async (index: number) => {
+      const roomState = roomStore.getState()
+      if (index < 0 || index >= roomState.roomHistory.length) return
+
+      // Save current room layout before leaving
+      if (currentRoomPath) {
+        await storage.flushGraphSave(
+          currentRoomPath,
+          () => buildMetaFromNodesEdges(
+            Array.from(nodesMapRef.current.values()),
+            Array.from(edgesMapRef.current.values())
+          )
+        )
+      }
+
+      clearSelection()
+      logAction('房间:导航', 'useGraph', { targetIndex: index })
+      roomStore.getState().navigateToHistoryIndex(index)
+      const newPath = roomStore.getState().currentRoomPath || ''
+      await loadRoom(newPath)
+    },
+    [currentRoomPath, storage, clearSelection, loadRoom]
+  )
 
   // ===== Search highlight =====
 
@@ -630,6 +619,7 @@ export function useGraph() {
     // Room lifecycle
     loadRoom,
     navigateBack,
+    navigateToRoom,
 
     // React Flow handlers
     onNodesChange,

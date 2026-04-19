@@ -21,6 +21,7 @@ export interface GraphContextValue {
   // Room lifecycle
   loadRoom: (dirPath: string) => Promise<void>
   navigateBack: () => Promise<void>
+  navigateToRoom: (index: number) => Promise<void>
 
   // React Flow handlers
   onNodesChange: (changes: NodeChange[]) => void
@@ -55,6 +56,7 @@ const emptyContext: GraphContextValue = {
   selectedNode: null,
   loadRoom: async () => {},
   navigateBack: async () => {},
+  navigateToRoom: async () => {},
   onNodesChange: () => {},
   onEdgesChange: () => {},
   onConnect: () => {},
@@ -83,6 +85,7 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     selectedNode: graph.selectedNode,
     loadRoom: graph.loadRoom,
     navigateBack: graph.navigateBack,
+    navigateToRoom: graph.navigateToRoom,
     onNodesChange: graph.onNodesChange,
     onEdgesChange: graph.onEdgesChange,
     onConnect: graph.onConnect,

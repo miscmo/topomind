@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '../../stores/appStore'
 import { useRoomStore } from '../../stores/roomStore'
 import { useStorage } from '../../hooks/useStorage'
+import { logger } from '../../core/logger'
 import type { KBListItem } from '../../types'
 import styles from './NavTree.module.css'
 
@@ -22,7 +23,7 @@ export default function NavTree() {
         const list = await storage.listKBs()
         setKbs(list)
       } catch (e) {
-        console.error('[NavTree] listKBs failed:', e)
+        logger.catch('NavTree', 'listKBs', e)
       }
     }
     load()
