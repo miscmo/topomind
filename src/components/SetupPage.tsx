@@ -18,7 +18,7 @@ export default function SetupPage() {
     try {
       const picked = await FSB.selectWorkDirCandidate()
       if (!picked?.valid) return
-      const res = await FSB.setWorkDir(picked.path)
+      const res = await FSB.setWorkDir(picked.nodePath!)
       if (!res?.valid) {
         setIsError(true)
         setMessage(res?.error || '不是有效的工作目录')
@@ -27,7 +27,7 @@ export default function SetupPage() {
       showHome()
     } catch (e) {
       setIsError(true)
-      setMessage(e?.message || '打开工作目录失败')
+      setMessage((e as { message?: string })?.message || '打开工作目录失败')
     }
   }
 
@@ -40,7 +40,7 @@ export default function SetupPage() {
         setMessage(picked?.error || '请选择一个空目录作为新的工作目录')
         return
       }
-      const res = await FSB.createWorkDir(picked.path)
+      const res = await FSB.createWorkDir(picked.nodePath!)
       if (!res?.valid) {
         setIsError(true)
         setMessage(res?.error || '创建工作目录失败')
@@ -49,7 +49,7 @@ export default function SetupPage() {
       showHome()
     } catch (e) {
       setIsError(true)
-      setMessage(e?.message || '创建工作目录失败')
+      setMessage((e as { message?: string })?.message || '创建工作目录失败')
     }
   }
 

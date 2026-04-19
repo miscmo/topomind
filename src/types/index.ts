@@ -33,11 +33,11 @@ export interface GraphEdge {
  * _graph.json 完整结构
  */
 export interface GraphMeta {
-  children: Record<string, GraphChild>
-  edges: GraphEdge[]
-  zoom?: number
-  pan?: { x: number; y: number }
-  canvasBounds?: { width: number; height: number }
+  children?: Record<string, GraphChild>
+  edges?: GraphEdge[]
+  zoom?: number | null
+  pan?: { x: number; y: number } | null
+  canvasBounds?: object | null
 }
 
 // ============== 边类型 ==============
@@ -76,6 +76,8 @@ export interface KnowledgeNodeData {
   selected?: boolean
   /** 悬停状态 */
   hovered?: boolean
+  /** Index signature for React Flow Record<string, unknown> compatibility */
+  [key: string]: unknown
 }
 
 // ============== React Flow 内置类型扩展 ==============

@@ -34,7 +34,9 @@ interface RoomState {
   getBreadcrumbs: () => RoomHistoryItem[]
 }
 
-const roomStoreCreator = (set: (fn: (s: RoomState) => RoomState) => void, get: () => RoomState): RoomState => ({
+type RoomStateSetter = (partial: Partial<RoomState> | ((state: RoomState) => Partial<RoomState>)) => void
+
+const roomStoreCreator = (set: RoomStateSetter, get: () => RoomState): RoomState => ({
   currentKBPath: null,
   currentRoomPath: null,
   currentRoomName: '全局',
@@ -148,9 +150,9 @@ const roomStoreCreator = (set: (fn: (s: RoomState) => RoomState) => void, get: (
 
   getBreadcrumbs: () => {
     const state = get()
-    const crumbs = state.roomHistory.map((h) => h.room)
+    const crumbs: RoomHistoryItem[] = state.roomHistory
     if (state.currentRoomPath) {
-      crumbs.push({ path: state.currentRoomPath, kbPath: state.currentKBPath || '', name: state.currentRoomName })
+      crumbs.push({ room: { path: state.currentRoomPath, kbPath: state.currentKBPath || '', name: state.currentRoomName } })
     }
     return crumbs
   },

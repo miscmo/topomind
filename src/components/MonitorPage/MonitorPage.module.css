@@ -1,0 +1,669 @@
+/* ===== MonitorPage 样式 ===== */
+/* 采用 VS Code / Chrome DevTools 风格的专业日志查看器 */
+
+/* ============================================================ */
+/* 根布局
+/* ============================================================ */
+.monitorRoot {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  background: var(--page-bg, #f0f2f5);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  color: #2d3436;
+}
+
+/* ============================================================ */
+/* 左侧边栏
+/* ============================================================ */
+.sidebar {
+  width: 200px;
+  min-width: 200px;
+  background: #1a2a3a;
+  display: flex;
+  flex-direction: column;
+  color: #c8d0d8;
+}
+
+.sidebarLogo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 16px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  letter-spacing: 0.3px;
+}
+
+.logoIcon {
+  font-size: 10px;
+  color: #3498db;
+}
+
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  gap: 2px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  color: #9aa5b1;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  border-radius: 0;
+  height: auto;
+  width: 100%;
+}
+
+.navItem:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8eaed;
+}
+
+.navItemActive {
+  background: rgba(52, 152, 219, 0.15) !important;
+  color: #3498db !important;
+  border-left: 2px solid #3498db;
+  padding-left: 14px;
+}
+
+.navIcon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.badge {
+  margin-left: auto;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 8px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.badgePlaceholder {
+  margin-left: auto;
+  width: 18px;
+}
+
+/* 侧边栏统计 */
+.sidebarStats {
+  margin-top: auto;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.statTitle {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.statRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.statDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.statLabel {
+  color: #9aa5b1;
+  flex: 1;
+}
+
+.statValue {
+  color: #c8d0d8;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 11px;
+}
+
+.statTotal {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* ============================================================ */
+/* 顶部过滤栏
+/* ============================================================ */
+.mainArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e0e4ea;
+  gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.filterLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.filterRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 搜索框 */
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 8px;
+  color: #999;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.searchInput {
+  height: 28px;
+  padding: 0 28px 0 26px;
+  border: 1px solid #e0e4ea;
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+  width: 220px;
+  background: #f8f9fb;
+  transition: all 0.15s;
+}
+
+.searchInput:focus {
+  border-color: #3498db;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.searchClear {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.searchClear:hover {
+  color: #e74c3c;
+}
+
+/* 日期选择 */
+.dateSelect {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #e0e4ea;
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+  background: #f8f9fb;
+  cursor: pointer;
+  color: #2d3436;
+}
+
+.dateSelect:focus {
+  border-color: #3498db;
+}
+
+/* 等级过滤按钮 */
+.levelFilters {
+  display: flex;
+  gap: 4px;
+}
+
+.levelBtn {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #e0e4ea;
+  background: #f8f9fb;
+  color: #888;
+  transition: all 0.12s;
+  letter-spacing: 0.3px;
+}
+
+.levelBtnActive {
+  background: color-mix(in srgb, var(--level-color) 12%, transparent);
+  border-color: var(--level-color);
+  color: var(--level-color);
+}
+
+.levelBtn:hover {
+  background: #eee;
+}
+
+/* 实时流开关 */
+.streamToggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #555;
+  user-select: none;
+}
+
+.streamToggle input {
+  accent-color: #3498db;
+}
+
+/* 操作按钮 */
+.actionBtn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e0e4ea;
+  border-radius: 6px;
+  background: #f8f9fb;
+  color: #555;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.12s;
+}
+
+.actionBtn:hover {
+  background: #eee;
+  border-color: #ccc;
+}
+
+.actionBtnDanger:hover {
+  background: #fee2e2;
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+/* ============================================================ */
+/* 内容区域（日志列表 + 详情面板）
+/* ============================================================ */
+.contentArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ============================================================ */
+/* 日志列表
+/* ============================================================ */
+.logList {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
+}
+
+.logHeader {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: #f8f9fb;
+  border-bottom: 1px solid #e0e4ea;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.logBody {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.logBody::-webkit-scrollbar {
+  width: 6px;
+}
+
+.logBody::-webkit-scrollbar-track {
+  background: #f0f2f5;
+}
+
+.logBody::-webkit-scrollbar-thumb {
+  background: #d0d4da;
+  border-radius: 3px;
+}
+
+.logBody::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
+
+.logRow {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-bottom: 1px solid #f0f2f5;
+  cursor: pointer;
+  transition: background 0.08s;
+  min-width: 0;
+  gap: 0;
+}
+
+.logRow:hover {
+  background: #f8f9fb;
+}
+
+.logRowSelected {
+  background: #e8f4fd !important;
+  border-left: 2px solid #3498db;
+  padding-left: 10px;
+}
+
+.logRowError {
+  background: #fef5f5;
+}
+
+.logRowError:hover {
+  background: #fee2e2;
+}
+
+.logRowWarn {
+  background: #fffbf0;
+}
+
+.logRowWarn:hover {
+  background: #fef3e2;
+}
+
+/* 列宽 */
+.colTime { width: 90px; min-width: 90px; flex-shrink: 0; }
+.colLevel { width: 52px; min-width: 52px; flex-shrink: 0; font-size: 10px; font-weight: 700; letter-spacing: 0.3px; }
+.colModule { width: 100px; min-width: 80px; flex-shrink: 0; }
+.colAction { width: 140px; min-width: 100px; flex-shrink: 0; }
+.colMessage { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 行内列 */
+.logTime {
+  width: 90px;
+  min-width: 90px;
+  flex-shrink: 0;
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.logLevel {
+  width: 52px;
+  min-width: 52px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.logModule {
+  width: 100px;
+  min-width: 80px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1a3a5c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logAction {
+  width: 140px;
+  min-width: 100px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #8b5cf6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logMessage {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 搜索高亮 */
+.highlight {
+  background: #fef08a;
+  color: #854d0e;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* 空状态 */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #aaa;
+  font-size: 14px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 40px;
+  margin-bottom: 12px;
+  display: block;
+  opacity: 0.4;
+}
+
+.emptyHint {
+  font-size: 12px;
+  color: #bbb;
+  margin-top: 4px;
+}
+
+/* ============================================================ */
+/* 详情面板
+/* ============================================================ */
+.detailPanel {
+  border-top: 1px solid #e0e4ea;
+  background: #fff;
+  max-height: 280px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.detailPanel::-webkit-scrollbar {
+  height: 6px;
+}
+
+.detailPanel::-webkit-scrollbar-track {
+  background: #f0f2f5;
+}
+
+.detailPanel::-webkit-scrollbar-thumb {
+  background: #d0d4da;
+  border-radius: 3px;
+}
+
+.detailEmpty {
+  padding: 24px;
+  color: #aaa;
+  font-size: 12px;
+  text-align: center;
+}
+
+.detailHeader {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: #f8f9fb;
+  border-bottom: 1px solid #e0e4ea;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+}
+
+.detailLevel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.detailTitle {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2d3436;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.detailBtn {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #e0e4ea;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.12s;
+}
+
+.detailBtn:hover {
+  background: #f0f2f5;
+}
+
+.detailBody {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detailRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.detailLabel {
+  width: 50px;
+  min-width: 50px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-top: 1px;
+  flex-shrink: 0;
+}
+
+.detailValue {
+  font-size: 12px;
+  color: #374151;
+  word-break: break-all;
+}
+
+.detailParams {
+  margin: 4px 0 0;
+  padding: 8px;
+  background: #f8f9fb;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+  color: #374151;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+  width: 100%;
+  border: 1px solid #e8ecf0;
+}
+
+/* ============================================================ */
+/* 性能监控占位
+/* ============================================================ */
+.perfContainer {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.perfPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 20px;
+  color: #aaa;
+  font-size: 14px;
+  text-align: center;
+}

@@ -14,7 +14,7 @@ export function useStorage() {
     getRootDir: () => Store.getRootDir(),
 
     // Knowledge bases
-    listKBs: (): Promise<KBListItem[]> => Store.listKBs(),
+    listKBs: (): Promise<KBListItem[]> => Store.listKBs() as Promise<KBListItem[]>,
     createKB: (name: string, meta?: object) => Store.createKB(name, meta),
     deleteKB: (name: string) => Store.deleteKB(name),
     renameKB: (kbPath: string, newName: string) => Store.renameKB(kbPath, newName),

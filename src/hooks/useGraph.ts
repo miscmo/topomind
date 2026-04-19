@@ -14,6 +14,7 @@ import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
 import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
+import { logAction } from '../core/log-backend'
 import type { KnowledgeNodeData, KnowledgeNode, KnowledgeEdge, GraphMeta, EdgeRelation, EdgeWeight } from '../types'
 import { DOMAIN_COLORS } from '../types'
 
@@ -167,7 +168,9 @@ export function useGraph() {
 
       try {
         const meta = await storage.readLayout(dirPath)
-        const kbPath = roomStore.getState().currentKBPath
+        const kbPath = roomStore.getState().currentKBPath || ''
+
+        logAction('房间:加载', 'useGraph', { roomPath: dirPath, kbPath })
 
         // Build saved position map
         const savedPositions: Record<string, { x: number; y: number }> = {}
@@ -208,31 +211,6 @@ export function useGraph() {
     [storage, buildNodes, buildEdges, rebuildMaps, updateSelectedNode]
   )
 
-  // ===== Apply layout =====
-
-  const layoutNodes = useCallback(
-    async (direction: 'RIGHT' | 'DOWN' = 'DOWN') => {
-      const positions = await computeLayout(nodesRef.current, direction)
-      if (Object.keys(positions).length === 0) return
-
-      const updatedNodes = nodesRef.current.map((n) => {
-        const pos = positions[n.id]
-        if (pos) {
-          return { ...n, position: pos }
-        }
-        return n
-      })
-
-      rebuildMaps(updatedNodes, edgesRef.current)
-      nodesRef.current = updatedNodes
-      setState((s) => ({ ...s, nodes: updatedNodes }))
-
-      // Save positions to filesystem
-      await saveLayoutToDisk(currentRoomPath, updatedNodes, edgesRef.current)
-    },
-    [currentRoomPath, computeLayout, rebuildMaps, saveLayoutToDisk]
-  )
-
   // ===== Save layout to disk =====
 
   const saveLayoutToDisk = useCallback(
@@ -262,6 +240,35 @@ export function useGraph() {
     },
     [storage]
   )
+
+  // ===== Apply layout =====
+
+  const layoutNodes = useCallback(
+    async (direction: 'RIGHT' | 'DOWN' = 'DOWN') => {
+      const positions = await computeLayout(nodesRef.current, direction)
+      if (Object.keys(positions).length === 0) return
+
+      const updatedNodes = nodesRef.current.map((n) => {
+        const pos = positions[n.id]
+        if (pos) {
+          return { ...n, position: pos }
+        }
+        return n
+      })
+
+      rebuildMaps(updatedNodes, edgesRef.current)
+      nodesRef.current = updatedNodes
+      setState((s) => ({ ...s, nodes: updatedNodes }))
+
+      // Save positions to filesystem
+      if (currentRoomPath) {
+        await saveLayoutToDisk(currentRoomPath, updatedNodes, edgesRef.current)
+      }
+    },
+    [currentRoomPath, computeLayout, rebuildMaps, saveLayoutToDisk]
+  )
+
+  // ===== Apply layout =====
 
   const scheduleDebouncedSave = useCallback(
     (dirPath: string) => {
@@ -384,6 +391,8 @@ export function useGraph() {
       if (currentRoomPath) {
         scheduleDebouncedSave(currentRoomPath)
       }
+
+      logAction('连线:创建', 'useGraph', { edgeId, source: connection.source, target: connection.target })
     },
     [currentRoomPath, rebuildMaps, scheduleDebouncedSave]
   )
@@ -392,6 +401,7 @@ export function useGraph() {
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
       selectNode(node.id)
       updateSelectedNode(nodesRef.current, node.id)
+      logAction('节点:选中', 'useGraph', { nodeId: node.id, label: node.data.label, path: node.data.path })
     },
     [selectNode, updateSelectedNode]
   )
@@ -412,7 +422,7 @@ export function useGraph() {
       // Save current room layout before leaving
       if (currentRoomPath) {
         await storage.flushGraphSave(
-          currentRoomPath,
+          currentRoomPath!,
           () => {
             const nodes = Array.from(nodesMapRef.current.values())
             const edges = Array.from(edgesMapRef.current.values())
@@ -436,7 +446,8 @@ export function useGraph() {
       }
 
       // Enter the child room
-      enterRoom({ path: childPath, kbPath: roomStore.getState().currentKBPath, name: childName })
+      enterRoom({ path: childPath, kbPath: roomStore.getState().currentKBPath || '', name: childName })
+      logAction('房间:钻入', 'useGraph', { roomPath: childPath, roomName: childName, fromRoom: currentRoomPath })
       // LoadRoom will be called by GraphPage when roomPath changes
     },
     [currentRoomPath, enterRoom, storage]
@@ -458,6 +469,7 @@ export function useGraph() {
 
       try {
         const newPath = await storage.createCard(currentRoomPath, name)
+        logAction('节点:创建', 'useGraph', { nodeName: name, parentPath: currentRoomPath, newPath: newPath ?? undefined })
 
         // Reload room to get updated children
         await loadRoom(currentRoomPath)
@@ -472,9 +484,11 @@ export function useGraph() {
 
   const deleteChildNode = useCallback(
     async (nodeId: string): Promise<boolean> => {
+      const nodeLabel = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
       try {
         await storage.deleteCard(nodeId)
-        await loadRoom(currentRoomPath)
+        logAction('节点:删除', 'useGraph', { nodeId, label: nodeLabel, path: nodeId })
+        await loadRoom(currentRoomPath || '')
         if (selectedNodeId === nodeId) {
           clearSelection()
         }
@@ -489,8 +503,10 @@ export function useGraph() {
 
   const renameNode = useCallback(
     async (nodeId: string, newName: string): Promise<boolean> => {
+      const oldName = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
       try {
         await storage.renameCard(nodeId, newName)
+        logAction('节点:重命名', 'useGraph', { nodeId, oldName, newName, path: nodeId })
         // Update the node in local state without full reload
         setState((prev) => {
           const nodes = prev.nodes.map((n) =>
@@ -518,12 +534,14 @@ export function useGraph() {
 
   const deleteEdge = useCallback(
     async (edgeId: string): Promise<boolean> => {
+      const edge = edgesMapRef.current.get(edgeId)
       setState((prev) => {
         const edges = prev.edges.filter((e) => e.id !== edgeId)
         edgesRef.current = edges
         rebuildMaps(prev.nodes, edges)
         return { ...prev, edges }
       })
+      logAction('连线:删除', 'useGraph', { edgeId, source: edge?.source, target: edge?.target })
       if (currentRoomPath) {
         scheduleDebouncedSave(currentRoomPath)
       }
@@ -579,6 +597,7 @@ export function useGraph() {
     }
 
     clearSelection()
+    logAction('房间:返回', 'useGraph', { fromRoom: currentRoomPath })
     goBack()
   }, [currentRoomPath, storage, goBack, clearSelection])
 

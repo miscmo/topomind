@@ -3,7 +3,7 @@
  * 左侧面板 + 中间 React Flow 图谱 + 右侧详情面板
  */
 import { useEffect, useRef, useState } from 'react'
-import { ReactFlow, useReactFlow } from '@xyflow/react'
+import { ReactFlow, useReactFlow, type Node, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore } from '../stores/roomStore'
@@ -18,7 +18,8 @@ import SearchBar from './SearchBar/SearchBar'
 import DetailPanel from './DetailPanel/DetailPanel'
 import Breadcrumb from './Breadcrumb/Breadcrumb'
 import ContextMenu from './ContextMenu/ContextMenu'
-import { Background } from '@xyflow/react'
+import { Background, type BackgroundVariant } from '@xyflow/react'
+import { logAction } from '../core/log-backend'
 import styles from './GraphPage.module.css'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
@@ -33,9 +34,9 @@ function GraphCanvas() {
   return (
     <>
       <ReactFlow
-        nodes={graph.nodes}
+        nodes={graph.nodes as Node[]}
         edges={graph.edges}
-        nodeTypes={nodeTypes}
+        nodeTypes={nodeTypes as NodeTypes}
         onNodesChange={graph.onNodesChange}
         onEdgesChange={graph.onEdgesChange}
         onConnect={graph.onConnect}
@@ -64,7 +65,7 @@ function GraphCanvas() {
       >
         {showGrid && (
           <Background
-            variant="dots"
+            variant={'dots' as BackgroundVariant}
             gap={20}
             size={1}
             color="#c8cdd6"
@@ -126,6 +127,7 @@ export default function GraphPage() {
   const handleNewChild = (nodeId: string) => {
     const name = window.prompt('请输入新节点名称：')
     if (!name?.trim()) return
+    logAction('节点:创建', 'GraphPage', { nodeId, nodeName: name.trim(), source: 'context-menu' })
     graph.createChildNode(name.trim())
   }
 
@@ -134,6 +136,7 @@ export default function GraphPage() {
     if (!node) return
     const newName = window.prompt('请输入新名称：', node.data.label)
     if (!newName?.trim() || newName === node.data.label) return
+    logAction('节点:重命名', 'GraphPage', { nodeId, oldName: node.data.label, newName: newName.trim(), source: 'context-menu' })
     graph.renameNode(nodeId, newName.trim())
   }
 
@@ -141,10 +144,13 @@ export default function GraphPage() {
     const node = graph.nodes.find((n) => n.id === nodeId)
     if (!node) return
     if (!window.confirm(`确定要删除 "${node.data.label}" 吗？`)) return
+    logAction('节点:删除', 'GraphPage', { nodeId, label: node.data.label, path: node.data.path, source: 'context-menu' })
     graph.deleteChildNode(nodeId)
   }
 
   const handleEdgeDelete = (edgeId: string) => {
+    const edge = graph.edges.find((e) => e.id === edgeId)
+    logAction('连线:删除', 'GraphPage', { edgeId, edgeSource: edge?.source, edgeTarget: edge?.target, trigger: 'context-menu' })
     graph.deleteEdge(edgeId)
   }
 

@@ -6,10 +6,10 @@
  */
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import type { KnowledgeNodeData } from '../types'
+import type { KnowledgeNode, KnowledgeNodeData } from '../types'
 import styles from './KnowledgeCard.module.css'
 
-function KnowledgeCard({ data, selected }: NodeProps<KnowledgeNodeData>) {
+function KnowledgeCard({ data, selected }: NodeProps<KnowledgeNode>) {
   const isContainer = data.nodeType === 'container'
   const hasUnsaved = data.hasUnsavedEdit
 

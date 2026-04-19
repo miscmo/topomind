@@ -7,6 +7,7 @@ import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
 import { FSB } from '../core/fs-backend'
 import { Store } from '../core/storage'
+import { logAction } from '../core/log-backend'
 import styles from './HomePage.module.css'
 
 interface KBItem {
@@ -52,8 +53,10 @@ export default function HomePage() {
       setWorkDir(dir || '')
       // 过滤出目录（知识库）
       const kbList = (list || []).filter((d: { name: string; isDir: boolean }) => d.isDir)
-      const initial: KBItem[] = kbList.map((kb: { path: string; name: string }) => ({
-        ...kb,
+      const initial: KBItem[] = kbList.map((kb: { path: string; name: string; order?: number }) => ({
+        path: kb.path,
+        name: kb.name,
+        order: kb.order ?? 0,
         nodeCount: null,
         coverUrl: null,
       }))
@@ -83,13 +86,14 @@ export default function HomePage() {
     } catch { /* ignore */ }
     roomStore.getState().setCurrentKB(kb.path)
     showGraph()
+    logAction('知识库:打开', 'HomePage', { kbPath: kb.path, kbName: kb.name, nodeCount: kb.nodeCount })
   }
 
   async function switchWorkDir() {
     setMessage('')
     const picked = await FSB.selectWorkDirCandidate()
     if (!picked?.valid) return
-    const res = await FSB.setWorkDir(picked.path)
+    const res = await FSB.setWorkDir(picked.nodePath!)
     if (!res?.valid) {
       if (res?.error) {
         setMessageError(true)
@@ -97,6 +101,7 @@ export default function HomePage() {
       }
       return
     }
+    logAction('工作目录:切换', 'HomePage', { newWorkDir: picked.nodePath })
     await loadKBList()
   }
 
@@ -116,6 +121,7 @@ export default function HomePage() {
     setCreateLoading(true)
     try {
       await Store.createKB(name)
+      logAction('知识库:创建', 'HomePage', { kbName: name })
       setShowCreateSheet(false)
       setCreateName('')
       await loadKBList()
@@ -131,7 +137,7 @@ export default function HomePage() {
   async function handleSelectImportDir() {
     const res = await FSB.selectWorkDirCandidate()
     if (res?.valid) {
-      setImportDir(res.path || '')
+      setImportDir(res.nodePath || '')
       setImportError('')
     }
   }
@@ -145,6 +151,7 @@ export default function HomePage() {
     setImportLoading(true)
     try {
       await Store.importKB(importDir)
+      logAction('知识库:导入', 'HomePage', { sourcePath: importDir })
       setShowImportSheet(false)
       setImportDir('')
       await loadKBList()

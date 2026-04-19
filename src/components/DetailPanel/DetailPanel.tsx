@@ -10,6 +10,7 @@ import { useGraphContext } from '../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
 import styles from './DetailPanel.module.css'
 import { FSB } from '../../core/fs-backend'
+import { logAction } from '../../core/log-backend'
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -74,6 +75,7 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
     if (!selectedNodeId) return
     const path = selectedNode?.data.path ?? selectedNodeId
     storage.writeMarkdown(path, markdown)
+    logAction('内容:保存', 'DetailPanel', { nodePath: path, label: selectedNode?.data.label })
     setEditMode(false)
   }
 
@@ -83,6 +85,12 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
       setRenameMode(false)
       return
     }
+    logAction('节点:重命名', 'DetailPanel', {
+      nodeId: selectedNodeId,
+      oldName: selectedNode?.data.label,
+      newName: newName.trim(),
+      path: selectedNode?.data.path,
+    })
     graph.renameNode(selectedNodeId, newName.trim())
     setRenameMode(false)
   }
@@ -91,6 +99,11 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
   const handleDelete = () => {
     if (!selectedNodeId) return
     if (!window.confirm(`确定要删除节点 "${selectedNode?.data.label}" 吗？`)) return
+    logAction('节点:删除', 'DetailPanel', {
+      nodeId: selectedNodeId,
+      label: selectedNode?.data.label,
+      path: selectedNode?.data.path,
+    })
     graph.deleteChildNode(selectedNodeId)
     collapseRightPanel()
   }

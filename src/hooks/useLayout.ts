@@ -14,7 +14,7 @@ interface ELKNode {
   id: string
   width?: number
   height?: number
-  layoutOptions?: Record<string, unknown>
+  layoutOptions?: Record<string, string | number>
 }
 
 interface ELKEdge {
@@ -30,7 +30,7 @@ interface ELKLayoutOptions {
   'elk.layered.spacing.nodeNodeBetweenLayers': number
   'elk.layered.crossingMinimization.strategy': string
   'elk.padding': string
-  [key: string]: unknown
+  [key: string]: string | number
 }
 
 /**
@@ -59,7 +59,7 @@ export function useLayout() {
         layoutOptions: {
           'elk.nodeSize.constraints': 'MINIMUM_SIZE',
           'elk.nodeSize.minimum': '(50, 30)',
-        },
+        } as unknown as ELKLayoutOptions,
       }))
 
       // Build ELK edges (only use existing edges for layout constraints)
@@ -81,18 +81,19 @@ export function useLayout() {
       }
 
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = await elk.layout(
           {
             id: 'root',
-            layoutOptions,
-            children: elkNodes,
-            edges: elkEdges,
-          },
+            layoutOptions: layoutOptions as any,
+            children: elkNodes as any,
+            edges: elkEdges as any,
+          } as any,
           {
             layoutOptions: {
               ...layoutOptions,
               'elk.layered.compaction.postCompaction.strategy': 'LEFTWARD',
-            },
+            } as any,
           }
         )
 
