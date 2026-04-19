@@ -9,11 +9,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import type { KnowledgeNodeData } from '../types'
 import styles from './KnowledgeCard.module.css'
 
-interface Props extends NodeProps {
-  data: KnowledgeNodeData
-}
-
-function KnowledgeCard({ data, selected }: Props) {
+function KnowledgeCard({ data, selected }: NodeProps<KnowledgeNodeData>) {
   const isContainer = data.nodeType === 'container'
   const hasUnsaved = data.hasUnsavedEdit
 

@@ -3,14 +3,14 @@
  * 左侧面板 + 中间 React Flow 图谱 + 右侧详情面板
  */
 import { useEffect, useRef, useState } from 'react'
-import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react'
+import { ReactFlow, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore } from '../stores/roomStore'
 import { useGraph } from '../hooks/useGraph'
 import { useContextMenu } from '../hooks/useContextMenu'
 import { useKeyboard } from '../hooks/useKeyboard'
-import type { KnowledgeNode } from '../types'
+import { GraphContextProvider, useGraphContext } from '../contexts/GraphContext'
 import KnowledgeCard from '../nodes/KnowledgeCard'
 import NavTree from './NavTree/NavTree'
 import Toolbar from './Toolbar/Toolbar'
@@ -20,33 +20,15 @@ import Breadcrumb from './Breadcrumb/Breadcrumb'
 import ContextMenu from './ContextMenu/ContextMenu'
 import { Background } from '@xyflow/react'
 import styles from './GraphPage.module.css'
-import '../css/graph.css'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
 
-/** Inner component that uses ReactFlow context */
-function GraphCanvas({ graph, onNodeContextMenu }: {
-  graph: ReturnType<typeof useGraph> & { fitView?: () => void }
-  onNodeContextMenu: (nodeId: string, e: React.MouseEvent) => void
-}) {
+/** Inner component that uses shared graph context */
+function GraphCanvas() {
   const showGrid = useAppStore((s) => s.showGrid)
-  const searchQuery = useAppStore((s) => s.searchQuery)
-  const { fitView } = useReactFlow()
-
-  // Load room when room path changes
-  useEffect(() => {
-    const load = async () => {
-      await graph.loadRoom(graph.nodes.length === 0 ? '' : '')
-      setTimeout(() => fitView({ padding: 0.1, duration: 200 }), 50)
-    }
-    load()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Highlight search matches
-  useEffect(() => {
-    graph.highlightSearch(searchQuery)
-  }, [searchQuery, graph.highlightSearch])
+  const graph = useGraphContext()
+  const { showCM, showEdgeCM } = useContextMenu()
+  const [zoomLevel, setZoomLevel] = useState(1)
 
   return (
     <>
@@ -59,15 +41,19 @@ function GraphCanvas({ graph, onNodeContextMenu }: {
         onConnect={graph.onConnect}
         onNodeClick={graph.onNodeClick}
         onNodeDoubleClick={graph.onNodeDoubleClick}
-        onNodeContextMenu={(e) => {
-          // Extract node ID from the event target
-          const nodeEl = (e.target as HTMLElement).closest('.react-flow__node')
-          if (nodeEl) {
-            const nodeId = nodeEl.getAttribute('data-id') ?? ''
-            onNodeContextMenu(nodeId, e)
+        onNodeContextMenu={(e, node) => {
+          if (node) {
+            graph.onNodeContextMenu(e, node)
+            showCM(node.id, e)
           }
         }}
         onPaneClick={graph.onPaneClick}
+        onEdgeContextMenu={(e, edge) => {
+          if (edge) {
+            showEdgeCM(edge.id, e)
+          }
+        }}
+        onMove={(_, viewport) => setZoomLevel(viewport.zoom)}
         minZoom={0.15}
         maxZoom={3.5}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
@@ -90,7 +76,7 @@ function GraphCanvas({ graph, onNodeContextMenu }: {
       <Toolbar />
 
       {/* 缩放指示器 */}
-      <div id="zoom-indicator" className={styles.zoomIndicator}>100%</div>
+      <div id="zoom-indicator" className={styles.zoomIndicator}>{Math.round(zoomLevel * 100)}%</div>
     </>
   )
 }
@@ -102,15 +88,14 @@ export default function GraphPage() {
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
   const currentRoomPath = useRoomStore((s) => s.currentRoomPath)
   const searchQuery = useAppStore((s) => s.searchQuery)
-  const hideContextMenu = useAppStore((s) => s.hideContextMenu)
-  const expandRightPanel = useAppStore((s) => s.expandRightPanel)
 
-  // Single source of truth for graph state
-  const graph = useGraph()
   const prevRoomPathRef = useRef<string | null>(null)
 
   // Context menu
-  const { contextMenu, showCM, hideCM } = useContextMenu()
+  const { contextMenu, showEdgeCM, hideCM } = useContextMenu()
+
+  // Single useGraph instance — passed to GraphContextProvider for sharing
+  const graph = useGraph()
 
   // Rename dialog state
   const [renameDialog, setRenameDialog] = useState<{ nodeId: string; name: string } | null>(null)
@@ -159,10 +144,8 @@ export default function GraphPage() {
     graph.deleteChildNode(nodeId)
   }
 
-  // Context menu trigger from canvas
-  const handleNodeContextMenu = (nodeId: string, e: React.MouseEvent) => {
-    graph.onNodeContextMenu(null as never, { id: nodeId } as never)
-    showCM(nodeId, e)
+  const handleEdgeDelete = (edgeId: string) => {
+    graph.deleteEdge(edgeId)
   }
 
   // Rename dialog confirm
@@ -175,71 +158,50 @@ export default function GraphPage() {
   if (view !== 'graph') return null
 
   return (
-    <div id="graph-page" className={styles.page}>
-      <div id="app-layout" className={styles.layout}>
-        {/* 左侧面板 */}
-        <div className={styles.leftPanel}>
-          <NavTree />
-        </div>
-
-        {/* 中间图谱 */}
-        <div id="graph-panel" className={styles.graphPanel}>
-          {/* 标题 */}
-          <div id="header" className={styles.header}>TopoMind</div>
-
-          {/* 面包屑 */}
-          <Breadcrumb />
-
-          {/* 搜索 */}
-          <SearchBar />
-
-          <ReactFlowProvider>
-            <GraphCanvas graph={graph} onNodeContextMenu={handleNodeContextMenu} />
-          </ReactFlowProvider>
-        </div>
-
-        {/* 右侧面板 */}
-        {!rightPanelCollapsed && (
-          <div className={styles.rightPanel} style={{ width: rightPanelWidth }}>
-            <DetailPanel selectedNode={graph.selectedNode} selectedNodeId={selectedNodeId} graph={graph} />
+    <GraphContextProvider graph={graph}>
+      <div id="graph-page" className={styles.page}>
+        <div id="app-layout" className={styles.layout}>
+          {/* 左侧面板 */}
+          <div className={styles.leftPanel}>
+            <NavTree />
           </div>
-        )}
-      </div>
 
-      {/* 右键菜单 */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        targetId={contextMenu.targetId}
-        onNewChild={handleNewChild}
-        onRename={handleRename}
-        onDelete={handleDelete}
-        onClose={hideCM}
-      />
+          {/* 中间图谱 */}
+          <div id="graph-panel" className={styles.graphPanel}>
+            {/* 标题 */}
+            <div id="header" className={styles.header}>TopoMind</div>
 
-      {/* 重命名对话框 */}
-      {renameDialog && (
-        <div className={styles.modalOverlay} onClick={() => setRenameDialog(null)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalTitle}>重命名节点</div>
-            <input
-              className={styles.modalInput}
-              value={renameDialog.name}
-              onChange={(e) => setRenameDialog({ ...renameDialog, name: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRenameConfirm()
-                if (e.key === 'Escape') setRenameDialog(null)
-              }}
-              autoFocus
-            />
-            <div className={styles.modalActions}>
-              <button className={styles.modalBtnCancel} onClick={() => setRenameDialog(null)}>取消</button>
-              <button className={styles.modalBtnConfirm} onClick={handleRenameConfirm}>确定</button>
+            {/* 面包屑 */}
+            <Breadcrumb />
+
+            {/* 搜索 */}
+            <SearchBar />
+
+            <GraphCanvas />
+          </div>
+
+          {/* 右侧面板 */}
+          {!rightPanelCollapsed && (
+            <div className={styles.rightPanel} style={{ width: rightPanelWidth }}>
+              <DetailPanel selectedNodeId={selectedNodeId} />
             </div>
-          </div>
+          )}
         </div>
-      )}
-    </div>
+
+        {/* 右键菜单 */}
+        <ContextMenu
+          visible={contextMenu.visible}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          type={contextMenu.type}
+          targetId={contextMenu.targetId}
+          onNewChild={handleNewChild}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          onEdgeDelete={handleEdgeDelete}
+          onClose={hideCM}
+        />
+      </div>
+    </GraphContextProvider>
   )
 }

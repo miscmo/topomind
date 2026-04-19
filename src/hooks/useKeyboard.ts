@@ -18,6 +18,10 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
 
   const clearSelection = useAppStore((s) => s.clearSelection)
   const hideContextMenu = useAppStore((s) => s.hideContextMenu)
+  const edgeMode = useAppStore((s) => s.edgeMode)
+  const enterEdgeMode = useAppStore((s) => s.enterEdgeMode)
+  const exitEdgeMode = useAppStore((s) => s.exitEdgeMode)
+  const selectedNodeId = useAppStore((s) => s.selectedNodeId)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -44,6 +48,15 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
         case 'Backspace':
           e.preventDefault()
           onDelete?.()
+          break
+
+        case 'Tab':
+          e.preventDefault()
+          if (edgeMode) {
+            exitEdgeMode()
+          } else if (selectedNodeId) {
+            enterEdgeMode(selectedNodeId)
+          }
           break
 
         default:

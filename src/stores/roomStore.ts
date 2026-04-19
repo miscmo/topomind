@@ -105,7 +105,7 @@ const roomStoreCreator = (set: (fn: (s: RoomState) => RoomState) => void, get: (
     const idx = history.findIndex((h) => h.room.path === item.room.path)
     if (idx === -1) {
       // 不在历史中，作为新入口
-      get().enterRoom(item.room.path, item.room.kbPath, item.room.name)
+      get().enterRoom({ path: item.room.path, kbPath: item.room.kbPath, name: item.room.name })
     } else {
       // 在历史中，截断后面的历史
       const newHistory = history.slice(0, idx)

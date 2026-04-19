@@ -1,5 +1,5 @@
 /* ===== SetupPage / WorkDir 样式 ===== */
-.workdir-page {
+.page {
   width: 100%;
   flex: 1;
   min-height: 0;
@@ -9,7 +9,7 @@
   justify-content: center;
 }
 
-.workdir-card {
+.card {
   background: #fff;
   border: 1px solid #e0e4ea;
   border-radius: 14px;
@@ -21,18 +21,18 @@
   gap: 20px;
 }
 
-.workdir-brand {
+.brand {
   display: flex;
   align-items: center;
   gap: 14px;
 }
 
-.workdir-logo {
+.logo {
   font-size: 36px;
   line-height: 1;
 }
 
-.workdir-brand h1 {
+.brand h1 {
   color: #1a3a5c;
   font-size: 22px;
   font-weight: 700;
@@ -40,20 +40,20 @@
   letter-spacing: -0.5px;
 }
 
-.workdir-brand p {
+.brand p {
   color: #888;
   font-size: 13px;
   margin: 0;
   line-height: 1.5;
 }
 
-.workdir-actions {
+.actions {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.workdir-btn {
+.btn {
   height: 40px;
   padding: 0 20px;
   border: 1px solid #e0e4ea;
@@ -66,30 +66,30 @@
   font-weight: 500;
 }
 
-.workdir-btn:hover {
+.btn:hover {
   background: #eef2f7;
   color: #1a3a5c;
   border-color: #b9c6d6;
 }
 
-.workdir-btn-primary {
+.btnPrimary {
   background: #1a3a5c;
   color: #fff;
   border-color: #1a3a5c;
 }
 
-.workdir-btn-primary:hover {
+.btnPrimary:hover {
   background: #254d73;
   border-color: #254d73;
 }
 
-.workdir-message {
+.message {
   font-size: 12px;
   color: #27ae60;
   text-align: center;
   padding: 8px 0 0;
 }
 
-.workdir-message.error {
+.message.error {
   color: #e74c3c;
 }

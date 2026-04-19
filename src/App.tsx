@@ -2,6 +2,7 @@
  * TopoMind React 根组件
  * 根据 view 状态路由到不同页面
  */
+import { ReactFlowProvider } from '@xyflow/react'
 import { useAppStore } from './stores/appStore'
 import { useRoomStore } from './stores/roomStore'
 import SetupPage from './components/SetupPage'
@@ -11,7 +12,11 @@ import GraphPage from './components/GraphPage'
 export default function App() {
   const view = useAppStore((s) => s.view)
 
-  if (view === 'setup') return <SetupPage />
-  if (view === 'home') return <HomePage />
-  return <GraphPage />
+  return (
+    <ReactFlowProvider>
+      {view === 'setup' && <SetupPage />}
+      {view === 'home' && <HomePage />}
+      {view === 'graph' && <GraphPage />}
+    </ReactFlowProvider>
+  )
 }

@@ -1,12 +1,13 @@
 /**
  * ContextMenu — 右键菜单
  *
- * Appears at cursor position when right-clicking a node.
- * Items:
+ * Appears at cursor position when right-clicking a node or edge.
+ * Items (node):
  * - 新建子节点
  * - 重命名
  * - 删除
- * - 连线模式
+ * Items (edge):
+ * - 删除连线
  */
 import { useEffect, useRef } from 'react'
 import styles from './ContextMenu.module.css'
@@ -33,10 +34,12 @@ interface ContextMenuProps {
   visible: boolean
   x: number
   y: number
+  type: 'node' | 'edge' | 'pane' | null
   targetId: string | null
   onNewChild: (nodeId: string) => void
   onRename: (nodeId: string) => void
   onDelete: (nodeId: string) => void
+  onEdgeDelete: (edgeId: string) => void
   onClose: () => void
 }
 
@@ -44,10 +47,12 @@ export default function ContextMenu({
   visible,
   x,
   y,
+  type,
   targetId,
   onNewChild,
   onRename,
   onDelete,
+  onEdgeDelete,
   onClose,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -78,31 +83,44 @@ export default function ContextMenu({
 
   if (!visible || !targetId) return null
 
-  const items: MenuEntry[] = [
-    {
-      label: '新建子节点',
-      action: () => {
-        onNewChild(targetId)
-        onClose()
-      },
-    },
-    {
-      label: '重命名',
-      action: () => {
-        onRename(targetId)
-        onClose()
-      },
-    },
-    { separator: true },
-    {
-      label: '删除节点',
-      action: () => {
-        onDelete(targetId)
-        onClose()
-      },
-      danger: true,
-    },
-  ]
+  const isEdge = type === 'edge'
+
+  const items: MenuEntry[] = isEdge
+    ? [
+        {
+          label: '删除连线',
+          action: () => {
+            onEdgeDelete(targetId)
+            onClose()
+          },
+          danger: true,
+        },
+      ]
+    : [
+        {
+          label: '新建子节点',
+          action: () => {
+            onNewChild(targetId)
+            onClose()
+          },
+        },
+        {
+          label: '重命名',
+          action: () => {
+            onRename(targetId)
+            onClose()
+          },
+        },
+        { separator: true },
+        {
+          label: '删除节点',
+          action: () => {
+            onDelete(targetId)
+            onClose()
+          },
+          danger: true,
+        },
+      ]
 
   // Adjust position to keep menu in viewport
   const adjustedX = Math.min(x, window.innerWidth - 160)

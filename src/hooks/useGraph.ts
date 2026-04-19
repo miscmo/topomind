@@ -15,12 +15,7 @@ import { useRoomStore, roomStore } from '../stores/roomStore'
 import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
 import type { KnowledgeNodeData, KnowledgeNode, KnowledgeEdge, GraphMeta, EdgeRelation, EdgeWeight } from '../types'
-
-const DOMAIN_COLORS = [
-  '#3498db', '#e74c3c', '#2ecc71', '#f39c12',
-  '#9b59b6', '#1abc9c', '#e67e22', '#34495e',
-  '#16a085', '#c0392b', '#8e44ad', '#27ae60',
-]
+import { DOMAIN_COLORS } from '../types'
 
 const AUTO_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
@@ -64,6 +59,9 @@ export function useGraph() {
     nodesMapRef = useRef<Map<string, KnowledgeNode>>(new Map())
   const edgesMapRef = useRef<Map<string, KnowledgeEdge>>(new Map())
   const savePendingRef = useRef(false)
+  // Refs for stable closure access to current nodes/edges
+  const nodesRef = useRef<KnowledgeNode[]>([])
+  const edgesRef = useRef<KnowledgeEdge[]>([])
 
   // ===== Node/Edge helpers =====
 
@@ -97,39 +95,35 @@ export function useGraph() {
       const spacingX = Math.max(60, 200 - nodeCount * 5)
       const spacingY = Math.max(50, 120 - nodeCount * 3)
 
-      const rfNodes: KnowledgeNode[] = []
+      // Parallelize child count checks — eliminates N sequential reads
+      const childCountResults = await Promise.all(
+        children.map(async ([childName]) => {
+          const childPath = dirPath ? `${dirPath}/${childName}` : childName
+          try {
+            return await storage.countChildren(childPath)
+          } catch {
+            return 0
+          }
+        })
+      )
 
-      for (let i = 0; i < children.length; i++) {
-        const [childName, childInfo] = children[i]
+      const rfNodes: KnowledgeNode[] = children.map(([childName, childInfo], i) => {
         const childPath = dirPath ? `${dirPath}/${childName}` : childName
-        const nodeId = childPath // Use path as node ID for uniqueness
-
-        // Check if this child has its own sub-directory (has children)
-        let hasChildren = false
-        let childCount = 0
-        try {
-          childCount = await storage.countChildren(childPath)
-          hasChildren = childCount > 0
-        } catch {
-          hasChildren = false
-        }
-
-        // Determine domain color from index
+        const nodeId = childPath
+        const childCount = childCountResults[i]
+        const hasChildren = childCount > 0
         const domainColor = DOMAIN_COLORS[i % DOMAIN_COLORS.length]
-
-        // Position: use saved position or compute grid layout
         const saved = savedPositions[nodeId]
         const position = saved ?? {
           x: 50 + i * spacingX,
           y: 50 + i * spacingY,
         }
 
-        const rfNode: KnowledgeNode = {
+        return {
           id: nodeId,
           type: 'knowledgeCard',
           position,
           data: {
-            id: nodeId,
             label: childInfo.name,
             path: childPath,
             parent: dirPath || kbPath || undefined,
@@ -139,9 +133,7 @@ export function useGraph() {
             nodeType: hasChildren ? 'container' : 'leaf',
           },
         }
-
-        rfNodes.push(rfNode)
-      }
+      })
 
       return rfNodes
     },
@@ -199,6 +191,8 @@ export function useGraph() {
 
         rebuildMaps(nodes, edges)
         updateSelectedNode(nodes, null)
+        nodesRef.current = nodes
+        edgesRef.current = edges
 
         setState({
           nodes,
@@ -218,10 +212,10 @@ export function useGraph() {
 
   const layoutNodes = useCallback(
     async (direction: 'RIGHT' | 'DOWN' = 'DOWN') => {
-      const positions = await computeLayout(state.nodes, direction)
+      const positions = await computeLayout(nodesRef.current, direction)
       if (Object.keys(positions).length === 0) return
 
-      const updatedNodes = state.nodes.map((n) => {
+      const updatedNodes = nodesRef.current.map((n) => {
         const pos = positions[n.id]
         if (pos) {
           return { ...n, position: pos }
@@ -229,13 +223,14 @@ export function useGraph() {
         return n
       })
 
-      rebuildMaps(updatedNodes, state.edges)
+      rebuildMaps(updatedNodes, edgesRef.current)
+      nodesRef.current = updatedNodes
       setState((s) => ({ ...s, nodes: updatedNodes }))
 
       // Save positions to filesystem
-      await saveLayoutToDisk(currentRoomPath, updatedNodes, state.edges)
+      await saveLayoutToDisk(currentRoomPath, updatedNodes, edgesRef.current)
     },
-    [state.nodes, state.edges, currentRoomPath, computeLayout, rebuildMaps]
+    [currentRoomPath, computeLayout, rebuildMaps, saveLayoutToDisk]
   )
 
   // ===== Save layout to disk =====
@@ -315,6 +310,7 @@ export function useGraph() {
             )
             // Mark dirty and schedule save
             nodesMapRef.current = new Map(nodes.map((n) => [n.id, n]))
+            nodesRef.current = nodes
             if (currentRoomPath) {
               scheduleDebouncedSave(currentRoomPath)
             }
@@ -322,6 +318,7 @@ export function useGraph() {
             // Node removed
             nodes = nodes.filter((n) => n.id !== change.id)
             nodesMapRef.current = new Map(nodes.map((n) => [n.id, n]))
+            nodesRef.current = nodes
           } else if (change.type === 'select') {
             // Selection change handled separately
           } else if (change.type === 'dimensions') {
@@ -329,6 +326,7 @@ export function useGraph() {
             nodes = nodes.map((n) =>
               n.id === change.id ? { ...n, measured: change.dimensions } : n
             )
+            nodesRef.current = nodes
           }
         }
 
@@ -349,6 +347,7 @@ export function useGraph() {
         if (change.type === 'remove') {
           edges = edges.filter((e) => e.id !== change.id)
           edgesMapRef.current = new Map(edges.map((e) => [e.id, e]))
+          edgesRef.current = edges
         }
       }
 
@@ -376,6 +375,7 @@ export function useGraph() {
 
       setState((prev) => {
         const edges = [...prev.edges, newEdge]
+        edgesRef.current = edges
         rebuildMaps(prev.nodes, edges)
         return { ...prev, edges }
       })
@@ -391,15 +391,15 @@ export function useGraph() {
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
       selectNode(node.id)
-      updateSelectedNode(state.nodes, node.id)
+      updateSelectedNode(nodesRef.current, node.id)
     },
-    [state.nodes, selectNode, updateSelectedNode]
+    [selectNode, updateSelectedNode]
   )
 
   const onPaneClick = useCallback(() => {
     clearSelection()
-    updateSelectedNode(state.nodes, null)
-  }, [state.nodes, clearSelection, updateSelectedNode])
+    updateSelectedNode(nodesRef.current, null)
+  }, [clearSelection, updateSelectedNode])
 
   const onNodeDoubleClick = useCallback(
     async (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
@@ -498,6 +498,7 @@ export function useGraph() {
               ? { ...n, data: { ...n.data, label: newName } }
               : n
           )
+          nodesRef.current = nodes
           rebuildMaps(nodes, prev.edges)
           return { ...prev, nodes }
         })
@@ -519,6 +520,7 @@ export function useGraph() {
     async (edgeId: string): Promise<boolean> => {
       setState((prev) => {
         const edges = prev.edges.filter((e) => e.id !== edgeId)
+        edgesRef.current = edges
         rebuildMaps(prev.nodes, edges)
         return { ...prev, edges }
       })
@@ -538,6 +540,7 @@ export function useGraph() {
             ? { ...e, data: { ...e.data, relation, weight } }
             : e
         )
+        edgesRef.current = edges
         rebuildMaps(prev.nodes, edges)
         return { ...prev, edges }
       })

@@ -54,8 +54,6 @@ export type EdgeWeight = 'main' | 'minor'
  * React Flow 自定义节点数据
  */
 export interface KnowledgeNodeData {
-  /** 节点 ID = 路径字符串（如 '知识库-A/子卡片-1'） */
-  id: string
   /** 显示名称（来自 _graph.children[name].name） */
   label: string
   /** 磁盘路径（相对路径） */
@@ -184,3 +182,10 @@ export const SIZES = {
   GRID_SMALL: 20,
   GRID_LARGE: 100,
 } as const
+
+/** 领域颜色池（循环分配给顶层节点） */
+export const DOMAIN_COLORS = [
+  '#3498db', '#e74c3c', '#2ecc71', '#f39c12',
+  '#9b59b6', '#1abc9c', '#e67e22', '#34495e',
+  '#16a085', '#c0392b', '#8e44ad', '#27ae60',
+] as const

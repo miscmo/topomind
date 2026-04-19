@@ -3,7 +3,7 @@
  * 布局控制、缩放、网格切换等
  */
 import { useAppStore } from '../../stores/appStore'
-import { useGraph } from '../../hooks/useGraph'
+import { useGraphContext } from '../../contexts/GraphContext'
 import { useReactFlow } from '@xyflow/react'
 import styles from './Toolbar.module.css'
 
@@ -12,17 +12,29 @@ export default function Toolbar() {
   const toggleGrid = useAppStore((s) => s.toggleGrid)
   const showGitPanel = useAppStore((s) => s.showGitPanel)
   const toggleGitPanel = useAppStore((s) => s.toggleGitPanel)
-  const graph = useGraph()
+  const edgeMode = useAppStore((s) => s.edgeMode)
+  const exitEdgeMode = useAppStore((s) => s.exitEdgeMode)
+  const selectedNodeId = useAppStore((s) => s.selectedNodeId)
+  const enterEdgeMode = useAppStore((s) => s.enterEdgeMode)
+  const graph = useGraphContext()
   const { fitView, zoomIn, zoomOut } = useReactFlow()
 
   return (
     <div id="toolbar" className={styles.toolbar}>
-      {/* 布局方向 */}
+      {/* 连线模式 */}
       <button
-        title="垂直布局 (↓)"
-        onClick={() => graph.layoutNodes('DOWN')}
+        className={edgeMode ? styles.active : ''}
+        title="连线模式（Tab 切换）"
+        onClick={() => {
+          if (edgeMode) {
+            exitEdgeMode()
+          } else if (selectedNodeId) {
+            enterEdgeMode(selectedNodeId)
+          }
+        }}
+        style={edgeMode ? { color: '#e67e22', fontWeight: 700 } : {}}
       >
-        ↓ 布局
+        🔗 连线
       </button>
 
       <div className={styles.sep} />

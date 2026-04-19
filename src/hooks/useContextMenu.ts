@@ -2,8 +2,9 @@
  * useContextMenu — 右键菜单逻辑
  *
  * Returns:
- * - contextMenu: { visible, x, y, targetId } | null
- * - showCM(nodeId, e): 打开菜单
+ * - contextMenu: { visible, x, y, type, targetId } | null
+ * - showCM(nodeId, e): 打开节点菜单
+ * - showEdgeCM(edgeId, e): 打开连线菜单
  * - hideCM(): 关闭菜单
  */
 import { useCallback } from 'react'
@@ -23,9 +24,18 @@ export function useContextMenu() {
     [showContextMenu]
   )
 
+  const showEdgeCM = useCallback(
+    (edgeId: string, e: MouseEvent | React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      showContextMenu(e.clientX, e.clientY, 'edge', edgeId)
+    },
+    [showContextMenu]
+  )
+
   const hideCM = useCallback(() => {
     hideContextMenu()
   }, [hideContextMenu])
 
-  return { contextMenu, showCM, hideCM }
+  return { contextMenu, showCM, showEdgeCM, hideCM }
 }

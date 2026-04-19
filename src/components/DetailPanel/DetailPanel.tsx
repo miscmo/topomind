@@ -6,29 +6,33 @@ import { useEffect, useState, useRef } from 'react'
 import { marked } from 'marked'
 import { useStorage } from '../../hooks/useStorage'
 import { useAppStore } from '../../stores/appStore'
+import { useGraphContext } from '../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
 import styles from './DetailPanel.module.css'
-import type { KnowledgeNode } from '../../types'
-import type { GraphState } from '../../hooks/useGraph'
+import { FSB } from '../../core/fs-backend'
 
 marked.setOptions({ breaks: true, gfm: true })
 
 interface DetailPanelProps {
-  selectedNode: KnowledgeNode | null
   selectedNodeId: string | null
-  graph?: GraphState
 }
 
-export default function DetailPanel({ selectedNode, selectedNodeId, graph }: DetailPanelProps) {
+export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
   const storage = useStorage()
   const collapseRightPanel = useAppStore((s) => s.collapseRightPanel)
+  const graph = useGraphContext()
 
   const [editMode, setEditMode] = useState(false)
   const [markdown, setMarkdown] = useState('')
   const [saving, setSaving] = useState(false)
   const [renameMode, setRenameMode] = useState(false)
   const [newName, setNewName] = useState('')
+  const [childTags, setChildTags] = useState<Array<{ path: string; name: string }>>([])
   const renameInputRef = useRef<HTMLInputElement>(null)
+
+  const selectedNode = graph.selectedNode
+  const nodePath = selectedNode?.data.path ?? null
+  const hasChildren = selectedNode?.data.hasChildren ?? false
 
   // Load markdown when node changes
   useEffect(() => {
@@ -39,9 +43,23 @@ export default function DetailPanel({ selectedNode, selectedNodeId, graph }: Det
     if (!selectedNodeId) return
 
     const path = selectedNode?.data.path ?? selectedNodeId
-    const content = storage.readMarkdown(path)
-    setMarkdown(content)
+    storage.readMarkdown(path).then((content: string) => {
+      setMarkdown(content)
+    })
   }, [selectedNodeId, selectedNode?.data.path, storage])
+
+  // Load child concept tags when node has children
+  useEffect(() => {
+    if (!hasChildren || !nodePath) {
+      setChildTags([])
+      return
+    }
+
+    FSB.listChildren(nodePath).then((children: Array<{ path: string; name: string; isDir: boolean }>) => {
+      const dirs = (children || []).filter((c: { isDir: boolean }) => c.isDir)
+      setChildTags(dirs)
+    })
+  }, [hasChildren, nodePath])
 
   // Focus rename input when entering rename mode
   useEffect(() => {
@@ -65,7 +83,7 @@ export default function DetailPanel({ selectedNode, selectedNodeId, graph }: Det
       setRenameMode(false)
       return
     }
-    graph?.renameNode(selectedNodeId, newName.trim())
+    graph.renameNode(selectedNodeId, newName.trim())
     setRenameMode(false)
   }
 
@@ -73,7 +91,7 @@ export default function DetailPanel({ selectedNode, selectedNodeId, graph }: Det
   const handleDelete = () => {
     if (!selectedNodeId) return
     if (!window.confirm(`确定要删除节点 "${selectedNode?.data.label}" 吗？`)) return
-    graph?.deleteChildNode(selectedNodeId)
+    graph.deleteChildNode(selectedNodeId)
     collapseRightPanel()
   }
 
@@ -87,18 +105,24 @@ export default function DetailPanel({ selectedNode, selectedNodeId, graph }: Det
   }
 
   const { data } = selectedNode
-  const nodePath = data.path
-  const hasChildren = data.hasChildren
 
   // Build child concept tags from directory listing
-  // We show available sub-rooms as clickable tags
+  // Clicking a tag navigates into that child room
   const renderChildTags = () => {
-    if (!hasChildren) return null
+    if (!hasChildren || childTags.length === 0) return null
     return (
       <div className={styles.childTags}>
         <span style={{ fontSize: '11px', color: '#888', marginRight: '4px' }}>子概念</span>
-        {/* Child tags are rendered as non-interactive labels for now */}
-        {/* Navigation via double-click on the canvas */}
+        {childTags.map((child) => (
+          <span
+            key={child.path}
+            className={styles.childTag}
+            onClick={() => graph.loadRoom(child.path)}
+            title={`进入 ${child.name}`}
+          >
+            {child.name}
+          </span>
+        ))}
       </div>
     )
   }
@@ -121,7 +145,7 @@ export default function DetailPanel({ selectedNode, selectedNodeId, graph }: Det
               }}
             />
           ) : (
-            <span className={styles.titleText} title={nodePath}>
+            <span className={styles.titleText} title={nodePath ?? undefined}>
               {data.label}
             </span>
           )}
@@ -167,7 +191,7 @@ export default function DetailPanel({ selectedNode, selectedNodeId, graph }: Det
               onClick={() => {
                 // Reload original content
                 const path = selectedNode?.data.path ?? selectedNodeId
-                setMarkdown(storage.readMarkdown(path))
+                storage.readMarkdown(path).then((content: string) => setMarkdown(content))
                 setEditMode(false)
               }}
             >
@@ -193,7 +217,7 @@ export default function DetailPanel({ selectedNode, selectedNodeId, graph }: Det
             {/* Markdown 渲染 */}
             <div
               className={styles.markdownBody}
-              dangerouslySetInnerHTML={{ __html: marked.parse(markdown) as string }}
+              dangerouslySetInnerHTML={{ __html: String(marked.parse(markdown)) }}
             />
             {renderChildTags()}
           </>

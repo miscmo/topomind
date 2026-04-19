@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { FSB } from '../core/fs-backend'
-import '../css/workdir.css'
+import styles from './SetupPage.module.css'
 
 export default function SetupPage() {
   const showHome = useAppStore((s) => s.showHome)
@@ -54,24 +54,24 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="workdir-page">
-      <div className="workdir-card">
-        <div className="workdir-brand">
-          <div className="workdir-logo">🧠</div>
+    <div className={styles.page}>
+      <div className={styles.card}>
+        <div className={styles.brand}>
+          <div className={styles.logo}>🧠</div>
           <div>
             <h1>TopoMind</h1>
             <p>先选择一个工作目录，再进入你的笔记本主页</p>
           </div>
         </div>
-        <div className="workdir-actions">
-          <button className="workdir-btn workdir-btn-primary" onClick={pickExisting}>
+        <div className={styles.actions}>
+          <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={pickExisting}>
             打开已有工作目录
           </button>
-          <button className="workdir-btn" onClick={createNew}>
+          <button className={styles.btn} onClick={createNew}>
             创建新的工作目录
           </button>
         </div>
-        {message && <div className={`workdir-message ${isError ? 'error' : ''}`}>{message}</div>}
+        {message && <div className={`${styles.message} ${isError ? styles.error : ''}`}>{message}</div>}
       </div>
     </div>
   )
