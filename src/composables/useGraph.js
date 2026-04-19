@@ -31,7 +31,7 @@ import {
   refreshHtmlLabels,
 } from '@/core/graph-utils.js'
 import { GraphConstants } from '@/core/graph-constants.js'
-import { logger } from '@/core/logger.js'
+import { loggerEnhanced as logger, Action } from '@/core/logger-enhanced.js'
 import { useGraphDOM } from '@/composables/useGraphDOM.js'
 
 /**
@@ -124,8 +124,10 @@ export function useGraph(containerRef) {
   async function loadRoom(dirPath) {
     if (!containerRef.value) return
 
+    const startTime = performance.now()
     const loadSeq = ++_loadRoomSeq
     const key = _roomKey(dirPath)
+    logger.info('useGraph', Action.PERF_LOAD_ROOM, `加载房间: ${dirPath}`, { key })
     if (cyManager.has(key)) {
       cyManager.remove(key)
     }
@@ -254,6 +256,7 @@ export function useGraph(containerRef) {
 
       // 从 localStorage 恢复选中的节点（仅当节点在当前房间中存在）
       _restoreSelectedNode()
+      logger.perf('useGraph', Action.PERF_LOAD_ROOM, `房间加载完成: ${dirPath}`, performance.now() - startTime, { key, cardCount: uniqueCards.length })
     } catch (e) {
       logger.catch('useGraph', 'loadRoom', e)
       throw e
@@ -309,6 +312,7 @@ export function useGraph(containerRef) {
   // ─── 钻入/返回 ──────────────────────────────────────────────
   async function drillInto(cardPath) {
     const prevPath = roomStore.currentRoomPath || roomStore.currentKBPath
+    logger.info('useGraph', Action.ROOM_DRILL_INTO, `钻入: ${cardPath}`, { prevPath, cardPath })
     try {
       await saveCurrentLayout(prevPath)
     } catch (e) {
@@ -337,6 +341,8 @@ export function useGraph(containerRef) {
       return
     }
     const prevPath = roomStore.currentRoomPath || roomStore.currentKBPath
+    const targetPath = roomStore.roomHistory[roomStore.roomHistory.length - 1]
+    logger.info('useGraph', Action.ROOM_GO_BACK, `返回: ${prevPath} -> ${targetPath}`, { prevPath, targetPath })
     try {
       await saveCurrentLayout(prevPath)
     } catch (e) {
@@ -347,6 +353,8 @@ export function useGraph(containerRef) {
 
   async function goRoot() {
     const prevPath = roomStore.currentRoomPath || roomStore.currentKBPath
+    const kbPath = roomStore.currentKBPath
+    logger.info('useGraph', Action.ROOM_GO_ROOT, `返回根级: ${prevPath} -> ${kbPath}`, { prevPath, kbPath })
     try {
       await saveCurrentLayout(prevPath)
     } catch (e) {
@@ -357,6 +365,7 @@ export function useGraph(containerRef) {
 
   async function jumpToBreadcrumb(path) {
     const prevPath = roomStore.currentRoomPath || roomStore.currentKBPath
+    logger.info('useGraph', Action.ROOM_JUMP_TO, `面包屑跳转: ${prevPath} -> ${path}`, { prevPath, path })
     try {
       await saveCurrentLayout(prevPath)
     } catch (e) {
@@ -376,7 +385,9 @@ export function useGraph(containerRef) {
   async function addCard(name, pos) {
     const dirPath = roomStore.currentRoomPath || roomStore.currentKBPath
     if (!dirPath) return
+    const startTime = performance.now()
     const cardPath = await storage.createCard(dirPath, name)
+    logger.info('useGraph', Action.NODE_ADD, `添加节点: ${name}`, { cardPath, dirPath })
     await storage.ensureCardDir(cardPath)
     const node = cy.value.add({
       group: 'nodes',
@@ -387,6 +398,7 @@ export function useGraph(containerRef) {
     if (!pos) cy.value.center(node)
     // 同步保存：确保父级的 _graph.json 立即更新，持久化新卡片
     await saveCurrentLayout(dirPath)
+    logger.perf('useGraph', Action.NODE_ADD, `节点添加完成: ${name}`, performance.now() - startTime, { cardPath })
     return cardPath
   }
 
@@ -402,6 +414,7 @@ export function useGraph(containerRef) {
 
   async function deleteCard(cardPath) {
     await storage.deleteCard(cardPath)
+    logger.info('useGraph', Action.NODE_DELETE, `删除节点: ${cardPath}`)
     const node = cy.value.getElementById(cardPath)
     if (node.length) {
       cy.value.remove(node.connectedEdges())
@@ -413,6 +426,7 @@ export function useGraph(containerRef) {
 
   async function renameCard(cardPath, newName) {
     const actualPath = await storage.renameCard(cardPath, newName)
+    logger.info('useGraph', Action.NODE_RENAME, `重命名节点: ${cardPath} -> ${newName}`, { cardPath, actualPath, newName })
     const node = cy.value.getElementById(cardPath)
     if (node.length) {
       node.data('label', newName)
@@ -447,16 +461,18 @@ export function useGraph(containerRef) {
     )
     if (existing.length) return
     try {
+      const edgeId = autoEdgeId()
       cy.value.add({
         group: 'edges',
         data: {
-          id: autoEdgeId(),
+          id: edgeId,
           source: sourceId,
           target: targetId,
           relation,
           weight: relation === '相关' ? 'minor' : 'main',
         },
       })
+      logger.info('useGraph', Action.EDGE_ADD, `添加边: ${sourceId} -> ${targetId} (${relation})`, { edgeId, source: sourceId, target: targetId, relation })
       saveCurrentLayoutDebounced()
     } catch (e) {
       logger.catch('useGraph', `添加边失败 (${sourceId} -> ${targetId})`, e)
@@ -464,12 +480,15 @@ export function useGraph(containerRef) {
   }
 
   function deleteEdge(edgeId) {
+    logger.info('useGraph', Action.EDGE_DELETE, `删除边: ${edgeId}`)
     const edge = cy.value.getElementById(edgeId)
     if (edge.length) cy.value.remove(edge)
     saveCurrentLayoutDebounced()
   }
 
   async function batchDelete(nodeIds) {
+    const count = nodeIds.length
+    logger.info('useGraph', Action.NODE_DELETE, `批量删除 ${count} 个节点`, { nodeIds })
     for (const id of nodeIds) {
       try {
         await storage.deleteCard(id)
@@ -487,6 +506,8 @@ export function useGraph(containerRef) {
   async function deleteAllNodes() {
     if (!cy.value) return
     const nodeIds = cy.value.nodes().map(n => n.id())
+    const count = nodeIds.length
+    logger.info('useGraph', Action.NODE_DELETE, `删除全部节点: ${count} 个`, { nodeIds })
     for (const id of nodeIds) {
       try {
         await storage.deleteCard(id)
@@ -507,27 +528,50 @@ export function useGraph(containerRef) {
     cy.value.nodes().removeClass('search-match')
     if (!q) return
     const lower = q.toLowerCase()
+    const matchCount = cy.value.nodes().filter(n => (n.data('label') || '').toLowerCase().includes(lower)).length
     cy.value.nodes().forEach(n => {
       if ((n.data('label') || '').toLowerCase().includes(lower)) {
         n.addClass('search-match')
       }
     })
+    logger.info('useGraph', Action.SEARCH_APPLY, `搜索: ${q}`, { query: q, matchCount })
   }
 
   // ─── 缩放 ────────────────────────────────────────────────────
-  function zoomIn() { cy.value?.animate({ zoom: cy.value.zoom() * 1.3 }, { duration: 200 }) }
-  function zoomOut() { cy.value?.animate({ zoom: cy.value.zoom() / 1.3 }, { duration: 200 }) }
-  function fitView() { cy.value?.animate({ fit: { padding: GraphConstants.FIT_PADDING } }, { duration: GraphConstants.FIT_ANIMATION_DURATION_MS }) }
-  function resetZoom() { cy.value?.zoom(1); cy.value?.center() }
+  function zoomIn() {
+    logger.info('useGraph', Action.VIEW_ZOOM, '放大')
+    cy.value?.animate({ zoom: cy.value.zoom() * 1.3 }, { duration: 200 })
+  }
+  function zoomOut() {
+    logger.info('useGraph', Action.VIEW_ZOOM, '缩小')
+    cy.value?.animate({ zoom: cy.value.zoom() / 1.3 }, { duration: 200 })
+  }
+  function fitView() {
+    logger.info('useGraph', Action.VIEW_FIT, '适应视图')
+    cy.value?.animate({ fit: { padding: GraphConstants.FIT_PADDING } }, { duration: GraphConstants.FIT_ANIMATION_DURATION_MS })
+  }
+  function resetZoom() {
+    logger.info('useGraph', Action.VIEW_RESET_ZOOM, '重置缩放')
+    cy.value?.zoom(1)
+    cy.value?.center()
+  }
 
   // ─── 事件绑定 ────────────────────────────────────────────────
 
   // 同步选中状态到 Pinia store
   const syncSelectionToStore = (c) => {
     const selected = c.nodes(':selected')
+    const prevSelected = appStore.selectedNodeId
     if (selected.length > 0) {
-      appStore.selectNode(selected[0].id())
+      const id = selected[0].id()
+      appStore.selectNode(id)
+      if (id !== prevSelected) {
+        logger.info('useGraph', Action.NODE_SELECT, `选中节点: ${id}`)
+      }
     } else {
+      if (prevSelected) {
+        logger.info('useGraph', Action.NODE_UNSELECT, `取消选中: ${prevSelected}`)
+      }
       appStore.clearSelection()
     }
     dom.updateNodeHandles(c)
@@ -604,6 +648,7 @@ export function useGraph(containerRef) {
     c.on('select unselect', 'node', () => { syncSelectionToStore(c) })
     c.on('zoom', () => {
       zoomLevel.value = Math.round(c.zoom() * 100)
+      logger.debug('useGraph', `缩放变更: ${Math.round(c.zoom() * 100)}%`)
       dom.applyZoomDisplay(c.zoom())
       dom.updateNodeHandles(c)
     })
