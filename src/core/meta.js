@@ -1,5 +1,9 @@
 /**
- * Meta 规范化工具
+ * 将原始图元数据规范化为稳定结构，过滤非法字段并补齐默认值。
+ * 主要用于读写 `_graph.json` 时统一 children、edges、viewport 等字段格式。
+ *
+ * @param {object} metaRaw 原始元数据对象
+ * @returns {{children: object, edges: Array<object>, zoom: number|null, pan: {x:number,y:number}|null, canvasBounds: object|null}} 规范化后的元数据
  */
 export function normalizeMeta(metaRaw) {
   const meta = (metaRaw && typeof metaRaw === 'object' && !Array.isArray(metaRaw)) ? metaRaw : {}

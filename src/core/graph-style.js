@@ -1,6 +1,6 @@
 /**
- * Graph style definitions for Cytoscape
- * Single source of truth — imported by both CyManager and useGraph
+ * Cytoscape 图谱样式定义。
+ * 作为图谱节点、边和状态样式的单一来源，供初始化与运行时共享。
  */
 export const GRAPH_STYLE = [
   { selector: 'node.card', style: {
@@ -40,8 +40,9 @@ export const GRAPH_STYLE = [
 ]
 
 /**
- * Deep-clone GRAPH_STYLE entries so callers can mutate without affecting the source.
- * @returns {Array} cloned style array
+ * 深拷贝图谱样式定义，避免调用方修改返回值时污染全局样式源。
+ *
+ * @returns {Array<{selector: string, style: object}>} 克隆后的样式数组
  */
 export function cloneGraphStyle() {
   return GRAPH_STYLE.map((entry) => ({

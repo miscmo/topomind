@@ -11,6 +11,12 @@ export const saveIndicatorVisible = ref(false)
 export const saveFailed = ref(false)
 let _saveIndicatorTimer = null
 
+/**
+ * 显示全局保存状态提示，并在短暂延时后自动隐藏。
+ *
+ * @param {boolean} [failed=false] 是否展示失败状态
+ * @returns {void}
+ */
 export function showSaveIndicator(failed = false) {
   saveFailed.value = failed
   saveIndicatorVisible.value = true
@@ -20,12 +26,18 @@ export function showSaveIndicator(failed = false) {
   }, 1500)
 }
 
+/**
+ * 提供统一的存储相关能力，并附带保存状态指示器。
+ * 该 composable 主要作为 UI 层访问 `Store` 的入口。
+ *
+ * @returns {object} 存储操作集合与保存状态
+ */
 export function useStorage() {
   return {
-    // 初始化
+    // ===== 初始化 =====
     init: () => Store.init(),
 
-    // 知识库
+    // ===== 知识库 =====
     listKBs: () => Store.listKBs(),
     createKB: (name, meta) => Store.createKB(name, meta),
     deleteKB: (name) => Store.deleteKB(name),
@@ -33,17 +45,17 @@ export function useStorage() {
     saveKBCover: (kbPath, coverPath) => Store.saveKBCover(kbPath, coverPath),
     renameKB: (kbPath, newName) => Store.renameKB(kbPath, newName),
 
-    // 卡片
+    // ===== 卡片 =====
     listCards: (parentPath) => Store.listCards(parentPath),
     createCard: (parentPath, cardName) => Store.createCard(parentPath, cardName),
     deleteCard: (cardPath) => Store.deleteCard(cardPath),
     renameCard: (cardPath, newName) => Store.renameCard(cardPath, newName),
 
-    // Markdown
+    // ===== Markdown =====
     readMarkdown: (cardPath) => Store.readMarkdown(cardPath),
     writeMarkdown: (cardPath, content) => Store.writeMarkdown(cardPath, content),
 
-    // 布局
+    // ===== 布局 =====
     readLayout: (dirPath) => Store.readLayout(dirPath),
     saveLayout: (dirPath, meta) => Store.saveLayout(dirPath, meta)
       .then(() => showSaveIndicator(false))
@@ -58,13 +70,13 @@ export function useStorage() {
     flushGraphSave: (dirPath, buildMetaFn) =>
       Store.flushGraphSave(dirPath, buildMetaFn, (failed) => showSaveIndicator(failed)),
 
-    // 图片
+    // ===== 图片 =====
     saveImage: (cardPath, blob, filename) => Store.saveImage(cardPath, blob, filename),
     saveKBImage: (kbPath, blob, filename) => Store.saveKBImage(kbPath, blob, filename),
     loadImage: (imgPath) => Store.loadImage(imgPath),
     revokeAllImageUrls: () => Store.revokeAllImageUrls(),
 
-    // 工具
+    // ===== 工具 =====
     countChildren: (p) => Store.countChildren(p),
     selectExistingWorkDir: (dirPath) => Store.selectExistingWorkDir(dirPath),
     selectWorkDirCandidate: () => Store.selectWorkDirCandidate(),
@@ -76,7 +88,7 @@ export function useStorage() {
     setLastOpenedKB: (kbPath) => Store.setLastOpenedKB(kbPath),
     ensureCardDir: (cardPath) => Store.ensureCardDir(cardPath),
 
-    // 指示器状态
+    // ===== 指示器状态 =====
     saveIndicatorVisible,
     saveFailed,
     showSaveIndicator,

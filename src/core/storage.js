@@ -12,10 +12,24 @@ const _blobUrlRegistry = new Map()
 /** 单张图片最大尺寸：5MB */
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
+/**
+ * 规范化用户输入名称，统一转为去除首尾空格的字符串。
+ *
+ * @param {string} name 原始名称
+ * @returns {string} 规范化后的名称
+ */
 function normalizeName(name) {
   return String(name || '').trim()
 }
 
+/**
+ * 校验名称是否合法，禁止空名称以及 `.`、`..`。
+ *
+ * @param {string} name 原始名称
+ * @param {string} [label='名称'] 字段标签，用于错误提示
+ * @returns {string} 校验通过后的名称
+ * @throws {Error} 当名称为空或不合法时抛出异常
+ */
 function ensureValidName(name, label = '名称') {
   const normalized = normalizeName(name)
   if (!normalized) throw new Error(`${label}不能为空`)
@@ -27,6 +41,11 @@ function ensureValidName(name, label = '名称') {
 
 export const Store = {
   // ===== 初始化 =====
+  /**
+   * 初始化当前工作目录。
+   *
+   * @returns {Promise<object>} 工作目录初始化结果
+   */
   init() {
     try {
       return FSB.initWorkDir()
@@ -35,6 +54,12 @@ export const Store = {
       throw e
     }
   },
+  /**
+   * 选择并校验一个已有工作目录。
+   *
+   * @param {string} dirPath 工作目录路径
+   * @returns {Promise<object>} 工作目录选择结果
+   */
   selectExistingWorkDir(dirPath) {
     try {
       return FSB.selectExistingWorkDir(dirPath)
@@ -43,6 +68,11 @@ export const Store = {
       throw e
     }
   },
+  /**
+   * 打开目录选择器，选择一个工作目录候选路径。
+   *
+   * @returns {Promise<object>} 目录选择结果
+   */
   selectWorkDirCandidate() {
     try {
       return FSB.selectWorkDirCandidate()
@@ -51,6 +81,13 @@ export const Store = {
       throw e
     }
   },
+
+  /**
+   * 创建新的工作目录。
+   *
+   * @param {string} dirPath 工作目录路径
+   * @returns {Promise<object>} 工作目录创建结果
+   */
   createWorkDir(dirPath) {
     try {
       return FSB.createWorkDir(dirPath)
@@ -61,8 +98,20 @@ export const Store = {
   },
 
   // ===== 知识库（根级目录） =====
+  /**
+   * 获取根目录下的知识库列表。
+   *
+   * @returns {Promise<Array<object>>} 知识库列表
+   */
   listKBs: () => FSB.listChildren(''),
 
+  /**
+   * 创建一个新的知识库目录，并为其分配排序值。
+   *
+   * @param {string} name 知识库名称
+   * @param {object} meta 当前未使用，预留参数
+   * @returns {Promise<string>} 新知识库相对路径
+   */
   async createKB(name, meta) {
     const safeName = ensureValidName(name, '知识库名称')
     try {
@@ -81,6 +130,12 @@ export const Store = {
     }
   },
 
+  /**
+   * 删除指定知识库目录。
+   *
+   * @param {string} name 知识库相对路径
+   * @returns {Promise<void>} 删除结果
+   */
   async deleteKB(name) {
     try {
       return await FSB.rmDir(name)
@@ -90,6 +145,13 @@ export const Store = {
     }
   },
 
+  /**
+   * 保存知识库封面路径配置。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @param {string|null} coverPath 封面相对路径
+   * @returns {Promise<void>} 保存结果
+   */
   async saveKBCover(kbPath, coverPath) {
     try {
       return await FSB.saveKBCover(kbPath, coverPath)
@@ -99,6 +161,13 @@ export const Store = {
     }
   },
 
+  /**
+   * 重命名知识库。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @param {string} newName 新名称
+   * @returns {Promise<string>} 重命名后的相对路径
+   */
   async renameKB(kbPath, newName) {
     const safeName = ensureValidName(newName, '知识库名称')
     try {
@@ -110,6 +179,12 @@ export const Store = {
   },
 
   // ===== 卡片（子目录） =====
+  /**
+   * 列出指定父路径下的卡片列表。
+   *
+   * @param {string} parentPath 父级相对路径
+   * @returns {Promise<Array<object>>} 卡片列表
+   */
   async listCards(parentPath) {
     try {
       return await FSB.listChildren(parentPath)
@@ -119,6 +194,13 @@ export const Store = {
     }
   },
 
+  /**
+   * 在指定父路径下创建卡片，并校验同级名称不能重复。
+   *
+   * @param {string} parentPath 父级相对路径
+   * @param {string} cardName 卡片名称
+   * @returns {Promise<string>} 新卡片相对路径
+   */
   async createCard(parentPath, cardName) {
     const safeName = ensureValidName(cardName, '卡片名称')
     try {
@@ -137,6 +219,12 @@ export const Store = {
     }
   },
 
+  /**
+   * 删除指定卡片目录。
+   *
+   * @param {string} cardPath 卡片相对路径
+   * @returns {Promise<void>} 删除结果
+   */
   async deleteCard(cardPath) {
     try {
       return await FSB.rmDir(cardPath)
@@ -146,6 +234,13 @@ export const Store = {
     }
   },
 
+  /**
+   * 重命名卡片显示名称，不改变目录路径，仅更新元数据。
+   *
+   * @param {string} cardPath 卡片相对路径
+   * @param {string} newName 新名称
+   * @returns {Promise<string>} 更新后的卡片路径
+   */
   async renameCard(cardPath, newName) {
     const safeName = ensureValidName(newName, '卡片名称')
     try {
@@ -164,6 +259,12 @@ export const Store = {
   },
 
   // ===== Markdown 文档 =====
+  /**
+   * 读取卡片目录下的 Markdown 文档内容。
+   *
+   * @param {string} cardPath 卡片相对路径
+   * @returns {Promise<string>} Markdown 内容
+   */
   async readMarkdown(cardPath) {
     try {
       return await FSB.readFile(`${cardPath}/README.md`)
@@ -173,6 +274,13 @@ export const Store = {
     }
   },
 
+  /**
+   * 写入卡片目录下的 Markdown 文档，必要时自动创建目录。
+   *
+   * @param {string} cardPath 卡片相对路径
+   * @param {string} content Markdown 内容
+   * @returns {Promise<void>} 写入结果
+   */
   async writeMarkdown(cardPath, content) {
     try {
       await FSB.ensureCardDir(cardPath)
@@ -183,6 +291,12 @@ export const Store = {
     }
   },
 
+  /**
+   * 读取目录布局元数据，并进行标准化处理。
+   *
+   * @param {string} dirPath 目录相对路径
+   * @returns {Promise<object>} 标准化后的布局数据
+   */
   async readLayout(dirPath) {
     try {
       return normalizeMeta(await FSB.readGraphMeta(dirPath))
@@ -192,6 +306,13 @@ export const Store = {
     }
   },
 
+  /**
+   * 保存目录布局元数据，并在写入前做标准化处理。
+   *
+   * @param {string} dirPath 目录相对路径
+   * @param {object} meta 布局元数据
+   * @returns {Promise<void>} 保存结果
+   */
   async saveLayout(dirPath, meta) {
     try {
       return await FSB.writeGraphMeta(dirPath, normalizeMeta(meta))
@@ -201,6 +322,15 @@ export const Store = {
     }
   },
 
+  /**
+   * 以防抖方式保存图布局，适合拖拽和连续编辑场景。
+   * 同一路径的上一次延迟保存会被新的请求覆盖。
+   *
+   * @param {string} dirPath 目标目录路径
+   * @param {() => object} buildMetaFn 用于构建最新图元数据的函数
+   * @param {() => void} [onSaved] 保存成功后的回调
+   * @returns {Promise<void>} 保存完成 Promise
+   */
   saveGraphDebounced(dirPath, buildMetaFn, onSaved) {
     if (!dirPath) return Promise.resolve()
     const oldTimer = _saveTimers.get(dirPath)
@@ -225,6 +355,14 @@ export const Store = {
     return promise
   },
 
+  /**
+   * 立即执行挂起中的图布局保存，并清除对应的防抖计时器。
+   *
+   * @param {string} dirPath 目标目录路径
+   * @param {() => object} buildMetaFn 用于构建最新图元数据的函数
+   * @param {() => void} [onSaved] 保存成功后的回调
+   * @returns {Promise<void>} 保存完成 Promise
+   */
   flushGraphSave(dirPath, buildMetaFn, onSaved) {
     if (!dirPath) return Promise.resolve()
     const oldTimer = _saveTimers.get(dirPath)
@@ -237,6 +375,15 @@ export const Store = {
   },
 
   // ===== 图片 =====
+  /**
+   * 保存卡片图片，并返回可写入 Markdown 的相对引用。
+   *
+   * @param {string} cardPath 卡片相对路径
+   * @param {Blob} blob 图片二进制内容
+   * @param {string} filename 文件名
+   * @returns {Promise<{path: string, markdownRef: string}>} 图片路径信息
+   * @throws {Error} 当图片体积超过限制时抛出异常
+   */
   async saveImage(cardPath, blob, filename) {
     if (blob.size > MAX_IMAGE_SIZE) {
       throw new Error(`图片大小超过限制（最大 5MB），当前 ${(blob.size / 1024 / 1024).toFixed(1)}MB`)
@@ -251,6 +398,15 @@ export const Store = {
     }
   },
 
+  /**
+   * 保存知识库级图片，并返回可用于引用的路径信息。
+   *
+   * @param {string} kbPath 知识库相对路径
+   * @param {Blob} blob 图片二进制内容
+   * @param {string} filename 文件名
+   * @returns {Promise<{path: string, markdownRef: string}>} 图片路径信息
+   * @throws {Error} 当图片体积超过限制时抛出异常
+   */
   async saveKBImage(kbPath, blob, filename) {
     if (blob.size > MAX_IMAGE_SIZE) {
       throw new Error(`图片大小超过限制（最大 5MB），当前 ${(blob.size / 1024 / 1024).toFixed(1)}MB`)
@@ -265,6 +421,13 @@ export const Store = {
     }
   },
 
+  /**
+   * 加载图片并转换为可在浏览器中使用的 Blob URL。
+   * 若同一路径此前已生成过 URL，会先撤销旧 URL 以避免泄漏。
+   *
+   * @param {string} imgPath 图片相对路径
+   * @returns {Promise<string>} Blob URL；图片不存在时返回空字符串
+   */
   async loadImage(imgPath) {
     try {
       const blob = await FSB.readBlobFile(imgPath)
@@ -284,7 +447,12 @@ export const Store = {
     }
   },
 
-  /** 撤销所有 loadImage 创建的 Blob URL（HomePage 列表刷新时调用） */
+  /**
+   * 撤销所有由 `loadImage` 创建的 Blob URL。
+   * 通常在列表刷新或页面卸载时调用，用于释放浏览器内存。
+   *
+   * @returns {void}
+   */
   revokeAllImageUrls() {
     for (const [path, url] of _blobUrlRegistry) {
       try { URL.revokeObjectURL(url) } catch (e) { logger.warn('Store', `revokeImageUrl ${path}`, e) }
@@ -293,6 +461,11 @@ export const Store = {
   },
 
   // ===== 工具 =====
+  /**
+   * 清空当前工作目录下的全部业务数据。
+   *
+   * @returns {Promise<void>} 清空结果
+   */
   async clearAll() {
     try {
       return await FSB.clearAll()
@@ -302,6 +475,12 @@ export const Store = {
     }
   },
 
+  /**
+   * 导入一个已存在的知识库目录到当前工作目录。
+   *
+   * @param {string} sourcePath 源知识库目录路径
+   * @returns {Promise<string>} 导入后的知识库相对路径
+   */
   async importKB(sourcePath) {
     try {
       return await FSB.importKB(sourcePath)
@@ -311,6 +490,12 @@ export const Store = {
     }
   },
 
+  /**
+   * 在系统文件管理器中打开指定路径。
+   *
+   * @param {string} p 相对路径或绝对路径
+   * @returns {Promise<void>} 打开结果
+   */
   async openInFinder(p) {
     try {
       return await FSB.openInFinder(p)
@@ -320,6 +505,12 @@ export const Store = {
     }
   },
 
+  /**
+   * 统计指定路径下的直接子目录数量。
+   *
+   * @param {string} p 相对路径
+   * @returns {Promise<number>} 子目录数量
+   */
   async countChildren(p) {
     try {
       return await FSB.countChildren(p)
@@ -329,6 +520,11 @@ export const Store = {
     }
   },
 
+  /**
+   * 获取当前工作目录路径。
+   *
+   * @returns {Promise<string>} 工作目录路径
+   */
   getRootDir() {
     try {
       return FSB.getRootDir()
@@ -338,6 +534,11 @@ export const Store = {
     }
   },
 
+  /**
+   * 获取上次打开的知识库路径。
+   *
+   * @returns {Promise<string|null>} 知识库路径
+   */
   getLastOpenedKB() {
     try {
       return FSB.getLastOpenedKB()
@@ -347,6 +548,12 @@ export const Store = {
     }
   },
 
+  /**
+   * 记录上次打开的知识库路径。
+   *
+   * @param {string|null} kbPath 知识库路径
+   * @returns {Promise<void>} 设置结果
+   */
   setLastOpenedKB(kbPath) {
     try {
       return FSB.setLastOpenedKB(kbPath)
@@ -356,6 +563,12 @@ export const Store = {
     }
   },
 
+  /**
+   * 确保卡片目录存在，必要时自动创建。
+   *
+   * @param {string} cardPath 卡片相对路径
+   * @returns {Promise<void>} 处理结果
+   */
   ensureCardDir(cardPath) {
     try {
       return FSB.ensureCardDir(cardPath)

@@ -7,9 +7,10 @@
 import { GraphConstants } from './graph-constants.js'
 
 /**
- * HTML 转义，防止 XSS
- * @param {string} text
- * @returns {string}
+ * 对文本进行 HTML 转义，防止标签注入和 XSS。
+ *
+ * @param {string} text 原始文本
+ * @returns {string} 转义后的字符串
  */
 export function escapeHtml(text) {
   return String(text ?? '')
@@ -21,7 +22,8 @@ export function escapeHtml(text) {
 }
 
 /**
- * 文档图标 SVG（14x14px，固定尺寸不随父元素 font-size 缩放）
+ * 文档徽标 SVG 模板。
+ * 固定为 14x14 像素，不随父元素字号变化。
  */
 const DOC_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="12" rx="1.5" stroke="#fff" stroke-width="1.2" fill="none"/><rect x="4" y="1" width="6" height="5" rx="1" fill="#fff" opacity="0.9"/><line x1="3" y1="8" x2="9" y2="8" stroke="#fff" stroke-width="1" stroke-linecap="round"/><line x1="3" y1="10" x2="9" y2="10" stroke="#fff" stroke-width="1" stroke-linecap="round"/><line x1="3" y1="12" x2="7" y2="12" stroke="#fff" stroke-width="1" stroke-linecap="round"/></svg>`
 
@@ -84,9 +86,10 @@ export function generateNodeLabelHtml(data) {
 }
 
 /**
- * 返回 cytoscape-node-html-label 配置对象
- * 注意：插件使用 `tpl`（非 `html`）作为模板函数属性
- * @returns {Array<{query: string, tpl: Function, halign: string, valign: string}>}
+ * 返回 `cytoscape-node-html-label` 插件所需的标签配置。
+ * 注意插件使用 `tpl` 而不是 `html` 作为模板函数字段。
+ *
+ * @returns {Array<{query: string, tpl: Function, halign: string, valign: string}>} 标签配置数组
  */
 export function getNodeHtmlLabelConfig() {
   return [{

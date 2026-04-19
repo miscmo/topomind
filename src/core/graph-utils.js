@@ -9,6 +9,11 @@ import { logger } from '@/core/logger.js'
 // ─── 边 ID 生成器 ─────────────────────────────────────────────
 let _edgeCounter = 0
 
+/**
+ * 生成图边的唯一 ID，并在计数器达到上限后自动回绕。
+ *
+ * @returns {string} 边 ID
+ */
 export function autoEdgeId() {
   if (_edgeCounter > GraphConstants.EDGE_COUNTER_CAP) {
     _edgeCounter = GraphConstants.EDGE_COUNTER_INITIAL
@@ -17,6 +22,12 @@ export function autoEdgeId() {
 }
 
 // ─── 卡片去重 ─────────────────────────────────────────────────
+/**
+ * 按卡片路径去重，并过滤无效卡片对象。
+ *
+ * @param {Array<object>} cards 原始卡片数组
+ * @returns {Array<object>} 去重后的卡片数组
+ */
 export function deduplicateCards(cards) {
   const unique = []
   const seen = new Set()
@@ -30,6 +41,14 @@ export function deduplicateCards(cards) {
 }
 
 // ─── 边去重 ───────────────────────────────────────────────────
+/**
+ * 遍历边数据并按边 ID 去重后回调输出。
+ * 兼容 `source/target` 与 `from/to` 两种字段命名。
+ *
+ * @param {Array<object>} edges 原始边数组
+ * @param {(edge: object) => void} addEdgeFn 去重后边数据的消费函数
+ * @returns {void}
+ */
 export function deduplicateEdges(edges, addEdgeFn) {
   const seenIds = new Set()
   for (const e of edges) {
@@ -51,6 +70,13 @@ export function deduplicateEdges(edges, addEdgeFn) {
 }
 
 // ─── 显示名称提取 ──────────────────────────────────────────────
+/**
+ * 从保存数据、卡片对象或路径中提取节点显示名称。
+ *
+ * @param {object} card 卡片对象
+ * @param {object} saved 已保存的节点元数据
+ * @returns {string} 显示名称
+ */
 export function extractDisplayName(card, saved) {
   if (saved && typeof saved.name === 'string' && saved.name.trim()) {
     return saved.name
@@ -63,6 +89,13 @@ export function extractDisplayName(card, saved) {
 }
 
 // ─── 节点 data 对象构建 ───────────────────────────────────────
+/**
+ * 根据卡片对象与保存的元数据构建 Cytoscape 节点 data。
+ *
+ * @param {object} card 卡片对象
+ * @param {object} saved 已保存的节点元数据
+ * @returns {object} Cytoscape 节点 data
+ */
 export function buildCardData(card, saved) {
   const displayName = extractDisplayName(card, saved)
   return {
@@ -85,6 +118,14 @@ export function buildCardData(card, saved) {
 }
 
 // ─── 节点初始样式应用 ─────────────────────────────────────────
+/**
+ * 将节点 data 与保存的位置、样式信息应用到 Cytoscape 元素。
+ *
+ * @param {import('cytoscape').NodeSingular} ele 节点元素
+ * @param {object} data 节点 data
+ * @param {object} saved 已保存的节点元数据
+ * @returns {void}
+ */
 export function applyNodeStyle(ele, data, saved) {
   if (data.color) ele.style('background-color', data.color)
   if (data.fontColor) ele.style('color', data.fontColor)
@@ -145,6 +186,15 @@ function mapStyleValue(key, value, node) {
 }
 
 // ─── 批量节点样式更新 ─────────────────────────────────────────
+/**
+ * 批量更新节点样式与对应 data 字段，并按需刷新 HTML 标签。
+ *
+ * @param {import('cytoscape').Core} cy Cytoscape 实例
+ * @param {import('cytoscape').CollectionReturnValue} targets 目标节点集合
+ * @param {object} styles 样式键值对
+ * @param {(nodes?: any) => void} [refreshLabelsFn] 标签刷新函数
+ * @returns {void}
+ */
 export function updateNodeStyle(cy, targets, styles, refreshLabelsFn) {
   if (!cy || !targets?.length) return
   targets.forEach((node) => {
@@ -182,6 +232,13 @@ export function batchSetColor(cy, targets, color) {
 }
 
 // ─── 加载节点徽标数据 ─────────────────────────────────────────
+/**
+ * 异步加载每个节点的子卡片数量和文档存在状态，用于徽标显示。
+ *
+ * @param {import('cytoscape').Core} cy Cytoscape 实例
+ * @param {object} storage 存储层对象
+ * @returns {Promise<void>} 加载结果
+ */
 export async function loadNodeBadges(cy, storage) {
   if (!cy) return
   const nodeIds = cy.nodes().map(n => n.id())
@@ -198,6 +255,14 @@ export async function loadNodeBadges(cy, storage) {
 }
 
 // ─── 构建 meta 对象 ───────────────────────────────────────────
+/**
+ * 根据当前图谱状态构建可持久化的 meta 对象。
+ *
+ * @param {import('cytoscape').Core} cy Cytoscape 实例
+ * @param {object|null} currentMeta 当前已加载的元数据
+ * @param {object} grid 网格控制对象
+ * @returns {object|null} 可保存的 meta 对象
+ */
 export function buildCurrentMeta(cy, currentMeta, grid) {
   if (!cy) return null
   const children = {}
@@ -241,6 +306,13 @@ export function buildCurrentMeta(cy, currentMeta, grid) {
 }
 
 // ─── 强制刷新 HTML 标签 ────────────────────────────────────────
+/**
+ * 触发节点的 `data` 事件，强制刷新 HTML Label 插件渲染结果。
+ *
+ * @param {import('cytoscape').Core} cy Cytoscape 实例
+ * @param {import('cytoscape').CollectionReturnValue} [nodes] 目标节点集合
+ * @returns {void}
+ */
 export function refreshHtmlLabels(cy, nodes) {
   if (!cy) return
   const targets = nodes || cy.nodes()
