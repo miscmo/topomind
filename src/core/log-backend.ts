@@ -117,9 +117,14 @@ function _dispatchToListeners(entry: LogEntry) {
 export function logSubscribe(callback: (entry: LogEntry) => void): void {
   _listeners.add(callback)
 
+  // Main process tracks subscribers by webContents id via log:subscribe channel
+  const api = _api()
+  if (api) {
+    api.send('log:subscribe')
+  }
+
   if (!_ipcRegistered) {
     _ipcRegistered = true
-    const api = _api()
     if (api) {
       _ipcHandler = _dispatchToListeners
       api.on('log:entry', _ipcHandler)
@@ -129,9 +134,12 @@ export function logSubscribe(callback: (entry: LogEntry) => void): void {
 
 export function logUnsubscribe(callback: (entry: LogEntry) => void): void {
   _listeners.delete(callback)
+  const api = _api()
+  if (api) {
+    api.send('log:unsubscribe')
+  }
   if (_listeners.size === 0 && _ipcRegistered) {
     _ipcRegistered = false
-    const api = _api()
     if (api && _ipcHandler) {
       api.off('log:entry', _ipcHandler)
       _ipcHandler = null

@@ -10,6 +10,7 @@ import {
   logGetAvailableDates,
   logClear,
   logSubscribe,
+  logUnsubscribe,
 } from '../../core/log-backend'
 import { COLORS } from '../../types'
 import styles from './MonitorPage.module.css'
@@ -158,8 +159,9 @@ function FilterBar() {
       dateStr,
       levels: selectedLevels.length > 0 ? selectedLevels : undefined,
     })) as LogEntry[]
-    setEntries(results)
-  }, [selectedDate, selectedLevels, setEntries])
+    // Append results instead of replacing to avoid wiping logs when query returns empty
+    appendEntries(results)
+  }, [selectedDate, selectedLevels, appendEntries])
 
   const handleClear = useCallback(async () => {
     await logClear()
@@ -507,6 +509,7 @@ export default function MonitorPage() {
 
     return () => {
       mounted = false
+      logUnsubscribe(handleEntry)
     }
   }, [appendEntries, setAvailableDates, setLoaded])
 
