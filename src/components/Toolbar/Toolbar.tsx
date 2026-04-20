@@ -8,18 +8,15 @@ import { useGraphContext } from '../../contexts/GraphContext'
 import { useReactFlow } from '@xyflow/react'
 import styles from './Toolbar.module.css'
 
-interface ToolbarProps {
-  showGrid: boolean
-  onToggleGrid: () => void
-}
-
-export default memo(function Toolbar({ showGrid, onToggleGrid }: ToolbarProps) {
+export default memo(function Toolbar() {
   const showGitPanel = useAppStore((s) => s.showGitPanel)
   const toggleGitPanel = useAppStore((s) => s.toggleGitPanel)
   const edgeMode = useAppStore((s) => s.edgeMode)
   const exitEdgeMode = useAppStore((s) => s.exitEdgeMode)
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
   const enterEdgeMode = useAppStore((s) => s.enterEdgeMode)
+  const showGrid = useAppStore((s) => s.showGrid)
+  const toggleGrid = useAppStore((s) => s.toggleGrid)
   const graph = useGraphContext()
   const { fitView, zoomIn, zoomOut } = useReactFlow()
 
@@ -67,7 +64,7 @@ export default memo(function Toolbar({ showGrid, onToggleGrid }: ToolbarProps) {
       <button
         className={showGrid ? styles.active : ''}
         title={showGrid ? '隐藏网格' : '显示网格'}
-        onClick={onToggleGrid}
+        onClick={toggleGrid}
       >
         #格
       </button>

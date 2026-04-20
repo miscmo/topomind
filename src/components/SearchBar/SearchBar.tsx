@@ -2,7 +2,6 @@
  * 搜索框组件
  */
 import { memo } from 'react'
-import { useGraphContext } from '../../contexts/GraphContext'
 import styles from './SearchBar.module.css'
 
 interface SearchBarProps {
@@ -11,12 +10,8 @@ interface SearchBarProps {
 }
 
 export default memo(function SearchBar({ searchQuery, onSearchChange }: SearchBarProps) {
-  const graph = useGraphContext()
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const q = e.target.value
-    onSearchChange(q)
-    graph.highlightSearch(q)
+    onSearchChange(e.target.value)
   }
 
   return (
@@ -32,10 +27,7 @@ export default memo(function SearchBar({ searchQuery, onSearchChange }: SearchBa
       {searchQuery && (
         <button
           className={styles.clearBtn}
-          onClick={() => {
-            onSearchChange('')
-            graph.highlightSearch('')
-          }}
+          onClick={() => onSearchChange('')}
           title="清除搜索"
         >
           ×

@@ -32,6 +32,10 @@ interface AppState {
   }
   // KB 列表刷新触发器（NavTree 监听此字段以保持同步）
   kbRefreshTrigger: number
+  // 是否显示网格背景
+  showGrid: boolean
+  // 搜索查询字符串
+  searchQuery: string
 
   // Actions
   showGraph: () => void
@@ -49,6 +53,8 @@ interface AppState {
   showContextMenu: (x: number, y: number, type: 'node' | 'edge' | 'pane', targetId?: string | null) => void
   hideContextMenu: () => void
   triggerKBRefresh: () => void
+  toggleGrid: () => void
+  setSearchQuery: (query: string) => void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -69,6 +75,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     targetId: null,
   },
   kbRefreshTrigger: 0,
+  showGrid: true,
+  searchQuery: '',
 
   // Actions
   showGraph: () => set({ view: 'graph' }),
@@ -115,4 +123,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   })),
 
   triggerKBRefresh: () => set((state) => ({ kbRefreshTrigger: state.kbRefreshTrigger + 1 })),
+
+  toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
+
+  setSearchQuery: (query) => set({ searchQuery: query }),
 }))

@@ -35,7 +35,7 @@ const GraphCanvas = memo(function GraphCanvas({
   searchQuery: string
   onSearchChange: (q: string) => void
 }) {
-  const [showGrid, setShowGrid] = useState(true)
+  const showGrid = useAppStore((s) => s.showGrid)
   const graph = useGraphContext()
   const { showCM, showEdgeCM } = useContextMenu()
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -97,7 +97,7 @@ const { handleClick: handlePaneClick } = useDoubleClick({
       </ReactFlow>
 
       {/* 工具栏 */}
-      <Toolbar showGrid={showGrid} onToggleGrid={() => setShowGrid((v) => !v)} />
+      <Toolbar />
 
       {/* 缩放指示器 */}
       <div id="zoom-indicator" className={styles.zoomIndicator}>{Math.round(zoomLevel * 100)}%</div>
@@ -111,7 +111,8 @@ export default memo(function GraphPage() {
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
   const currentRoomPath = useRoomStore((s) => s.currentRoomPath)
-  const [searchQuery, setSearchQuery] = useState('')
+  const searchQuery = useAppStore((s) => s.searchQuery)
+  const setSearchQuery = useAppStore((s) => s.setSearchQuery)
 
   const prevRoomPathRef = useRef<string | null>(null)
 
