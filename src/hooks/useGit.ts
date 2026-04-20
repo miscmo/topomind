@@ -1,19 +1,18 @@
 /**
  * useGit — React hook for Git operations
  */
-import { GitBackend, GitCache, startGitCacheCleanup, stopGitCacheCleanup } from '../core/git-backend'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
+import { GitBackend, GitCache, startGitCacheCleanup } from '../core/git-backend'
 
 export type GitRepoStatus = 'clean' | 'dirty' | 'untracked' | 'error' | 'unknown'
 
 export function useGit() {
-  // Start cache cleanup on mount
+  // Start cache cleanup timer on mount (singleton — safe to call multiple times)
   useEffect(() => {
     startGitCacheCleanup()
-    return () => stopGitCacheCleanup()
   }, [])
 
-  return {
+  return useMemo(() => ({
     // Availability
     checkAvailable: () => GitBackend.checkAvailable(),
 
@@ -60,5 +59,5 @@ export function useGit() {
     cacheIsDirty: (kbPath: string) => GitCache.isDirty(kbPath),
     onStatusChange: (fn: (kbPath: string, status: object | null) => void) =>
       GitCache.onStatusChange(fn),
-  }
+  }), [])
 }

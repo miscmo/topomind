@@ -22,6 +22,10 @@ function _shouldLog(level: string) {
   return _enabled && (_levelMap[level] ?? 0) >= (_levelMap[_currentLevel] ?? 2)
 }
 
+const _warn = (...args: unknown[]) => {
+  console.warn('[logger]', ...args)
+}
+
 function _toServiceLevel(level: string): 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' {
   const map: Record<string, 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'> = { debug: 'DEBUG', info: 'INFO', warn: 'WARN', error: 'ERROR' }
   return map[level] ?? 'INFO'
@@ -55,7 +59,7 @@ export const logger = {
         level: _toServiceLevel('debug'),
         module,
         message: _extractMessage(module, 'debug', ...args),
-      }).catch(() => {})
+      }).catch((e) => { _warn('logWrite failed:', e) })
     }
   },
 
@@ -66,7 +70,7 @@ export const logger = {
         level: _toServiceLevel('info'),
         module,
         message: _extractMessage(module, 'info', ...args),
-      }).catch(() => {})
+      }).catch((e) => { _warn('logWrite failed:', e) })
     }
   },
 
@@ -77,7 +81,7 @@ export const logger = {
         level: _toServiceLevel('warn'),
         module,
         message: _extractMessage(module, 'warn', ...args),
-      }).catch(() => {})
+      }).catch((e) => { _warn('logWrite failed:', e) })
     }
   },
 
@@ -88,7 +92,7 @@ export const logger = {
         level: _toServiceLevel('error'),
         module,
         message: _extractMessage(module, 'error', ...args),
-      }).catch(() => {})
+      }).catch((e) => { _warn('logWrite failed:', e) })
     }
   },
 

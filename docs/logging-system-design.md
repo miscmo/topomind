@@ -32,9 +32,9 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      Renderer Process                        │
 │  ┌──────────────┐   ┌──────────────────┐   ┌────────────┐ │
-│  │ 业务代码     │──▶│ LoggerEnhanced    │──▶│ IPC Bridge │ │
-│  │ (useGraph,   │   │ (src/core/       │   │ (preload)  │ │
-│  │  Store等)    │   │  logger-enhanced) │   │            │ │
+│  │ 业务代码     │──▶│ Logger            │──▶│ IPC Bridge │ │
+│  │ (hooks,      │   │ (src/core/       │   │ (preload)  │ │
+│  │  Stores等)   │   │  logger.ts)       │   │            │ │
 │  └──────────────┘   └──────────────────┘   └─────┬──────┘ │
 │                                                    │         │
 └────────────────────────────────────────────────────│─────────┘
@@ -57,7 +57,7 @@
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │ MonitorWindow (独立 BrowserWindow, 非模态)             │   │
-│  │  - 渲染 LogMonitorView.vue                           │   │
+│  │  - 渲染 MonitorPage.tsx                             │   │
 │  │  - 通过 IPC 接收日志流并实时展示                      │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
@@ -67,20 +67,25 @@
 
 ```
 业务代码调用 logger.info/warn/error()
-  └─▶ LoggerEnhanced (src/core/logger-enhanced.js)
+  └─▶ logger (src/core/logger.ts)
         ├─▶ console.* (开发调试保留)
-        ├─▶ IPC invoke('log:write', entry) ──▶ Main Process LogService
-        │                                            ├─▶ 写入 logs/YYYY-MM-DD.log (JSON Lines)
-        │                                            └─▶ 维护内存缓冲区 (最新 2000 条)
-        └─▶ 本地内存缓冲区 (最新 500 条，供 LogMonitorView 实时消费)
+        ├─▶ logWrite() ──▶ IPC invoke('log:write', entry)
+        │     └─▶ Main Process LogService
+        │          ├─▶ 写入 logs/YYYY-MM-DD.log (JSON Lines)
+        │          └─▶ 维护内存缓冲区 (最新 2000 条)
+
+业务代码调用 logAction(action, module, params)
+  └─▶ log-backend.ts (src/core/log-backend.ts)
+        ├─▶ logWrite() ──▶ IPC 'log:write'
+        └─▶ logSubscribe() ──▶ MonitorPage.tsx 实时消费
 ```
 
 ### 2.3 窗口架构
 
 | 窗口 | 类型 | 说明 |
 |------|------|------|
-| 主窗口 | BrowserWindow | 承载 App.vue，路由到 setup/home/graph 视图 |
-| 监控窗口 | BrowserWindow (非模态) | 承载 LogMonitorView.vue，固定大小 1200x700 |
+| 主窗口 | BrowserWindow | 承载 App.tsx，路由到 setup/home/graph 视图 |
+| 监控窗口 | BrowserWindow (非模态) | 承载 MonitorPage.tsx，固定大小 1200x700 |
 
 ---
 
@@ -92,11 +97,11 @@
 
 ```json
 {
-  "id": "01DX8T3K5M7N9P2Q4R6S8T0V@example.com",
+  "id": "01DX8T3K5M7N9P2Q4R6S8T0V@topomind",
   "level": "INFO",
   "timestamp": "2026-04-19T14:32:15.847+08:00",
   "module": "useGraph",
-  "file": "useGraph.js",
+  "file": "useGraph.ts",
   "line": 278,
   "func": "drillInto",
   "action": "drillInto",
@@ -271,46 +276,42 @@ TopoMind工作目录/
 
 ## 五、前端组件设计
 
-### 5.1 App.vue 路由扩展
+### 5.1 App.tsx 路由扩展
 
 在现有 `view: 'setup' | 'home' | 'graph'` 基础上增加：
 - `'monitoring'`
 
-### 5.2 LogMonitorView.vue
+### 5.2 MonitorPage.tsx
 
 主监控视图，结构如下：
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  LogMonitorView (monitoring view)                        │
+│  MonitorPage (monitoring view)                            │
 │  ┌──────────┬─────────────────────────────────────────┐  │
-│  │ LogPanel │  ┌────────────────────────────────────┐ │  │
-│  │ (sidebar)│  │  FilterBar (搜索筛选区)             │ │  │
-│  │          │  │  - 关键词搜索                       │ │  │
-│  │ [日志]   │  │  - 日期范围                         │ │  │
-│  │ [性能*]  │  │  - 日志等级多选                     │ │  │
-│  │          │  │  - 动作类型多选                     │ │  │
+│  │ Sidebar  │  ┌────────────────────────────────────┐ │  │
+│  │          │  │  FilterBar (搜索筛选区)             │ │  │
+│  │ [日志]   │  │  - 关键词搜索                       │ │  │
+│  │ [性能*]  │  │  - 日期范围                         │ │  │
+│  │          │  │  - 日志等级多选                     │ │  │
+│  │ 统计信息  │  │  - 动作类型多选                     │ │  │
 │  │          │  └────────────────────────────────────┘ │  │
 │  │          │  ┌────────────────────────────────────┐ │  │
-│  │          │  │  LogTable (日志展示区)             │ │  │
+│  │          │  │  LogList + DetailPanel              │ │  │
 │  │          │  │  - 时间 | 等级 | 模块 | 消息 | 操作│ │  │
-│  │          │  │  - 虚拟滚动（支持大量日志）         │ │  │
+│  │          │  │  - 按等级排序（ERROR > WARN > ...) │ │  │
 │  │          │  │  - 点击行展开详情                   │ │  │
 │  │          │  │  - 双击行定位到源码位置（开发模式）│ │  │
-│  │          │  └────────────────────────────────────┘ │  │
-│  │          │  ┌────────────────────────────────────┐ │  │
-│  │          │  │  StatusBar (状态栏)                │ │  │
-│  │          │  │  - 日志总数 | 筛选后数量 | 日志等级│ │  │
 │  │          │  └────────────────────────────────────┘ │  │
 │  └──────────┴─────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 5.3 LogPanel.vue
+### 5.3 Sidebar 组件
 
-左侧边栏面板组件，提供视图切换：
-- **日志监控**：`LogTable` 视图（完整实现）
-- **性能监控**：`ComingSoon` 占位视图（二期实现）
+左侧边栏面板组件（`MonitorPage.tsx` 内），提供视图切换：
+- **日志监控**：`LogList` 视图（完整实现）
+- **性能监控**：`PerformanceTab` 占位视图（二期实现）
 
 ### 5.4 FilterBar 设计
 
@@ -334,14 +335,14 @@ TopoMind工作目录/
 | main.js 应用启动 | `app:start` | `version`, `platform` |
 | main.js 应用就绪 | `app:ready` | - |
 | main.js 窗口创建 | `window:create` | `width`, `height` |
-| App.vue 挂载 | `app:mount` | - |
+| App.tsx 挂载 | `app:mount` | - |
 
 ### 6.2 知识库操作
 
 | 位置 | action | params |
 |------|--------|--------|
 | HomePage 打开KB | `kb:open` | `kbPath`, `kbName` |
-| roomStore.openKB | `kb:switch` | `kbPath`, `kbName` |
+| roomStore.enterRoom | `kb:switch` | `kbPath`, `kbName` |
 | 切换知识库 | `kb:switch` | `prevKb`, `newKb` |
 
 ### 6.3 图谱交互
@@ -352,47 +353,44 @@ TopoMind工作目录/
 | useGraph.drillInto | `room:drillInto` | `cardPath`, `prevPath`, `childCount` |
 | useGraph.goBack | `room:goBack` | `fromPath`, `toPath` |
 | useGraph.goRoot | `room:goRoot` | `targetPath` |
-| useGraph.jumpToBreadcrumb | `room:jumpTo` | `targetPath` |
-| useGraph.syncSelectionToStore | `node:select` | `nodeId`, `nodeLabel` |
-| useGraph.syncSelectionToStore (unselect) | `node:unselect` | `prevNodeId` |
-| useGraph._onNodeTap (dbltap) | `node:dbltap` | `nodeId` |
-| useGraph.addCard | `node:add` | `cardPath`, `name`, `position` |
-| useGraph.addChildCard | `node:add` | `parentPath`, `cardPath`, `name` |
-| useGraph.deleteCard | `node:delete` | `cardPath` |
-| useGraph.renameCard | `node:rename` | `cardPath`, `oldName`, `newName` |
-| useGraph.addEdge | `edge:add` | `sourceId`, `targetId`, `relation` |
-| useGraph.deleteEdge | `edge:delete` | `edgeId` |
-| useGraph.saveCurrentLayout | `layout:save` | `dirPath`, `nodeCount`, `edgeCount` |
-| useGraph.loadRoom (ELK) | `layout:auto` | `roomPath`, `nodeCount` |
-| useGraph.zoomIn/Out | `view:zoom` | `prevZoom`, `newZoom` |
-| useGraph.fitView | `view:fit` | - |
-| useGraph.exportPNG | `export:png` | - |
-| useGraph.applySearch | `search:apply` | `query`, `matchCount` |
+| useGraph.navigateToHistoryIndex | `room:jumpTo` | `targetPath` |
+| useGraph handlers | `node:select` | `nodeId`, `nodeLabel` |
+| useGraph handlers (unselect) | `node:unselect` | `prevNodeId` |
+| useGraph onNodeDoubleClick | `node:dbltap` | `nodeId` |
+| useGraph addNode | `node:add` | `cardPath`, `name`, `position` |
+| useGraph addChildNode | `node:add` | `parentPath`, `cardPath`, `name` |
+| useGraph deleteNode | `node:delete` | `cardPath` |
+| useGraph renameNode | `node:rename` | `cardPath`, `oldName`, `newName` |
+| useGraph onConnect | `edge:add` | `sourceId`, `targetId`, `relation` |
+| useGraph onEdgesDelete | `edge:delete` | `edgeId` |
+| useGraph saveLayout | `layout:save` | `dirPath`, `nodeCount`, `edgeCount` |
+| useGraph ELK layout | `layout:auto` | `roomPath`, `nodeCount` |
+| useGraph zoom handlers | `view:zoom` | `prevZoom`, `newZoom` |
+| useGraph fitView | `view:fit` | - |
+| useGraph applySearch | `search:apply` | `query`, `matchCount` |
 
 ### 6.4 存储操作
 
 | 位置 | action | params |
 |------|--------|--------|
-| Store.createKB | `kb:create` | `kbName` |
-| Store.deleteKB | `kb:delete` | `kbPath` |
-| Store.readMarkdown | `markdown:load` | `cardPath`, `length` |
-| Store.writeMarkdown | `markdown:save` | `cardPath`, `length` |
-| Store.saveImage | `image:save` | `cardPath`, `filename`, `size` |
+| storage.createKB | `kb:create` | `kbName` |
+| storage.deleteKB | `kb:delete` | `kbPath` |
+| storage.readMarkdown | `markdown:load` | `cardPath`, `length` |
+| storage.writeMarkdown | `markdown:save` | `cardPath`, `length` |
+| storage.saveImage | `image:save` | `cardPath`, `filename`, `size` |
 
 ### 6.5 标签页操作
 
-| 位置 | action | params |
-|------|--------|--------|
-| roomStore.openTab | `tab:open` | `kbPath`, `tabId` |
-| roomStore.switchTab | `tab:switch` | `fromTabId`, `toTabId` |
-| roomStore.closeTab | `tab:close` | `tabId` |
+> 注：React 重构后已移除标签页（Tab）特性，roomStore 采用面包屑历史栈替代。
 
 ### 6.6 Git 操作
 
 | 位置 | action | params |
 |------|--------|--------|
-| GitPanel.doCommit | `git:commit` | `kbPath`, `fileCount`, `message` |
-| GitPanel.doSync | `git:sync` | `kbPath`, `action` (push/pull) |
+| GitPanel.handleCommit | `git:commit` | `kbPath`, `fileCount`, `message` |
+| GitPanel.handlePush | `git:push` | `kbPath` |
+| GitPanel.handlePull | `git:pull` | `kbPath` |
+| GitPanel.handleFetch | `git:fetch` | `kbPath` |
 
 ### 6.7 性能标记
 
@@ -411,9 +409,11 @@ TopoMind工作目录/
 | 文件路径 | 说明 |
 |----------|------|
 | `electron/log-service.js` | 后端日志服务模块 |
-| `src/core/logger-enhanced.js` | 增强型前端日志模块 |
-| `src/components/LogMonitorView.vue` | 监控视图主组件 |
-| `src/components/LogPanel.vue` | 左侧边栏面板组件 |
+| `src/core/logger.ts` | 前端日志模块（Zustand 兼容） |
+| `src/core/log-backend.ts` | 日志 IPC 桥接层 |
+| `src/stores/monitorStore.ts` | 监控页面 Zustand store |
+| `src/components/MonitorPage/MonitorPage.tsx` | 监控页面主组件 |
+| `src/components/MonitorPage/MonitorPage.module.css` | 监控页面样式 |
 | `docs/logging-system-design.md` | 本设计文档 |
 
 ### 7.2 修改文件
@@ -423,10 +423,13 @@ TopoMind工作目录/
 | `electron/main.js` | 添加日志 IPC handlers、菜单项、LogService 初始化 |
 | `electron/preload.js` | 添加 log:* 通道到白名单 |
 | `dist-electron/preload.js` | 重新构建 |
-| `src/App.vue` | 添加 `monitoring` 视图路由 |
-| `src/composables/useGraph.js` | 添加关键 action 日志调用 |
-| `src/stores/room.js` | 添加 KB 切换和标签页操作日志 |
-| `src/core/storage.js` | 已有 logger.catch 已有，可补充结构化 action 日志 |
+| `src/App.tsx` | 添加 `monitoring` 视图路由 |
+| `src/hooks/useGraph.ts` | 添加关键 action 日志调用 |
+| `src/stores/roomStore.ts` | 添加 KB 切换日志 |
+| `src/stores/appStore.ts` | 添加视图切换日志 |
+| `src/core/storage.ts` | 已有 logger.catch，可补充结构化 action 日志 |
+| `src/core/git-backend.ts` | 添加 Git 操作日志 |
+| `src/components/GitPanel/GitPanel.tsx` | 添加 Git 操作日志调用 |
 
 ---
 

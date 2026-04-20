@@ -105,30 +105,37 @@ export async function logGetLogDir(): Promise<string | null> {
 }
 
 const _listeners = new Set<(entry: LogEntry) => void>()
-let _subscribed = false
+let _ipcHandler: ((entry: LogEntry) => void) | null = null
+let _ipcRegistered = false
+
+function _dispatchToListeners(entry: LogEntry) {
+  for (const cb of _listeners) {
+    try { cb(entry) } catch { /* ignore */ }
+  }
+}
 
 export function logSubscribe(callback: (entry: LogEntry) => void): void {
   _listeners.add(callback)
 
-  if (!_subscribed) {
-    _subscribed = true
+  if (!_ipcRegistered) {
+    _ipcRegistered = true
     const api = _api()
     if (api) {
-      api.on('log:entry', (entry: LogEntry) => {
-        for (const cb of _listeners) {
-          try { cb(entry) } catch { /* ignore */ }
-        }
-      })
+      _ipcHandler = _dispatchToListeners
+      api.on('log:entry', _ipcHandler)
     }
   }
 }
 
 export function logUnsubscribe(callback: (entry: LogEntry) => void): void {
   _listeners.delete(callback)
-  if (_listeners.size === 0) {
-    _subscribed = false
+  if (_listeners.size === 0 && _ipcRegistered) {
+    _ipcRegistered = false
     const api = _api()
-    if (api) api.off('log:entry')
+    if (api && _ipcHandler) {
+      api.off('log:entry', _ipcHandler)
+      _ipcHandler = null
+    }
   }
 }
 

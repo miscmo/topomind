@@ -14,6 +14,10 @@ const _call = (channel: string, ...args: unknown[]) => {
     logger.catch('FSB', `IPC API 未就绪，无法调用 ${channel}`, undefined)
     return Promise.reject(new Error(`IPC API 未就绪: ${channel}`))
   }
+  if (typeof api.invoke !== 'function') {
+    logger.catch('FSB', `IPC API.invoke 不可用，无法调用 ${channel}`, undefined)
+    return Promise.reject(new Error(`IPC API.invoke 不可用: ${channel}`))
+  }
   return api.invoke(channel, ...args)
 }
 

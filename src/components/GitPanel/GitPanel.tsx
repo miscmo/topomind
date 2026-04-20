@@ -97,6 +97,7 @@ export default function GitPanel() {
       const statusData = newStatus as Record<string, unknown>
       if (statusData) {
         setStatus({
+          initialized: true,
           clean: true,
           untrackedCount: 0,
           modifiedCount: 0,

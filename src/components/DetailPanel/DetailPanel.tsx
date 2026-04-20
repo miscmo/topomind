@@ -4,6 +4,7 @@
  */
 import { useEffect, useState, useRef } from 'react'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useStorage } from '../../hooks/useStorage'
 import { useAppStore } from '../../stores/appStore'
 import { useGraphContext } from '../../contexts/GraphContext'
@@ -230,7 +231,7 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
             {/* Markdown 渲染 */}
             <div
               className={styles.markdownBody}
-              dangerouslySetInnerHTML={{ __html: String(marked.parse(markdown)) }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(markdown) as string) }}
             />
             {renderChildTags()}
           </>

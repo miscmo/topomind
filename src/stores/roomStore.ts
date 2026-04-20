@@ -35,9 +35,7 @@ interface RoomState {
   getBreadcrumbs: () => RoomHistoryItem[]
 }
 
-type RoomStateSetter = (partial: Partial<RoomState> | ((state: RoomState) => Partial<RoomState>)) => void
-
-const roomStoreCreator = (set: RoomStateSetter, get: () => RoomState): RoomState => ({
+const roomStoreCreator = (set: (partial: Partial<RoomState> | ((state: RoomState) => Partial<RoomState>)) => void, get: () => RoomState): RoomState => ({
   currentKBPath: null,
   currentRoomPath: null,
   currentRoomName: '全局',

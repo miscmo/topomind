@@ -12,6 +12,10 @@ const _call = (channel: string, ...args: unknown[]) => {
     logger.catch('GitBackend', `IPC API 未就绪，无法调用 ${channel}`, undefined)
     return Promise.reject(new Error(`IPC API 未就绪: ${channel}`))
   }
+  if (typeof api.invoke !== 'function') {
+    logger.catch('GitBackend', `IPC API.invoke 不可用，无法调用 ${channel}`, undefined)
+    return Promise.reject(new Error(`IPC API.invoke 不可用: ${channel}`))
+  }
   return api.invoke(channel, ...args)
 }
 
@@ -98,8 +102,14 @@ export const GitCache: GitCache = {
     if (!kbPath) return
     _dirty[kbPath] = true
     if (_cache[kbPath]) {
-      _cache[kbPath].status.state = 'dirty'
-      _cache[kbPath].status.hasUncommitted = true
+      _cache[kbPath] = {
+        ..._cache[kbPath],
+        status: {
+          ..._cache[kbPath].status,
+          state: 'dirty',
+          hasUncommitted: true,
+        },
+      }
     }
     _notify(kbPath)
   },
