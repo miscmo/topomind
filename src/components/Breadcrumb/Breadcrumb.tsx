@@ -3,13 +3,13 @@
  * 显示完整房间路径：全局 > 父房间 > ... > 当前房间
  * 历史房间可点击跳转，当前房间不可点击
  */
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { roomStore } from '../../stores/roomStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import type { RoomHistoryItem } from '../../types'
 import styles from './Breadcrumb.module.css'
 
-export default function Breadcrumb() {
+export default memo(function Breadcrumb() {
   const graph = useGraphContext()
 
   const [history, setHistory] = useState<RoomHistoryItem[]>([])
@@ -69,4 +69,4 @@ export default function Breadcrumb() {
       </span>
     </div>
   )
-}
+})

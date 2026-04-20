@@ -1,7 +1,7 @@
 /**
  * Markdown 编辑器组件
  */
-import { useEffect, useRef, useCallback } from 'react'
+import { memo, useEffect, useRef, useCallback } from 'react'
 import styles from './DetailPanel.module.css'
 
 interface MarkdownEditorProps {
@@ -11,7 +11,7 @@ interface MarkdownEditorProps {
   placeholder?: string
 }
 
-export default function MarkdownEditor({ value, onChange, onSave, placeholder }: MarkdownEditorProps) {
+export default memo(function MarkdownEditor({ value, onChange, onSave, placeholder }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Ctrl+S / Cmd+S 保存
@@ -42,4 +42,4 @@ export default function MarkdownEditor({ value, onChange, onSave, placeholder }:
       spellCheck={false}
     />
   )
-}
+})

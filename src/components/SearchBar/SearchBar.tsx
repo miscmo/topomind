@@ -1,6 +1,7 @@
 /**
  * 搜索框组件
  */
+import { memo } from 'react'
 import { useGraphContext } from '../../contexts/GraphContext'
 import styles from './SearchBar.module.css'
 
@@ -9,7 +10,7 @@ interface SearchBarProps {
   onSearchChange: (q: string) => void
 }
 
-export default function SearchBar({ searchQuery, onSearchChange }: SearchBarProps) {
+export default memo(function SearchBar({ searchQuery, onSearchChange }: SearchBarProps) {
   const graph = useGraphContext()
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,4 +43,4 @@ export default function SearchBar({ searchQuery, onSearchChange }: SearchBarProp
       )}
     </div>
   )
-}
+})

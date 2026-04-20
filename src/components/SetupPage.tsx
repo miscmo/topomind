@@ -2,12 +2,12 @@
  * 设置页面（工作目录选择）
  * 对应原 WorkDirPage.vue
  */
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useStorage } from '../hooks/useStorage'
 import styles from './SetupPage.module.css'
 
-export default function SetupPage() {
+export default memo(function SetupPage() {
   const showHome = useAppStore((s) => s.showHome)
   const storage = useStorage()
   const [message, setMessage] = useState('')
@@ -76,4 +76,4 @@ export default function SetupPage() {
       </div>
     </div>
   )
-}
+})

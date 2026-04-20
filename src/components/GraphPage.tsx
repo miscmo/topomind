@@ -2,7 +2,7 @@
  * 图谱页面：三栏布局
  * 左侧面板 + 中间 React Flow 图谱 + 右侧详情面板
  */
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { ReactFlow, type Node, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
@@ -28,7 +28,7 @@ import styles from './GraphPage.module.css'
 const nodeTypes = { knowledgeCard: KnowledgeCard }
 
 /** Inner component that uses shared graph context */
-function GraphCanvas({
+const GraphCanvas = memo(function GraphCanvas({
   searchQuery,
   onSearchChange,
 }: {
@@ -103,9 +103,9 @@ const { handleClick: handlePaneClick } = useDoubleClick({
       <div id="zoom-indicator" className={styles.zoomIndicator}>{Math.round(zoomLevel * 100)}%</div>
     </>
   )
-}
+})
 
-export default function GraphPage() {
+export default memo(function GraphPage() {
   const view = useAppStore((s) => s.view)
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
@@ -209,4 +209,4 @@ export default function GraphPage() {
       </div>
     </GraphContextProvider>
   )
-}
+})

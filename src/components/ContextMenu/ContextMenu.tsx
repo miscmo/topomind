@@ -9,7 +9,7 @@
  * Items (edge):
  * - 删除连线
  */
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import styles from './ContextMenu.module.css'
 
 interface MenuItem {
@@ -45,7 +45,7 @@ interface ContextMenuProps {
   onClose: () => void
 }
 
-export default function ContextMenu({
+export default memo(function ContextMenu({
   visible,
   x,
   y,
@@ -60,8 +60,14 @@ export default function ContextMenu({
   onClose,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
+  const [menuSize, setMenuSize] = useState({ width: 160, height: 0 })
 
-  // Close on click outside
+  // Measure menu size when it becomes visible
+  useEffect(() => {
+    if (!visible || !menuRef.current) return
+    const measured = menuRef.current.getBoundingClientRect()
+    setMenuSize({ width: measured.width, height: measured.height })
+  }, [visible])
   useEffect(() => {
     if (!visible) return
     const handler = (e: MouseEvent) => {
@@ -141,8 +147,8 @@ export default function ContextMenu({
       ]
 
   // Adjust position to keep menu in viewport
-  const adjustedX = Math.min(x, window.innerWidth - 160)
-  const adjustedY = Math.min(y, window.innerHeight - items.length * 36 - 16)
+  const adjustedX = Math.min(x, window.innerWidth - menuSize.width)
+  const adjustedY = Math.min(y, window.innerHeight - menuSize.height)
 
   return (
     <div
@@ -166,4 +172,4 @@ export default function ContextMenu({
       )}
     </div>
   )
-}
+})
