@@ -123,6 +123,7 @@ export default function HomePage() {
     try {
       await storage.createKB(name)
       logAction('知识库:创建', 'HomePage', { kbName: name })
+      useAppStore.getState().triggerKBRefresh()
       setShowCreateSheet(false)
       setCreateName('')
       await loadKBList()

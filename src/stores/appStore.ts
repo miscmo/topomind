@@ -30,6 +30,8 @@ interface AppState {
     type: 'node' | 'edge' | 'pane' | null
     targetId: string | null
   }
+  // KB 列表刷新触发器（NavTree 监听此字段以保持同步）
+  kbRefreshTrigger: number
 
   // Actions
   showGraph: () => void
@@ -46,6 +48,7 @@ interface AppState {
   setRightPanelWidth: (width: number) => void
   showContextMenu: (x: number, y: number, type: 'node' | 'edge' | 'pane', targetId?: string | null) => void
   hideContextMenu: () => void
+  triggerKBRefresh: () => void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -65,6 +68,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     type: null,
     targetId: null,
   },
+  kbRefreshTrigger: 0,
 
   // Actions
   showGraph: () => set({ view: 'graph' }),
@@ -109,4 +113,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   hideContextMenu: () => set((state) => ({
     contextMenu: { ...state.contextMenu, visible: false },
   })),
+
+  triggerKBRefresh: () => set((state) => ({ kbRefreshTrigger: state.kbRefreshTrigger + 1 })),
 }))

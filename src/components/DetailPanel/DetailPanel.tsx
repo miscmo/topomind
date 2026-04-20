@@ -2,7 +2,7 @@
  * 右侧详情面板
  * 显示节点 Markdown 内容，支持预览/编辑切换
  */
-import { useEffect, useState, useRef, memo } from 'react'
+import { useEffect, useState, useRef, memo, useMemo } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useStorage } from '../../hooks/useStorage'
@@ -141,6 +141,12 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
     )
   }
 
+  // Memoize parsed HTML to avoid re-parsing on every render
+  const sanitizedHtml = useMemo(
+    () => DOMPurify.sanitize(marked.parse(markdown) as string),
+    [markdown]
+  )
+
   return (
     <div className={styles.detailPanel}>
       {/* 标题栏 */}
@@ -231,7 +237,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
             {/* Markdown 渲染 */}
             <div
               className={styles.markdownBody}
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(markdown) as string) }}
+              dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
             />
             {renderChildTags()}
           </>

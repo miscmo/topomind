@@ -17,6 +17,7 @@ export default memo(function NavTree() {
   const showGraph = useAppStore((s) => s.showGraph)
   const setCurrentKB = useRoomStore((s) => s.setCurrentKB)
   const enterRoom = useRoomStore((s) => s.enterRoom)
+  const triggerKBRefresh = useAppStore((s) => s.triggerKBRefresh)
   const storage = useStorage()
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default memo(function NavTree() {
       }
     }
     load()
-  }, [storage])
+  }, [storage, triggerKBRefresh])
 
   const handleKBOpen = (kb: KBListItem) => {
     setCurrentKB(kb.path)
@@ -45,6 +46,7 @@ export default memo(function NavTree() {
       await storage.createKB(name.trim())
       const list = await storage.listKBs()
       setKbs(list)
+      triggerKBRefresh()
     } catch (e) {
       logger.catch('NavTree', 'createKB', e)
     }
