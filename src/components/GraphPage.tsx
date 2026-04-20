@@ -119,7 +119,7 @@ export default function GraphPage() {
 
   const prevRoomPathRef = useRef<string | null>(null)
 
-  const { selectNode } = useAppStore((s) => ({ selectNode: s.selectNode }))
+  const selectNode = useAppStore((s) => s.selectNode)
 
   // Context menu
   const { contextMenu, showEdgeCM, hideCM } = useContextMenu()
@@ -145,7 +145,9 @@ export default function GraphPage() {
   useKeyboard({
     onDelete: () => {
       if (!selectedNodeId) return
-      if (!window.confirm(`确定要删除 "${graph.selectedNode?.data.label}" 吗？`)) return
+      const node = graph.nodes.find((n) => n.id === selectedNodeId)
+      if (!node) return
+      if (!window.confirm(`确定要删除 "${node.data.label}" 吗？`)) return
       graph.deleteChildNode(selectedNodeId)
     },
     onAddChild: (parentId: string) => {

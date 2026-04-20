@@ -361,19 +361,18 @@ interface KBEdge {
 
 | 菜单项 | 功能 |
 |--------|------|
-| 🔍 聚焦 | 钻入该节点房间 |
-| ⚙ 属性 | 打开节点编辑模态框 |
-| ✏️ 文档 | 选中节点并切换到编辑模式 |
-| ＋ 子节点 | 弹出输入框添加子概念 |
-| ⤯ 连线 | 进入连线模式，以该节点为源 |
-| 🗑 删除 | 弹出删除确认 |
+| ＋ 新建子节点 | 弹出输入框添加子概念 |
+| 聚焦节点 | 聚焦该节点（fitView）并选中 |
+| 重命名 | 弹出输入框修改节点名称 |
+| 属性 | 选中节点，打开右侧详情面板 |
+| ——— | 分割线 |
+| 🗑 删除节点 | 弹出删除确认 |
 
 #### 边右键菜单
 
 | 菜单项 | 功能 |
 |--------|------|
-| ⚙ 编辑 | 打开边编辑模态框（修改关系类型） |
-| 🗑 删除 | 直接删除该边 |
+| 🗑 删除连线 | 直接删除该边 |
 
 ---
 
@@ -965,6 +964,7 @@ return (
 |------|------|----------|
 | v5.0.0 | 2026-04-17 | **架构大重构**：Vite + Vue 3 + Pinia 构建系统替代纯 HTML/CDN；纯文件系统存储（移除 IndexedDB），使用 `_graph.json` 和 `_config.json`；目录即结构（KB=目录，Card=子目录）；项目结构重组为 `composables/` + `core/` + `components/` + `stores/`；Electron 主进程合并为单文件；内置 Git 版本控制；移除 vendor/、docs/ 等旧目录 |
 | v5.1.0 | 2026-04-19 | **Vue 3 → React 18 + React Flow + Zustand 迁移**：渲染进程从 Vue 3 迁移到 React 18 + TypeScript + React Flow；状态管理从 Pinia 迁移到 Zustand（`appStore` 使用 `create`，`roomStore` 使用 vanilla `createStore` 支持外部 `getState()`）；样式从全局 CSS 迁移到 CSS Modules；`ReactFlowProvider` 移动到 App.tsx 根级别；移除 `vendor/` 和 `src/css/` 遗留文件；修复多处 stale closure 和 async/await bug |
+| v5.2.0 | 2026-04-20 | **BUG 修复与文档更新**：修复 `GraphPage.tsx` 中 `selectNode` stale closure bug（解构赋值导致每次渲染创建新对象 → 改为直接订阅）；修复 `useGraph.ts` 中 `updateSelectedNode` stale closure bug（`selectedNodeId` 被 Promise 回调捕获 → 改用 `useAppStore.getState()`）；修复 `GraphPage.tsx` 删除确认中 `label` 可能为 undefined 的 bug；更新右键菜单文档描述以匹配实际实现（节点菜单：新建子节点/聚焦节点/重命名/属性/删除节点；边菜单：删除连线）；`package.json` 版本号同步更新为 v5.2.0 |
 | v5.1.1 | 2026-04-20 | **BUG 修复与架构优化**：修复双击画布创建节点（实现 `onPaneClick` 双击检测）、Tab 添加子节点（stale closure 修复）、面包屑显示完整历史链、Git 面板 `statusClass` TS 错误；添加 Git 面板组件（底部弹出式，状态徽章 + Fetch/Pull/Push/Commit）；新增 `GraphContext` 单例共享；补充 SPEC.md Git 面板 UI 规范和项目结构 |
 
 ---

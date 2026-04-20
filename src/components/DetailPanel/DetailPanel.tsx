@@ -11,6 +11,7 @@ import MarkdownEditor from './MarkdownEditor'
 import styles from './DetailPanel.module.css'
 import { logAction } from '../../core/log-backend'
 
+// Configure marked once — called at module load time, not inside components
 marked.setOptions({ breaks: true, gfm: true })
 
 interface DetailPanelProps {
@@ -124,7 +125,7 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
     if (!hasChildren || childTags.length === 0) return null
     return (
       <div className={styles.childTags}>
-        <span style={{ fontSize: '11px', color: '#888', marginRight: '4px' }}>子概念</span>
+        <span className={styles.childTagsLabel}>子概念</span>
         {childTags.map((child) => (
           <span
             key={child.path}
@@ -189,7 +190,7 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
             <button
               onClick={handleDelete}
               title="删除节点"
-              style={{ color: '#e74c3c' }}
+              className={styles.deleteBtn}
             >
               删除
             </button>

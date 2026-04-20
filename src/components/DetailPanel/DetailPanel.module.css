@@ -333,6 +333,16 @@
   margin-top: 40%;
 }
 
+/* ===== 删除按钮 ===== */
+.deleteBtn {
+  color: #e74c3c;
+}
+
+.deleteBtn:hover {
+  background: #fff2f2;
+  border-color: #e74c3c;
+}
+
 /* ===== 保存按钮 ===== */
 .saveBtn {
   height: 26px !important;
@@ -344,6 +354,13 @@
 
 .saveBtn:hover {
   background: #254d73 !important;
+}
+
+/* ===== 子概念标签云标签 ===== */
+.childTagsLabel {
+  font-size: 11px;
+  color: #888;
+  margin-right: 4px;
 }
 
 /* ===== 重命名输入框 ===== */

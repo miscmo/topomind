@@ -555,7 +555,37 @@
   background: #ffe7e7;
 }
 
-/* 响应式 */
+/* ===== 表单内联样式 ===== */
+.formError {
+  color: #e74c3c;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.importInputRow {
+  display: flex;
+  gap: 8px;
+}
+
+.importInputField {
+  flex: 1;
+}
+
+.selectFolderBtn {
+  white-space: nowrap;
+  padding: 10px 14px;
+  font-size: 13px;
+  background: #3498db;
+  color: #fff;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.selectFolderBtn:hover {
+  background: #2980b9;
+}
+
 @media (max-width: 768px) {
   .header {
     padding: 20px 24px;

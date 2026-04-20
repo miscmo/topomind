@@ -37,14 +37,17 @@ export default function NavTree() {
     showGraph()
   }
 
-  const handleNewCard = () => {
+  const handleNewCard = async () => {
     const name = window.prompt('请输入知识库名称：')
     if (!name?.trim()) return
     logAction('知识库:创建', 'NavTree', { kbName: name.trim() })
-    storage.createKB(name.trim()).then(async () => {
+    try {
+      await storage.createKB(name.trim())
       const list = await storage.listKBs()
       setKbs(list)
-    })
+    } catch (e) {
+      logger.catch('NavTree', 'createKB', e)
+    }
   }
 
   return (

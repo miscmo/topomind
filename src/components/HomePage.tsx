@@ -255,7 +255,7 @@ export default function HomePage() {
                 placeholder="输入知识库名称"
                 autoFocus
               />
-              {createError && <div style={{ color: '#e74c3c', fontSize: '12px', marginTop: '6px' }}>{createError}</div>}
+              {createError && <div className={styles.formError}>{createError}</div>}
             </div>
           </div>
           <div className={styles.formFooter}>
@@ -280,23 +280,22 @@ export default function HomePage() {
           <div className={styles.formBody}>
             <div className={styles.formGroup}>
               <label>选择文件夹</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div className={styles.importInputRow}>
                 <input
                   type="text"
                   value={importDir}
                   readOnly
                   placeholder="点击「选择文件夹」按钮选择"
-                  style={{ flex: 1 }}
+                  className={styles.importInputField}
                 />
                 <button
-                  className={styles.btn}
-                  style={{ whiteSpace: 'nowrap', padding: '10px 14px', fontSize: '13px', background: '#3498db', color: '#fff', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                  className={styles.selectFolderBtn}
                   onClick={handleSelectImportDir}
                 >
                   选择文件夹
                 </button>
               </div>
-              {importError && <div style={{ color: '#e74c3c', fontSize: '12px', marginTop: '6px' }}>{importError}</div>}
+              {importError && <div className={styles.formError}>{importError}</div>}
             </div>
           </div>
           <div className={styles.formFooter}>

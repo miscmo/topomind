@@ -261,12 +261,13 @@ export function useGraph() {
       nodesRef.current = updatedNodes
       setState((s) => ({ ...s, nodes: updatedNodes }))
 
-      // Save positions to filesystem
-      if (currentRoomPath) {
-        await saveLayoutToDisk(currentRoomPath, updatedNodes, edgesRef.current)
+      // Read currentRoomPath at execution time to avoid stale closure
+      const dirPath = roomStore.getState().currentRoomPath
+      if (dirPath) {
+        await saveLayoutToDisk(dirPath, updatedNodes, edgesRef.current)
       }
     },
-    [currentRoomPath, computeLayout, rebuildMaps, saveLayoutToDisk]
+    [computeLayout, rebuildMaps, saveLayoutToDisk]
   )
 
   const scheduleDebouncedSave = useCallback(
@@ -323,13 +324,13 @@ export function useGraph() {
           }
         }
 
-        // Update selectedNode ref
-        updateSelectedNode(nodes, selectedNodeId)
+        // Update selectedNode ref — read fresh from store to avoid stale closure
+        updateSelectedNode(nodes, useAppStore.getState().selectedNodeId)
 
         return { ...prev, nodes }
       })
     },
-    [currentRoomPath, selectedNodeId, updateSelectedNode, scheduleDebouncedSave]
+    [currentRoomPath, updateSelectedNode, scheduleDebouncedSave]
   )
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {

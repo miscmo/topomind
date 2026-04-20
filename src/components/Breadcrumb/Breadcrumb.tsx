@@ -45,19 +45,10 @@ export default function Breadcrumb() {
       ))}
 
       {/* 当前房间（不可点击） */}
-      {(() => {
-        const state = roomStore.getState()
-        const historyCount = history.length
-        // Only add current room if it's not already shown (it shouldn't be in history)
-        // Actually, getBreadcrumbs returns history + current, so current is not in history
-        // The current room is the last segment, non-clickable
-        return (
-          <span className={styles.chain}>
-            <span className={styles.sep}>&gt;</span>
-            <span className={styles.current}>{state.currentRoomName}</span>
-          </span>
-        )
-      })()}
+      <span className={styles.chain}>
+        <span className={styles.sep}>&gt;</span>
+        <span className={styles.current}>{roomStore.getState().currentRoomName}</span>
+      </span>
     </div>
   )
 }
