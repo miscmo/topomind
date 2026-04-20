@@ -1,18 +1,20 @@
 /**
  * 搜索框组件
  */
-import { useAppStore } from '../../stores/appStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import styles from './SearchBar.module.css'
 
-export default function SearchBar() {
-  const searchQuery = useAppStore((s) => s.searchQuery)
-  const setSearchQuery = useAppStore((s) => s.setSearchQuery)
+interface SearchBarProps {
+  searchQuery: string
+  onSearchChange: (q: string) => void
+}
+
+export default function SearchBar({ searchQuery, onSearchChange }: SearchBarProps) {
   const graph = useGraphContext()
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const q = e.target.value
-    setSearchQuery(q)
+    onSearchChange(q)
     graph.highlightSearch(q)
   }
 
@@ -30,7 +32,7 @@ export default function SearchBar() {
         <button
           className={styles.clearBtn}
           onClick={() => {
-            setSearchQuery('')
+            onSearchChange('')
             graph.highlightSearch('')
           }}
           title="清除搜索"

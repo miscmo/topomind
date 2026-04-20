@@ -333,21 +333,32 @@ export function useGraph() {
     [currentRoomPath, updateSelectedNode, scheduleDebouncedSave]
   )
 
-  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    setState((prev) => {
-      let edges = [...prev.edges]
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      // Read currentRoomPath at execution time to avoid stale closure
+      const dirPath = roomStore.getState().currentRoomPath
 
-      for (const change of changes) {
-        if (change.type === 'remove') {
-          edges = edges.filter((e) => e.id !== change.id)
-          edgesMapRef.current = new Map(edges.map((e) => [e.id, e]))
-          edgesRef.current = edges
+      setState((prev) => {
+        let edges = [...prev.edges]
+
+        for (const change of changes) {
+          if (change.type === 'remove') {
+            edges = edges.filter((e) => e.id !== change.id)
+            edgesMapRef.current = new Map(edges.map((e) => [e.id, e]))
+            edgesRef.current = edges
+          }
         }
-      }
 
-      return { ...prev, edges }
-    })
-  }, [])
+        return { ...prev, edges }
+      })
+
+      // Persist edge deletions/additions to disk
+      if (dirPath) {
+        scheduleDebouncedSave(dirPath)
+      }
+    },
+    [scheduleDebouncedSave]
+  )
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -506,24 +517,6 @@ export function useGraph() {
 
   // ===== Edge CRUD =====
 
-  const deleteEdge = useCallback(
-    async (edgeId: string): Promise<boolean> => {
-      const edge = edgesMapRef.current.get(edgeId)
-      setState((prev) => {
-        const edges = prev.edges.filter((e) => e.id !== edgeId)
-        edgesRef.current = edges
-        rebuildMaps(prev.nodes, edges)
-        return { ...prev, edges }
-      })
-      logAction('连线:删除', 'useGraph', { edgeId, source: edge?.source, target: edge?.target })
-      if (currentRoomPath) {
-        scheduleDebouncedSave(currentRoomPath)
-      }
-      return true
-    },
-    [currentRoomPath, rebuildMaps, scheduleDebouncedSave]
-  )
-
   const updateEdgeRelation = useCallback(
     (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => {
       setState((prev) => {
@@ -637,7 +630,6 @@ export function useGraph() {
     renameNode,
 
     // Edge operations
-    deleteEdge,
     updateEdgeRelation,
 
     // Layout

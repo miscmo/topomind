@@ -6,7 +6,6 @@
 import { useEffect, useState } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useAppStore } from './stores/appStore'
-import { useRoomStore } from './stores/roomStore'
 import SetupPage from './components/SetupPage'
 import HomePage from './components/HomePage'
 import GraphPage from './components/GraphPage'

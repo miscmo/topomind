@@ -3,13 +3,15 @@
  * 左侧面板 + 中间 React Flow 图谱 + 右侧详情面板
  */
 import { useEffect, useRef, useState } from 'react'
-import { ReactFlow, type Node, type NodeTypes, useReactFlow } from '@xyflow/react'
+import { ReactFlow, type Node, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore } from '../stores/roomStore'
 import { useGraph } from '../hooks/useGraph'
+import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
 import { useKeyboard } from '../hooks/useKeyboard'
+import { useDoubleClick } from '../hooks/useDoubleClick'
 import { GraphContextProvider, useGraphContext } from '../contexts/GraphContext'
 import KnowledgeCard from '../nodes/KnowledgeCard'
 import NavTree from './NavTree/NavTree'
@@ -26,37 +28,30 @@ import styles from './GraphPage.module.css'
 const nodeTypes = { knowledgeCard: KnowledgeCard }
 
 /** Inner component that uses shared graph context */
-function GraphCanvas() {
-  const showGrid = useAppStore((s) => s.showGrid)
+function GraphCanvas({
+  searchQuery,
+  onSearchChange,
+}: {
+  searchQuery: string
+  onSearchChange: (q: string) => void
+}) {
+  const [showGrid, setShowGrid] = useState(true)
   const graph = useGraphContext()
   const { showCM, showEdgeCM } = useContextMenu()
   const [zoomLevel, setZoomLevel] = useState(1)
 
-  // Double-click detection: track click timing/position via onPaneClick
-  const lastPaneClickRef = useRef<{ time: number; x: number; y: number } | null>(null)
-
-  const handlePaneClick = (event: React.MouseEvent) => {
-    const now = Date.now()
-    const { clientX, clientY } = event
-
-    if (lastPaneClickRef.current) {
-      const elapsed = now - lastPaneClickRef.current.time
-      const dx = Math.abs(clientX - lastPaneClickRef.current.x)
-      const dy = Math.abs(clientY - lastPaneClickRef.current.y)
-      if (elapsed < 400 && dx < 10 && dy < 10) {
-        // Double-click on empty canvas: create new top-level node
-        lastPaneClickRef.current = null
-        const name = window.prompt('请输入新节点名称：')
-        if (!name?.trim()) return
-        logAction('节点:创建', 'GraphPage', { nodeName: name.trim(), source: 'double-click-canvas' })
-        graph.createChildNode(name.trim())
-        return
-      }
-    }
-
-    lastPaneClickRef.current = { time: now, x: clientX, y: clientY }
-    graph.onPaneClick(event)
-  }
+const { handleClick: handlePaneClick } = useDoubleClick({
+    onDoubleClick: () => {
+      const name = window.prompt('请输入新节点名称：')
+      if (!name?.trim()) return
+      logAction('节点:创建', 'GraphPage', { nodeName: name.trim(), source: 'double-click-canvas' })
+      graph.createChildNode(name.trim())
+    },
+    onSingleClick: () => {
+      // Single click on pane: deselect
+      useAppStore.getState().clearSelection()
+    },
+  })
 
   return (
     <>
@@ -101,7 +96,7 @@ function GraphCanvas() {
       </ReactFlow>
 
       {/* 工具栏 */}
-      <Toolbar />
+      <Toolbar showGrid={showGrid} onToggleGrid={() => setShowGrid((v) => !v)} />
 
       {/* 缩放指示器 */}
       <div id="zoom-indicator" className={styles.zoomIndicator}>{Math.round(zoomLevel * 100)}%</div>
@@ -115,15 +110,11 @@ export default function GraphPage() {
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
   const currentRoomPath = useRoomStore((s) => s.currentRoomPath)
-  const searchQuery = useAppStore((s) => s.searchQuery)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const prevRoomPathRef = useRef<string | null>(null)
 
-  const selectNode = useAppStore((s) => s.selectNode)
-
-  // Context menu
   const { contextMenu, showEdgeCM, hideCM } = useContextMenu()
-  const { fitView } = useReactFlow()
 
   // Single useGraph instance — passed to GraphContextProvider for sharing
   const graph = useGraph()
@@ -142,66 +133,26 @@ export default function GraphPage() {
   }, [searchQuery, graph.highlightSearch])
 
   // Keyboard shortcuts
+  const { deleteSelectedNode, addChildNode } = useNodeActions()
   useKeyboard({
     onDelete: () => {
       if (!selectedNodeId) return
-      const node = graph.nodes.find((n) => n.id === selectedNodeId)
-      if (!node) return
-      if (!window.confirm(`确定要删除 "${node.data.label}" 吗？`)) return
-      graph.deleteChildNode(selectedNodeId)
+      deleteSelectedNode(selectedNodeId)
     },
     onAddChild: (parentId: string) => {
-      const name = window.prompt('请输入新节点名称：')
-      if (!name?.trim()) return
-      logAction('节点:创建', 'GraphPage', { parentId, nodeName: name.trim(), source: 'keyboard-tab' })
-      graph.createChildNode(name.trim(), parentId)
+      addChildNode(parentId)
     },
   })
 
-  // Context menu handlers
-  const handleNewChild = (nodeId: string) => {
-    const name = window.prompt('请输入新节点名称：')
-    if (!name?.trim()) return
-    logAction('节点:创建', 'GraphPage', { nodeId, nodeName: name.trim(), source: 'context-menu' })
-    graph.createChildNode(name.trim(), nodeId)
-  }
-
-  const handleRename = (nodeId: string) => {
-    const node = graph.nodes.find((n) => n.id === nodeId)
-    if (!node) return
-    const newName = window.prompt('请输入新名称：', node.data.label)
-    if (!newName?.trim() || newName === node.data.label) return
-    logAction('节点:重命名', 'GraphPage', { nodeId, oldName: node.data.label, newName: newName.trim(), source: 'context-menu' })
-    graph.renameNode(nodeId, newName.trim())
-  }
-
-  const handleDelete = (nodeId: string) => {
-    const node = graph.nodes.find((n) => n.id === nodeId)
-    if (!node) return
-    if (!window.confirm(`确定要删除 "${node.data.label}" 吗？`)) return
-    logAction('节点:删除', 'GraphPage', { nodeId, label: node.data.label, path: node.data.path, source: 'context-menu' })
-    graph.deleteChildNode(nodeId)
-  }
-
-  const handleEdgeDelete = (edgeId: string) => {
-    const edge = graph.edges.find((e) => e.id === edgeId)
-    logAction('连线:删除', 'GraphPage', { edgeId, edgeSource: edge?.source, edgeTarget: edge?.target, trigger: 'context-menu' })
-    graph.deleteEdge(edgeId)
-  }
-
-  const handleFocus = (nodeId: string) => {
-    selectNode(nodeId)
-    const node = graph.nodes.find((n) => n.id === nodeId)
-    if (node) {
-      fitView({ nodes: [node], padding: 0.3, duration: 300 })
-    }
-    logAction('节点:聚焦', 'GraphPage', { nodeId })
-  }
-
-  const handleProperties = (nodeId: string) => {
-    selectNode(nodeId)
-    logAction('节点:属性', 'GraphPage', { nodeId })
-  }
+  // Context menu handlers — extracted to useNodeActions hook
+  const {
+    handleNewChild,
+    handleRename,
+    handleDelete,
+    handleEdgeDelete,
+    handleFocus,
+    handleProperties,
+  } = useNodeActions()
 
   if (view !== 'graph') return null
 
@@ -223,9 +174,9 @@ export default function GraphPage() {
             <Breadcrumb />
 
             {/* 搜索 */}
-            <SearchBar />
+            <SearchBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
-            <GraphCanvas />
+            <GraphCanvas searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
             {/* Git 面板 */}
             <GitPanel />

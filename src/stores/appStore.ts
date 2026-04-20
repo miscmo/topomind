@@ -16,10 +16,6 @@ interface AppState {
   edgeModeSourceId: string | null
   // 自动 ID 计数器
   autoIdCounter: number
-  // 搜索关键词
-  searchQuery: string
-  // 是否显示网格
-  showGrid: boolean
   // 是否显示 Git 面板
   showGitPanel: boolean
   // 右侧面板是否折叠
@@ -44,8 +40,6 @@ interface AppState {
   enterEdgeMode: (sourceId: string) => void
   exitEdgeMode: () => void
   autoId: () => string
-  setSearchQuery: (query: string) => void
-  toggleGrid: () => void
   toggleGitPanel: () => void
   collapseRightPanel: () => void
   expandRightPanel: () => void
@@ -61,8 +55,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   edgeMode: false,
   edgeModeSourceId: null,
   autoIdCounter: 0,
-  searchQuery: '',
-  showGrid: true,
   showGitPanel: false,
   rightPanelCollapsed: false,
   rightPanelWidth: 320,
@@ -102,10 +94,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({ autoIdCounter: state.autoIdCounter + 1 }))
     return id
   },
-
-  setSearchQuery: (query) => set({ searchQuery: query }),
-
-  toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
 
   toggleGitPanel: () => set((state) => ({ showGitPanel: !state.showGitPanel })),
 

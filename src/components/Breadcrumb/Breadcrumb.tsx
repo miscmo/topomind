@@ -3,7 +3,7 @@
  * 显示完整房间路径：全局 > 父房间 > ... > 当前房间
  * 历史房间可点击跳转，当前房间不可点击
  */
-import { useRoomStore, roomStore } from '../../stores/roomStore'
+import { roomStore } from '../../stores/roomStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import type { RoomHistoryItem } from '../../types'
 import styles from './Breadcrumb.module.css'

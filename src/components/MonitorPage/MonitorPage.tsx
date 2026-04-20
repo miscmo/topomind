@@ -9,8 +9,6 @@ import {
   logQuery,
   logGetAvailableDates,
   logClear,
-  logSetLevel,
-  logGetLogDir,
   logSubscribe,
 } from '../../core/log-backend'
 import { COLORS } from '../../types'

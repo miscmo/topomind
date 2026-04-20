@@ -33,12 +33,11 @@ export interface GraphContextValue {
   onNodeContextMenu: (event: React.MouseEvent, node: Node) => void
 
   // Node operations
-  createChildNode: (name: string) => Promise<string | null>
+  createChildNode: (name: string, parentId?: string) => Promise<string | null>
   deleteChildNode: (nodeId: string) => Promise<boolean>
   renameNode: (nodeId: string, newName: string) => Promise<boolean>
 
   // Edge operations
-  deleteEdge: (edgeId: string) => Promise<boolean>
   updateEdgeRelation: (edgeId: string, relation: string, weight: string) => void
 
   // Layout
@@ -64,10 +63,9 @@ const emptyContext: GraphContextValue = {
   onPaneClick: () => {},
   onNodeDoubleClick: () => {},
   onNodeContextMenu: () => {},
-  createChildNode: async () => null,
+  createChildNode: async () => null as string | null,
   deleteChildNode: async () => false,
   renameNode: async () => false,
-  deleteEdge: async () => false,
   updateEdgeRelation: () => {},
   layoutNodes: async () => {},
   highlightSearch: () => {},
@@ -96,7 +94,6 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     createChildNode: graph.createChildNode,
     deleteChildNode: graph.deleteChildNode,
     renameNode: graph.renameNode,
-    deleteEdge: graph.deleteEdge,
     updateEdgeRelation: graph.updateEdgeRelation as (edgeId: string, relation: string, weight: string) => void,
     layoutNodes: graph.layoutNodes,
     highlightSearch: graph.highlightSearch,
