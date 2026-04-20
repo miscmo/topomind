@@ -62,11 +62,12 @@ const { handleClick: handlePaneClick } = useDoubleClick({
         onNodesChange={graph.onNodesChange}
         onEdgesChange={graph.onEdgesChange}
         onConnect={graph.onConnect}
-        onNodeClick={graph.onNodeClick}
-        onNodeDoubleClick={graph.onNodeDoubleClick}
+        onNodeClick={graph.onNodeClick as (e: React.MouseEvent, node: Node) => void}
+        onNodeDoubleClick={graph.onNodeDoubleClick as (e: React.MouseEvent, node: Node) => void}
         onNodeContextMenu={(e, node) => {
           if (node) {
-            graph.onNodeContextMenu(e, node)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            graph.onNodeContextMenu(e, node as any)
             showCM(node.id, e)
           }
         }}

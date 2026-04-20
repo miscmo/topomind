@@ -2,6 +2,7 @@
  * 工具栏组件
  * 布局控制、缩放、网格切换等
  */
+import { memo } from 'react'
 import { useAppStore } from '../../stores/appStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import { useReactFlow } from '@xyflow/react'
@@ -12,7 +13,7 @@ interface ToolbarProps {
   onToggleGrid: () => void
 }
 
-export default function Toolbar({ showGrid, onToggleGrid }: ToolbarProps) {
+export default memo(function Toolbar({ showGrid, onToggleGrid }: ToolbarProps) {
   const showGitPanel = useAppStore((s) => s.showGitPanel)
   const toggleGitPanel = useAppStore((s) => s.toggleGitPanel)
   const edgeMode = useAppStore((s) => s.edgeMode)
@@ -81,4 +82,4 @@ export default function Toolbar({ showGrid, onToggleGrid }: ToolbarProps) {
       </button>
     </div>
   )
-}
+})

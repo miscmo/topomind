@@ -8,7 +8,7 @@
  */
 import { createContext, useContext, useMemo, type Context } from 'react'
 import { useGraph } from '../hooks/useGraph'
-import type { KnowledgeNode, KnowledgeEdge } from '../types'
+import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData } from '../types'
 import type { Node, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 
 export interface GraphContextValue {
@@ -23,14 +23,14 @@ export interface GraphContextValue {
   navigateBack: () => Promise<void>
   navigateToRoom: (index: number) => Promise<void>
 
-  // React Flow handlers
+  // React Flow handlers — typed with proper Node<KnowledgeNodeData> signatures
   onNodesChange: (changes: NodeChange[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
   onConnect: (connection: Connection) => void
-  onNodeClick: (event: React.MouseEvent, node: Node) => void
+  onNodeClick: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
   onPaneClick: (event: React.MouseEvent) => void
-  onNodeDoubleClick: (event: React.MouseEvent, node: Node) => void
-  onNodeContextMenu: (event: React.MouseEvent, node: Node) => void
+  onNodeDoubleClick: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
+  onNodeContextMenu: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
 
   // Node operations
   createChildNode: (name: string, parentId?: string) => Promise<string | null>
@@ -87,10 +87,10 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     onNodesChange: graph.onNodesChange,
     onEdgesChange: graph.onEdgesChange,
     onConnect: graph.onConnect,
-    onNodeClick: graph.onNodeClick as unknown as (event: React.MouseEvent, node: Node) => void,
+    onNodeClick: graph.onNodeClick as GraphContextValue['onNodeClick'],
     onPaneClick: graph.onPaneClick,
-    onNodeDoubleClick: graph.onNodeDoubleClick as unknown as (event: React.MouseEvent, node: Node) => void,
-    onNodeContextMenu: graph.onNodeContextMenu as unknown as (event: React.MouseEvent, node: Node) => void,
+    onNodeDoubleClick: graph.onNodeDoubleClick as GraphContextValue['onNodeDoubleClick'],
+    onNodeContextMenu: graph.onNodeContextMenu as GraphContextValue['onNodeContextMenu'],
     createChildNode: graph.createChildNode,
     deleteChildNode: graph.deleteChildNode,
     renameNode: graph.renameNode,

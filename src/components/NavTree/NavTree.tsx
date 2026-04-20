@@ -2,7 +2,7 @@
  * 导航树组件
  * 显示知识库列表，支持进入图谱
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, memo } from 'react'
 import { useAppStore } from '../../stores/appStore'
 import { useRoomStore } from '../../stores/roomStore'
 import { useStorage } from '../../hooks/useStorage'
@@ -12,7 +12,7 @@ import type { KBListItem } from '../../types'
 import { DOMAIN_COLORS } from '../../types'
 import styles from './NavTree.module.css'
 
-export default function NavTree() {
+export default memo(function NavTree() {
   const [kbs, setKbs] = useState<KBListItem[]>([])
   const showGraph = useAppStore((s) => s.showGraph)
   const setCurrentKB = useRoomStore((s) => s.setCurrentKB)
@@ -88,4 +88,4 @@ export default function NavTree() {
       </div>
     </div>
   )
-}
+})

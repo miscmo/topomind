@@ -2,7 +2,7 @@
  * GitPanel — collapsible bottom panel for Git operations
  * Shows status, allows commit/push/pull, and displays remote info
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { useGitStore } from '../../stores/gitStore'
 import { useRoomStore } from '../../stores/roomStore'
 import { useAppStore } from '../../stores/appStore'
@@ -24,7 +24,7 @@ interface DiffFile {
   status: string
 }
 
-export default function GitPanel() {
+export default memo(function GitPanel() {
   const showGitPanel = useAppStore((s) => s.showGitPanel)
   const currentKBPath = useRoomStore((s) => s.currentKBPath)
   const git = useGit()
@@ -278,4 +278,4 @@ export default function GitPanel() {
       )}
     </div>
   )
-}
+})

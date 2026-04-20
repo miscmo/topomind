@@ -2,7 +2,7 @@
  * 右侧详情面板
  * 显示节点 Markdown 内容，支持预览/编辑切换
  */
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, memo } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useStorage } from '../../hooks/useStorage'
@@ -19,7 +19,7 @@ interface DetailPanelProps {
   selectedNodeId: string | null
 }
 
-export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
+const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelProps) {
   const storage = useStorage()
   const collapseRightPanel = useAppStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()
@@ -239,4 +239,6 @@ export default function DetailPanel({ selectedNodeId }: DetailPanelProps) {
       </div>
     </div>
   )
-}
+})
+
+export default DetailPanel
