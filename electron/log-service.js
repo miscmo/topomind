@@ -9,7 +9,7 @@
  * 5. 响应 renderer 发来的日志 IPC 请求
  */
 
-import { ipcMain, app } from 'electron';
+import { ipcMain, app, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 
@@ -270,9 +270,10 @@ function _registerIpcHandlers() {
  */
 function _broadcast(entry) {
   for (const senderId of _subscribers) {
-    const sender = app.getWebContentsById(senderId);
-    if (sender && !sender.isDestroyed()) {
-      sender.send('log:entry', entry);
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.webContents.id === senderId && !win.webContents.isDestroyed()) {
+        win.webContents.send('log:entry', entry);
+      }
     }
   }
 }
