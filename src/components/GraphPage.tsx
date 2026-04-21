@@ -8,6 +8,7 @@ import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore } from '../stores/roomStore'
 import { usePromptStore } from '../stores/promptStore'
+import { useTabStore } from '../stores/tabStore'
 import { useGraph } from '../hooks/useGraph'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
@@ -38,7 +39,7 @@ const GraphCanvas = memo(function GraphCanvas({
 }) {
   const showGrid = useAppStore((s) => s.showGrid)
   const graph = useGraphContext()
-  const { showCM, showEdgeCM } = useContextMenu()
+  const { showCM, showEdgeCM, hideCM } = useContextMenu()
   const prompt = usePromptStore((s) => s.open)
   const [zoomLevel, setZoomLevel] = useState(1)
   const lastLogTimeRef = useRef<number>(0)
@@ -61,6 +62,10 @@ const GraphCanvas = memo(function GraphCanvas({
   )
 
 const { handleClick: handlePaneClick } = useDoubleClick({
+    onClick: () => {
+      // Immediate: close context menu on every pane click
+      hideCM()
+    },
     onDoubleClick: async () => {
       const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
       if (!name?.trim()) return
@@ -68,7 +73,6 @@ const { handleClick: handlePaneClick } = useDoubleClick({
       graph.createChildNode(name.trim())
     },
     onSingleClick: () => {
-      // Single click on pane: deselect
       useAppStore.getState().clearSelection()
     },
   })
@@ -92,6 +96,10 @@ const { handleClick: handlePaneClick } = useDoubleClick({
           }
         }}
         onPaneClick={handlePaneClick}
+        onPaneContextMenu={(e) => {
+          e.preventDefault()
+          hideCM()
+        }}
         onEdgeContextMenu={(e, edge) => {
           if (edge) {
             showEdgeCM(edge.id, e)
@@ -126,7 +134,11 @@ const { handleClick: handlePaneClick } = useDoubleClick({
   )
 })
 
-export default memo(function GraphPage() {
+interface GraphPageProps {
+  tabId?: string
+}
+
+export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const view = useAppStore((s) => s.view)
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
@@ -134,6 +146,7 @@ export default memo(function GraphPage() {
   const currentRoomPath = useRoomStore((s) => s.currentRoomPath)
   const searchQuery = useAppStore((s) => s.searchQuery)
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
+  const setTabDirty = useTabStore((s) => s.setTabDirty)
 
   // Log graph page visibility
   useEffect(() => {
@@ -147,16 +160,35 @@ export default memo(function GraphPage() {
   // Single useGraph instance — passed to GraphContextProvider for sharing
   const graph = useGraph()
 
+  // Poll dirty state and sync to tabStore every 1s
+  // Only active when this GraphPage is associated with a tab (tabId is provided)
+  useEffect(() => {
+    if (!tabId) return
+    const interval = setInterval(() => {
+      if (graph.isModified !== undefined) {
+        setTabDirty(tabId, graph.isModified)
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [tabId, setTabDirty])
+
   // Load room when room path changes
+  // Use refs to avoid stale closure and prevent infinite loops from graph object changing
+  const graphLoadRoomRef = useRef(graph.loadRoom)
+  const graphHighlightRef = useRef(graph.highlightSearch)
+  // Keep refs in sync when graph instance changes
+  graphLoadRoomRef.current = graph.loadRoom
+  graphHighlightRef.current = graph.highlightSearch
+
   useEffect(() => {
     logAction('房间:加载触发', 'GraphPage', { currentRoomPath: currentRoomPath || '' })
-    graph.loadRoom(currentRoomPath || '')
-  }, [currentRoomPath, graph])
+    graphLoadRoomRef.current(currentRoomPath || '')
+  }, [currentRoomPath])
 
   // Highlight search matches
   useEffect(() => {
-    graph.highlightSearch(searchQuery)
-  }, [searchQuery, graph.highlightSearch])
+    graphHighlightRef.current(searchQuery)
+  }, [searchQuery])
 
   // Keyboard shortcuts + context menu handlers — single useNodeActions instance
   const {
@@ -186,11 +218,6 @@ export default memo(function GraphPage() {
     <GraphContextProvider graph={graph}>
       <div id="graph-page" className={styles.page}>
         <div id="app-layout" className={styles.layout}>
-          {/* 左侧面板 */}
-          <div className={styles.leftPanel}>
-            <NavTree />
-          </div>
-
           {/* 中间图谱 */}
           <div id="graph-panel" className={styles.graphPanel}>
             {/* 标题 */}
