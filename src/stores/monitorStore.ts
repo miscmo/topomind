@@ -33,13 +33,11 @@ interface MonitorState {
   selectedDate: string  // YYYY-MM-DD
   availableDates: string[]
   selectedLevels: string[]  // ['DEBUG','INFO','WARN','ERROR']
-  selectedActions: string[]
 
   setKeyword: (kw: string) => void
   setSelectedDate: (d: string) => void
   setAvailableDates: (dates: string[]) => void
   setSelectedLevels: (levels: string[]) => void
-  setSelectedActions: (actions: string[]) => void
 
   // 日志列表
   entries: LogEntry[]
@@ -78,7 +76,6 @@ const initialState = {
   selectedDate: '',
   availableDates: [] as string[],
   selectedLevels: [] as string[],
-  selectedActions: [] as string[],
   entries: [] as LogEntry[],
   selectedEntry: null as LogEntry | null,
   streaming: true,
@@ -95,7 +92,6 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   setSelectedDate: (selectedDate) => set({ selectedDate }),
   setAvailableDates: (availableDates) => set({ availableDates }),
   setSelectedLevels: (selectedLevels) => set({ selectedLevels }),
-  setSelectedActions: (selectedActions) => set({ selectedActions }),
 
   setEntries: (entries) => {
     set({ entries, loaded: true })
@@ -104,8 +100,11 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
 
   appendEntries: (newEntries) => {
     const { entries } = get()
+    // 按 id 去重，防止同一条日志通过 buffer 加载和 IPC 订阅两个路径重复添加
+    const existingIds = new Set(entries.map((e) => e.id).filter(Boolean))
+    const unique = newEntries.filter((n) => !n.id || !existingIds.has(n.id))
     // 保留最新 5000 条
-    const combined = [...entries, ...newEntries]
+    const combined = [...entries, ...unique]
     const trimmed = combined.length > 5000 ? combined.slice(-5000) : combined
     set({ entries: trimmed })
     get().updateStats()

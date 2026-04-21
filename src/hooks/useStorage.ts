@@ -20,14 +20,13 @@ const storeApi = {
 
   // Knowledge bases
   listKBs: async (): Promise<KBListItem[]> => {
+    // Store.listKBs() already calls FSB.listChildren('') — returns DirEntry[]
     const entries: DirEntry[] = await Store.listKBs()
-    return entries
-      .filter((d) => d.isDir)
-      .map((d, i) => ({
-        path: d.path,
-        name: d.name,
-        order: i,
-      }))
+    return entries.map((d) => ({
+      path: d.path,
+      name: d.name,
+      order: d.order ?? 0,
+    }))
   },
   createKB: (name: string, meta?: object) => Store.createKB(name, meta),
   deleteKB: (name: string) => Store.deleteKB(name),

@@ -7,6 +7,7 @@ import { memo, useEffect, useState } from 'react'
 import { roomStore } from '../../stores/roomStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import type { RoomHistoryItem } from '../../types'
+import { logAction } from '../../core/log-backend'
 import styles from './Breadcrumb.module.css'
 
 export default memo(function Breadcrumb() {
@@ -41,6 +42,7 @@ export default memo(function Breadcrumb() {
       <button
         className={styles.link}
         onClick={async () => {
+          logAction('房间:返回', 'Breadcrumb', { source: 'breadcrumb-home' })
           await graph.navigateBack()
         }}
       >
@@ -54,6 +56,9 @@ export default memo(function Breadcrumb() {
           <button
             className={styles.link}
             onClick={async () => {
+              const roomName = item.room.name
+              const roomPath = item.room.path
+              logAction('房间:导航', 'Breadcrumb', { historyIndex: index, roomName, roomPath })
               await graph.navigateToRoom(index)
             }}
           >

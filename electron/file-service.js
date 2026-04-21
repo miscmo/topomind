@@ -178,7 +178,7 @@ function createFileService() {
             : e.name;
           var cover = 'images/cover.png';
           var order = Number.isFinite(_fs_config.orders[childPath]) ? _fs_config.orders[childPath] : Infinity;
-          return { nodePath: childPath, name: safeName, cover: cover, order: order };
+          return { path: childPath, name: safeName, isDir: true, cover: cover, order: order };
         });
       children.sort(function(a, b) {
         var orderA = Number.isFinite(a.order) ? a.order : Infinity;

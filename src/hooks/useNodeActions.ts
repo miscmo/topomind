@@ -7,6 +7,7 @@
 import { useCallback } from 'react'
 import { useReactFlow } from '@xyflow/react'
 import { useAppStore } from '../stores/appStore'
+import { usePromptStore } from '../stores/promptStore'
 import { useGraphContext } from '../contexts/GraphContext'
 import { logAction } from '../core/log-backend'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
@@ -21,33 +22,35 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
   const graph = useGraphContext()
   const { fitView, deleteElements } = useReactFlow()
   const selectNode = useAppStore((s) => s.selectNode)
+  const prompt = usePromptStore((s) => s.open)
 
-  const handleNewChild = useCallback((nodeId: string) => {
-    const name = window.prompt('请输入新节点名称：')
+  const handleNewChild = useCallback(async (nodeId: string) => {
+    const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
     if (!name?.trim()) return
     logAction('节点:创建', 'GraphPage', { nodeId, nodeName: name.trim(), source: 'context-menu' })
     graph.createChildNode(name.trim(), nodeId)
     onAction?.()
-  }, [graph, onAction])
+  }, [graph, onAction, prompt])
 
-  const handleRename = useCallback((nodeId: string) => {
+  const handleRename = useCallback(async (nodeId: string) => {
     const node = graph.nodes.find((n) => n.id === nodeId)
     if (!node) return
-    const newName = window.prompt('请输入新名称：', node.data.label)
+    const newName = await prompt({ title: '请输入新名称', placeholder: '节点名称', defaultValue: node.data.label })
     if (!newName?.trim() || newName === node.data.label) return
     logAction('节点:重命名', 'GraphPage', { nodeId, oldName: node.data.label, newName: newName.trim(), source: 'context-menu' })
     graph.renameNode(nodeId, newName.trim())
     onAction?.()
-  }, [graph, onAction])
+  }, [graph, onAction, prompt])
 
-  const handleDelete = useCallback((nodeId: string) => {
+  const handleDelete = useCallback(async (nodeId: string) => {
     const node = graph.nodes.find((n) => n.id === nodeId)
     if (!node) return
-    if (!window.confirm(`确定要删除 "${node.data.label}" 吗？`)) return
+    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除` })
+    if (!confirmed?.trim() || confirmed !== node.data.label) return
     logAction('节点:删除', 'GraphPage', { nodeId, label: node.data.label, path: node.data.path, source: 'context-menu' })
     graph.deleteChildNode(nodeId)
     onAction?.()
-  }, [graph, onAction])
+  }, [graph, onAction, prompt])
 
   const handleEdgeDelete = useCallback((edgeId: string) => {
     const edge = graph.edges.find((e) => e.id === edgeId)
@@ -73,21 +76,22 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
   }, [selectNode, onAction])
 
   /** Delete selected node — used by keyboard shortcut */
-  const deleteSelectedNode = useCallback((nodeId: string) => {
+  const deleteSelectedNode = useCallback(async (nodeId: string) => {
     const node = graph.nodes.find((n) => n.id === nodeId)
     if (!node) return
-    if (!window.confirm(`确定要删除 "${node.data.label}" 吗？`)) return
+    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除` })
+    if (!confirmed?.trim() || confirmed !== node.data.label) return
     logAction('节点:删除', 'GraphPage', { nodeId, label: node.data.label, path: node.data.path, source: 'keyboard-delete' })
     graph.deleteChildNode(nodeId)
-  }, [graph])
+  }, [graph, prompt])
 
   /** Add child node — used by keyboard Tab shortcut */
-  const addChildNode = useCallback((parentId: string) => {
-    const name = window.prompt('请输入新节点名称：')
+  const addChildNode = useCallback(async (parentId: string) => {
+    const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
     if (!name?.trim()) return
-    logAction('节点:创建', 'GraphPage', { parentId, nodeName: name.trim(), source: 'keyboard-tab' })
+    logAction('节点:创建', 'GraphPage', { nodeId: parentId, nodeName: name.trim(), source: 'keyboard-tab' })
     graph.createChildNode(name.trim(), parentId)
-  }, [graph])
+  }, [graph, prompt])
 
   return {
     handleNewChild,

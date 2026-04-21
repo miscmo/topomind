@@ -2,7 +2,7 @@
  * 首页：知识库列表
  * 对应原 HomePage.vue
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
 import { useStorage } from '../hooks/useStorage'
@@ -40,11 +40,34 @@ export default function HomePage() {
   const [importLoading, setImportLoading] = useState(false)
   const [importError, setImportError] = useState('')
 
+  // 新建知识库弹窗生命周期日志
+  const prevShowCreateSheet = useRef(false)
+  useEffect(() => {
+    if (showCreateSheet && !prevShowCreateSheet.current) {
+      logAction('HomePage:新建知识库弹窗:打开', 'HomePage', {})
+    } else if (!showCreateSheet && prevShowCreateSheet.current) {
+      logAction('HomePage:新建知识库弹窗:关闭', 'HomePage', { createName })
+    }
+    prevShowCreateSheet.current = showCreateSheet
+  }, [showCreateSheet])
+
+  // 导入知识库弹窗生命周期日志
+  const prevShowImportSheet = useRef(false)
+  useEffect(() => {
+    if (showImportSheet && !prevShowImportSheet.current) {
+      logAction('HomePage:导入知识库弹窗:打开', 'HomePage', {})
+    } else if (!showImportSheet && prevShowImportSheet.current) {
+      logAction('HomePage:导入知识库弹窗:关闭', 'HomePage', { importDir })
+    }
+    prevShowImportSheet.current = showImportSheet
+  }, [showImportSheet])
+
   useEffect(() => {
     loadKBList()
   }, [])
 
   async function loadKBList() {
+    logAction('HomePage:开始加载知识库列表', 'HomePage', {})
     setLoading(true)
     try {
       const [list, dir] = await Promise.all([
@@ -52,6 +75,10 @@ export default function HomePage() {
         storage.getRootDir(),
       ])
       setWorkDir(dir || '')
+      logAction('HomePage:知识库列表加载成功', 'HomePage', {
+        kbCount: (list || []).length,
+        workDir: dir,
+      })
       // listKBs() already returns only KB directories as KBListItem[]
       const kbList = list || []
       const initial: KBItem[] = kbList.map((kb) => ({
@@ -64,6 +91,7 @@ export default function HomePage() {
       setKbs(initial)
 
       // 加载子节点数量（使用初始值避免 stale closure）
+      logAction('HomePage:开始加载子节点数量', 'HomePage', { kbCount: initial.length })
       const counts = await Promise.all(
         initial.map(async (kb) => {
           try {
@@ -74,32 +102,44 @@ export default function HomePage() {
         })
       )
       setKbs(initial.map((kb, i) => ({ ...kb, nodeCount: counts[i] })))
+      logAction('HomePage:子节点数量加载完成', 'HomePage', { totalNodes: counts.reduce((a, b) => a + b, 0) })
     } catch (err) {
       logger.catch('HomePage', 'loadKBList', err)
+      logAction('HomePage:加载知识库列表异常', 'HomePage', { error: (err as Error)?.message || String(err) })
     } finally {
       setLoading(false)
     }
   }
 
-  async function openKB(kb: KBItem) {
-    try {
-      await storage.setLastOpenedKB(kb.path)
-    } catch { /* ignore */ }
-    roomStore.getState().setCurrentKB(kb.path)
+  function openKB(kb: KBItem) {
+    roomStore.getState().enterRoom({ path: kb.path, kbPath: kb.path, name: kb.name })
     showGraph()
     logAction('知识库:打开', 'HomePage', { kbPath: kb.path, kbName: kb.name, nodeCount: kb.nodeCount })
   }
 
   async function switchWorkDir() {
     setMessage('')
+    logAction('HomePage:点击切换工作目录', 'HomePage', {})
+    logAction('HomePage:打开文件对话框', 'HomePage', { purpose: '切换工作目录' })
     const picked = await storage.selectWorkDirCandidate()
-    if (!picked?.valid) return
+    if (!picked?.valid) {
+      logAction('HomePage:文件对话框关闭', 'HomePage', {
+        result: 'cancelled',
+        reason: picked?.error || '用户取消',
+      })
+      return
+    }
+    logAction('HomePage:文件对话框已选择路径', 'HomePage', { selectedPath: picked.nodePath })
     const res = await storage.setWorkDir(picked.nodePath!)
     if (!res?.valid) {
       if (res?.error) {
         setMessageError(true)
         setMessage(res.error)
       }
+      logAction('HomePage:切换工作目录失败', 'HomePage', {
+        newWorkDir: picked.nodePath,
+        error: res?.error || null,
+      })
       return
     }
     logAction('工作目录:切换', 'HomePage', { newWorkDir: picked.nodePath })
@@ -137,10 +177,14 @@ export default function HomePage() {
 
   // ===== 导入知识库 =====
   async function handleSelectImportDir() {
+    logAction('HomePage:点击选择导入文件夹', 'HomePage', {})
     const res = await storage.selectWorkDirCandidate()
     if (res?.valid) {
       setImportDir(res.nodePath || '')
       setImportError('')
+      logAction('HomePage:选择导入文件夹完成', 'HomePage', { selectedPath: res.nodePath })
+    } else {
+      logAction('HomePage:选择导入文件夹取消', 'HomePage', {})
     }
   }
 
@@ -199,7 +243,7 @@ export default function HomePage() {
         <div className={styles.sectionTitle}>我的知识库</div>
         <div className={styles.grid}>
           {kbs.map((kb) => (
-            <div key={kb.path} className={styles.card} onClick={() => openKB(kb)}>
+            <div key={kb.path} className={styles.card} onClick={() => { logAction('HomePage:点击知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name }); openKB(kb); }} onMouseEnter={() => logAction('HomePage:悬停知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name })}>
               <div className={styles.cardImage}>
                 {kb.coverUrl ? (
                   <img src={kb.coverUrl} alt={kb.name} />
@@ -221,13 +265,13 @@ export default function HomePage() {
           ))}
 
           {/* 新建按钮 */}
-          <div className={styles.cardAdd} onClick={() => { setShowCreateSheet(true); setCreateName(''); setCreateError(''); }}>
+          <div className={styles.cardAdd} onClick={() => { logAction('HomePage:点击新建知识库', 'HomePage', {}); setShowCreateSheet(true); setCreateName(''); setCreateError(''); }}>
             <div className={styles.cardAddIcon}>＋</div>
             <div className={styles.cardAddText}>新建知识库</div>
           </div>
 
           {/* 导入按钮 */}
-          <div className={styles.cardAdd} onClick={() => { setShowImportSheet(true); setImportDir(''); setImportError(''); }}>
+          <div className={styles.cardAdd} onClick={() => { logAction('HomePage:点击导入知识库', 'HomePage', {}); setShowImportSheet(true); setImportDir(''); setImportError(''); }}>
             <div className={styles.cardAddIcon}>📥</div>
             <div className={styles.cardAddText}>导入知识库</div>
           </div>

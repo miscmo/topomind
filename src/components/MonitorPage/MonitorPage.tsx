@@ -11,6 +11,7 @@ import {
   logClear,
   logSubscribe,
   logUnsubscribe,
+  logAction,
 } from '../../core/log-backend'
 import { COLORS } from '../../types'
 import styles from './MonitorPage.module.css'
@@ -75,6 +76,11 @@ function Sidebar() {
   const setActiveTab = useMonitorStore((s) => s.setActiveTab)
   const stats = useMonitorStore((s) => s.stats)
 
+  const handleTabClick = (tab: 'log' | 'performance') => {
+    logAction('监控页:切换Tab', 'MonitorPage', { tab, previousTab: activeTab })
+    setActiveTab(tab)
+  }
+
   return (
     <aside className={styles.sidebar}>
       <div className={styles.sidebarLogo}>
@@ -84,7 +90,7 @@ function Sidebar() {
       <nav className={styles.sidebarNav}>
         <button
           className={`${styles.navItem} ${activeTab === 'log' ? styles.navItemActive : ''}`}
-          onClick={() => setActiveTab('log')}
+          onClick={() => handleTabClick('log')}
         >
           <span className={styles.navIcon}>&#9776;</span>
           <span>日志监控</span>
@@ -96,7 +102,7 @@ function Sidebar() {
         </button>
         <button
           className={`${styles.navItem} ${activeTab === 'performance' ? styles.navItemActive : ''}`}
-          onClick={() => setActiveTab('performance')}
+          onClick={() => handleTabClick('performance')}
         >
           <span className={styles.navIcon}>&#9651;</span>
           <span>性能监控</span>
@@ -144,8 +150,11 @@ function FilterBar() {
   const setStreaming = useMonitorStore((s) => s.setStreaming)
   const setEntries = useMonitorStore((s) => s.setEntries)
   const appendEntries = useMonitorStore((s) => s.appendEntries)
+  const entries = useMonitorStore((s) => s.entries)
 
   const handleLevelToggle = (level: string) => {
+    const isActive = selectedLevels.includes(level)
+    logAction(isActive ? '监控:过滤级别移除' : '监控:过滤级别添加', 'MonitorPage', { level, currentLevels: selectedLevels })
     if (selectedLevels.includes(level)) {
       setSelectedLevels(selectedLevels.filter((l) => l !== level))
     } else {
@@ -154,6 +163,7 @@ function FilterBar() {
   }
 
   const handleRefresh = useCallback(async () => {
+    logAction('监控:刷新', 'MonitorPage', { dateStr: selectedDate || '全部', levels: selectedLevels.length > 0 ? selectedLevels : '全部' })
     const dateStr = selectedDate || undefined
     const results = (await logQuery({
       dateStr,
@@ -164,9 +174,10 @@ function FilterBar() {
   }, [selectedDate, selectedLevels, appendEntries])
 
   const handleClear = useCallback(async () => {
+    logAction('监控:清空', 'MonitorPage', { bufferSizeBefore: entries.length })
     await logClear()
     setEntries([])
-  }, [setEntries])
+  }, [setEntries, entries])
 
   return (
     <div className={styles.filterBar}>
@@ -179,10 +190,17 @@ function FilterBar() {
             type="text"
             placeholder="搜索关键词..."
             value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
+            onChange={(e) => {
+              const newKeyword = e.target.value
+              logAction('监控:关键词变化', 'MonitorPage', { previousKeyword: keyword, newKeyword })
+              setKeyword(newKeyword)
+            }}
           />
           {keyword && (
-            <button className={styles.searchClear} onClick={() => setKeyword('')}>
+            <button className={styles.searchClear} onClick={() => {
+              logAction('监控:清除关键词', 'MonitorPage', { previousKeyword: keyword })
+              setKeyword('')
+            }}>
               &#10005;
             </button>
           )}
@@ -192,7 +210,10 @@ function FilterBar() {
         <select
           className={styles.dateSelect}
           value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
+          onChange={(e) => {
+            logAction('监控:日期选择', 'MonitorPage', { previousDate: selectedDate || '全部', newDate: e.target.value || '全部' })
+            setSelectedDate(e.target.value)
+          }}
         >
           <option value="">全部日期</option>
           {availableDates.map((d) => (
@@ -231,7 +252,11 @@ function FilterBar() {
           <input
             type="checkbox"
             checked={streaming}
-            onChange={(e) => setStreaming(e.target.checked)}
+            onChange={(e) => {
+              const newStreaming = e.target.checked
+              logAction('监控:实时流开关', 'MonitorPage', { previousStreaming: streaming, newStreaming })
+              setStreaming(newStreaming)
+            }}
           />
           <span>实时</span>
         </label>
@@ -346,7 +371,15 @@ function LogList() {
               key={entry.id}
               entry={entry}
               selected={selectedEntry?.id === entry.id}
-              onClick={() => setSelectedEntry(entry)}
+              onClick={() => {
+                logAction('监控:选择日志', 'MonitorPage', {
+                  entryId: entry.id,
+                  entryLevel: entry.level,
+                  entryAction: entry.action,
+                  entryMessage: entry.message,
+                })
+                setSelectedEntry(entry)
+              }}
               keyword={keyword}
             />
           ))
@@ -371,6 +404,7 @@ function DetailPanel() {
   }
 
   const handleCopy = () => {
+    logAction('监控:复制日志', 'MonitorPage', { entryId: selectedEntry.id, entryLevel: selectedEntry.level })
     navigator.clipboard.writeText(JSON.stringify(selectedEntry, null, 2)).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
@@ -393,7 +427,10 @@ function DetailPanel() {
           <button className={styles.detailBtn} onClick={handleCopy}>
             {copied ? '已复制!' : '复制'}
           </button>
-          <button className={styles.detailBtn} onClick={() => setSelectedEntry(null)}>
+          <button className={styles.detailBtn} onClick={() => {
+            logAction('监控:关闭详情', 'MonitorPage', { closedEntryId: selectedEntry.id })
+            setSelectedEntry(null)
+          }}>
             &#10005;
           </button>
         </div>
@@ -487,6 +524,7 @@ export default function MonitorPage() {
 
   // 初始化：加载缓冲区 + 订阅实时流
   useEffect(() => {
+    logAction('页面:进入监控', 'MonitorPage', { timestamp: new Date().toISOString() })
     let mounted = true
 
     const init = async () => {

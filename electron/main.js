@@ -45,7 +45,14 @@ function absKbPath(kbPath) {
  */
 function registerIPC() {
   // ----- File system handlers -----
-  ipcMain.handle('fs:init', function() { return fileService.initWorkDir(); });
+  ipcMain.handle('fs:init', function() {
+    var result = fileService.initWorkDir();
+    LogService.write({
+      level: 'INFO', module: 'Main', action: 'fs:init',
+      message: 'fs:init 调用', params: { valid: result.valid, error: result.error || null },
+    });
+    return result;
+  });
   ipcMain.handle('fs:listChildren', function(e, p) { return fileService.listChildren(p); });
   ipcMain.handle('fs:mkDir', function(e, p, m) {
     var abs = fileService.mkDir(p, m);
@@ -81,13 +88,61 @@ function registerIPC() {
         .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; }).length;
     } catch(err) { return 0; }
   });
-  ipcMain.handle('fs:getRootDir', function() { return fileService.getRootDir(); });
-  ipcMain.handle('fs:getLastOpenedKB', function() { return fileService.getLastOpenedKB(); });
-  ipcMain.handle('fs:setLastOpenedKB', function(e, kbPath) { fileService.setLastOpenedKB(kbPath); });
-  ipcMain.handle('fs:setWorkDir', function(e, dirPath) { return fileService.setWorkDir(dirPath); });
-  ipcMain.handle('fs:selectWorkDirCandidate', function() { return fileService.selectWorkDirCandidate(); });
-  ipcMain.handle('fs:createWorkDir', function(e, dirPath) { return fileService.createWorkDir(dirPath); });
-  ipcMain.handle('fs:importKB', function(e, sourcePath) { return fileService.importKB(sourcePath); });
+  ipcMain.handle('fs:getRootDir', function() {
+    var root = fileService.getRootDir();
+    LogService.write({
+      level: 'DEBUG', module: 'Main', action: 'fs:getRootDir',
+      message: '获取根目录', params: { rootDir: root },
+    });
+    return root;
+  });
+  ipcMain.handle('fs:getLastOpenedKB', function() {
+    var kb = fileService.getLastOpenedKB();
+    LogService.write({
+      level: 'DEBUG', module: 'Main', action: 'fs:getLastOpenedKB',
+      message: '获取上次打开的知识库', params: { lastOpenedKB: kb },
+    });
+    return kb;
+  });
+  ipcMain.handle('fs:setLastOpenedKB', function(e, kbPath) {
+    fileService.setLastOpenedKB(kbPath);
+    LogService.write({
+      level: 'INFO', module: 'Main', action: 'fs:setLastOpenedKB',
+      message: '设置上次打开的知识库', params: { kbPath },
+    });
+  });
+  ipcMain.handle('fs:setWorkDir', function(e, dirPath) {
+    var result = fileService.setWorkDir(dirPath);
+    LogService.write({
+      level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:setWorkDir',
+      message: result.valid ? '工作目录已切换' : '工作目录切换失败', params: { dirPath, valid: result.valid, error: result.error || null },
+    });
+    return result;
+  });
+  ipcMain.handle('fs:selectWorkDirCandidate', function() {
+    var result = fileService.selectWorkDirCandidate();
+    LogService.write({
+      level: 'INFO', module: 'Main', action: 'fs:selectWorkDirCandidate',
+      message: '文件对话框已关闭', params: { valid: result.valid, path: result.nodePath || null, error: result.error || null },
+    });
+    return result;
+  });
+  ipcMain.handle('fs:createWorkDir', function(e, dirPath) {
+    var result = fileService.createWorkDir(dirPath);
+    LogService.write({
+      level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:createWorkDir',
+      message: result.valid ? '工作目录创建成功' : '工作目录创建失败', params: { dirPath, valid: result.valid, error: result.error || null },
+    });
+    return result;
+  });
+  ipcMain.handle('fs:importKB', function(e, sourcePath) {
+    var result = fileService.importKB(sourcePath);
+    LogService.write({
+      level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:importKB',
+      message: result.valid ? '知识库导入成功' : '知识库导入失败', params: { sourcePath, valid: result.valid, error: result.error || null },
+    });
+    return result;
+  });
 
   // ----- App handlers -----
   ipcMain.handle('app:openExternal', function(e, url) {
@@ -201,9 +256,6 @@ if (process.env.TOPOMIND_PROFILE && process.env.TOPOMIND_PROFILE !== 'prod') {
   app.setName('TopoMind-' + process.env.TOPOMIND_PROFILE);
 }
 
-/**
- * 创建应用主窗口，并根据运行环境加载开发服务器或生产构建页面。
- */
 function createWindow() {
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
@@ -213,6 +265,13 @@ function createWindow() {
       nodeIntegration: false, contextIsolation: true,
     },
   });
+  LogService.write({
+    level: 'INFO',
+    module: 'Main',
+    action: 'window:created',
+    message: '主窗口已创建',
+    params: { width: 1400, height: 900, devServer: !!process.env.VITE_DEV_SERVER_URL },
+  });
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
@@ -221,11 +280,26 @@ function createWindow() {
   win.webContents.on('console-message', function(e, level, msg, line, src) {
     if (process.env.VITE_DEV_SERVER_URL) console.log('[renderer]', msg);
   });
+  win.on('closed', function() {
+    LogService.write({
+      level: 'INFO', module: 'Main', action: 'window:closed',
+      message: '主窗口已关闭',
+    });
+    win = null;
+  });
 }
 
 function createMonitorWindow() {
+  LogService.write({
+    level: 'INFO', module: 'Main', action: 'monitor:will-open',
+    message: '即将打开日志监控窗口',
+  });
   if (monitorWin && !monitorWin.isDestroyed()) {
     monitorWin.focus();
+    LogService.write({
+      level: 'INFO', module: 'Main', action: 'monitor:focus-existing',
+      message: '聚焦已有监控窗口',
+    });
     return;
   }
   monitorWin = new BrowserWindow({
@@ -240,14 +314,32 @@ function createMonitorWindow() {
     ? process.env.VITE_DEV_SERVER_URL + '#/monitor'
     : 'file://' + nodePath.join(DIST_ELECTRON_DIR, '..', 'dist', 'index.html') + '#/monitor';
   monitorWin.loadURL(monitorUrl);
-  monitorWin.on('closed', function() { monitorWin = null; });
+  LogService.write({
+    level: 'INFO', module: 'Main', action: 'monitor:created',
+    message: '监控窗口已创建', params: { url: monitorUrl },
+  });
+  monitorWin.on('closed', function() {
+    LogService.write({
+      level: 'INFO', module: 'Main', action: 'monitor:closed',
+      message: '监控窗口已关闭',
+    });
+    monitorWin = null;
+  });
 }
 
 function toggleMonitorWindow() {
   if (monitorWin && !monitorWin.isDestroyed()) {
+    LogService.write({
+      level: 'INFO', module: 'Main', action: 'monitor:close-toggled',
+      message: '关闭监控窗口',
+    });
     monitorWin.close();
     monitorWin = null;
   } else {
+    LogService.write({
+      level: 'INFO', module: 'Main', action: 'monitor:open-toggled',
+      message: '创建监控窗口',
+    });
     createMonitorWindow();
   }
 }
@@ -280,8 +372,22 @@ function buildMenu() {
 app.whenReady().then(function() {
   registerIPC();
   LogService.init(app.getPath('userData'));
+  LogService.write({
+    level: 'INFO',
+    module: 'Main',
+    action: 'app:ready',
+    message: 'Electron 应用已就绪，开始创建主窗口',
+    params: { profile: process.env.TOPOMIND_PROFILE || 'prod', platform: process.platform },
+  });
   buildMenu();
   createWindow();
+  LogService.write({
+    level: 'INFO',
+    module: 'Main',
+    action: 'app:startup-complete',
+    message: 'TopoMind 应用启动完成',
+    params: { version: app.getVersion(), userData: app.getPath('userData') },
+  });
   app.on('activate', function() { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
@@ -290,6 +396,10 @@ app.on('window-all-closed', function() { if (process.platform !== 'darwin') app.
 
 // Notify renderer before quit so it can save state
 app.on('before-quit', function() {
+  LogService.write({
+    level: 'INFO', module: 'Main', action: 'app:before-quit',
+    message: '应用即将退出，开始保存状态',
+  });
   if (win && !win.isDestroyed()) {
     win.webContents.send('save:before-quit');
   }

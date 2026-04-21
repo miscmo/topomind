@@ -146,9 +146,10 @@ export default memo(function ContextMenu({
         },
       ]
 
-  // Adjust position to keep menu in viewport
-  const adjustedX = Math.min(x, window.innerWidth - menuSize.width)
-  const adjustedY = Math.min(y, window.innerHeight - menuSize.height)
+  // Adjust position to keep menu in viewport — x stays at 0 if it would go negative
+  const adjustedX = Math.max(0, Math.min(x, window.innerWidth - menuSize.width))
+  // y stays at 0 if it would go negative
+  const adjustedY = Math.max(0, Math.min(y, window.innerHeight - menuSize.height))
 
   return (
     <div

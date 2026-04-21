@@ -6,8 +6,10 @@
 import { useCallback } from 'react'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import type { Node } from '@xyflow/react'
+import type { ELKGraph, ELKLayoutResult } from '../types/elk.d'
 import { LAYOUT } from '../types'
 import { logger } from '../core/logger'
+import { logAction } from '../core/log-backend'
 
 const elk = new ELK()
 
@@ -81,26 +83,21 @@ export function useLayout() {
         'elk.padding': '[top=30, left=30, bottom=30, right=30]',
       }
 
-// ELK input/output types — elkjs bundled lacks complete type definitions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ELKArgument = any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ELKOptions = Record<string, any>
-
       try {
-        const result = await elk.layout(
+        logAction('布局:开始', 'useLayout', { direction, nodeCount: elkNodes.length, spacing })
+        const result: ELKLayoutResult = await elk.layout(
           {
             id: 'root',
             layoutOptions,
             children: elkNodes,
             edges: elkEdges,
-          } as ELKArgument,
+          } as ELKGraph,
           {
             layoutOptions: {
               ...layoutOptions,
               'elk.layered.compaction.postCompaction.strategy': 'LEFTWARD',
             },
-          } as ELKOptions
+          }
         )
 
         const positions: Record<string, { x: number; y: number }> = {}
@@ -116,9 +113,11 @@ type ELKOptions = Record<string, any>
           }
         }
 
+        logAction('布局:完成', 'useLayout', { direction, positionedCount: Object.keys(positions).length })
         return positions
       } catch (e) {
         logger.catch('useLayout', 'ELK layout failed', e)
+        logAction('布局:失败', 'useLayout', { direction, nodeCount: elkNodes.length, error: (e as Error)?.message || String(e) })
         return {}
       }
     },

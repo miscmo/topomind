@@ -7,6 +7,7 @@
  */
 import { useEffect } from 'react'
 import { useAppStore } from '../stores/appStore'
+import { logAction } from '../core/log-backend'
 
 interface UseKeyboardOptions {
   onDelete?: () => void
@@ -28,6 +29,7 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
         // Only handle Escape in inputs
         if (e.key === 'Escape') {
           ;(e.target as HTMLElement).blur?.()
+          logAction('快捷键:ESC', 'useKeyboard', { action: 'blur-input' })
           onEscape?.()
         }
         return
@@ -36,7 +38,9 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
       switch (e.key) {
         case 'Escape':
           e.preventDefault()
+          logAction('快捷键:ESC', 'useKeyboard', { action: 'clear-selection' })
           clearSelection()
+          logAction('右键菜单:关闭', 'useKeyboard', { source: 'Escape' })
           hideContextMenu()
           onEscape?.()
           break
@@ -44,15 +48,20 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
         case 'Delete':
         case 'Backspace':
           e.preventDefault()
+          const selectedNodeIdForDelete = useAppStore.getState().selectedNodeId
+          if (selectedNodeIdForDelete) {
+            logAction('快捷键:删除节点', 'useKeyboard', { nodeId: selectedNodeIdForDelete })
+          }
           onDelete?.()
           break
 
         case 'Tab':
           e.preventDefault()
           // Read fresh from store to avoid stale closure
-          const selectedNodeId = useAppStore.getState().selectedNodeId
-          if (selectedNodeId) {
-            onAddChild?.(selectedNodeId)
+          const selectedNodeIdKeyboard = useAppStore.getState().selectedNodeId
+          if (selectedNodeIdKeyboard) {
+            logAction('快捷键:添加子节点', 'useKeyboard', { parentId: selectedNodeIdKeyboard })
+            onAddChild?.(selectedNodeIdKeyboard)
           }
           break
 

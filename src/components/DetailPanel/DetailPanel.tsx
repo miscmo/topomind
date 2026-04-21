@@ -2,11 +2,13 @@
  * 右侧详情面板
  * 显示节点 Markdown 内容，支持预览/编辑切换
  */
-import { useEffect, useState, useRef, memo, useMemo } from 'react'
+import { useEffect, useState, useRef, memo, useMemo, useCallback } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useStorage } from '../../hooks/useStorage'
 import { useAppStore } from '../../stores/appStore'
+import { usePromptStore } from '../../stores/promptStore'
+import { useRoomStore } from '../../stores/roomStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
 import styles from './DetailPanel.module.css'
@@ -23,6 +25,9 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
   const storage = useStorage()
   const collapseRightPanel = useAppStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()
+  const prompt = usePromptStore((s) => s.open)
+  const roomStore = useRoomStore()
+  const currentKBPath = useRoomStore((s) => s.currentKBPath)
 
   const [editMode, setEditMode] = useState(false)
   const [markdown, setMarkdown] = useState('')
@@ -97,17 +102,25 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
   }
 
   // ===== Delete node =====
-  const handleDelete = () => {
+  const handleDelete = useCallback(async () => {
     if (!selectedNodeId) return
-    if (!window.confirm(`确定要删除节点 "${selectedNode?.data.label}" 吗？`)) return
+    const label = selectedNode?.data.label ?? selectedNodeId
+    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${label}" 确认删除` })
+    if (!confirmed?.trim() || confirmed !== label) return
     logAction('节点:删除', 'DetailPanel', {
       nodeId: selectedNodeId,
-      label: selectedNode?.data.label,
+      label,
       path: selectedNode?.data.path,
     })
     graph.deleteChildNode(selectedNodeId)
     collapseRightPanel()
-  }
+  }, [selectedNodeId, selectedNode, prompt, graph, collapseRightPanel])
+
+  // Memoize parsed HTML — must be declared before any early returns (Rules of Hooks)
+  const sanitizedHtml = useMemo(
+    () => DOMPurify.sanitize(marked.parse(markdown) as string),
+    [markdown]
+  )
 
   // ===== Empty state =====
   if (!selectedNodeId || !selectedNode) {
@@ -131,7 +144,12 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
           <span
             key={child.path}
             className={styles.childTag}
-            onClick={() => graph.loadRoom(child.path)}
+            onClick={() => {
+              logAction('房间:钻入', 'DetailPanel', { roomPath: child.path, roomName: child.name, source: 'child-tag' })
+              const idx = child.path.lastIndexOf('/')
+              const kbPath = idx >= 0 ? child.path.slice(0, idx) : currentKBPath || child.path
+              roomStore.enterRoom({ path: child.path, kbPath, name: child.name })
+            }}
             title={`进入 ${child.name}`}
           >
             {child.name}
@@ -141,11 +159,6 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
     )
   }
 
-  // Memoize parsed HTML to avoid re-parsing on every render
-  const sanitizedHtml = useMemo(
-    () => DOMPurify.sanitize(marked.parse(markdown) as string),
-    [markdown]
-  )
 
   return (
     <div className={styles.detailPanel}>

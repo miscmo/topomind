@@ -3,6 +3,7 @@
  */
 import { memo } from 'react'
 import styles from './SearchBar.module.css'
+import { logAction } from '../../core/log-backend'
 
 interface SearchBarProps {
   searchQuery: string
@@ -11,7 +12,9 @@ interface SearchBarProps {
 
 export default memo(function SearchBar({ searchQuery, onSearchChange }: SearchBarProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onSearchChange(e.target.value)
+    const query = e.target.value
+    onSearchChange(query)
+    logAction('搜索:输入', 'SearchBar', { query })
   }
 
   return (
@@ -27,7 +30,10 @@ export default memo(function SearchBar({ searchQuery, onSearchChange }: SearchBa
       {searchQuery && (
         <button
           className={styles.clearBtn}
-          onClick={() => onSearchChange('')}
+          onClick={() => {
+            logAction('搜索:清除', 'SearchBar', { previousQuery: searchQuery })
+            onSearchChange('')
+          }}
           title="清除搜索"
         >
           ×

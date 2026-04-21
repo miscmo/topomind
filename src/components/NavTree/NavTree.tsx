@@ -6,6 +6,7 @@ import { useEffect, useState, memo } from 'react'
 import { useAppStore } from '../../stores/appStore'
 import { useRoomStore } from '../../stores/roomStore'
 import { useStorage } from '../../hooks/useStorage'
+import { usePromptStore } from '../../stores/promptStore'
 import { logAction } from '../../core/log-backend'
 import { logger } from '../../core/logger'
 import type { KBListItem } from '../../types'
@@ -38,8 +39,10 @@ export default memo(function NavTree() {
     showGraph()
   }
 
+  const prompt = usePromptStore((s) => s.open)
+
   const handleNewCard = async () => {
-    const name = window.prompt('请输入知识库名称：')
+    const name = await prompt({ title: '新建知识库', placeholder: '知识库名称' })
     if (!name?.trim()) return
     logAction('知识库:创建', 'NavTree', { kbName: name.trim() })
     try {

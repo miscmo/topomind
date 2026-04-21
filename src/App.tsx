@@ -10,6 +10,7 @@ import SetupPage from './components/SetupPage'
 import HomePage from './components/HomePage'
 import GraphPage from './components/GraphPage'
 import MonitorPage from './components/MonitorPage/MonitorPage'
+import PromptModal from './components/PromptModal/PromptModal'
 
 export default memo(function App() {
   const view = useAppStore((s) => s.view)
@@ -33,10 +34,13 @@ export default memo(function App() {
   }
 
   return (
-    <ReactFlowProvider>
-      {view === 'setup' && <SetupPage />}
-      {view === 'home' && <HomePage />}
-      {view === 'graph' && <GraphPage />}
-    </ReactFlowProvider>
+    <>
+      <PromptModal />
+      <ReactFlowProvider>
+        {view === 'setup' && <SetupPage />}
+        {view === 'home' && <HomePage />}
+        {view === 'graph' && <GraphPage />}
+      </ReactFlowProvider>
+    </>
   )
 })

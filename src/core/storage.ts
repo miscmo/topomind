@@ -51,8 +51,66 @@ function normalizeMeta(metaRaw: unknown): FSBGraphMeta {
 
 // ===== 工具函数 =====
 
-const _saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
-const _blobUrlRegistry = new Map<string, string>()
+// ===== 私有管理类 =====
+
+/**
+ * 管理防抖保存定时器
+ * 替代模块级可变 _saveTimers Map
+ */
+class SaveManager {
+  private timers = new Map<string, ReturnType<typeof setTimeout>>()
+
+  setTimer(dirPath: string, timer: ReturnType<typeof setTimeout>): void {
+    const old = this.timers.get(dirPath)
+    if (old !== undefined) clearTimeout(old)
+    this.timers.set(dirPath, timer)
+  }
+
+  clearTimer(dirPath: string): void {
+    const timer = this.timers.get(dirPath)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      this.timers.delete(dirPath)
+    }
+  }
+
+  clearAll(): void {
+    for (const timer of this.timers.values()) {
+      clearTimeout(timer)
+    }
+    this.timers.clear()
+  }
+}
+
+/**
+ * 管理 Blob URL 注册表
+ * 替代模块级可变 _blobUrlRegistry Map，防止内存泄漏
+ */
+class ImageUrlRegistry {
+  private registry = new Map<string, string>()
+
+  get(path: string): string | undefined {
+    return this.registry.get(path)
+  }
+
+  register(path: string, url: string): void {
+    const existing = this.registry.get(path)
+    if (existing !== undefined) {
+      try { URL.revokeObjectURL(existing) } catch (e) { logger.warn('Store', `revokeImageUrl ${path}`, e) }
+    }
+    this.registry.set(path, url)
+  }
+
+  revokeAll(): void {
+    for (const [path, url] of this.registry) {
+      try { URL.revokeObjectURL(url) } catch (e) { logger.warn('Store', `revokeImageUrl ${path}`, e) }
+    }
+    this.registry.clear()
+  }
+}
+
+const _saveManager = new SaveManager()
+const _imageUrlRegistry = new ImageUrlRegistry()
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 function normalizeName(name: unknown): string {
@@ -74,6 +132,7 @@ export interface DirEntry {
   path: string
   name: string
   isDir: boolean
+  order?: number
 }
 
 export interface DirDialogResult {
@@ -269,16 +328,15 @@ export const Store = {
 
   saveGraphDebounced(dirPath: string, buildMetaFn: () => unknown, onSaved?: () => void): Promise<void> {
     if (!dirPath) return Promise.resolve()
-    const oldTimer = _saveTimers.get(dirPath)
-    if (oldTimer) clearTimeout(oldTimer)
+
+    _saveManager.clearTimer(dirPath)
 
     let resolveRef: (() => void) | null = null
     const promise = new Promise<void>(resolve => { resolveRef = resolve })
     const timer = setTimeout(async () => {
-      _saveTimers.delete(dirPath)
       const meta = buildMetaFn()
       try {
-        await Store.saveLayout(dirPath, normalizeMeta(meta))
+        await Store.saveLayout(dirPath, meta)
         onSaved?.()
         resolveRef?.()
       } catch (e) {
@@ -287,19 +345,15 @@ export const Store = {
       }
     }, 300)
 
-    _saveTimers.set(dirPath, timer)
+    _saveManager.setTimer(dirPath, timer)
     return promise
   },
 
   flushGraphSave(dirPath: string, buildMetaFn: () => unknown, onSaved?: () => void): Promise<void> {
     if (!dirPath) return Promise.resolve()
-    const oldTimer = _saveTimers.get(dirPath)
-    if (oldTimer) {
-      clearTimeout(oldTimer)
-      _saveTimers.delete(dirPath)
-    }
+    _saveManager.clearTimer(dirPath)
     const meta = buildMetaFn()
-    return Store.saveLayout(dirPath, normalizeMeta(meta)).then(() => onSaved?.())
+    return Store.saveLayout(dirPath, meta).then(() => onSaved?.())
   },
 
   // ===== 图片 =====
@@ -318,32 +372,12 @@ export const Store = {
     }
   },
 
-  async saveKBImage(kbPath: string, blob: Blob, filename: string): Promise<SaveImageResult> {
-    if (blob.size > MAX_IMAGE_SIZE) {
-      throw new Error(`图片大小超过限制（最大 5MB），当前 ${(blob.size / 1024 / 1024).toFixed(1)}MB`)
-    }
-    const imgPath = `${kbPath}/images/${filename}`
-    try {
-      const buffer = await blob.arrayBuffer()
-      await FSB.writeBlobFile(imgPath, buffer)
-      return { path: imgPath, markdownRef: `images/${filename}` }
-    } catch (e) {
-      logger.catch('Store.saveKBImage', `保存图片失败: ${imgPath}`, e)
-      throw e
-    }
-  },
-
   async loadImage(imgPath: string): Promise<string> {
     try {
       const buffer = await FSB.readBlobFile(imgPath)
       if (!buffer) return ''
-      const existing = _blobUrlRegistry.get(imgPath)
-      if (existing) {
-        try { URL.revokeObjectURL(existing) } catch (e) { logger.warn('Store', `revokeImageUrl ${imgPath}`, e) }
-        _blobUrlRegistry.delete(imgPath)
-      }
       const url = URL.createObjectURL(new Blob([buffer]))
-      _blobUrlRegistry.set(imgPath, url)
+      _imageUrlRegistry.register(imgPath, url)
       return url
     } catch (e) {
       logger.catch('Store.loadImage', `加载图片失败: ${imgPath}`, e)
@@ -352,10 +386,7 @@ export const Store = {
   },
 
   revokeAllImageUrls(): void {
-    for (const [path, url] of _blobUrlRegistry) {
-      try { URL.revokeObjectURL(url) } catch (e) { logger.warn('Store', `revokeImageUrl ${path}`, e) }
-    }
-    _blobUrlRegistry.clear()
+    _imageUrlRegistry.revokeAll()
   },
 
   // ===== 工具 =====

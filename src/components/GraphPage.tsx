@@ -2,11 +2,12 @@
  * 图谱页面：三栏布局
  * 左侧面板 + 中间 React Flow 图谱 + 右侧详情面板
  */
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState, useCallback } from 'react'
 import { ReactFlow, type Node, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore } from '../stores/roomStore'
+import { usePromptStore } from '../stores/promptStore'
 import { useGraph } from '../hooks/useGraph'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
@@ -38,11 +39,30 @@ const GraphCanvas = memo(function GraphCanvas({
   const showGrid = useAppStore((s) => s.showGrid)
   const graph = useGraphContext()
   const { showCM, showEdgeCM } = useContextMenu()
+  const prompt = usePromptStore((s) => s.open)
   const [zoomLevel, setZoomLevel] = useState(1)
+  const lastLogTimeRef = useRef<number>(0)
+
+  // Debounced viewport change logging (max once per 2 seconds)
+  const logViewportChange = useCallback(
+    (viewport: { zoom: number; x: number; y: number }) => {
+      setZoomLevel(viewport.zoom)
+      const now = Date.now()
+      if (now - lastLogTimeRef.current > 2000) {
+        lastLogTimeRef.current = now
+        logAction('视图:移动', 'GraphPage', {
+          zoom: viewport.zoom,
+          x: Math.round(viewport.x),
+          y: Math.round(viewport.y),
+        })
+      }
+    },
+    []
+  )
 
 const { handleClick: handlePaneClick } = useDoubleClick({
-    onDoubleClick: () => {
-      const name = window.prompt('请输入新节点名称：')
+    onDoubleClick: async () => {
+      const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
       if (!name?.trim()) return
       logAction('节点:创建', 'GraphPage', { nodeName: name.trim(), source: 'double-click-canvas' })
       graph.createChildNode(name.trim())
@@ -77,7 +97,7 @@ const { handleClick: handlePaneClick } = useDoubleClick({
             showEdgeCM(edge.id, e)
           }
         }}
-        onMove={(_, viewport) => setZoomLevel(viewport.zoom)}
+        onMove={(_, viewport) => logViewportChange(viewport)}
         minZoom={0.15}
         maxZoom={3.5}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
@@ -85,6 +105,7 @@ const { handleClick: handlePaneClick } = useDoubleClick({
         nodesDraggable
         nodesConnectable
         elementsSelectable
+        style={{ width: '100%', height: '100%' }}
       >
         {showGrid && (
           <Background
@@ -114,7 +135,12 @@ export default memo(function GraphPage() {
   const searchQuery = useAppStore((s) => s.searchQuery)
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
 
-  const prevRoomPathRef = useRef<string | null>(null)
+  // Log graph page visibility
+  useEffect(() => {
+    if (view === 'graph') {
+      logAction('页面:进入图谱', 'GraphPage', { currentRoomPath: currentRoomPath || '' })
+    }
+  }, [view, currentRoomPath])
 
   const { contextMenu, showEdgeCM, hideCM } = useContextMenu()
 
@@ -123,10 +149,8 @@ export default memo(function GraphPage() {
 
   // Load room when room path changes
   useEffect(() => {
-    if (prevRoomPathRef.current !== currentRoomPath) {
-      prevRoomPathRef.current = currentRoomPath
-      graph.loadRoom(currentRoomPath || '')
-    }
+    logAction('房间:加载触发', 'GraphPage', { currentRoomPath: currentRoomPath || '' })
+    graph.loadRoom(currentRoomPath || '')
   }, [currentRoomPath, graph])
 
   // Highlight search matches
@@ -134,8 +158,18 @@ export default memo(function GraphPage() {
     graph.highlightSearch(searchQuery)
   }, [searchQuery, graph.highlightSearch])
 
-  // Keyboard shortcuts
-  const { deleteSelectedNode, addChildNode } = useNodeActions()
+  // Keyboard shortcuts + context menu handlers — single useNodeActions instance
+  const {
+    deleteSelectedNode,
+    addChildNode,
+    handleNewChild,
+    handleRename,
+    handleDelete,
+    handleEdgeDelete,
+    handleFocus,
+    handleProperties,
+  } = useNodeActions()
+
   useKeyboard({
     onDelete: () => {
       if (!selectedNodeId) return
@@ -145,16 +179,6 @@ export default memo(function GraphPage() {
       addChildNode(parentId)
     },
   })
-
-  // Context menu handlers — extracted to useNodeActions hook
-  const {
-    handleNewChild,
-    handleRename,
-    handleDelete,
-    handleEdgeDelete,
-    handleFocus,
-    handleProperties,
-  } = useNodeActions()
 
   if (view !== 'graph') return null
 

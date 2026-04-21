@@ -107,6 +107,12 @@ export function useGraph() {
         updateSelectedNode(nodes, null)
         nodesRef.current = nodes
         edgesRef.current = edges
+        logAction('房间:加载完成', 'useGraph', {
+          roomPath: dirPath,
+          kbPath,
+          nodeCount: nodes.length,
+          edgeCount: edges.length,
+        })
 
         setState({
           nodes,
@@ -147,6 +153,7 @@ export function useGraph() {
       rebuildMaps(updatedNodes, edgesRef.current)
       nodesRef.current = updatedNodes
       setState((s) => ({ ...s, nodes: updatedNodes }))
+      logAction('布局:应用', 'useGraph', { direction, positionedCount: Object.keys(positions).length })
 
       // Read currentRoomPath at execution time to avoid stale closure
       const dirPath = roomStore.getState().currentRoomPath
@@ -267,8 +274,6 @@ export function useGraph() {
         rebuildMaps(prev.nodes, edges)
         return { ...prev, edges }
       })
-
-      // Read currentRoomPath at execution time to avoid stale closure
       const dirPath = roomStore.getState().currentRoomPath
       if (dirPath) {
         scheduleDebouncedSave(dirPath)

@@ -9,6 +9,7 @@
  */
 import { useCallback } from 'react'
 import { useAppStore } from '../stores/appStore'
+import { logAction } from '../core/log-backend'
 
 export function useContextMenu() {
   const contextMenu = useAppStore((s) => s.contextMenu)
@@ -19,6 +20,7 @@ export function useContextMenu() {
     (nodeId: string, e: MouseEvent | React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
+      logAction('右键菜单:显示', 'useContextMenu', { type: 'node', nodeId, x: e.clientX, y: e.clientY })
       showContextMenu(e.clientX, e.clientY, 'node', nodeId)
     },
     [showContextMenu]
@@ -28,12 +30,14 @@ export function useContextMenu() {
     (edgeId: string, e: MouseEvent | React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
+      logAction('右键菜单:显示', 'useContextMenu', { type: 'edge', edgeId, x: e.clientX, y: e.clientY })
       showContextMenu(e.clientX, e.clientY, 'edge', edgeId)
     },
     [showContextMenu]
   )
 
   const hideCM = useCallback(() => {
+    logAction('右键菜单:关闭', 'useContextMenu', {})
     hideContextMenu()
   }, [hideContextMenu])
 

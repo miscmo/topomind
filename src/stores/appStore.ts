@@ -14,8 +14,6 @@ interface AppState {
   edgeMode: boolean
   // 连线模式源节点 ID
   edgeModeSourceId: string | null
-  // 自动 ID 计数器
-  autoIdCounter: number
   // 是否显示 Git 面板
   showGitPanel: boolean
   // 右侧面板是否折叠
@@ -45,7 +43,6 @@ interface AppState {
   clearSelection: () => void
   enterEdgeMode: (sourceId: string) => void
   exitEdgeMode: () => void
-  autoId: () => string
   toggleGitPanel: () => void
   collapseRightPanel: () => void
   expandRightPanel: () => void
@@ -57,13 +54,12 @@ interface AppState {
   setSearchQuery: (query: string) => void
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>((set) => ({
   // Initial state
   view: 'setup',
   selectedNodeId: null,
   edgeMode: false,
   edgeModeSourceId: null,
-  autoIdCounter: 0,
   showGitPanel: false,
   rightPanelCollapsed: false,
   rightPanelWidth: 320,
@@ -101,12 +97,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     edgeModeSourceId: null,
   }),
 
-  autoId: () => {
-    const id = `auto-${Date.now()}-${get().autoIdCounter}`
-    set((state) => ({ autoIdCounter: state.autoIdCounter + 1 }))
-    return id
-  },
-
   toggleGitPanel: () => set((state) => ({ showGitPanel: !state.showGitPanel })),
 
   collapseRightPanel: () => set({ rightPanelCollapsed: true }),
@@ -119,6 +109,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
 
   hideContextMenu: () => set((state) => ({
+    ...state,
     contextMenu: { ...state.contextMenu, visible: false },
   })),
 
