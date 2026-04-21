@@ -10,6 +10,8 @@ interface UseDoubleClickOptions {
   threshold?: number
   /** Max distance in px between clicks (default: 10) */
   distanceThreshold?: number
+  /** Called for every click immediately (before double-click detection) */
+  onClick?: (e: React.MouseEvent) => void
   /** Called when a double-click is detected */
   onDoubleClick: () => void
   /** Called for each single click (after threshold passes without double-click) */
@@ -25,6 +27,7 @@ interface UseDoubleClickOptions {
 export function useDoubleClick({
   threshold = 400,
   distanceThreshold = 10,
+  onClick,
   onDoubleClick,
   onSingleClick,
 }: UseDoubleClickOptions) {
@@ -32,6 +35,8 @@ export function useDoubleClick({
   const singleClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleClick = (event: React.MouseEvent) => {
+    onClick?.(event)
+
     const now = Date.now()
     const { clientX, clientY } = event
 

@@ -212,3 +212,174 @@ TODO/FIXME 检测  →  零匹配
 - 完成了 10 维度架构评估，确认整体架构健康
 
 代码库在当前迭代范围内已达到高标准。剩余优化项（P2-P3）属于渐进式改进，不影响系统稳定性。
+
+---
+
+## 六、多知识库 Tab 页管理功能实现（本次会话）
+
+> 分支：`feature/react_flow_refactor`
+> 时间：2026-04-21（会话续）
+
+### 6.1 功能概述
+
+本轮实现了 TopoMind 多知识库 Tab 页管理功能，允许用户同时打开多个知识库并通过 Tab 切换，Tab 关闭时检查脏状态。
+
+### 6.2 核心实现
+
+#### 6.2.1 tabStore（`src/stores/tabStore.ts`）
+
+新建的 Zustand store，负责所有 Tab 相关状态：
+
+```typescript
+interface Tab {
+  id: string
+  type: 'home' | 'kb'
+  label: string
+  kbPath?: string
+  isDirty: boolean
+  // Per-tab room navigation state
+  roomHistory?: RoomHistoryItem[]
+  currentRoomPath?: string
+  currentRoomName?: string
+}
+```
+
+核心方法：
+- `initHomeTab()` — 初始化主页 Tab
+- `addTab(tab)` / `removeTab(tabId)` — 添加/删除 Tab
+- `setActiveTab(tabId)` — 切换 Tab
+- `setTabDirty(tabId, isDirty)` — 设置脏状态
+- `saveRoomStateToTab(tabId, roomState)` / `getRoomStateFromTab(tabId)` — 每 Tab 独立保存房间导航状态（房间历史栈、当前房间路径、当前房间名）
+
+#### 6.2.2 TabBar 组件（`src/components/TabBar/TabBar.tsx`）
+
+渲染 Tab 列表，仅当 `tabs.length > 1` 时显示。Tab 切换时恢复对应知识库的房间导航状态（路径和房间历史）。
+
+#### 6.2.3 App.tsx 重构（`src/App.tsx`）
+
+基于 Tab 的路由：
+- `{activeTab?.type === 'home' && <HomePage />}` — 主页 Tab
+- `{activeTab?.type === 'kb' && <GraphPage key={activeTab.id} tabId={activeTab.id} />}` — 知识库 Tab
+
+关键设计：`key={activeTab.id}` 确保切换 Tab 时创建新的 GraphPage 实例，实现真正的多知识库并行。
+
+Tab 关闭逻辑（`handleCloseTab`）：
+1. 查找目标 Tab
+2. 若 `isDirty === true`，调用 `confirmOpen` 弹出确认框
+3. 用户确认后调用 `removeTab` 移除 Tab
+4. 若关闭的是活跃 Tab，自动切换到相邻 Tab
+
+#### 6.2.4 HomePage.openKB 修改
+
+打开知识库时不再直接进入图谱视图，而是通过 `tabStore.addTab()` 添加新 Tab，由 App.tsx 的 Tab 路由负责渲染。
+
+#### 6.2.5 GraphPage 每 Tab 房间状态持久化
+
+```typescript
+// 每次房间状态变化时同步到 tabStore
+useEffect(() => {
+  if (!tabId) return
+  const syncRoomState = () => {
+    const roomState = roomStore.getState()
+    tabStore.getState().saveRoomStateToTab(tabId, {
+      roomHistory: roomState.roomHistory,
+      currentRoomPath: roomState.currentRoomPath,
+      currentRoomName: roomState.currentRoomName,
+    })
+  }
+  syncRoomState()
+  const unsub = roomStore.subscribe(syncRoomState)
+  return unsub
+}, [tabId])
+```
+
+#### 6.2.6 GraphPage Tab 关闭时脏状态确认
+
+TabBar 的 `onCloseTab` 通过 App.tsx 的 `handleCloseTab` 统一处理，GraphPage 无需单独处理关闭确认逻辑。
+
+### 6.3 10 维度架构优化
+
+#### 6.3.1 轮询 → 回调：消除 GraphPage 脏状态同步的性能浪费
+
+**问题**：原 GraphPage 通过 `setInterval(..., 1000)` 每秒轮询 `graph.isModified`，即使没有任何变化也在持续执行。
+
+**解决**：在 `useGraph` 中实现回调注册模式：
+
+```typescript
+// useGraph.ts — 添加回调注册
+const dirtyChangeCallbacksRef = useRef<Set<(isModified: boolean) => void>>(new Set())
+
+const onDirtyChange = useCallback((callback: (isModified: boolean) => void) => {
+  dirtyChangeCallbacksRef.current.add(callback)
+  callback(isModified) // 立即调用一次
+  return () => dirtyChangeCallbacksRef.current.delete(callback)
+}, [isModified])
+
+// graph.isModified 状态变化时触发所有回调
+const scheduleDebouncedSave = useCallback((dirPath: string) => {
+  if (savePendingRef.current) return
+  savePendingRef.current = true
+  setIsModified(true)
+  dirtyChangeCallbacksRef.current.forEach((cb) => cb(true)) // 通知 dirty
+  storage.saveGraphDebounced(
+    dirPath,
+    () => buildMetaFromNodesEdges(...),
+    () => {
+      savePendingRef.current = false
+      setIsModified(false)
+      dirtyChangeCallbacksRef.current.forEach((cb) => cb(false)) // 通知 clean
+    }
+  )
+}, [storage])
+```
+
+**GraphPage.tsx** 中替换为：
+
+```typescript
+useEffect(() => {
+  if (!tabId) return
+  return graph.onDirtyChange((isModified: boolean) => {
+    setTabDirty(tabId, isModified)
+  })
+}, [tabId, graph, setTabDirty])
+```
+
+**效果**：无轮询，仅在状态实际变化时触发回调。消除了每秒 1 次的不必要执行。
+
+### 6.4 本轮验证
+
+```
+npx tsc --noEmit  →  零错误
+```
+
+### 6.5 本轮新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/stores/tabStore.ts` | Tab 状态管理 |
+| `src/components/TabBar/TabBar.tsx` | Tab 栏组件 |
+| `src/components/PromptModal/` | Prompt 弹窗（Promise-based 替代 window.prompt）|
+| `src/components/ConfirmModal/` | Confirm 弹窗（Promise-based 替代 window.confirm）|
+
+### 6.6 本轮修改文件
+
+| 文件 | 修改内容 |
+|------|---------|
+| `src/App.tsx` | 基于 Tab 的路由，Tab 关闭脏状态检查 |
+| `src/components/HomePage.tsx` | openKB 改为添加 Tab |
+| `src/components/GraphPage.tsx` | 每 Tab 房间状态持久化 + 回调式脏状态同步 |
+| `src/hooks/useGraph.ts` | 新增 `onDirtyChange` 回调注册 + 回调触发 |
+| `src/contexts/GraphContext.tsx` | 透传 `onDirtyChange` 方法 |
+| `src/stores/confirmStore.ts` | Promise-based confirm 弹窗 |
+| `docs/SPEC.md` | 补充 Tab 管理功能说明 |
+| `CLAUDE.md` | 补充 tabStore/confirmStore 说明 |
+
+### 6.7 结论
+
+本轮完成了多知识库 Tab 页管理功能的完整实现，涵盖从数据层（tabStore）到 UI 层（TabBar）的全链路。关键设计决策：
+- 每 Tab 独立房间状态，通过 tabStore 持久化
+- `key={activeTab.id}` 保证 GraphPage 实例隔离
+- Tab 关闭统一在 App.tsx 层处理脏状态确认
+- 回调模式替代轮询，消除不必要的性能开销
+
+代码库在 Tab 管理功能上已达到生产可用标准。

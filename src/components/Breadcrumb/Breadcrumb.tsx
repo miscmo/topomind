@@ -2,39 +2,49 @@
  * 面包屑导航组件
  * 显示完整房间路径：全局 > 父房间 > ... > 当前房间
  * 历史房间可点击跳转，当前房间不可点击
+ * 每个 KB tab 有独立的 room 历史状态，从 tabStore 读取。
  */
 import { memo, useEffect, useState } from 'react'
-import { roomStore } from '../../stores/roomStore'
+import { tabStore } from '../../stores/tabStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import type { RoomHistoryItem } from '../../types'
 import { logAction } from '../../core/log-backend'
 import styles from './Breadcrumb.module.css'
 
-export default memo(function Breadcrumb() {
+interface BreadcrumbProps {
+  /** 当前 KB tab 的 id（来自 GraphPage tabId prop） */
+  tabId?: string
+}
+
+export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
   const graph = useGraphContext()
 
   const [history, setHistory] = useState<RoomHistoryItem[]>([])
   const [currentPath, setCurrentPath] = useState<string | null>(null)
   const [currentRoomName, setCurrentRoomName] = useState<string>('')
 
-  // Subscribe to store changes to trigger re-renders
-  useEffect(() => {
-    // Initialize with current state
-    const state = roomStore.getState()
-    setHistory(state.roomHistory)
-    setCurrentPath(state.currentRoomPath)
-    setCurrentRoomName(state.currentRoomName)
+  // Load room state from tabStore for this tab
+  const loadFromTabStore = () => {
+    if (!tabId) return
+    const tabState = tabStore.getState().getRoomStateFromTab(tabId)
+    if (tabState) {
+      setHistory(tabState.roomHistory)
+      setCurrentPath(tabState.currentRoomPath)
+      setCurrentRoomName(tabState.currentRoomName)
+    }
+  }
 
-    // Subscribe to future changes
-    const unsub = roomStore.subscribe((state) => {
-      setHistory(state.roomHistory)
-      setCurrentPath(state.currentRoomPath)
-      setCurrentRoomName(state.currentRoomName)
+  useEffect(() => {
+    loadFromTabStore()
+
+    const unsub = tabStore.subscribe(() => {
+      loadFromTabStore()
     })
     return unsub
-  }, [])
+  }, [tabId])
 
-  if (!currentPath) return null
+  // Hide breadcrumb when at KB top level (no drilling down, no history)
+  if (!currentPath || history.length === 0) return null
 
   return (
     <div id="breadcrumb" className={styles.breadcrumb}>

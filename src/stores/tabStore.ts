@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { RoomHistoryItem } from '../types'
 
 export interface Tab {
   id: string
@@ -6,6 +7,10 @@ export interface Tab {
   label: string
   kbPath?: string
   isDirty: boolean
+  // Per-tab room navigation state
+  roomHistory?: RoomHistoryItem[]
+  currentRoomPath?: string
+  currentRoomName?: string
 }
 
 interface TabState {
@@ -18,6 +23,8 @@ interface TabState {
   setActiveTab: (tabId: string) => void
   setTabDirty: (tabId: string, isDirty: boolean) => void
   getActiveTab: () => Tab | undefined
+  saveRoomStateToTab: (tabId: string, roomState: { roomHistory: RoomHistoryItem[]; currentRoomPath: string | null; currentRoomName: string }) => void
+  getRoomStateFromTab: (tabId: string) => { roomHistory: RoomHistoryItem[]; currentRoomPath: string | null; currentRoomName: string } | null
 }
 
 export const tabStore = create<TabState>()((set, get) => ({
@@ -66,6 +73,31 @@ export const tabStore = create<TabState>()((set, get) => ({
   getActiveTab: () => {
     const { tabs, activeTabId } = get()
     return tabs.find((t) => t.id === activeTabId)
+  },
+
+  saveRoomStateToTab: (tabId, roomState) => {
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              roomHistory: roomState.roomHistory,
+              currentRoomPath: roomState.currentRoomPath ?? undefined,
+              currentRoomName: roomState.currentRoomName,
+            }
+          : t
+      ),
+    }))
+  },
+
+  getRoomStateFromTab: (tabId) => {
+    const tab = get().tabs.find((t) => t.id === tabId)
+    if (!tab) return null
+    return {
+      roomHistory: tab.roomHistory ?? [],
+      currentRoomPath: tab.currentRoomPath ?? null,
+      currentRoomName: tab.currentRoomName ?? '全局',
+    }
   },
 }))
 

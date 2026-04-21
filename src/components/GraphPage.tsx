@@ -6,9 +6,9 @@ import { memo, useEffect, useRef, useState, useCallback } from 'react'
 import { ReactFlow, type Node, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
-import { useRoomStore } from '../stores/roomStore'
+import { useRoomStore, roomStore } from '../stores/roomStore'
+import { useTabStore, tabStore } from '../stores/tabStore'
 import { usePromptStore } from '../stores/promptStore'
-import { useTabStore } from '../stores/tabStore'
 import { useGraph } from '../hooks/useGraph'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
@@ -157,38 +157,56 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
 
   const { contextMenu, showEdgeCM, hideCM } = useContextMenu()
 
-  // Single useGraph instance — passed to GraphContextProvider for sharing
+  // Single useGraph instance — shared via GraphContextProvider below
   const graph = useGraph()
 
-  // Poll dirty state and sync to tabStore every 1s
+  // Callback-based dirty state sync — avoids polling interval
   // Only active when this GraphPage is associated with a tab (tabId is provided)
   useEffect(() => {
     if (!tabId) return
-    const interval = setInterval(() => {
-      if (graph.isModified !== undefined) {
-        setTabDirty(tabId, graph.isModified)
-      }
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [tabId, setTabDirty])
+    return graph.onDirtyChange((isModified: boolean) => {
+      setTabDirty(tabId, isModified)
+    })
+  }, [tabId, graph, setTabDirty])
 
   // Load room when room path changes
-  // Use refs to avoid stale closure and prevent infinite loops from graph object changing
+  // Keep refs in sync to avoid stale closure and infinite loops from graph object changing
   const graphLoadRoomRef = useRef(graph.loadRoom)
   const graphHighlightRef = useRef(graph.highlightSearch)
-  // Keep refs in sync when graph instance changes
   graphLoadRoomRef.current = graph.loadRoom
   graphHighlightRef.current = graph.highlightSearch
 
   useEffect(() => {
-    logAction('房间:加载触发', 'GraphPage', { currentRoomPath: currentRoomPath || '' })
-    graphLoadRoomRef.current(currentRoomPath || '')
+    const loadPath = currentRoomPath || roomStore.getState().currentKBPath || ''
+    logAction('房间:加载触发', 'GraphPage', { loadPath, currentRoomPath: currentRoomPath || '' })
+    graphLoadRoomRef.current(loadPath)
   }, [currentRoomPath])
 
   // Highlight search matches
   useEffect(() => {
     graphHighlightRef.current(searchQuery)
   }, [searchQuery])
+
+  // Sync room state to tabStore when navigating (for per-tab room history)
+  useEffect(() => {
+    if (!tabId) return
+
+    const syncRoomState = () => {
+      const roomState = roomStore.getState()
+      tabStore.getState().saveRoomStateToTab(tabId, {
+        roomHistory: roomState.roomHistory,
+        currentRoomPath: roomState.currentRoomPath,
+        currentRoomName: roomState.currentRoomName,
+      })
+    }
+
+    // Initial sync
+    syncRoomState()
+
+    // Subscribe to roomStore changes and sync
+    const unsub = roomStore.subscribe(syncRoomState)
+    return unsub
+  }, [tabId])
 
   // Keyboard shortcuts + context menu handlers — single useNodeActions instance
   const {
@@ -224,7 +242,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
             <div id="header" className={styles.header}>TopoMind</div>
 
             {/* 面包屑 */}
-            <Breadcrumb />
+            <Breadcrumb tabId={tabId} />
 
             {/* 搜索 */}
             <SearchBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />

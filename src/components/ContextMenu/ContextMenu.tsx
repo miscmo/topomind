@@ -76,7 +76,11 @@ export default memo(function ContextMenu({
       }
     }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('contextmenu', handler) // right-click outside also closes
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('contextmenu', handler)
+    }
   }, [visible, onClose])
 
   // Close on scroll or resize

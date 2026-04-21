@@ -17,6 +17,7 @@ export interface GraphContextValue {
   edges: KnowledgeEdge[]
   loading: boolean
   selectedNode: KnowledgeNode | null
+  isModified: boolean
 
   // Room lifecycle
   loadRoom: (dirPath: string) => Promise<void>
@@ -53,6 +54,7 @@ const emptyContext: GraphContextValue = {
   edges: [],
   loading: false,
   selectedNode: null,
+  isModified: false,
   loadRoom: async () => {},
   navigateBack: async () => {},
   navigateToRoom: async () => {},
@@ -81,6 +83,7 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     edges: graph.edges,
     loading: graph.loading,
     selectedNode: graph.selectedNode,
+    isModified: graph.isModified,
     loadRoom: graph.loadRoom,
     navigateBack: graph.navigateBack,
     navigateToRoom: graph.navigateToRoom,

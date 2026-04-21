@@ -9,7 +9,7 @@
  *
  * Node/edge building is delegated to ./graphBuilder.ts
  */
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef, useState, useEffect } from 'react'
 import type { Node, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
@@ -45,6 +45,9 @@ export function useGraph() {
     loading: false,
     selectedNode: null,
   })
+
+  // Dirty state: true when changes are pending save, false when saved
+  const [isModified, setIsModified] = useState(false)
 
   // Node internal maps for O(1) access
   const nodesMapRef = useRef<Map<string, KnowledgeNode>>(new Map())
@@ -168,6 +171,8 @@ export function useGraph() {
     (dirPath: string) => {
       if (savePendingRef.current) return
       savePendingRef.current = true
+      setIsModified(true)
+      dirtyChangeCallbacksRef.current.forEach((cb) => cb(true))
 
       storage.saveGraphDebounced(
         dirPath,
@@ -177,11 +182,27 @@ export function useGraph() {
         ),
         () => {
           savePendingRef.current = false
+          setIsModified(false)
+          dirtyChangeCallbacksRef.current.forEach((cb) => cb(false))
         }
       )
     },
     [storage]
   )
+
+  // Callback refs for external consumers to observe dirty state changes
+  // Avoids polling intervals in consuming components
+  const dirtyChangeCallbacksRef = useRef<Set<(isModified: boolean) => void>>(new Set())
+
+  // Register a callback to be called when dirty state changes
+  const onDirtyChange = useCallback((callback: (isModified: boolean) => void) => {
+    dirtyChangeCallbacksRef.current.add(callback)
+    // Call immediately with current state
+    callback(isModified)
+    return () => {
+      dirtyChangeCallbacksRef.current.delete(callback)
+    }
+  }, [isModified])
 
   // ===== React Flow event handlers =====
 
@@ -347,7 +368,7 @@ export function useGraph() {
         const newPath = await storage.createCard(targetPath, name)
         logAction('节点:创建', 'useGraph', { nodeName: name, parentPath: targetPath, newPath: newPath ?? undefined })
         // Reload room to get updated children
-        await loadRoom(dirPath || '')
+        await loadRoom(dirPath || roomStore.getState().currentKBPath || '')
         return newPath
       } catch (e) {
         logger.catch('useGraph', 'createChildNode', e)
@@ -364,7 +385,7 @@ export function useGraph() {
       try {
         await storage.deleteCard(nodeId)
         logAction('节点:删除', 'useGraph', { nodeId, label: nodeLabel, path: nodeId })
-        await loadRoom(dirPath || '')
+        await loadRoom(dirPath || roomStore.getState().currentKBPath || '')
         // Read fresh from store to avoid stale closure
         if (useAppStore.getState().selectedNodeId === nodeId) {
           clearSelection()
@@ -450,7 +471,7 @@ export function useGraph() {
     logAction('房间:返回', 'useGraph', { fromRoom: dirPath })
     goBack()
     // Load the new room immediately after store update
-    const newPath = roomStore.getState().currentRoomPath || ''
+    const newPath = roomStore.getState().currentRoomPath || roomStore.getState().currentKBPath || ''
     await loadRoom(newPath)
   }, [storage, goBack, clearSelection, loadRoom])
 
@@ -476,7 +497,7 @@ export function useGraph() {
       clearSelection()
       logAction('房间:导航', 'useGraph', { targetIndex: index })
       roomStore.getState().navigateToHistoryIndex(index)
-      const newPath = roomStore.getState().currentRoomPath || ''
+      const newPath = roomStore.getState().currentRoomPath || roomStore.getState().currentKBPath || ''
       await loadRoom(newPath)
     },
     [storage, clearSelection, loadRoom]
@@ -504,6 +525,10 @@ export function useGraph() {
     edges: state.edges,
     loading: state.loading,
     selectedNode: state.selectedNode,
+    isModified,
+
+    // Dirty state callbacks — consumer registers to avoid polling
+    onDirtyChange,
 
     // Room lifecycle
     loadRoom,

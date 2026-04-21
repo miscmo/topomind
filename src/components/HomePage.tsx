@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
+import { useTabStore, tabStore } from '../stores/tabStore'
 import { useStorage } from '../hooks/useStorage'
 import { logAction } from '../core/log-backend'
 import { logger } from '../core/logger'
@@ -21,6 +22,8 @@ interface KBItem {
 
 export default function HomePage() {
   const showGraph = useAppStore((s) => s.showGraph)
+  const setActiveTab = useTabStore((s) => s.setActiveTab)
+  const tabs = useTabStore((s) => s.tabs)
   const storage = useStorage()
   const [loading, setLoading] = useState(false)
   const [kbs, setKbs] = useState<KBItem[]>([])
@@ -112,8 +115,16 @@ export default function HomePage() {
   }
 
   function openKB(kb: KBItem) {
-    roomStore.getState().enterRoom({ path: kb.path, kbPath: kb.path, name: kb.name })
-    showGraph()
+    const tabId = `kb:${kb.path}`
+    const existing = tabs.find((t) => t.id === tabId)
+    if (existing) {
+      setActiveTab(tabId)
+    } else {
+      tabStore.getState().addTab({ id: tabId, type: 'kb', label: kb.name, kbPath: kb.path, isDirty: false })
+      setActiveTab(tabId)
+      roomStore.getState().enterRoom({ path: kb.path, kbPath: kb.path, name: kb.name })
+      showGraph()
+    }
     logAction('知识库:打开', 'HomePage', { kbPath: kb.path, kbName: kb.name, nodeCount: kb.nodeCount })
   }
 

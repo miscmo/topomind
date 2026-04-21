@@ -8,8 +8,9 @@
 
 ```bash
 pnpm install
-pnpm dev      # 开发模式（带 DevTools）
-pnpm start    # 生产模式
+pnpm dev      # 开发模式（Vite）
+pnpm build    # 构建渲染进程
+pnpm preview  # 预览构建产物
 ```
 
 打包为安装程序：
@@ -23,59 +24,67 @@ pnpm run build:linux  # Linux (.AppImage)
 ## 项目结构
 
 ```
-├── index.html                 # 主入口
-├── package.json               # 项目依赖 + 构建脚本
-├── vite.config.js             # Vite 配置
-├── tsconfig.json              # TypeScript 配置
-├── electron/                  # Electron 专属代码
-│   ├── main.js                # 主进程（窗口、菜单、IPC）
-│   └── file-service.js        # 文件系统服务
+├── index.html
+├── package.json
+├── vite.config.js
+├── tsconfig.json
+├── electron/                  # Electron 主进程与底层服务
+│   ├── main.js
+│   ├── preload.js
+│   ├── file-service.js
+│   ├── git-service.js
+│   ├── git-auth.js
+│   └── log-service.js
 ├── src/
-│   ├── main.tsx               # React 应用入口
-│   ├── App.tsx                # 根组件（路由 + ReactFlowProvider）
-│   ├── types/                 # TypeScript 类型定义
-│   │   └── index.ts           # barrel 导出
-│   ├── stores/                # Zustand 状态管理
-│   │   ├── appStore.ts        # 应用全局状态（view、选中节点等）
-│   │   ├── roomStore.ts       # 房间导航状态（当前房间、历史栈）
-│   │   ├── gitStore.ts        # Git 状态
-│   │   ├── promptStore.ts     # Prompt 弹窗状态
-│   │   └── monitorStore.ts    # 监控页面状态
-│   ├── hooks/                 # React 自定义 Hooks
-│   │   ├── useGraph.ts        # 图谱核心逻辑（节点/边 CRUD、房间加载）
-│   │   ├── useLayout.ts       # ELK.js 分层布局
-│   │   ├── useStorage.ts      # 存储抽象层（Store 模块封装）
-│   │   ├── useGit.ts          # Git 操作封装
-│   │   ├── useKeyboard.ts     # 快捷键处理
-│   │   ├── useContextMenu.ts   # 右键菜单逻辑
-│   │   └── useDoubleClick.ts  # 双击检测
-│   ├── nodes/                 # React Flow 自定义节点
-│   │   └── KnowledgeCard.tsx  # 知识卡片节点
-│   ├── components/            # React 组件
-│   │   ├── HomePage.tsx       # 首页（知识库列表）
-│   │   ├── GraphPage.tsx      # 图谱页面（三栏布局）
-│   │   ├── MonitorPage/       # 日志监控页面
-│   │   ├── DetailPanel/       # 右侧详情面板
-│   │   ├── NavTree/           # 左侧导航树
-│   │   ├── Toolbar/           # 图谱工具栏
-│   │   ├── SearchBar/         # 搜索框
-│   │   ├── Breadcrumb/        # 面包屑导航
-│   │   ├── ContextMenu/       # 右键菜单
-│   │   ├── GitPanel/          # Git 面板
-│   │   └── PromptModal/       # Prompt 弹窗（替代 window.prompt）
-│   ├── contexts/              # React Context
-│   │   └── GraphContext.tsx   # 图谱单例（React Flow 节点/边 + 操作方法）
-│   ├── core/                  # 核心模块
-│   │   ├── fs-backend.ts      # IPC 文件系统调用（Electron 桥接）
-│   │   ├── git-backend.ts     # Git 操作封装 + 内存缓存
-│   │   ├── storage.ts         # 统一存储适配器
-│   │   ├── log-backend.ts     # 日志后端
-│   │   └── logger.ts          # 日志工具
-│   └── styles/                # 全局样式
-│       └── base.css           # CSS 变量定义
-├── docs/                      # 文档
-├── SPEC.md                    # 详细技术规范
-└── README.md                  # 本文件
+│   ├── App.tsx                # 应用入口与视图切换
+│   ├── main.tsx
+│   ├── components/
+│   │   ├── GraphPage.tsx      # 图谱页外层，挂载 GraphContextProvider
+│   │   ├── HomePage.tsx
+│   │   ├── SetupPage.tsx
+│   │   ├── MonitorPage/
+│   │   ├── DetailPanel/
+│   │   ├── NavTree/
+│   │   ├── Toolbar/
+│   │   ├── SearchBar/
+│   │   ├── Breadcrumb/
+│   │   ├── ContextMenu/
+│   │   ├── GitPanel/
+│   │   └── PromptModal/
+│   ├── contexts/
+│   │   └── GraphContext.tsx   # 共享单例 graph 实例，避免多次 useGraph()
+│   ├── hooks/
+│   │   ├── useGraph.ts
+│   │   ├── useGraph/graphBuilder.ts
+│   │   ├── useNodeActions.ts
+│   │   ├── useLayout.ts
+│   │   ├── useStorage.ts
+│   │   ├── useGit.ts
+│   │   ├── useKeyboard.ts
+│   │   ├── useContextMenu.ts
+│   │   └── useDoubleClick.ts
+│   ├── stores/
+│   │   ├── appStore.ts
+│   │   ├── roomStore.ts
+│   │   ├── promptStore.ts
+│   │   ├── monitorStore.ts
+│   │   └── gitStore.ts
+│   ├── core/
+│   │   ├── fs-backend.ts
+│   │   ├── storage.ts
+│   │   ├── git-backend.ts
+│   │   ├── log-backend.ts
+│   │   └── logger.ts
+│   ├── nodes/
+│   │   └── KnowledgeCard.tsx
+│   ├── types/
+│   └── styles/
+├── docs/
+│   ├── logging-system-design.md
+│   └── optimization-report-2026-04-21.md
+├── CLAUDE.md
+├── SPEC.md
+└── README.md
 ```
 
 ## 技术栈
@@ -148,32 +157,102 @@ pnpm run build:linux  # Linux (.AppImage)
 与 Electron 主进程通信的通道（通过 `window.electronAPI.invoke`）：
 
 ### 文件系统
-- `fs:init-work-dir` - 初始化工作目录
-- `fs:set-work-dir` - 设置工作目录
-- `fs:select-work-dir-candidate` - 选择工作目录候选
-- `fs:create-work-dir` - 创建工作目录
-- `fs:list-children` - 列出子项
-- `fs:mk-dir` - 创建目录
-- `fs:rm-dir` - 删除目录
-- `fs:read-graph-meta` - 读取图谱元数据
-- `fs:write-graph-meta` - 写入图谱元数据
-- `fs:read-file` - 读取文件
-- `fs:write-file` - 写入文件
-- `fs:write-blob-file` - 写入二进制文件
-- `fs:read-blob-file` - 读取二进制文件
+- `fs:init`
+- `fs:listChildren`
+- `fs:mkDir`
+- `fs:rmDir`
+- `fs:saveKBOrder`
+- `fs:getKBCover`
+- `fs:saveKBCover`
+- `fs:renameKB`
+- `fs:readGraphMeta`
+- `fs:writeGraphMeta`
+- `fs:getDir`
+- `fs:updateCardMeta`
+- `fs:readFile`
+- `fs:writeFile`
+- `fs:deleteFile`
+- `fs:writeBlobFile`
+- `fs:readBlobFile`
+- `fs:clearAll`
+- `fs:openInFinder`
+- `fs:countChildren`
+- `fs:ensureCardDir`
+- `fs:getRootDir`
+- `fs:getLastOpenedKB`
+- `fs:setLastOpenedKB`
+- `fs:setWorkDir`
+- `fs:selectWorkDirCandidate`
+- `fs:createWorkDir`
+- `fs:importKB`
 
 ### Git
-- `git:check-available` - 检查 Git 是否可用
-- `git:init` - 初始化仓库
-- `git:get-status` - 获取状态
-- `git:commit` - 提交
-- `git:push` - 推送
-- `git:pull` - 拉取
+- `git:checkAvailable`
+- `git:init`
+- `git:status`
+- `git:statusBatch`
+- `git:isDirty`
+- `git:commit`
+- `git:log`
+- `git:diff`
+- `git:diffFiles`
+- `git:commitDiffFiles`
+- `git:commitFileDiff`
+- `git:fetch`
+- `git:push`
+- `git:pull`
+- `git:remote:get`
+- `git:remote:set`
+- `git:conflict:list`
+- `git:conflict:show`
+- `git:conflict:resolve`
+- `git:conflict:complete`
+- `git:auth:setToken`
+- `git:auth:getSSHKey`
+- `git:auth:setAuthType`
+- `git:auth:getAuthType`
 
-### 应用
-- `app:select-directory` - 选择目录
-- `app:open-in-finder` - 在文件管理器中打开
-- `app:get-last-opened-kb` - 获取上次打开的知识库
+### 应用 / 其他
+- `app:openExternal`
+- `log:write`
+- `log:getBuffer`
+- `log:query`
+- `log:setLevel`
+- `log:clear`
+- `log:getAvailableDates`
+- `log:getLogDir`
+
+## 当前代码审查结论
+
+通读当前代码后，项目整体结构已经比较清晰，Electron 主进程、React 渲染层、存储层和 Git/日志能力边界也较明确；但仍有一些值得优先关注的问题：
+
+1. **文档与实现多处不一致**
+   - README / SPEC 中曾使用了旧版 IPC 名称、旧脚本命令、旧版本号。
+   - 这会直接误导后续开发者或 AI 代理。
+
+2. **GraphPage 责任仍然偏重**
+   - `GraphPage.tsx` 同时处理页面骨架、图谱初始化、搜索联动、快捷键、上下文菜单、日志埋点。
+   - 目前虽已通过 `GraphContext` 和 `useNodeActions` 做过拆分，但后续仍建议继续把页面级编排和图谱交互进一步解耦。
+
+3. **`useGraph` 负担较大**
+   - 该 hook 同时负责 room 加载、状态维护、节点边 CRUD、持久化、防抖保存、导航和搜索高亮。
+   - 后续维护时容易出现 stale closure、状态同步、保存时机相关 bug。
+
+4. **渲染层对存储模型耦合较深**
+   - 例如节点 ID、路径、目录层级、README.md 和 `_graph.json` 的映射关系已经深入多个组件和 hook。
+   - 这保证了效率，但会提高未来做存储演进或批量迁移时的成本。
+
+5. **部分实现细节存在潜在一致性风险**
+   - 例如 `roomStore` 的历史栈语义、`goBack` / `navigateToHistoryIndex` / `enterRoom` 之间的关系较绕。
+   - 这类逻辑在复杂导航路径下容易回归，需要测试覆盖。
+
+6. **预加载层仍有 `console.error` / `console.warn`**
+   - 主体渲染层已经尽量切到 `logger`，但 preload 里仍保留原生命令行输出。
+   - 如果希望日志体系彻底统一，后续可考虑收口。
+
+7. **项目缺少自动化质量说明**
+   - 仓库中有 `scripts/run-tests.mjs` 与 `playwright` 依赖，但 README 未明确测试入口与当前测试覆盖范围。
+   - 建议后续补充“如何验证”的稳定流程。
 
 ## License
 
