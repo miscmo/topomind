@@ -1,8 +1,8 @@
 # TopoMind 规范文档
 
 **项目**：TopoMind — 可漫游拓扑知识大脑
-**版本**：v5.2.0
-**最后更新**：2026-04-20
+**版本**：v5.2.1
+**最后更新**：2026-04-21
 **状态**：已实现
 
 ---
@@ -55,12 +55,15 @@ topomind_cc/
 │   └── preload.js               # 预加载（contextBridge 暴露 IPC 白名单）
 └── src/
     ├── main.tsx                  # React 应用入口
-    ├── App.tsx                   # 根组件（ReactFlowProvider + 视图路由）
+    ├── App.tsx                   # 根组件（ReactFlowProvider + Tab 路由：主页 + 多 KB Tab）
     ├── types/
     │   └── index.ts             # 全局 TypeScript 类型定义
     ├── stores/
     │   ├── appStore.ts          # 应用状态（view、selectedNodeId、edgeMode 等）
     │   ├── roomStore.ts         # 房间状态（currentKBPath、currentRoomPath、roomHistory）
+    │   ├── tabStore.ts          # 多知识库 Tab 管理（tabs、活跃 Tab、脏状态、每 Tab 房间状态）
+    │   ├── confirmStore.ts      # Confirm 弹窗（Promise-based 替代 window.confirm）
+    │   ├── promptStore.ts       # Prompt 弹窗（Promise-based 替代 window.prompt）
     │   ├── gitStore.ts          # Git 状态（token、authType、SSHKey）
     │   └── monitorStore.ts      # 日志/性能监控窗口状态
     ├── core/                     # 核心工具层（Electron IPC 桥接）
@@ -86,6 +89,15 @@ topomind_cc/
     │   ├── HomePage.module.css
     │   ├── GraphPage.tsx        # 图谱视图（画布 + 覆盖层 UI）
     │   ├── GraphPage.module.css
+    │   ├── TabBar/              # 多知识库 Tab 栏
+    │   │   ├── TabBar.tsx
+    │   │   └── TabBar.module.css
+    │   ├── PromptModal/         # Prompt 弹窗（Promise-based 替代 window.prompt）
+    │   │   ├── PromptModal.tsx
+    │   │   └── PromptModal.module.css
+    │   ├── ConfirmModal/        # Confirm 弹窗（Promise-based 替代 window.confirm）
+    │   │   ├── ConfirmModal.tsx
+    │   │   └── ConfirmModal.module.css
     │   ├── DetailPanel/         # 右侧详情面板
     │   │   ├── DetailPanel.tsx
     │   │   ├── MarkdownEditor.tsx
@@ -784,7 +796,58 @@ interface LogEntry {
 | `goToRoom(item)` | action | 跳转到历史栈中的指定房间 |
 | `setCurrentKB(path)` | action | 设置当前 KB |
 
-### 8.3 gitStore
+### 8.3 tabStore（多知识库 Tab 管理 + 每 Tab 房间状态持久化）
+
+| 状态/动作 | 类型 | 说明 |
+|----------|------|------|
+| `tabs` | `Tab[]` | Tab 列表（home + KB tabs） |
+| `activeTabId` | `string` | 当前活跃 Tab ID |
+| `initHomeTab()` | action | 初始化主页 Tab |
+| `addTab(tab)` | action | 添加新 Tab |
+| `removeTab(tabId)` | action | 移除 Tab（排除 home） |
+| `setActiveTab(tabId)` | action | 切换活跃 Tab |
+| `setTabDirty(tabId, isDirty)` | action | 设置脏状态 |
+| `getActiveTab()` | action | 获取当前活跃 Tab |
+| `saveRoomStateToTab(tabId, roomState)` | action | 保存房间导航状态到 Tab |
+| `getRoomStateFromTab(tabId)` | action | 从 Tab 恢复房间导航状态 |
+
+**Tab 接口**：
+```typescript
+interface Tab {
+  id: string                    // 'home' 或 'kb:{kbPath}'
+  type: 'home' | 'kb'          // Tab 类型
+  label: string                // 显示标签
+  kbPath?: string             // 知识库路径（type='kb' 时）
+  isDirty: boolean           // 是否有未保存的更改
+  roomHistory?: RoomHistoryItem[]  // 房间导航历史
+  currentRoomPath?: string        // 当前房间路径
+  currentRoomName?: string      // 当前房间名称
+}
+```
+
+**每 Tab 房间状态持久化**：切换 Tab 时自动保存当前房间导航状态（roomHistory、currentRoomPath、currentRoomName）到 tabStore，切换回来时恢复，实现独立的房间导航历史。
+
+### 8.4 confirmStore（Promise-based confirm 替代 window.confirm）
+
+| 状态/动作 | 类型 | 说明 |
+|----------|------|------|
+| `visible` | `boolean` | 弹窗是否可见 |
+| `title` | `string` | 弹窗标题 |
+| `message` | `string` | 弹窗消息 |
+| `resolve` | `((value: boolean) => void) \| null` | Promise 解析器 |
+| `open({ title, message })` | action | 打开确认弹窗（返回 Promise） |
+| `confirm()` | action | 确认（resolve true） |
+| `cancel()` | action | 取消（resolve false） |
+
+```typescript
+// 使用示例
+const confirmed = await confirmOpen({
+  title: '关闭知识库',
+  message: '有未保存的更改，是否确认关闭？'
+})
+```
+
+### 8.5 gitStore
 
 | 状态/动作 | 类型 | 说明 |
 |----------|------|------|
@@ -792,7 +855,7 @@ interface LogEntry {
 | `authType` | `'token' \| 'ssh'` | 认证类型 |
 | `SSHKey` | `string` | SSH 公钥 |
 
-### 8.5 GraphContext
+### 8.6 GraphContext
 
 `GraphContext` 是图谱状态的单例共享机制，避免多个 `useGraph()` 调用导致状态碎片化。
 
@@ -821,17 +884,22 @@ interface LogEntry {
 
 **重要**：所有需要访问图谱状态的组件必须使用 `useGraphContext()` 而非直接调用 `useGraph()`。`GraphContextProvider` 在 `GraphPage` 根级别挂载，单次调用 `useGraph()` 实例后通过 Context 共享。
 
-### 8.4 ReactFlowProvider 放置原则
+### 8.7 ReactFlowProvider 放置原则
 
 ⚠️ **重要**：`ReactFlowProvider` 必须位于 `App.tsx` 根级别，包裹所有视图组件。
 
 ```tsx
-// App.tsx
+// App.tsx - Tab-based routing
 return (
   <ReactFlowProvider>
-    {view === 'setup' && <SetupPage />}
-    {view === 'home' && <HomePage />}
-    {view === 'graph' && <GraphPage />}
+    {isSetup && <SetupPage />}
+    {!isSetup && (
+      <>
+        <TabBar onCloseTab={handleCloseTab} />
+        {activeTab?.type === 'home' && <HomePage />}
+        {activeTab?.type === 'kb' && <GraphPage key={activeTab.id} tabId={activeTab.id} />}
+      </>
+    )}
   </ReactFlowProvider>
 )
 ```
@@ -913,6 +981,18 @@ return (
 | `app:openExternal` | 打开外部链接 |
 | `app:menu-action` | 应用菜单动作（接收端） |
 
+### 日志
+
+| 通道 | 说明 |
+|------|------|
+| `log:write` | 写入日志 |
+| `log:getBuffer` | 读取内存日志缓冲 |
+| `log:query` | 查询历史日志 |
+| `log:setLevel` | 设置日志等级 |
+| `log:clear` | 清空日志缓冲 |
+| `log:getAvailableDates` | 获取可查询日志日期 |
+| `log:getLogDir` | 获取日志目录 |
+
 ---
 
 ## 10. 注释规范
@@ -957,15 +1037,46 @@ return (
 
 ---
 
-## 11. 变更日志
+## 11. 已知问题与改进建议
+
+### 11.1 当前代码问题总结
+
+1. **文档滞后于实现**
+   - 历史文档中存在旧版 IPC 名称、旧命令、旧版本号，说明项目缺少一套“功能变更后同步更新文档”的流程。
+
+2. **页面与业务逻辑边界仍可继续拆分**
+   - `GraphPage.tsx` 仍承担页面编排、日志埋点、搜索联动、右键菜单接线、键盘交互等多类职责。
+   - 建议继续拆分为页面骨架层与图谱交互控制层。
+
+3. **`useGraph.ts` 单体职责偏多**
+   - 当前集成了房间加载、布局、CRUD、导航、持久化和搜索高亮。
+   - 此类“大 hook” 可维护性一般，后续修改容易引入回归。
+
+4. **导航状态语义复杂**
+   - `roomStore` 中 `enterRoom`、`goBack`、`goToRoom`、`navigateToHistoryIndex` 对历史栈的处理存在较强心智负担。
+   - 建议补充单元测试或将状态机显式化。
+
+5. **日志体系尚未完全收口**
+   - 渲染层大多使用 `logger` / `logAction`，但 preload 仍直接输出 `console.warn/error`。
+   - 长期看会造成日志出口不统一。
+
+6. **对底层存储结构耦合较深**
+   - 节点路径即 ID、目录结构即业务结构、`README.md` / `_graph.json` 与 UI 状态强绑定。
+   - 优点是简单直接，缺点是迁移成本高、调试时对存储细节要求高。
+
+7. **自动化验证入口不清晰**
+   - 仓库有 `playwright` 与 `scripts/run-tests.mjs`，但主文档未明确测试策略、执行方式与覆盖边界。
+
+## 12. 变更日志
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
 | v5.0.0 | 2026-04-17 | **架构大重构**：Vite + Vue 3 + Pinia 构建系统替代纯 HTML/CDN；纯文件系统存储（移除 IndexedDB），使用 `_graph.json` 和 `_config.json`；目录即结构（KB=目录，Card=子目录）；项目结构重组为 `composables/` + `core/` + `components/` + `stores/`；Electron 主进程合并为单文件；内置 Git 版本控制；移除 vendor/、docs/ 等旧目录 |
 | v5.1.0 | 2026-04-19 | **Vue 3 → React 18 + React Flow + Zustand 迁移**：渲染进程从 Vue 3 迁移到 React 18 + TypeScript + React Flow；状态管理从 Pinia 迁移到 Zustand（`appStore` 使用 `create`，`roomStore` 使用 vanilla `createStore` 支持外部 `getState()`）；样式从全局 CSS 迁移到 CSS Modules；`ReactFlowProvider` 移动到 App.tsx 根级别；移除 `vendor/` 和 `src/css/` 遗留文件；修复多处 stale closure 和 async/await bug |
-| v5.2.0 | 2026-04-20 | **BUG 修复与文档更新**：修复 `GraphPage.tsx` 中 `selectNode` stale closure bug（解构赋值导致每次渲染创建新对象 → 改为直接订阅）；修复 `useGraph.ts` 中 `updateSelectedNode` stale closure bug（`selectedNodeId` 被 Promise 回调捕获 → 改用 `useAppStore.getState()`）；修复 `GraphPage.tsx` 删除确认中 `label` 可能为 undefined 的 bug；更新右键菜单文档描述以匹配实际实现（节点菜单：新建子节点/聚焦节点/重命名/属性/删除节点；边菜单：删除连线）；`package.json` 版本号同步更新为 v5.2.0 |
 | v5.1.1 | 2026-04-20 | **BUG 修复与架构优化**：修复双击画布创建节点（实现 `onPaneClick` 双击检测）、Tab 添加子节点（stale closure 修复）、面包屑显示完整历史链、Git 面板 `statusClass` TS 错误；添加 Git 面板组件（底部弹出式，状态徽章 + Fetch/Pull/Push/Commit）；新增 `GraphContext` 单例共享；补充 SPEC.md Git 面板 UI 规范和项目结构 |
+| v5.2.0 | 2026-04-20 | **BUG 修复与文档更新**：修复 `GraphPage.tsx` 中 `selectNode` stale closure bug（解构赋值导致每次渲染创建新对象 → 改为直接订阅）；修复 `useGraph.ts` 中 `updateSelectedNode` stale closure bug（`selectedNodeId` 被 Promise 回调捕获 → 改用 `useAppStore.getState()`）；修复 `GraphPage.tsx` 删除确认中 `label` 可能为 undefined 的 bug；更新右键菜单文档描述以匹配实际实现（节点菜单：新建子节点/聚焦节点/重命名/属性/删除节点；边菜单：删除连线）；`package.json` 版本号同步更新为 v5.2.0 |
 | v5.2.1 | 2026-04-20 | **连线删除 BUG 修复与死代码清理**：修复 `onEdgesChange` 在删除边时未调用 `scheduleDebouncedSave` 导致 `_graph.json` 未更新的 bug；修复 `handleEdgeDelete` 使用 `graph.deleteEdge()` 而非 React Flow `deleteElements()` 导致边在画布上视觉残留的 bug；移除 `GraphContext` 中已废弃的 `deleteEdge` 方法；移除 `useGraph.ts` 中的 `deleteEdge` 死代码函数 |
+| v5.2.1-docs | 2026-04-21 | **文档同步更新**：统一 README、CLAUDE、SPEC 中的脚本命令、项目结构、IPC 白名单、日志能力和当前版本信息；新增“已知问题与改进建议”章节，反映当前代码审查结论 |
 | v5.3.0 | 2026-04-20 | **性能优化与同步机制增强**：修复 `DetailPanel.tsx` 中 `marked.parse()` 在每次渲染时重复调用的性能问题（改用 `useMemo` 缓存解析结果）；新增 `appStore.triggerKBRefresh()` 方法和 `kbRefreshTrigger` 状态字段，实现 NavTree KB 列表与应用层操作的跨组件同步；`HomePage` 和 `NavTree` 在创建 KB 后触发全局刷新；`SPEC.md` 核心文件引用全面从 `.js` 更新为 `.ts` |
 
 ---
