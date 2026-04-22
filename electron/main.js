@@ -23,6 +23,26 @@ import LogService from './log-service.js';
 // 从 app.getAppPath() 推导 dist-electron/ 路径（兼容 dev 和 production）
 const DIST_ELECTRON_DIR = nodePath.join(app.getAppPath(), 'dist-electron');
 
+// E2E 测试：尝试从工作目录根目录的 .env 文件加载环境变量。
+// global-setup.ts 会将 TOPOMIND_E2E_WORKDIR 写入项目根目录的 .env。
+// 注意：此代码在 import { fileService } 之后执行，
+// 如果 vite-plugin-electron 已经通过 spawn options 传递了 env var，
+// 则此处的 .env 加载会跳过（因为 process.env[key] 已存在）。
+const E2E_ENV_FILE = nodePath.join(process.cwd(), '.env');
+if (nodeFs.existsSync(E2E_ENV_FILE)) {
+  for (const line of nodeFs.readFileSync(E2E_ENV_FILE, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx < 0) continue;
+    const key = trimmed.slice(0, eqIdx);
+    const val = trimmed.slice(eqIdx + 1);
+    if (key && !Object.prototype.hasOwnProperty.call(process.env, key)) {
+      process.env[key] = val;
+    }
+  }
+}
+
 // ============================================================
 // IPC HANDLERS
 // ============================================================
@@ -145,6 +165,20 @@ function registerIPC() {
   });
 
   // ----- App handlers -----
+  ipcMain.handle('app:navigateHome', function() {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('app:navigate-home');
+    }
+  });
+  ipcMain.handle('app:getE2EState', function() {
+    return {
+      rootDir: fileService.getRootDir(),
+      valid: !!fileService.getRootDir(),
+      workDirConfigured: !!process.env.TOPOMIND_E2E_WORKDIR,
+      windowReady: !!(win && !win.isDestroyed()),
+      ipcRegistered: true,
+    };
+  });
   ipcMain.handle('app:openExternal', function(e, url) {
     if (typeof url !== 'string') return false;
     var target = url.trim();

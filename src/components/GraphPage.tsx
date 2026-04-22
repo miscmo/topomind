@@ -3,7 +3,7 @@
  * 左侧面板 + 中间 React Flow 图谱 + 右侧详情面板
  */
 import { memo, useEffect, useRef, useState, useCallback } from 'react'
-import { ReactFlow, type Node, type NodeTypes } from '@xyflow/react'
+import { ReactFlow, type Node, type NodeTypes, type ReactFlowInstance } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
@@ -70,7 +70,7 @@ const { handleClick: handlePaneClick } = useDoubleClick({
       const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
       if (!name?.trim()) return
       logAction('节点:创建', 'GraphPage', { nodeName: name.trim(), source: 'double-click-canvas' })
-      graph.createChildNode(name.trim())
+      await graph.createChildNode(name.trim())
     },
     onSingleClick: () => {
       useAppStore.getState().clearSelection()
@@ -106,6 +106,7 @@ const { handleClick: handlePaneClick } = useDoubleClick({
           }
         }}
         onMove={(_, viewport) => logViewportChange(viewport)}
+        onInit={(instance: ReactFlowInstance) => { (window as any).__reactFlow = instance }}
         minZoom={0.15}
         maxZoom={3.5}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
@@ -140,25 +141,50 @@ interface GraphPageProps {
 
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const view = useAppStore((s) => s.view)
-  const selectedNodeId = useAppStore((s) => s.selectedNodeId)
+  const appSelectedNodeId = useAppStore((s) => s.selectedNodeId)
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
   const currentRoomPath = useRoomStore((s) => s.currentRoomPath)
-  const searchQuery = useAppStore((s) => s.searchQuery)
-  const setSearchQuery = useAppStore((s) => s.setSearchQuery)
+  const currentKBPath = useRoomStore((s) => s.currentKBPath)
+  const currentRoomName = useRoomStore((s) => s.currentRoomName)
+  const roomHistory = useRoomStore((s) => s.roomHistory)
+  const appSearchQuery = useAppStore((s) => s.searchQuery)
+  const setAppSearchQuery = useAppStore((s) => s.setSearchQuery)
   const setTabDirty = useTabStore((s) => s.setTabDirty)
+  const getTabById = useTabStore((s) => s.getTabById)
+  const setTabSearchQuery = useTabStore((s) => s.setTabSearchQuery)
+  const setTabSelectedNode = useTabStore((s) => s.setTabSelectedNode)
+  const restoreRoomStateToTab = useTabStore((s) => s.restoreRoomStateToTab)
+  const activeTabId = useTabStore((s) => s.activeTabId)
+
+  const currentTab = tabId ? getTabById(tabId) : undefined
+  const tabRoomHistory = currentTab?.roomHistory ?? []
+  const tabRoomPath = currentTab?.currentRoomPath ?? null
+  const tabRoomName = currentTab?.currentRoomName ?? ''
+  const tabLabel = currentTab?.label ?? ''
+  const tabKbPath = currentTab?.kbPath ?? null
+  const tabSearchQuery = currentTab?.searchQuery ?? ''
+  const tabSelectedNodeId = currentTab?.selectedNodeId ?? null
+  const effectiveRoomPath = tabRoomPath || currentRoomPath
+  const effectiveKbPath = tabKbPath || currentKBPath
+  const effectiveSearchQuery = tabId ? tabSearchQuery : appSearchQuery
+  const effectiveSelectedNodeId = tabId ? tabSelectedNodeId : appSelectedNodeId
 
   // Log graph page visibility
   useEffect(() => {
     if (view === 'graph') {
-      logAction('页面:进入图谱', 'GraphPage', { currentRoomPath: currentRoomPath || '' })
+      logAction('页面:进入图谱', 'GraphPage', {
+        currentRoomPath: effectiveRoomPath || '',
+        currentKBPath: effectiveKbPath || '',
+        tabId: tabId || '',
+      })
     }
-  }, [view, currentRoomPath])
+  }, [view, effectiveRoomPath, effectiveKbPath, tabId])
 
   const { contextMenu, showEdgeCM, hideCM } = useContextMenu()
 
   // Single useGraph instance — shared via GraphContextProvider below
-  const graph = useGraph()
+  const graph = useGraph(tabId)
 
   // Callback-based dirty state sync — avoids polling interval
   // Only active when this GraphPage is associated with a tab (tabId is provided)
@@ -176,37 +202,100 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   graphLoadRoomRef.current = graph.loadRoom
   graphHighlightRef.current = graph.highlightSearch
 
+  // Restore tab-scoped room snapshot into roomStore when this GraphPage becomes active.
+  // Phase 2: roomStore is still used as a compatibility layer, but tabStore becomes the preferred source.
   useEffect(() => {
-    const loadPath = currentRoomPath || roomStore.getState().currentKBPath || ''
-    logAction('房间:加载触发', 'GraphPage', { loadPath, currentRoomPath: currentRoomPath || '' })
+    if (!tabId || activeTabId !== tabId || !effectiveKbPath) return
+
+    roomStore.getState().restoreRoomState({
+      kbPath: effectiveKbPath,
+      roomHistory: tabRoomHistory,
+      currentRoomPath: effectiveRoomPath ?? effectiveKbPath,
+      currentRoomName: tabRoomName || tabLabel || '全局',
+    })
+  }, [tabId, activeTabId, effectiveKbPath, effectiveRoomPath, tabRoomHistory, tabRoomName, tabLabel])
+
+  useEffect(() => {
+    const loadPath = effectiveRoomPath || effectiveKbPath || ''
+    if (!loadPath) return
+    logAction('房间:加载触发', 'GraphPage', {
+      loadPath,
+      currentRoomPath: effectiveRoomPath || '',
+      currentKBPath: effectiveKbPath || '',
+      tabId: tabId || '',
+    })
     graphLoadRoomRef.current(loadPath)
-  }, [currentRoomPath])
+  }, [effectiveRoomPath, effectiveKbPath, tabId])
+
+  const handleSearchChange = useCallback((q: string) => {
+    if (tabId) {
+      setTabSearchQuery(tabId, q)
+    }
+    // Compatibility: keep global app store in sync during migration period
+    setAppSearchQuery(q)
+  }, [tabId, setTabSearchQuery, setAppSearchQuery])
 
   // Highlight search matches
   useEffect(() => {
-    graphHighlightRef.current(searchQuery)
-  }, [searchQuery])
+    graphHighlightRef.current(effectiveSearchQuery)
+  }, [effectiveSearchQuery])
 
-  // Sync room state to tabStore when navigating (for per-tab room history)
+  // Sync room state to tabStore when key room fields change (active tab only)
   useEffect(() => {
-    if (!tabId) return
+    if (!tabId || activeTabId !== tabId) return
 
-    const syncRoomState = () => {
-      const roomState = roomStore.getState()
-      tabStore.getState().saveRoomStateToTab(tabId, {
-        roomHistory: roomState.roomHistory,
-        currentRoomPath: roomState.currentRoomPath,
-        currentRoomName: roomState.currentRoomName,
+    const roomHistoryChanged = JSON.stringify(tabRoomHistory) !== JSON.stringify(roomHistory)
+    const roomPathChanged = tabRoomPath !== currentRoomPath
+    const roomNameChanged = tabRoomName !== currentRoomName
+    const kbPathChanged = tabKbPath !== currentKBPath
+
+    if (!roomHistoryChanged && !roomPathChanged && !roomNameChanged && !kbPathChanged) return
+
+    restoreRoomStateToTab(tabId, {
+      kbPath: currentKBPath,
+      roomHistory,
+      currentRoomPath,
+      currentRoomName,
+    })
+  }, [
+    tabId,
+    activeTabId,
+    restoreRoomStateToTab,
+    tabRoomHistory,
+    tabRoomPath,
+    tabRoomName,
+    tabKbPath,
+    roomHistory,
+    currentRoomPath,
+    currentRoomName,
+    currentKBPath,
+  ])
+
+  // Keep app-level selected node in sync with active tab selected node (compatibility bridge)
+  useEffect(() => {
+    if (!tabId || activeTabId !== tabId) return
+    if (appSelectedNodeId === effectiveSelectedNodeId) return
+    if (effectiveSelectedNodeId) {
+      useAppStore.getState().selectNode(effectiveSelectedNodeId)
+    } else {
+      useAppStore.getState().clearSelection()
+    }
+  }, [tabId, activeTabId, appSelectedNodeId, effectiveSelectedNodeId])
+
+  // Save current graph before app quit
+  useEffect(() => {
+    const handler = () => {
+      graph.flushCurrentRoomSave().catch((e) => {
+        logAction('保存:退出前失败', 'GraphPage', {
+          tabId: tabId || '',
+          error: e instanceof Error ? e.message : String(e),
+        })
       })
     }
 
-    // Initial sync
-    syncRoomState()
-
-    // Subscribe to roomStore changes and sync
-    const unsub = roomStore.subscribe(syncRoomState)
-    return unsub
-  }, [tabId])
+    window.electronAPI?.on('save:before-quit', handler)
+    return () => window.electronAPI?.off('save:before-quit', handler)
+  }, [graph, tabId])
 
   // Keyboard shortcuts + context menu handlers — single useNodeActions instance
   const {
@@ -222,8 +311,11 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
 
   useKeyboard({
     onDelete: () => {
-      if (!selectedNodeId) return
-      deleteSelectedNode(selectedNodeId)
+      const selectedNodeIdForDelete = tabId
+        ? tabStore.getState().getTabSelectedNode(tabId)
+        : useAppStore.getState().selectedNodeId
+      if (!selectedNodeIdForDelete) return
+      deleteSelectedNode(selectedNodeIdForDelete)
     },
     onAddChild: (parentId: string) => {
       addChildNode(parentId)
@@ -245,9 +337,9 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
             <Breadcrumb tabId={tabId} />
 
             {/* 搜索 */}
-            <SearchBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+            <SearchBar searchQuery={effectiveSearchQuery} onSearchChange={handleSearchChange} />
 
-            <GraphCanvas searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+            <GraphCanvas searchQuery={effectiveSearchQuery} onSearchChange={handleSearchChange} />
 
             {/* Git 面板 */}
             <GitPanel />
@@ -256,7 +348,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
           {/* 右侧面板 */}
           {!rightPanelCollapsed && (
             <div className={styles.rightPanel} style={{ width: rightPanelWidth }}>
-              <DetailPanel selectedNodeId={selectedNodeId} />
+              <DetailPanel selectedNodeId={effectiveSelectedNodeId} />
             </div>
           )}
         </div>

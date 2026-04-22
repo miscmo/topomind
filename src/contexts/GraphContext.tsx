@@ -17,6 +17,12 @@ export interface GraphContextValue {
   edges: KnowledgeEdge[]
   loading: boolean
   selectedNode: KnowledgeNode | null
+  // Refs for stable closure access to current state
+  nodesRef: React.MutableRefObject<KnowledgeNode[]>
+  edgesRef: React.MutableRefObject<KnowledgeEdge[]>
+  // O(1) lookup maps — consistently updated by rebuildMaps() on every state change
+  nodesMapRef: React.MutableRefObject<Map<string, KnowledgeNode>>
+  edgesMapRef: React.MutableRefObject<Map<string, KnowledgeEdge>>
   isModified: boolean
 
   // Room lifecycle
@@ -46,6 +52,9 @@ export interface GraphContextValue {
 
   // Search
   highlightSearch: (query: string) => void
+
+  // Persistence
+  flushCurrentRoomSave: () => Promise<void>
 }
 
 // Empty context value for when used outside provider
@@ -55,6 +64,10 @@ const emptyContext: GraphContextValue = {
   loading: false,
   selectedNode: null,
   isModified: false,
+  nodesRef: { current: [] },
+  edgesRef: { current: [] },
+  nodesMapRef: { current: new Map() },
+  edgesMapRef: { current: new Map() },
   loadRoom: async () => {},
   navigateBack: async () => {},
   navigateToRoom: async () => {},
@@ -71,6 +84,7 @@ const emptyContext: GraphContextValue = {
   updateEdgeRelation: () => {},
   layoutNodes: async () => {},
   highlightSearch: () => {},
+  flushCurrentRoomSave: async () => {},
 }
 
 // Create context with null default — must be provided by GraphPage
@@ -84,6 +98,10 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     loading: graph.loading,
     selectedNode: graph.selectedNode,
     isModified: graph.isModified,
+    nodesRef: graph.nodesRef,
+    edgesRef: graph.edgesRef,
+    nodesMapRef: graph.nodesMapRef,
+    edgesMapRef: graph.edgesMapRef,
     loadRoom: graph.loadRoom,
     navigateBack: graph.navigateBack,
     navigateToRoom: graph.navigateToRoom,
@@ -100,6 +118,7 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     updateEdgeRelation: graph.updateEdgeRelation as (edgeId: string, relation: string, weight: string) => void,
     layoutNodes: graph.layoutNodes,
     highlightSearch: graph.highlightSearch,
+    flushCurrentRoomSave: graph.flushCurrentRoomSave,
   }), [graph])
 
   return (

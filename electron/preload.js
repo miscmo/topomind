@@ -34,6 +34,8 @@ const ALLOWED_CHANNELS = new Set([
   'git:auth:setAuthType', 'git:auth:getAuthType',
   // app
   'app:openExternal',
+  'app:navigateHome',
+  'app:getE2EState',
   // save
   'save:layout',
   // log
@@ -47,6 +49,7 @@ const ALLOWED_SEND_SYNC_CHANNELS = new Set([
 
 const ALLOWED_RECEIVE_CHANNELS = new Set([
   'app:menu-action',
+  'app:navigate-home',
   'save:before-quit',
   'log:entry',
 ]);

@@ -27,6 +27,7 @@ interface RoomState {
   setLoading: (loading: boolean) => void
   setCurrentKB: (kbPath: string) => void
   navigateToHistoryIndex: (index: number) => void
+  restoreRoomState: (roomState: { kbPath: string; roomHistory: RoomHistoryItem[]; currentRoomPath: string | null; currentRoomName: string }) => void
 
   // Computed-like helpers
   isInRoom: () => boolean
@@ -157,6 +158,13 @@ export const roomStore = create<RoomState>((set, get) => ({
       })
     }
   },
+
+  restoreRoomState: ({ kbPath, roomHistory, currentRoomPath, currentRoomName }) => set({
+    currentKBPath: kbPath,
+    currentRoomPath,
+    currentRoomName,
+    roomHistory,
+  }),
 
   clearRoom: () => set({
     currentKBPath: null,

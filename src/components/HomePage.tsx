@@ -23,6 +23,8 @@ interface KBItem {
 export default function HomePage() {
   const showGraph = useAppStore((s) => s.showGraph)
   const setActiveTab = useTabStore((s) => s.setActiveTab)
+  const addKBTab = useTabStore((s) => s.addKBTab)
+  const restoreRoomStateToTab = useTabStore((s) => s.restoreRoomStateToTab)
   const tabs = useTabStore((s) => s.tabs)
   const storage = useStorage()
   const [loading, setLoading] = useState(false)
@@ -117,14 +119,36 @@ export default function HomePage() {
   function openKB(kb: KBItem) {
     const tabId = `kb:${kb.path}`
     const existing = tabs.find((t) => t.id === tabId)
+
     if (existing) {
+      const roomState = tabStore.getState().getRoomStateFromTab(tabId)
+      const restoredRoomState = {
+        kbPath: kb.path,
+        roomHistory: roomState?.roomHistory ?? [],
+        currentRoomPath: roomState?.currentRoomPath ?? kb.path,
+        currentRoomName: roomState?.currentRoomName || kb.name,
+      }
+      restoreRoomStateToTab(tabId, restoredRoomState)
+      roomStore.getState().restoreRoomState(restoredRoomState)
       setActiveTab(tabId)
+      showGraph()
     } else {
-      tabStore.getState().addTab({ id: tabId, type: 'kb', label: kb.name, kbPath: kb.path, isDirty: false })
+      addKBTab({
+        id: tabId,
+        label: kb.name,
+        kbPath: kb.path,
+        isDirty: false,
+      })
+      roomStore.getState().restoreRoomState({
+        kbPath: kb.path,
+        roomHistory: [],
+        currentRoomPath: kb.path,
+        currentRoomName: kb.name,
+      })
       setActiveTab(tabId)
-      roomStore.getState().enterRoom({ path: kb.path, kbPath: kb.path, name: kb.name })
       showGraph()
     }
+
     logAction('知识库:打开', 'HomePage', { kbPath: kb.path, kbName: kb.name, nodeCount: kb.nodeCount })
   }
 

@@ -426,9 +426,9 @@ export const Store = {
     }
   },
 
-  getRootDir() {
+  async getRootDir(): Promise<string | null> {
     try {
-      return FSB.getRootDir()
+      return await FSB.getRootDir()
     } catch (e) {
       logger.catch('Store.getRootDir', '获取根目录失败', e)
       throw e

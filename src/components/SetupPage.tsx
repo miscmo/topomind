@@ -87,7 +87,7 @@ export default memo(function SetupPage() {
   }
 
   return (
-    <div className={styles.page}>
+    <div id="setup-page" className={styles.page}>
       <div className={styles.card}>
         <div className={styles.brand}>
           <div className={styles.logo}>🧠</div>

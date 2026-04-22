@@ -35,6 +35,8 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
   const [newName, setNewName] = useState('')
   const [childTags, setChildTags] = useState<Array<{ path: string; name: string }>>([])
   const renameInputRef = useRef<HTMLInputElement>(null)
+  const markdownRequestSeqRef = useRef(0)
+  const childTagsRequestSeqRef = useRef(0)
 
   const selectedNode = graph.selectedNode
   const nodePath = selectedNode?.data.path ?? null
@@ -47,26 +49,37 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
     setRenameMode(false)
     setNewName('')
 
+    const requestSeq = ++markdownRequestSeqRef.current
     if (!selectedNodeId) return
 
     const path = selectedNode?.data.path ?? selectedNodeId
     storage.readMarkdown(path).then((content: string) => {
+      if (markdownRequestSeqRef.current !== requestSeq) return
       setMarkdown(content)
+    }).catch(() => {
+      if (markdownRequestSeqRef.current !== requestSeq) return
+      setMarkdown('')
     })
   }, [selectedNodeId, selectedNode?.data.path, storage])
 
   // Load child concept tags when node has children
   useEffect(() => {
+    const requestSeq = ++childTagsRequestSeqRef.current
+
     if (!hasChildren || !nodePath) {
       setChildTags([])
       return
     }
 
     storage.listCards(nodePath).then((children: Array<{ path: string; name: string; isDir: boolean }>) => {
+      if (childTagsRequestSeqRef.current !== requestSeq) return
       const dirs = (children || []).filter((c: { isDir: boolean }) => c.isDir)
       setChildTags(dirs)
+    }).catch(() => {
+      if (childTagsRequestSeqRef.current !== requestSeq) return
+      setChildTags([])
     })
-  }, [hasChildren, nodePath])
+  }, [hasChildren, nodePath, storage])
 
   // Focus rename input when entering rename mode
   useEffect(() => {
@@ -224,7 +237,14 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
               onClick={() => {
                 // Reload original content
                 const path = selectedNode?.data.path ?? selectedNodeId
-                storage.readMarkdown(path).then((content: string) => setMarkdown(content))
+                const requestSeq = ++markdownRequestSeqRef.current
+                storage.readMarkdown(path).then((content: string) => {
+                  if (markdownRequestSeqRef.current !== requestSeq) return
+                  setMarkdown(content)
+                }).catch(() => {
+                  if (markdownRequestSeqRef.current !== requestSeq) return
+                  setMarkdown('')
+                })
                 setEditMode(false)
               }}
             >

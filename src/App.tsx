@@ -16,6 +16,7 @@ import { useTabStore, tabStore } from './stores/tabStore'
 import { useAppStore } from './stores/appStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
+import { useStorage } from './hooks/useStorage'
 
 export default memo(function App() {
   const [isMonitorWindow, setIsMonitorWindow] = useState(
@@ -28,11 +29,44 @@ export default memo(function App() {
   const removeTab = useTabStore((s) => s.removeTab)
   const confirmOpen = useConfirmStore((s) => s.open)
   const view = useAppStore((s) => s.view)
+  const showHome = useAppStore((s) => s.showHome)
+  const storage = useStorage()
 
   // Init home tab on mount
   useEffect(() => {
     initHomeTab()
   }, [initHomeTab])
+
+  // Listen for main-process navigation trigger (E2E test harness)
+  useEffect(() => {
+    function onNavigateHome() {
+      showHome()
+    }
+    window.electronAPI?.on('app:navigate-home', onNavigateHome)
+    return () => window.electronAPI?.off('app:navigate-home', onNavigateHome)
+  }, [])
+
+  // Auto-navigate to home if work directory is already initialized (e.g., via E2E env var)
+  useEffect(() => {
+    let cancelled = false
+    async function checkAndNavigate() {
+      try {
+        const rootDir = await storage.getRootDir()
+        if (rootDir && !cancelled) {
+          const initResult = await storage.init()
+          const valid = typeof initResult === 'object' && (initResult as { valid?: boolean }).valid
+          if (!cancelled && valid) {
+            showHome()
+            logAction('App:auto-navigate-home', 'App', { rootDir })
+          }
+        }
+      } catch {
+        // Ignore — stay on setup page
+      }
+    }
+    checkAndNavigate()
+    return () => { cancelled = true }
+  }, [initHomeTab, showHome, storage])
 
   useEffect(() => {
     const handleHashChange = () => {

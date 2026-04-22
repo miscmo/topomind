@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron/simple'
 import { resolve } from 'path'
+import fs from 'fs'
 
 export default defineConfig({
   plugins: [
@@ -17,6 +18,20 @@ export default defineConfig({
               },
             },
           },
+        },
+        processAsync: true,
+        onstart({ startup }) {
+          let e2eWorkdir = process.env.TOPOMIND_E2E_WORKDIR || ''
+          try {
+            if (fs.existsSync('.env')) {
+              const content = fs.readFileSync('.env', 'utf8')
+              const match = content.split('\n').find(l => l.startsWith('TOPOMIND_E2E_WORKDIR='))
+              if (match) e2eWorkdir = match.split('=').slice(1).join('=')
+            }
+          } catch (_) {}
+          startup([], {
+            env: { ...process.env, TOPOMIND_E2E_WORKDIR: e2eWorkdir },
+          })
         },
       },
       preload: {

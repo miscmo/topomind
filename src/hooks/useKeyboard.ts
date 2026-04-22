@@ -51,8 +51,8 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
           const selectedNodeIdForDelete = useAppStore.getState().selectedNodeId
           if (selectedNodeIdForDelete) {
             logAction('快捷键:删除节点', 'useKeyboard', { nodeId: selectedNodeIdForDelete })
+            onDelete?.()
           }
-          onDelete?.()
           break
 
         case 'Tab':

@@ -9,6 +9,27 @@ import { dialog } from 'electron';
 let _fs_rootDir = '';
 let _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
 
+// Allow E2E tests to pre-initialize the work directory via environment variable.
+// This avoids needing window.electronAPI in Playwright globalSetup.
+if (process.env.TOPOMIND_E2E_WORKDIR) {
+  const e2eDir = process.env.TOPOMIND_E2E_WORKDIR;
+  _fs_rootDir = e2eDir;
+  try {
+    if (!nodeFs.existsSync(e2eDir)) nodeFs.mkdirSync(e2eDir, { recursive: true });
+    const cfgPath = nodePath.join(e2eDir, '_config.json');
+    if (nodeFs.existsSync(cfgPath)) {
+      var loaded = JSON.parse(nodeFs.readFileSync(cfgPath, 'utf-8')) || {};
+      _fs_config = {
+        lastOpenedKB: loaded.lastOpenedKB || null,
+        orders: (loaded.orders && typeof loaded.orders === 'object') ? loaded.orders : {},
+        covers: (loaded.covers && typeof loaded.covers === 'object') ? loaded.covers : {},
+      };
+    }
+  } catch (e) {
+    _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+  }
+}
+
 function _fs_appConfigPath(dir) {
   return nodePath.join(dir || _fs_rootDir, '_config.json');
 }

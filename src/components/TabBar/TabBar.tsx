@@ -3,9 +3,8 @@
  * Tab 栏组件 — 渲染所有 Tab，仅 tabs.length > 1 时显示
  */
 import { memo } from 'react'
-import { useTabStore, tabStore, type Tab } from '../../stores/tabStore'
+import { useTabStore, type Tab } from '../../stores/tabStore'
 import { useAppStore } from '../../stores/appStore'
-import { useRoomStore } from '../../stores/roomStore'
 import styles from './TabBar.module.css'
 
 interface TabBarProps {
@@ -51,33 +50,29 @@ export default memo(function TabBar({ onCloseTab }: TabBarProps) {
   const activeTabId = useTabStore((s) => s.activeTabId)
   const setActiveTab = useTabStore((s) => s.setActiveTab)
   const getRoomStateFromTab = useTabStore((s) => s.getRoomStateFromTab)
+  const restoreRoomStateToTab = useTabStore((s) => s.restoreRoomStateToTab)
   const showHome = useAppStore((s) => s.showHome)
-  const enterRoom = useRoomStore((s) => s.enterRoom)
 
-  // 处理 Tab 切换：恢复房间导航状态
+  // 处理 Tab 切换：纯恢复已保存状态，不重放 enterRoom 导航动作
   const handleTabClick = (tab: Tab) => {
-    // 如果点击已活跃的 Tab，跳过
     if (tab.id === activeTabId) return
 
     if (tab.id === 'home') {
       showHome()
-    } else if (tab.type === 'kb' && tab.kbPath) {
-      // 恢复该 Tab 保存的房间状态
-      const roomState = getRoomStateFromTab(tab.id)
-      if (roomState?.currentRoomPath) {
-        enterRoom({
-          path: roomState.currentRoomPath,
-          kbPath: tab.kbPath,
-          name: roomState.currentRoomName || tab.label,
-        })
-      } else {
-        enterRoom({
-          path: tab.kbPath,
-          kbPath: tab.kbPath,
-          name: tab.label,
-        })
-      }
+      setActiveTab(tab.id)
+      return
     }
+
+    if (tab.type === 'kb' && tab.kbPath) {
+      const roomState = getRoomStateFromTab(tab.id)
+      restoreRoomStateToTab(tab.id, {
+        kbPath: tab.kbPath,
+        roomHistory: roomState?.roomHistory ?? [],
+        currentRoomPath: roomState?.currentRoomPath ?? tab.kbPath,
+        currentRoomName: roomState?.currentRoomName || tab.label,
+      })
+    }
+
     setActiveTab(tab.id)
   }
 

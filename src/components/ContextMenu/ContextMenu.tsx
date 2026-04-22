@@ -14,7 +14,7 @@ import styles from './ContextMenu.module.css'
 
 interface MenuItem {
   label: string
-  action: () => void
+  action: () => Promise<void>
   danger?: boolean
   disabled?: boolean
   separator?: never
@@ -103,8 +103,8 @@ export default memo(function ContextMenu({
     ? [
         {
           label: '删除连线',
-          action: () => {
-            onEdgeDelete(targetId)
+          action: async () => {
+            await onEdgeDelete(targetId)
             onClose()
           },
           danger: true,
@@ -113,8 +113,8 @@ export default memo(function ContextMenu({
     : [
         {
           label: '新建子节点',
-          action: () => {
-            onNewChild(targetId)
+          action: async () => {
+            await onNewChild(targetId)
             onClose()
           },
         },
@@ -127,8 +127,8 @@ export default memo(function ContextMenu({
         },
         {
           label: '重命名',
-          action: () => {
-            onRename(targetId)
+          action: async () => {
+            await onRename(targetId)
             onClose()
           },
         },
@@ -142,8 +142,8 @@ export default memo(function ContextMenu({
         { separator: true },
         {
           label: '删除节点',
-          action: () => {
-            onDelete(targetId)
+          action: async () => {
+            await onDelete(targetId)
             onClose()
           },
           danger: true,
@@ -158,6 +158,7 @@ export default memo(function ContextMenu({
   return (
     <div
       ref={menuRef}
+      data-testid="context-menu"
       className={styles.menu}
       style={{ left: adjustedX, top: adjustedY }}
     >
@@ -167,8 +168,9 @@ export default memo(function ContextMenu({
         ) : (
           <button
             key={i}
+            data-testid={`context-menu-${item.label}`}
             className={`${styles.item} ${item.danger ? styles.danger : ''}`}
-            onClick={item.action}
+            onClick={async () => { await item.action() }}
             disabled={item.disabled}
           >
             {item.label}
