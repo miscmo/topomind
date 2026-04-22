@@ -1,0 +1,1180 @@
+﻿
+Running 44 tests using 1 worker
+
+  x   1 [chromium] › e2e\custom-modal.spec.ts:17:3 › 自定义弹窗（非原生） › 12.1 双击画布弹出 PromptModal（非原生 prompt） (27.3s)
+  x   2 [chromium] › e2e\custom-modal.spec.ts:42:3 › 自定义弹窗（非原生） › 12.2 PromptModal 取消后无节点创建 (26.1s)
+  x   3 [chromium] › e2e\custom-modal.spec.ts:67:3 › 自定义弹窗（非原生） › 12.3 PromptModal 支持 Enter 确认 (26.1s)
+  x   4 [chromium] › e2e\custom-modal.spec.ts:93:3 › 自定义弹窗（非原生） › 13.1 Tab 关闭脏状态时弹出自定义 ConfirmModal（非原生 confirm） (26.2s)
+  x   5 [chromium] › e2e\custom-modal.spec.ts:127:3 › 自定义弹窗（非原生） › 13.2 ConfirmModal 取消后 Tab 不关闭 (26.1s)
+  x   6 [chromium] › e2e\custom-modal.spec.ts:167:3 › 自定义弹窗（非原生） › 13.3 删除节点时弹出自定义 ConfirmModal (26.1s)
+  x   7 [chromium] › e2e\detail-panel.spec.ts:23:3 › 详细面板 › 2.1 点击节点显示详细面板 (26.0s)
+  x   8 [chromium] › e2e\detail-panel.spec.ts:41:3 › 详细面板 › 2.2 编辑节点详细信息 (26.1s)
+  x   9 [chromium] › e2e\detail-panel.spec.ts:61:3 › 详细面板 › 2.3 关闭详细面板 (26.1s)
+  x  10 [chromium] › e2e\detail-panel.spec.ts:80:3 › 详细面板 › 2.4 详细面板显示节点属性 (26.2s)
+  -  11 [chromium] › e2e\diagnostic.spec.ts:4:6 › diagnostic: capture console logs
+  x  12 [chromium] › e2e\dirty-state.spec.ts:26:3 › 脏状态指示 › 6.1 修改后 Tab 显示脏标记 (26.2s)
+  x  13 [chromium] › e2e\dirty-state.spec.ts:46:3 › 脏状态指示 › 6.2 保存后脏标记消失（300ms debounce） (26.5s)
+  x  14 [chromium] › e2e\dirty-state.spec.ts:64:3 › 脏状态指示 › 6.3 回调模式 vs 轮询 — 验证没有 setInterval 轮询脏状态 (26.1s)
+  x  15 [chromium] › e2e\edge-ops.spec.ts:23:3 › 边（连线）操作 › 8.1 右键删除连线 (26.3s)
+  x  16 [chromium] › e2e\edge-ops.spec.ts:65:3 › 边（连线）操作 › 8.2 连线模式下取消 (26.0s)
+  x  17 [chromium] › e2e\git-panel.spec.ts:27:3 › Git 面板 › 15.1 工具栏 Git 按钮打开 Git 面板 (26.1s)
+  x  18 [chromium] › e2e\git-panel.spec.ts:44:3 › Git 面板 › 15.2 Git 面板显示状态信息 (26.1s)
+  x  19 [chromium] › e2e\git-panel.spec.ts:65:3 › Git 面板 › 15.3 再次点击 Git 按钮关闭面板 (26.0s)
+  x  20 [chromium] › e2e\git-panel.spec.ts:83:3 › Git 面板 › 15.4 关闭 Git 面板后工具栏按钮不再高亮 (26.7s)
+  x  21 [chromium] › e2e\kb-management.spec.ts:14:3 › 知识库管理 › 1.1 创建知识库 (26.1s)
+  x  22 [chromium] › e2e\kb-management.spec.ts:31:3 › 知识库管理 › 1.2 删除知识库 (26.1s)
+  x  23 [chromium] › e2e\kb-management.spec.ts:57:3 › 知识库管理 › 1.3 重命名知识库 (26.1s)
+  x  24 [chromium] › e2e\kb-management.spec.ts:87:3 › 知识库管理 › 1.4 知识库排序 (26.0s)
+  x  25 [chromium] › e2e\kb-management.spec.ts:103:3 › 知识库管理 › 1.5 导入知识库 (26.1s)
+  x  26 [chromium] › e2e\layout.spec.ts:26:3 › 布局计算 › 11.1 新建节点后触发 ELK 布局 (26.1s)
+  x  27 [chromium] › e2e\layout.spec.ts:54:3 › 布局计算 › 11.2 节点位置在保存后被记住 (26.1s)
+  x  28 [chromium] › e2e\layout.spec.ts:81:3 › 布局计算 › 11.3 右键新建子节点触发布局 (26.1s)
+  x  29 [chromium] › e2e\multi-tab.spec.ts:14:3 › 多知识库 Tab 管理 › 4.1 创建并打开第一个知识库，TabBar 出现 (26.2s)
+  x  30 [chromium] › e2e\multi-tab.spec.ts:37:3 › 多知识库 Tab 管理 › 4.2 打开第二个知识库，TabBar 显示 3 个 Tab (26.0s)
+  x  31 [chromium] › e2e\multi-tab.spec.ts:64:3 › 多知识库 Tab 管理 › 4.3 Tab 切换 — KB1 和 KB2 独立显示 (26.1s)
+  x  32 [chromium] › e2e\multi-tab.spec.ts:100:3 › 多知识库 Tab 管理 › 4.4 Tab 关闭 — 无脏状态时直接关闭 (26.1s)
+node.exe : [2m[WebServer] [22mERROR: The process "24176" not found.
+所在位置 C:\Program Files\nodejs\npx.ps1:29 字符: 3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([2m[WebServer]...176" not found.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  x  33 [chromium] › e2e\multi-tab.spec.ts:125:3 › 多知识库 Tab 管理 › 4.5 Tab 关闭后自动切换到相邻 Tab (26.1s)
+  x  34 [chromium] › e2e\node-crud.spec.ts:23:3 › 节点 CRUD 操作 › 7.1 双击画布新建节点 (2.7s)
+  x  35 [chromium] › e2e\node-crud.spec.ts:46:3 › 节点 CRUD 操作 › 7.2 右键菜单新建子节点 (2.7s)
+  x  36 [chromium] › e2e\node-crud.spec.ts:88:3 › 节点 CRUD 操作 › 7.3 重命名节点 (2.7s)
+  x  37 [chromium] › e2e\node-crud.spec.ts:121:3 › 节点 CRUD 操作 › 7.4 删除节点 (2.7s)
+  x  38 [chromium] › e2e\node-crud.spec.ts:157:3 › 节点 CRUD 操作 › 7.5 键盘 Delete 键删除选中节点 (2.7s)
+  x  39 [chromium] › e2e\room-nav.spec.ts:23:3 › 房间导航 › 10.1 双击有子节点钻入子房间 (1.2s)
+  x  40 [chromium] › e2e\room-nav.spec.ts:53:3 › 房间导航 › 10.2 Breadcrumb 返回上级房间 (2.7s)
+  x  41 [chromium] › e2e\room-nav.spec.ts:87:3 › 房间导航 › 10.3 无导航历史时 Breadcrumb 不显示 (2.7s)
+  x  42 [chromium] › e2e\search.spec.ts:23:3 › 搜索功能 › 9.1 搜索高亮匹配的节点 (2.6s)
+  x  43 [chromium] › e2e\search.spec.ts:58:3 › 搜索功能 › 9.2 搜索清除后恢复正常显示 (2.7s)
+  x  44 [chromium] › e2e\search.spec.ts:84:3 › 搜索功能 › 9.3 无匹配结果时搜索框仍显示 (2.7s)
+
+
+  1) [chromium] › e2e\custom-modal.spec.ts:17:3 › 自定义弹窗（非原生） › 12.1 双击画布弹出 PromptModal（非原生 prompt） ─
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\custom-modal.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\custom-modal-自定义弹窗（非原生）-12-1-双击画布弹出-PromptModal（非原生-prompt）-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\custom-modal-自定义弹窗（非原生）-12-1-双击画布弹出-PromptModal（非原生-prompt）-chromium\error-context.md
+
+  2) [chromium] › e2e\custom-modal.spec.ts:42:3 › 自定义弹窗（非原生） › 12.2 PromptModal 取消后无节点创建 ───────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\custom-modal.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\custom-modal-自定义弹窗（非原生）-12-2-PromptModal-取消后无节点创建-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\custom-modal-自定义弹窗（非原生）-12-2-PromptModal-取消后无节点创建-chromium\error-context.md
+
+  3) [chromium] › e2e\custom-modal.spec.ts:67:3 › 自定义弹窗（非原生） › 12.3 PromptModal 支持 Enter 确认 ────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\custom-modal.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\custom-modal-自定义弹窗（非原生）-12-3-PromptModal-支持-Enter-确认-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\custom-modal-自定义弹窗（非原生）-12-3-PromptModal-支持-Enter-确认-chromium\error-context.md
+
+  4) [chromium] › e2e\custom-modal.spec.ts:93:3 › 自定义弹窗（非原生） › 13.1 Tab 关闭脏状态时弹出自定义 ConfirmModal（非原生 confirm） 
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\custom-modal.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\custom-modal-自定义弹窗（非原生）-13-5f74f-义-ConfirmModal（非原生-confirm）-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\custom-modal-自定义弹窗（非原生）-13-5f74f-义-ConfirmModal（非原生-confirm）-chromium\error-context.md
+
+  5) [chromium] › e2e\custom-modal.spec.ts:127:3 › 自定义弹窗（非原生） › 13.2 ConfirmModal 取消后 Tab 不关闭 ──────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\custom-modal.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\custom-modal-自定义弹窗（非原生）-13-2-ConfirmModal-取消后-Tab-不关闭-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\custom-modal-自定义弹窗（非原生）-13-2-ConfirmModal-取消后-Tab-不关闭-chromium\error-context.md
+
+  6) [chromium] › e2e\custom-modal.spec.ts:167:3 › 自定义弹窗（非原生） › 13.3 删除节点时弹出自定义 ConfirmModal ───────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\custom-modal.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\custom-modal-自定义弹窗（非原生）-13-3-删除节点时弹出自定义-ConfirmModal-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\custom-modal-自定义弹窗（非原生）-13-3-删除节点时弹出自定义-ConfirmModal-chromium\error-context.md
+
+  7) [chromium] › e2e\detail-panel.spec.ts:23:3 › 详细面板 › 2.1 点击节点显示详细面板 ────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+    [2m    - waiting for" http://localhost:5173/" navigation to finish...[22m
+    [2m    - navigated to "http://localhost:5173/"[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\detail-panel.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\detail-panel-详细面板-2-1-点击节点显示详细面板-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\detail-panel-详细面板-2-1-点击节点显示详细面板-chromium\error-context.md
+
+  8) [chromium] › e2e\detail-panel.spec.ts:41:3 › 详细面板 › 2.2 编辑节点详细信息 ──────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\detail-panel.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\detail-panel-详细面板-2-2-编辑节点详细信息-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\detail-panel-详细面板-2-2-编辑节点详细信息-chromium\error-context.md
+
+  9) [chromium] › e2e\detail-panel.spec.ts:61:3 › 详细面板 › 2.3 关闭详细面板 ────────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\detail-panel.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\detail-panel-详细面板-2-3-关闭详细面板-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\detail-panel-详细面板-2-3-关闭详细面板-chromium\error-context.md
+
+  10) [chromium] › e2e\detail-panel.spec.ts:80:3 › 详细面板 › 2.4 详细面板显示节点属性 ───────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\detail-panel.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\detail-panel-详细面板-2-4-详细面板显示节点属性-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\detail-panel-详细面板-2-4-详细面板显示节点属性-chromium\error-context.md
+
+  11) [chromium] › e2e\dirty-state.spec.ts:26:3 › 脏状态指示 › 6.1 修改后 Tab 显示脏标记 ────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\dirty-state.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\dirty-state-脏状态指示-6-1-修改后-Tab-显示脏标记-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\dirty-state-脏状态指示-6-1-修改后-Tab-显示脏标记-chromium\error-context.md
+
+  12) [chromium] › e2e\dirty-state.spec.ts:46:3 › 脏状态指示 › 6.2 保存后脏标记消失（300ms debounce） ─────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\dirty-state.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\dirty-state-脏状态指示-6-2-保存后脏标记消失（300ms-debounce）-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\dirty-state-脏状态指示-6-2-保存后脏标记消失（300ms-debounce）-chromium\error-context.md
+
+  13) [chromium] › e2e\dirty-state.spec.ts:64:3 › 脏状态指示 › 6.3 回调模式 vs 轮询 — 验证没有 setInterval 轮询脏状态 ──
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\dirty-state.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\dirty-state-脏状态指示-6-3-回调模式-vs-轮询-—-验证没有-setInterval-轮询脏状态-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\dirty-state-脏状态指示-6-3-回调模式-vs-轮询-—-验证没有-setInterval-轮询脏状态-chromium\error-context.md
+
+  14) [chromium] › e2e\edge-ops.spec.ts:23:3 › 边（连线）操作 › 8.1 右键删除连线 ────────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\edge-ops.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\edge-ops-边（连线）操作-8-1-右键删除连线-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\edge-ops-边（连线）操作-8-1-右键删除连线-chromium\error-context.md
+
+  15) [chromium] › e2e\edge-ops.spec.ts:65:3 › 边（连线）操作 › 8.2 连线模式下取消 ───────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\edge-ops.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\edge-ops-边（连线）操作-8-2-连线模式下取消-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\edge-ops-边（连线）操作-8-2-连线模式下取消-chromium\error-context.md
+
+  16) [chromium] › e2e\git-panel.spec.ts:27:3 › Git 面板 › 15.1 工具栏 Git 按钮打开 Git 面板 ──────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\git-panel.spec.ts:15:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\git-panel-Git-面板-15-1-工具栏-Git-按钮打开-Git-面板-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\git-panel-Git-面板-15-1-工具栏-Git-按钮打开-Git-面板-chromium\error-context.md
+
+  17) [chromium] › e2e\git-panel.spec.ts:44:3 › Git 面板 › 15.2 Git 面板显示状态信息 ─────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\git-panel.spec.ts:15:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\git-panel-Git-面板-15-2-Git-面板显示状态信息-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\git-panel-Git-面板-15-2-Git-面板显示状态信息-chromium\error-context.md
+
+  18) [chromium] › e2e\git-panel.spec.ts:65:3 › Git 面板 › 15.3 再次点击 Git 按钮关闭面板 ──────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\git-panel.spec.ts:15:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\git-panel-Git-面板-15-3-再次点击-Git-按钮关闭面板-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\git-panel-Git-面板-15-3-再次点击-Git-按钮关闭面板-chromium\error-context.md
+
+  19) [chromium] › e2e\git-panel.spec.ts:83:3 › Git 面板 › 15.4 关闭 Git 面板后工具栏按钮不再高亮 ──────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\git-panel.spec.ts:15:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\git-panel-Git-面板-15-4-关闭-Git-面板后工具栏按钮不再高亮-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\git-panel-Git-面板-15-4-关闭-Git-面板后工具栏按钮不再高亮-chromium\error-context.md
+
+  20) [chromium] › e2e\kb-management.spec.ts:14:3 › 知识库管理 › 1.1 创建知识库 ──────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\kb-management.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\kb-management-知识库管理-1-1-创建知识库-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\kb-management-知识库管理-1-1-创建知识库-chromium\error-context.md
+
+  21) [chromium] › e2e\kb-management.spec.ts:31:3 › 知识库管理 › 1.2 删除知识库 ──────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\kb-management.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\kb-management-知识库管理-1-2-删除知识库-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\kb-management-知识库管理-1-2-删除知识库-chromium\error-context.md
+
+  22) [chromium] › e2e\kb-management.spec.ts:57:3 › 知识库管理 › 1.3 重命名知识库 ─────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\kb-management.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\kb-management-知识库管理-1-3-重命名知识库-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\kb-management-知识库管理-1-3-重命名知识库-chromium\error-context.md
+
+  23) [chromium] › e2e\kb-management.spec.ts:87:3 › 知识库管理 › 1.4 知识库排序 ──────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\kb-management.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\kb-management-知识库管理-1-4-知识库排序-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\kb-management-知识库管理-1-4-知识库排序-chromium\error-context.md
+
+  24) [chromium] › e2e\kb-management.spec.ts:103:3 › 知识库管理 › 1.5 导入知识库 ─────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\kb-management.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\kb-management-知识库管理-1-5-导入知识库-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\kb-management-知识库管理-1-5-导入知识库-chromium\error-context.md
+
+  25) [chromium] › e2e\layout.spec.ts:26:3 › 布局计算 › 11.1 新建节点后触发 ELK 布局 ────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\layout.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\layout-布局计算-11-1-新建节点后触发-ELK-布局-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\layout-布局计算-11-1-新建节点后触发-ELK-布局-chromium\error-context.md
+
+  26) [chromium] › e2e\layout.spec.ts:54:3 › 布局计算 › 11.2 节点位置在保存后被记住 ───────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\layout.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\layout-布局计算-11-2-节点位置在保存后被记住-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\layout-布局计算-11-2-节点位置在保存后被记住-chromium\error-context.md
+
+  27) [chromium] › e2e\layout.spec.ts:81:3 › 布局计算 › 11.3 右键新建子节点触发布局 ───────────────────────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\layout.spec.ts:14:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\layout-布局计算-11-3-右键新建子节点触发布局-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\layout-布局计算-11-3-右键新建子节点触发布局-chromium\error-context.md
+
+  28) [chromium] › e2e\multi-tab.spec.ts:14:3 › 多知识库 Tab 管理 › 4.1 创建并打开第一个知识库，TabBar 出现 ────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\multi-tab.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\multi-tab-多知识库-Tab-管理-4-1-创建并打开第一个知识库，TabBar-出现-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\multi-tab-多知识库-Tab-管理-4-1-创建并打开第一个知识库，TabBar-出现-chromium\error-context.md
+
+  29) [chromium] › e2e\multi-tab.spec.ts:37:3 › 多知识库 Tab 管理 › 4.2 打开第二个知识库，TabBar 显示 3 个 Tab ───────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\multi-tab.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\multi-tab-多知识库-Tab-管理-4-2-打开第二个知识库，TabBar-显示-3-个-Tab-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\multi-tab-多知识库-Tab-管理-4-2-打开第二个知识库，TabBar-显示-3-个-Tab-chromium\error-context.md
+
+  30) [chromium] › e2e\multi-tab.spec.ts:64:3 › 多知识库 Tab 管理 › 4.3 Tab 切换 — KB1 和 KB2 独立显示 ──────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\multi-tab.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\multi-tab-多知识库-Tab-管理-4-3-Tab-切换-—-KB1-和-KB2-独立显示-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\multi-tab-多知识库-Tab-管理-4-3-Tab-切换-—-KB1-和-KB2-独立显示-chromium\error-context.md
+
+  31) [chromium] › e2e\multi-tab.spec.ts:100:3 › 多知识库 Tab 管理 › 4.4 Tab 关闭 — 无脏状态时直接关闭 ──────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\multi-tab.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\multi-tab-多知识库-Tab-管理-4-4-Tab-关闭-—-无脏状态时直接关闭-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\multi-tab-多知识库-Tab-管理-4-4-Tab-关闭-—-无脏状态时直接关闭-chromium\error-context.md
+
+  32) [chromium] › e2e\multi-tab.spec.ts:125:3 › 多知识库 Tab 管理 › 4.5 Tab 关闭后自动切换到相邻 Tab ──────────────
+
+    TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('#home-modal') to be visible[22m
+    [2m    - waiting for" http://localhost:5173/" navigation to finish...[22m
+    [2m    - navigated to "http://localhost:5173/"[22m
+
+
+       at fixtures\work-dir.ts:156
+
+      154 |   } catch {
+      155 |     // 如果没有停留在 SetupPage，直接等待 HomePage
+    > 156 |     await page.waitForSelector('#home-modal', { timeout: 15_000 })
+          |                ^
+      157 |   }
+      158 | }
+      159 |
+        at waitForHomePage (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:156:16)
+        at D:\Code\topomind_cc\e2e\multi-tab.spec.ts:11:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\multi-tab-多知识库-Tab-管理-4-5-Tab-关闭后自动切换到相邻-Tab-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\multi-tab-多知识库-Tab-管理-4-5-Tab-关闭后自动切换到相邻-Tab-chromium\error-context.md
+
+  33) [chromium] › e2e\node-crud.spec.ts:23:3 › 节点 CRUD 操作 › 7.1 双击画布新建节点 ──────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\node-crud.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\node-crud-节点-CRUD-操作-7-1-双击画布新建节点-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\node-crud-节点-CRUD-操作-7-1-双击画布新建节点-chromium\error-context.md
+
+  34) [chromium] › e2e\node-crud.spec.ts:46:3 › 节点 CRUD 操作 › 7.2 右键菜单新建子节点 ─────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\node-crud.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\node-crud-节点-CRUD-操作-7-2-右键菜单新建子节点-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\node-crud-节点-CRUD-操作-7-2-右键菜单新建子节点-chromium\error-context.md
+
+  35) [chromium] › e2e\node-crud.spec.ts:88:3 › 节点 CRUD 操作 › 7.3 重命名节点 ─────────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\node-crud.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\node-crud-节点-CRUD-操作-7-3-重命名节点-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\node-crud-节点-CRUD-操作-7-3-重命名节点-chromium\error-context.md
+
+  36) [chromium] › e2e\node-crud.spec.ts:121:3 › 节点 CRUD 操作 › 7.4 删除节点 ─────────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\node-crud.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\node-crud-节点-CRUD-操作-7-4-删除节点-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\node-crud-节点-CRUD-操作-7-4-删除节点-chromium\error-context.md
+
+  37) [chromium] › e2e\node-crud.spec.ts:157:3 › 节点 CRUD 操作 › 7.5 键盘 Delete 键删除选中节点 ────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\node-crud.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\node-crud-节点-CRUD-操作-7-5-键盘-Delete-键删除选中节点-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\node-crud-节点-CRUD-操作-7-5-键盘-Delete-键删除选中节点-chromium\error-context.md
+
+  38) [chromium] › e2e\room-nav.spec.ts:23:3 › 房间导航 › 10.1 双击有子节点钻入子房间 ─────────────────────────────
+
+    Error: page.goto: net::ERR_NETWORK_CHANGED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\room-nav.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\room-nav-房间导航-10-1-双击有子节点钻入子房间-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\room-nav-房间导航-10-1-双击有子节点钻入子房间-chromium\error-context.md
+
+  39) [chromium] › e2e\room-nav.spec.ts:53:3 › 房间导航 › 10.2 Breadcrumb 返回上级房间 ───────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\room-nav.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\room-nav-房间导航-10-2-Breadcrumb-返回上级房间-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\room-nav-房间导航-10-2-Breadcrumb-返回上级房间-chromium\error-context.md
+
+  40) [chromium] › e2e\room-nav.spec.ts:87:3 › 房间导航 › 10.3 无导航历史时 Breadcrumb 不显示 ───────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\room-nav.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\room-nav-房间导航-10-3-无导航历史时-Breadcrumb-不显示-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\room-nav-房间导航-10-3-无导航历史时-Breadcrumb-不显示-chromium\error-context.md
+
+  41) [chromium] › e2e\search.spec.ts:23:3 › 搜索功能 › 9.1 搜索高亮匹配的节点 ──────────────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\search.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\search-搜索功能-9-1-搜索高亮匹配的节点-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\search-搜索功能-9-1-搜索高亮匹配的节点-chromium\error-context.md
+
+  42) [chromium] › e2e\search.spec.ts:58:3 › 搜索功能 › 9.2 搜索清除后恢复正常显示 ────────────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\search.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\search-搜索功能-9-2-搜索清除后恢复正常显示-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\search-搜索功能-9-2-搜索清除后恢复正常显示-chromium\error-context.md
+
+  43) [chromium] › e2e\search.spec.ts:84:3 › 搜索功能 › 9.3 无匹配结果时搜索框仍显示 ───────────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "networkidle"[22m
+
+
+       at fixtures\work-dir.ts:138
+
+      136 | export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
+      137 |   // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
+    > 138 |   await page.goto('/', { waitUntil: 'networkidle' })
+          |              ^
+      139 | }
+      140 |
+      141 | /**
+        at initWorkDir (D:\Code\topomind_cc\e2e\fixtures\work-dir.ts:138:14)
+        at D:\Code\topomind_cc\e2e\search.spec.ts:10:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\search-搜索功能-9-3-无匹配结果时搜索框仍显示-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\search-搜索功能-9-3-无匹配结果时搜索框仍显示-chromium\error-context.md
+
+  43 failed
+    [chromium] › e2e\custom-modal.spec.ts:17:3 › 自定义弹窗（非原生） › 12.1 双击画布弹出 PromptModal（非原生 prompt） ──
+    [chromium] › e2e\custom-modal.spec.ts:42:3 › 自定义弹窗（非原生） › 12.2 PromptModal 取消后无节点创建 ────────────
+    [chromium] › e2e\custom-modal.spec.ts:67:3 › 自定义弹窗（非原生） › 12.3 PromptModal 支持 Enter 确认 ─────────
+    [chromium] › e2e\custom-modal.spec.ts:93:3 › 自定义弹窗（非原生） › 13.1 Tab 关闭脏状态时弹出自定义 ConfirmModal（非原生 confirm） 
+    [chromium] › e2e\custom-modal.spec.ts:127:3 › 自定义弹窗（非原生） › 13.2 ConfirmModal 取消后 Tab 不关闭 ───────
+    [chromium] › e2e\custom-modal.spec.ts:167:3 › 自定义弹窗（非原生） › 13.3 删除节点时弹出自定义 ConfirmModal ────────
+    [chromium] › e2e\detail-panel.spec.ts:23:3 › 详细面板 › 2.1 点击节点显示详细面板 ─────────────────────────────
+    [chromium] › e2e\detail-panel.spec.ts:41:3 › 详细面板 › 2.2 编辑节点详细信息 ───────────────────────────────
+    [chromium] › e2e\detail-panel.spec.ts:61:3 › 详细面板 › 2.3 关闭详细面板 ─────────────────────────────────
+    [chromium] › e2e\detail-panel.spec.ts:80:3 › 详细面板 › 2.4 详细面板显示节点属性 ─────────────────────────────
+    [chromium] › e2e\dirty-state.spec.ts:26:3 › 脏状态指示 › 6.1 修改后 Tab 显示脏标记 ──────────────────────────
+    [chromium] › e2e\dirty-state.spec.ts:46:3 › 脏状态指示 › 6.2 保存后脏标记消失（300ms debounce） ───────────────
+    [chromium] › e2e\dirty-state.spec.ts:64:3 › 脏状态指示 › 6.3 回调模式 vs 轮询 — 验证没有 setInterval 轮询脏状态 ────
+    [chromium] › e2e\edge-ops.spec.ts:23:3 › 边（连线）操作 › 8.1 右键删除连线 ──────────────────────────────────
+    [chromium] › e2e\edge-ops.spec.ts:65:3 › 边（连线）操作 › 8.2 连线模式下取消 ─────────────────────────────────
+    [chromium] › e2e\git-panel.spec.ts:27:3 › Git 面板 › 15.1 工具栏 Git 按钮打开 Git 面板 ────────────────────
+    [chromium] › e2e\git-panel.spec.ts:44:3 › Git 面板 › 15.2 Git 面板显示状态信息 ───────────────────────────
+    [chromium] › e2e\git-panel.spec.ts:65:3 › Git 面板 › 15.3 再次点击 Git 按钮关闭面板 ────────────────────────
+    [chromium] › e2e\git-panel.spec.ts:83:3 › Git 面板 › 15.4 关闭 Git 面板后工具栏按钮不再高亮 ────────────────────
+    [chromium] › e2e\kb-management.spec.ts:14:3 › 知识库管理 › 1.1 创建知识库 ────────────────────────────────
+    [chromium] › e2e\kb-management.spec.ts:31:3 › 知识库管理 › 1.2 删除知识库 ────────────────────────────────
+    [chromium] › e2e\kb-management.spec.ts:57:3 › 知识库管理 › 1.3 重命名知识库 ───────────────────────────────
+    [chromium] › e2e\kb-management.spec.ts:87:3 › 知识库管理 › 1.4 知识库排序 ────────────────────────────────
+    [chromium] › e2e\kb-management.spec.ts:103:3 › 知识库管理 › 1.5 导入知识库 ───────────────────────────────
+    [chromium] › e2e\layout.spec.ts:26:3 › 布局计算 › 11.1 新建节点后触发 ELK 布局 ──────────────────────────────
+    [chromium] › e2e\layout.spec.ts:54:3 › 布局计算 › 11.2 节点位置在保存后被记住 ─────────────────────────────────
+    [chromium] › e2e\layout.spec.ts:81:3 › 布局计算 › 11.3 右键新建子节点触发布局 ─────────────────────────────────
+    [chromium] › e2e\multi-tab.spec.ts:14:3 › 多知识库 Tab 管理 › 4.1 创建并打开第一个知识库，TabBar 出现 ──────────────
+    [chromium] › e2e\multi-tab.spec.ts:37:3 › 多知识库 Tab 管理 › 4.2 打开第二个知识库，TabBar 显示 3 个 Tab ─────────
+    [chromium] › e2e\multi-tab.spec.ts:64:3 › 多知识库 Tab 管理 › 4.3 Tab 切换 — KB1 和 KB2 独立显示 ────────────
+    [chromium] › e2e\multi-tab.spec.ts:100:3 › 多知识库 Tab 管理 › 4.4 Tab 关闭 — 无脏状态时直接关闭 ────────────────
+    [chromium] › e2e\multi-tab.spec.ts:125:3 › 多知识库 Tab 管理 › 4.5 Tab 关闭后自动切换到相邻 Tab ────────────────
+    [chromium] › e2e\node-crud.spec.ts:23:3 › 节点 CRUD 操作 › 7.1 双击画布新建节点 ────────────────────────────
+    [chromium] › e2e\node-crud.spec.ts:46:3 › 节点 CRUD 操作 › 7.2 右键菜单新建子节点 ───────────────────────────
+    [chromium] › e2e\node-crud.spec.ts:88:3 › 节点 CRUD 操作 › 7.3 重命名节点 ───────────────────────────────
+    [chromium] › e2e\node-crud.spec.ts:121:3 › 节点 CRUD 操作 › 7.4 删除节点 ───────────────────────────────
+    [chromium] › e2e\node-crud.spec.ts:157:3 › 节点 CRUD 操作 › 7.5 键盘 Delete 键删除选中节点 ──────────────────
+    [chromium] › e2e\room-nav.spec.ts:23:3 › 房间导航 › 10.1 双击有子节点钻入子房间 ───────────────────────────────
+    [chromium] › e2e\room-nav.spec.ts:53:3 › 房间导航 › 10.2 Breadcrumb 返回上级房间 ─────────────────────────
+    [chromium] › e2e\room-nav.spec.ts:87:3 › 房间导航 › 10.3 无导航历史时 Breadcrumb 不显示 ─────────────────────
+    [chromium] › e2e\search.spec.ts:23:3 › 搜索功能 › 9.1 搜索高亮匹配的节点 ────────────────────────────────────
+    [chromium] › e2e\search.spec.ts:58:3 › 搜索功能 › 9.2 搜索清除后恢复正常显示 ──────────────────────────────────
+    [chromium] › e2e\search.spec.ts:84:3 › 搜索功能 › 9.3 无匹配结果时搜索框仍显示 ─────────────────────────────────
+  1 skipped

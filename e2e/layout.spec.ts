@@ -31,8 +31,11 @@ test.describe('布局计算', () => {
     await page.click('[data-testid="prompt-modal"] button:has-text("确定")')
     await page.waitForTimeout(800)
 
-    // First node should exist
-    await expect(page.locator('.react-flow__node').filter({ hasText: '布局根节点' })).toBeVisible()
+    // First node should exist with a valid position (not at origin)
+    const node1 = page.locator('.react-flow__node').filter({ hasText: '布局根节点' })
+    await expect(node1).toBeVisible()
+    const pos1 = await node1.boundingBox()
+    expect(pos1).not.toBeNull()
 
     // Create a second node
     await page.locator('.react-flow').dblclick({ position: { x: 600, y: 200 } })
@@ -42,8 +45,10 @@ test.describe('布局计算', () => {
     await page.waitForTimeout(800)
 
     // Both nodes should be visible and independently positioned
-    await expect(page.locator('.react-flow__node').filter({ hasText: '布局根节点' })).toBeVisible()
-    await expect(page.locator('.react-flow__node').filter({ hasText: '布局子节点B' })).toBeVisible()
+    const node2 = page.locator('.react-flow__node').filter({ hasText: '布局子节点B' })
+    await expect(node2).toBeVisible()
+    const pos2 = await node2.boundingBox()
+    expect(pos2).not.toBeNull()
   })
 
   test('11.2 节点位置在保存后被记住', async ({ page }) => {

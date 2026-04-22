@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron/simple'
+
 import { resolve } from 'path'
 import fs from 'fs'
 
@@ -20,7 +21,7 @@ export default defineConfig({
           },
         },
         processAsync: true,
-        onstart({ startup }) {
+        onstart({ startup, url }) {
           let e2eWorkdir = process.env.TOPOMIND_E2E_WORKDIR || ''
           try {
             if (fs.existsSync('.env')) {
@@ -29,8 +30,8 @@ export default defineConfig({
               if (match) e2eWorkdir = match.split('=').slice(1).join('=')
             }
           } catch (_) {}
-          startup([], {
-            env: { ...process.env, TOPOMIND_E2E_WORKDIR: e2eWorkdir },
+          startup(['.'], {
+            env: { ...process.env, TOPOMIND_E2E_WORKDIR: e2eWorkdir, VITE_DEV_SERVER_URL: url },
           })
         },
       },

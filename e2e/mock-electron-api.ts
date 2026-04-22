@@ -6,7 +6,9 @@
  * IPC calls that App.tsx uses on mount so checkAndNavigate() succeeds and
  * #home-modal renders.
  *
- * Injected via playwright.config.ts → `page.addInitScript`.
+ * NOTE: The primary mock is configured in playwright.config.ts (addInitScript)
+ * which covers all IPC channels. This file provides a simplified fallback for
+ * direct import scenarios and uses dynamic path resolution via os.tmpdir().
  */
 
 import path from 'path'
@@ -17,48 +19,34 @@ const TEMP_WORKDIR = path.join(os.tmpdir(), 'topomind-e2e-workdir')
 // Track which channels have been called (useful for test assertions)
 const callLog: { channel: string; timestamp: number }[] = []
 
-function makeMockAPI() {
+function makeMockAPI(workDir: string) {
   return {
     invoke(channel: string): Promise<unknown> {
       callLog.push({ channel, timestamp: Date.now() })
       switch (channel) {
         case 'fs:getRootDir':
-          return Promise.resolve(TEMP_WORKDIR)
-
+          return Promise.resolve(workDir)
         case 'fs:init':
           return Promise.resolve({ valid: true, error: null })
-
         case 'app:getE2EState':
           return Promise.resolve({
-            rootDir: TEMP_WORKDIR,
+            rootDir: workDir,
             valid: true,
             workDirConfigured: true,
             windowReady: true,
             ipcRegistered: true,
           })
-
         default:
-          // For any unhandled channel, return a plausible "not implemented" response
-          // rather than crashing. Tests can override per-test via addInitScript.
-          console.warn(`[mock-electronAPI] Unhandled IPC channel: ${channel}`)
           return Promise.resolve(null)
       }
     },
 
-    send(_channel: string, _data?: unknown): void {
-      // no-op for send channels used by the app
-    },
+    send(_channel: string, _data?: unknown): void {},
 
-    on(channel: string, handler: (...args: unknown[]) => void): void {
-      // no-op: register a no-op listener so the app's removeListener call doesn't throw
-      // We intentionally don't store handlers so duplicate calls are idempotent.
-    },
+    on(_channel: string, _handler: (...args: unknown[]) => void): void {},
 
-    off(channel: string, _handler: (...args: unknown[]) => void): void {
-      // no-op: remove listener (idempotent)
-    },
+    off(_channel: string, _handler: (...args: unknown[]) => void {},
 
-    // Expose call log for test debugging
     __getCallLog() {
       return [...callLog]
     },
@@ -72,7 +60,7 @@ function makeMockAPI() {
 ;(function install() {
   if (typeof window === 'undefined') return
   Object.defineProperty(window, 'electronAPI', {
-    value: makeMockAPI(),
+    value: makeMockAPI(TEMP_WORKDIR),
     writable: true,
     configurable: true,
     enumerable: true,

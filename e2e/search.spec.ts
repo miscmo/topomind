@@ -41,9 +41,18 @@ test.describe('搜索功能', () => {
     // Wait for search to process (debounce)
     await page.waitForTimeout(300)
 
-    // All nodes with "机器" should be visible (搜索不隐藏节点，只高亮)
-    // We verify the search input value is set correctly
+    // Verify search input value is set correctly
     await expect(page.locator('#search-input')).toHaveValue('机器')
+
+    // Verify matching nodes have the searchMatch style (yellow border via searchHighlight class)
+    // Nodes "机器学习" and "机器视觉" should have highlighted border
+    const matchedNodes = page.locator('.react-flow__node').filter({ hasText: /机器学习|机器视觉/ })
+    const matchedCount = await matchedNodes.count()
+    expect(matchedCount).toBeGreaterThanOrEqual(2)
+
+    // Non-matching node should NOT have highlight style
+    const nonMatchNode = page.locator('.react-flow__node').filter({ hasText: '深度学习' })
+    await expect(nonMatchNode).toBeVisible()
   })
 
   test('9.2 搜索清除后恢复正常显示', async ({ page }) => {

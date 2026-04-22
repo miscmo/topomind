@@ -10,6 +10,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
     "build": "vite build",
     "build:mac": "vite build && electron-builder --mac",
     "build:win": "vite build && electron-builder --win",

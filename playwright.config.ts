@@ -10,11 +10,12 @@ const __dirname = path.dirname(__filename)
 const TEMP_WORKDIR = path.join(os.tmpdir(), 'topomind-e2e-workdir')
 
 // Mock electronAPI injected into every page before navigation.
-// Using a context-level addInitScript ensures the mock is present when
-// React's useEffect (checkAndNavigate) first fires — before any async boundary.
-const MOCK_SCRIPT = `(function () {
+// Uses dynamic TEMP_WORKDIR for cross-machine compatibility.
+function buildMockScript(workDir: string): string {
+  return `(function () {
   var createdKBs = [];
   var storedGraphMeta = null;
+  var WORK_DIR = ${JSON.stringify(workDir)};
 
   Object.defineProperty(globalThis, 'electronAPI', {
     value: {
@@ -22,7 +23,7 @@ const MOCK_SCRIPT = `(function () {
         var args = Array.prototype.slice.call(arguments, 1);
         switch (channel) {
           case 'fs:getRootDir':
-            return Promise.resolve('C:\\\\Users\\\\75465\\\\AppData\\\\Local\\\\Temp\\\\topomind-e2e-workdir');
+            return Promise.resolve(WORK_DIR);
           case 'fs:init':
             return Promise.resolve({ valid: true, error: null });
           case 'fs:listChildren':
@@ -34,9 +35,8 @@ const MOCK_SCRIPT = `(function () {
             var dirPath = args[0] || '';
             var isCard = dirPath.includes('/') || dirPath.includes('\\\\');
             if (!isCard) {
-              var kbPath = 'C:\\\\Users\\\\75465\\\\AppData\\\\Local\\\\Temp\\\\topomind-e2e-workdir\\\\' + dirPath;
-              createdKBs.push({ path: kbPath, name: dirPath, isDir: true, order: createdKBs.length });
-              return Promise.resolve(kbPath);
+              createdKBs.push({ path: dirPath, name: dirPath, isDir: true, order: createdKBs.length });
+              return Promise.resolve(dirPath);
             } else {
               var cardId = dirPath;
               var cardName = cardId.split(/[/\\\\]/).pop() || dirPath;
@@ -63,11 +63,11 @@ const MOCK_SCRIPT = `(function () {
           case 'fs:setLastOpenedKB':
             return Promise.resolve(null);
           case 'fs:selectWorkDirCandidate':
-            return Promise.resolve({ valid: true, nodePath: 'C:\\\\Users\\\\75465\\\\AppData\\\\Local\\\\Temp\\\\topomind-e2e-workdir', error: null });
+            return Promise.resolve({ valid: true, nodePath: WORK_DIR, error: null });
           case 'fs:setWorkDir':
-            return Promise.resolve({ valid: true, nodePath: 'C:\\\\Users\\\\75465\\\\AppData\\\\Local\\\\Temp\\\\topomind-e2e-workdir', error: null });
+            return Promise.resolve({ valid: true, nodePath: WORK_DIR, error: null });
           case 'fs:createWorkDir':
-            return Promise.resolve({ valid: true, nodePath: 'C:\\\\Users\\\\75465\\\\AppData\\\\Local\\\\Temp\\\\topomind-e2e-workdir', error: null });
+            return Promise.resolve({ valid: true, nodePath: WORK_DIR, error: null });
           case 'fs:readFile':
             return Promise.resolve('{}');
           case 'fs:writeFile':
@@ -111,6 +111,7 @@ const MOCK_SCRIPT = `(function () {
     enumerable: true
   });
 })();`
+}
 
 export default defineConfig({
   testDir: './e2e',
@@ -135,7 +136,7 @@ export default defineConfig({
     // Config-level addInitScript: injects into every context before any page loads.
     // This is the key difference from page.addInitScript which runs too late —
     // the Vite-rendered page starts with globalThis.electronAPI already defined.
-    addInitScript: MOCK_SCRIPT,
+    addInitScript: buildMockScript(TEMP_WORKDIR),
   },
 
   projects: [

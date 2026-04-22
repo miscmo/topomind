@@ -1,11 +1,17 @@
 import { test as base, expect } from '@playwright/test'
+import path from 'path'
+import os from 'os'
+
+// Dynamic work directory path — matches global-setup.ts
+const TEMP_WORKDIR = path.join(os.tmpdir(), 'topomind-e2e-workdir')
 
 // Shared mock electronAPI — injected into every browser context before any page loads.
-// Using context.addInitScript (not page.addInitScript) so the mock is present when
-// React's useEffect (checkAndNavigate) first fires.
-const MOCK_SCRIPT = `(function () {
+// Uses dynamic TEMP_WORKDIR instead of hardcoded path for cross-machine compatibility.
+function buildMockScript(workDir: string): string {
+  return `(function () {
   var createdKBs = [];
   var storedGraphMeta = null;
+  var WORK_DIR = ${JSON.stringify(workDir)};
 
   Object.defineProperty(globalThis, 'electronAPI', {
     value: {
@@ -13,7 +19,7 @@ const MOCK_SCRIPT = `(function () {
         var args = Array.prototype.slice.call(arguments, 1);
         switch (channel) {
           case 'fs:getRootDir':
-            return Promise.resolve('C:\\\\Users\\\\75465\\\\AppData\\\\Local\\\\Temp\\\\topomind-e2e-workdir');
+            return Promise.resolve(WORK_DIR);
           case 'fs:init':
             return Promise.resolve({ valid: true, error: null });
           case 'fs:listChildren':
@@ -23,20 +29,16 @@ const MOCK_SCRIPT = `(function () {
             return Promise.resolve([]);
           case 'fs:mkDir':
             var dirPath = args[0] || '';
-            var isCard = dirPath.includes('/') || dirPath.includes('\\');
+            var isCard = dirPath.includes('/') || dirPath.includes('\\\\');
             if (!isCard) {
-              // KB creation - return relative path (not full Windows path)
               createdKBs.push({ path: dirPath, name: dirPath, isDir: true, order: createdKBs.length });
               return Promise.resolve(dirPath);
             } else {
-              // Card creation - return relative path
-              // dirPath is like "节点CRUD测试/待重命名节点"
               var cardId = dirPath;
-              var cardName = cardId.split(/[/\\]/).pop() || dirPath;
+              var cardName = cardId.split(/[/\\\\]/).pop() || dirPath;
               if (storedGraphMeta === null) {
                 storedGraphMeta = { children: {}, edges: [] };
               }
-              // Use just the card name as key (consistent with real implementation)
               storedGraphMeta.children[cardName] = { name: cardName, hasChildren: false };
               return Promise.resolve(cardId);
             }
@@ -57,11 +59,11 @@ const MOCK_SCRIPT = `(function () {
           case 'fs:setLastOpenedKB':
             return Promise.resolve(null);
           case 'fs:selectWorkDirCandidate':
-            return Promise.resolve({ valid: true, nodePath: 'C:\\\\Users\\\\75465\\\\AppData\\\\Local\\\\Temp\\\\topomind-e2e-workdir', error: null });
+            return Promise.resolve({ valid: true, nodePath: WORK_DIR, error: null });
           case 'fs:setWorkDir':
-            return Promise.resolve({ valid: true, nodePath: 'C:\\\\Users\\\\75465\\\\AppData\\\\Local\\\\Temp\\\\topomind-e2e-workdir', error: null });
+            return Promise.resolve({ valid: true, nodePath: WORK_DIR, error: null });
           case 'fs:createWorkDir':
-            return Promise.resolve({ valid: true, nodePath: 'C:\\\\Users\\\\75465\\\\AppData\\\\Local\\\\Temp\\\\topomind-e2e-workdir', error: null });
+            return Promise.resolve({ valid: true, nodePath: WORK_DIR, error: null });
           case 'fs:readFile':
             return Promise.resolve('{}');
           case 'fs:writeFile':
@@ -105,12 +107,14 @@ const MOCK_SCRIPT = `(function () {
     enumerable: true
   });
 })();`
+}
 
 /**
-
+ * Inject the mock electronAPI into a browser context.
+ * Uses the dynamic work directory path from os.tmpdir().
  */
-export async function mockBrowserContext(context: BrowserContext) {
-  await context.addInitScript(MOCK_SCRIPT)
+export async function mockBrowserContext(context: import('@playwright/test').BrowserContext) {
+  await context.addInitScript(buildMockScript(TEMP_WORKDIR))
 }
 
 /**
@@ -127,14 +131,10 @@ export const test = base
  *
  * globalThis.electronAPI must be defined before React's checkAndNavigate() fires —
  * the Vite/React page load (triggered by goto) wipes any injection done after
- * the page starts loading. We install the mock at the CONTEXT level before
- * navigation so it is present when React first executes.
+ * the page starts loading. We use the mock injected at the config level in playwright.config.ts.
  */
 export async function initWorkDir(page: import('@playwright/test').Page): Promise<void> {
-  // Install mock at context level BEFORE navigating.
-  // page.context() is the browser context shared by all pages in this test.
-  await page.context().addInitScript(MOCK_SCRIPT)
-  // Navigate. The mock is already in place before the page loads.
+  // Navigate. The mock is already in place before the page loads (from playwright.config.ts).
   await page.goto('/', { waitUntil: 'networkidle' })
 }
 
@@ -144,5 +144,15 @@ export async function initWorkDir(page: import('@playwright/test').Page): Promis
  * Call this AFTER initWorkDir() in a beforeEach block.
  */
 export async function waitForHomePage(page: import('@playwright/test').Page): Promise<void> {
-  await page.waitForSelector('#home-modal', { timeout: 15_000 })
+  try {
+    // 首先检查是否停留在 SetupPage
+    await page.waitForSelector('#setup-page', { timeout: 5000 })
+    // 如果停留在 SetupPage，尝试手动触发导航到 HomePage
+    await page.click('button:has-text("打开已有工作目录")')
+    // 等待 HomePage 出现
+    await page.waitForSelector('#home-modal', { timeout: 10_000 })
+  } catch {
+    // 如果没有停留在 SetupPage，直接等待 HomePage
+    await page.waitForSelector('#home-modal', { timeout: 15_000 })
+  }
 }
