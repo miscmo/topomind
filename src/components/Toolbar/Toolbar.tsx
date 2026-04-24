@@ -37,6 +37,7 @@ export default memo(function Toolbar() {
 
       {/* 连线模式 */}
       <button
+        data-testid="toolbar-edge-mode"
         className={edgeMode ? styles.active : ''}
         title="连线模式（Tab 切换）"
         onClick={() => {

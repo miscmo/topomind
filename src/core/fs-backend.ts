@@ -6,7 +6,10 @@ import { logger } from './logger'
 import type { EdgeRelation, EdgeWeight } from '../types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getApi = (): any => (window as any).electronAPI
+const getApi = (): any => {
+  const w = window as any
+  return w.electronAPI || w.__E2E_ELECTRON_API__
+}
 
 const _call = (channel: string, ...args: unknown[]) => {
   const api = getApi()
@@ -43,6 +46,8 @@ export interface FSBGraphMeta {
     target: string
     relation: EdgeRelation
     weight: EdgeWeight
+    highlighted?: boolean
+    faded?: boolean
   }>
   zoom?: number | null
   pan?: { x: number; y: number } | null

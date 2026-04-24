@@ -54,6 +54,19 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   'log:entry',
 ]);
 
+console.log('[preload] loaded');
+
+const listenerMap = new Map();
+
+function getChannelListenerMap(channel) {
+  var channelMap = listenerMap.get(channel);
+  if (!channelMap) {
+    channelMap = new WeakMap();
+    listenerMap.set(channel, channelMap);
+  }
+  return channelMap;
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   isElectron: true,
   invoke: function(channel) {
@@ -80,16 +93,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
       console.warn('[preload] 忽略未授权的监听通道:', channel);
       return;
     }
-    ipcRenderer.on(channel, function(e) {
+    if (typeof fn !== 'function') {
+      console.warn('[preload] on 需要函数回调:', channel);
+      return;
+    }
+    var channelMap = getChannelListenerMap(channel);
+    if (channelMap.has(fn)) {
+      return;
+    }
+    var wrapped = function() {
       var args = Array.prototype.slice.call(arguments, 1);
       fn.apply(null, args);
-    });
+    };
+    channelMap.set(fn, wrapped);
+    ipcRenderer.on(channel, wrapped);
   },
   off: function(channel, fn) {
     if (!ALLOWED_RECEIVE_CHANNELS.has(channel)) {
       console.warn('[preload] 忽略未授权的移除通道:', channel);
       return;
     }
-    ipcRenderer.off(channel, fn);
+    if (typeof fn !== 'function') {
+      return;
+    }
+    var channelMap = getChannelListenerMap(channel);
+    var wrapped = channelMap.get(fn);
+    if (!wrapped) {
+      return;
+    }
+    ipcRenderer.off(channel, wrapped);
+    channelMap.delete(fn);
   }
 });

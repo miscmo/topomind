@@ -5,21 +5,31 @@
  * - Tab: 为选中节点添加子概念
  * - Delete / Backspace: 删除选中节点
  */
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useAppStore } from '../stores/appStore'
+import { tabStore } from '../stores/tabStore'
 import { logAction } from '../core/log-backend'
 
 interface UseKeyboardOptions {
   onDelete?: () => void
   onEscape?: () => void
   onAddChild?: (parentId: string) => void
+  tabId?: string
 }
 
 export function useKeyboard(options: UseKeyboardOptions = {}) {
-  const { onDelete, onEscape, onAddChild } = options
+  const { onDelete, onEscape, onAddChild, tabId } = options
 
   const clearSelection = useAppStore((s) => s.clearSelection)
   const hideContextMenu = useAppStore((s) => s.hideContextMenu)
+
+  // Read the selection node respecting tab context when active.
+  // useCallback ensures the function identity is stable across renders so
+  // the useEffect deps array remains accurate without stale-closure risk.
+  const getSelectedNodeId = useCallback(
+    () => (tabId ? tabStore.getState().getTabSelectedNode(tabId) : useAppStore.getState().selectedNodeId),
+    [tabId]
+  )
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -39,6 +49,9 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
         case 'Escape':
           e.preventDefault()
           logAction('快捷键:ESC', 'useKeyboard', { action: 'clear-selection' })
+          if (tabId) {
+            tabStore.getState().setTabSelectedNode(tabId, null)
+          }
           clearSelection()
           logAction('右键菜单:关闭', 'useKeyboard', { source: 'Escape' })
           hideContextMenu()
@@ -48,7 +61,7 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
         case 'Delete':
         case 'Backspace':
           e.preventDefault()
-          const selectedNodeIdForDelete = useAppStore.getState().selectedNodeId
+          const selectedNodeIdForDelete = getSelectedNodeId()
           if (selectedNodeIdForDelete) {
             logAction('快捷键:删除节点', 'useKeyboard', { nodeId: selectedNodeIdForDelete })
             onDelete?.()
@@ -57,8 +70,7 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
 
         case 'Tab':
           e.preventDefault()
-          // Read fresh from store to avoid stale closure
-          const selectedNodeIdKeyboard = useAppStore.getState().selectedNodeId
+          const selectedNodeIdKeyboard = getSelectedNodeId()
           if (selectedNodeIdKeyboard) {
             logAction('快捷键:添加子节点', 'useKeyboard', { parentId: selectedNodeIdKeyboard })
             onAddChild?.(selectedNodeIdKeyboard)
@@ -72,5 +84,5 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [clearSelection, hideContextMenu, onDelete, onEscape, onAddChild])
+  }, [clearSelection, hideContextMenu, onDelete, onEscape, onAddChild, tabId, getSelectedNodeId])
 }

@@ -20,27 +20,47 @@ export function generateId(prefix: string): string {
   return id
 }
 
+/** Return type — includes highlighted/faded so callers can extend it */
+export interface SerializedEdge {
+  id: string
+  source: string
+  target: string
+  relation: string
+  weight: string
+  highlighted?: boolean
+  faded?: boolean
+}
+
 /** Convert nodes+edges to _graph.json compatible format */
 export function buildMetaFromNodesEdges(
   nodes: KnowledgeNode[],
-  edges: KnowledgeEdge[]
+  edges: KnowledgeEdge[],
+  zoom?: number | null,
+  pan?: { x: number; y: number } | null
 ): {
   children: Record<string, { name: string }>
-  edges: Array<{ id: string; source: string; target: string; relation: string; weight: string }>
+  edges: SerializedEdge[]
+  zoom?: number | null
+  pan?: { x: number; y: number } | null
 } {
   const children: Record<string, { name: string }> = {}
   for (const node of nodes) {
-    const childName = node.id.includes('/') ? node.id.split('/').pop()! : node.id
+    const childName = node.id.includes('/') ? (node.id.split('/').pop() ?? node.id) : node.id
     children[childName] = { name: node.data.label }
   }
-  const graphEdges = edges.map((e) => ({
+  const graphEdges: SerializedEdge[] = edges.map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,
     relation: e.data?.relation ?? '相关',
     weight: e.data?.weight ?? 'minor',
+    // Preserve visual state across save+reload round-trips.
+    // Without these, highlighted/faded are silently dropped and never
+    // recovered after a layout change or node move triggers a flush.
+    highlighted: e.data?.highlighted,
+    faded: e.data?.faded,
   }))
-  return { children, edges: graphEdges }
+  return { children, edges: graphEdges, zoom, pan }
 }
 
 /**
@@ -55,14 +75,21 @@ export async function buildNodes(
   kbPath: string
 ): Promise<KnowledgeNode[]> {
   const children = Object.entries(meta.children ?? {})
-  const nodeCount = children.length
+  const normalizedChildren = children.map(([rawChildName, childInfo]) => {
+    const normalizedName = rawChildName.includes('/') || rawChildName.includes('\\')
+      ? (rawChildName.split(/[/\\]/).pop() ?? rawChildName)
+      : rawChildName
+    return [normalizedName, childInfo] as [string, { name: string }]
+  })
+
+  const nodeCount = normalizedChildren.length
 
   const spacingX = Math.max(60, 200 - nodeCount * 5)
   const spacingY = Math.max(50, 120 - nodeCount * 3)
 
   // Parallelize child count checks
   const childCountResults = await Promise.all(
-    children.map(async ([childName]) => {
+    normalizedChildren.map(async ([childName]) => {
       const childPath = dirPath ? `${dirPath}/${childName}` : childName
       try {
         return await storage.countChildren(childPath)
@@ -72,7 +99,7 @@ export async function buildNodes(
     })
   )
 
-  return children.map(([childName, childInfo]: [string, { name: string }], i) => {
+  return normalizedChildren.map(([childName, childInfo]: [string, { name: string }], i) => {
     const childPath = dirPath ? `${dirPath}/${childName}` : childName
     const nodeId = childPath
     const childCount = childCountResults[i]
@@ -112,8 +139,11 @@ export function buildEdges(meta: GraphMeta): KnowledgeEdge[] {
     data: {
       relation: e.relation,
       weight: e.weight,
-      highlighted: false,
-      faded: false,
+      // Restore persisted visual state rather than always defaulting to false.
+      // When nodes move or layout changes, the save flushes current state to disk.
+      // Without reading it back here, highlighted/faded are permanently lost after reload.
+      highlighted: e.highlighted ?? false,
+      faded: e.faded ?? false,
     },
   }))
 }

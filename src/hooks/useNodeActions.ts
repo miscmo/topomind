@@ -13,20 +13,31 @@ import { useReactFlow } from '@xyflow/react'
 import { useAppStore } from '../stores/appStore'
 import { usePromptStore } from '../stores/promptStore'
 import { useGraphContext } from '../contexts/GraphContext'
+import { tabStore } from '../stores/tabStore'
 import { logAction } from '../core/log-backend'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
 
 export interface UseNodeActionsOptions {
   /** Called after an action to notify parent (e.g., for focus management) */
   onAction?: () => void
+  graph?: ReturnType<typeof useGraphContext>
+  /** Tab ID for setting dirty state directly — avoids getActiveTab() which may return wrong tab */
+  tabId?: string
 }
 
 export function useNodeActions(options: UseNodeActionsOptions = {}) {
-  const { onAction } = options
-  const graph = useGraphContext()
+  const { onAction, graph: graphFromOptions, tabId } = options
+  const graphFromContext = useGraphContext()
+  const graph = graphFromOptions ?? graphFromContext
   const { fitView, deleteElements } = useReactFlow()
   const selectNode = useAppStore((s) => s.selectNode)
   const prompt = usePromptStore((s) => s.open)
+
+  // Set dirty state: use tabId directly if provided, otherwise fall back to getActiveTab()
+  const setDirty = useCallback((isDirty: boolean) => {
+    const tid = tabId ?? tabStore.getState().getActiveTab()?.id
+    if (tid) tabStore.getState().setTabDirty(tid, isDirty)
+  }, [tabId])
 
   // Use nodesMapRef/edgesMapRef (Map) for O(1) lookup instead of nodesRef/edgesRef arrays.
   // Maps are consistently updated by rebuildMaps() on every state change.
@@ -44,8 +55,9 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
     if (!name?.trim()) return
     logAction('节点:创建', 'GraphPage', { nodeId, nodeName: name.trim(), source: 'context-menu' })
     await graph.createChildNode(name.trim(), nodeId)
+    setDirty(true)
     onAction?.()
-  }, [graph, onAction, prompt])
+  }, [graph, onAction, prompt, setDirty])
 
   const handleRename = useCallback(async (nodeId: string) => {
     const node = findNodeById(nodeId)
@@ -54,25 +66,28 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
     if (!newName?.trim() || newName === node.data.label) return
     logAction('节点:重命名', 'GraphPage', { nodeId, oldName: node.data.label, newName: newName.trim(), source: 'context-menu' })
     graph.renameNode(nodeId, newName.trim())
+    setDirty(true)
     onAction?.()
-  }, [findNodeById, graph, onAction, prompt])
+  }, [findNodeById, graph, onAction, prompt, setDirty])
 
   const handleDelete = useCallback(async (nodeId: string) => {
     const node = findNodeById(nodeId)
     if (!node) return
-    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除` })
+    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除`, defaultValue: node.data.label })
     if (!confirmed?.trim() || confirmed !== node.data.label) return
     logAction('节点:删除', 'GraphPage', { nodeId, label: node.data.label, path: node.data.path, source: 'context-menu' })
-    graph.deleteChildNode(nodeId)
+    await graph.deleteChildNode(nodeId)
+    setDirty(true)
     onAction?.()
-  }, [findNodeById, graph, onAction, prompt])
+  }, [findNodeById, graph, onAction, prompt, setDirty])
 
   const handleEdgeDelete = useCallback((edgeId: string) => {
     const edge = findEdgeById(edgeId)
     logAction('连线:删除', 'GraphPage', { edgeId, edgeSource: edge?.source, edgeTarget: edge?.target, trigger: 'context-menu' })
     deleteElements({ edges: [{ id: edgeId }] })
+    setDirty(true)
     onAction?.()
-  }, [findEdgeById, deleteElements, onAction])
+  }, [findEdgeById, deleteElements, onAction, setDirty])
 
   const handleFocus = useCallback((nodeId: string) => {
     selectNode(nodeId)
@@ -94,11 +109,12 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
   const deleteSelectedNode = useCallback(async (nodeId: string) => {
     const node = findNodeById(nodeId)
     if (!node) return
-    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除` })
+    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除`, defaultValue: node.data.label })
     if (!confirmed?.trim() || confirmed !== node.data.label) return
     logAction('节点:删除', 'GraphPage', { nodeId, label: node.data.label, path: node.data.path, source: 'keyboard-delete' })
-    graph.deleteChildNode(nodeId)
-  }, [findNodeById, graph, prompt])
+    await graph.deleteChildNode(nodeId)
+    setDirty(true)
+  }, [findNodeById, graph, prompt, setDirty])
 
   /** Add child node — used by keyboard Tab shortcut */
   const addChildNode = useCallback(async (parentId: string) => {
@@ -106,7 +122,8 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
     if (!name?.trim()) return
     logAction('节点:创建', 'GraphPage', { nodeId: parentId, nodeName: name.trim(), source: 'keyboard-tab' })
     await graph.createChildNode(name.trim(), parentId)
-  }, [graph, prompt])
+    setDirty(true)
+  }, [graph, prompt, setDirty])
 
   return {
     handleNewChild,

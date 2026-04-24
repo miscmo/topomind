@@ -2,14 +2,26 @@
  * useGit — React hook for Git operations
  */
 import { useEffect, useMemo } from 'react'
-import { GitBackend, GitCache, startGitCacheCleanup } from '../core/git-backend'
+import { GitBackend, GitCache, startGitCacheCleanup, stopGitCacheCleanup } from '../core/git-backend'
 
 export type GitRepoStatus = 'clean' | 'dirty' | 'untracked' | 'error' | 'unknown'
 
+let cleanupRefCount = 0
+
 export function useGit() {
-  // Start cache cleanup timer on mount (singleton — safe to call multiple times)
+  // Use a ref counter instead of a boolean so that when multiple components
+  // use useGit(), the cleanup timer is only stopped when ALL of them unmount.
   useEffect(() => {
-    startGitCacheCleanup()
+    cleanupRefCount++
+    if (cleanupRefCount === 1) {
+      startGitCacheCleanup()
+    }
+    return () => {
+      cleanupRefCount--
+      if (cleanupRefCount === 0) {
+        stopGitCacheCleanup()
+      }
+    }
   }, [])
 
   return useMemo(() => ({

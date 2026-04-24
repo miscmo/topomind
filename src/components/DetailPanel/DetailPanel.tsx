@@ -90,11 +90,15 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
   }, [renameMode])
 
   // ===== Save markdown =====
+  // Use nodesMapRef for stale-closure-safe access. selectedNode from render-time
+  // closure can be stale when the selected node changes without re-rendering DetailPanel.
   const handleSave = () => {
     if (!selectedNodeId) return
-    const path = selectedNode?.data.path ?? selectedNodeId
+    const node = graph.nodesMapRef.current.get(selectedNodeId)
+    const path = node?.data.path ?? selectedNodeId
+    const label = node?.data.label
     storage.writeMarkdown(path, markdown)
-    logAction('内容:保存', 'DetailPanel', { nodePath: path, label: selectedNode?.data.label })
+    logAction('内容:保存', 'DetailPanel', { nodePath: path, label })
     setEditMode(false)
   }
 
@@ -115,19 +119,20 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
   }
 
   // ===== Delete node =====
+  // Use nodesMapRef for stale-closure-safe node data access.
+  // selectedNode from render-time closure can be stale when the selected node changes
+  // without triggering a DetailPanel re-render (e.g., via React Flow selection).
   const handleDelete = useCallback(async () => {
     if (!selectedNodeId) return
-    const label = selectedNode?.data.label ?? selectedNodeId
+    const node = graph.nodesMapRef.current.get(selectedNodeId)
+    const label = node?.data.label ?? selectedNodeId
+    const path = node?.data.path ?? selectedNodeId
     const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${label}" 确认删除` })
     if (!confirmed?.trim() || confirmed !== label) return
-    logAction('节点:删除', 'DetailPanel', {
-      nodeId: selectedNodeId,
-      label,
-      path: selectedNode?.data.path,
-    })
+    logAction('节点:删除', 'DetailPanel', { nodeId: selectedNodeId, label, path })
     graph.deleteChildNode(selectedNodeId)
     collapseRightPanel()
-  }, [selectedNodeId, selectedNode, prompt, graph, collapseRightPanel])
+  }, [selectedNodeId, prompt, graph, collapseRightPanel])
 
   // Memoize parsed HTML — must be declared before any early returns (Rules of Hooks)
   const sanitizedHtml = useMemo(
@@ -138,11 +143,15 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
   // ===== Empty state =====
   if (!selectedNodeId || !selectedNode) {
     return (
-      <div className={styles.detailPanel}>
+      <div id="detail-panel" className={styles.detailPanel}>
         <div className={styles.emptyState}>选择一个节点查看详情</div>
       </div>
     )
   }
+
+  // selectedNode could be null due to stale closures even after the guard above.
+  // This resolves "Cannot destructure property 'data' of 'R' as it is null" errors.
+  if (!selectedNode) return null
 
   const { data } = selectedNode
 
@@ -174,7 +183,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
 
 
   return (
-    <div className={styles.detailPanel}>
+    <div id="detail-panel" className={styles.detailPanel}>
       {/* 标题栏 */}
       <div className={styles.title}>
         <div className={styles.titleMain}>
@@ -235,8 +244,9 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
             </button>
             <button
               onClick={() => {
-                // Reload original content
-                const path = selectedNode?.data.path ?? selectedNodeId
+                // Reload original content — use nodesMapRef for stale-closure-safe access
+                const node = graph.nodesMapRef.current.get(selectedNodeId)
+                const path = node?.data.path ?? selectedNodeId
                 const requestSeq = ++markdownRequestSeqRef.current
                 storage.readMarkdown(path).then((content: string) => {
                   if (markdownRequestSeqRef.current !== requestSeq) return

@@ -8,7 +8,7 @@
  */
 import { createContext, useContext, useMemo, type Context } from 'react'
 import { useGraph } from '../hooks/useGraph'
-import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData } from '../types'
+import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData, EdgeRelation, EdgeWeight } from '../types'
 import type { Node, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 
 export interface GraphContextValue {
@@ -29,6 +29,7 @@ export interface GraphContextValue {
   loadRoom: (dirPath: string) => Promise<void>
   navigateBack: () => Promise<void>
   navigateToRoom: (index: number) => Promise<void>
+  navigateToRoot: () => Promise<void>
 
   // React Flow handlers — typed with proper Node<KnowledgeNodeData> signatures
   onNodesChange: (changes: NodeChange[]) => void
@@ -45,7 +46,7 @@ export interface GraphContextValue {
   renameNode: (nodeId: string, newName: string) => Promise<boolean>
 
   // Edge operations
-  updateEdgeRelation: (edgeId: string, relation: string, weight: string) => void
+  updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => void
 
   // Layout
   layoutNodes: (direction?: 'RIGHT' | 'DOWN') => Promise<void>
@@ -71,6 +72,7 @@ const emptyContext: GraphContextValue = {
   loadRoom: async () => {},
   navigateBack: async () => {},
   navigateToRoom: async () => {},
+  navigateToRoot: async () => {},
   onNodesChange: () => {},
   onEdgesChange: () => {},
   onConnect: () => {},
@@ -105,6 +107,7 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     loadRoom: graph.loadRoom,
     navigateBack: graph.navigateBack,
     navigateToRoom: graph.navigateToRoom,
+    navigateToRoot: graph.navigateToRoot,
     onNodesChange: graph.onNodesChange,
     onEdgesChange: graph.onEdgesChange,
     onConnect: graph.onConnect,
@@ -115,7 +118,7 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     createChildNode: graph.createChildNode,
     deleteChildNode: graph.deleteChildNode,
     renameNode: graph.renameNode,
-    updateEdgeRelation: graph.updateEdgeRelation as (edgeId: string, relation: string, weight: string) => void,
+    updateEdgeRelation: graph.updateEdgeRelation,
     layoutNodes: graph.layoutNodes,
     highlightSearch: graph.highlightSearch,
     flushCurrentRoomSave: graph.flushCurrentRoomSave,

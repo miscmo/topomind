@@ -10,13 +10,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "clean": "node -e \"const fs=require('fs');['dist','dist-electron'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",
     "test": "npx playwright test",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:unit:coverage": "vitest run --coverage",
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
-    "build": "vite build",
-    "build:mac": "vite build && electron-builder --mac",
-    "build:win": "vite build && electron-builder --win",
-    "build:linux": "vite build && electron-builder --linux",
+    "test:e2e": "npm run clean && npm run build && npx playwright test",
+    "build": "npm run clean && vite build",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:win": "npm run build && electron-builder --win",
+    "build:linux": "npm run build && electron-builder --linux",
     "preview": "vite preview"
   },
   "build": {
@@ -67,16 +72,20 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/dompurify": "^3.0.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^30.5.1",
     "electron-builder": "^24.13.3",
+    "jsdom": "^23.0.0",
     "playwright": "^1.59.1",
     "typescript": "^5.7.3",
     "vite": "^5.2.8",
     "vite-plugin-electron": "^0.28.4",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^4.1.5"
   }
 }

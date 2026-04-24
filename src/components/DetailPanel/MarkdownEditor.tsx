@@ -34,6 +34,7 @@ export default memo(function MarkdownEditor({ value, onChange, onSave, placehold
 
   return (
     <textarea
+      id="node-description"
       ref={textareaRef}
       className={styles.mdEditorTextarea}
       value={value}

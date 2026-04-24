@@ -29,6 +29,10 @@ export interface GraphEdge {
   target: string
   relation: EdgeRelation
   weight: EdgeWeight
+  /** 高亮状态（搜索/选中连线时置 true） */
+  highlighted?: boolean
+  /** 淡化状态（其他连线淡化时置 true） */
+  faded?: boolean
 }
 
 /**

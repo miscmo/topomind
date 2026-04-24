@@ -39,9 +39,15 @@ export default defineConfig({
         input: 'electron/preload.js',
         vite: {
           build: {
+            lib: {
+              entry: resolve(__dirname, 'electron/preload.js'),
+              formats: ['cjs'],
+              fileName: () => 'preload.js',
+            },
             rollupOptions: {
               output: {
                 inlineDynamicImports: true,
+                entryFileNames: 'preload.js',
               },
             },
           },

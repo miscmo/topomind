@@ -142,21 +142,12 @@ export const roomStore = create<RoomState>((set, get) => ({
 
     const target = history[index]
     const newHistory = history.slice(0, index)
-    if (newHistory.length === 0) {
-      set({
-        currentRoomPath: null,
-        currentKBPath: target.room.kbPath,
-        currentRoomName: '全局',
-        roomHistory: [],
-      })
-    } else {
-      set({
-        currentRoomPath: target.room.path,
-        currentKBPath: target.room.kbPath,
-        currentRoomName: target.room.name,
-        roomHistory: newHistory,
-      })
-    }
+    set({
+      currentRoomPath: target.room.path,
+      currentKBPath: target.room.kbPath,
+      currentRoomName: target.room.name,
+      roomHistory: newHistory,
+    })
   },
 
   restoreRoomState: ({ kbPath, roomHistory, currentRoomPath, currentRoomName }) => set({

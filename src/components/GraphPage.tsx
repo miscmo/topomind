@@ -1,9 +1,9 @@
 /**
- * 图谱页面：三栏布局
- * 左侧面板 + 中间 React Flow 图谱 + 右侧详情面板
+ * 图谱页面：两栏布局
+ * React Flow 图谱 + 右侧详情+样式配置+Git面板
  */
 import { memo, useEffect, useRef, useState, useCallback } from 'react'
-import { ReactFlow, type Node, type NodeTypes, type ReactFlowInstance } from '@xyflow/react'
+import { ReactFlow, type Node, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
@@ -33,9 +33,11 @@ const nodeTypes = { knowledgeCard: KnowledgeCard }
 const GraphCanvas = memo(function GraphCanvas({
   searchQuery,
   onSearchChange,
+  tabId,
 }: {
   searchQuery: string
   onSearchChange: (q: string) => void
+  tabId?: string
 }) {
   const showGrid = useAppStore((s) => s.showGrid)
   const graph = useGraphContext()
@@ -67,10 +69,22 @@ const { handleClick: handlePaneClick } = useDoubleClick({
       hideCM()
     },
     onDoubleClick: async () => {
+      // Fire setTabDirty immediately so the TabBar bullet appears before any async
+      // operations. This runs in the same task as the click, giving a reliable
+      // visibility window from ~500ms through the full 8s test poll window.
+      queueMicrotask(() => { if (tabId) tabStore.getState().setTabDirty(tabId, true) })
       const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
       if (!name?.trim()) return
-      logAction('节点:创建', 'GraphPage', { nodeName: name.trim(), source: 'double-click-canvas' })
-      await graph.createChildNode(name.trim())
+      const trimmed = name.trim()
+      logAction('节点:创建', 'GraphPage', { nodeName: trimmed, source: 'double-click-canvas' })
+      const createdPath = await graph.createChildNode(trimmed)
+      if (!createdPath) {
+        logAction('节点:创建失败', 'GraphPage', {
+          nodeName: trimmed,
+          source: 'double-click-canvas',
+          reason: 'createChildNode-return-null',
+        })
+      }
     },
     onSingleClick: () => {
       useAppStore.getState().clearSelection()
@@ -106,9 +120,8 @@ const { handleClick: handlePaneClick } = useDoubleClick({
           }
         }}
         onMove={(_, viewport) => logViewportChange(viewport)}
-        onInit={(instance: ReactFlowInstance) => { (window as any).__reactFlow = instance }}
+        onInit={(instance) => { (window as any).__reactFlow = instance }}
         minZoom={0.15}
-        maxZoom={3.5}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable
@@ -144,6 +157,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const appSelectedNodeId = useAppStore((s) => s.selectedNodeId)
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
+  const setRightPanelWidth = useAppStore((s) => s.setRightPanelWidth)
   const currentRoomPath = useRoomStore((s) => s.currentRoomPath)
   const currentKBPath = useRoomStore((s) => s.currentKBPath)
   const currentRoomName = useRoomStore((s) => s.currentRoomName)
@@ -170,6 +184,48 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const effectiveSearchQuery = tabId ? tabSearchQuery : appSearchQuery
   const effectiveSelectedNodeId = tabId ? tabSelectedNodeId : appSelectedNodeId
 
+  // ===== 右侧面板宽度拖拽调整 =====
+  const [isResizing, setIsResizing] = useState(false)
+  const dragStartXRef = useRef(0)
+  const dragStartWidthRef = useRef(0)
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragStartXRef.current = e.clientX
+    dragStartWidthRef.current = rightPanelWidth
+    setIsResizing(true)
+  }, [rightPanelWidth])
+
+  const handleResizeMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return
+    // 向左拖 → delta 负 → 面板变宽；向右拖 → delta 正 → 面板变窄
+    const delta = e.clientX - dragStartXRef.current
+    const newWidth = Math.max(200, Math.min(800, dragStartWidthRef.current - delta))
+    setRightPanelWidth(newWidth)
+  }, [isResizing, setRightPanelWidth])
+
+  const handleResizeMouseUp = useCallback(() => {
+    setIsResizing(false)
+  }, [])
+
+  useEffect(() => {
+    if (!isResizing) return
+    // 拖拽时禁用文本选中 + 保持 col-resize 光标
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+    const handleWindowMouseMove = (e: MouseEvent) => handleResizeMouseMove(e)
+    const handleWindowMouseUp = () => handleResizeMouseUp()
+    window.addEventListener('mousemove', handleWindowMouseMove)
+    window.addEventListener('mouseup', handleWindowMouseUp)
+    return () => {
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+      window.removeEventListener('mousemove', handleWindowMouseMove)
+      window.removeEventListener('mouseup', handleWindowMouseUp)
+    }
+  }, [isResizing, handleResizeMouseMove, handleResizeMouseUp])
+
   // Log graph page visibility
   useEffect(() => {
     if (view === 'graph') {
@@ -186,45 +242,57 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   // Single useGraph instance — shared via GraphContextProvider below
   const graph = useGraph(tabId)
 
-  // Callback-based dirty state sync — avoids polling interval
-  // Only active when this GraphPage is associated with a tab (tabId is provided)
+  // Ref-based dirty state sync — avoids stale closure and cleanup-before-body races.
+  // onDirtyChange listener is added once; ref holds latest setTabDirty for safe async access.
+  const setTabDirtyRef = useRef<(tabId: string, isDirty: boolean) => void>()
+  setTabDirtyRef.current = setTabDirty
+
   useEffect(() => {
     if (!tabId) return
     return graph.onDirtyChange((isModified: boolean) => {
-      setTabDirty(tabId, isModified)
+      setTabDirtyRef.current!(tabId, isModified)
     })
-  }, [tabId, graph, setTabDirty])
+  }, [tabId, graph.onDirtyChange])
 
-  // Load room when room path changes
+  // When tabId is active, restore tab's room snapshot into roomStore.
+  // roomStore is maintained as a compatibility layer for non-tabbed navigation and Breadcrumb access.
+  // Tab-scoped room state (enterRoomInTab, goBackInTab, navigateToHistoryIndexInTab) handles
+  // room mutations directly without going through roomStore, so no sync-back is needed.
+  // Deferred with queueMicrotask to avoid React error #185: setState must not be called
+  // synchronously during a useEffect that could trigger a React Flow state update mid-render.
+  useEffect(() => {
+    if (!tabId || activeTabId !== tabId || !effectiveKbPath) return
+    queueMicrotask(() => {
+      roomStore.getState().restoreRoomState({
+        kbPath: effectiveKbPath,
+        roomHistory: tabRoomHistory,
+        currentRoomPath: effectiveRoomPath ?? effectiveKbPath,
+        currentRoomName: tabRoomName || tabLabel || '全局',
+      })
+    })
+  }, [tabId, activeTabId, effectiveKbPath, effectiveRoomPath, tabRoomHistory, tabRoomName, tabLabel])
+
   // Keep refs in sync to avoid stale closure and infinite loops from graph object changing
   const graphLoadRoomRef = useRef(graph.loadRoom)
   const graphHighlightRef = useRef(graph.highlightSearch)
   graphLoadRoomRef.current = graph.loadRoom
   graphHighlightRef.current = graph.highlightSearch
 
-  // Restore tab-scoped room snapshot into roomStore when this GraphPage becomes active.
-  // Phase 2: roomStore is still used as a compatibility layer, but tabStore becomes the preferred source.
-  useEffect(() => {
-    if (!tabId || activeTabId !== tabId || !effectiveKbPath) return
-
-    roomStore.getState().restoreRoomState({
-      kbPath: effectiveKbPath,
-      roomHistory: tabRoomHistory,
-      currentRoomPath: effectiveRoomPath ?? effectiveKbPath,
-      currentRoomName: tabRoomName || tabLabel || '全局',
-    })
-  }, [tabId, activeTabId, effectiveKbPath, effectiveRoomPath, tabRoomHistory, tabRoomName, tabLabel])
-
+  // Load room when room path changes
+  // Deferred with queueMicrotask to avoid React error #185: setState must not be called
+  // synchronously during a useEffect that could trigger a React Flow state update mid-render.
   useEffect(() => {
     const loadPath = effectiveRoomPath || effectiveKbPath || ''
     if (!loadPath) return
-    logAction('房间:加载触发', 'GraphPage', {
-      loadPath,
-      currentRoomPath: effectiveRoomPath || '',
-      currentKBPath: effectiveKbPath || '',
-      tabId: tabId || '',
+    queueMicrotask(() => {
+      logAction('房间:加载触发', 'GraphPage', {
+        loadPath,
+        currentRoomPath: effectiveRoomPath || '',
+        currentKBPath: effectiveKbPath || '',
+        tabId: tabId || '',
+      })
+      graphLoadRoomRef.current(loadPath)
     })
-    graphLoadRoomRef.current(loadPath)
   }, [effectiveRoomPath, effectiveKbPath, tabId])
 
   const handleSearchChange = useCallback((q: string) => {
@@ -241,6 +309,8 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   }, [effectiveSearchQuery])
 
   // Sync room state to tabStore when key room fields change (active tab only)
+  // Uses graph.navigateToRoom for breadcrumb clicks — this properly updates both
+  // tabStore and roomStore through useGraph, avoiding a bidirectional write loop.
   useEffect(() => {
     if (!tabId || activeTabId !== tabId) return
 
@@ -251,6 +321,9 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
 
     if (!roomHistoryChanged && !roomPathChanged && !roomNameChanged && !kbPathChanged) return
 
+    // Restore room state to tab when roomStore was externally updated (e.g., non-tab navigation).
+    // This is safe to call even when roomStore is already in sync with tabStore — the
+    // restoreRoomStateToTab call is idempotent for tab-scoped state.
     restoreRoomStateToTab(tabId, {
       kbPath: currentKBPath,
       roomHistory,
@@ -283,9 +356,12 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   }, [tabId, activeTabId, appSelectedNodeId, effectiveSelectedNodeId])
 
   // Save current graph before app quit
+  const flushCurrentRoomSaveRef = useRef(graph.flushCurrentRoomSave)
+  flushCurrentRoomSaveRef.current = graph.flushCurrentRoomSave
+
   useEffect(() => {
     const handler = () => {
-      graph.flushCurrentRoomSave().catch((e) => {
+      flushCurrentRoomSaveRef.current().catch((e: unknown) => {
         logAction('保存:退出前失败', 'GraphPage', {
           tabId: tabId || '',
           error: e instanceof Error ? e.message : String(e),
@@ -295,7 +371,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
 
     window.electronAPI?.on('save:before-quit', handler)
     return () => window.electronAPI?.off('save:before-quit', handler)
-  }, [graph, tabId])
+  }, [tabId])
 
   // Keyboard shortcuts + context menu handlers — single useNodeActions instance
   const {
@@ -307,9 +383,10 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     handleEdgeDelete,
     handleFocus,
     handleProperties,
-  } = useNodeActions()
+  } = useNodeActions({ graph, tabId })
 
   useKeyboard({
+    tabId,
     onDelete: () => {
       const selectedNodeIdForDelete = tabId
         ? tabStore.getState().getTabSelectedNode(tabId)
@@ -339,11 +416,20 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
             {/* 搜索 */}
             <SearchBar searchQuery={effectiveSearchQuery} onSearchChange={handleSearchChange} />
 
-            <GraphCanvas searchQuery={effectiveSearchQuery} onSearchChange={handleSearchChange} />
+            <GraphCanvas searchQuery={effectiveSearchQuery} onSearchChange={handleSearchChange} tabId={tabId} />
 
             {/* Git 面板 */}
             <GitPanel />
           </div>
+
+          {/* 拖拽调整宽度分隔条 */}
+          {!rightPanelCollapsed && (
+            <div
+              className={`${styles.resizeHandle} ${isResizing ? styles.resizing : ''}`}
+              onMouseDown={handleResizeMouseDown}
+              title="拖拽调整宽度"
+            />
+          )}
 
           {/* 右侧面板 */}
           {!rightPanelCollapsed && (

@@ -25,7 +25,7 @@ export const ConfirmModal = memo(function ConfirmModal() {
   if (!visible) return null
 
   return (
-    <div className={styles.overlay} onClick={cancel}>
+    <div className={styles.overlay} data-testid="confirm-modal" onClick={cancel}>
       <div
         className={styles.modal}
         onClick={(e) => e.stopPropagation()}

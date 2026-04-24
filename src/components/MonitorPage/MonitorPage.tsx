@@ -169,8 +169,7 @@ function FilterBar() {
       dateStr,
       levels: selectedLevels.length > 0 ? selectedLevels : undefined,
     })) as LogEntry[]
-    // Append results instead of replacing to avoid wiping logs when query returns empty
-    appendEntries(results)
+    setEntries(results)
   }, [selectedDate, selectedLevels, appendEntries])
 
   const handleClear = useCallback(async () => {

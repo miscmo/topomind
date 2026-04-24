@@ -20,8 +20,15 @@ import { gitService } from './git-service.js';
 import { gitAuth } from './git-auth.js';
 import LogService from './log-service.js';
 
-// 从 app.getAppPath() 推导 dist-electron/ 路径（兼容 dev 和 production）
-const DIST_ELECTRON_DIR = nodePath.join(app.getAppPath(), 'dist-electron');
+// 兼容生产运行、Playwright 直接启动 dist-electron/main.js、以及 dev 模式。
+const APP_PATH = app.getAppPath();
+const MAIN_SCRIPT_DIR = process.argv[1] ? nodePath.dirname(nodePath.resolve(process.argv[1])) : APP_PATH;
+const DIST_ELECTRON_DIR = nodeFs.existsSync(nodePath.join(APP_PATH, 'dist-electron'))
+  ? nodePath.join(APP_PATH, 'dist-electron')
+  : MAIN_SCRIPT_DIR;
+const DIST_RENDERER_DIR = nodeFs.existsSync(nodePath.join(APP_PATH, 'dist'))
+  ? nodePath.join(APP_PATH, 'dist')
+  : nodePath.join(nodePath.dirname(DIST_ELECTRON_DIR), 'dist');
 
 // E2E 测试：尝试从工作目录根目录的 .env 文件加载环境变量。
 // global-setup.ts 会将 TOPOMIND_E2E_WORKDIR 写入项目根目录的 .env。
@@ -291,11 +298,32 @@ if (process.env.TOPOMIND_PROFILE && process.env.TOPOMIND_PROFILE !== 'prod') {
 }
 
 function createWindow() {
+  const preloadPath = nodePath.join(DIST_ELECTRON_DIR, 'preload.js');
+  const rendererIndexPath = nodePath.join(DIST_RENDERER_DIR, 'index.html');
+
+  LogService.write({
+    level: 'INFO',
+    module: 'Main',
+    action: 'window:paths',
+    message: '窗口加载路径解析',
+    params: {
+      appPath: APP_PATH,
+      execPath: process.execPath,
+      distElectronDir: DIST_ELECTRON_DIR,
+      distRendererDir: DIST_RENDERER_DIR,
+      preloadPath,
+      preloadExists: nodeFs.existsSync(preloadPath),
+      rendererIndexPath,
+      rendererExists: nodeFs.existsSync(rendererIndexPath),
+      devServerUrl: process.env.VITE_DEV_SERVER_URL || null,
+    },
+  });
+
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     title: 'TopoMind',
     webPreferences: {
-      preload: nodePath.join(DIST_ELECTRON_DIR, 'preload.mjs'),
+      preload: preloadPath,
       nodeIntegration: false, contextIsolation: true,
     },
   });
@@ -309,10 +337,37 @@ function createWindow() {
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    win.loadFile(nodePath.join(DIST_ELECTRON_DIR, '..', 'dist', 'index.html'));
+    win.loadFile(rendererIndexPath);
   }
   win.webContents.on('console-message', function(e, level, msg, line, src) {
-    if (process.env.VITE_DEV_SERVER_URL) console.log('[renderer]', msg);
+    console.log('[renderer]', msg, src || '', line || '');
+  });
+  win.webContents.on('did-fail-load', function(e, errorCode, errorDescription, validatedURL, isMainFrame) {
+    LogService.write({
+      level: 'ERROR',
+      module: 'Main',
+      action: 'window:did-fail-load',
+      message: '窗口加载失败',
+      params: { errorCode, errorDescription, validatedURL, isMainFrame },
+    });
+    console.error('[window:did-fail-load]', errorCode, errorDescription, validatedURL, isMainFrame);
+  });
+  win.webContents.on('did-finish-load', function() {
+    const currentUrl = win && !win.isDestroyed() ? win.webContents.getURL() : '';
+    LogService.write({
+      level: 'INFO',
+      module: 'Main',
+      action: 'window:did-finish-load',
+      message: '窗口加载完成',
+      params: { currentUrl },
+    });
+    console.log('[window:did-finish-load]', currentUrl);
+  });
+  win.webContents.on('render-process-gone', function(e, details) {
+    console.error('[window:render-process-gone]', JSON.stringify(details));
+  });
+  win.on('unresponsive', function() {
+    console.error('[window:unresponsive]');
   });
   win.on('closed', function() {
     LogService.write({

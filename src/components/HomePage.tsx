@@ -2,13 +2,15 @@
  * 首页：知识库列表
  * 对应原 HomePage.vue
  */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
 import { useTabStore, tabStore } from '../stores/tabStore'
 import { useStorage } from '../hooks/useStorage'
 import { logAction } from '../core/log-backend'
 import { logger } from '../core/logger'
+import { useConfirmStore } from '../stores/confirmStore'
+import { usePromptStore } from '../stores/promptStore'
 import styles from './HomePage.module.css'
 
 interface KBItem {
@@ -18,6 +20,13 @@ interface KBItem {
   cover?: string
   nodeCount: number | null
   coverUrl: string | null
+}
+
+interface KBContextMenu {
+  visible: boolean
+  x: number
+  y: number
+  kb: KBItem | null
 }
 
 export default function HomePage() {
@@ -44,6 +53,72 @@ export default function HomePage() {
   const [importDir, setImportDir] = useState('')
   const [importLoading, setImportLoading] = useState(false)
   const [importError, setImportError] = useState('')
+
+  // KB 右键菜单状态
+  const [ctxMenu, setCtxMenu] = useState<KBContextMenu>({ visible: false, x: 0, y: 0, kb: null })
+
+  // 点击外部关闭 KB 右键菜单
+  useEffect(() => {
+    if (!ctxMenu.visible) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Element
+      if (!target.closest('[data-testid="kb-context-menu"]') && !target.closest('[class*="card"]')) {
+        closeCtxMenu()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [ctxMenu.visible])
+
+  // KB 右键菜单
+  function handleKBRightClick(e: React.MouseEvent, kb: KBItem) {
+    e.preventDefault()
+    e.stopPropagation()
+    setCtxMenu({ visible: true, x: e.clientX, y: e.clientY, kb })
+  }
+
+  function closeCtxMenu() {
+    setCtxMenu((prev) => ({ ...prev, visible: false }))
+  }
+
+  async function handleKBDelete() {
+    const kb = ctxMenu.kb
+    if (!kb) return
+    closeCtxMenu()
+    const confirmed = await useConfirmStore.getState().open({
+      title: '确认删除',
+      message: `确定要删除知识库「${kb.name}」吗？此操作不可恢复。`,
+    })
+    if (!confirmed) return
+    try {
+      await storage.deleteKB(kb.name)
+      logAction('知识库:删除', 'HomePage', { kbName: kb.name, kbPath: kb.path })
+      useAppStore.getState().triggerKBRefresh()
+      await loadKBList()
+    } catch (err) {
+      logger.catch('HomePage', 'handleKBDelete', err)
+    }
+  }
+
+  async function handleKBRename() {
+    const kb = ctxMenu.kb
+    if (!kb) return
+    closeCtxMenu()
+    const newName = await usePromptStore.getState().open({
+      title: '重命名知识库',
+      placeholder: '输入新名称',
+      defaultValue: kb.name,
+    })
+    if (!newName?.trim() || newName === kb.name) return
+    try {
+      await storage.renameKB(kb.path, newName.trim())
+      logAction('知识库:重命名', 'HomePage', { kbName: kb.name, newName, kbPath: kb.path })
+      useAppStore.getState().triggerKBRefresh()
+      await loadKBList()
+    } catch (err) {
+      logger.catch('HomePage', 'handleKBRename', err)
+    }
+  }
 
   // 新建知识库弹窗生命周期日志
   const prevShowCreateSheet = useRef(false)
@@ -278,7 +353,13 @@ export default function HomePage() {
         <div className={styles.sectionTitle}>我的知识库</div>
         <div className={styles.grid}>
           {kbs.map((kb) => (
-            <div key={kb.path} className={styles.card} onClick={() => { logAction('HomePage:点击知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name }); openKB(kb); }} onMouseEnter={() => logAction('HomePage:悬停知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name })}>
+            <div
+              key={kb.path}
+              className={styles.card}
+              onClick={() => { logAction('HomePage:点击知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name }); openKB(kb); }}
+              onMouseEnter={() => logAction('HomePage:悬停知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name })}
+              onContextMenu={(e) => handleKBRightClick(e, kb)}
+            >
               <div className={styles.cardImage}>
                 {kb.coverUrl ? (
                   <img src={kb.coverUrl} alt={kb.name} />
@@ -312,6 +393,31 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* KB 右键菜单 */}
+      {ctxMenu.visible && ctxMenu.kb && (
+        <div
+          data-testid="kb-context-menu"
+          className={styles.ctxMenu}
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onMouseLeave={closeCtxMenu}
+        >
+          <button
+            className={styles.ctxMenuItem}
+            onClick={handleKBDelete}
+            data-testid="ctx-delete"
+          >
+            删除
+          </button>
+          <button
+            className={styles.ctxMenuItem}
+            onClick={handleKBRename}
+            data-testid="ctx-rename"
+          >
+            重命名
+          </button>
+        </div>
+      )}
 
       {/* 新建知识库弹窗 */}
       <div

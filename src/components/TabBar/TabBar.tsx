@@ -64,6 +64,7 @@ export default memo(function TabBar({ onCloseTab }: TabBarProps) {
     }
 
     if (tab.type === 'kb' && tab.kbPath) {
+      setActiveTab(tab.id)
       const roomState = getRoomStateFromTab(tab.id)
       restoreRoomStateToTab(tab.id, {
         kbPath: tab.kbPath,
@@ -72,12 +73,11 @@ export default memo(function TabBar({ onCloseTab }: TabBarProps) {
         currentRoomName: roomState?.currentRoomName || tab.label,
       })
     }
-
-    setActiveTab(tab.id)
   }
 
-  // 仅有一个 Tab（主页）时不渲染
-  if (tabs.length <= 1) return null
+  // 有知识库 Tab 时才渲染（主页 Tab 本身不渲染 TabBar）
+  const hasKbTab = tabs.some((t) => t.type === 'kb')
+  if (!hasKbTab) return null
 
   return (
     <div className={styles.bar} role="tablist">

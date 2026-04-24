@@ -17,6 +17,7 @@ import { useAppStore } from './stores/appStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
 import { useStorage } from './hooks/useStorage'
+import { Store } from './core/storage'
 
 export default memo(function App() {
   const [isMonitorWindow, setIsMonitorWindow] = useState(
@@ -76,9 +77,16 @@ export default memo(function App() {
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
+  // App unmount: revoke all Blob URLs to prevent memory leaks.
+  useEffect(() => {
+    return () => {
+      Store.revokeAllImageUrls()
+    }
+  }, [])
+
   // Close tab handler: check dirty state before removing
   async function handleCloseTab(tabId: string) {
-    const tab = tabs.find((t) => t.id === tabId)
+    const tab = tabStore.getState().getTabById(tabId)
     if (!tab || tab.id === 'home') return
 
     if (tab.isDirty) {
@@ -100,7 +108,6 @@ export default memo(function App() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const isSetup = view === 'setup'
-
   return (
     <>
       <ConfirmModal />

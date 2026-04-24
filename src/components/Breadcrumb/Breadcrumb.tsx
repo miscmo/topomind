@@ -1,11 +1,11 @@
 /**
  * 面包屑导航组件
- * 显示完整房间路径：全局 > 父房间 > ... > 当前房间
- * 历史房间可点击跳转，当前房间不可点击
- * 每个 KB tab 有独立的 room 历史状态，从 tabStore 读取。
+ * 显示完整房间路径：知识库根 > 父房间 > ... > 当前房间
+ * 历史房间可点击跳转，当前房间不可点击。
  */
-import { memo, useEffect, useState } from 'react'
-import { tabStore } from '../../stores/tabStore'
+import { memo } from 'react'
+import { useRoomStore } from '../../stores/roomStore'
+import { useTabStore } from '../../stores/tabStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import type { RoomHistoryItem } from '../../types'
 import { logAction } from '../../core/log-backend'
@@ -19,47 +19,36 @@ interface BreadcrumbProps {
 export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
   const graph = useGraphContext()
 
-  const [history, setHistory] = useState<RoomHistoryItem[]>([])
-  const [currentPath, setCurrentPath] = useState<string | null>(null)
-  const [currentRoomName, setCurrentRoomName] = useState<string>('')
+  const tab = useTabStore((s) => (tabId ? s.getTabById(tabId) : undefined))
+  const roomHistory = useRoomStore((s) => s.roomHistory)
+  const currentRoomPath = useRoomStore((s) => s.currentRoomPath)
+  const currentRoomName = useRoomStore((s) => s.currentRoomName)
+  const currentKBPath = useRoomStore((s) => s.currentKBPath)
 
-  // Load room state from tabStore for this tab
-  const loadFromTabStore = () => {
-    if (!tabId) return
-    const tabState = tabStore.getState().getRoomStateFromTab(tabId)
-    if (tabState) {
-      setHistory(tabState.roomHistory)
-      setCurrentPath(tabState.currentRoomPath)
-      setCurrentRoomName(tabState.currentRoomName)
-    }
-  }
+  const history = tabId ? (tab?.roomHistory ?? []) : roomHistory
+  const activeRoomPath = tabId ? (tab?.currentRoomPath ?? null) : currentRoomPath
+  const activeRoomName = tabId ? (tab?.currentRoomName ?? '') : currentRoomName
+  const rootPath = tabId ? (tab?.kbPath ?? null) : currentKBPath
+  const rootLabel = tabId ? (tab?.label ?? '知识库') : (rootPath ? '知识库' : '')
+  const isAtRoot = Boolean(activeRoomPath && rootPath && activeRoomPath === rootPath)
 
-  useEffect(() => {
-    loadFromTabStore()
-
-    const unsub = tabStore.subscribe(() => {
-      loadFromTabStore()
-    })
-    return unsub
-  }, [tabId])
-
-  // Hide breadcrumb when at KB top level (no drilling down, no history)
-  if (!currentPath || history.length === 0) return null
+  if (!rootLabel || !activeRoomPath) return null
 
   return (
     <div id="breadcrumb" className={styles.breadcrumb}>
-      {/* 全局 */}
       <button
+        data-testid="breadcrumb-root"
         className={styles.link}
         onClick={async () => {
-          logAction('房间:返回', 'Breadcrumb', { source: 'breadcrumb-home' })
-          await graph.navigateBack()
+          logAction('房间:返回根级', 'Breadcrumb', { source: 'breadcrumb-root', rootLabel })
+          await graph.navigateToRoot()
         }}
+        disabled={isAtRoot}
+        aria-current={isAtRoot ? 'page' : undefined}
       >
-        🏠 全局
+        {rootLabel}
       </button>
 
-      {/* 历史房间（可点击） */}
       {history.map((item: RoomHistoryItem, index: number) => (
         <span key={item.room.path} className={styles.chain}>
           <span className={styles.sep}>&gt;</span>
@@ -77,11 +66,12 @@ export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
         </span>
       ))}
 
-      {/* 当前房间（不可点击） */}
-      <span className={styles.chain}>
-        <span className={styles.sep}>&gt;</span>
-        <span className={styles.current}>{currentRoomName}</span>
-      </span>
+      {!isAtRoot && (
+        <span className={styles.chain}>
+          <span className={styles.sep}>&gt;</span>
+          <span className={styles.current}>{activeRoomName}</span>
+        </span>
+      )}
     </div>
   )
 })

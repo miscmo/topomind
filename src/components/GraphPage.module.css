@@ -27,6 +27,42 @@
   background: #fff;
   flex-shrink: 0;
   overflow-y: auto;
+  border-left: 1px solid #e6ebf1;
+}
+/* 可拖拽调整宽度的分隔条 */
+.resizeHandle {
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  flex-shrink: 0;
+  background: #e8eaed;
+  z-index: 999;
+  position: relative;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.resizeHandle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  background: #c5c8ce;
+}
+
+.resizeHandle:hover,
+.resizeHandle:active,
+.resizing {
+  background: #d5d8de;
+}
+
+.resizeHandle:hover::before,
+.resizeHandle:active::before,
+.resizing::before {
+  background: #9ea3ad;
 }
 
 .header {

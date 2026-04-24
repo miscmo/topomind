@@ -14,7 +14,7 @@ import styles from './ContextMenu.module.css'
 
 interface MenuItem {
   label: string
-  action: () => Promise<void>
+  action: () => void | Promise<void>
   danger?: boolean
   disabled?: boolean
   separator?: never

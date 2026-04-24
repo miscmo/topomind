@@ -20,7 +20,15 @@ function normalizeMeta(metaRaw: unknown): FSBGraphMeta {
   const canvasBounds = (meta.canvasBounds && typeof meta.canvasBounds === 'object') ? meta.canvasBounds : null
 
   const rawEdges = Array.isArray(meta.edges) ? meta.edges : []
-  type EdgeItem = { id: string; source: string; target: string; relation: EdgeRelation; weight: EdgeWeight }
+  type EdgeItem = {
+    id: string
+    source: string
+    target: string
+    relation: EdgeRelation
+    weight: EdgeWeight
+    highlighted?: boolean
+    faded?: boolean
+  }
   const edges: EdgeItem[] = rawEdges
     .map((e): EdgeItem | null => {
       if (!e || typeof e !== 'object') return null
@@ -34,6 +42,11 @@ function normalizeMeta(metaRaw: unknown): FSBGraphMeta {
         target,
         relation: (edge.relation || '相关') as EdgeRelation,
         weight: (edge.weight || 'minor') as EdgeWeight,
+        // Preserve visual state across save+reload round-trips.
+        // Without these, highlighted/faded are silently dropped when
+        // normalizeMeta processes data before writing to _graph.json.
+        highlighted: typeof edge.highlighted === 'boolean' ? (edge.highlighted as boolean) : undefined,
+        faded: typeof edge.faded === 'boolean' ? (edge.faded as boolean) : undefined,
       }
     })
     .filter((e): e is NonNullable<typeof e> => e !== null)
@@ -57,7 +70,7 @@ function normalizeMeta(metaRaw: unknown): FSBGraphMeta {
  * 管理防抖保存定时器
  * 替代模块级可变 _saveTimers Map
  */
-class SaveManager {
+export class SaveManager {
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
 
   setTimer(dirPath: string, timer: ReturnType<typeof setTimeout>): void {

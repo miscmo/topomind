@@ -3,13 +3,14 @@
  *
  * Responsibilities:
  * - Load room graph data from filesystem (_graph.json)
- * - Handle node/edge CRUD operations
  * - Persist layout changes (debounced)
  * - Handle room navigation (drill-in / drill-out)
+ * - Coordinate React Flow event handlers
  *
  * Node/edge building is delegated to ./graphBuilder.ts
+ * Node/edge CRUD operations are delegated to ./graphOperations.ts
  */
-import { useCallback, useRef, useState, useEffect } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { Node, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
@@ -18,8 +19,9 @@ import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
 import { logAction } from '../core/log-backend'
 import { logger } from '../core/logger'
-import type { KnowledgeNodeData, KnowledgeNode, KnowledgeEdge, EdgeRelation, EdgeWeight } from '../types'
+import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData } from '../types'
 import { buildMetaFromNodesEdges, buildNodes, buildEdges, generateId } from './useGraph/graphBuilder'
+import { buildGraphOperations } from './useGraph/graphOperations'
 
 export interface GraphState {
   nodes: KnowledgeNode[]
@@ -45,7 +47,6 @@ export function useGraph(tabId?: string) {
     selectedNode: null,
   })
 
-  // Dirty state: true when changes are pending save, false when saved
   const [isModified, setIsModified] = useState(false)
 
   // Node internal maps for O(1) access
@@ -74,8 +75,8 @@ export function useGraph(tabId?: string) {
     setState((s) => ({ ...s, selectedNode: node }))
   }, [])
 
-  // Callback refs for external consumers to observe dirty state changes
-  // Avoids polling intervals in consuming components
+  // ===== Dirty state callbacks =====
+
   const dirtyChangeCallbacksRef = useRef<Set<(isModified: boolean) => void>>(new Set())
 
   const setDirtyState = useCallback((next: boolean) => {
@@ -84,6 +85,16 @@ export function useGraph(tabId?: string) {
     setIsModified(next)
     dirtyChangeCallbacksRef.current.forEach((cb) => cb(next))
   }, [])
+
+  const onDirtyChange = useCallback((callback: (isModified: boolean) => void) => {
+    dirtyChangeCallbacksRef.current.add(callback)
+    callback(isModifiedRef.current)
+    return () => {
+      dirtyChangeCallbacksRef.current.delete(callback)
+    }
+  }, [])
+
+  // ===== Navigation helpers =====
 
   const getActiveSelectedNodeId = useCallback(() => {
     if (tabId) {
@@ -96,7 +107,6 @@ export function useGraph(tabId?: string) {
     if (tabId) {
       tabStore.getState().setTabSelectedNode(tabId, nodeId)
     }
-
     if (nodeId === null) {
       clearSelection()
     } else {
@@ -115,7 +125,6 @@ export function useGraph(tabId?: string) {
         }
       }
     }
-
     const roomState = roomStore.getState()
     return {
       kbPath: roomState.currentKBPath || '',
@@ -137,6 +146,14 @@ export function useGraph(tabId?: string) {
 
         logAction('房间:加载', 'useGraph', { roomPath: dirPath, kbPath, requestSeq })
 
+        // Abandon superseded requests before doing expensive I/O.
+        // (requestSeq was incremented at the top; any newer loadRoom call
+        // will have already incremented loadRequestSeqRef, so we can detect staleness.)
+        if (requestSeq < loadRequestSeqRef.current) {
+          logAction('房间:加载丢弃', 'useGraph', { roomPath: dirPath, kbPath, requestSeq })
+          return
+        }
+
         // Build saved position map from child rooms' zoom/pan
         const savedPositions: Record<string, { x: number; y: number }> = {}
         if (meta.children) {
@@ -149,8 +166,15 @@ export function useGraph(tabId?: string) {
             })
           )
           for (const result of positionResults) {
-            if (result.status === 'fulfilled' && result.value.childMeta.zoom != null && result.value.childMeta.pan != null) {
-              savedPositions[result.value.childPath] = { x: result.value.childMeta.pan.x, y: result.value.childMeta.pan.y }
+            if (
+              result.status === 'fulfilled' &&
+              result.value.childMeta.zoom != null &&
+              result.value.childMeta.pan != null
+            ) {
+              savedPositions[result.value.childPath] = {
+                x: result.value.childMeta.pan.x,
+                y: result.value.childMeta.pan.y,
+              }
             }
           }
         }
@@ -158,7 +182,6 @@ export function useGraph(tabId?: string) {
         const nodes = await buildNodes(storage, dirPath, meta, savedPositions, kbPath)
         const edges = buildEdges(meta)
 
-        // Ignore stale responses: only the latest in-flight load may update refs/state.
         if (requestSeq < loadRequestSeqRef.current) {
           logAction('房间:加载丢弃', 'useGraph', { roomPath: dirPath, kbPath, requestSeq })
           return
@@ -177,12 +200,7 @@ export function useGraph(tabId?: string) {
           requestSeq,
         })
 
-        setState({
-          nodes,
-          edges,
-          loading: false,
-          selectedNode: null,
-        })
+        setState({ nodes, edges, loading: false, selectedNode: null })
       } catch (e) {
         logger.catch('useGraph', 'loadRoom', e)
         if (requestSeq === loadRequestSeqRef.current && requestSeq >= latestAppliedLoadSeqRef.current) {
@@ -190,19 +208,26 @@ export function useGraph(tabId?: string) {
         }
       }
     },
-    [storage, rebuildMaps, updateSelectedNode]
+    [storage, getActiveNavState, rebuildMaps, updateSelectedNode]
   )
 
-  // ===== Save layout to disk =====
+  // ===== Graph operations (CRUD) =====
 
-  const saveLayoutToDisk = useCallback(
-    async (dirPath: string, nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => {
-      if (!dirPath) return
-      await storage.saveLayout(dirPath, buildMetaFromNodesEdges(nodes, edges))
-      setDirtyState(false)
-    },
-    [storage, setDirtyState]
-  )
+  const ops = buildGraphOperations({
+    storage,
+    nodesMapRef,
+    edgesMapRef,
+    nodesRef,
+    edgesRef,
+    getActiveNavState,
+    loadRoom,
+    rebuildMaps,
+    setState: setState as Parameters<typeof buildGraphOperations>[0]['setState'],
+    getActiveSelectedNodeId,
+    setActiveSelectedNodeId,
+    updateSelectedNode,
+    setDirtyState,
+  })
 
   // ===== Apply layout =====
 
@@ -221,198 +246,101 @@ export function useGraph(tabId?: string) {
       setState((s) => ({ ...s, nodes: updatedNodes }))
       logAction('布局:应用', 'useGraph', { direction, positionedCount: Object.keys(positions).length })
 
-      // Read current room path at execution time to avoid stale closure
       const dirPath = getActiveNavState().roomPath
       if (dirPath) {
-        await saveLayoutToDisk(dirPath, updatedNodes, edgesRef.current)
+        await storage.saveLayout(dirPath, buildMetaFromNodesEdges(updatedNodes, edgesRef.current))
+        setDirtyState(false)
       }
     },
-    [computeLayout, rebuildMaps, saveLayoutToDisk]
+    [computeLayout, rebuildMaps, getActiveNavState, storage, setDirtyState]
   )
-
-  const scheduleDebouncedSave = useCallback(
-    (dirPath: string) => {
-      if (!dirPath) return
-      setDirtyState(true)
-
-      storage.saveGraphDebounced(
-        dirPath,
-        () => buildMetaFromNodesEdges(
-          Array.from(nodesMapRef.current.values()),
-          Array.from(edgesMapRef.current.values())
-        ),
-        () => {
-          setDirtyState(false)
-        }
-      )
-    },
-    [storage, setDirtyState]
-  )
-
-  // Register a callback to be called when dirty state changes
-  const onDirtyChange = useCallback((callback: (isModified: boolean) => void) => {
-    dirtyChangeCallbacksRef.current.add(callback)
-    // Call immediately with current state
-    callback(isModifiedRef.current)
-    return () => {
-      dirtyChangeCallbacksRef.current.delete(callback)
-    }
-  }, [])
 
   // ===== React Flow event handlers =====
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      setState((prev) => {
-        let nodes = [...prev.nodes]
+      const positionChanges: Array<{ id: string; position: { x: number; y: number } }> = []
+      const removeIds: string[] = []
+      const dimensionChanges: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined }> = []
 
-        for (const change of changes) {
-          if (change.type === 'position' && change.position) {
-            nodes = nodes.map((n) =>
-              n.id === change.id ? { ...n, position: change.position! } : n
-            )
-            nodesMapRef.current = new Map(nodes.map((n) => [n.id, n]))
-            nodesRef.current = nodes
-            const dirPath = getActiveNavState().roomPath
-            if (dirPath) {
-              scheduleDebouncedSave(dirPath)
-            }
-          } else if (change.type === 'remove') {
-            nodes = nodes.filter((n) => n.id !== change.id)
-            nodesMapRef.current = new Map(nodes.map((n) => [n.id, n]))
-            nodesRef.current = nodes
-          } else if (change.type === 'select') {
-            // Selection change handled separately
-          } else if (change.type === 'dimensions') {
-            nodes = nodes.map((n) =>
-              n.id === change.id ? { ...n, measured: change.dimensions } : n
-            )
-            nodesRef.current = nodes
-          }
+      for (const change of changes) {
+        if (change.type === 'position' && change.position) {
+          positionChanges.push({ id: change.id, position: change.position })
+        } else if (change.type === 'remove') {
+          removeIds.push(change.id)
+        } else if (change.type === 'dimensions') {
+          dimensionChanges.push({ id: change.id, dimensions: change.dimensions })
         }
+      }
 
-        // Update selectedNode ref — read fresh from active state to avoid stale closure
-        updateSelectedNode(nodes, getActiveSelectedNodeId())
-
-        return { ...prev, nodes }
-      })
+      if (positionChanges.length) ops.applyNodePositionChanges(positionChanges)
+      if (removeIds.length) ops.applyNodeRemoveChanges(removeIds)
+      if (dimensionChanges.length) ops.applyNodeDimensionChanges(dimensionChanges)
     },
-    [updateSelectedNode, scheduleDebouncedSave]
+    [ops]
   )
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      // Read current room path at execution time to avoid stale closure
-      const dirPath = getActiveNavState().roomPath
-
-      setState((prev) => {
-        let edges = [...prev.edges]
-
-        for (const change of changes) {
-          if (change.type === 'remove') {
-            edges = edges.filter((e) => e.id !== change.id)
-            edgesMapRef.current = new Map(edges.map((e) => [e.id, e]))
-            edgesRef.current = edges
-          }
+      for (const change of changes) {
+        if (change.type === 'remove') {
+          ops.deleteEdge(change.id)
         }
-
-        return { ...prev, edges }
-      })
-
-      if (dirPath) {
-        scheduleDebouncedSave(dirPath)
       }
     },
-    [scheduleDebouncedSave]
+    [ops]
   )
 
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return
-
       const edgeId = generateId('e-')
-      const newEdge: KnowledgeEdge = {
-        id: edgeId,
-        source: connection.source,
-        target: connection.target,
-        type: 'smoothstep',
-        data: {
-          relation: '相关',
-          weight: 'minor',
-          highlighted: false,
-          faded: false,
-        },
-      }
-
-      setState((prev) => {
-        const edges = [...prev.edges, newEdge]
-        edgesRef.current = edges
-        rebuildMaps(prev.nodes, edges)
-        return { ...prev, edges }
-      })
-      const dirPath = getActiveNavState().roomPath
-      if (dirPath) {
-        scheduleDebouncedSave(dirPath)
-      }
-
-      logAction('连线:创建', 'useGraph', { edgeId, source: connection.source, target: connection.target })
+      ops.addEdge(connection, edgeId)
     },
-    [rebuildMaps, scheduleDebouncedSave]
+    [ops]
   )
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
-      setActiveSelectedNodeId(node.id)
-      updateSelectedNode(nodesRef.current, node.id)
-      logAction('节点:选中', 'useGraph', { nodeId: node.id, label: node.data.label, path: node.data.path })
+      ops.selectNode(node.id)
     },
-    [setActiveSelectedNodeId, updateSelectedNode]
+    [ops]
   )
 
   const onPaneClick = useCallback(() => {
-    setActiveSelectedNodeId(null)
-    updateSelectedNode(nodesRef.current, null)
-  }, [setActiveSelectedNodeId, updateSelectedNode])
+    ops.deselectNode()
+  }, [ops])
 
   const navigateToChildRoom = useCallback(async (childPath: string, childName: string) => {
     const navState = getActiveNavState()
     const dirPath = navState.roomPath
 
-    // Save current room layout before leaving
     if (dirPath) {
-      await storage.flushGraphSave(
-        dirPath,
-        () => buildMetaFromNodesEdges(
-          Array.from(nodesMapRef.current.values()),
-          Array.from(edgesMapRef.current.values())
-        ),
-        () => setDirtyState(false)
-      )
+      await ops.saveNow(dirPath)
     }
 
-    // Enter the child room
+    // Resolve childPath to absolute path before storing — loadRoom needs absolute paths
+    const absoluteChildPath = navState.kbPath && !childPath.startsWith(navState.kbPath)
+      ? `${navState.kbPath}/${childPath}`
+      : childPath
+
     if (tabId) {
       tabStore.getState().enterRoomInTab(tabId, {
-        path: childPath,
+        path: absoluteChildPath,
         kbPath: navState.kbPath || '',
         name: childName,
       })
-      const restored = tabStore.getState().getRoomStateFromTab(tabId)
-      roomStore.getState().restoreRoomState({
-        kbPath: navState.kbPath || '',
-        roomHistory: restored?.roomHistory ?? [],
-        currentRoomPath: restored?.currentRoomPath ?? childPath,
-        currentRoomName: restored?.currentRoomName || childName,
-      })
+      // GraphPage's loadRoom effect will pick up the new effectiveRoomPath from tabStore
+      // and trigger automatically via the useEffect dependency array. No explicit sync needed.
     } else {
       enterRoom({ path: childPath, kbPath: navState.kbPath || '', name: childName })
     }
     logAction('房间:钻入', 'useGraph', { roomPath: childPath, roomName: childName, fromRoom: dirPath })
-  }, [getActiveNavState, tabId, enterRoom, storage, setDirtyState])
+  }, [getActiveNavState, tabId, enterRoom, ops])
 
   const onNodeDoubleClick = useCallback(
     async (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
-      if (!node.data.hasChildren) return // Can't enter a leaf node
+      if (!node.data.hasChildren) return
       await navigateToChildRoom(node.data.path, node.data.label)
     },
     [navigateToChildRoom]
@@ -420,106 +348,9 @@ export function useGraph(tabId?: string) {
 
   const onNodeContextMenu = useCallback(
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
-      setActiveSelectedNodeId(node.id)
+      ops.selectNode(node.id)
     },
-    [setActiveSelectedNodeId]
-  )
-
-  // ===== Node CRUD =====
-
-  const createChildNode = useCallback(
-    async (name: string, parentId?: string): Promise<string | null> => {
-      // If parentId is provided, create inside that node's directory
-      // Otherwise create in the current room (top-level node)
-      const dirPath = getActiveNavState().roomPath
-      const targetPath = parentId ?? dirPath
-      if (!targetPath) return null
-
-      try {
-        const newPath = await storage.createCard(targetPath, name)
-        logAction('节点:创建', 'useGraph', { nodeName: name, parentPath: targetPath, newPath: newPath ?? undefined })
-        // Reload room to get updated children
-        await loadRoom(dirPath || getActiveNavState().kbPath || '')
-        return newPath
-      } catch (e) {
-        logger.catch('useGraph', 'createChildNode', e)
-        return null
-      }
-    },
-    [storage, loadRoom]
-  )
-
-  const deleteChildNode = useCallback(
-    async (nodeId: string): Promise<boolean> => {
-      const nodeLabel = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
-      const dirPath = getActiveNavState().roomPath
-      try {
-        await storage.deleteCard(nodeId)
-        logAction('节点:删除', 'useGraph', { nodeId, label: nodeLabel, path: nodeId })
-        await loadRoom(dirPath || getActiveNavState().kbPath || '')
-        // Read fresh from active state to avoid stale closure
-        if (getActiveSelectedNodeId() === nodeId) {
-          setActiveSelectedNodeId(null)
-        }
-        return true
-      } catch (e) {
-        logger.catch('useGraph', 'deleteChildNode', e)
-        return false
-      }
-    },
-    [storage, loadRoom, clearSelection]
-  )
-
-  const renameNode = useCallback(
-    async (nodeId: string, newName: string): Promise<boolean> => {
-      const oldName = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
-      const dirPath = getActiveNavState().roomPath
-      try {
-        await storage.renameCard(nodeId, newName)
-        logAction('节点:重命名', 'useGraph', { nodeId, oldName, newName, path: nodeId })
-        // Update the node in local state without full reload
-        setState((prev) => {
-          const nodes = prev.nodes.map((n) =>
-            n.id === nodeId
-              ? { ...n, data: { ...n.data, label: newName } }
-              : n
-          )
-          nodesRef.current = nodes
-          rebuildMaps(nodes, prev.edges)
-          return { ...prev, nodes }
-        })
-        if (dirPath) {
-          scheduleDebouncedSave(dirPath)
-        }
-        return true
-      } catch (e) {
-        logger.catch('useGraph', 'renameNode', e)
-        return false
-      }
-    },
-    [storage, rebuildMaps, scheduleDebouncedSave]
-  )
-
-  // ===== Edge CRUD =====
-
-  const updateEdgeRelation = useCallback(
-    (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => {
-      const dirPath = getActiveNavState().roomPath
-      setState((prev) => {
-        const edges = prev.edges.map((e) =>
-          e.id === edgeId
-            ? { ...e, data: { ...e.data, relation, weight } }
-            : e
-        )
-        edgesRef.current = edges
-        rebuildMaps(prev.nodes, edges)
-        return { ...prev, edges }
-      })
-      if (dirPath) {
-        scheduleDebouncedSave(dirPath)
-      }
-    },
-    [rebuildMaps, scheduleDebouncedSave]
+    [ops]
   )
 
   // ===== Room navigation =====
@@ -527,40 +358,23 @@ export function useGraph(tabId?: string) {
   const navigateBack = useCallback(async () => {
     const dirPath = getActiveNavState().roomPath
 
-    // Save current room layout
     if (dirPath) {
-      await storage.flushGraphSave(
-        dirPath,
-        () => buildMetaFromNodesEdges(
-          Array.from(nodesMapRef.current.values()),
-          Array.from(edgesMapRef.current.values())
-        ),
-        () => setDirtyState(false)
-      )
+      await ops.saveNow(dirPath)
     }
 
     clearSelection()
     logAction('房间:返回', 'useGraph', { fromRoom: dirPath })
 
     if (tabId) {
-      const target = tabStore.getState().goBackInTab(tabId)
-      const fallbackKbPath = getActiveNavState().kbPath || ''
-      roomStore.getState().restoreRoomState({
-        kbPath: target?.kbPath || fallbackKbPath,
-        roomHistory: tabStore.getState().getRoomStateFromTab(tabId)?.roomHistory ?? [],
-        currentRoomPath: target?.path || fallbackKbPath,
-        currentRoomName: target?.name || tabStore.getState().getTabById(tabId)?.label || '全局',
-      })
-    } else {
-      goBack()
+      tabStore.getState().goBackInTab(tabId)
+      return
     }
 
-    // Load the new room immediately after store update
+    goBack()
     const newPath = getActiveNavState().roomPath || getActiveNavState().kbPath || ''
     await loadRoom(newPath)
-  }, [tabId, storage, goBack, clearSelection, loadRoom, getActiveNavState])
+  }, [tabId, clearSelection, goBack, loadRoom, getActiveNavState, ops])
 
-  /** Navigate to a specific room by history index. Truncates history and loads target room. */
   const navigateToRoom = useCallback(
     async (index: number) => {
       const historyLength = tabId
@@ -570,39 +384,65 @@ export function useGraph(tabId?: string) {
 
       const dirPath = getActiveNavState().roomPath
 
-      // Save current room layout before leaving
-      if (dirPath) {
-        await storage.flushGraphSave(
-          dirPath,
-          () => buildMetaFromNodesEdges(
-            Array.from(nodesMapRef.current.values()),
-            Array.from(edgesMapRef.current.values())
-          ),
-          () => setDirtyState(false)
-        )
+      const savedDirPath = dirPath
+      // Only save when leaving a room (navigating to a different one).
+      // Reloading the same room (e.g. after createChildNode) must NOT call saveNow
+      // because saveNow's onFlush callback resets isModified to false, which
+      // removes the TabBar dirty bullet before the user has made a meaningful save.
+      if (savedDirPath && savedDirPath !== dirPath) {
+        await ops.saveNow(savedDirPath)
       }
 
       clearSelection()
       logAction('房间:导航', 'useGraph', { targetIndex: index })
 
       if (tabId) {
-        const target = tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
-        const fallbackKbPath = getActiveNavState().kbPath || ''
-        roomStore.getState().restoreRoomState({
-          kbPath: target?.kbPath || fallbackKbPath,
-          roomHistory: tabStore.getState().getRoomStateFromTab(tabId)?.roomHistory ?? [],
-          currentRoomPath: target?.path || fallbackKbPath,
-          currentRoomName: target?.name || tabStore.getState().getTabById(tabId)?.label || '全局',
-        })
-      } else {
-        roomStore.getState().navigateToHistoryIndex(index)
+        tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
+        return
       }
 
+      roomStore.getState().navigateToHistoryIndex(index)
       const newPath = getActiveNavState().roomPath || getActiveNavState().kbPath || ''
       await loadRoom(newPath)
     },
-    [tabId, storage, clearSelection, loadRoom, getActiveNavState]
+    [tabId, clearSelection, loadRoom, getActiveNavState, ops]
   )
+
+  const navigateToRoot = useCallback(async () => {
+    const navState = getActiveNavState()
+    const dirPath = navState.roomPath
+    const kbPath = navState.kbPath || dirPath || ''
+
+    if (!kbPath) return
+
+    if (dirPath) {
+      await ops.saveNow(dirPath)
+    }
+
+    clearSelection()
+    logAction('房间:返回根级', 'useGraph', { fromRoom: dirPath, kbPath })
+
+    if (tabId) {
+      const tab = tabStore.getState().getTabById(tabId)
+      if (tab?.type === 'kb') {
+        tabStore.getState().restoreRoomStateToTab(tabId, {
+          kbPath,
+          roomHistory: [],
+          currentRoomPath: kbPath,
+          currentRoomName: tab.label,
+        })
+      }
+      return
+    }
+
+    roomStore.getState().restoreRoomState({
+      kbPath,
+      roomHistory: [],
+      currentRoomPath: kbPath,
+      currentRoomName: navState.roomName || '全局',
+    })
+    await loadRoom(kbPath)
+  }, [tabId, clearSelection, loadRoom, getActiveNavState, ops])
 
   // ===== Search highlight =====
 
@@ -620,20 +460,16 @@ export function useGraph(tabId?: string) {
     }))
   }, [])
 
+  // ===== Persistence =====
+
   const flushCurrentRoomSave = useCallback(async () => {
     const navState = getActiveNavState()
     const dirPath = navState.roomPath || navState.kbPath || ''
     if (!dirPath) return
+    await ops.saveNow(dirPath)
+  }, [getActiveNavState, ops])
 
-    await storage.flushGraphSave(
-      dirPath,
-      () => buildMetaFromNodesEdges(
-        Array.from(nodesMapRef.current.values()),
-        Array.from(edgesMapRef.current.values())
-      ),
-      () => setDirtyState(false)
-    )
-  }, [storage, setDirtyState, getActiveNavState])
+  // ===== Public API =====
 
   return {
     // State
@@ -643,13 +479,13 @@ export function useGraph(tabId?: string) {
     selectedNode: state.selectedNode,
     isModified,
 
-    // Dirty state callbacks — consumer registers to avoid polling
     onDirtyChange,
 
     // Room lifecycle
     loadRoom,
     navigateBack,
     navigateToRoom,
+    navigateToRoot,
 
     // React Flow handlers
     onNodesChange,
@@ -660,13 +496,13 @@ export function useGraph(tabId?: string) {
     onNodeDoubleClick,
     onNodeContextMenu,
 
-    // Node operations
-    createChildNode,
-    deleteChildNode,
-    renameNode,
+    // Node operations (delegated to ops)
+    createChildNode: ops.createChildNode,
+    deleteChildNode: ops.deleteChildNode,
+    renameNode: ops.renameNode,
 
-    // Edge operations
-    updateEdgeRelation,
+    // Edge operations (delegated to ops)
+    updateEdgeRelation: ops.updateEdgeRelation,
 
     // Layout
     layoutNodes,
@@ -677,7 +513,7 @@ export function useGraph(tabId?: string) {
     // Persistence
     flushCurrentRoomSave,
 
-    // Stable refs for closure access to current state
+    // Stable refs
     nodesRef,
     edgesRef,
     nodesMapRef,

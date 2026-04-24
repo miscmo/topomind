@@ -38,7 +38,8 @@ TopoMind 是一个可漫游拓扑知识大脑桌面应用，基于 Electron + Re
 
 | Hook | 文件 | 职责 |
 |------|------|------|
-| `useGraph` | `src/hooks/useGraph.ts` | 图谱核心逻辑（房间加载、节点/边 CRUD、ELK 布局） |
+| `useGraph` | `src/hooks/useGraph.ts` | 图谱核心逻辑（房间加载、节点/边 CRUD、ELK 布局），CRUD 委托给 graphOperations |
+| `useGraph/graphOperations` | `src/hooks/useGraph/graphOperations.ts` | 节点/边 CRUD 操作实现（从 useGraph 提取，依赖注入模式） |
 | `useLayout` | `src/hooks/useLayout.ts` | ELK.js 分层布局封装 |
 | `useStorage` | `src/hooks/useStorage.ts` | 存储抽象层（Store 模块封装） |
 | `useGit` | `src/hooks/useGit.ts` | Git 操作封装 |

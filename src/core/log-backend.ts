@@ -115,33 +115,43 @@ function _dispatchToListeners(entry: LogEntry) {
 }
 
 export function logSubscribe(callback: (entry: LogEntry) => void): void {
+  const wasEmpty = _listeners.size === 0
   _listeners.add(callback)
 
-  // Main process tracks subscribers by webContents id via log:subscribe channel
-  const api = _api()
-  if (api) {
-    api.send('log:subscribe')
-  }
-
+  // Register the IPC handler only once (first subscriber).
+  // Use _ipcRegistered flag to avoid duplicate handler registration.
   if (!_ipcRegistered) {
     _ipcRegistered = true
+    const api = _api()
     if (api) {
       _ipcHandler = _dispatchToListeners
       api.on('log:entry', _ipcHandler)
+    }
+  }
+
+  // Send log:subscribe only when transitioning from 0 → 1 subscribers.
+  // Subsequent logSubscribe calls (listeners already populated) skip the IPC.
+  if (wasEmpty) {
+    const api = _api()
+    if (api) {
+      api.send('log:subscribe')
     }
   }
 }
 
 export function logUnsubscribe(callback: (entry: LogEntry) => void): void {
   _listeners.delete(callback)
-  const api = _api()
-  if (api) {
-    api.send('log:unsubscribe')
-  }
+
+  // Send log:unsubscribe only when transitioning from 1 → 0 subscribers.
+  // Unregister the IPC handler after the last listener leaves.
   if (_listeners.size === 0 && _ipcRegistered) {
     _ipcRegistered = false
-    if (api && _ipcHandler) {
-      api.off('log:entry', _ipcHandler)
+    const api = _api()
+    if (api) {
+      api.send('log:unsubscribe')
+      if (_ipcHandler) {
+        api.off('log:entry', _ipcHandler)
+      }
       _ipcHandler = null
     }
   }

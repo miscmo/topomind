@@ -130,5 +130,3 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
 
   setLoaded: (loaded) => set({ loaded }),
 }))
-
-/** @typedef {LogEntry & { _filtered?: boolean }} LogEntry */
