@@ -58,6 +58,7 @@ export function useGraph(tabId?: string) {
   const isModifiedRef = useRef(false)
   const loadRequestSeqRef = useRef(0)
   const latestAppliedLoadSeqRef = useRef(0)
+  const isCreatingRef = useRef(false)
 
   // ===== Node/Edge helpers =====
 
@@ -80,6 +81,7 @@ export function useGraph(tabId?: string) {
   const dirtyChangeCallbacksRef = useRef<Set<(isModified: boolean) => void>>(new Set())
 
   const setDirtyState = useCallback((next: boolean) => {
+    console.log('[DEBUG] setDirtyState called with:', next, 'current:', isModifiedRef.current)
     if (isModifiedRef.current === next) return
     isModifiedRef.current = next
     setIsModified(next)
@@ -136,7 +138,7 @@ export function useGraph(tabId?: string) {
   // ===== Load room =====
 
   const loadRoom = useCallback(
-    async (dirPath: string) => {
+    async (dirPath: string, isCreating?: boolean) => {
       const requestSeq = ++loadRequestSeqRef.current
       setState((s) => ({ ...s, loading: true }))
 
@@ -227,6 +229,8 @@ export function useGraph(tabId?: string) {
     setActiveSelectedNodeId,
     updateSelectedNode,
     setDirtyState,
+    isCreatingRef,
+    isModifiedRef,
   })
 
   // ===== Apply layout =====

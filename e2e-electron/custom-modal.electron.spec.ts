@@ -140,18 +140,14 @@ test.describe('自定义弹窗（非原生）', () => {
       await page.waitForSelector('[data-testid="prompt-modal"]', { timeout: 5000 })
       await page.fill('[data-testid="prompt-modal"] input', '脏测试节点')
       await page.click('[data-testid="prompt-modal"] button:has-text("确定")')
-      await page.waitForTimeout(500)
-
-      // Wait for TabBar to appear (multi-tab feature activates when KB tab opens)
-      await page.waitForSelector('[role="tablist"]', { timeout: 5000 })
-
-      // Poll for dirty bullet in TabBar tabs (waitForFunction ignores timeout: 3000, use poll instead)
+      // Poll for dirty bullet in TabBar tabs (poll immediately, debounce ~300ms may fire before tab bar is even visible)
       await expect.poll(async () => {
         return await page.locator('[role="tablist"] [role="tab"]').filter({ hasText: '\u2022' }).count()
       }, { timeout: 8000 }).toBeGreaterThan(0)
 
-      // Click close button on KB tab using mouse.click to bypass TabBar interception
-      const kbTab = page.locator('[role="tablist"] [role="tab"]').filter({ hasNotText: /^首页$/ }).last()
+      // Click close button on KB tab — use .first() to get the non-home KB tab
+      // (tabs order: [首页, Confirm测试KB], filter excludes 首页, .first() = KB tab)
+      const kbTab = page.locator('[role="tablist"] [role="tab"]').filter({ hasNotText: /^首页$/ }).first()
       const closeBtn = kbTab.locator('button[aria-label*="关闭"]')
       const closeBtnBox = await closeBtn.boundingBox()
       expect(closeBtnBox).not.toBeNull()
@@ -175,26 +171,27 @@ test.describe('自定义弹窗（非原生）', () => {
     try {
       await createAndOpenKB(page, 'Confirm取消测试KB')
 
-      // Create a node (make dirty)
+      // Wait for TabBar to be visible first (KB tab was created when createAndOpenKB ran)
+      await page.waitForSelector('[role="tablist"]', { timeout: 5000 })
+
+      // The prior node creation's debounce has already fired → tab is no longer dirty.
+      // Trigger a FRESH change to set dirty again, then poll immediately before debounce fires.
       const pane = page.locator('.react-flow__pane')
-      await pane.click({ position: { x: 300, y: 200 } })
+      await pane.click({ position: { x: 400, y: 200 } })
       await page.waitForTimeout(80)
-      await pane.click({ position: { x: 300, y: 200 } })
+      await pane.click({ position: { x: 400, y: 200 } })
       await page.waitForSelector('[data-testid="prompt-modal"]', { timeout: 5000 })
       await page.fill('[data-testid="prompt-modal"] input', '脏节点X')
       await page.click('[data-testid="prompt-modal"] button:has-text("确定")')
-      await page.waitForTimeout(500)
 
-      // Wait for TabBar to appear
-      await page.waitForSelector('[role="tablist"]', { timeout: 5000 })
-
-      // Poll for dirty bullet in TabBar tabs
+      // Poll for dirty bullet immediately — bullet appears via queueMicrotask,
+      // debounce fires ~300ms later so poll must happen within that window
       await expect.poll(async () => {
         return await page.locator('[role="tablist"] [role="tab"]').filter({ hasText: '\u2022' }).count()
       }, { timeout: 8000 }).toBeGreaterThan(0)
 
-      // Click close button using mouse.click
-      const kbTab = page.locator('[role="tablist"] [role="tab"]').filter({ hasNotText: /^首页$/ }).last()
+      // Immediately click close button on KB tab — use .first() to get the non-home KB tab
+      const kbTab = page.locator('[role="tablist"] [role="tab"]').filter({ hasNotText: /^首页$/ }).first()
       const closeBtn = kbTab.locator('button[aria-label*="关闭"]')
       const closeBtnBox = await closeBtn.boundingBox()
       expect(closeBtnBox).not.toBeNull()

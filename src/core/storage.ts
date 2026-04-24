@@ -340,19 +340,27 @@ export const Store = {
   },
 
   saveGraphDebounced(dirPath: string, buildMetaFn: () => unknown, onSaved?: () => void): Promise<void> {
-    if (!dirPath) return Promise.resolve()
+    console.log('[DEBUG] saveGraphDebounced called with dirPath:', dirPath)
+    if (!dirPath) {
+      console.log('[DEBUG] saveGraphDebounced early return - dirPath is empty')
+      return Promise.resolve()
+    }
 
     _saveManager.clearTimer(dirPath)
 
     let resolveRef: (() => void) | null = null
     const promise = new Promise<void>(resolve => { resolveRef = resolve })
     const timer = setTimeout(async () => {
+      console.log('[DEBUG] saveGraphDebounced timer fired for:', dirPath)
       const meta = buildMetaFn()
+      console.log('[DEBUG] buildMetaFn returned:', JSON.stringify(meta))
       try {
         await Store.saveLayout(dirPath, meta)
+        console.log('[DEBUG] saveLayout succeeded, calling onSaved')
         onSaved?.()
         resolveRef?.()
       } catch (e) {
+        console.log('[DEBUG] saveLayout failed:', e)
         logger.catch('Store.saveGraphDebounced', `保存布局失败: ${dirPath}`, e)
         resolveRef?.()
       }

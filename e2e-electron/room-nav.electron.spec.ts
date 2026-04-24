@@ -153,11 +153,15 @@ async function enterRoom(page: Page, nodeName: string) {
     rf?.fitView?.({ padding: 0.3, duration: 300 })
   })
   await page.waitForTimeout(400)
-  // Use page.mouse.dblclick() with bounding box — node.dblclick({ force: true }) bypasses React Flow's onNodeDoubleClick
   const box = await node.boundingBox()
   expect(box).not.toBeNull()
-  await page.mouse.dblclick(box!.x + box!.width / 2, box!.y + box!.height / 2)
-  await page.waitForTimeout(800)
+  await node.dblclick({ force: true, timeout: 10000 })
+  const result = await page.evaluate(() => {
+    const breadcrumbEl = document.getElementById('breadcrumb')
+    const breadcrumbText = breadcrumbEl ? breadcrumbEl.innerText : 'NOT FOUND'
+    return { breadcrumbText }
+  })
+  console.log('[DEBUG enterRoom] breadcrumb after enterRoom:', result.breadcrumbText)
 }
 
 test.describe('房间导航 Electron', () => {
@@ -181,7 +185,28 @@ test.describe('房间导航 Electron', () => {
       await createAndOpenKB(page, '房间导航测试KB-钻入')
       await createRootNode(page, '父节点')
       await createChildNodeFromContextMenu(page, '父节点', '子节点A')
+
+      // DEBUG: check actual hasChildren value of '父节点' node
+      const parentHasChildren = await page.evaluate(() => {
+        const rf = (window as unknown as { __reactFlow?: { getNodes: () => Array<{id: string; data: {label: string; hasChildren: boolean}}> } }).__reactFlow
+        const nodes = rf?.getNodes?.() ?? []
+        const parent = nodes.find(n => n.data.label === '父节点')
+        return parent?.data.hasChildren
+      })
+      console.log('[DEBUG] hasChildren for 父节点:', parentHasChildren)
+
+      // DEBUG: check breadcrumb state before enterRoom
+      const breadcrumbBefore = await page.locator('#breadcrumb').count()
+      const breadcrumbTextBefore = breadcrumbBefore > 0 ? await page.locator('#breadcrumb').innerText() : 'NOT FOUND'
+      console.log('[DEBUG] breadcrumb before enterRoom:', breadcrumbTextBefore)
+
       await enterRoom(page, '父节点')
+
+      // DEBUG: check breadcrumb state after enterRoom
+      await page.waitForTimeout(5000)
+      const breadcrumbAfter = await page.locator('#breadcrumb').count()
+      const breadcrumbTextAfter = breadcrumbAfter > 0 ? await page.locator('#breadcrumb').innerText() : 'NOT FOUND'
+      console.log('[DEBUG] breadcrumb after enterRoom:', breadcrumbTextAfter)
 
       const breadcrumb = page.locator('#breadcrumb')
       await expect(breadcrumb).toBeVisible()

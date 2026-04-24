@@ -26,13 +26,15 @@ export interface GraphOpsDeps {
   nodesRef: React.MutableRefObject<KnowledgeNode[]>
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
   getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
-  loadRoom: (path: string) => Promise<void>
+  loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   setState: (updater: (prev: { nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }) => { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; loading?: boolean; selectedNode?: KnowledgeNode | null }) => void
   getActiveSelectedNodeId: () => string | null
   setActiveSelectedNodeId: (nodeId: string | null) => void
   updateSelectedNode: (nodes: KnowledgeNode[], nodeId: string | null) => void
   setDirtyState: (next: boolean) => void
+  isCreatingRef: React.MutableRefObject<boolean>
+  isModifiedRef: React.MutableRefObject<boolean>
 }
 
 export function buildGraphOperations(deps: GraphOpsDeps) {
@@ -50,11 +52,14 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     setActiveSelectedNodeId,
     updateSelectedNode,
     setDirtyState,
+    isCreatingRef,
+    isModifiedRef,
   } = deps
 
   // ===== Internal helpers =====
 
   const scheduleSave = (dirPath: string) => {
+    console.log('[DEBUG] scheduleSave called with dirPath:', dirPath)
     if (!dirPath) return
     storage.saveGraphDebounced(
       dirPath,
@@ -86,7 +91,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     const targetPath = parentId ?? (dirPath || nav.kbPath)
     if (!targetPath) {
       logAction('节点:创建失败', 'graphOperations', {
-        reason: 'targetPath-empty',
+        reason: dirPath ? 'targetPath-empty' : 'not-inside-room',
         nodeName: name,
         parentId: parentId || null,
         roomPath: nav.roomPath || null,
@@ -95,10 +100,11 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
       return null
     }
 
-    // Mark dirty BEFORE async work so the TabBar bullet appears immediately.
-    // The onDirtyChange callback in GraphPage fires synchronously here,
-    // calling setTabDirty(tabId, true) before any awaits.
-    setDirtyState(true)
+    // Only mark dirty when inside a room (roomPath is non-empty).
+    // At root level there is no _graph.json to save to, so the debounce
+    // mechanism never fires and dirty would persist forever.
+    if (dirPath) setDirtyState(true)
+    isCreatingRef.current = true
 
     try {
       const newPath = await storage.createCard(targetPath, name)
@@ -187,9 +193,17 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
         edges: Array.isArray((currentRoomMeta as { edges?: unknown })?.edges) ? (currentRoomMeta as { edges: unknown[] }).edges : [],
       } as Parameters<typeof FSB.writeGraphMeta>[1])
 
-      await loadRoom(reloadPath)
+      await loadRoom(reloadPath, true)
+      isCreatingRef.current = false
+
+      // Trigger debounce save so that onFlush → setDirtyState(false) fires
+      // naturally, clearing the dirty bullet. Without this, dirty stays true
+      // forever and test 6.2 ("保存后脏标记消失") times out.
+      scheduleSave(getActiveNavState().roomPath)
+
       return newPath
     } catch (e) {
+      isCreatingRef.current = false
       logger.catch('graphOperations', 'createChildNode', e)
       logAction('节点:创建失败', 'graphOperations', {
         reason: 'exception',
