@@ -15,6 +15,7 @@ import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
 import { usePageLogging } from '../hooks/usePageLogging'
 import { useRoomLoader } from '../hooks/useRoomLoader'
+import { useTabDirtySync } from '../hooks/useTabDirtySync'
 import { useResizePanel } from '../hooks/useResizePanel'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { useDoubleClick } from '../hooks/useDoubleClick'
@@ -179,7 +180,6 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
 
   // Tab store selectors (restored after nav refactor)
   const activeTabId = useTabStore((s) => s.activeTabId)
-  const setTabDirty = useTabStore((s) => s.setTabDirty)
   const setTabSearchQuery = useTabStore((s) => s.setTabSearchQuery)
 
   const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
@@ -203,16 +203,10 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const graph = useGraph(tabId)
 
   // Ref-based dirty state sync — avoids stale closure and cleanup-before-body races.
-  // onDirtyChange listener is added once; ref holds latest setTabDirty for safe async access.
-  const setTabDirtyRef = useRef<(tabId: string, isDirty: boolean) => void>()
-  setTabDirtyRef.current = setTabDirty
-
-  useEffect(() => {
-    if (!tabId) return
-    return graph.onDirtyChange((isModified: boolean) => {
-      setTabDirtyRef.current!(tabId, isModified)
-    })
-  }, [tabId, graph.onDirtyChange])
+  useTabDirtySync({
+    tabId,
+    onDirtyChange: graph.onDirtyChange,
+  })
 
   // When tabId is active, restore tab's room snapshot into roomStore.
   // roomStore is maintained as a compatibility layer for non-tabbed navigation and Breadcrumb access.
