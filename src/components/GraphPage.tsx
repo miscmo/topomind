@@ -13,6 +13,7 @@ import { useGraph } from '../hooks/useGraph'
 import { useNavContext } from '../hooks/useNavContext'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
+import { usePageLogging } from '../hooks/usePageLogging'
 import { useResizePanel } from '../hooks/useResizePanel'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { useDoubleClick } from '../hooks/useDoubleClick'
@@ -188,15 +189,12 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   })
 
   // Log graph page visibility
-  useEffect(() => {
-    if (view === 'graph') {
-      logAction('页面:进入图谱', 'GraphPage', {
-        currentRoomPath: effectiveRoomPath || '',
-        currentKBPath: effectiveKbPath || '',
-        tabId: tabId || '',
-      })
-    }
-  }, [view, effectiveRoomPath, effectiveKbPath, tabId])
+  usePageLogging({
+    view,
+    effectiveRoomPath: effectiveRoomPath || null,
+    effectiveKbPath: effectiveKbPath || null,
+    tabId,
+  })
 
   const { contextMenu, showCM, showEdgeCM, hideCM } = useContextMenu()
 
