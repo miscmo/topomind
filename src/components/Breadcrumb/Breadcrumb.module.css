@@ -20,7 +20,7 @@
   box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
 }
 
-.rootLink {
+.link {
   color: #3498db;
   cursor: pointer;
   font-weight: 500;
@@ -31,8 +31,14 @@
   transition: text-decoration 0.15s;
 }
 
-.rootLink:hover {
+.link:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+.link:disabled {
+  color: #1a3a5c;
+  font-weight: 600;
+  cursor: default;
 }
 
 .sep {
@@ -42,4 +48,10 @@
 .current {
   color: #1a3a5c;
   font-weight: 600;
+}
+
+.chain {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
