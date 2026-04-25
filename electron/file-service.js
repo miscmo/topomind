@@ -394,45 +394,6 @@ function createFileService() {
       return '';
     },
 
-    readAppConfig: function() {
-      var cfg = _fs_appConfigPath();
-      if (!nodeFs.existsSync(cfg)) {
-        return { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-      }
-      try {
-        var loaded = JSON.parse(nodeFs.readFileSync(cfg, 'utf-8')) || {};
-        return {
-          lastOpenedKB: loaded.lastOpenedKB || null,
-          orders: (loaded.orders && typeof loaded.orders === 'object') ? loaded.orders : {},
-          covers: (loaded.covers && typeof loaded.covers === 'object') ? loaded.covers : {},
-          defaultEdgeStyle: (loaded.defaultEdgeStyle && typeof loaded.defaultEdgeStyle === 'object')
-            ? loaded.defaultEdgeStyle
-            : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
-        };
-      } catch (e) {
-        return { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-      }
-    },
-
-    writeAppConfig: function(content) {
-      var cfg = _fs_appConfigPath();
-      _fs_ensureDir(_fs_rootDir);
-      var data = content;
-      if (typeof content === 'string') {
-        try { data = JSON.parse(content); } catch (e) { data = {}; }
-      }
-      _fs_config = {
-        lastOpenedKB: data.lastOpenedKB || null,
-        orders: (data.orders && typeof data.orders === 'object') ? data.orders : {},
-        covers: (data.covers && typeof data.covers === 'object') ? data.covers : {},
-        defaultEdgeStyle: (data.defaultEdgeStyle && typeof data.defaultEdgeStyle === 'object')
-          ? data.defaultEdgeStyle
-          : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
-      };
-      nodeFs.writeFileSync(cfg, JSON.stringify(_fs_config, null, 2), 'utf-8');
-      return _fs_config;
-    },
-
     writeFile: function(filePath, content) {
       var f = _fs_abs(filePath);
       _fs_ensureDir(nodePath.dirname(f));

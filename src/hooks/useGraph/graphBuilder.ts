@@ -111,7 +111,7 @@ export async function buildNodes(
     })
   )
 
-  return normalizedChildren.map(([childName, childInfo]: [string, { name: string }], i) => {
+  return normalizedChildren.map(([childName, childInfo]: [string, { name: string; x?: number; y?: number }], i) => {
     const childPath = dirPath ? `${dirPath}/${childName}` : childName
     const nodeId = childPath
     const childCount = childCountResults[i]

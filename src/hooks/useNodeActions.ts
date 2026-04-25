@@ -92,15 +92,15 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
   const handleEdgeStyle = useCallback(async (edgeId: string) => {
     const edge = findEdgeById(edgeId)
     if (!edge) return
-    const current = edge.data || {}
+    const current = (edge.data ?? {}) as KnowledgeEdge['data']
     const raw = await prompt({
       title: '编辑连线样式',
       placeholder: '输入 JSON，例如 {"lineMode":"straight","lineStyle":"dashed","color":"#e74c3c","arrow":true}',
       defaultValue: JSON.stringify({
-        lineMode: current.lineMode ?? 'smoothstep',
-        lineStyle: current.lineStyle ?? 'solid',
-        color: current.color ?? '#7f8c8d',
-        arrow: current.arrow ?? true,
+        lineMode: current?.lineMode ?? 'smoothstep',
+        lineStyle: current?.lineStyle ?? 'solid',
+        color: current?.color ?? '#7f8c8d',
+        arrow: current?.arrow ?? true,
       }),
     })
     if (!raw?.trim()) return

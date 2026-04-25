@@ -354,6 +354,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
         const nextArrow = style.arrow ?? e.data?.arrow ?? true
         const nextWeight = e.data?.weight ?? 'minor'
         const nextSelected = style.selected ?? false
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return {
           ...e,
           type: style.lineMode ?? e.data?.lineMode ?? 'smoothstep',
@@ -372,12 +373,14 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
           data: {
             ...e.data,
             ...style,
+            relation: e.data?.relation ?? '相关',
+            weight: e.data?.weight ?? 'minor',
             color: nextColor,
             lineStyle: nextLineStyle,
             arrow: nextArrow,
             selected: nextSelected,
           },
-        }
+        } as KnowledgeEdge
       })
       edgesRef.current = edges
       rebuildMaps(prev.nodes, edges)

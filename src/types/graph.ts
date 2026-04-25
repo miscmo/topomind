@@ -110,6 +110,8 @@ export type KnowledgeEdge = Edge<{
   arrow?: boolean
   highlighted?: boolean
   faded?: boolean
+  /** 选中状态（运行时状态，不持久化） */
+  selected?: boolean
 }>
 
 // ============== 房间/导航 ==============

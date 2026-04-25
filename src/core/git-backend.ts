@@ -2,9 +2,11 @@
  * Git IPC 前端调用封装 - ES Module 版本
  */
 import { logger } from './logger'
+import type { ElectronAPI } from '../types/electron-api'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getApi = (): any => (window as any).electronAPI
+const getApi = (): ElectronAPI | null => {
+  return (window as Window).electronAPI ?? null
+}
 
 const _call = (channel: string, ...args: unknown[]) => {
   const api = getApi()

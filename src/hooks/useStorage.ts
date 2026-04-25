@@ -47,8 +47,6 @@ const storeApi = {
   // Markdown
   readMarkdown: (cardPath: string) => Store.readMarkdown(cardPath),
   writeMarkdown: (cardPath: string, content: string) => Store.writeMarkdown(cardPath, content),
-  readAppConfig: () => Store.readAppConfig(),
-  writeAppConfig: (content: unknown) => Store.writeAppConfig(content),
 
   // Layout
   readLayout: (dirPath: string) => Store.readLayout(dirPath),

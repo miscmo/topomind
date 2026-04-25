@@ -57,7 +57,7 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   'log:entry',
 ]);
 
-console.log('[preload] loaded');
+// preload loaded — intentionally silent (no console output in production)
 
 const listenerMap = new Map();
 
@@ -88,6 +88,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.sendSync.apply(ipcRenderer, [channel].concat(args));
   },
   send: function(channel) {
+    if (!ALLOWED_SEND_SYNC_CHANNELS.has(channel)) {
+      console.error('[preload] send 通道不在白名单中:', channel);
+      return;
+    }
     var args = Array.prototype.slice.call(arguments, 1);
     ipcRenderer.send.apply(ipcRenderer, [channel].concat(args));
   },

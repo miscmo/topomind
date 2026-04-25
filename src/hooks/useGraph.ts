@@ -181,6 +181,7 @@ export function useGraph(tabId?: string) {
         }
 
         latestAppliedLoadSeqRef.current = requestSeq
+        setState({ nodes, edges, loading: false, selectedNode: null })
         rebuildMaps(nodes, edges)
         updateSelectedNode(nodes, null)
         nodesRef.current = nodes

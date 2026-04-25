@@ -42,8 +42,8 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
     }
 
     roomStore.getState().navigateToHistoryIndex(index)
-    const newPath = getActiveNavState().roomPath || getActiveNavState().kbPath || ''
-    await loadRoom(newPath)
+    const navState = getActiveNavState()
+    await loadRoom(navState.roomPath || navState.kbPath || '')
   }
 
   const navigateToRoot = async () => {

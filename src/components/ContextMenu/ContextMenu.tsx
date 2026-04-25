@@ -118,7 +118,7 @@ export default memo(function ContextMenu({
           {
             label: '连线样式',
             action: async () => {
-              await onEdgeStyle(targetId)
+              if (targetId) await onEdgeStyle(targetId)
               onClose()
             },
           },
@@ -126,7 +126,7 @@ export default memo(function ContextMenu({
           {
             label: '删除连线',
             action: async () => {
-              await onEdgeDelete(targetId)
+              if (targetId) await onEdgeDelete(targetId)
               onClose()
             },
             danger: true,
@@ -136,28 +136,28 @@ export default memo(function ContextMenu({
           {
             label: '新建子节点',
             action: async () => {
-              await onNewChild(paneTargetId)
+              await onNewChild(paneTargetId ?? '')
               onClose()
             },
           },
           {
             label: '聚焦节点',
             action: () => {
-              onFocus(paneTargetId)
+              if (paneTargetId) onFocus(paneTargetId)
               onClose()
             },
           },
           {
             label: '重命名',
             action: async () => {
-              await onRename(paneTargetId)
+              if (paneTargetId) await onRename(paneTargetId)
               onClose()
             },
           },
           {
             label: '属性',
             action: () => {
-              onProperties(paneTargetId)
+              if (paneTargetId) onProperties(paneTargetId)
               onClose()
             },
           },
@@ -165,7 +165,7 @@ export default memo(function ContextMenu({
           {
             label: '删除节点',
             action: async () => {
-              await onDelete(paneTargetId)
+              if (paneTargetId) await onDelete(paneTargetId)
               onClose()
             },
             danger: true,

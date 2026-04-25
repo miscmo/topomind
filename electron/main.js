@@ -12,7 +12,7 @@
  *   - git-auth.js       — Git 认证（Token / SSH）
  *   - log-service.js     — 日志服务
  */
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import nodePath from 'path';
 import nodeFs from 'fs';
 import { fileService } from './file-service.js';

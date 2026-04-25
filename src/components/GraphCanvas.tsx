@@ -6,6 +6,7 @@ import { useDoubleClick } from '../hooks/useDoubleClick'
 import { useGraphContext } from '../contexts/GraphContext'
 import KnowledgeCard from '../nodes/KnowledgeCard'
 import Toolbar from './Toolbar/Toolbar'
+import type { KnowledgeNode } from '../types'
 import { logAction } from '../core/log-backend'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
@@ -56,8 +57,7 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
         onNodeDoubleClick={graph.onNodeDoubleClick as (e: React.MouseEvent, node: Node) => void}
         onNodeContextMenu={(e, node) => {
           if (node) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            graph.onNodeContextMenu(e, node as any)
+            graph.onNodeContextMenu(e, node as KnowledgeNode)
             showCM(node.id, e)
           }
         }}
@@ -73,8 +73,7 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
           }
         }}
         onMove={(_, viewport) => logViewportChange(viewport)}
-        onInit={() => {}}
-        minZoom={0.15}
+                minZoom={0.15}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         zoomOnDoubleClick={false}
         zoomOnScroll

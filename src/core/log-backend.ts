@@ -1,6 +1,8 @@
 /**
  * 日志后端（渲染进程 → Electron 主进程 LogService 的 IPC 桥接）
  */
+import type { ElectronAPI } from '../types/electron-api'
+
 interface LogEntry {
   id?: string
   timestamp?: string
@@ -28,7 +30,9 @@ interface LogQueryOptions {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _api = (): any => (window as any).electronAPI
+const _api = (): ElectronAPI | null => {
+  return (window as Window).electronAPI ?? null
+}
 
 const _call = (channel: string, ...args: unknown[]) => {
   const api = _api()
@@ -45,7 +49,7 @@ export async function logWrite(entry: Partial<LogEntry>): Promise<boolean> {
   const api = _api()
   if (!api) return false
   try {
-    return await _call('log:write', entry)
+    return await (_call('log:write', entry) as Promise<boolean>)
   } catch (e) {
     return false
   }
@@ -53,7 +57,7 @@ export async function logWrite(entry: Partial<LogEntry>): Promise<boolean> {
 
 export async function logGetBuffer(): Promise<LogEntry[]> {
   try {
-    return await _call('log:getBuffer')
+    return await (_call('log:getBuffer') as Promise<LogEntry[]>)
   } catch {
     return []
   }
@@ -61,7 +65,7 @@ export async function logGetBuffer(): Promise<LogEntry[]> {
 
 export async function logQuery(opts: LogQueryOptions = {}): Promise<LogEntry[]> {
   try {
-    return await _call('log:query', opts)
+    return await (_call('log:query', opts) as Promise<LogEntry[]>)
   } catch {
     return []
   }
@@ -69,7 +73,7 @@ export async function logQuery(opts: LogQueryOptions = {}): Promise<LogEntry[]> 
 
 export async function logSetLevel(level: string | number): Promise<boolean> {
   try {
-    return await _call('log:setLevel', level)
+    return await (_call('log:setLevel', level) as Promise<boolean>)
   } catch {
     return false
   }
@@ -77,7 +81,7 @@ export async function logSetLevel(level: string | number): Promise<boolean> {
 
 export async function logClear(): Promise<boolean> {
   try {
-    return await _call('log:clear')
+    return await (_call('log:clear') as Promise<boolean>)
   } catch {
     return false
   }
@@ -85,7 +89,7 @@ export async function logClear(): Promise<boolean> {
 
 export async function logGetAvailableDates(): Promise<string[]> {
   try {
-    return await _call('log:getAvailableDates')
+    return await (_call('log:getAvailableDates') as Promise<string[]>)
   } catch {
     return []
   }
@@ -93,14 +97,14 @@ export async function logGetAvailableDates(): Promise<string[]> {
 
 export async function logGetLogDir(): Promise<string | null> {
   try {
-    return await _call('log:getLogDir')
+    return await (_call('log:getLogDir') as Promise<string | null>)
   } catch {
     return null
   }
 }
 
 const _listeners = new Set<(entry: LogEntry) => void>()
-let _ipcHandler: ((entry: LogEntry) => void) | null = null
+let _ipcHandler: ((entry: unknown) => void) | null = null
 let _ipcRegistered = false
 
 function _dispatchToListeners(entry: LogEntry) {
@@ -119,7 +123,7 @@ export function logSubscribe(callback: (entry: LogEntry) => void): void {
     _ipcRegistered = true
     const api = _api()
     if (api) {
-      _ipcHandler = _dispatchToListeners
+      _ipcHandler = (entry: unknown) => _dispatchToListeners(entry as LogEntry)
       api.on('log:entry', _ipcHandler)
     }
   }

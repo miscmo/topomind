@@ -3,12 +3,12 @@
  * 通过 window.electronAPI (IPC) 调用 Node.js fs
  */
 import { logger } from './logger'
+import type { ElectronAPI } from '../types/electron-api'
 import type { EdgeRelation, EdgeWeight } from '../types'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getApi = (): any => {
-  const w = window as any
-  return w.electronAPI || w.__E2E_ELECTRON_API__
+const getApi = (): ElectronAPI | null => {
+  const w = window as Window
+  return (w.electronAPI ?? null) as ElectronAPI | null
 }
 
 const _call = (channel: string, ...args: unknown[]) => {
@@ -102,36 +102,36 @@ export const FSBImpl: FSB = {
   clearAll: () => _call('fs:clearAll'),
   initWorkDir: () => _call('fs:init'),
 
-  listChildren: (parentPath) => _call('fs:listChildren', parentPath),
-  mkDir: (dirPath, meta) => _call('fs:mkDir', dirPath, meta || {}),
+  listChildren: (parentPath) => _call('fs:listChildren', parentPath) as Promise<FSBChildInfo[]>,
+  mkDir: (dirPath, meta) => _call('fs:mkDir', dirPath, meta || {}) as Promise<string>,
   rmDir: (dirPath) => _call('fs:rmDir', dirPath),
   saveKBOrder: (kbPath, order) => _call('fs:saveKBOrder', kbPath, order),
-  getKBCover: (kbPath) => _call('fs:getKBCover', kbPath),
+  getKBCover: (kbPath) => _call('fs:getKBCover', kbPath) as Promise<FSBKBCover | null>,
   saveKBCover: (kbPath, coverPath) => _call('fs:saveKBCover', kbPath, coverPath),
-  renameKB: (kbPath, newName) => _call('fs:renameKB', kbPath, newName),
-  readGraphMeta: (dirPath) => _call('fs:readGraphMeta', dirPath),
+  renameKB: (kbPath, newName) => _call('fs:renameKB', kbPath, newName) as Promise<string>,
+  readGraphMeta: (dirPath) => _call('fs:readGraphMeta', dirPath) as Promise<FSBGraphMeta>,
   writeGraphMeta: (dirPath, meta) => _call('fs:writeGraphMeta', dirPath, meta),
   getDir: (dirPath) => _call('fs:getDir', dirPath),
-  updateCardMeta: (cardPath, newName) => _call('fs:updateCardMeta', cardPath, newName),
+  updateCardMeta: (cardPath, newName) => _call('fs:updateCardMeta', cardPath, newName) as Promise<string>,
 
-  readFile: (filePath) => _call('fs:readFile', filePath),
+  readFile: (filePath) => _call('fs:readFile', filePath) as Promise<string>,
   readAppConfig: () => _call('fs:readAppConfig'),
   writeAppConfig: (content) => _call('fs:writeAppConfig', content),
   writeFile: (filePath, content) => _call('fs:writeFile', filePath, content),
   deleteFile: (filePath) => _call('fs:deleteFile', filePath),
 
   writeBlobFile: (filePath, buffer) => _call('fs:writeBlobFile', filePath, buffer),
-  readBlobFile: (filePath) => _call('fs:readBlobFile', filePath),
+  readBlobFile: (filePath) => _call('fs:readBlobFile', filePath) as Promise<ArrayBuffer | null>,
 
-  setWorkDir: (dirPath) => _call('fs:setWorkDir', dirPath),
+  setWorkDir: (dirPath) => _call('fs:setWorkDir', dirPath) as Promise<FSBResult>,
   ensureCardDir: (cardPath) => _call('fs:ensureCardDir', cardPath),
-  selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate'),
-  createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath),
-  importKB: (sourcePath) => _call('fs:importKB', sourcePath),
+  selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate') as Promise<FSBResult>,
+  createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath) as Promise<FSBResult>,
+  importKB: (sourcePath) => _call('fs:importKB', sourcePath) as Promise<string>,
   openInFinder: (p) => _call('fs:openInFinder', p),
-  countChildren: (p) => _call('fs:countChildren', p),
-  getRootDir: () => _call('fs:getRootDir'),
-  getLastOpenedKB: () => _call('fs:getLastOpenedKB'),
+  countChildren: (p) => _call('fs:countChildren', p) as Promise<number>,
+  getRootDir: () => _call('fs:getRootDir') as Promise<string | null>,
+  getLastOpenedKB: () => _call('fs:getLastOpenedKB') as Promise<string | null>,
   setLastOpenedKB: (kbPath) => _call('fs:setLastOpenedKB', kbPath),
 }
 
