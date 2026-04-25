@@ -14,6 +14,7 @@ import { useNavContext } from '../hooks/useNavContext'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
 import { usePageLogging } from '../hooks/usePageLogging'
+import { useRoomLoader } from '../hooks/useRoomLoader'
 import { useResizePanel } from '../hooks/useResizePanel'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { useDoubleClick } from '../hooks/useDoubleClick'
@@ -231,28 +232,18 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     })
   }, [tabId, activeTabId, effectiveKbPath, effectiveRoomPath, tabRoomHistory, tabRoomName, tabLabel])
 
-  // Keep refs in sync to avoid stale closure and infinite loops from graph object changing
-  const graphLoadRoomRef = useRef(graph.loadRoom)
+  // Keep ref in sync to avoid stale closure from graph object changing
   const graphHighlightRef = useRef(graph.highlightSearch)
-  graphLoadRoomRef.current = graph.loadRoom
   graphHighlightRef.current = graph.highlightSearch
 
   // Load room when room path changes
-  // Deferred with queueMicrotask to avoid React error #185: setState must not be called
-  // synchronously during a useEffect that could trigger a React Flow state update mid-render.
-  useEffect(() => {
-    const loadPath = effectiveRoomPath || effectiveKbPath || ''
-    if (!loadPath) return
-    queueMicrotask(() => {
-      logAction('房间:加载触发', 'GraphPage', {
-        loadPath,
-        currentRoomPath: effectiveRoomPath || '',
-        currentKBPath: effectiveKbPath || '',
-        tabId: tabId || '',
-      })
-      graphLoadRoomRef.current(loadPath)
-    })
-  }, [effectiveRoomPath, effectiveKbPath, tabId])
+  useRoomLoader({
+    effectiveRoomPath: effectiveRoomPath || null,
+    effectiveKbPath: effectiveKbPath || null,
+    tabId,
+    loadRoom: graph.loadRoom,
+    isCreatingRef: graph.isCreatingRef,
+  })
 
   const handleSearchChange = useCallback((q: string) => {
     if (tabId) {
