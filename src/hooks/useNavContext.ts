@@ -9,6 +9,7 @@ export interface NavState {
   roomName: string
   searchQuery: string
   selectedNodeId: string | null
+  setSearchQuery: (query: string) => void
 }
 
 export interface UseNavContextOptions {
@@ -29,6 +30,7 @@ export function useNavContext(options: UseNavContextOptions = {}) {
           roomName: tab.currentRoomName || tab.label,
           searchQuery: tab.searchQuery ?? '',
           selectedNodeId: tab.selectedNodeId ?? null,
+          setSearchQuery: (query) => tabStore.getState().setTabSearchQuery(tabId, query),
         }
       }
     }
@@ -40,6 +42,7 @@ export function useNavContext(options: UseNavContextOptions = {}) {
       roomName: roomState.currentRoomName || '全局',
       searchQuery: appState.searchQuery,
       selectedNodeId: appState.selectedNodeId,
+      setSearchQuery: (query) => useAppStore.getState().setSearchQuery(query),
     }
   }, [tabId])
 

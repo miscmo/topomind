@@ -2,11 +2,10 @@
  * 图谱页面：两栏布局
  * React Flow 图谱 + 右侧详情+样式配置+Git面板
  */
-import { memo, useEffect, useRef, useState, useCallback } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { ReactFlow, type Node, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../stores/appStore'
-import { useRoomStore, roomStore } from '../stores/roomStore'
 import { useTabStore, tabStore } from '../stores/tabStore'
 import { usePromptStore } from '../stores/promptStore'
 import { useGraph } from '../hooks/useGraph'
@@ -39,11 +38,9 @@ const nodeTypes = { knowledgeCard: KnowledgeCard }
 /** Inner component that uses shared graph context */
 const GraphCanvas = memo(function GraphCanvas({
   searchQuery,
-  onSearchChange,
   tabId,
 }: {
   searchQuery: string
-  onSearchChange: (q: string) => void
   tabId?: string
 }) {
   const showGrid = useAppStore((s) => s.showGrid)
@@ -158,29 +155,20 @@ interface GraphPageProps {
 
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const view = useAppStore((s) => s.view)
-  const appSelectedNodeId = useAppStore((s) => s.selectedNodeId)
-  const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
-  const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
-  const setRightPanelWidth = useAppStore((s) => s.setRightPanelWidth)
-  const rightPanelTab = useAppStore((s) => s.rightPanelTab)
-  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
-  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
-  const setAppSearchQuery = useAppStore((s) => s.setSearchQuery)
   const { getNavState } = useNavContext({ tabId })
   const nav = getNavState()
   const effectiveRoomPath = nav.roomPath
   const effectiveKbPath = nav.kbPath
   const effectiveSearchQuery = nav.searchQuery
   const effectiveSelectedNodeId = nav.selectedNodeId
-  const currentTab = tabId ? tabStore.getState().getTabById(tabId) : undefined
-  const tabRoomHistory = currentTab?.roomHistory ?? []
-  const tabRoomPath = currentTab?.currentRoomPath ?? null
-  const tabRoomName = currentTab?.currentRoomName ?? ''
-  const tabLabel = currentTab?.label ?? ''
 
-  // Tab store selectors (restored after nav refactor)
-  const activeTabId = useTabStore((s) => s.activeTabId)
-  const setTabSearchQuery = useTabStore((s) => s.setTabSearchQuery)
+  // Right panel state
+  const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
+  const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
+  const setRightPanelWidth = useAppStore((s) => s.setRightPanelWidth)
+  const rightPanelTab = useAppStore((s) => s.rightPanelTab)
+  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
+  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
 
   const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
     initialWidth: rightPanelWidth,
@@ -208,24 +196,6 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     onDirtyChange: graph.onDirtyChange,
   })
 
-  // When tabId is active, restore tab's room snapshot into roomStore.
-  // roomStore is maintained as a compatibility layer for non-tabbed navigation and Breadcrumb access.
-  // Tab-scoped room state (enterRoomInTab, goBackInTab, navigateToHistoryIndexInTab) handles
-  // room mutations directly without going through roomStore, so no sync-back is needed.
-  // Deferred with queueMicrotask to avoid React error #185: setState must not be called
-  // synchronously during a useEffect that could trigger a React Flow state update mid-render.
-  useEffect(() => {
-    if (!tabId || activeTabId !== tabId || !effectiveKbPath) return
-    queueMicrotask(() => {
-      roomStore.getState().restoreRoomState({
-        kbPath: effectiveKbPath,
-        roomHistory: tabRoomHistory,
-        currentRoomPath: effectiveRoomPath ?? effectiveKbPath,
-        currentRoomName: tabRoomName || tabLabel || '全局',
-      })
-    })
-  }, [tabId, activeTabId, effectiveKbPath, effectiveRoomPath, tabRoomHistory, tabRoomName, tabLabel])
-
   // Keep ref in sync to avoid stale closure from graph object changing
   const graphHighlightRef = useRef(graph.highlightSearch)
   graphHighlightRef.current = graph.highlightSearch
@@ -239,32 +209,11 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     isCreatingRef: graph.isCreatingRef,
   })
 
-  const handleSearchChange = useCallback((q: string) => {
-    if (tabId) {
-      setTabSearchQuery(tabId, q)
-    }
-    // Compatibility: keep global app store in sync during migration period
-    setAppSearchQuery(q)
-  }, [tabId, setTabSearchQuery, setAppSearchQuery])
-
+  
   // Highlight search matches
   useEffect(() => {
     graphHighlightRef.current(effectiveSearchQuery)
   }, [effectiveSearchQuery])
-
-  // Tab-scoped room state is the source of truth; avoid syncing roomStore back
-  // into tabStore here because tab switching can otherwise form a write loop.
-
-  // Keep app-level selected node in sync with active tab selected node (compatibility bridge)
-  useEffect(() => {
-    if (!tabId || activeTabId !== tabId) return
-    if (appSelectedNodeId === effectiveSelectedNodeId) return
-    if (effectiveSelectedNodeId) {
-      useAppStore.getState().selectNode(effectiveSelectedNodeId)
-    } else {
-      useAppStore.getState().clearSelection()
-    }
-  }, [tabId, activeTabId, appSelectedNodeId, effectiveSelectedNodeId])
 
   // Save current graph before app quit
   const flushCurrentRoomSaveRef = useRef(graph.flushCurrentRoomSave)
@@ -319,9 +268,9 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
             <Breadcrumb tabId={tabId} />
 
             {/* 搜索 */}
-            <SearchBar searchQuery={effectiveSearchQuery} onSearchChange={handleSearchChange} />
+            <SearchBar searchQuery={effectiveSearchQuery} onSearchChange={nav.setSearchQuery} />
 
-            <GraphCanvas searchQuery={effectiveSearchQuery} onSearchChange={handleSearchChange} tabId={tabId} />
+            <GraphCanvas searchQuery={effectiveSearchQuery} tabId={tabId} />
 
             {/* Git 面板 */}
             <GitPanel />
