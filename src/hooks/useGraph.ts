@@ -358,16 +358,11 @@ export function useGraph(tabId?: string) {
         kbPath: navState.kbPath || '',
         name: childName,
       })
-      // Call loadRoom directly so the graph updates synchronously with the store update.
-      // Relying on the GraphPage useEffect to pick up the effectiveRoomPath change
-      // creates a race condition where the graph may not refresh on double-click.
-      await loadRoom(absoluteChildPath)
     } else {
       enterRoom({ path: childPath, kbPath: navState.kbPath || '', name: childName })
-      await loadRoom(absoluteChildPath)
     }
     logAction('房间:钻入', 'useGraph', { roomPath: childPath, roomName: childName, fromRoom: dirPath })
-  }, [getActiveNavState, tabId, enterRoom, loadRoom, ops])
+  }, [getActiveNavState, tabId, enterRoom, ops])
 
   const onNodeDoubleClick = useCallback(
     async (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {

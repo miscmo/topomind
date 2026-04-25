@@ -19,6 +19,12 @@ export function useRoomLoader(options: UseRoomLoaderOptions) {
     const loadPath = effectiveRoomPath || effectiveKbPath || ''
     if (!loadPath) return
 
+    // Capture values as parameters to the arrow function — avoids stale closure
+    // when queueMicrotask fires after tabId or path has changed.
+    const capturedRoomPath = effectiveRoomPath || ''
+    const capturedKBPath = effectiveKbPath || ''
+    const capturedTabId = tabId || ''
+
     queueMicrotask(() => {
       if (isCreatingRef.current) {
         isCreatingRef.current = false
@@ -26,9 +32,9 @@ export function useRoomLoader(options: UseRoomLoaderOptions) {
       }
       logAction('房间:加载触发', 'GraphPage', {
         loadPath,
-        currentRoomPath: effectiveRoomPath || '',
-        currentKBPath: effectiveKbPath || '',
-        tabId: tabId || '',
+        currentRoomPath: capturedRoomPath,
+        currentKBPath: capturedKBPath,
+        tabId: capturedTabId,
       })
       loadRoomRef.current(loadPath)
     })
