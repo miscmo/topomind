@@ -465,7 +465,16 @@ export function useGraph(tabId?: string) {
       logAction('房间:导航', 'useGraph', { targetIndex: index })
 
       if (tabId) {
-        tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
+        const target = tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
+        if (target) {
+          // Resolve absolute path before loading — loadRoom needs absolute paths
+          const navState = getActiveNavState()
+          const absolutePath =
+            navState.kbPath && !target.path.startsWith(navState.kbPath)
+              ? `${navState.kbPath}/${target.path}`
+              : target.path
+          await loadRoom(absolutePath)
+        }
         return
       }
 
@@ -559,6 +568,8 @@ export function useGraph(tabId?: string) {
     onNodesChange,
     onEdgesChange,
     onConnect,
+    onConnectStart,
+    onConnectEnd,
     onNodeClick,
     onEdgeClick,
     onPaneClick,
