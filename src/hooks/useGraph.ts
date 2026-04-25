@@ -126,14 +126,19 @@ export function useGraph(tabId?: string) {
           kbPath: tab.kbPath,
           roomPath: tab.currentRoomPath || tab.kbPath,
           roomName: tab.currentRoomName || tab.label,
+          searchQuery: tab.searchQuery ?? '',
+          selectedNodeId: tab.selectedNodeId ?? null,
         }
       }
     }
     const roomState = roomStore.getState()
+    const appState = useAppStore.getState()
     return {
       kbPath: roomState.currentKBPath || '',
       roomPath: roomState.currentRoomPath || roomState.currentKBPath || '',
       roomName: roomState.currentRoomName || '全局',
+      searchQuery: appState.searchQuery,
+      selectedNodeId: appState.selectedNodeId,
     }
   }, [tabId])
 
