@@ -10,6 +10,7 @@ import { useRoomStore, roomStore } from '../stores/roomStore'
 import { useTabStore, tabStore } from '../stores/tabStore'
 import { usePromptStore } from '../stores/promptStore'
 import { useGraph } from '../hooks/useGraph'
+import { useNavContext } from '../hooks/useNavContext'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
 import { useKeyboard } from '../hooks/useKeyboard'
@@ -157,34 +158,20 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
   const setRightPanelWidth = useAppStore((s) => s.setRightPanelWidth)
-  const currentRoomPath = useRoomStore((s) => s.currentRoomPath)
-  const currentKBPath = useRoomStore((s) => s.currentKBPath)
-  const currentRoomName = useRoomStore((s) => s.currentRoomName)
-  const roomHistory = useRoomStore((s) => s.roomHistory)
-  const appSearchQuery = useAppStore((s) => s.searchQuery)
   const rightPanelTab = useAppStore((s) => s.rightPanelTab)
   const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
   const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
-  const setAppSearchQuery = useAppStore((s) => s.setSearchQuery)
-  const setTabDirty = useTabStore((s) => s.setTabDirty)
-  const getTabById = useTabStore((s) => s.getTabById)
-  const setTabSearchQuery = useTabStore((s) => s.setTabSearchQuery)
-  const setTabSelectedNode = useTabStore((s) => s.setTabSelectedNode)
-  const restoreRoomStateToTab = useTabStore((s) => s.restoreRoomStateToTab)
-  const activeTabId = useTabStore((s) => s.activeTabId)
-
-  const currentTab = tabId ? getTabById(tabId) : undefined
+  const { getNavState } = useNavContext({ tabId })
+  const nav = getNavState()
+  const effectiveRoomPath = nav.roomPath
+  const effectiveKbPath = nav.kbPath
+  const effectiveSearchQuery = nav.searchQuery
+  const effectiveSelectedNodeId = nav.selectedNodeId
+  const currentTab = tabId ? tabStore.getState().getTabById(tabId) : undefined
   const tabRoomHistory = currentTab?.roomHistory ?? []
   const tabRoomPath = currentTab?.currentRoomPath ?? null
   const tabRoomName = currentTab?.currentRoomName ?? ''
   const tabLabel = currentTab?.label ?? ''
-  const tabKbPath = currentTab?.kbPath ?? null
-  const tabSearchQuery = currentTab?.searchQuery ?? ''
-  const tabSelectedNodeId = currentTab?.selectedNodeId ?? null
-  const effectiveRoomPath = tabRoomPath || currentRoomPath
-  const effectiveKbPath = tabKbPath || currentKBPath
-  const effectiveSearchQuery = tabId ? tabSearchQuery : appSearchQuery
-  const effectiveSelectedNodeId = tabId ? tabSelectedNodeId : appSelectedNodeId
 
   // ===== 右侧面板宽度拖拽调整 =====
   const [isResizing, setIsResizing] = useState(false)

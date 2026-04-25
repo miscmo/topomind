@@ -17,6 +17,7 @@ import { useRoomStore, roomStore } from '../stores/roomStore'
 import { tabStore } from '../stores/tabStore'
 import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
+import { useNavContext } from './useNavContext'
 import { logAction } from '../core/log-backend'
 import { logger } from '../core/logger'
 import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData } from '../types'
@@ -118,29 +119,9 @@ export function useGraph(tabId?: string) {
     }
   }, [tabId, clearSelection, selectNode])
 
-  const getActiveNavState = useCallback(() => {
-    if (tabId) {
-      const tab = tabStore.getState().getTabById(tabId)
-      if (tab && tab.type === 'kb' && tab.kbPath) {
-        return {
-          kbPath: tab.kbPath,
-          roomPath: tab.currentRoomPath || tab.kbPath,
-          roomName: tab.currentRoomName || tab.label,
-          searchQuery: tab.searchQuery ?? '',
-          selectedNodeId: tab.selectedNodeId ?? null,
-        }
-      }
-    }
-    const roomState = roomStore.getState()
-    const appState = useAppStore.getState()
-    return {
-      kbPath: roomState.currentKBPath || '',
-      roomPath: roomState.currentRoomPath || roomState.currentKBPath || '',
-      roomName: roomState.currentRoomName || '全局',
-      searchQuery: appState.searchQuery,
-      selectedNodeId: appState.selectedNodeId,
-    }
-  }, [tabId])
+  const { getNavState } = useNavContext({ tabId })
+
+  const getActiveNavState = useCallback(() => getNavState(), [getNavState])
 
   // ===== Load room =====
 
@@ -378,13 +359,16 @@ export function useGraph(tabId?: string) {
         kbPath: navState.kbPath || '',
         name: childName,
       })
-      // GraphPage's loadRoom effect will pick up the new effectiveRoomPath from tabStore
-      // and trigger automatically via the useEffect dependency array. No explicit sync needed.
+      // Call loadRoom directly so the graph updates synchronously with the store update.
+      // Relying on the GraphPage useEffect to pick up the effectiveRoomPath change
+      // creates a race condition where the graph may not refresh on double-click.
+      await loadRoom(absoluteChildPath)
     } else {
       enterRoom({ path: childPath, kbPath: navState.kbPath || '', name: childName })
+      await loadRoom(absoluteChildPath)
     }
     logAction('房间:钻入', 'useGraph', { roomPath: childPath, roomName: childName, fromRoom: dirPath })
-  }, [getActiveNavState, tabId, enterRoom, ops])
+  }, [getActiveNavState, tabId, enterRoom, loadRoom, ops])
 
   const onNodeDoubleClick = useCallback(
     async (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
@@ -604,5 +588,6 @@ export function useGraph(tabId?: string) {
     edgesRef,
     nodesMapRef,
     edgesMapRef,
+    isCreatingRef,
   }
 }
