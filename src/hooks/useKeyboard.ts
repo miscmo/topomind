@@ -7,8 +7,8 @@
  */
 import { useCallback, useEffect } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { tabStore } from '../stores/tabStore'
 import { logAction } from '../core/log-backend'
+import { useNavContext } from './useNavContext'
 
 interface UseKeyboardOptions {
   onDelete?: () => void
@@ -22,13 +22,14 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
 
   const clearSelection = useAppStore((s) => s.clearSelection)
   const hideContextMenu = useAppStore((s) => s.hideContextMenu)
+  const { getNavState } = useNavContext({ tabId })
 
   // Read the selection node respecting tab context when active.
   // useCallback ensures the function identity is stable across renders so
   // the useEffect deps array remains accurate without stale-closure risk.
   const getSelectedNodeId = useCallback(
-    () => (tabId ? tabStore.getState().getTabSelectedNode(tabId) : useAppStore.getState().selectedNodeId),
-    [tabId]
+    () => getNavState().selectedNodeId,
+    [getNavState]
   )
 
   useEffect(() => {
@@ -49,9 +50,6 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
         case 'Escape':
           e.preventDefault()
           logAction('快捷键:ESC', 'useKeyboard', { action: 'clear-selection' })
-          if (tabId) {
-            tabStore.getState().setTabSelectedNode(tabId, null)
-          }
           clearSelection()
           logAction('右键菜单:关闭', 'useKeyboard', { source: 'Escape' })
           hideContextMenu()

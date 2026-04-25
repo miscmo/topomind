@@ -23,6 +23,8 @@ import { logger } from '../core/logger'
 import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData } from '../types'
 import { buildMetaFromNodesEdges, buildNodes, buildEdges, generateId } from './useGraph/graphBuilder'
 import { buildGraphOperations } from './useGraph/graphOperations'
+import { applySearchHighlight } from './useGraph/search'
+import { buildGraphNavigation } from './useGraph/navigation'
 
 export interface GraphState {
   nodes: KnowledgeNode[]
@@ -110,7 +112,9 @@ export function useGraph(tabId?: string) {
   const setActiveSelectedNodeId = useCallback((nodeId: string | null) => {
     if (tabId) {
       tabStore.getState().setTabSelectedNode(tabId, nodeId)
+      return
     }
+
     if (nodeId === null) {
       clearSelection()
     } else {
@@ -406,117 +410,20 @@ export function useGraph(tabId?: string) {
 
   // ===== Room navigation =====
 
-  const navigateBack = useCallback(async () => {
-    const dirPath = getActiveNavState().roomPath
-
-    if (dirPath) {
-      await ops.saveNow(dirPath)
-    }
-
-    clearSelection()
-    logAction('房间:返回', 'useGraph', { fromRoom: dirPath })
-
-    if (tabId) {
-      tabStore.getState().goBackInTab(tabId)
-      return
-    }
-
-    goBack()
-    const newPath = getActiveNavState().roomPath || getActiveNavState().kbPath || ''
-    await loadRoom(newPath)
-  }, [tabId, clearSelection, goBack, loadRoom, getActiveNavState, ops])
-
-  const navigateToRoom = useCallback(
-    async (index: number) => {
-      const historyLength = tabId
-        ? (tabStore.getState().getRoomStateFromTab(tabId)?.roomHistory.length ?? 0)
-        : roomStore.getState().roomHistory.length
-      if (index < 0 || index >= historyLength) return
-
-      const dirPath = getActiveNavState().roomPath
-
-      const savedDirPath = dirPath
-      // Only save when leaving a room (navigating to a different one).
-      // Reloading the same room (e.g. after createChildNode) must NOT call saveNow
-      // because saveNow's onFlush callback resets isModified to false, which
-      // removes the TabBar dirty bullet before the user has made a meaningful save.
-      if (savedDirPath && savedDirPath !== dirPath) {
-        await ops.saveNow(savedDirPath)
-      }
-
-      clearSelection()
-      logAction('房间:导航', 'useGraph', { targetIndex: index })
-
-      if (tabId) {
-        const target = tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
-        if (target) {
-          // Resolve absolute path before loading — loadRoom needs absolute paths
-          const navState = getActiveNavState()
-          const absolutePath =
-            navState.kbPath && !target.path.startsWith(navState.kbPath)
-              ? `${navState.kbPath}/${target.path}`
-              : target.path
-          await loadRoom(absolutePath)
-        }
-        return
-      }
-
-      roomStore.getState().navigateToHistoryIndex(index)
-      const newPath = getActiveNavState().roomPath || getActiveNavState().kbPath || ''
-      await loadRoom(newPath)
-    },
-    [tabId, clearSelection, loadRoom, getActiveNavState, ops]
-  )
-
-  const navigateToRoot = useCallback(async () => {
-    const navState = getActiveNavState()
-    const dirPath = navState.roomPath
-    const kbPath = navState.kbPath || dirPath || ''
-
-    if (!kbPath) return
-
-    if (dirPath) {
-      await ops.saveNow(dirPath)
-    }
-
-    clearSelection()
-    logAction('房间:返回根级', 'useGraph', { fromRoom: dirPath, kbPath })
-
-    if (tabId) {
-      const tab = tabStore.getState().getTabById(tabId)
-      if (tab?.type === 'kb') {
-        tabStore.getState().restoreRoomStateToTab(tabId, {
-          kbPath,
-          roomHistory: [],
-          currentRoomPath: kbPath,
-          currentRoomName: tab.label,
-        })
-      }
-      return
-    }
-
-    roomStore.getState().restoreRoomState({
-      kbPath,
-      roomHistory: [],
-      currentRoomPath: kbPath,
-      currentRoomName: navState.roomName || '全局',
-    })
-    await loadRoom(kbPath)
-  }, [tabId, clearSelection, loadRoom, getActiveNavState, ops])
+  const navigation = buildGraphNavigation({
+    tabId,
+    getActiveNavState,
+    saveNow: ops.saveNow,
+    loadRoom,
+    clearSelection,
+  })
 
   // ===== Search highlight =====
 
   const highlightSearch = useCallback((query: string) => {
-    const q = query.toLowerCase().trim()
     setState((prev) => ({
       ...prev,
-      nodes: prev.nodes.map((n) => ({
-        ...n,
-        data: {
-          ...n.data,
-          searchMatch: q ? n.data.label.toLowerCase().includes(q) : false,
-        },
-      })),
+      nodes: applySearchHighlight(prev.nodes, query),
     }))
   }, [])
 
@@ -543,9 +450,9 @@ export function useGraph(tabId?: string) {
 
     // Room lifecycle
     loadRoom,
-    navigateBack,
-    navigateToRoom,
-    navigateToRoot,
+    navigateBack: navigation.navigateBack,
+    navigateToRoom: navigation.navigateToRoom,
+    navigateToRoot: navigation.navigateToRoot,
 
     // React Flow handlers
     onNodesChange,

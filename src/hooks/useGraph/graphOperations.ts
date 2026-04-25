@@ -59,7 +59,6 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
   // ===== Internal helpers =====
 
   const scheduleSave = (dirPath: string) => {
-    console.log('[DEBUG] scheduleSave called with dirPath:', dirPath)
     if (!dirPath) return
     storage.saveGraphDebounced(
       dirPath,

@@ -10,6 +10,8 @@ export interface NavState {
   searchQuery: string
   selectedNodeId: string | null
   setSearchQuery: (query: string) => void
+  setSelectedNodeId: (nodeId: string | null) => void
+  clearSelectedNode: () => void
 }
 
 export interface UseNavContextOptions {
@@ -31,6 +33,8 @@ export function useNavContext(options: UseNavContextOptions = {}) {
           searchQuery: tab.searchQuery ?? '',
           selectedNodeId: tab.selectedNodeId ?? null,
           setSearchQuery: (query) => tabStore.getState().setTabSearchQuery(tabId, query),
+          setSelectedNodeId: (nodeId) => tabStore.getState().setTabSelectedNode(tabId, nodeId),
+          clearSelectedNode: () => tabStore.getState().setTabSelectedNode(tabId, null),
         }
       }
     }
@@ -43,6 +47,8 @@ export function useNavContext(options: UseNavContextOptions = {}) {
       searchQuery: appState.searchQuery,
       selectedNodeId: appState.selectedNodeId,
       setSearchQuery: (query) => useAppStore.getState().setSearchQuery(query),
+      setSelectedNodeId: (nodeId) => useAppStore.getState().selectNode(nodeId),
+      clearSelectedNode: () => useAppStore.getState().clearSelection(),
     }
   }, [tabId])
 
