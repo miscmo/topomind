@@ -13,6 +13,7 @@ import { useGraph } from '../hooks/useGraph'
 import { useNavContext } from '../hooks/useNavContext'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
+import { useResizePanel } from '../hooks/useResizePanel'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { useDoubleClick } from '../hooks/useDoubleClick'
 import { GraphContextProvider, useGraphContext } from '../contexts/GraphContext'
@@ -179,47 +180,12 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const setTabDirty = useTabStore((s) => s.setTabDirty)
   const setTabSearchQuery = useTabStore((s) => s.setTabSearchQuery)
 
-  // ===== 右侧面板宽度拖拽调整 =====
-  const [isResizing, setIsResizing] = useState(false)
-  const dragStartXRef = useRef(0)
-  const dragStartWidthRef = useRef(0)
-
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    dragStartXRef.current = e.clientX
-    dragStartWidthRef.current = rightPanelWidth
-    setIsResizing(true)
-  }, [rightPanelWidth])
-
-  const handleResizeMouseMove = useCallback((e: MouseEvent) => {
-    if (!isResizing) return
-    // 向左拖 → delta 负 → 面板变宽；向右拖 → delta 正 → 面板变窄
-    const delta = e.clientX - dragStartXRef.current
-    const newWidth = Math.max(200, Math.min(800, dragStartWidthRef.current - delta))
-    setRightPanelWidth(newWidth)
-  }, [isResizing, setRightPanelWidth])
-
-  const handleResizeMouseUp = useCallback(() => {
-    setIsResizing(false)
-  }, [])
-
-  useEffect(() => {
-    if (!isResizing) return
-    // 拖拽时禁用文本选中 + 保持 col-resize 光标
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'col-resize'
-    const handleWindowMouseMove = (e: MouseEvent) => handleResizeMouseMove(e)
-    const handleWindowMouseUp = () => handleResizeMouseUp()
-    window.addEventListener('mousemove', handleWindowMouseMove)
-    window.addEventListener('mouseup', handleWindowMouseUp)
-    return () => {
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-      window.removeEventListener('mousemove', handleWindowMouseMove)
-      window.removeEventListener('mouseup', handleWindowMouseUp)
-    }
-  }, [isResizing, handleResizeMouseMove, handleResizeMouseUp])
+  const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
+    initialWidth: rightPanelWidth,
+    onWidthChange: setRightPanelWidth,
+    minWidth: 200,
+    maxWidth: 800,
+  })
 
   // Log graph page visibility
   useEffect(() => {
