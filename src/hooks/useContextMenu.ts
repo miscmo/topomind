@@ -20,8 +20,10 @@ export function useContextMenu() {
     (nodeId: string, e: MouseEvent | React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      logAction('右键菜单:显示', 'useContextMenu', { type: 'node', nodeId, x: e.clientX, y: e.clientY })
-      showContextMenu(e.clientX, e.clientY, 'node', nodeId)
+      const type = nodeId ? 'node' : 'pane'
+      const targetId = nodeId || '__pane__'
+      logAction('右键菜单:显示', 'useContextMenu', { type, nodeId: nodeId || null, x: e.clientX, y: e.clientY })
+      showContextMenu(e.clientX, e.clientY, type, targetId)
     },
     [showContextMenu]
   )

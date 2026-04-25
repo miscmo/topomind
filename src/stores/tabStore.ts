@@ -40,6 +40,11 @@ export interface Tab {
   selectedNodeId?: string | null
 }
 
+const TAB_INITIAL_STATE = {
+  tabs: [] as Tab[],
+  activeTabId: 'home',
+}
+
 interface TabState {
   tabs: Tab[]
   activeTabId: string
@@ -80,11 +85,12 @@ interface TabState {
   setTabSelectedNode: (tabId: string, nodeId: string | null) => void
   /** 读取指定 Tab 的选中节点 ID */
   getTabSelectedNode: (tabId: string) => string | null
+  /** 重置所有 tabs 到初始状态 */
+  reset: () => void
 }
 
 export const tabStore = create<TabState>()((set, get) => ({
-  tabs: [],
-  activeTabId: 'home',
+  ...TAB_INITIAL_STATE,
 
   /**
    * 初始化主页 Tab（仅在首次启动时调用一次）
@@ -433,6 +439,8 @@ export const tabStore = create<TabState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId)
     return tab?.selectedNodeId ?? null
   },
+
+  reset: () => set({ ...TAB_INITIAL_STATE }),
 }))
 
 export const useTabStore = tabStore

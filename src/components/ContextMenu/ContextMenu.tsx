@@ -40,6 +40,7 @@ interface ContextMenuProps {
   onRename: (nodeId: string) => void
   onDelete: (nodeId: string) => void
   onEdgeDelete: (edgeId: string) => void
+  onEdgeStyle: (edgeId: string) => void
   onFocus: (nodeId: string) => void
   onProperties: (nodeId: string) => void
   onClose: () => void
@@ -55,6 +56,7 @@ export default memo(function ContextMenu({
   onRename,
   onDelete,
   onEdgeDelete,
+  onEdgeStyle,
   onFocus,
   onProperties,
   onClose,
@@ -95,60 +97,80 @@ export default memo(function ContextMenu({
     }
   }, [visible, onClose])
 
-  if (!visible || !targetId) return null
+  if (!visible) return null
 
   const isEdge = type === 'edge'
+  const isPane = type === 'pane'
+  const paneTargetId = isPane ? '' : targetId
 
-  const items: MenuEntry[] = isEdge
+  const items: MenuEntry[] = isPane
     ? [
-        {
-          label: '删除连线',
-          action: async () => {
-            await onEdgeDelete(targetId)
-            onClose()
-          },
-          danger: true,
-        },
-      ]
-    : [
         {
           label: '新建子节点',
           action: async () => {
-            await onNewChild(targetId)
+            await onNewChild('')
             onClose()
           },
-        },
-        {
-          label: '聚焦节点',
-          action: () => {
-            onFocus(targetId)
-            onClose()
-          },
-        },
-        {
-          label: '重命名',
-          action: async () => {
-            await onRename(targetId)
-            onClose()
-          },
-        },
-        {
-          label: '属性',
-          action: () => {
-            onProperties(targetId)
-            onClose()
-          },
-        },
-        { separator: true },
-        {
-          label: '删除节点',
-          action: async () => {
-            await onDelete(targetId)
-            onClose()
-          },
-          danger: true,
         },
       ]
+    : isEdge
+      ? [
+          {
+            label: '连线样式',
+            action: async () => {
+              await onEdgeStyle(targetId)
+              onClose()
+            },
+          },
+          { separator: true },
+          {
+            label: '删除连线',
+            action: async () => {
+              await onEdgeDelete(targetId)
+              onClose()
+            },
+            danger: true,
+          },
+        ]
+      : [
+          {
+            label: '新建子节点',
+            action: async () => {
+              await onNewChild(paneTargetId)
+              onClose()
+            },
+          },
+          {
+            label: '聚焦节点',
+            action: () => {
+              onFocus(paneTargetId)
+              onClose()
+            },
+          },
+          {
+            label: '重命名',
+            action: async () => {
+              await onRename(paneTargetId)
+              onClose()
+            },
+          },
+          {
+            label: '属性',
+            action: () => {
+              onProperties(paneTargetId)
+              onClose()
+            },
+          },
+          { separator: true },
+          {
+            label: '删除节点',
+            action: async () => {
+              await onDelete(paneTargetId)
+              onClose()
+            },
+            danger: true,
+          },
+        ]
 
   // Adjust position to keep menu in viewport — x stays at 0 if it would go negative
   const adjustedX = Math.max(0, Math.min(x, window.innerWidth - menuSize.width))

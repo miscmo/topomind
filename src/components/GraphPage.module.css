@@ -26,8 +26,35 @@
   height: 100%;
   background: #fff;
   flex-shrink: 0;
-  overflow-y: auto;
+  overflow: hidden;
   border-left: 1px solid #e6ebf1;
+  display: flex;
+  flex-direction: column;
+}
+
+.rightPanelTabs {
+  display: flex;
+  padding: 10px 12px 0;
+  gap: 8px;
+  border-bottom: 1px solid #e8ecf0;
+  background: #fbfcfd;
+}
+
+.rightPanelTabBtn {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #73808c;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rightPanelTabBtnActive {
+  color: #1a3a5c;
+  border-bottom-color: #1a3a5c;
+  font-weight: 600;
 }
 /* 可拖拽调整宽度的分隔条 */
 .resizeHandle {

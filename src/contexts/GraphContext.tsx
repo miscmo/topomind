@@ -8,8 +8,8 @@
  */
 import { createContext, useContext, useMemo, type Context } from 'react'
 import { useGraph } from '../hooks/useGraph'
-import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData, EdgeRelation, EdgeWeight } from '../types'
-import type { Node, NodeChange, EdgeChange, Connection } from '@xyflow/react'
+import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../types'
+import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 
 export interface GraphContextValue {
   // State
@@ -36,7 +36,10 @@ export interface GraphContextValue {
   onEdgesChange: (changes: EdgeChange[]) => void
   onConnect: (connection: Connection) => void
   onNodeClick: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
+  onEdgeClick: (event: React.MouseEvent, edge: Edge) => void
   onPaneClick: (event: React.MouseEvent) => void
+  onConnectStart: (event: unknown, params: { nodeId?: string | null }) => void
+  onConnectEnd: () => void
   onNodeDoubleClick: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
   onNodeContextMenu: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
 
@@ -47,6 +50,7 @@ export interface GraphContextValue {
 
   // Edge operations
   updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => void
+  updateEdgeStyle: (edgeId: string, style: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean; selected?: boolean }) => void
 
   // Layout
   layoutNodes: (direction?: 'RIGHT' | 'DOWN') => Promise<void>
@@ -77,13 +81,17 @@ const emptyContext: GraphContextValue = {
   onEdgesChange: () => {},
   onConnect: () => {},
   onNodeClick: () => {},
+  onEdgeClick: () => {},
   onPaneClick: () => {},
+  onConnectStart: () => {},
+  onConnectEnd: () => {},
   onNodeDoubleClick: () => {},
   onNodeContextMenu: () => {},
   createChildNode: async () => null as string | null,
   deleteChildNode: async () => false,
   renameNode: async () => false,
   updateEdgeRelation: () => {},
+  updateEdgeStyle: () => {},
   layoutNodes: async () => {},
   highlightSearch: () => {},
   flushCurrentRoomSave: async () => {},
@@ -112,13 +120,17 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     onEdgesChange: graph.onEdgesChange,
     onConnect: graph.onConnect,
     onNodeClick: graph.onNodeClick as GraphContextValue['onNodeClick'],
+    onEdgeClick: graph.onEdgeClick as GraphContextValue['onEdgeClick'],
     onPaneClick: graph.onPaneClick,
+    onConnectStart: graph.onConnectStart,
+    onConnectEnd: graph.onConnectEnd,
     onNodeDoubleClick: graph.onNodeDoubleClick as GraphContextValue['onNodeDoubleClick'],
     onNodeContextMenu: graph.onNodeContextMenu as GraphContextValue['onNodeContextMenu'],
     createChildNode: graph.createChildNode,
     deleteChildNode: graph.deleteChildNode,
     renameNode: graph.renameNode,
     updateEdgeRelation: graph.updateEdgeRelation,
+    updateEdgeStyle: graph.updateEdgeStyle,
     layoutNodes: graph.layoutNodes,
     highlightSearch: graph.highlightSearch,
     flushCurrentRoomSave: graph.flushCurrentRoomSave,

@@ -2,7 +2,7 @@
  * 日志性能监控页面
  * 通过菜单"视图 → 日志性能监控"打开的独立窗口
  */
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useMonitorStore, type LogEntry } from '../../stores/monitorStore'
 import {
   logGetBuffer,
@@ -13,7 +13,6 @@ import {
   logUnsubscribe,
   logAction,
 } from '../../core/log-backend'
-import { COLORS } from '../../types'
 import styles from './MonitorPage.module.css'
 
 // ============================================================
@@ -34,11 +33,14 @@ const LEVEL_ORDER: Record<string, number> = { ERROR: 0, WARN: 1, INFO: 2, DEBUG:
 function formatTimestamp(iso: string): string {
   try {
     const d = new Date(iso)
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
     const h = String(d.getHours()).padStart(2, '0')
     const m = String(d.getMinutes()).padStart(2, '0')
     const s = String(d.getSeconds()).padStart(2, '0')
     const ms = String(d.getMilliseconds()).padStart(3, '0')
-    return `${h}:${m}:${s}.${ms}`
+    return `${yyyy}-${mm}-${dd} ${h}:${m}:${s}.${ms}`
   } catch {
     return iso
   }
@@ -64,6 +66,18 @@ function highlightText(text: string, keyword: string): React.ReactNode {
       {text.slice(idx + keyword.length)}
     </>
   )
+}
+
+function toDateStr(iso: string): string {
+  try {
+    const d = new Date(iso)
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  } catch {
+    return ''
+  }
 }
 
 // ============================================================
@@ -149,7 +163,6 @@ function FilterBar() {
   const setSelectedLevels = useMonitorStore((s) => s.setSelectedLevels)
   const setStreaming = useMonitorStore((s) => s.setStreaming)
   const setEntries = useMonitorStore((s) => s.setEntries)
-  const appendEntries = useMonitorStore((s) => s.appendEntries)
   const entries = useMonitorStore((s) => s.entries)
 
   const handleLevelToggle = (level: string) => {
@@ -167,10 +180,11 @@ function FilterBar() {
     const dateStr = selectedDate || undefined
     const results = (await logQuery({
       dateStr,
+      keyword: keyword || undefined,
       levels: selectedLevels.length > 0 ? selectedLevels : undefined,
     })) as LogEntry[]
     setEntries(results)
-  }, [selectedDate, selectedLevels, appendEntries])
+  }, [keyword, selectedDate, selectedLevels, setEntries])
 
   const handleClear = useCallback(async () => {
     logAction('监控:清空', 'MonitorPage', { bufferSizeBefore: entries.length })
@@ -305,14 +319,14 @@ function LogRow({ entry, selected, onClick, keyword }: LogRowProps) {
 function LogList() {
   const entries = useMonitorStore((s) => s.entries)
   const keyword = useMonitorStore((s) => s.keyword)
+  const selectedDate = useMonitorStore((s) => s.selectedDate)
   const selectedLevels = useMonitorStore((s) => s.selectedLevels)
   const selectedEntry = useMonitorStore((s) => s.selectedEntry)
   const setSelectedEntry = useMonitorStore((s) => s.setSelectedEntry)
-  const listRef = useRef<HTMLDivElement>(null)
-  const autoScrollRef = useRef(true)
 
   // 过滤
   const filtered = entries.filter((e) => {
+    if (selectedDate && toDateStr(e.timestamp || '') !== selectedDate) return false
     if (selectedLevels.length > 0 && !selectedLevels.includes(e.level || 'INFO')) return false
     if (keyword) {
       const k = keyword.toLowerCase()
@@ -339,7 +353,7 @@ function LogList() {
   })
 
   return (
-    <div className={styles.logList} ref={listRef}>
+    <div className={styles.logList}>
       <div className={styles.logHeader}>
         <span className={styles.colTime}>时间</span>
         <span className={styles.colLevel}>等级</span>
@@ -518,37 +532,43 @@ export default function MonitorPage() {
   const activeTab = useMonitorStore((s) => s.activeTab)
   const streaming = useMonitorStore((s) => s.streaming)
   const appendEntries = useMonitorStore((s) => s.appendEntries)
+  const setEntries = useMonitorStore((s) => s.setEntries)
   const setAvailableDates = useMonitorStore((s) => s.setAvailableDates)
   const setLoaded = useMonitorStore((s) => s.setLoaded)
 
-  // 初始化：加载缓冲区 + 订阅实时流
+  // 初始化：加载缓冲区 + 可用日期
   useEffect(() => {
     logAction('页面:进入监控', 'MonitorPage', { timestamp: new Date().toISOString() })
     let mounted = true
 
     const init = async () => {
-      // 加载内存缓冲区
       const [buffer, dates] = await Promise.all([logGetBuffer(), logGetAvailableDates()])
       if (!mounted) return
-      appendEntries(buffer as LogEntry[])
+      setEntries(buffer as LogEntry[])
       setAvailableDates(dates)
       setLoaded(true)
     }
 
     init()
 
-    // 订阅实时日志
-    const handleEntry = (entry: unknown) => {
-      if (!mounted) return
-      appendEntries([entry as Parameters<typeof appendEntries>[0][0]])
-    }
-    logSubscribe(handleEntry)
-
     return () => {
       mounted = false
+    }
+  }, [setAvailableDates, setEntries, setLoaded])
+
+  // 实时订阅：仅在 streaming=true 时接收新日志
+  useEffect(() => {
+    if (!streaming) return
+
+    const handleEntry = (entry: unknown) => {
+      appendEntries([entry as Parameters<typeof appendEntries>[0][0]])
+    }
+
+    logSubscribe(handleEntry)
+    return () => {
       logUnsubscribe(handleEntry)
     }
-  }, [appendEntries, setAvailableDates, setLoaded])
+  }, [appendEntries, streaming])
 
   return (
     <div className={styles.monitorRoot}>

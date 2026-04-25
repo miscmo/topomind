@@ -5,7 +5,7 @@
  * All functions here deal with pure state transformations and storage I/O.
  */
 import type { Connection } from '@xyflow/react'
-import type { KnowledgeNode, KnowledgeEdge, EdgeRelation, EdgeWeight } from '../../types'
+import type { KnowledgeNode, KnowledgeEdge, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../../types'
 import { buildMetaFromNodesEdges } from './graphBuilder'
 import { FSB } from '../../core/fs-backend'
 import { logger } from '../../core/logger'
@@ -266,15 +266,29 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   // ===== Edge CRUD =====
 
-  const addEdge = (connection: Connection, edgeId: string) => {
+  const addEdge = (connection: Connection, edgeId: string, defaultStyle?: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean }) => {
+    const lineMode = defaultStyle?.lineMode ?? 'smoothstep'
+    const lineStyle = defaultStyle?.lineStyle ?? 'solid'
+    const color = defaultStyle?.color ?? '#7f8c8d'
+    const arrow = defaultStyle?.arrow ?? true
     const newEdge: KnowledgeEdge = {
       id: edgeId,
       source: connection.source,
       target: connection.target,
-      type: 'smoothstep',
+      type: lineMode,
+      style: {
+        stroke: color,
+        strokeWidth: 2,
+        strokeDasharray: lineStyle === 'dashed' ? '6 4' : undefined,
+      },
+      markerEnd: arrow ? { type: 'arrowclosed', color } : undefined,
       data: {
         relation: '相关',
         weight: 'minor',
+        lineMode,
+        lineStyle,
+        color,
+        arrow,
         highlighted: false,
         faded: false,
       },
@@ -308,7 +322,17 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     const dirPath = getActiveNavState().roomPath
     setState((prev) => {
       const edges = prev.edges.map((e) =>
-        e.id === edgeId ? { ...e, data: { ...e.data, relation, weight } } : e
+        e.id === edgeId
+          ? {
+              ...e,
+              animated: weight === 'main',
+              style: {
+                ...e.style,
+                strokeWidth: weight === 'main' ? 2.5 : 2,
+              },
+              data: { ...e.data, relation, weight },
+            }
+          : e
       )
       edgesRef.current = edges
       rebuildMaps(prev.nodes, edges)
@@ -316,6 +340,52 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     })
     if (dirPath) scheduleSave(dirPath)
     logAction('连线:更新关系', 'graphOperations', { edgeId, relation, weight })
+  }
+
+  const updateEdgeStyle = (
+    edgeId: string,
+    style: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean; selected?: boolean }
+  ) => {
+    const dirPath = getActiveNavState().roomPath
+    setState((prev) => {
+      const edges = prev.edges.map((e) => {
+        if (e.id !== edgeId) return e
+        const nextColor = style.color ?? e.data?.color ?? '#7f8c8d'
+        const nextLineStyle = style.lineStyle ?? e.data?.lineStyle ?? 'solid'
+        const nextArrow = style.arrow ?? e.data?.arrow ?? true
+        const nextWeight = e.data?.weight ?? 'minor'
+        const nextSelected = style.selected ?? false
+        return {
+          ...e,
+          type: style.lineMode ?? e.data?.lineMode ?? 'smoothstep',
+          style: {
+            stroke: nextColor,
+            strokeWidth: nextSelected ? (nextWeight === 'main' ? 4 : 3.5) : (nextWeight === 'main' ? 2.5 : 2),
+            strokeDasharray: nextLineStyle === 'dashed' ? '6 4' : undefined,
+            filter: nextSelected ? 'drop-shadow(0 0 6px rgba(52, 152, 219, 0.45))' : undefined,
+          },
+          markerEnd: nextArrow
+            ? {
+                type: 'arrowclosed',
+                color: nextColor,
+              }
+            : undefined,
+          data: {
+            ...e.data,
+            ...style,
+            color: nextColor,
+            lineStyle: nextLineStyle,
+            arrow: nextArrow,
+            selected: nextSelected,
+          },
+        }
+      })
+      edgesRef.current = edges
+      rebuildMaps(prev.nodes, edges)
+      return { ...prev, edges }
+    })
+    if (dirPath) scheduleSave(dirPath)
+    logAction('连线:更新样式', 'graphOperations', { edgeId, ...style })
   }
 
   // ===== Node position changes =====
@@ -395,6 +465,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     addEdge,
     deleteEdge,
     updateEdgeRelation,
+    updateEdgeStyle,
     // Position changes
     applyNodePositionChanges,
     applyNodeRemoveChanges,

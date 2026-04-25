@@ -36,16 +36,17 @@ const _call = (channel: string, ...args: unknown[]) => {
   return api.invoke(channel, ...args)
 }
 
-/** 直接写 console.warn 避免循环依赖 */
-const _warn = (...args: unknown[]) => {
-  console.warn('[log-backend]', ...args)
+/** 直接吞掉错误，避免控制台输出；日志由 file-service 异步落盘 */
+const _warn = (..._args: unknown[]) => {
+  return
 }
 
 export async function logWrite(entry: Partial<LogEntry>): Promise<boolean> {
+  const api = _api()
+  if (!api) return false
   try {
     return await _call('log:write', entry)
   } catch (e) {
-    _warn('log:write failed:', (e as Error).message)
     return false
   }
 }
@@ -53,8 +54,7 @@ export async function logWrite(entry: Partial<LogEntry>): Promise<boolean> {
 export async function logGetBuffer(): Promise<LogEntry[]> {
   try {
     return await _call('log:getBuffer')
-  } catch (e) {
-    _warn('log:getBuffer failed:', (e as Error).message)
+  } catch {
     return []
   }
 }
@@ -62,8 +62,7 @@ export async function logGetBuffer(): Promise<LogEntry[]> {
 export async function logQuery(opts: LogQueryOptions = {}): Promise<LogEntry[]> {
   try {
     return await _call('log:query', opts)
-  } catch (e) {
-    _warn('log:query failed:', (e as Error).message)
+  } catch {
     return []
   }
 }
@@ -71,8 +70,7 @@ export async function logQuery(opts: LogQueryOptions = {}): Promise<LogEntry[]> 
 export async function logSetLevel(level: string | number): Promise<boolean> {
   try {
     return await _call('log:setLevel', level)
-  } catch (e) {
-    _warn('log:setLevel failed:', (e as Error).message)
+  } catch {
     return false
   }
 }
@@ -80,8 +78,7 @@ export async function logSetLevel(level: string | number): Promise<boolean> {
 export async function logClear(): Promise<boolean> {
   try {
     return await _call('log:clear')
-  } catch (e) {
-    _warn('log:clear failed:', (e as Error).message)
+  } catch {
     return false
   }
 }
@@ -89,8 +86,7 @@ export async function logClear(): Promise<boolean> {
 export async function logGetAvailableDates(): Promise<string[]> {
   try {
     return await _call('log:getAvailableDates')
-  } catch (e) {
-    _warn('log:getAvailableDates failed:', (e as Error).message)
+  } catch {
     return []
   }
 }
@@ -98,8 +94,7 @@ export async function logGetAvailableDates(): Promise<string[]> {
 export async function logGetLogDir(): Promise<string | null> {
   try {
     return await _call('log:getLogDir')
-  } catch (e) {
-    _warn('log:getLogDir failed:', (e as Error).message)
+  } catch {
     return null
   }
 }

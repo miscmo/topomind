@@ -13,15 +13,17 @@ import { useGraphContext } from '../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
 import styles from './DetailPanel.module.css'
 import { logAction } from '../../core/log-backend'
+import { registerTabSaver } from '../../core/close-guard'
 
 // Configure marked once — called at module load time, not inside components
 marked.setOptions({ breaks: true, gfm: true })
 
 interface DetailPanelProps {
   selectedNodeId: string | null
+  tabId?: string
 }
 
-const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelProps) {
+const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailPanelProps) {
   const storage = useStorage()
   const collapseRightPanel = useAppStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()
@@ -31,6 +33,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
 
   const [editMode, setEditMode] = useState(false)
   const [markdown, setMarkdown] = useState('')
+  const [savedMarkdown, setSavedMarkdown] = useState('')
   const [renameMode, setRenameMode] = useState(false)
   const [newName, setNewName] = useState('')
   const [childTags, setChildTags] = useState<Array<{ path: string; name: string }>>([])
@@ -56,9 +59,11 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
     storage.readMarkdown(path).then((content: string) => {
       if (markdownRequestSeqRef.current !== requestSeq) return
       setMarkdown(content)
+      setSavedMarkdown(content)
     }).catch(() => {
       if (markdownRequestSeqRef.current !== requestSeq) return
       setMarkdown('')
+      setSavedMarkdown('')
     })
   }, [selectedNodeId, selectedNode?.data.path, storage])
 
@@ -92,12 +97,13 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
   // ===== Save markdown =====
   // Use nodesMapRef for stale-closure-safe access. selectedNode from render-time
   // closure can be stale when the selected node changes without re-rendering DetailPanel.
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedNodeId) return
     const node = graph.nodesMapRef.current.get(selectedNodeId)
     const path = node?.data.path ?? selectedNodeId
     const label = node?.data.label
-    storage.writeMarkdown(path, markdown)
+    await storage.writeMarkdown(path, markdown)
+    setSavedMarkdown(markdown)
     logAction('内容:保存', 'DetailPanel', { nodePath: path, label })
     setEditMode(false)
   }
@@ -133,6 +139,17 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
     graph.deleteChildNode(selectedNodeId)
     collapseRightPanel()
   }, [selectedNodeId, prompt, graph, collapseRightPanel])
+
+  const flushMarkdownSave = useCallback(async () => {
+    if (!tabId || !editMode || !selectedNodeId) return
+    if (markdown === savedMarkdown) return
+    await handleSave()
+  }, [tabId, editMode, selectedNodeId, markdown, savedMarkdown])
+
+  useEffect(() => {
+    if (!tabId) return
+    return registerTabSaver(tabId, flushMarkdownSave)
+  }, [tabId, flushMarkdownSave])
 
   // Memoize parsed HTML — must be declared before any early returns (Rules of Hooks)
   const sanitizedHtml = useMemo(
@@ -251,9 +268,11 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId }: DetailPanelPro
                 storage.readMarkdown(path).then((content: string) => {
                   if (markdownRequestSeqRef.current !== requestSeq) return
                   setMarkdown(content)
+                  setSavedMarkdown(content)
                 }).catch(() => {
                   if (markdownRequestSeqRef.current !== requestSeq) return
                   setMarkdown('')
+                  setSavedMarkdown('')
                 })
                 setEditMode(false)
               }}

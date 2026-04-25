@@ -23,6 +23,19 @@ export interface LogEntry {
   meta?: Record<string, unknown>
 }
 
+const MONITOR_INITIAL_STATE = {
+  activeTab: 'log' as const,
+  keyword: '',
+  selectedDate: '',
+  availableDates: [] as string[],
+  selectedLevels: [] as string[],
+  entries: [] as LogEntry[],
+  selectedEntry: null as LogEntry | null,
+  streaming: true,
+  stats: { total: 0, debug: 0, info: 0, warn: 0, error: 0 },
+  loaded: false,
+}
+
 interface MonitorState {
   // 当前 tab
   activeTab: 'log' | 'performance'
@@ -65,26 +78,13 @@ interface MonitorState {
   // 是否已加载
   loaded: boolean
   setLoaded: (v: boolean) => void
+  reset: () => void
 }
 
 const EMPTY_STATS = { total: 0, debug: 0, info: 0, warn: 0, error: 0 }
 
-/** @type {MonitorState} */
-const initialState = {
-  activeTab: 'log' as const,
-  keyword: '',
-  selectedDate: '',
-  availableDates: [] as string[],
-  selectedLevels: [] as string[],
-  entries: [] as LogEntry[],
-  selectedEntry: null as LogEntry | null,
-  streaming: true,
-  stats: { ...EMPTY_STATS },
-  loaded: false,
-}
-
 export const useMonitorStore = create<MonitorState>((set, get) => ({
-  ...initialState,
+  ...MONITOR_INITIAL_STATE,
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
@@ -129,4 +129,6 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   },
 
   setLoaded: (loaded) => set({ loaded }),
+
+  reset: () => set({ ...MONITOR_INITIAL_STATE, stats: { ...EMPTY_STATS } }),
 }))

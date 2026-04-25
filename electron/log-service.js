@@ -2,7 +2,7 @@
  * 日志服务 (Electron Main Process)
  *
  * 职责：
- * 1. 初始化 logs/ 目录（与应用工作目录平级）
+ * 1. 初始化工作目录下的 logs/ 目录
  * 2. 按日期分文件存储日志（JSON Lines 格式）
  * 3. 维护内存环形缓冲区（最新 2000 条）
  * 4. 异步写入文件，不阻塞主线程
@@ -17,14 +17,12 @@ import fs from 'fs';
 // 1. 配置
 // ============================================================
 
-/** 日志目录名称（与工作目录平级） */
+/** 日志目录名称（位于工作目录下） */
 const LOG_DIR_NAME = 'logs';
 
 /** 环形缓冲区最大容量 */
 const MAX_BUFFER_SIZE = 2000;
 
-/** 单个日志文件最大字节数（10MB） */
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 // ============================================================
 // 2. 状态
@@ -45,9 +43,6 @@ let _bufferWrapped = false;
 /** 当前写入的文件路径 */
 let _currentLogFile = null;
 
-/** 当前文件已写入字节数 */
-let _currentFileBytes = 0;
-
 /** 当前日期（用于检测日期变更） */
 let _currentDate = null;
 
@@ -67,21 +62,15 @@ const LEVEL_MAP = {
 
 /**
  * 初始化日志服务
- * @param {string} workDir - 应用工作目录（日志目录将创建在其平级）
+ * @param {string} workDir - 应用工作目录（日志目录将创建在其下）
  */
 function init(workDir) {
-  _logDir = path.join(workDir, '..', LOG_DIR_NAME);
+  if (!workDir) return false;
+  _logDir = path.join(workDir, LOG_DIR_NAME);
   _ensureLogDir();
   _initTodayFile();
   _registerIpcHandlers();
-  write({
-    level: 'INFO',
-    module: 'LogService',
-    action: 'app:start',
-    message: `日志服务初始化，logDir=${_logDir}`,
-    params: { workDir, platform: process.platform, version: app.getVersion() },
-    meta: { platform: process.platform, version: app.getVersion() },
-  });
+  return true;
 }
 
 /**
@@ -101,16 +90,6 @@ function _initTodayFile() {
   const today = _getDateStr();
   _currentDate = today;
   _currentLogFile = _getLogFilePath(today);
-  _currentFileBytes = 0;
-
-  if (fs.existsSync(_currentLogFile)) {
-    try {
-      const stat = fs.statSync(_currentLogFile);
-      _currentFileBytes = stat.size;
-    } catch (e) {
-      _currentFileBytes = 0;
-    }
-  }
 }
 
 /**
@@ -129,22 +108,8 @@ function _getDateStr() {
  * @param {string} dateStr - 日期字符串 YYYY-MM-DD
  */
 function _getLogFilePath(dateStr) {
-  return path.join(_logDir, `${dateStr}.log`);
-}
-
-/**
- * 获取带序号的新日志文件路径（轮转时使用）
- */
-function _getNextLogFilePath(dateStr) {
-  let seq = 1;
-  let filePath;
-  do {
-    filePath = seq === 1
-      ? _getLogFilePath(dateStr)
-      : path.join(_logDir, `${dateStr}.${seq}.log`);
-    seq++;
-  } while (fs.existsSync(filePath) && seq < 1000);
-  return filePath;
+  const normalizedDate = String(dateStr).replace(/(\.\d+)?\.log$/, '');
+  return path.join(_logDir, `${normalizedDate}.log`);
 }
 
 // ============================================================
@@ -156,6 +121,8 @@ function _getNextLogFilePath(dateStr) {
  * @param {object} entry - 日志条目
  */
 function write(entry) {
+  if (!_logDir) return false;
+
   // 检查日期是否变更
   const today = _getDateStr();
   if (today !== _currentDate) {
@@ -196,6 +163,7 @@ function write(entry) {
 
   // 广播给订阅者
   _broadcast(fullEntry);
+  return true;
 }
 
 /**
@@ -213,6 +181,7 @@ function _pushToBuffer(entry) {
     _buffer.push(entry);
   } else {
     _buffer[_bufferIndex] = entry;
+    _bufferWrapped = true;
   }
   _bufferIndex = (_bufferIndex + 1) % MAX_BUFFER_SIZE;
 }
@@ -222,20 +191,10 @@ function _pushToBuffer(entry) {
  */
 function _writeToFile(entry) {
   const line = JSON.stringify(entry) + '\n';
-  const lineBytes = Buffer.byteLength(line, 'utf8');
-
-  // 检查文件大小限制
-  if (_currentFileBytes + lineBytes > MAX_FILE_SIZE_BYTES) {
-    _currentLogFile = _getNextLogFilePath(_currentDate);
-    _currentFileBytes = 0;
-  }
-
   fs.appendFile(_currentLogFile, line, { encoding: 'utf8' }, (err) => {
     if (err) {
       console.error('[LogService] Failed to write log:', err);
-      return;
     }
-    _currentFileBytes += lineBytes;
   });
 }
 
@@ -316,7 +275,8 @@ function getBuffer() {
  */
 function query({ dateStr, keyword, levels, actions, startTime, endTime } = {}) {
   const results = [];
-  const logFile = dateStr ? _getLogFilePath(dateStr) : null;
+  const normalizedDate = dateStr ? String(dateStr).replace(/\.log$/, '') : _getDateStr();
+  const logFile = _getLogFilePath(normalizedDate);
 
   if (!logFile || !fs.existsSync(logFile)) return results;
 
@@ -375,9 +335,8 @@ function getAvailableDates() {
   try {
     const files = fs.readdirSync(_logDir);
     return files
-      .filter(f => /^(\d{4}-\d{2}-\d{2})(\.log|\.\d+\.log)?$/.test(f))
-      .map(f => f.replace(/\.\d+\.log$/, ''))
-      .filter((v, i, a) => a.indexOf(v) === i) // 去重
+      .filter(f => /^\d{4}-\d{2}-\d{2}\.log$/.test(f))
+      .map(f => f.replace(/\.log$/, ''))
       .sort()
       .reverse(); // 最新的在前
   } catch (e) {

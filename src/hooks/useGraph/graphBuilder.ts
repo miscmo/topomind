@@ -27,6 +27,10 @@ export interface SerializedEdge {
   target: string
   relation: string
   weight: string
+  lineMode?: 'smoothstep' | 'straight'
+  lineStyle?: 'solid' | 'dashed'
+  color?: string
+  arrow?: boolean
   highlighted?: boolean
   faded?: boolean
 }
@@ -38,15 +42,19 @@ export function buildMetaFromNodesEdges(
   zoom?: number | null,
   pan?: { x: number; y: number } | null
 ): {
-  children: Record<string, { name: string }>
+  children: Record<string, { name: string; x?: number; y?: number }>
   edges: SerializedEdge[]
   zoom?: number | null
   pan?: { x: number; y: number } | null
 } {
-  const children: Record<string, { name: string }> = {}
+  const children: Record<string, { name: string; x?: number; y?: number }> = {}
   for (const node of nodes) {
     const childName = node.id.includes('/') ? (node.id.split('/').pop() ?? node.id) : node.id
-    children[childName] = { name: node.data.label }
+    children[childName] = {
+      name: node.data.label,
+      x: node.position?.x,
+      y: node.position?.y,
+    }
   }
   const graphEdges: SerializedEdge[] = edges.map((e) => ({
     id: e.id,
@@ -54,6 +62,10 @@ export function buildMetaFromNodesEdges(
     target: e.target,
     relation: e.data?.relation ?? '相关',
     weight: e.data?.weight ?? 'minor',
+    lineMode: e.data?.lineMode ?? 'smoothstep',
+    lineStyle: e.data?.lineStyle ?? 'solid',
+    color: e.data?.color ?? '#7f8c8d',
+    arrow: e.data?.arrow ?? true,
     // Preserve visual state across save+reload round-trips.
     // Without these, highlighted/faded are silently dropped and never
     // recovered after a layout change or node move triggers a flush.
@@ -105,11 +117,21 @@ export async function buildNodes(
     const childCount = childCountResults[i]
     const hasChildren = childCount > 0
     const domainColor = DOMAIN_COLORS[i % DOMAIN_COLORS.length]
+    const childSavedPosition = childInfo && typeof childInfo === 'object'
+      ? {
+          x: typeof childInfo.x === 'number' ? childInfo.x : undefined,
+          y: typeof childInfo.y === 'number' ? childInfo.y : undefined,
+        }
+      : null
     const saved = savedPositions[nodeId]
-    const position = saved ?? {
-      x: 50 + i * spacingX,
-      y: 50 + i * spacingY,
-    }
+    const position = saved ?? (
+      childSavedPosition?.x != null && childSavedPosition?.y != null
+        ? { x: childSavedPosition.x, y: childSavedPosition.y }
+        : {
+            x: 50 + i * spacingX,
+            y: 50 + i * spacingY,
+          }
+    )
 
     return {
       id: nodeId,
@@ -134,11 +156,26 @@ export function buildEdges(meta: GraphMeta): KnowledgeEdge[] {
     id: e.id,
     source: e.source,
     target: e.target,
-    type: 'smoothstep',
+    type: e.lineMode ?? 'smoothstep',
     animated: e.weight === 'main',
+    style: {
+      stroke: e.color ?? '#7f8c8d',
+      strokeWidth: e.weight === 'main' ? 2.5 : 2,
+      strokeDasharray: (e.lineStyle ?? 'solid') === 'dashed' ? '6 4' : undefined,
+    },
+    markerEnd: (e.arrow ?? true)
+      ? {
+          type: 'arrowclosed',
+          color: e.color ?? '#7f8c8d',
+        }
+      : undefined,
     data: {
       relation: e.relation,
       weight: e.weight,
+      lineMode: e.lineMode ?? 'smoothstep',
+      lineStyle: e.lineStyle ?? 'solid',
+      color: e.color ?? '#7f8c8d',
+      arrow: e.arrow ?? true,
       // Restore persisted visual state rather than always defaulting to false.
       // When nodes move or layout changes, the save flushes current state to disk.
       // Without reading it back here, highlighted/faded are permanently lost after reload.

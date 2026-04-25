@@ -6,6 +6,14 @@
 import { create } from 'zustand'
 import type { Room, RoomHistoryItem } from '@/types'
 
+const ROOM_INITIAL_STATE = {
+  currentKBPath: null as string | null,
+  currentRoomPath: null as string | null,
+  currentRoomName: '全局',
+  roomHistory: [] as RoomHistoryItem[],
+  loading: false,
+}
+
 interface RoomState {
   // 当前知识库路径
   currentKBPath: string | null
@@ -28,6 +36,7 @@ interface RoomState {
   setCurrentKB: (kbPath: string) => void
   navigateToHistoryIndex: (index: number) => void
   restoreRoomState: (roomState: { kbPath: string; roomHistory: RoomHistoryItem[]; currentRoomPath: string | null; currentRoomName: string }) => void
+  reset: () => void
 
   // Computed-like helpers
   isInRoom: () => boolean
@@ -41,11 +50,7 @@ interface RoomState {
  * 共享同一个状态。
  */
 export const roomStore = create<RoomState>((set, get) => ({
-  currentKBPath: null,
-  currentRoomPath: null,
-  currentRoomName: '全局',
-  roomHistory: [],
-  loading: false,
+  ...ROOM_INITIAL_STATE,
 
   setLoading: (loading) => set({ loading }),
 
@@ -157,13 +162,9 @@ export const roomStore = create<RoomState>((set, get) => ({
     roomHistory,
   }),
 
-  clearRoom: () => set({
-    currentKBPath: null,
-    currentRoomPath: null,
-    currentRoomName: '全局',
-    roomHistory: [],
-    loading: false,
-  }),
+  clearRoom: () => set({ ...ROOM_INITIAL_STATE }),
+
+  reset: () => set({ ...ROOM_INITIAL_STATE }),
 
   isInRoom: () => get().currentRoomPath !== null,
 

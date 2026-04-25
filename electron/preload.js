@@ -17,6 +17,7 @@ const ALLOWED_CHANNELS = new Set([
   'fs:ensureCardDir',
   'fs:getRootDir',
   'fs:getLastOpenedKB', 'fs:setLastOpenedKB',
+  'fs:readAppConfig', 'fs:writeAppConfig',
   'fs:setWorkDir', 'fs:selectWorkDirCandidate', 'fs:createWorkDir', 'fs:importKB',
   // git: basic
   'git:checkAvailable', 'git:init', 'git:status',
@@ -36,6 +37,7 @@ const ALLOWED_CHANNELS = new Set([
   'app:openExternal',
   'app:navigateHome',
   'app:getE2EState',
+  'app:switchWorkDir',
   // save
   'save:layout',
   // log
@@ -50,6 +52,7 @@ const ALLOWED_SEND_SYNC_CHANNELS = new Set([
 const ALLOWED_RECEIVE_CHANNELS = new Set([
   'app:menu-action',
   'app:navigate-home',
+  'app:reset-session',
   'save:before-quit',
   'log:entry',
 ]);

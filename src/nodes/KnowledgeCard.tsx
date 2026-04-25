@@ -9,7 +9,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import type { KnowledgeNode, KnowledgeNodeData } from '../types'
 import styles from './KnowledgeCard.module.css'
 
-function KnowledgeCard({ data, selected }: NodeProps<KnowledgeNode>) {
+function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
   const isContainer = data.nodeType === 'container'
   const hasUnsaved = data.hasUnsavedEdit
 
@@ -21,13 +21,18 @@ function KnowledgeCard({ data, selected }: NodeProps<KnowledgeNode>) {
         selected ? styles.selected : '',
         data.searchMatch ? styles.searchMatch : '',
         data.hovered ? styles.hovered : '',
+        data.connectTarget ? styles.connectTarget : '',
         hasUnsaved ? styles.unsaved : '',
+        dragging ? styles.dragging : '',
       ].filter(Boolean).join(' ')}
       style={data.domainColor ? { borderColor: data.domainColor } : undefined}
     >
-      {/* 连线手柄 */}
+      {/* 轻量连接入口 */}
       <Handle type="target" position={Position.Left} className={styles.handleTarget} />
       <Handle type="source" position={Position.Right} className={styles.handleSource} />
+      <div className={styles.connectHint} aria-hidden="true">
+        <span className={styles.connectHintIcon}>＋</span>
+      </div>
 
       {/* 标签 */}
       <div className={styles.label}>{data.label}</div>

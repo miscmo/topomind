@@ -18,17 +18,26 @@ export type AppView = 'setup' | 'home' | 'graph'
  */
 export interface GraphChild {
   name: string
+  x?: number
+  y?: number
 }
 
 /**
  * _graph.json 中的 edges 条目
  */
+export type EdgeLineMode = 'smoothstep' | 'straight'
+export type EdgeLineStyle = 'solid' | 'dashed'
+
 export interface GraphEdge {
   id: string
   source: string
   target: string
   relation: EdgeRelation
   weight: EdgeWeight
+  lineMode?: EdgeLineMode
+  lineStyle?: EdgeLineStyle
+  color?: string
+  arrow?: boolean
   /** 高亮状态（搜索/选中连线时置 true） */
   highlighted?: boolean
   /** 淡化状态（其他连线淡化时置 true） */
@@ -82,6 +91,8 @@ export interface KnowledgeNodeData {
   selected?: boolean
   /** 悬停状态 */
   hovered?: boolean
+  /** 作为连线目标高亮 */
+  connectTarget?: boolean
   /** Index signature for React Flow Record<string, unknown> compatibility */
   [key: string]: unknown
 }
@@ -93,6 +104,10 @@ export type KnowledgeNode = Node<KnowledgeNodeData, 'knowledgeCard'>
 export type KnowledgeEdge = Edge<{
   relation: EdgeRelation
   weight: EdgeWeight
+  lineMode?: EdgeLineMode
+  lineStyle?: EdgeLineStyle
+  color?: string
+  arrow?: boolean
   highlighted?: boolean
   faded?: boolean
 }>

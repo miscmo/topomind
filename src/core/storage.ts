@@ -7,6 +7,19 @@ import { logger } from './logger'
 import type { FSBChildInfo, FSBGraphMeta, FSBResult } from './fs-backend'
 import type { EdgeRelation, EdgeWeight } from '../types'
 
+interface WorkDirConfig {
+  lastOpenedKB?: string | null
+  orders?: Record<string, number>
+  covers?: Record<string, unknown>
+  defaultEdgeStyle?: {
+    lineMode?: 'smoothstep' | 'straight'
+    lineStyle?: 'solid' | 'dashed'
+    color?: string
+    arrow?: boolean
+  }
+  [key: string]: unknown
+}
+
 // ===== normalizeMeta — 将原始图元数据规范化为稳定结构 =====
 
 function normalizeMeta(metaRaw: unknown): FSBGraphMeta {
@@ -26,6 +39,10 @@ function normalizeMeta(metaRaw: unknown): FSBGraphMeta {
     target: string
     relation: EdgeRelation
     weight: EdgeWeight
+    lineMode?: 'smoothstep' | 'straight'
+    lineStyle?: 'solid' | 'dashed'
+    color?: string
+    arrow?: boolean
     highlighted?: boolean
     faded?: boolean
   }
@@ -42,6 +59,10 @@ function normalizeMeta(metaRaw: unknown): FSBGraphMeta {
         target,
         relation: (edge.relation || '相关') as EdgeRelation,
         weight: (edge.weight || 'minor') as EdgeWeight,
+        lineMode: edge.lineMode === 'straight' ? 'straight' : 'smoothstep',
+        lineStyle: edge.lineStyle === 'dashed' ? 'dashed' : 'solid',
+        color: typeof edge.color === 'string' ? edge.color : undefined,
+        arrow: typeof edge.arrow === 'boolean' ? edge.arrow : undefined,
         // Preserve visual state across save+reload round-trips.
         // Without these, highlighted/faded are silently dropped when
         // normalizeMeta processes data before writing to _graph.json.
@@ -130,6 +151,28 @@ function normalizeName(name: unknown): string {
   return String(name || '').trim()
 }
 
+function normalizeConfig(configRaw: unknown): WorkDirConfig {
+  const config = (configRaw && typeof configRaw === 'object' && !Array.isArray(configRaw)) ? configRaw as Record<string, unknown> : {}
+  const defaultEdgeStyleRaw = (config.defaultEdgeStyle && typeof config.defaultEdgeStyle === 'object' && !Array.isArray(config.defaultEdgeStyle))
+    ? config.defaultEdgeStyle as Record<string, unknown>
+    : {}
+  return {
+    lastOpenedKB: typeof config.lastOpenedKB === 'string' ? config.lastOpenedKB : null,
+    orders: (config.orders && typeof config.orders === 'object' && !Array.isArray(config.orders))
+      ? config.orders as Record<string, number>
+      : {},
+    covers: (config.covers && typeof config.covers === 'object' && !Array.isArray(config.covers))
+      ? config.covers as Record<string, unknown>
+      : {},
+    defaultEdgeStyle: {
+      lineMode: defaultEdgeStyleRaw.lineMode === 'straight' ? 'straight' : 'smoothstep',
+      lineStyle: defaultEdgeStyleRaw.lineStyle === 'dashed' ? 'dashed' : 'solid',
+      color: typeof defaultEdgeStyleRaw.color === 'string' ? defaultEdgeStyleRaw.color : '#7f8c8d',
+      arrow: typeof defaultEdgeStyleRaw.arrow === 'boolean' ? defaultEdgeStyleRaw.arrow : true,
+    },
+  }
+}
+
 function ensureValidName(name: unknown, label = '名称'): string {
   const normalized = normalizeName(name)
   if (!normalized) throw new Error(`${label}不能为空`)
@@ -158,6 +201,8 @@ export interface SaveImageResult {
   path: string
   markdownRef: string
 }
+
+let cachedConfig: WorkDirConfig = normalizeConfig({})
 
 export const Store = {
   // ===== 初始化 =====
@@ -482,4 +527,33 @@ export const Store = {
       throw e
     }
   },
+
+  async readConfig(): Promise<WorkDirConfig> {
+    try {
+      cachedConfig = normalizeConfig(await FSB.readAppConfig())
+      return cachedConfig
+    } catch {
+      cachedConfig = normalizeConfig({})
+      return cachedConfig
+    }
+  },
+
+  async writeConfig(config: WorkDirConfig) {
+    try {
+      const next = normalizeConfig({
+        ...cachedConfig,
+        ...config,
+        defaultEdgeStyle: {
+          ...cachedConfig.defaultEdgeStyle,
+          ...config.defaultEdgeStyle,
+        },
+      })
+      cachedConfig = next
+      return await FSB.writeAppConfig(next)
+    } catch (e) {
+      logger.catch('Store.writeConfig', '保存工作目录配置失败', e)
+      throw e
+    }
+  },
 }
+

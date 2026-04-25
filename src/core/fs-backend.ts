@@ -77,6 +77,8 @@ export interface FSB {
   getDir: (dirPath: string) => Promise<unknown>
   updateCardMeta: (cardPath: string, newName: string) => Promise<string>
   readFile: (filePath: string) => Promise<string>
+  readAppConfig: () => Promise<unknown>
+  writeAppConfig: (content: unknown) => Promise<unknown>
   writeFile: (filePath: string, content: string) => Promise<unknown>
   deleteFile: (filePath: string) => Promise<unknown>
   writeBlobFile: (filePath: string, buffer: ArrayBuffer) => Promise<unknown>
@@ -113,6 +115,8 @@ export const FSBImpl: FSB = {
   updateCardMeta: (cardPath, newName) => _call('fs:updateCardMeta', cardPath, newName),
 
   readFile: (filePath) => _call('fs:readFile', filePath),
+  readAppConfig: () => _call('fs:readAppConfig'),
+  writeAppConfig: (content) => _call('fs:writeAppConfig', content),
   writeFile: (filePath, content) => _call('fs:writeFile', filePath, content),
   deleteFile: (filePath) => _call('fs:deleteFile', filePath),
 

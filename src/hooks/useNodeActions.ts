@@ -53,8 +53,8 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
   const handleNewChild = useCallback(async (nodeId: string) => {
     const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
     if (!name?.trim()) return
-    logAction('节点:创建', 'GraphPage', { nodeId, nodeName: name.trim(), source: 'context-menu' })
-    await graph.createChildNode(name.trim(), nodeId)
+    logAction('节点:创建', 'GraphPage', { nodeId, nodeName: name.trim(), source: nodeId ? 'context-menu' : 'pane-context-menu' })
+    await graph.createChildNode(name.trim(), nodeId || undefined)
     setDirty(true)
     onAction?.()
   }, [graph, onAction, prompt, setDirty])
@@ -88,6 +88,32 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
     setDirty(true)
     onAction?.()
   }, [findEdgeById, deleteElements, onAction, setDirty])
+
+  const handleEdgeStyle = useCallback(async (edgeId: string) => {
+    const edge = findEdgeById(edgeId)
+    if (!edge) return
+    const current = edge.data || {}
+    const raw = await prompt({
+      title: '编辑连线样式',
+      placeholder: '输入 JSON，例如 {"lineMode":"straight","lineStyle":"dashed","color":"#e74c3c","arrow":true}',
+      defaultValue: JSON.stringify({
+        lineMode: current.lineMode ?? 'smoothstep',
+        lineStyle: current.lineStyle ?? 'solid',
+        color: current.color ?? '#7f8c8d',
+        arrow: current.arrow ?? true,
+      }),
+    })
+    if (!raw?.trim()) return
+    let parsed: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return
+    }
+    graph.updateEdgeStyle(edgeId, parsed)
+    setDirty(true)
+    onAction?.()
+  }, [findEdgeById, graph, prompt, onAction, setDirty])
 
   const handleFocus = useCallback((nodeId: string) => {
     selectNode(nodeId)
@@ -130,6 +156,7 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
     handleRename,
     handleDelete,
     handleEdgeDelete,
+    handleEdgeStyle,
     handleFocus,
     handleProperties,
     deleteSelectedNode,

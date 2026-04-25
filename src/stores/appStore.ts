@@ -5,6 +5,34 @@
 import { create } from 'zustand'
 import type { AppView } from '@/types'
 
+const APP_INITIAL_STATE = {
+  view: 'setup' as AppView,
+  selectedNodeId: null as string | null,
+  edgeMode: false,
+  edgeModeSourceId: null as string | null,
+  showGitPanel: false,
+  rightPanelCollapsed: false,
+  rightPanelWidth: 320,
+  contextMenu: {
+    visible: false,
+    x: 0,
+    y: 0,
+    type: null as 'node' | 'edge' | 'pane' | null,
+    targetId: null as string | null,
+  },
+  kbRefreshTrigger: 0,
+  showGrid: true,
+  searchQuery: '',
+  rightPanelTab: 'detail' as 'detail' | 'style',
+  selectedEdgeId: null as string | null,
+  defaultEdgeStyle: {
+    lineMode: 'smoothstep' as 'smoothstep' | 'straight',
+    lineStyle: 'solid' as 'solid' | 'dashed',
+    color: '#7f8c8d',
+    arrow: true,
+  },
+}
+
 interface AppState {
   // 视图状态
   view: AppView
@@ -34,6 +62,17 @@ interface AppState {
   showGrid: boolean
   // 搜索查询字符串
   searchQuery: string
+  // 右侧面板当前 Tab
+  rightPanelTab: 'detail' | 'style'
+  // 当前选中的连线 ID
+  selectedEdgeId: string | null
+  // 全局默认连线样式
+  defaultEdgeStyle: {
+    lineMode: 'smoothstep' | 'straight'
+    lineStyle: 'solid' | 'dashed'
+    color: string
+    arrow: boolean
+  }
 
   // Actions
   showGraph: () => void
@@ -52,27 +91,16 @@ interface AppState {
   triggerKBRefresh: () => void
   toggleGrid: () => void
   setSearchQuery: (query: string) => void
+  setRightPanelTab: (tab: 'detail' | 'style') => void
+  setSelectedEdgeId: (edgeId: string | null) => void
+  setDefaultEdgeStyle: (style: Partial<AppState['defaultEdgeStyle']>) => void
+  replaceDefaultEdgeStyle: (style: AppState['defaultEdgeStyle']) => void
+  reset: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   // Initial state
-  view: 'setup',
-  selectedNodeId: null,
-  edgeMode: false,
-  edgeModeSourceId: null,
-  showGitPanel: false,
-  rightPanelCollapsed: false,
-  rightPanelWidth: 320,
-  contextMenu: {
-    visible: false,
-    x: 0,
-    y: 0,
-    type: null,
-    targetId: null,
-  },
-  kbRefreshTrigger: 0,
-  showGrid: true,
-  searchQuery: '',
+  ...APP_INITIAL_STATE,
 
   // Actions
   showGraph: () => set({ view: 'graph' }),
@@ -118,4 +146,13 @@ export const useAppStore = create<AppState>((set) => ({
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
 
   setSearchQuery: (query) => set({ searchQuery: query }),
+  setRightPanelTab: (rightPanelTab) => set({ rightPanelTab }),
+  setSelectedEdgeId: (selectedEdgeId) => set({ selectedEdgeId }),
+  setDefaultEdgeStyle: (style) => set((state) => ({
+    defaultEdgeStyle: { ...state.defaultEdgeStyle, ...style },
+  })),
+
+  replaceDefaultEdgeStyle: (style) => set({ defaultEdgeStyle: style }),
+
+  reset: () => set({ ...APP_INITIAL_STATE }),
 }))

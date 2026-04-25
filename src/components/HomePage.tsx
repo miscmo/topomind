@@ -229,31 +229,11 @@ export default function HomePage() {
 
   async function switchWorkDir() {
     setMessage('')
-    logAction('HomePage:点击切换工作目录', 'HomePage', {})
-    logAction('HomePage:打开文件对话框', 'HomePage', { purpose: '切换工作目录' })
-    const picked = await storage.selectWorkDirCandidate()
-    if (!picked?.valid) {
-      logAction('HomePage:文件对话框关闭', 'HomePage', {
-        result: 'cancelled',
-        reason: picked?.error || '用户取消',
-      })
+    setMessageError(false)
+    const resetResult = await window.electronAPI?.invoke('app:switchWorkDir') as { ok?: boolean; cancelled?: boolean } | undefined
+    if (!resetResult?.ok) {
       return
     }
-    logAction('HomePage:文件对话框已选择路径', 'HomePage', { selectedPath: picked.nodePath })
-    const res = await storage.setWorkDir(picked.nodePath!)
-    if (!res?.valid) {
-      if (res?.error) {
-        setMessageError(true)
-        setMessage(res.error)
-      }
-      logAction('HomePage:切换工作目录失败', 'HomePage', {
-        newWorkDir: picked.nodePath,
-        error: res?.error || null,
-      })
-      return
-    }
-    logAction('工作目录:切换', 'HomePage', { newWorkDir: picked.nodePath })
-    await loadKBList()
   }
 
   function truncatedWorkDir() {

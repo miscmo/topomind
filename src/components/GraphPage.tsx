@@ -20,11 +20,12 @@ import NavTree from './NavTree/NavTree'
 import Toolbar from './Toolbar/Toolbar'
 import SearchBar from './SearchBar/SearchBar'
 import DetailPanel from './DetailPanel/DetailPanel'
-import Breadcrumb from './Breadcrumb/Breadcrumb'
+import StyleSection from './DetailPanel/StyleSection'
 import ContextMenu from './ContextMenu/ContextMenu'
 import GitPanel from './GitPanel/GitPanel'
 import { Background, type BackgroundVariant } from '@xyflow/react'
 import { logAction } from '../core/log-backend'
+import { registerTabSaver } from '../core/close-guard'
 import styles from './GraphPage.module.css'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
@@ -40,6 +41,8 @@ const GraphCanvas = memo(function GraphCanvas({
   tabId?: string
 }) {
   const showGrid = useAppStore((s) => s.showGrid)
+  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
+  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
   const graph = useGraphContext()
   const { showCM, showEdgeCM, hideCM } = useContextMenu()
   const prompt = usePromptStore((s) => s.open)
@@ -68,23 +71,9 @@ const { handleClick: handlePaneClick } = useDoubleClick({
       // Immediate: close context menu on every pane click
       hideCM()
     },
-    onDoubleClick: async () => {
-      // Fire setTabDirty immediately so the TabBar bullet appears before any async
-      // operations. This runs in the same task as the click, giving a reliable
-      // visibility window from ~500ms through the full 8s test poll window.
-      queueMicrotask(() => { if (tabId) tabStore.getState().setTabDirty(tabId, true) })
-      const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
-      if (!name?.trim()) return
-      const trimmed = name.trim()
-      logAction('节点:创建', 'GraphPage', { nodeName: trimmed, source: 'double-click-canvas' })
-      const createdPath = await graph.createChildNode(trimmed)
-      if (!createdPath) {
-        logAction('节点:创建失败', 'GraphPage', {
-          nodeName: trimmed,
-          source: 'double-click-canvas',
-          reason: 'createChildNode-return-null',
-        })
-      }
+    onDoubleClick: () => {
+      // 双击空白区只取消选择，不执行缩放动作
+      useAppStore.getState().clearSelection()
     },
     onSingleClick: () => {
       useAppStore.getState().clearSelection()
@@ -100,6 +89,9 @@ const { handleClick: handlePaneClick } = useDoubleClick({
         onNodesChange={graph.onNodesChange}
         onEdgesChange={graph.onEdgesChange}
         onConnect={graph.onConnect}
+        onConnectStart={graph.onConnectStart}
+        onConnectEnd={graph.onConnectEnd}
+        connectionRadius={48}
         onNodeClick={graph.onNodeClick as (e: React.MouseEvent, node: Node) => void}
         onNodeDoubleClick={graph.onNodeDoubleClick as (e: React.MouseEvent, node: Node) => void}
         onNodeContextMenu={(e, node) => {
@@ -109,13 +101,19 @@ const { handleClick: handlePaneClick } = useDoubleClick({
             showCM(node.id, e)
           }
         }}
+        onEdgeClick={(e, edge) => {
+          if (edge) {
+            graph.onEdgeClick(e, edge)
+          }
+        }}
         onPaneClick={handlePaneClick}
         onPaneContextMenu={(e) => {
-          e.preventDefault()
-          hideCM()
+          showCM('', e)
         }}
         onEdgeContextMenu={(e, edge) => {
           if (edge) {
+            setSelectedEdgeId(edge.id)
+            setRightPanelTab('style')
             showEdgeCM(edge.id, e)
           }
         }}
@@ -123,6 +121,9 @@ const { handleClick: handlePaneClick } = useDoubleClick({
         onInit={(instance) => { (window as any).__reactFlow = instance }}
         minZoom={0.15}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+        zoomOnDoubleClick={false}
+        zoomOnScroll
+        panOnDrag={[2]}
         proOptions={{ hideAttribution: true }}
         nodesDraggable
         nodesConnectable
@@ -140,10 +141,7 @@ const { handleClick: handlePaneClick } = useDoubleClick({
       </ReactFlow>
 
       {/* 工具栏 */}
-      <Toolbar />
-
-      {/* 缩放指示器 */}
-      <div id="zoom-indicator" className={styles.zoomIndicator}>{Math.round(zoomLevel * 100)}%</div>
+      <Toolbar zoomLevel={zoomLevel} />
     </>
   )
 })
@@ -163,6 +161,9 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const currentRoomName = useRoomStore((s) => s.currentRoomName)
   const roomHistory = useRoomStore((s) => s.roomHistory)
   const appSearchQuery = useAppStore((s) => s.searchQuery)
+  const rightPanelTab = useAppStore((s) => s.rightPanelTab)
+  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
+  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
   const setAppSearchQuery = useAppStore((s) => s.setSearchQuery)
   const setTabDirty = useTabStore((s) => s.setTabDirty)
   const getTabById = useTabStore((s) => s.getTabById)
@@ -237,7 +238,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     }
   }, [view, effectiveRoomPath, effectiveKbPath, tabId])
 
-  const { contextMenu, showEdgeCM, hideCM } = useContextMenu()
+  const { contextMenu, showCM, showEdgeCM, hideCM } = useContextMenu()
 
   // Single useGraph instance — shared via GraphContextProvider below
   const graph = useGraph(tabId)
@@ -308,41 +309,8 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     graphHighlightRef.current(effectiveSearchQuery)
   }, [effectiveSearchQuery])
 
-  // Sync room state to tabStore when key room fields change (active tab only)
-  // Uses graph.navigateToRoom for breadcrumb clicks — this properly updates both
-  // tabStore and roomStore through useGraph, avoiding a bidirectional write loop.
-  useEffect(() => {
-    if (!tabId || activeTabId !== tabId) return
-
-    const roomHistoryChanged = JSON.stringify(tabRoomHistory) !== JSON.stringify(roomHistory)
-    const roomPathChanged = tabRoomPath !== currentRoomPath
-    const roomNameChanged = tabRoomName !== currentRoomName
-    const kbPathChanged = tabKbPath !== currentKBPath
-
-    if (!roomHistoryChanged && !roomPathChanged && !roomNameChanged && !kbPathChanged) return
-
-    // Restore room state to tab when roomStore was externally updated (e.g., non-tab navigation).
-    // This is safe to call even when roomStore is already in sync with tabStore — the
-    // restoreRoomStateToTab call is idempotent for tab-scoped state.
-    restoreRoomStateToTab(tabId, {
-      kbPath: currentKBPath,
-      roomHistory,
-      currentRoomPath,
-      currentRoomName,
-    })
-  }, [
-    tabId,
-    activeTabId,
-    restoreRoomStateToTab,
-    tabRoomHistory,
-    tabRoomPath,
-    tabRoomName,
-    tabKbPath,
-    roomHistory,
-    currentRoomPath,
-    currentRoomName,
-    currentKBPath,
-  ])
+  // Tab-scoped room state is the source of truth; avoid syncing roomStore back
+  // into tabStore here because tab switching can otherwise form a write loop.
 
   // Keep app-level selected node in sync with active tab selected node (compatibility bridge)
   useEffect(() => {
@@ -360,17 +328,10 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   flushCurrentRoomSaveRef.current = graph.flushCurrentRoomSave
 
   useEffect(() => {
-    const handler = () => {
-      flushCurrentRoomSaveRef.current().catch((e: unknown) => {
-        logAction('保存:退出前失败', 'GraphPage', {
-          tabId: tabId || '',
-          error: e instanceof Error ? e.message : String(e),
-        })
-      })
-    }
-
-    window.electronAPI?.on('save:before-quit', handler)
-    return () => window.electronAPI?.off('save:before-quit', handler)
+    if (!tabId) return
+    return registerTabSaver(tabId, async () => {
+      await flushCurrentRoomSaveRef.current()
+    })
   }, [tabId])
 
   // Keyboard shortcuts + context menu handlers — single useNodeActions instance
@@ -381,6 +342,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     handleRename,
     handleDelete,
     handleEdgeDelete,
+    handleEdgeStyle,
     handleFocus,
     handleProperties,
   } = useNodeActions({ graph, tabId })
@@ -434,7 +396,25 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
           {/* 右侧面板 */}
           {!rightPanelCollapsed && (
             <div className={styles.rightPanel} style={{ width: rightPanelWidth }}>
-              <DetailPanel selectedNodeId={effectiveSelectedNodeId} />
+              <div className={styles.rightPanelTabs}>
+                <button
+                  className={`${styles.rightPanelTabBtn} ${rightPanelTab === 'detail' ? styles.rightPanelTabBtnActive : ''}`}
+                  onClick={() => setRightPanelTab('detail')}
+                >
+                  详情
+                </button>
+                <button
+                  className={`${styles.rightPanelTabBtn} ${rightPanelTab === 'style' ? styles.rightPanelTabBtnActive : ''}`}
+                  onClick={() => setRightPanelTab('style')}
+                >
+                  样式
+                </button>
+              </div>
+              {rightPanelTab === 'detail' ? (
+                <DetailPanel selectedNodeId={effectiveSelectedNodeId} tabId={tabId} />
+              ) : (
+                <StyleSection />
+              )}
             </div>
           )}
         </div>
@@ -450,6 +430,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
           onRename={handleRename}
           onDelete={handleDelete}
           onEdgeDelete={handleEdgeDelete}
+          onEdgeStyle={handleEdgeStyle}
           onFocus={handleFocus}
           onProperties={handleProperties}
           onClose={hideCM}

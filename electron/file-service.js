@@ -7,7 +7,15 @@ import nodeFs from 'fs';
 import { dialog } from 'electron';
 
 let _fs_rootDir = '';
-let _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+let _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+
+function _fs_kbsDir(dir) {
+  return nodePath.join(dir || _fs_rootDir, 'kbs');
+}
+
+function _fs_logsDir(dir) {
+  return nodePath.join(dir || _fs_rootDir, 'logs');
+}
 
 // Allow E2E tests to pre-initialize the work directory via environment variable.
 // This avoids needing window.electronAPI in Playwright globalSetup.
@@ -16,6 +24,8 @@ if (process.env.TOPOMIND_E2E_WORKDIR) {
   _fs_rootDir = e2eDir;
   try {
     if (!nodeFs.existsSync(e2eDir)) nodeFs.mkdirSync(e2eDir, { recursive: true });
+    _fs_ensureDir(_fs_kbsDir(e2eDir));
+    _fs_ensureDir(_fs_logsDir(e2eDir));
     const cfgPath = nodePath.join(e2eDir, '_config.json');
     if (nodeFs.existsSync(cfgPath)) {
       var loaded = JSON.parse(nodeFs.readFileSync(cfgPath, 'utf-8')) || {};
@@ -23,10 +33,13 @@ if (process.env.TOPOMIND_E2E_WORKDIR) {
         lastOpenedKB: loaded.lastOpenedKB || null,
         orders: (loaded.orders && typeof loaded.orders === 'object') ? loaded.orders : {},
         covers: (loaded.covers && typeof loaded.covers === 'object') ? loaded.covers : {},
+        defaultEdgeStyle: (loaded.defaultEdgeStyle && typeof loaded.defaultEdgeStyle === 'object')
+          ? loaded.defaultEdgeStyle
+          : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
       };
     }
   } catch (e) {
-    _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+    _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
   }
 }
 
@@ -43,18 +56,23 @@ function _fs_loadAppConfig(dir) {
         lastOpenedKB: loaded.lastOpenedKB || null,
         orders: (loaded.orders && typeof loaded.orders === 'object') ? loaded.orders : {},
         covers: (loaded.covers && typeof loaded.covers === 'object') ? loaded.covers : {},
+        defaultEdgeStyle: (loaded.defaultEdgeStyle && typeof loaded.defaultEdgeStyle === 'object')
+          ? loaded.defaultEdgeStyle
+          : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
       };
     } else {
-      _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+      _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
     }
   } catch (e) {
-    _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+    _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
   }
 }
 
 function _fs_saveAppConfig() {
   try {
     _fs_ensureDir(_fs_rootDir);
+    _fs_ensureDir(_fs_kbsDir());
+    _fs_ensureDir(_fs_logsDir());
     nodeFs.writeFileSync(_fs_appConfigPath(), JSON.stringify(_fs_config, null, 2), 'utf-8');
   } catch (e) {
     // 静默处理：配置保存失败不影响应用运行
@@ -73,7 +91,9 @@ function _fs_isValidWorkDir(dirPath) {
     if (!dirPath || !nodeFs.existsSync(dirPath)) return false;
     var stat = nodeFs.statSync(dirPath);
     if (!stat.isDirectory()) return false;
-    return nodeFs.existsSync(nodePath.join(dirPath, '_config.json'));
+    return nodeFs.existsSync(nodePath.join(dirPath, '_config.json'))
+      && nodeFs.existsSync(_fs_kbsDir(dirPath))
+      && nodeFs.existsSync(_fs_logsDir(dirPath));
   } catch (e) { return false; }
 }
 
@@ -99,8 +119,8 @@ function _fs_uniqueFolderName(parentDir, desiredName) {
 }
 
 function _fs_abs(relPath) {
-  if (!relPath) return _fs_rootDir;
-  var resolvedRoot = nodePath.resolve(_fs_rootDir);
+  var resolvedRoot = nodePath.resolve(_fs_kbsDir());
+  if (!relPath) return resolvedRoot;
   var result = nodePath.resolve(resolvedRoot, relPath);
   var rel = nodePath.relative(resolvedRoot, result);
   if (rel.startsWith('..') || nodePath.isAbsolute(rel)) {
@@ -127,11 +147,34 @@ function createFileService() {
     setRootDir: function(dir) {
       _fs_rootDir = dir;
       _fs_ensureDir(_fs_rootDir);
-      _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+      _fs_ensureDir(_fs_kbsDir());
+      _fs_ensureDir(_fs_logsDir());
+      _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
       _fs_saveAppConfig();
     },
 
     getRootDir: function() { return _fs_rootDir; },
+
+    readAppConfig: function() {
+      return _fs_readJsonFile(_fs_appConfigPath()) || { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+    },
+
+    writeAppConfig: function(content) {
+      var data = content;
+      if (typeof content === 'string') {
+        try { data = JSON.parse(content); } catch (e) { data = {}; }
+      }
+      _fs_config = {
+        lastOpenedKB: data.lastOpenedKB || null,
+        orders: (data.orders && typeof data.orders === 'object') ? data.orders : {},
+        covers: (data.covers && typeof data.covers === 'object') ? data.covers : {},
+        defaultEdgeStyle: (data.defaultEdgeStyle && typeof data.defaultEdgeStyle === 'object')
+          ? data.defaultEdgeStyle
+          : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
+      };
+      _fs_saveAppConfig();
+      return _fs_config;
+    },
 
     getLastOpenedKB: function() { return _fs_config.lastOpenedKB || null; },
 
@@ -146,8 +189,10 @@ function createFileService() {
         throw new Error('工作目录必须是空目录');
       }
       _fs_ensureDir(dir);
+      _fs_ensureDir(_fs_kbsDir(dir));
+      _fs_ensureDir(_fs_logsDir(dir));
       _fs_rootDir = dir;
-      _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+      _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
       _fs_saveAppConfig();
       return { valid: true, nodePath: _fs_rootDir };
     },
@@ -177,8 +222,10 @@ function createFileService() {
     initWorkDir: function() {
       if (!_fs_rootDir) return { valid: false, nodePath: null, error: '未选择工作目录' };
       _fs_ensureDir(_fs_rootDir);
+      _fs_ensureDir(_fs_kbsDir());
+      _fs_ensureDir(_fs_logsDir());
       if (!nodeFs.existsSync(_fs_appConfigPath())) {
-        _fs_config = { lastOpenedKB: null, orders: {}, covers: {} };
+        _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
         _fs_saveAppConfig();
       }
       return { valid: true, nodePath: _fs_rootDir };
@@ -186,6 +233,7 @@ function createFileService() {
 
     listChildren: function(parentPath) {
       var dir = _fs_abs(parentPath);
+      _fs_ensureDir(_fs_kbsDir());
       _fs_ensureDir(dir);
       var parentGraph = _fs_readJsonFile(_fs_graphFilePath(dir)) || { children: {} };
       var parentChildren = parentGraph.children || {};
@@ -210,8 +258,8 @@ function createFileService() {
       return children;
     },
 
-    mkDir: function(dirPath, meta, customRootDir) {
-      var parent = customRootDir ? nodePath.resolve(customRootDir) : _fs_rootDir;
+    mkDir: function(dirPath, _meta, customRootDir) {
+      var parent = customRootDir ? nodePath.resolve(customRootDir) : _fs_kbsDir();
       _fs_ensureDir(parent);
       var segments = (dirPath || '').split('/').filter(Boolean);
       if (segments.length === 0) return parent;
@@ -234,18 +282,18 @@ function createFileService() {
     },
 
     saveKBOrder: function(kbPath, order) {
-      var relPath = nodePath.relative(_fs_rootDir, kbPath).split(nodePath.sep).join('/');
+      var relPath = nodePath.relative(_fs_kbsDir(), _fs_abs(kbPath)).split(nodePath.sep).join('/');
       _fs_config.orders[relPath] = Number.isFinite(order) ? order : 0;
       _fs_saveAppConfig();
     },
 
     getKBCover: function(kbPath) {
-      var relPath = nodePath.relative(_fs_rootDir, kbPath).split(nodePath.sep).join('/');
+      var relPath = nodePath.relative(_fs_kbsDir(), _fs_abs(kbPath)).split(nodePath.sep).join('/');
       return _fs_config.covers[relPath] || null;
     },
 
     saveKBCover: function(kbPath, coverPath) {
-      var relPath = nodePath.relative(_fs_rootDir, kbPath).split(nodePath.sep).join('/');
+      var relPath = nodePath.relative(_fs_kbsDir(), _fs_abs(kbPath)).split(nodePath.sep).join('/');
       if (coverPath) {
         _fs_config.covers[relPath] = coverPath;
       } else {
@@ -257,25 +305,22 @@ function createFileService() {
     renameKB: function(kbPath, newName) {
       var d = _fs_abs(kbPath);
       if (!nodeFs.existsSync(d)) return null;
-      var parentDir = _fs_rootDir;
+      var parentDir = _fs_kbsDir();
       var newSafeName = _fs_safeSegment(newName);
       var newDirName = _fs_uniqueFolderName(parentDir, newSafeName);
       var oldDirName = nodePath.basename(d);
       var newDir = nodePath.join(parentDir, newDirName);
-      var oldRelPath = nodePath.relative(_fs_rootDir, d).split(nodePath.sep).join('/');
+      var oldRelPath = nodePath.relative(_fs_kbsDir(), d).split(nodePath.sep).join('/');
       if (oldDirName !== newDirName) {
         nodeFs.renameSync(d, newDir);
       }
-      var newRelPath = nodePath.relative(_fs_rootDir, newDir).split(nodePath.sep).join('/');
+      var newRelPath = nodePath.relative(_fs_kbsDir(), newDir).split(nodePath.sep).join('/');
       if (oldRelPath !== newRelPath) {
         var orderVal = _fs_config.orders[oldRelPath];
         delete _fs_config.orders[oldRelPath];
         _fs_config.orders[newRelPath] = orderVal;
-        if (_fs_config.lastOpenedKB) {
-          var lastRel = nodePath.relative(_fs_rootDir, _fs_abs(_fs_config.lastOpenedKB)).split(nodePath.sep).join('/');
-          if (lastRel === oldRelPath) {
-            _fs_config.lastOpenedKB = newDir;
-          }
+        if (_fs_config.lastOpenedKB === oldRelPath) {
+          _fs_config.lastOpenedKB = newRelPath;
         }
         _fs_saveAppConfig();
       }
@@ -294,7 +339,7 @@ function createFileService() {
       var d = _fs_abs(cardPath);
       if (nodeFs.existsSync(d)) return;
       var segments = cardPath.split('/').filter(Boolean);
-      var parent = _fs_rootDir;
+      var parent = _fs_kbsDir();
       for (var i = 0; i < segments.length - 1; i++) {
         parent = nodePath.join(parent, _fs_safeSegment(segments[i]));
         _fs_ensureDir(parent);
@@ -311,7 +356,7 @@ function createFileService() {
       var d = _fs_abs(dirPath);
       if (!nodeFs.existsSync(d)) {
         var segments = dirPath.split('/').filter(Boolean);
-        var parent = _fs_rootDir;
+        var parent = _fs_kbsDir();
         for (var i = 0; i < segments.length - 1; i++) {
           parent = nodePath.join(parent, _fs_safeSegment(segments[i]));
           _fs_ensureDir(parent);
@@ -349,6 +394,45 @@ function createFileService() {
       return '';
     },
 
+    readAppConfig: function() {
+      var cfg = _fs_appConfigPath();
+      if (!nodeFs.existsSync(cfg)) {
+        return { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+      }
+      try {
+        var loaded = JSON.parse(nodeFs.readFileSync(cfg, 'utf-8')) || {};
+        return {
+          lastOpenedKB: loaded.lastOpenedKB || null,
+          orders: (loaded.orders && typeof loaded.orders === 'object') ? loaded.orders : {},
+          covers: (loaded.covers && typeof loaded.covers === 'object') ? loaded.covers : {},
+          defaultEdgeStyle: (loaded.defaultEdgeStyle && typeof loaded.defaultEdgeStyle === 'object')
+            ? loaded.defaultEdgeStyle
+            : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
+        };
+      } catch (e) {
+        return { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+      }
+    },
+
+    writeAppConfig: function(content) {
+      var cfg = _fs_appConfigPath();
+      _fs_ensureDir(_fs_rootDir);
+      var data = content;
+      if (typeof content === 'string') {
+        try { data = JSON.parse(content); } catch (e) { data = {}; }
+      }
+      _fs_config = {
+        lastOpenedKB: data.lastOpenedKB || null,
+        orders: (data.orders && typeof data.orders === 'object') ? data.orders : {},
+        covers: (data.covers && typeof data.covers === 'object') ? data.covers : {},
+        defaultEdgeStyle: (data.defaultEdgeStyle && typeof data.defaultEdgeStyle === 'object')
+          ? data.defaultEdgeStyle
+          : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
+      };
+      nodeFs.writeFileSync(cfg, JSON.stringify(_fs_config, null, 2), 'utf-8');
+      return _fs_config;
+    },
+
     writeFile: function(filePath, content) {
       var f = _fs_abs(filePath);
       _fs_ensureDir(nodePath.dirname(f));
@@ -374,12 +458,12 @@ function createFileService() {
     },
 
     clearAll: function() {
-      var rootAbs = nodePath.resolve(_fs_rootDir);
-      if (!nodeFs.existsSync(rootAbs)) { _fs_ensureDir(rootAbs); return; }
+      var kbRoot = nodePath.resolve(_fs_kbsDir());
+      if (!nodeFs.existsSync(kbRoot)) { _fs_ensureDir(kbRoot); return; }
       try {
-        nodeFs.readdirSync(rootAbs, { withFileTypes: true }).forEach(function(e) {
+        nodeFs.readdirSync(kbRoot, { withFileTypes: true }).forEach(function(e) {
           if (e.isDirectory() && !e.name.startsWith('.')) {
-            nodeFs.rmSync(nodePath.join(rootAbs, e.name), { recursive: true, force: true });
+            nodeFs.rmSync(nodePath.join(kbRoot, e.name), { recursive: true, force: true });
           }
         });
       } catch (e) {
@@ -394,8 +478,9 @@ function createFileService() {
         throw new Error('不是有效的知识库目录');
       }
       var kbName = nodePath.basename(src);
-      var destName = _fs_uniqueFolderName(_fs_rootDir, kbName);
-      var dest = nodePath.join(_fs_rootDir, destName);
+      _fs_ensureDir(_fs_kbsDir());
+      var destName = _fs_uniqueFolderName(_fs_kbsDir(), kbName);
+      var dest = nodePath.join(_fs_kbsDir(), destName);
       _fs_ensureDir(dest);
 
       function copyDirRecursive(srcDir, destDir) {
@@ -428,10 +513,10 @@ function createFileService() {
         var o = existing[i].order;
         if (Number.isFinite(o) && o > maxOrder) maxOrder = o;
       }
-      var relDest = nodePath.relative(_fs_rootDir, dest).split(nodePath.sep).join('/');
+      var relDest = nodePath.relative(_fs_kbsDir(), dest).split(nodePath.sep).join('/');
       _fs_config.orders[relDest] = maxOrder + 1;
       _fs_saveAppConfig();
-      return nodePath.relative(_fs_rootDir, dest);
+      return nodePath.relative(_fs_kbsDir(), dest).split(nodePath.sep).join('/');
     },
   };
 }

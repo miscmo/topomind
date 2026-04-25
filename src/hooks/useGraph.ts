@@ -11,7 +11,7 @@
  * Node/edge CRUD operations are delegated to ./graphOperations.ts
  */
 import { useCallback, useRef, useState } from 'react'
-import type { Node, NodeChange, EdgeChange, Connection } from '@xyflow/react'
+import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
 import { tabStore } from '../stores/tabStore'
@@ -39,6 +39,8 @@ export function useGraph(tabId?: string) {
 
   const selectNode = useAppStore((s) => s.selectNode)
   const clearSelection = useAppStore((s) => s.clearSelection)
+  const defaultEdgeStyle = useAppStore((s) => s.defaultEdgeStyle)
+  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
 
   const [state, setState] = useState<GraphState>({
     nodes: [],
@@ -299,21 +301,58 @@ export function useGraph(tabId?: string) {
     (connection: Connection) => {
       if (!connection.source || !connection.target) return
       const edgeId = generateId('e-')
-      ops.addEdge(connection, edgeId)
+      ops.addEdge(connection, edgeId, defaultEdgeStyle)
+      setSelectedEdgeId(edgeId)
     },
-    [ops]
+    [ops, defaultEdgeStyle, setSelectedEdgeId]
   )
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
+      setSelectedEdgeId(null)
       ops.selectNode(node.id)
     },
-    [ops]
+    [ops, setSelectedEdgeId]
   )
+
+  const onEdgeClick = useCallback(
+    (_: React.MouseEvent, edge: Edge) => {
+      clearSelection()
+      for (const current of edgesRef.current) {
+        if (current.data?.selected && current.id !== edge.id) {
+          ops.updateEdgeStyle(current.id, { selected: false })
+        }
+      }
+      ops.updateEdgeStyle(edge.id, { selected: true })
+      setSelectedEdgeId(edge.id)
+      useAppStore.getState().setRightPanelTab('style')
+    },
+    [clearSelection, setSelectedEdgeId, ops, edgesRef]
+  )
+
+  const resetConnectTargetHighlight = useCallback(() => {
+    let changed = false
+    const nextNodes = nodesRef.current.map((node) => {
+      if (!node.data.connectTarget) return node
+      changed = true
+      return { ...node, data: { ...node.data, connectTarget: false } }
+    })
+    if (!changed) return
+    nodesRef.current = nextNodes
+    rebuildMaps(nextNodes, edgesRef.current)
+    setState((prev) => ({ ...prev, nodes: nextNodes }))
+  }, [rebuildMaps, setState, nodesRef, edgesRef])
 
   const onPaneClick = useCallback(() => {
     ops.deselectNode()
-  }, [ops])
+    resetConnectTargetHighlight()
+    for (const current of edgesRef.current) {
+      if (current.data?.selected) {
+        ops.updateEdgeStyle(current.id, { selected: false })
+      }
+    }
+    setSelectedEdgeId(null)
+  }, [ops, setSelectedEdgeId, edgesRef, resetConnectTargetHighlight])
 
   const navigateToChildRoom = useCallback(async (childPath: string, childName: string) => {
     const navState = getActiveNavState()
@@ -356,6 +395,31 @@ export function useGraph(tabId?: string) {
     },
     [ops]
   )
+
+  const onConnectStart = useCallback((_: unknown, params: { nodeId?: string | null }) => {
+    const sourceId = params.nodeId
+    let changed = false
+    const nextNodes = nodesRef.current.map((node) => {
+      const shouldHighlight = !!sourceId && node.id !== sourceId
+      if (node.data.connectTarget === shouldHighlight) return node
+      changed = true
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          connectTarget: shouldHighlight,
+        },
+      }
+    })
+    if (!changed) return
+    nodesRef.current = nextNodes
+    rebuildMaps(nextNodes, edgesRef.current)
+    setState((prev) => ({ ...prev, nodes: nextNodes }))
+  }, [nodesRef, edgesRef, rebuildMaps, setState])
+
+  const onConnectEnd = useCallback(() => {
+    resetConnectTargetHighlight()
+  }, [resetConnectTargetHighlight])
 
   // ===== Room navigation =====
 
@@ -496,6 +560,7 @@ export function useGraph(tabId?: string) {
     onEdgesChange,
     onConnect,
     onNodeClick,
+    onEdgeClick,
     onPaneClick,
     onNodeDoubleClick,
     onNodeContextMenu,
@@ -507,6 +572,7 @@ export function useGraph(tabId?: string) {
 
     // Edge operations (delegated to ops)
     updateEdgeRelation: ops.updateEdgeRelation,
+    updateEdgeStyle: ops.updateEdgeStyle,
 
     // Layout
     layoutNodes,

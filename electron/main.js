@@ -70,14 +70,84 @@ function absKbPath(kbPath) {
 /**
  * 注册渲染进程与主进程之间的所有 IPC 通道。
  */
+async function askRendererToFlushAllDirtyTabs() {
+  if (!win || win.isDestroyed()) return { ok: true, hasDirty: false };
+  try {
+    const result = await win.webContents.executeJavaScript(`(async () => {
+      const guard = window.__topomindCloseGuard;
+      if (!guard) return { ok: true, hasDirty: false };
+      const state = guard.getDirtyState();
+      if (!state.hasDirty) return { ok: true, hasDirty: false };
+      const flushResult = await guard.flushAllDirtyTabs();
+      return { ok: !!flushResult.ok, hasDirty: true, failedTabId: flushResult.failedTabId || null };
+    })()`);
+    return result || { ok: true, hasDirty: false };
+  } catch (e) {
+    return { ok: false, hasDirty: true };
+  }
+}
+
+async function confirmAndFlushBeforeExit(reason) {
+  if (!win || win.isDestroyed()) return { ok: true };
+
+  let dirtyState;
+  try {
+    dirtyState = await win.webContents.executeJavaScript(`(() => {
+      const guard = window.__topomindCloseGuard;
+      return guard ? guard.getDirtyState() : { hasDirty: false, dirtyTabIds: [] };
+    })()`);
+  } catch (e) {
+    dirtyState = { hasDirty: false, dirtyTabIds: [] };
+  }
+
+  if (!dirtyState?.hasDirty) {
+    return { ok: true, hasDirty: false };
+  }
+
+  const message = reason === 'switch-workdir'
+    ? '当前有未保存修改，确认后会先保存所有改动，再切换工作目录。是否继续？'
+    : '当前有未保存修改，确认后会先保存所有改动，再关闭应用。是否继续？';
+
+  const response = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: ['确认继续', '取消'],
+    defaultId: 1,
+    cancelId: 1,
+    title: reason === 'switch-workdir' ? '切换工作目录' : '关闭应用',
+    message,
+    detail: '只有所有修改成功写入磁盘后，操作才会继续。',
+  });
+
+  if (response.response !== 0) {
+    return { ok: false, cancelled: true };
+  }
+
+  const flushResult = await askRendererToFlushAllDirtyTabs();
+  if (!flushResult.ok) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      buttons: ['知道了'],
+      defaultId: 0,
+      title: '保存失败',
+      message: '存在修改未能成功写入磁盘，本次操作已取消。',
+    });
+    return { ok: false, failed: true };
+  }
+
+  return { ok: true, hasDirty: true };
+}
+
 function registerIPC() {
   // ----- File system handlers -----
   ipcMain.handle('fs:init', function() {
     var result = fileService.initWorkDir();
-    LogService.write({
-      level: 'INFO', module: 'Main', action: 'fs:init',
-      message: 'fs:init 调用', params: { valid: result.valid, error: result.error || null },
-    });
+    if (result && result.valid) {
+      LogService.init(fileService.getRootDir());
+      LogService.write({
+        level: 'INFO', module: 'Main', action: 'fs:init',
+        message: 'fs:init 调用', params: { valid: result.valid, error: result.error || null },
+      });
+    }
     return result;
   });
   ipcMain.handle('fs:listChildren', function(e, p) { return fileService.listChildren(p); });
@@ -102,13 +172,15 @@ function registerIPC() {
   ipcMain.handle('fs:readBlobFile', function(e, p) { return fileService.readBlobFile(p); });
   ipcMain.handle('fs:clearAll', function() { fileService.clearAll(); });
   ipcMain.handle('fs:openInFinder', function(e, dirPath) {
-    var absPath = nodePath.isAbsolute(dirPath) ? dirPath : nodePath.join(fileService.getRootDir(), dirPath);
+    var kbRoot = nodePath.join(fileService.getRootDir(), 'kbs');
+    var absPath = nodePath.isAbsolute(dirPath) ? dirPath : nodePath.join(kbRoot, dirPath);
     var rootDir = nodePath.normalize(fileService.getRootDir());
     if (!nodePath.normalize(absPath).startsWith(rootDir)) return;
     if (nodeFs.existsSync(absPath)) shell.openPath(absPath);
   });
   ipcMain.handle('fs:countChildren', function(e, dirPath) {
-    var d = dirPath ? nodePath.join(fileService.getRootDir(), dirPath) : fileService.getRootDir();
+    var kbRoot = nodePath.join(fileService.getRootDir(), 'kbs');
+    var d = dirPath ? nodePath.join(kbRoot, dirPath) : kbRoot;
     if (!nodeFs.existsSync(d)) return 0;
     try {
       return nodeFs.readdirSync(d, { withFileTypes: true })
@@ -122,6 +194,12 @@ function registerIPC() {
       message: '获取根目录', params: { rootDir: root },
     });
     return root;
+  });
+  ipcMain.handle('fs:readAppConfig', function() {
+    return fileService.readAppConfig();
+  });
+  ipcMain.handle('fs:writeAppConfig', function(e, content) {
+    return fileService.writeAppConfig(content);
   });
   ipcMain.handle('fs:getLastOpenedKB', function() {
     var kb = fileService.getLastOpenedKB();
@@ -140,6 +218,10 @@ function registerIPC() {
   });
   ipcMain.handle('fs:setWorkDir', function(e, dirPath) {
     var result = fileService.setWorkDir(dirPath);
+    if (result.valid) {
+      LogService.clear();
+      LogService.init(fileService.getRootDir());
+    }
     LogService.write({
       level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:setWorkDir',
       message: result.valid ? '工作目录已切换' : '工作目录切换失败', params: { dirPath, valid: result.valid, error: result.error || null },
@@ -156,6 +238,10 @@ function registerIPC() {
   });
   ipcMain.handle('fs:createWorkDir', function(e, dirPath) {
     var result = fileService.createWorkDir(dirPath);
+    if (result.valid) {
+      LogService.clear();
+      LogService.init(fileService.getRootDir());
+    }
     LogService.write({
       level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:createWorkDir',
       message: result.valid ? '工作目录创建成功' : '工作目录创建失败', params: { dirPath, valid: result.valid, error: result.error || null },
@@ -174,6 +260,11 @@ function registerIPC() {
   // ----- App handlers -----
   ipcMain.handle('app:navigateHome', function() {
     if (win && !win.isDestroyed()) {
+      win.setResizable(true);
+      win.setMinimumSize(900, 600);
+      win.setMaximumSize(0, 0);
+      win.setBounds({ width: 1400, height: 900 });
+      buildMenu(false);
       win.webContents.send('app:navigate-home');
     }
   });
@@ -185,6 +276,23 @@ function registerIPC() {
       windowReady: !!(win && !win.isDestroyed()),
       ipcRegistered: true,
     };
+  });
+  ipcMain.handle('app:switchWorkDir', async function() {
+    if (!win || win.isDestroyed()) return { ok: false, cancelled: true };
+
+    const guardResult = await confirmAndFlushBeforeExit('switch-workdir');
+    if (!guardResult.ok) {
+      return { ok: false, cancelled: !!guardResult.cancelled };
+    }
+
+    if (monitorWin && !monitorWin.isDestroyed()) {
+      monitorWin.destroy();
+      monitorWin = null;
+    }
+
+    LogService.clear();
+    resetMainWindowToSetup();
+    return { ok: true };
   });
   ipcMain.handle('app:openExternal', function(e, url) {
     if (typeof url !== 'string') return false;
@@ -270,7 +378,7 @@ function registerIPC() {
   ipcMain.handle('git:auth:getAuthType', function(e, kbPath) { return gitAuth.getAuthType(kbPath); });
 
   // ----- Log handlers -----
-  ipcMain.handle('log:write', function(e, entry) { LogService.write(entry); return true; });
+  ipcMain.handle('log:write', function(e, entry) { return LogService.write(entry); });
   ipcMain.handle('log:getBuffer', function() { return LogService.getBuffer(); });
   ipcMain.handle('log:query', function(e, opts) { return LogService.query(opts); });
   ipcMain.handle('log:setLevel', function(e, level) { return LogService.setLevel(level); });
@@ -301,38 +409,13 @@ function createWindow() {
   const preloadPath = nodePath.join(DIST_ELECTRON_DIR, 'preload.js');
   const rendererIndexPath = nodePath.join(DIST_RENDERER_DIR, 'index.html');
 
-  LogService.write({
-    level: 'INFO',
-    module: 'Main',
-    action: 'window:paths',
-    message: '窗口加载路径解析',
-    params: {
-      appPath: APP_PATH,
-      execPath: process.execPath,
-      distElectronDir: DIST_ELECTRON_DIR,
-      distRendererDir: DIST_RENDERER_DIR,
-      preloadPath,
-      preloadExists: nodeFs.existsSync(preloadPath),
-      rendererIndexPath,
-      rendererExists: nodeFs.existsSync(rendererIndexPath),
-      devServerUrl: process.env.VITE_DEV_SERVER_URL || null,
-    },
-  });
-
   win = new BrowserWindow({
-    width: 1400, height: 900, minWidth: 900, minHeight: 600,
+    width: 520, height: 420, minWidth: 520, minHeight: 420, maxWidth: 520, maxHeight: 420,
     title: 'TopoMind',
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false, contextIsolation: true,
     },
-  });
-  LogService.write({
-    level: 'INFO',
-    module: 'Main',
-    action: 'window:created',
-    message: '主窗口已创建',
-    params: { width: 1400, height: 900, devServer: !!process.env.VITE_DEV_SERVER_URL },
   });
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -343,24 +426,10 @@ function createWindow() {
     console.log('[renderer]', msg, src || '', line || '');
   });
   win.webContents.on('did-fail-load', function(e, errorCode, errorDescription, validatedURL, isMainFrame) {
-    LogService.write({
-      level: 'ERROR',
-      module: 'Main',
-      action: 'window:did-fail-load',
-      message: '窗口加载失败',
-      params: { errorCode, errorDescription, validatedURL, isMainFrame },
-    });
     console.error('[window:did-fail-load]', errorCode, errorDescription, validatedURL, isMainFrame);
   });
   win.webContents.on('did-finish-load', function() {
     const currentUrl = win && !win.isDestroyed() ? win.webContents.getURL() : '';
-    LogService.write({
-      level: 'INFO',
-      module: 'Main',
-      action: 'window:did-finish-load',
-      message: '窗口加载完成',
-      params: { currentUrl },
-    });
     console.log('[window:did-finish-load]', currentUrl);
   });
   win.webContents.on('render-process-gone', function(e, details) {
@@ -370,10 +439,6 @@ function createWindow() {
     console.error('[window:unresponsive]');
   });
   win.on('closed', function() {
-    LogService.write({
-      level: 'INFO', module: 'Main', action: 'window:closed',
-      message: '主窗口已关闭',
-    });
     win = null;
   });
 }
@@ -395,7 +460,7 @@ function createMonitorWindow() {
     width: 1200, height: 700, minWidth: 800, minHeight: 500,
     title: '日志性能监控 - TopoMind',
     webPreferences: {
-      preload: nodePath.join(DIST_ELECTRON_DIR, 'preload.mjs'),
+      preload: nodePath.join(DIST_ELECTRON_DIR, 'preload.js'),
       nodeIntegration: false, contextIsolation: true,
     },
   });
@@ -433,7 +498,22 @@ function toggleMonitorWindow() {
   }
 }
 
-function buildMenu() {
+function resetMainWindowToSetup() {
+  if (!win || win.isDestroyed()) return;
+  win.setResizable(false);
+  win.setMinimumSize(520, 420);
+  win.setMaximumSize(520, 420);
+  win.setBounds({ width: 520, height: 420 });
+  buildMenu(true);
+  win.webContents.send('app:reset-session');
+}
+
+function buildMenu(isSetupView) {
+  if (isSetupView) {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+
   var tpl = [
     { label: '文件', submenu: [{ role: 'quit', label: '退出' }] },
     { label: '编辑', submenu: [
@@ -460,23 +540,8 @@ function buildMenu() {
 // App ready
 app.whenReady().then(function() {
   registerIPC();
-  LogService.init(app.getPath('userData'));
-  LogService.write({
-    level: 'INFO',
-    module: 'Main',
-    action: 'app:ready',
-    message: 'Electron 应用已就绪，开始创建主窗口',
-    params: { profile: process.env.TOPOMIND_PROFILE || 'prod', platform: process.platform },
-  });
-  buildMenu();
+  buildMenu(true);
   createWindow();
-  LogService.write({
-    level: 'INFO',
-    module: 'Main',
-    action: 'app:startup-complete',
-    message: 'TopoMind 应用启动完成',
-    params: { version: app.getVersion(), userData: app.getPath('userData') },
-  });
   app.on('activate', function() { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
@@ -484,15 +549,22 @@ app.whenReady().then(function() {
 app.on('window-all-closed', function() { if (process.platform !== 'darwin') app.quit(); });
 
 // Notify renderer before quit so it can save state
-app.on('before-quit', function() {
-  LogService.write({
-    level: 'INFO', module: 'Main', action: 'app:before-quit',
-    message: '应用即将退出，开始保存状态',
-  });
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('save:before-quit');
+let _isQuittingAfterFlush = false;
+
+app.on('before-quit', async function(event) {
+  if (_isQuittingAfterFlush) {
+    if (monitorWin && !monitorWin.isDestroyed()) {
+      monitorWin.destroy();
+    }
+    return;
   }
-  if (monitorWin && !monitorWin.isDestroyed()) {
-    monitorWin.destroy();
+
+  event.preventDefault();
+  const guardResult = await confirmAndFlushBeforeExit('quit-app');
+  if (!guardResult.ok) {
+    return;
   }
+
+  _isQuittingAfterFlush = true;
+  app.quit();
 });

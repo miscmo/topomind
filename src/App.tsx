@@ -18,6 +18,8 @@ import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
 import { useStorage } from './hooks/useStorage'
 import { Store } from './core/storage'
+import { resetClientSession } from './core/session-reset'
+import { flushAllDirtyTabs } from './core/close-guard'
 
 export default memo(function App() {
   const [isMonitorWindow, setIsMonitorWindow] = useState(
@@ -43,9 +45,16 @@ export default memo(function App() {
     function onNavigateHome() {
       showHome()
     }
+    function onResetSession() {
+      resetClientSession()
+    }
     window.electronAPI?.on('app:navigate-home', onNavigateHome)
-    return () => window.electronAPI?.off('app:navigate-home', onNavigateHome)
-  }, [])
+    window.electronAPI?.on('app:reset-session', onResetSession)
+    return () => {
+      window.electronAPI?.off('app:navigate-home', onNavigateHome)
+      window.electronAPI?.off('app:reset-session', onResetSession)
+    }
+  }, [showHome])
 
   // Auto-navigate to home if work directory is already initialized (e.g., via E2E env var)
   useEffect(() => {
@@ -84,6 +93,14 @@ export default memo(function App() {
     }
   }, [])
 
+  useEffect(() => {
+    const handler = async () => {
+      await flushAllDirtyTabs()
+    }
+    window.electronAPI?.on('save:before-quit', handler)
+    return () => window.electronAPI?.off('save:before-quit', handler)
+  }, [])
+
   // Close tab handler: check dirty state before removing
   async function handleCloseTab(tabId: string) {
     const tab = tabStore.getState().getTabById(tabId)
@@ -92,9 +109,19 @@ export default memo(function App() {
     if (tab.isDirty) {
       const confirmed = await confirmOpen({
         title: '关闭知识库',
-        message: `知识库 "${tab.label}" 有未保存的更改，是否确认关闭？`,
+        message: `知识库 "${tab.label}" 有未保存的更改，确认后会先保存再关闭。是否继续？`,
       })
       if (!confirmed) return
+
+      const { flushTabs } = await import('./core/close-guard')
+      const result = await flushTabs([tabId])
+      if (!result.ok) {
+        await confirmOpen({
+          title: '保存失败',
+          message: `知识库 "${tab.label}" 保存失败，无法关闭。`,
+        })
+        return
+      }
     }
 
     removeTab(tabId)

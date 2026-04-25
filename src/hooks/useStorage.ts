@@ -47,6 +47,8 @@ const storeApi = {
   // Markdown
   readMarkdown: (cardPath: string) => Store.readMarkdown(cardPath),
   writeMarkdown: (cardPath: string, content: string) => Store.writeMarkdown(cardPath, content),
+  readAppConfig: () => Store.readAppConfig(),
+  writeAppConfig: (content: unknown) => Store.writeAppConfig(content),
 
   // Layout
   readLayout: (dirPath: string) => Store.readLayout(dirPath),
@@ -65,6 +67,8 @@ const storeApi = {
   // Utility
   clearAll: () => Store.clearAll(),
   ensureCardDir: (cardPath: string) => Store.ensureCardDir(cardPath),
+  readConfig: () => Store.readConfig(),
+  writeConfig: (config: { defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean } }) => Store.writeConfig(config),
 }
 
 export function useStorage() {
