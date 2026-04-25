@@ -161,6 +161,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const rightPanelTab = useAppStore((s) => s.rightPanelTab)
   const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
   const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
+  const setAppSearchQuery = useAppStore((s) => s.setSearchQuery)
   const { getNavState } = useNavContext({ tabId })
   const nav = getNavState()
   const effectiveRoomPath = nav.roomPath
@@ -172,6 +173,11 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const tabRoomPath = currentTab?.currentRoomPath ?? null
   const tabRoomName = currentTab?.currentRoomName ?? ''
   const tabLabel = currentTab?.label ?? ''
+
+  // Tab store selectors (restored after nav refactor)
+  const activeTabId = useTabStore((s) => s.activeTabId)
+  const setTabDirty = useTabStore((s) => s.setTabDirty)
+  const setTabSearchQuery = useTabStore((s) => s.setTabSearchQuery)
 
   // ===== 右侧面板宽度拖拽调整 =====
   const [isResizing, setIsResizing] = useState(false)

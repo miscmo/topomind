@@ -84,7 +84,6 @@ export function useGraph(tabId?: string) {
   const dirtyChangeCallbacksRef = useRef<Set<(isModified: boolean) => void>>(new Set())
 
   const setDirtyState = useCallback((next: boolean) => {
-    console.log('[DEBUG] setDirtyState called with:', next, 'current:', isModifiedRef.current)
     if (isModifiedRef.current === next) return
     isModifiedRef.current = next
     setIsModified(next)
