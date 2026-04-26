@@ -62,6 +62,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
             <Breadcrumb tabId={tabId} />
 
             <GraphCanvas
+              tabId={tabId}
               onEdgeContextMenu={(edgeId) => {
                 if (rightPanelTab !== 'style') setRightPanelTab('style')
                 setSelectedEdgeId(edgeId)
