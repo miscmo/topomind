@@ -8,6 +8,21 @@ export type GitRepoStatus = 'clean' | 'dirty' | 'untracked' | 'error' | 'unknown
 
 let cleanupRefCount = 0
 
+/**
+ * Hook that provides a typed facade over the Git backend for renderer-process
+ * components. All methods delegate to `GitBackend` / `GitCache` so that business
+ * logic stays out of the React layer.
+ *
+ * The hook maintains a ref-counted cleanup timer so that the global LRU cache
+ * cleanup interval started by `startGitCacheCleanup` is only torn down when the
+ * last component that uses this hook unmounts.
+ *
+ * @example
+ * ```tsx
+ * const git = useGit()
+ * const status = await git.status('/path/to/kb')
+ * ```
+ */
 export function useGit() {
   // Use a ref counter instead of a boolean so that when multiple components
   // use useGit(), the cleanup timer is only stopped when ALL of them unmount.
