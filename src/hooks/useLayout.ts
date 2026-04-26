@@ -21,6 +21,7 @@ const elk = new ELK()
  * @param elkInstance - ELK instance with a `.layout()` method
  * @param nodes - React Flow nodes to layout
  * @param direction - 'RIGHT' for global view, 'DOWN' for room view
+ * @returns Map of node id → { x, y } position
  */
 export async function computeLayoutImpl(
   elkInstance: { layout: (graph: ELKGraph, options?: Record<string, unknown>) => Promise<ELKLayoutResult> },

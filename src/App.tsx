@@ -19,7 +19,7 @@ import { logAction } from './core/log-backend'
 import { useStorage } from './hooks/useStorage'
 import { Store } from './core/storage'
 import { resetClientSession } from './core/session-reset'
-import { flushAllDirtyTabs } from './core/close-guard'
+import { flushAllDirtyTabs, flushTabs } from './core/close-guard'
 
 export default memo(function App() {
   const [isMonitorWindow, setIsMonitorWindow] = useState(
@@ -113,7 +113,6 @@ export default memo(function App() {
       })
       if (!confirmed) return
 
-      const { flushTabs } = await import('./core/close-guard')
       const result = await flushTabs([tabId])
       if (!result.ok) {
         await confirmOpen({

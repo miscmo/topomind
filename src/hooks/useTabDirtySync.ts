@@ -1,3 +1,8 @@
+/**
+ * Tab 脏状态同步钩子
+ * 将子组件的脏状态回调同步到 tabStore。
+ * 使用 ref 模式避免 stale closure 问题。
+ */
 import { useRef, useEffect } from 'react'
 import { tabStore } from '../stores/tabStore'
 

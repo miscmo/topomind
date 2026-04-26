@@ -1,3 +1,8 @@
+/**
+ * 页面日志记录钩子
+ * 监听视图切换，当进入 GraphPage 时记录日志。
+ * 用于页面访问追踪和用户行为分析。
+ */
 import { useEffect } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { logAction } from '../core/log-backend'

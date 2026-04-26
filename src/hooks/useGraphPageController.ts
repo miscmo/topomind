@@ -1,3 +1,8 @@
+/**
+ * GraphPage 页面控制器
+ * 编排 usePageLogging / useTabDirtySync / useRoomLoader / useNavContext / useGraph
+ * 等多个子模块，统一管理 GraphPage 的页面逻辑。
+ */
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useNavContext } from './useNavContext'

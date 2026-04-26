@@ -1,3 +1,9 @@
+/**
+ * 导航上下文访问接口
+ * 提供统一的导航状态读取接口，支持 Tab-scoped 和全局状态两种模式。
+ * Tab-scoped 模式下优先读取 tabStore 中的 Tab 专属状态，
+ * 否则 fallback 到 roomStore/appStore 的全局状态。
+ */
 import { useCallback } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { roomStore } from '../stores/roomStore'
