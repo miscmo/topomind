@@ -40,10 +40,6 @@ export function useResizePanel(options: UseResizePanelOptions) {
     onWidthChange(newWidth)
   }, [isResizing, minWidth, maxWidth, onWidthChange])
 
-  const handleMouseUp = useCallback(() => {
-    setIsResizing(false)
-  }, [])
-
   useEffect(() => {
     if (!isResizing) return
     document.body.style.userSelect = 'none'
