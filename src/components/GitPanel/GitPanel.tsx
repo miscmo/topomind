@@ -2,7 +2,7 @@
  * GitPanel — collapsible bottom panel for Git operations
  * Shows status, allows commit/push/pull, and displays remote info
  */
-import { useState, useEffect, useCallback, memo } from 'react'
+import { useState, useEffect, useCallback, useRef, memo } from 'react'
 import { useGitStore } from '../../stores/gitStore'
 import { useRoomStore } from '../../stores/roomStore'
 import { useAppStore } from '../../stores/appStore'
@@ -41,8 +41,12 @@ export default memo(function GitPanel() {
   const [showCommitBox, setShowCommitBox] = useState(false)
 
   // Load git status when panel opens
+  // Uses requestSeq to prevent stale state updates when user switches KB mid-flight
+  const requestSeqRef = useRef(0)
   useEffect(() => {
     if (!showGitPanel || !currentKBPath) return
+
+    const requestSeq = ++requestSeqRef.current
 
     const loadStatus = async () => {
       try {
@@ -51,6 +55,9 @@ export default memo(function GitPanel() {
           git.diffFiles(currentKBPath, {}),
           git.remoteGet(currentKBPath),
         ])
+
+        // Discard stale response if KB has changed since request was issued
+        if (requestSeqRef.current !== requestSeq) return
 
         // Parse status result
         const statusData = statusResult as Record<string, unknown>
@@ -77,6 +84,7 @@ export default memo(function GitPanel() {
           deletions: 0,
         })
       } catch (e) {
+        if (requestSeqRef.current !== requestSeq) return
         logger.catch('GitPanel', 'load git status', e)
       }
     }
@@ -92,17 +100,19 @@ export default memo(function GitPanel() {
       logAction('Git:提交', 'GitPanel', { kbPath: currentKBPath, message: commitMsg.trim() })
       setCommitMsg('')
       setShowCommitBox(false)
-      // Reload status
+      // Reload status — preserve remote info from existing status
       const newStatus = await git.status(currentKBPath)
       const statusData = newStatus as Record<string, unknown>
-      if (statusData) {
-        setStatus({
-          initialized: true,
-          clean: true,
-          untrackedCount: 0,
-          modifiedCount: 0,
-        })
-      }
+      const currentRemote = (statusData.remote as string) || remoteUrl
+      setStatus({
+        initialized: true,
+        clean: true,
+        untrackedCount: 0,
+        modifiedCount: 0,
+        hasRemote: !!currentRemote,
+        remoteUrl: currentRemote,
+      })
+      if (currentRemote) setRemoteUrl(currentRemote)
     } catch (e) {
       logger.catch('GitPanel', 'commit', e)
     } finally {

@@ -57,6 +57,19 @@ export default function HomePage() {
   // KB 右键菜单状态
   const [ctxMenu, setCtxMenu] = useState<KBContextMenu>({ visible: false, x: 0, y: 0, kb: null })
 
+  // Debounce mouse-enter logging to avoid firing on every pixel of movement
+  const enterLogTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  // Cleanup all hover timers on unmount
+  useEffect(() => {
+    return () => {
+      for (const timer of enterLogTimers.current.values()) {
+        clearTimeout(timer)
+      }
+      enterLogTimers.current.clear()
+    }
+  }, [])
+
   // 点击外部关闭 KB 右键菜单
   useEffect(() => {
     if (!ctxMenu.visible) return
@@ -234,6 +247,8 @@ export default function HomePage() {
     if (!resetResult?.ok) {
       return
     }
+    setMessage('工作目录已切换')
+    setMessageError(false)
   }
 
   function truncatedWorkDir() {
@@ -337,7 +352,15 @@ export default function HomePage() {
               key={kb.path}
               className={styles.card}
               onClick={() => { logAction('HomePage:点击知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name }); openKB(kb); }}
-              onMouseEnter={() => logAction('HomePage:悬停知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name })}
+              onMouseEnter={() => {
+                const timers = enterLogTimers.current
+                if (timers.has(kb.path)) return
+                const timer = setTimeout(() => {
+                  timers.delete(kb.path)
+                  logAction('HomePage:悬停知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name })
+                }, 200)
+                timers.set(kb.path, timer)
+              }}
               onContextMenu={(e) => handleKBRightClick(e, kb)}
             >
               <div className={styles.cardImage}>

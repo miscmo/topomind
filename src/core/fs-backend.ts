@@ -97,7 +97,7 @@ export interface FSB {
 
 // ===== FSB 实现 =====
 
-export const FSBImpl: FSB = {
+const FSBImpl: FSB = {
   open: () => _call('fs:init'),
   clearAll: () => _call('fs:clearAll'),
   initWorkDir: () => _call('fs:init'),

@@ -171,6 +171,8 @@ export const tabStore = create<TabState>()((set, get) => ({
    * @param tabId - 目标 Tab id
    */
   setActiveTab: (tabId: string) => {
+    const exists = get().tabs.some((t) => t.id === tabId)
+    if (!exists) return
     set({ activeTabId: tabId })
   },
 

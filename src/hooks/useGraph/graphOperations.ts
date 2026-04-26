@@ -193,7 +193,6 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
       } as Parameters<typeof FSB.writeGraphMeta>[1])
 
       await loadRoom(reloadPath, true)
-      isCreatingRef.current = false
 
       // Trigger debounce save so that onFlush → setDirtyState(false) fires
       // naturally, clearing the dirty bullet. Without this, dirty stays true

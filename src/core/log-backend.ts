@@ -40,11 +40,6 @@ const _call = (channel: string, ...args: unknown[]) => {
   return api.invoke(channel, ...args)
 }
 
-/** 直接吞掉错误，避免控制台输出；日志由 file-service 异步落盘 */
-const _warn = (..._args: unknown[]) => {
-  return
-}
-
 export async function logWrite(entry: Partial<LogEntry>): Promise<boolean> {
   const api = _api()
   if (!api) return false

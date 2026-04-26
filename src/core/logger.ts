@@ -54,7 +54,6 @@ export const logger = {
 
   debug(module: string, ...args: unknown[]) {
     if (_shouldLog('debug')) {
-      console.debug(..._format(module, 'debug'), ...args)
       logWrite({
         level: _toServiceLevel('debug'),
         module,
@@ -65,7 +64,6 @@ export const logger = {
 
   info(module: string, ...args: unknown[]) {
     if (_shouldLog('info')) {
-      console.info(..._format(module, 'info'), ...args)
       logWrite({
         level: _toServiceLevel('info'),
         module,

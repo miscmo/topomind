@@ -9,7 +9,7 @@
  * Items (edge):
  * - 删除连线
  */
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import styles from './ContextMenu.module.css'
 
 interface MenuItem {
@@ -63,39 +63,8 @@ export default memo(function ContextMenu({
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuSize, setMenuSize] = useState({ width: 160, height: 0 })
-
-  // Measure menu size when it becomes visible
-  useEffect(() => {
-    if (!visible || !menuRef.current) return
-    const measured = menuRef.current.getBoundingClientRect()
-    setMenuSize({ width: measured.width, height: measured.height })
-  }, [visible])
-  useEffect(() => {
-    if (!visible) return
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    document.addEventListener('contextmenu', handler) // right-click outside also closes
-    return () => {
-      document.removeEventListener('mousedown', handler)
-      document.removeEventListener('contextmenu', handler)
-    }
-  }, [visible, onClose])
-
-  // Close on scroll or resize
-  useEffect(() => {
-    if (!visible) return
-    const handler = () => onClose()
-    window.addEventListener('scroll', handler, true)
-    window.addEventListener('resize', handler)
-    return () => {
-      window.removeEventListener('scroll', handler, true)
-      window.removeEventListener('resize', handler)
-    }
-  }, [visible, onClose])
+  // Keyboard navigation: tracks focused item index among non-separator items
+  const [focusedIndex, setFocusedIndex] = useState(-1)
 
   if (!visible) return null
 
@@ -103,6 +72,7 @@ export default memo(function ContextMenu({
   const isPane = type === 'pane'
   const paneTargetId = isPane ? '' : targetId
 
+  // Build menu items — must be before useEffect that references `items`
   const items: MenuEntry[] = isPane
     ? [
         {
@@ -172,10 +142,83 @@ export default memo(function ContextMenu({
           },
         ]
 
+  // Memoize navigable (non-separator) items so focusedIndex maps correctly
+  const navigableItems = useMemo(
+    () => items.filter((item): item is MenuItem => !('separator' in item)),
+    [items]
+  )
+
+  // Reset focus to first item when menu opens
+  useEffect(() => {
+    setFocusedIndex(navigableItems.length > 0 ? 0 : -1)
+  }, [visible, navigableItems.length])
+
+  // Measure menu size when it becomes visible
+  useEffect(() => {
+    if (!menuRef.current) return
+    const measured = menuRef.current.getBoundingClientRect()
+    setMenuSize({ width: measured.width, height: measured.height })
+  }, [visible])
+
+  // Close on mousedown/contextmenu outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('contextmenu', handler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('contextmenu', handler)
+    }
+  }, [onClose])
+
+  // Close on scroll or resize
+  useEffect(() => {
+    const handler = () => onClose()
+    window.addEventListener('scroll', handler, true)
+    window.addEventListener('resize', handler)
+    return () => {
+      window.removeEventListener('scroll', handler, true)
+      window.removeEventListener('resize', handler)
+    }
+  }, [onClose])
+
+  // Keyboard: Escape closes, Arrow keys navigate, Enter activates
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setFocusedIndex((prev) =>
+          prev < navigableItems.length - 1 ? prev + 1 : 0
+        )
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setFocusedIndex((prev) =>
+          prev > 0 ? prev - 1 : navigableItems.length - 1
+        )
+      } else if (e.key === 'Enter' && focusedIndex >= 0 && focusedIndex < navigableItems.length) {
+        e.preventDefault()
+        const item = navigableItems[focusedIndex]!
+        if (item && !item.disabled) item.action()
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose, navigableItems, focusedIndex])
+
   // Adjust position to keep menu in viewport — x stays at 0 if it would go negative
   const adjustedX = Math.max(0, Math.min(x, window.innerWidth - menuSize.width))
   // y stays at 0 if it would go negative
   const adjustedY = Math.max(0, Math.min(y, window.innerHeight - menuSize.height))
+
+  // Build index → position map so button refs can be focused
+  const itemButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   return (
     <div
@@ -189,9 +232,10 @@ export default memo(function ContextMenu({
           <div key={i} className={styles.sep} />
         ) : (
           <button
+            ref={(el) => { itemButtonRefs.current[i] = el }}
             key={i}
             data-testid={`context-menu-${item.label}`}
-            className={`${styles.item} ${item.danger ? styles.danger : ''}`}
+            className={`${styles.item} ${item.danger ? styles.danger : ''} ${focusedIndex === i ? styles.focused : ''}`}
             onClick={async () => { await item.action() }}
             disabled={item.disabled}
           >

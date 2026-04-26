@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { useAppStore } from '../../stores/appStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import { useStorage } from '../../hooks/useStorage'
@@ -25,8 +25,13 @@ export default memo(function StyleSection() {
       }
     : defaultEdgeStyle
 
+  // Load config on mount — uses requestSeq to prevent stale updates when
+  // the user switches to a different node before the config read resolves
+  const configRequestSeqRef = useRef(0)
   useEffect(() => {
+    const requestSeq = ++configRequestSeqRef.current
     storage.readConfig().then((config) => {
+      if (configRequestSeqRef.current !== requestSeq) return
       if (config.defaultEdgeStyle) {
         replaceDefaultEdgeStyle({
           lineMode: config.defaultEdgeStyle.lineMode ?? 'smoothstep',
@@ -38,10 +43,8 @@ export default memo(function StyleSection() {
     })
   }, [storage, replaceDefaultEdgeStyle])
 
-  useEffect(() => {
-    storage.writeConfig({ defaultEdgeStyle })
-  }, [storage, defaultEdgeStyle])
-
+  // Persist style changes via updateDefaultStyle (which already calls writeConfig).
+  // Avoid a separate useEffect watching defaultEdgeStyle to prevent duplicate writes.
   const updateDefaultStyle = (patch: Partial<typeof defaultEdgeStyle>) => {
     const next = { ...defaultEdgeStyle, ...patch }
     setDefaultEdgeStyle(patch)

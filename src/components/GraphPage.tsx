@@ -5,14 +5,13 @@
 import { memo } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useGraphPageController } from '../hooks/useGraphPageController'
+import { useNavContext } from '../hooks/useNavContext'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
 import { useResizePanel } from '../hooks/useResizePanel'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { GraphContextProvider } from '../contexts/GraphContext'
 import Breadcrumb from './Breadcrumb/Breadcrumb'
-import SearchBar from './SearchBar/SearchBar'
-import GitPanel from './GitPanel/GitPanel'
 import GraphRightPanel from './GraphRightPanel'
 import GraphCanvas from './GraphCanvas'
 import ContextMenu from './ContextMenu/ContextMenu'
@@ -24,11 +23,13 @@ interface GraphPageProps {
 
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const { nav, graph, view } = useGraphPageController({ tabId })
+  const { getNavState } = useNavContext({ tabId })
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
   const rightPanelTab = useAppStore((s) => s.rightPanelTab)
   const setRightPanelWidth = useAppStore((s) => s.setRightPanelWidth)
   const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
+  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
   const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
     initialWidth: rightPanelWidth,
     onWidthChange: setRightPanelWidth,
@@ -41,8 +42,9 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   useKeyboard({
     tabId,
     onDelete: () => {
-      if (!nav.selectedNodeId) return
-      deleteSelectedNode(nav.selectedNodeId)
+      const { selectedNodeId } = getNavState()
+      if (!selectedNodeId) return
+      deleteSelectedNode(selectedNodeId)
     },
     onAddChild: (parentId: string) => {
       addChildNode(parentId)
@@ -58,14 +60,13 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
           <div id="graph-panel" className={styles.graphPanel}>
             <div id="header" className={styles.header}>TopoMind</div>
             <Breadcrumb tabId={tabId} />
-            <SearchBar searchQuery={nav.searchQuery} onSearchChange={nav.setSearchQuery} />
+
             <GraphCanvas
               onEdgeContextMenu={(edgeId) => {
                 if (rightPanelTab !== 'style') setRightPanelTab('style')
-                useAppStore.getState().setSelectedEdgeId(edgeId)
+                setSelectedEdgeId(edgeId)
               }}
             />
-            <GitPanel />
           </div>
           {!rightPanelCollapsed && (
             <div

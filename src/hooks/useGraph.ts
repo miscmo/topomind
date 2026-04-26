@@ -44,6 +44,7 @@ export function useGraph(tabId?: string) {
   const clearSelection = useAppStore((s) => s.clearSelection)
   const defaultEdgeStyle = useAppStore((s) => s.defaultEdgeStyle)
   const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
+  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
 
   const [state, setState] = useState<GraphState>({
     nodes: [],
@@ -193,8 +194,6 @@ export function useGraph(tabId?: string) {
           edgeCount: edges.length,
           requestSeq,
         })
-
-        setState({ nodes, edges, loading: false, selectedNode: null })
       } catch (e) {
         logger.catch('useGraph', 'loadRoom', e)
         if (requestSeq === loadRequestSeqRef.current && requestSeq >= latestAppliedLoadSeqRef.current) {
@@ -315,9 +314,9 @@ export function useGraph(tabId?: string) {
       }
       ops.updateEdgeStyle(edge.id, { selected: true })
       setSelectedEdgeId(edge.id)
-      useAppStore.getState().setRightPanelTab('style')
+      setRightPanelTab('style')
     },
-    [clearSelection, setSelectedEdgeId, ops, edgesRef]
+    [clearSelection, setSelectedEdgeId, setRightPanelTab, ops, edgesRef]
   )
 
   const resetConnectTargetHighlight = useCallback(() => {

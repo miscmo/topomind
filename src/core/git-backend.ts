@@ -94,7 +94,7 @@ export const GitBackend: GitBackend = {
 // In-memory status cache
 const _cache: Record<string, { status: GitCacheStatus; timestamp: number }> = {}
 const _dirty: Record<string, boolean> = {}
-const _listeners: Array<(kbPath: string, status: GitCacheStatus | null) => void> = []
+const _listeners: Set<(kbPath: string, status: GitCacheStatus | null) => void> = new Set()
 const CACHE_TTL = 30000
 const MAX_CACHE_SIZE = 50
 const CLEANUP_INTERVAL = 60000
@@ -149,10 +149,9 @@ export const GitCache: GitCache = {
   },
 
   onStatusChange(fn) {
-    _listeners.push(fn)
+    _listeners.add(fn)
     return () => {
-      const idx = _listeners.indexOf(fn)
-      if (idx !== -1) _listeners.splice(idx, 1)
+      _listeners.delete(fn)
     }
   },
 }

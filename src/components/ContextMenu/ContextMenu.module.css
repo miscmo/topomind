@@ -35,6 +35,11 @@
   cursor: not-allowed;
 }
 
+.item.focused {
+  background: #e0e8f5;
+  outline: 2px solid #1a3a5c;
+}
+
 .danger {
   color: #e74c3c;
 }

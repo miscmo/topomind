@@ -34,6 +34,9 @@ export function useKeyboard(options: UseKeyboardOptions = {}) {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // macOS: Cmd+Backspace fires both Meta and Backspace — guard to avoid double-trigger
+      if (e.metaKey) return
+
       // Ignore if typing in an input/textarea
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) {

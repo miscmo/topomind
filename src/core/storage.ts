@@ -203,6 +203,8 @@ export interface SaveImageResult {
 }
 
 let cachedConfig: WorkDirConfig = normalizeConfig({})
+let cachedConfigTimestamp = 0
+const CONFIG_CACHE_TTL = 30000
 
 export const Store = {
   // ===== 初始化 =====
@@ -523,11 +525,17 @@ export const Store = {
   },
 
   async readConfig(): Promise<WorkDirConfig> {
+    const now = Date.now()
+    if (cachedConfigTimestamp && now - cachedConfigTimestamp < CONFIG_CACHE_TTL) {
+      return cachedConfig
+    }
     try {
       cachedConfig = normalizeConfig(await FSB.readAppConfig())
+      cachedConfigTimestamp = now
       return cachedConfig
     } catch {
       cachedConfig = normalizeConfig({})
+      cachedConfigTimestamp = now
       return cachedConfig
     }
   },

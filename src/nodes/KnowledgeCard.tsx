@@ -3,6 +3,8 @@
  * React Flow 自定义节点
  * container: 有子节点的容器卡片（浅色背景、彩色边框）
  * leaf: 叶子卡片（深色填充、白色文字）
+ *
+ * @file nodes/KnowledgeCard.tsx
  */
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'

@@ -49,7 +49,7 @@ export function useResizePanel(options: UseResizePanelOptions) {
     document.body.style.userSelect = 'none'
     document.body.style.cursor = 'col-resize'
     const onMove = (e: MouseEvent) => handleMouseMove(e)
-    const onUp = () => handleMouseUp()
+    const onUp = () => setIsResizing(false)
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => {
@@ -58,7 +58,7 @@ export function useResizePanel(options: UseResizePanelOptions) {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [isResizing, handleMouseMove, handleMouseUp])
+  }, [isResizing, handleMouseMove])
 
   return { isResizing, handleMouseDown }
 }

@@ -13,6 +13,7 @@ import { useGraphContext } from '../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
 import styles from './DetailPanel.module.css'
 import { logAction } from '../../core/log-backend'
+import { logger } from '../../core/logger'
 import { registerTabSaver } from '../../core/close-guard'
 
 // Configure marked once — called at module load time, not inside components
@@ -102,23 +103,32 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
     const node = graph.nodesMapRef.current.get(selectedNodeId)
     const path = node?.data.path ?? selectedNodeId
     const label = node?.data.label
-    await storage.writeMarkdown(path, markdown)
-    setSavedMarkdown(markdown)
-    logAction('内容:保存', 'DetailPanel', { nodePath: path, label })
-    setEditMode(false)
+    try {
+      await storage.writeMarkdown(path, markdown)
+      setSavedMarkdown(markdown)
+      logAction('内容:保存', 'DetailPanel', { nodePath: path, label })
+      setEditMode(false)
+    } catch (e) {
+      logger.catch('DetailPanel', 'handleSave', e)
+    }
   }
 
   // ===== Rename node =====
+  // Use nodesMapRef for stale-closure-safe access. selectedNode from render-time
+  // closure can be stale when the selected node changes without re-rendering DetailPanel.
   const handleRenameConfirm = () => {
     if (!renameMode || !newName.trim() || !selectedNodeId) {
       setRenameMode(false)
       return
     }
+    const node = graph.nodesMapRef.current.get(selectedNodeId)
+    const oldLabel = node?.data.label ?? selectedNode?.data.label
+    const path = node?.data.path ?? selectedNode?.data.path
     logAction('节点:重命名', 'DetailPanel', {
       nodeId: selectedNodeId,
-      oldName: selectedNode?.data.label,
+      oldName: oldLabel,
       newName: newName.trim(),
-      path: selectedNode?.data.path,
+      path,
     })
     graph.renameNode(selectedNodeId, newName.trim())
     setRenameMode(false)
@@ -165,10 +175,6 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
       </div>
     )
   }
-
-  // selectedNode could be null due to stale closures even after the guard above.
-  // This resolves "Cannot destructure property 'data' of 'R' as it is null" errors.
-  if (!selectedNode) return null
 
   const { data } = selectedNode
 
