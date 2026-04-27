@@ -45,6 +45,11 @@ const ALLOWED_CHANNELS = new Set([
   'log:getAvailableDates', 'log:getLogDir',
 ]);
 
+const ALLOWED_SEND_CHANNELS = new Set([
+  'log:subscribe',
+  'log:unsubscribe',
+]);
+
 const ALLOWED_SEND_SYNC_CHANNELS = new Set([
   'save:layout',
 ]);
@@ -88,7 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.sendSync.apply(ipcRenderer, [channel].concat(args));
   },
   send: function(channel) {
-    if (!ALLOWED_SEND_SYNC_CHANNELS.has(channel)) {
+    if (!ALLOWED_SEND_CHANNELS.has(channel)) {
       console.error('[preload] send 通道不在白名单中:', channel);
       return;
     }
