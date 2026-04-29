@@ -151,6 +151,7 @@ export function logUnsubscribe(callback: (entry: LogEntry) => void): void {
   }
 }
 
+// TODO：这里的module可以做出枚举，还没想好这里按照什么分类
 /**
  * 构造并写入一条关键动作日志
  * @example

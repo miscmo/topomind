@@ -6,47 +6,39 @@ import nodePath from 'path';
 import nodeFs from 'fs';
 import { dialog } from 'electron';
 
-let _fs_rootDir = '';
-let _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+// _config.json配置文件对象配置
+let _fs_config = { 
+  orders: [], 
+  covers: {}, 
+  defaultEdgeStyle: { 
+    lineMode: 'smoothstep', 
+    lineStyle: 'solid', 
+    color: '#7f8c8d', 
+    arrow: true 
+  } 
+};
 
+// 返回dir/kbs知识库目录
 function _fs_kbsDir(dir) {
-  return nodePath.join(dir || _fs_rootDir, 'kbs');
+  return nodePath.join(dir, 'kbs');
 }
 
+// 返回dir/logs日志目录
 function _fs_logsDir(dir) {
-  return nodePath.join(dir || _fs_rootDir, 'logs');
+  return nodePath.join(dir, 'logs');
 }
 
-// Allow E2E tests to pre-initialize the work directory via environment variable.
-// This avoids needing window.electronAPI in Playwright globalSetup.
-if (process.env.TOPOMIND_E2E_WORKDIR) {
-  const e2eDir = process.env.TOPOMIND_E2E_WORKDIR;
-  _fs_rootDir = e2eDir;
-  try {
-    if (!nodeFs.existsSync(e2eDir)) nodeFs.mkdirSync(e2eDir, { recursive: true });
-    _fs_ensureDir(_fs_kbsDir(e2eDir));
-    _fs_ensureDir(_fs_logsDir(e2eDir));
-    const cfgPath = nodePath.join(e2eDir, '_config.json');
-    if (nodeFs.existsSync(cfgPath)) {
-      var loaded = JSON.parse(nodeFs.readFileSync(cfgPath, 'utf-8')) || {};
-      _fs_config = {
-        lastOpenedKB: loaded.lastOpenedKB || null,
-        orders: (loaded.orders && typeof loaded.orders === 'object') ? loaded.orders : {},
-        covers: (loaded.covers && typeof loaded.covers === 'object') ? loaded.covers : {},
-        defaultEdgeStyle: (loaded.defaultEdgeStyle && typeof loaded.defaultEdgeStyle === 'object')
-          ? loaded.defaultEdgeStyle
-          : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
-      };
-    }
-  } catch (e) {
-    _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-  }
-}
-
+// 返回dir/_config.json配置文件路径
 function _fs_appConfigPath(dir) {
-  return nodePath.join(dir || _fs_rootDir, '_config.json');
+  return nodePath.join(dir, '_config.json');
 }
 
+/**
+* @description 加载根目录_config.json配置
+* @returns { void }
+* @param { string } dir: 工作目录路径
+* @throws { Error } 路径为相对路径时抛出错误
+*/
 function _fs_loadAppConfig(dir) {
   try {
     var cfgPath = _fs_appConfigPath(dir);
@@ -68,9 +60,10 @@ function _fs_loadAppConfig(dir) {
   }
 }
 
+// TODO：这个函数感觉并不需要，保存应该做一个更通用的接口
 function _fs_saveAppConfig() {
   try {
-    _fs_ensureDir(_fs_rootDir);
+    _fs_ensureDir();
     _fs_ensureDir(_fs_kbsDir());
     _fs_ensureDir(_fs_logsDir());
     nodeFs.writeFileSync(_fs_appConfigPath(), JSON.stringify(_fs_config, null, 2), 'utf-8');
@@ -81,24 +74,37 @@ function _fs_saveAppConfig() {
 
 function _fs_isDirEmpty(dirPath) {
   try {
-    if (!nodeFs.existsSync(dirPath)) return true;
+    if (!nodeFs.existsSync(dirPath)) 
+      return true;
     return nodeFs.readdirSync(dirPath).length === 0;
   } catch (e) { return false; }
 }
 
+/**
+* @description 验证路径是否为有效工作目录：工作目录存在且为目录  -> 存在_config.json -> 存在kbs目录 -> 存在logs目录
+* @returns { boolean } 是否为有效工作目录
+* @param { string } dirPath: 工作目录路径
+* @throws { Error } 路径为相对路径时抛出错误
+*/
 function _fs_isValidWorkDir(dirPath) {
   try {
-    if (!dirPath || !nodeFs.existsSync(dirPath)) return false;
-    var stat = nodeFs.statSync(dirPath);
-    if (!stat.isDirectory()) return false;
-    return nodeFs.existsSync(nodePath.join(dirPath, '_config.json'))
+    return dirPath
+      && nodeFs.existsSync(dirPath)
+      && nodeFs.statSync(dirPath).isDirectory()
+      && nodeFs.existsSync(nodePath.join(dirPath, '_config.json'))
       && nodeFs.existsSync(_fs_kbsDir(dirPath))
       && nodeFs.existsSync(_fs_logsDir(dirPath));
   } catch (e) { return false; }
 }
 
+/**
+ * @description 确保目录存在
+ * @param { string } d: 目录路径
+ * @returns { void }
+ */
 function _fs_ensureDir(d) {
-  if (!nodeFs.existsSync(d)) nodeFs.mkdirSync(d, { recursive: true });
+  if (!nodeFs.existsSync(d)) 
+    nodeFs.mkdirSync(d, { recursive: true });
 }
 
 function _fs_safeSegment(name) {
@@ -142,19 +148,22 @@ function _fs_graphFilePath(dir) {
   return nodePath.join(dir, '_graph.json');
 }
 
+/**
+ * 验证路径必须是绝对路径，否则抛出错误，返回标准化后的绝对路径
+ * @param {string} dir - 传入的路径
+ * @returns {string} 标准化后的绝对路径
+ * @throws {Error} 路径为相对路径时抛出错误
+ */
+function _fs_validateAbsolutePath(dir) {
+  if (!nodePath.isAbsolute(dir)) {
+    throw new Error('路径必须是绝对路径');
+  }
+  // 消除路径中的./ ../ 多余斜杠，标准化绝对路径
+  return nodePath.resolve(dir);
+}
+
 function createFileService() {
   return {
-    setRootDir: function(dir) {
-      _fs_rootDir = dir;
-      _fs_ensureDir(_fs_rootDir);
-      _fs_ensureDir(_fs_kbsDir());
-      _fs_ensureDir(_fs_logsDir());
-      _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-      _fs_saveAppConfig();
-    },
-
-    getRootDir: function() { return _fs_rootDir; },
-
     readAppConfig: function() {
       return _fs_readJsonFile(_fs_appConfigPath()) || { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
     },
@@ -197,6 +206,14 @@ function createFileService() {
       return { valid: true, nodePath: _fs_rootDir };
     },
 
+
+    /**
+    * @description 选择工作目录候选者
+    * @returns { valid: boolean, nodePath: string | null, error?: string }
+    * @param { boolean } valid: 是否选择成功
+    * @param { string | null } nodePath: 选择的工作目录路径
+    * @param { string | null } error: 选择失败的原因
+    */
     selectWorkDirCandidate: function() {
       var result = dialog.showOpenDialogSync({
         title: '选择工作目录',
@@ -206,15 +223,22 @@ function createFileService() {
       return { valid: true, nodePath: nodePath.resolve(result[0]) };
     },
 
+    /** 
+    * @description 设置工作目录：检查目录是否存在 -> 是否为有效工作目录 -> 加载根目录_config.json配置
+    * @returns { valid: boolean, nodePath: string | null, error?: string }
+    * @param { string } dirPath: 工作目录路径
+    * @param { boolean } valid: 是否设置成功
+    * @param { string | null } nodePath: 设置的工作目录路径
+    * @param { string | null } error: 设置失败的原因
+    */
     setWorkDir: function(dirPath) {
       var dir = dirPath;
       if (!dir) {
-        return { valid: false, nodePath: null, error: '未指定工作目录路径' };      }
-      dir = nodePath.resolve(dir);
+        return { valid: false, nodePath: null, error: '工作目录路径为空' };      }
+      dir = _fs_validateAbsolutePath(dir);
       if (!_fs_isValidWorkDir(dir)) {
-        return { valid: false, nodePath: dir, error: '不是有效的工作目录（缺少 _config.json）' };
+        return { valid: false, nodePath: dir, error: '不是有效的工作目录' };
       }
-      _fs_rootDir = dir;
       _fs_loadAppConfig(dir);
       return { valid: true, nodePath: _fs_rootDir };
     },
@@ -485,5 +509,4 @@ function createFileService() {
 // Singleton instance — internal methods use this instead of re-creating via factory
 const fileService = createFileService();
 
-export { createFileService, fileService };
 export default fileService;

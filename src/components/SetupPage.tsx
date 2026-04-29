@@ -11,42 +11,45 @@ import styles from './SetupPage.module.css'
 export default memo(function SetupPage() {
   const showHome = useAppStore((s) => s.showHome)
   const storage = useStorage()
+
+  // TODO：error和message是否可以合并？这俩应该都是同时变的，改成{isError, message}
   const [message, setMessage] = useState('')
   const [isError, setIsError] = useState(false)
 
   async function pickExisting() {
     setMessage('')
     setIsError(false)
-    logAction('SetupPage:点击打开工作目录', 'SetupPage', {})
     try {
-      logAction('SetupPage:打开文件对话框', 'SetupPage', { purpose: '选择已有工作目录' })
+      // [step 1] 选择工作目录 —— 打开文件对话框确定目录路径
       const picked = await storage.selectWorkDirCandidate()
       if (!picked?.valid) {
         // 用户取消或选择无效
-        logAction('SetupPage:文件对话框关闭', 'SetupPage', {
+        logAction('工作目录选择对话框关闭', 'SetupPage', {
           result: 'cancelled',
           reason: picked?.error || '用户取消',
         })
         return
       }
-      logAction('SetupPage:文件对话框已选择路径', 'SetupPage', { selectedPath: picked.nodePath })
-      logAction('SetupPage:设置工作目录', 'SetupPage', { nodePath: picked.nodePath })
+      logAction('已选择工作目录', 'SetupPage', { selectedPath: picked.nodePath })
+
+      // [step 2] 设置并校验工作目录格式是否为笔记本
       const res = await storage.setWorkDir(picked.nodePath!)
       if (!res?.valid) {
         setIsError(true)
         setMessage(res?.error || '不是有效的工作目录')
-        logAction('SetupPage:设置工作目录失败', 'SetupPage', {
+        logAction('设置工作目录失败', 'SetupPage', {
           nodePath: picked.nodePath,
           error: res?.error || '不是有效的工作目录',
         })
         return
       }
+
       showHome()
       void window.electronAPI?.invoke('app:navigateHome')
     } catch (e) {
       setIsError(true)
       setMessage((e as { message?: string })?.message || '打开工作目录失败')
-      logAction('SetupPage:打开工作目录异常', 'SetupPage', { error: (e as Error)?.message || String(e) })
+      logAction('打开工作目录异常', 'SetupPage', { error: (e as Error)?.message || String(e) })
     }
   }
 

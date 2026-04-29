@@ -138,60 +138,74 @@ topomind_cc/
 ```
 {工作目录}/
 ├── _config.json                 # 应用级配置（根目录）
-├── 知识库-A/                    # 顶层 KB 目录
-│   ├── _graph.json              # KB 的图结构（children + edges + zoom + pan + canvasBounds）
-│   ├── images/
-│   │   └── cover.png            # KB 封面图
-│   ├── 子卡片-1/                # 第一层卡片
-│   │   ├── _graph.json          # 卡片的图结构
-│   │   ├── README.md            # Markdown 文档
-│   │   └── images/              # 卡片内图片
-│   │       └── *.png|jpg|webp
-│   └── 子卡片-2/
-│       ├── _graph.json
-│       ├── README.md
-│       └── 子子卡片/            # 第二层卡片（无限嵌套）
-│           └── ...
-└── 知识库-B/
-    └── ...
+├── images/
+│   ├── cover_知识库A.png        # 知识库的封面存入images下，根据cover_{知识库名}.png自动搜寻，无需配置，代码写死查找规则，有则展示，无则默认
+│   ├── cover_知识库B.png
+├── logs/
+│   ├── 2026-04-24.log
+│   ├── 2026-04-25.log
+├── kbs/
+│   ├── 知识库-A/                    # 顶层 KB 目录
+│   │   ├── _graph.json              # KB 的图结构（children + edges + zoom + pan + canvasBounds）
+    │   ├── 子卡片-1/                # 第一层卡片
+    │   │   ├── README.md            # Markdown 文档
+    │   └── 子卡片-2/
+    │       ├── _graph.json
+    │       ├── README.md
+    │       └── 子子卡片/            # 第二层卡片（无限嵌套）
+    │           └── ...
+    └── 知识库-B/
+        └── ...
 ```
 
 ### 4.2 `_graph.json` 结构
 
 每个 KB 和卡片目录下有一份 `_graph.json`，存储该目录的直接子卡片信息：
+1. 目录下子卡片节点信息
+2. 子卡片关联连线信息
+3. 画布相关信息：缩放，视图位置等
 
+TODO：children的key到底设置成什么？一个唯一ID还是目录名？
 ```javascript
 {
   "children": {
-    "子卡片-1": { "name": "显示名称" },   // key = 目录名，name = 显示名称（可不同）
-    "子卡片-2": { "name": "另一个名称" }
+    "card-23223xaaf": { 
+      "name": "显示名称",
+      "path": "子卡片-1",
+      "posX": 725.8836742991465,
+      "posY": 46.00401123106391
+    },   // key = 目录名，name = 显示名称（可不同）
+    "card-322312112": { 
+      "name": "另一个名称" 
+      "path": "子卡片-2",
+      "posX": 725.8836742991465,
+      "posY": 46.00401123106391
+    }
   },
   "edges": [
-    { "id": "e-1", "source": "子卡片-1", "target": "子卡片-2", "relation": "演进", "weight": "main" }
+    { 
+      "id": "edge-1232323", 
+      "source": "card-23223xaaf", 
+      "target": "card-322312112", 
+      "relation": "演进", 
+      "weight": "main" 
+    }
   ],
-  "zoom": 1.0,                          // 缩放比例（可选）
-  "pan": { "x": 0, "y": 0 },            // 平移偏移（可选）
-  "canvasBounds": {                      // 有限画布边界（可选）
-    "width": 1500,
-    "height": 1000
-  }
+  "zoom": 1.0,                          // 缩放比例
+  "pan": { "x": 0, "y": 0 }            // 平移偏移
 }
 ```
-
-> **注意**：`children` 的 key 是**目录名**（磁盘实际文件夹名），`name` 是**显示名称**（可不同）。节点 ID 即路径（如 `知识库-A/子卡片-1`），在父目录内唯一。
+> **注意**：`children` 的 key 是**card-{唯一id}**（磁盘实际文件夹名），`name` 是**显示名称**（可不同）。`path`是目录名。
+- key为工作目录下的全局唯一，生成的思路是卡片在工作目录下的相对路径的md5，再追加一个时间戳，防止重复或者删除后重建的重复
 
 ### 4.3 `_config.json` 结构（根目录）
 
 ```javascript
 {
-  "lastOpenedKB": "知识库-A",           // 上次打开的 KB 相对路径
-  "orders": {                           // 各 KB 的排序序号
-    "知识库-A": 0,
-    "知识库-B": 1
-  },
-  "covers": {                           // 各 KB 的封面图路径
-    "知识库-A": "images/cover.png"
-  }
+  "orders": [                           // 各 KB 的排列顺序
+    "知识库-A",
+    "知识库-B"
+  ]
 }
 ```
 
