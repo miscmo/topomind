@@ -5,7 +5,7 @@
 import { FSB } from './fs-backend'
 import { logger } from './logger'
 import type { FSBChildInfo, FSBGraphMeta, FSBResult } from './fs-backend'
-import type { EdgeRelation, EdgeWeight } from '../types'
+import type { EdgeRelation, EdgeWeight, KBListItem } from '../types'
 
 interface WorkDirConfig {
   lastOpenedKB?: string | null
@@ -245,7 +245,19 @@ export const Store = {
   },
 
   // ===== 知识库（根级目录） =====
-  listKBs: () => FSB.listChildren(''),
+  async listKBs(): Promise<KBListItem[]> {
+    try {
+      const entries = await FSB.listChildren('')
+      return entries.map((d) => ({
+        path: d.path,
+        name: d.name,
+        order: d.order ?? 0,
+      }))
+    } catch (e) {
+      logger.catch('Store.listKBs', '列出知识库失败', e)
+      throw e
+    }
+  },
 
   async createKB(name: unknown, meta?: unknown) {
     const safeName = ensureValidName(name, '知识库名称')

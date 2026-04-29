@@ -509,4 +509,5 @@ function createFileService() {
 // Singleton instance — internal methods use this instead of re-creating via factory
 const fileService = createFileService();
 
+export { createFileService, fileService };
 export default fileService;
