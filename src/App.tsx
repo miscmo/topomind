@@ -17,7 +17,6 @@ import { useAppStore } from './stores/appStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
 import { useStorage } from './hooks/useStorage'
-import { Store } from './core/storage'
 import { resetClientSession } from './core/session-reset'
 import { flushAllDirtyTabs, flushTabs } from './core/close-guard'
 
@@ -35,19 +34,11 @@ export default memo(function App() {
   const showHome = useAppStore((s) => s.showHome)
   const storage = useStorage()
 
-  // Init home tab on mount
-  useEffect(() => {
-    initHomeTab()
-  }, [initHomeTab])
+  useEffect(() => { initHomeTab() }, [initHomeTab])
 
-  // Listen for main-process navigation trigger (E2E test harness)
   useEffect(() => {
-    function onNavigateHome() {
-      showHome()
-    }
-    function onResetSession() {
-      resetClientSession()
-    }
+    function onNavigateHome() { showHome() }
+    function onResetSession() { resetClientSession() }
     window.electronAPI?.on('app:navigate-home', onNavigateHome)
     window.electronAPI?.on('app:reset-session', onResetSession)
     return () => {
@@ -56,7 +47,6 @@ export default memo(function App() {
     }
   }, [showHome])
 
-  // Auto-navigate to home if work directory is already initialized (e.g., via E2E env var)
   useEffect(() => {
     let cancelled = false
     async function checkAndNavigate() {
@@ -71,37 +61,26 @@ export default memo(function App() {
           }
         }
       } catch {
-        // Ignore — stay on setup page
       }
     }
     checkAndNavigate()
     return () => { cancelled = true }
-  }, [initHomeTab, showHome, storage])
+  }, [showHome, storage])
 
   useEffect(() => {
-    const handleHashChange = () => {
-      setIsMonitorWindow(window.location.hash === '#/monitor')
-    }
+    const handleHashChange = () => setIsMonitorWindow(window.location.hash === '#/monitor')
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
-  // App unmount: revoke all Blob URLs to prevent memory leaks.
-  useEffect(() => {
-    return () => {
-      Store.revokeAllImageUrls()
-    }
-  }, [])
+  useEffect(() => () => { storage.revokeAllImageUrls() }, [storage])
 
   useEffect(() => {
-    const handler = async () => {
-      await flushAllDirtyTabs()
-    }
+    const handler = async () => { await flushAllDirtyTabs() }
     window.electronAPI?.on('save:before-quit', handler)
     return () => window.electronAPI?.off('save:before-quit', handler)
   }, [])
 
-  // Close tab handler: check dirty state before removing
   async function handleCloseTab(tabId: string) {
     const tab = tabStore.getState().getTabById(tabId)
     if (!tab || tab.id === 'home') return
@@ -115,10 +94,7 @@ export default memo(function App() {
 
       const result = await flushTabs([tabId])
       if (!result.ok) {
-        await confirmOpen({
-          title: '保存失败',
-          message: `知识库 "${tab.label}" 保存失败，无法关闭。`,
-        })
+        await confirmOpen({ title: '保存失败', message: `知识库 "${tab.label}" 保存失败，无法关闭。` })
         return
       }
     }
@@ -127,10 +103,7 @@ export default memo(function App() {
     logAction('Tab:关闭', 'App', { tabId, label: tab.label, wasDirty: tab.isDirty })
   }
 
-  // Monitor window only renders MonitorPage
-  if (isMonitorWindow) {
-    return <MonitorPage />
-  }
+  if (isMonitorWindow) return <MonitorPage />
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const isSetup = view === 'setup'
@@ -139,15 +112,7 @@ export default memo(function App() {
       <ConfirmModal />
       <PromptModal />
       <ReactFlowProvider>
-        {isSetup ? (
-          <SetupPage />
-        ) : (
-          <>
-            <TabBar onCloseTab={handleCloseTab} />
-            {activeTab?.type === 'home' && <HomePage />}
-            {activeTab?.type === 'kb' && <GraphPage key={activeTab.id} tabId={activeTab.id} />}
-          </>
-        )}
+        {isSetup ? <SetupPage /> : (<><TabBar onCloseTab={handleCloseTab} />{activeTab?.type === 'home' && <HomePage />}{activeTab?.type === 'kb' && <GraphPage key={activeTab.id} tabId={activeTab.id} />}</>)}
       </ReactFlowProvider>
     </>
   )
