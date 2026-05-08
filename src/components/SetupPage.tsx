@@ -10,6 +10,7 @@ import styles from './SetupPage.module.css'
 
 export default memo(function SetupPage() {
   const showHome = useAppStore((s) => s.showHome)
+  const setCurrentWorkDir = useAppStore((s) => s.setCurrentWorkDir)
   const storage = useStorage()
 
   // TODO：error和message是否可以合并？这俩应该都是同时变的，改成{isError, message}
@@ -44,6 +45,7 @@ export default memo(function SetupPage() {
         return
       }
 
+      setCurrentWorkDir(picked.nodePath!)
       showHome()
       void window.electronAPI?.invoke('app:navigateHome')
     } catch (e) {
@@ -80,6 +82,7 @@ export default memo(function SetupPage() {
         })
         return
       }
+      setCurrentWorkDir(picked.nodePath!)
       showHome()
       void window.electronAPI?.invoke('app:navigateHome')
     } catch (e) {

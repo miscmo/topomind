@@ -24,6 +24,7 @@ const APP_INITIAL_STATE = {
   showGrid: true,
   searchQuery: '',
   rightPanelTab: 'detail' as 'detail' | 'style',
+  currentWorkDir: null as string | null,
   selectedEdgeId: null as string | null,
   defaultEdgeStyle: {
     lineMode: 'smoothstep' as 'smoothstep' | 'straight',
@@ -64,6 +65,8 @@ interface AppState {
   searchQuery: string
   // 右侧面板当前 Tab
   rightPanelTab: 'detail' | 'style'
+  // 当前打开的工作目录
+  currentWorkDir: string | null
   // 当前选中的连线 ID
   selectedEdgeId: string | null
   // 全局默认连线样式
@@ -92,6 +95,7 @@ interface AppState {
   toggleGrid: () => void
   setSearchQuery: (query: string) => void
   setRightPanelTab: (tab: 'detail' | 'style') => void
+  setCurrentWorkDir: (workDir: string | null) => void
   setSelectedEdgeId: (edgeId: string | null) => void
   setDefaultEdgeStyle: (style: Partial<AppState['defaultEdgeStyle']>) => void
   replaceDefaultEdgeStyle: (style: AppState['defaultEdgeStyle']) => void
@@ -147,6 +151,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   setSearchQuery: (query) => set({ searchQuery: query }),
   setRightPanelTab: (rightPanelTab) => set({ rightPanelTab }),
+  setCurrentWorkDir: (currentWorkDir) => set({ currentWorkDir }),
   setSelectedEdgeId: (selectedEdgeId) => set({ selectedEdgeId }),
   setDefaultEdgeStyle: (style) => set((state) => ({
     defaultEdgeStyle: { ...state.defaultEdgeStyle, ...style },

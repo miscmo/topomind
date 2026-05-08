@@ -1,12 +1,15 @@
 /* ===== SetupPage / WorkDir 样式 ===== */
 .page {
-  width: 100%;
-  flex: 1;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
   min-height: 0;
   background: #f0f2f5;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: auto;
 }
 
 .card {
@@ -14,7 +17,7 @@
   border: 1px solid #e0e4ea;
   border-radius: 14px;
   padding: 36px 40px 32px;
-  width: 380px;
+  width: min(380px, calc(100vw - 32px));
   min-height: 252px;
   box-shadow: 0 4px 24px rgba(16, 24, 40, 0.08);
   display: flex;
