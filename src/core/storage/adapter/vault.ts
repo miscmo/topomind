@@ -1,11 +1,4 @@
-import type { StorageRef, VaultRef } from './ref'
-
-export interface StorageDialogResult {
-  valid: boolean
-  nodePath?: string | null
-  path?: string
-  error?: string
-}
+export type VaultRef = string
 
 export interface VaultInfo {
   ref: VaultRef
@@ -14,8 +7,31 @@ export interface VaultInfo {
 }
 
 export interface IVaultStorage {
-  createVault: (rootRef: StorageRef) => Promise<StorageDialogResult>
-  isVaildVault: (rootRef: StorageRef) => Promise<boolean>
+  /**
+   * Create a new vault
+   * @param vaultRef - The root reference of the vault
+   * @returns The information of the vault
+   */
+  createVault: (vaultRef: VaultRef) => Promise<VaultInfo>
+
+  /**
+   * Check if the vault is valid
+   * @param vaultRef - The root reference of the vault
+   * @returns boolean of validity
+   */
+  isValidVault: (vaultRef: VaultRef) => Promise<boolean>
+
+  /**
+   * Get the information of the vault
+   * @param vaultRef - The reference of the vault
+   * @returns The information of the vault
+   */
   getVaultInfo: (vaultRef: VaultRef) => Promise<VaultInfo>
-  removeVault: (vaultRef: VaultRef) => Promise<unknown>
+
+  /**
+   * Remove the vault
+   * @param vaultRef - The reference of the vault
+   * @returns The result of the removal
+   */
+  removeVault: (vaultRef: VaultRef) => Promise<void>
 }
