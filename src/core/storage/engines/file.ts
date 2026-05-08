@@ -1,7 +1,12 @@
 import { FSB } from '../../fs-backend'
-import type { StorageAdapter, StorageChildInfo, StorageGraphMeta } from '../adapter'
+import type { StorageAdapter, StorageChildInfo } from '../adapter'
 
-const toStorageChildInfo = (child: { path: string; name: string; isDir: boolean; order?: number }): StorageChildInfo => ({
+const toStorageChildInfo = (child: {
+  path: string
+  name: string
+  isDir: boolean
+  order?: number
+}): StorageChildInfo => ({
   ref: child.path,
   path: child.path,
   name: child.name,
@@ -9,16 +14,33 @@ const toStorageChildInfo = (child: { path: string; name: string; isDir: boolean;
   order: child.order,
 })
 
-/** 当前 Electron 文件系统实现。 */
-export const fileStorageAdapter: StorageAdapter = {
-  initWorkspace: () => FSB.initWorkDir(),
-  setWorkspace: (rootRef) => FSB.setWorkDir(rootRef),
-  selectWorkspaceCandidate: () => FSB.selectWorkDirCandidate(),
-  createWorkspace: (rootRef) => FSB.createWorkDir(rootRef),
-  getWorkspaceRoot: () => FSB.getRootDir(),
-  clearWorkspace: () => FSB.clearAll(),
+const toKBInfo = (child: StorageChildInfo) => ({
+  ref: child.ref,
+  path: child.path,
+  name: child.name,
+  order: child.order ?? 0,
+})
 
-  listKnowledgeBases: async () => (await FSB.listChildren('')).map(toStorageChildInfo).map((c) => ({ ...c, order: c.order ?? 0 })),
+const toCardInfo = (child: StorageChildInfo) => ({
+  ref: child.ref,
+  path: child.path,
+  name: child.name,
+  parentRef: child.path.includes('/') ? child.path.slice(0, child.path.lastIndexOf('/')) : null,
+  order: child.order,
+  hasChildren: child.isDir,
+  childCount: undefined,
+  isDir: child.isDir,
+})
+
+export const fileStorageAdapter: StorageAdapter = {
+  initVault: () => FSB.initWorkDir(),
+  setVault: (rootRef) => FSB.setWorkDir(rootRef),
+  selectVaultCandidate: () => FSB.selectWorkDirCandidate(),
+  createVault: (rootRef) => FSB.createWorkDir(rootRef),
+  getVaultRoot: () => FSB.getRootDir(),
+  clearVault: () => FSB.clearAll(),
+
+  listKnowledgeBases: async () => (await FSB.listChildren('')).map(toStorageChildInfo).map(toKBInfo),
   createKnowledgeBase: (name, meta) => FSB.mkDir(name, meta),
   deleteKnowledgeBase: (kbRef) => FSB.rmDir(kbRef),
   renameKnowledgeBase: (kbRef, newName) => FSB.renameKB(kbRef, newName),
@@ -28,7 +50,7 @@ export const fileStorageAdapter: StorageAdapter = {
   getLastOpenedKnowledgeBase: () => FSB.getLastOpenedKB(),
   setLastOpenedKnowledgeBase: (kbRef) => FSB.setLastOpenedKB(kbRef),
 
-  listCards: async (parentCardRef) => (await FSB.listChildren(parentCardRef)).map(toStorageChildInfo).map((c) => ({ ...c, hasChildren: c.isDir } as any)),
+  listCards: async (parentCardRef) => (await FSB.listChildren(parentCardRef)).map(toStorageChildInfo).map(toCardInfo),
   createCard: (cardRef, meta) => FSB.mkDir(cardRef, meta),
   deleteCard: (cardRef) => FSB.rmDir(cardRef),
   renameCard: (cardRef, newName) => FSB.updateCardMeta(cardRef, newName),
@@ -42,7 +64,7 @@ export const fileStorageAdapter: StorageAdapter = {
     return FSB.writeFile(`${cardRef}/README.md`, content)
   },
 
-  readCardLayout: (cardRef) => FSB.readGraphMeta(cardRef) as Promise<StorageGraphMeta>,
+  readCardLayout: (cardRef) => FSB.readGraphMeta(cardRef),
   writeCardLayout: (cardRef, meta) => FSB.writeGraphMeta(cardRef, meta),
 
   writeCardAsset: (assetRef, buffer) => FSB.writeBlobFile(assetRef, buffer),

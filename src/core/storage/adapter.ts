@@ -7,54 +7,32 @@ import type { EdgeRelation, EdgeWeight } from '../../types'
  * ref 可以自然映射为数据库 id、uuid 或服务端资源 id。Store/UI 不应该假设它一定是文件路径。
  */
 export type StorageRef = string
-export type WorkspaceRef = StorageRef
+export type VaultRef = StorageRef
 export type KBRef = StorageRef
 export type CardRef = StorageRef
 
-/** 工作区信息 */
-export interface WorkspaceInfo {
-  ref: WorkspaceRef
+/** 资料库信息 */
+export interface VaultInfo {
+  ref: VaultRef
   createdAt?: string
   updatedAt?: string
-}
-
-export interface StorageDialogResult {
-  valid: boolean
-  nodePath?: string | null
-  path?: string
-  error?: string
 }
 
 /** 知识库信息 */
 export interface KBInfo {
   ref: KBRef
-  path: string
+  vaultRef: VaultRef
   name: string
-  order: number
-  coverRef?: StorageRef | null
+  coverRef?: string | null
   childCount?: number
-  lastOpenedAt?: string
 }
 
 /** 卡片信息 */
 export interface CardInfo {
   ref: CardRef
-  path: string
+  kbRef: KBRef
   name: string
-  parentRef?: CardRef | null
-  order?: number
-  hasChildren: boolean
-  childCount?: number
-  isDir?: boolean
   updatedAt?: string
-}
-
-export interface StorageChildInfo {
-  ref: StorageRef
-  path: string
-  name: string
-  isDir: boolean
-  order?: number
 }
 
 export interface StorageGraphMeta {
@@ -77,35 +55,130 @@ export interface StorageGraphMeta {
   canvasBounds?: object | null
 }
 
-export interface IWorkspaceStorage {
-  initWorkspace: () => Promise<unknown>
-  setWorkspace: (rootRef: StorageRef) => Promise<StorageDialogResult>
-  selectWorkspaceCandidate: () => Promise<StorageDialogResult>
-  createWorkspace: (rootRef: StorageRef) => Promise<StorageDialogResult>
-  getWorkspaceRoot: () => Promise<StorageRef | null>
-  clearWorkspace: () => Promise<unknown>
+export interface IVaultStorage {
+  /** 
+   * 创建资料库 
+   * @param rootRef 资料库根路径
+   * @returns 结果
+  */
+  createVault: (rootRef: StorageRef) => Promise<StorageDialogResult>
+
+  /** 
+   * 验证资料库是否有效 
+   * @param rootRef 资料库根路径
+   * @returns 是否有效
+   */
+  isVaildVault: (rootRef: StorageRef) => Promise<boolean>
+
+  /**
+   * 获取资料库信息
+   * @param vaultRef 资料库引用
+   * @returns 
+   */
+  getVaultInfo: (vaultRef: VaultRef) => Promise<VaultInfo>
+
+  /**
+   * 删除资料库
+   * @param vaultRef 资料库引用
+   * @returns 结果
+   */
+  removeVault: (vaultRef: VaultRef) => Promise<unknown>
 }
 
 export interface IKBSStorage {
-  listKnowledgeBases: () => Promise<KBInfo[]>
-  createKnowledgeBase: (name: string, meta?: object | null) => Promise<KBRef>
-  deleteKnowledgeBase: (kbRef: KBRef) => Promise<unknown>
-  renameKnowledgeBase: (kbRef: KBRef, newName: string) => Promise<KBRef>
-  setKnowledgeBaseOrder: (kbRef: KBRef, order: number) => Promise<unknown>
-  saveKnowledgeBaseCover: (kbRef: KBRef, coverRef: StorageRef | null) => Promise<unknown>
-  importKnowledgeBase: (sourceRef: StorageRef) => Promise<KBRef>
-  getLastOpenedKnowledgeBase: () => Promise<KBRef | null>
-  setLastOpenedKnowledgeBase: (kbRef: KBRef | null) => Promise<unknown>
+  /**
+   * 获取知识库列表
+   * @param vaultRef 资料库引用
+   * @returns 知识库列表
+   */
+  listKBS: (vaultRef: VaultRef) => Promise<KBInfo[]>
+
+  /**
+   * 创建知识库
+   * @param vaultRef 资料库引用
+   * @param name 知识库名称
+   * @param meta 知识库元数据
+   * @returns 知识库引用
+   */
+  createKB: (vaultRef: VaultRef, name: string, meta?: object | null) => Promise<KBRef>
+
+  /**
+   * 删除知识库
+   * @param kbRef 知识库引用
+   * @returns 结果
+   */
+  deleteKB: (kbRef: KBRef) => Promise<unknown>
+
+  /**
+   * 重命名知识库
+   * @param kbRef 知识库引用
+   * @param newName 新名称
+   * @returns 知识库引用
+   */
+  renameKB: (kbRef: KBRef, newName: string) => Promise<KBRef>
+
+  /**
+   * 设置知识库封面
+   * @param kbRef 知识库引用
+   * @param coverRef 封面引用
+   * @returns 结果
+   */
+  setKBCover: (kbRef: KBRef, coverRef: StorageRef | null) => Promise<unknown>
+
+  /**
+   * 导入知识库
+   * @param targetVaultRef 目标资料库引用
+   * @param sourceKBRef 源知识库引用
+   * @returns 知识库引用
+   */
+  importKB: (targetVaultRef: VaultRef, sourceKBRef: KBRef) => Promise<KBRef>
 }
 
 export interface ICardStorage {
-  listCards: (parentCardRef: CardRef) => Promise<CardInfo[]>
+  /**
+   * 获取知识卡片列表
+   * @param parentCardRef 父卡片引用
+   * @returns 卡片列表
+   */
+  listCards: (kbRef: KBRef) => Promise<CardInfo[]>
+
+  /**
+   * 获取知识卡片信息
+   * @param cardRef 知识卡片引用
+   * @returns 卡片信息
+   */
+  GetCardInfo: (cardRef: CardRef) => Promise<CardInfo>
+
+  /**
+   * 创建知识卡片
+   * @param parentCardRef 父卡片引用
+   * @param meta 
+   * @returns 
+   */
   createCard: (cardRef: CardRef, meta?: object | null) => Promise<CardRef>
+
+
+  /**
+   * 删除知识卡片
+   * @param cardRef 知识卡片引用
+   * @returns 结果
+   */
   deleteCard: (cardRef: CardRef) => Promise<unknown>
+
+  /**
+   * 重命名知识卡片
+   * @param cardRef 知识卡片引用
+   * @param newName 新名称
+   * @returns 
+   */
   renameCard: (cardRef: CardRef, newName: string) => Promise<CardRef>
-  ensureCard: (cardRef: CardRef) => Promise<unknown>
-  countCards: (parentCardRef: CardRef) => Promise<number>
-  openCardLocation: (cardRef: CardRef) => Promise<unknown>
+
+  /**
+   * 获取子卡片数量
+   * @param parentCardRef 父卡片引用
+   * @returns 子卡片数量
+   */
+  countSubCards: (cardRef: CardRef) => Promise<number>
 }
 
 export interface IDocumentStorage {
@@ -128,11 +201,17 @@ export interface IConfigStorage {
   writeAppConfig: (content: unknown) => Promise<unknown>
 }
 
+export interface ILogStorage {
+  readLogs: () => Promise<unknown>
+  writeLogs: (content: unknown) => Promise<unknown>
+}
+
 export type StorageAdapter =
-  & IWorkspaceStorage
+  & IVaultStorage
   & IKBSStorage
   & ICardStorage
   & IDocumentStorage
   & IGraphStorage
   & IAssetStorage
   & IConfigStorage
+  & ILogStorage

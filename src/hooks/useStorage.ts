@@ -1,1 +1,1 @@
-export { useStorage } from '../core/storage/context'
+export { useStorage } from '../core/storage'
