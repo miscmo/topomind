@@ -1,7 +1,7 @@
 export type { VaultRef, VaultInfo, IVaultStorage } from './adapter/vault'
 export type { KBRef, KBInfo, IKBSStorage } from './adapter/kb'
 export type { CardRef, CardInfo, ICardStorage } from './adapter/card'
-export type { StorageGraphMeta, IGraphStorage } from './adapter/graph'
+export type { GraphMeta, IGraphStorage } from './adapter/graph'
 
 export type StorageAdapter =
   & import('./adapter/vault').IVaultStorage
