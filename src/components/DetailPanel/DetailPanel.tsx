@@ -77,10 +77,12 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
       return
     }
 
-    storage.listCards(nodePath).then((children: Array<{ path: string; name: string; isDir: boolean }>) => {
+    storage.listCards(nodePath).then(async (cards: Array<{ ref: string; name: string; updatedAt?: string }>) => {
       if (childTagsRequestSeqRef.current !== requestSeq) return
-      const dirs = (children || []).filter((c: { isDir: boolean }) => c.isDir)
-      setChildTags(dirs)
+      if (!cards.length) { setChildTags([]); return }
+      const withCounts = await Promise.all(cards.map(async (c) => ({ path: c.ref, name: c.name, count: await storage.countChildren(c.ref) })))
+      if (childTagsRequestSeqRef.current !== requestSeq) return
+      setChildTags(withCounts.filter(c => c.count > 0))
     }).catch(() => {
       if (childTagsRequestSeqRef.current !== requestSeq) return
       setChildTags([])

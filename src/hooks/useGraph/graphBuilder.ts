@@ -6,8 +6,10 @@
  * - Build React Flow edges from graph metadata
  * - Serialize nodes+edges to _graph.json format
  */
-import type { KnowledgeNode, KnowledgeEdge, GraphMeta } from '../../types'
+import type { KnowledgeNode, KnowledgeEdge } from '../../types'
 import { DOMAIN_COLORS } from '../../types'
+import type { GraphMeta } from '../../core/storage/adapter/graph'
+import type { CardInfo } from '../../core/storage/adapter/card'
 import type { useStorage } from '../useStorage'
 
 const AUTO_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
@@ -35,44 +37,40 @@ export interface SerializedEdge {
   faded?: boolean
 }
 
-/** Convert nodes+edges to _graph.json compatible format */
+/** Convert nodes+edges to adapter GraphMeta format */
 export function buildMetaFromNodesEdges(
   nodes: KnowledgeNode[],
   edges: KnowledgeEdge[],
-  zoom?: number | null,
-  pan?: { x: number; y: number } | null
-): {
-  children: Record<string, { name: string; x?: number; y?: number }>
-  edges: SerializedEdge[]
-  zoom?: number | null
-  pan?: { x: number; y: number } | null
-} {
-  const children: Record<string, { name: string; x?: number; y?: number }> = {}
+  viewport?: { zoom: number; pan: { x: number; y: number } } | null
+): GraphMeta {
+  const metaNodes: Record<string, { id: string; card: CardInfo; height: number; width: number }> = {}
   for (const node of nodes) {
-    const childName = node.id.includes('/') ? (node.id.split('/').pop() ?? node.id) : node.id
-    children[childName] = {
-      name: node.data.label,
-      x: node.position?.x,
-      y: node.position?.y,
+    const rawId = node.id.includes('/') ? (node.id.split('/').pop() ?? node.id) : node.id
+    metaNodes[node.id] = {
+      id: node.id,
+      card: { ref: node.id, name: node.data.label, updatedAt: undefined },
+      height: 150,
+      width: 200,
     }
   }
-  const graphEdges: SerializedEdge[] = edges.map((e) => ({
+  const metaEdges = edges.map((e) => ({
     id: e.id,
-    source: e.source,
-    target: e.target,
-    relation: e.data?.relation ?? '相关',
-    weight: e.data?.weight ?? 'minor',
+    source: { ref: e.source, name: '', updatedAt: undefined } as CardInfo,
+    target: { ref: e.target, name: '', updatedAt: undefined } as CardInfo,
+    relation: (e.data?.relation ?? '相关') as import('../../core/storage/adapter/graph').KBEdge['relation'],
+    weight: (e.data?.weight ?? 'minor') as import('../../core/storage/adapter/graph').KBEdge['weight'],
     lineMode: e.data?.lineMode ?? 'smoothstep',
     lineStyle: e.data?.lineStyle ?? 'solid',
     color: e.data?.color ?? '#7f8c8d',
     arrow: e.data?.arrow ?? true,
-    // Preserve visual state across save+reload round-trips.
-    // Without these, highlighted/faded are silently dropped and never
-    // recovered after a layout change or node move triggers a flush.
-    highlighted: e.data?.highlighted,
-    faded: e.data?.faded,
+    highlighted: e.data?.highlighted ?? false,
+    faded: e.data?.faded ?? false,
   }))
-  return { children, edges: graphEdges, zoom, pan }
+  return {
+    nodes: metaNodes,
+    edges: metaEdges,
+    viewport: viewport ?? { zoom: 1, pan: { x: 0, y: 0 } },
+  }
 }
 
 /**
@@ -86,12 +84,12 @@ export async function buildNodes(
   savedPositions: Record<string, { x: number; y: number }>,
   kbPath: string
 ): Promise<KnowledgeNode[]> {
-  const children = Object.entries(meta.children ?? {})
-  const normalizedChildren = children.map(([rawChildName, childInfo]) => {
-    const normalizedName = rawChildName.includes('/') || rawChildName.includes('\\')
-      ? (rawChildName.split(/[/\\]/).pop() ?? rawChildName)
-      : rawChildName
-    return [normalizedName, childInfo] as [string, { name: string }]
+  const nodeEntries = Object.entries(meta.nodes)
+  const normalizedChildren = nodeEntries.map(([nodeId, kbNode]) => {
+    const rawChildName = nodeId.includes('/') || nodeId.includes('\\')
+      ? (nodeId.split(/[/\\]/).pop() ?? nodeId)
+      : nodeId
+    return [rawChildName, kbNode] as [string, { card: { name: string }; height: number; width: number }]
   })
 
   const nodeCount = normalizedChildren.length
@@ -111,34 +109,24 @@ export async function buildNodes(
     })
   )
 
-  return normalizedChildren.map(([childName, childInfo]: [string, { name: string; x?: number; y?: number }], i) => {
+  return normalizedChildren.map(([childName, kbNode]: [string, { card: { name: string }; height: number; width: number }], i) => {
     const childPath = dirPath ? `${dirPath}/${childName}` : childName
     const nodeId = childPath
     const childCount = childCountResults[i]
     const hasChildren = childCount > 0
     const domainColor = DOMAIN_COLORS[i % DOMAIN_COLORS.length]
-    const childSavedPosition = childInfo && typeof childInfo === 'object'
-      ? {
-          x: typeof childInfo.x === 'number' ? childInfo.x : undefined,
-          y: typeof childInfo.y === 'number' ? childInfo.y : undefined,
-        }
-      : null
     const saved = savedPositions[nodeId]
-    const position = saved ?? (
-      childSavedPosition?.x != null && childSavedPosition?.y != null
-        ? { x: childSavedPosition.x, y: childSavedPosition.y }
-        : {
-            x: 50 + i * spacingX,
-            y: 50 + i * spacingY,
-          }
-    )
+    const position = saved ?? {
+      x: 50 + i * spacingX,
+      y: 50 + i * spacingY,
+    }
 
     return {
       id: nodeId,
       type: 'knowledgeCard',
       position,
       data: {
-        label: childInfo.name,
+        label: kbNode.card.name,
         path: childPath,
         parent: dirPath || kbPath || undefined,
         hasChildren,
@@ -152,10 +140,10 @@ export async function buildNodes(
 
 /** Build React Flow edges from graph metadata */
 export function buildEdges(meta: GraphMeta): KnowledgeEdge[] {
-  return (meta.edges ?? []).map((e) => ({
+  return meta.edges.map((e) => ({
     id: e.id,
-    source: e.source,
-    target: e.target,
+    source: e.source.ref,
+    target: e.target.ref,
     type: e.lineMode ?? 'smoothstep',
     animated: e.weight === 'main',
     style: {
@@ -176,9 +164,6 @@ export function buildEdges(meta: GraphMeta): KnowledgeEdge[] {
       lineStyle: e.lineStyle ?? 'solid',
       color: e.color ?? '#7f8c8d',
       arrow: e.arrow ?? true,
-      // Restore persisted visual state rather than always defaulting to false.
-      // When nodes move or layout changes, the save flushes current state to disk.
-      // Without reading it back here, highlighted/faded are permanently lost after reload.
       highlighted: e.highlighted ?? false,
       faded: e.faded ?? false,
     },

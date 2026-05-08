@@ -7,7 +7,6 @@
 import type { Connection } from '@xyflow/react'
 import type { KnowledgeNode, KnowledgeEdge, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../../types'
 import { buildMetaFromNodesEdges } from './graphBuilder'
-import { FSB } from '../../core/fs-backend'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 
@@ -17,6 +16,8 @@ export interface StorageApi {
   renameCard: (cardPath: string, newName: string) => Promise<unknown>
   saveGraphDebounced: (dirPath: string, buildMeta: () => object, onFlush: () => void) => void
   flushGraphSave: (dirPath: string, buildMeta: () => object, onFlush: () => void) => Promise<void>
+  readLayout: (dirPath: string) => Promise<{ nodes: Record<string, unknown>; edges: unknown[]; viewport: { zoom: number; pan: { x: number; y: number } } }>
+  writeLayout: (dirPath: string, meta: { nodes: Record<string, unknown>; edges: unknown[]; viewport: { zoom: number; pan: { x: number; y: number } } }) => Promise<void>
 }
 
 export interface GraphOpsDeps {
@@ -122,30 +123,24 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
       // so buildNodes skips it and the node never appears on canvas.
       // (The old e2e mock updated storedGraphMeta in fs:mkDir, but the real
       // Electron backend only creates the directory — save is debounced 300ms later.)
-      let parentMeta: Awaited<ReturnType<typeof FSB.readGraphMeta>> = {}
-      try {
-        parentMeta = await FSB.readGraphMeta(targetPath)
-      } catch {
-        // 新建父节点首次添加子节点时，_graph.json 可能尚不存在；按空 meta 兜底。
-        parentMeta = {}
-      }
-
-      const existingChildren = (parentMeta?.children && typeof parentMeta.children === 'object' && !Array.isArray(parentMeta.children))
-        ? parentMeta.children as Record<string, unknown>
-        : {} as Record<string, unknown>
+      const parentLayout = await storage.readLayout(targetPath).catch(() => ({
+        nodes: {} as Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }>,
+        edges: [] as KnowledgeEdge[],
+        viewport: { zoom: 1, pan: { x: 0, y: 0 } },
+      }))
       const resolvedPath = (newPath ?? '').trim()
       const cardKey = resolvedPath
         ? (resolvedPath.split(/[/\\]/).pop() ?? resolvedPath)
         : name
-      const childrenWithNew: Record<string, unknown> = {
-        ...existingChildren,
-        [cardKey]: { name, hasChildren: false },
+      const nodesWithNew: Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }> = {
+        ...(parentLayout.nodes as Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }>),
+        [cardKey]: { id: cardKey, card: { ref: resolvedPath, name, updatedAt: undefined }, height: 150, width: 200 },
       }
-      await FSB.writeGraphMeta(targetPath, {
-        ...parentMeta,
-        children: childrenWithNew,
-        edges: Array.isArray((parentMeta as { edges?: unknown })?.edges) ? (parentMeta as { edges: unknown[] }).edges : [],
-      } as Parameters<typeof FSB.writeGraphMeta>[1])
+      await storage.writeLayout(targetPath, {
+        ...parentLayout,
+        nodes: nodesWithNew,
+        edges: parentLayout.edges,
+      })
 
       // Also update the current room's _graph.json so that when this room is
       // displayed, buildNodes finds the child entry and the node appears on canvas.
@@ -153,44 +148,48 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
       // 1. The parent's entry must have hasChildren: true (so it shows "1 child")
       // 2. The new child entry must be added to the room's children map
       //    (otherwise loadRoom never discovers it and the node count stays the same)
-      const currentRoomMeta = await FSB.readGraphMeta(reloadPath).catch(() => ({ children: {}, edges: [] } as Record<string, unknown>))
-      const roomChildren = (currentRoomMeta?.children && typeof currentRoomMeta.children === 'object' && !Array.isArray(currentRoomMeta.children))
-        ? currentRoomMeta.children as Record<string, unknown>
-        : {} as Record<string, unknown>
+      const currentRoomLayout = await storage.readLayout(reloadPath).catch(() => ({
+        nodes: {} as Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }>,
+        edges: [] as KnowledgeEdge[],
+        viewport: { zoom: 1, pan: { x: 0, y: 0 } },
+      }))
+      const roomNodesBase = currentRoomLayout.nodes as Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }>
 
-      // Find the parent's key in the room's children map.
+      // Find the parent's key in the room's nodes map.
       // Keys are name-only (e.g. "父节点") at the room level, not full paths.
       // Match by comparing normalized entry names against the parent's display name.
       const parentName = nodesMapRef.current.get(targetPath)?.data.label ?? (targetPath.split(/[/\\]/).pop() ?? targetPath)
       let parentEntryKey: string | null = null
-      for (const [key, value] of Object.entries(roomChildren)) {
+      for (const [key, value] of Object.entries(roomNodesBase)) {
         const normalizedKey = key.includes('/') || key.includes('\\')
           ? (key.split(/[/\\]/).pop() ?? key)
           : key
-        const entry = value as { name?: string }
-        if (normalizedKey === parentName || entry.name === parentName || key === parentName) {
+        const entry = value as { card?: { name?: string } }
+        if (normalizedKey === parentName || entry.card?.name === parentName || key === parentName) {
           parentEntryKey = key
           break
         }
       }
 
-      // Determine the child's key in the room's children map: name-only (e.g. "子节点A")
+      // Determine the child's key in the room's nodes map: name-only (e.g. "子节点A")
       const childName = cardKey
 
-      const updatedRoomChildren: Record<string, unknown> = { ...roomChildren }
-      if (parentEntryKey) {
-        updatedRoomChildren[parentEntryKey] = { ...(roomChildren[parentEntryKey] as object), hasChildren: true }
+      const updatedRoomNodes: Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }> = { ...roomNodesBase }
+      if (parentEntryKey && updatedRoomNodes[parentEntryKey]) {
+        updatedRoomNodes[parentEntryKey] = {
+          ...updatedRoomNodes[parentEntryKey],
+        }
       }
       // Add the new child entry (only if not already present)
-      if (!updatedRoomChildren[childName]) {
-        updatedRoomChildren[childName] = { name, hasChildren: false }
+      if (!updatedRoomNodes[childName]) {
+        updatedRoomNodes[childName] = { id: childName, card: { ref: resolvedPath, name, updatedAt: undefined }, height: 150, width: 200 }
       }
 
-      await FSB.writeGraphMeta(reloadPath, {
-        ...currentRoomMeta,
-        children: updatedRoomChildren,
-        edges: Array.isArray((currentRoomMeta as { edges?: unknown })?.edges) ? (currentRoomMeta as { edges: unknown[] }).edges : [],
-      } as Parameters<typeof FSB.writeGraphMeta>[1])
+      await storage.writeLayout(reloadPath, {
+        ...currentRoomLayout,
+        nodes: updatedRoomNodes,
+        edges: currentRoomLayout.edges,
+      })
 
       await loadRoom(reloadPath, true)
 

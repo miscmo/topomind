@@ -18,11 +18,12 @@ import { tabStore } from '../stores/tabStore'
 import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
 import { useNavContext } from './useNavContext'
+import type { Store } from '../core/storage/service'
 import { logAction } from '../core/log-backend'
 import { logger } from '../core/logger'
 import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData } from '../types'
 import { buildMetaFromNodesEdges, buildNodes, buildEdges, generateId } from './useGraph/graphBuilder'
-import { buildGraphOperations } from './useGraph/graphOperations'
+import { buildGraphOperations, type StorageApi } from './useGraph/graphOperations'
 import { applySearchHighlight } from './useGraph/search'
 import { buildGraphNavigation } from './useGraph/navigation'
 
@@ -34,7 +35,7 @@ export interface GraphState {
 }
 
 export function useGraph(tabId?: string) {
-  const storage = useStorage()
+  const storage = useStorage() as Store
   const { computeLayout } = useLayout()
 
   const enterRoom = useRoomStore((s) => s.enterRoom)
@@ -148,13 +149,13 @@ export function useGraph(tabId?: string) {
           return
         }
 
-        // Build saved position map from child rooms' zoom/pan
+        // Build saved position map from child rooms' viewport
         const savedPositions: Record<string, { x: number; y: number }> = {}
-        if (meta.children) {
-          const childEntries = Object.keys(meta.children)
+        const nodeEntries = Object.entries(meta.nodes ?? {})
+        if (nodeEntries.length > 0) {
           const positionResults = await Promise.allSettled(
-            childEntries.map(async (childName) => {
-              const childPath = dirPath ? `${dirPath}/${childName}` : childName
+            nodeEntries.map(async ([nodeId]) => {
+              const childPath = dirPath ? `${dirPath}/${nodeId}` : nodeId
               const childMeta = await storage.readLayout(childPath)
               return { childPath, childMeta }
             })
@@ -162,12 +163,12 @@ export function useGraph(tabId?: string) {
           for (const result of positionResults) {
             if (
               result.status === 'fulfilled' &&
-              result.value.childMeta.zoom != null &&
-              result.value.childMeta.pan != null
+              result.value.childMeta.viewport.zoom != null &&
+              result.value.childMeta.viewport.pan != null
             ) {
               savedPositions[result.value.childPath] = {
-                x: result.value.childMeta.pan.x,
-                y: result.value.childMeta.pan.y,
+                x: result.value.childMeta.viewport.pan.x,
+                y: result.value.childMeta.viewport.pan.y,
               }
             }
           }
@@ -204,10 +205,21 @@ export function useGraph(tabId?: string) {
     [storage, getActiveNavState, rebuildMaps, updateSelectedNode]
   )
 
+  // Storage adapter compatible with the minimal interface graphOperations expects
+  const storageApi = {
+    createCard: storage.createCard.bind(storage),
+    deleteCard: storage.deleteCard.bind(storage),
+    renameCard: storage.renameCard.bind(storage),
+    saveGraphDebounced: storage.saveGraphDebounced.bind(storage) as StorageApi['saveGraphDebounced'],
+    flushGraphSave: storage.flushGraphSave.bind(storage) as StorageApi['flushGraphSave'],
+    readLayout: storage.readLayout.bind(storage) as StorageApi['readLayout'],
+    writeLayout: storage.writeLayout.bind(storage) as StorageApi['writeLayout'],
+  }
+
   // ===== Graph operations (CRUD) =====
 
   const ops = buildGraphOperations({
-    storage,
+    storage: storageApi,
     nodesMapRef,
     edgesMapRef,
     nodesRef,

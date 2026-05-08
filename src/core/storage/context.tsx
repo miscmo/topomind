@@ -1,14 +1,14 @@
 import { createContext, useContext, useMemo } from 'react'
 import { createStorageAdapter, type StorageEngine } from './factory'
 import { createStore, type Store as StoreType } from './service'
-import type { StorageAdapter } from './adapter'
+import type { StorageAdapterExtended } from './adapter'
 
 const StorageContext = createContext<StoreType | null>(null)
 
 export interface StorageProviderProps {
   children: React.ReactNode
   engine?: StorageEngine
-  adapter?: StorageAdapter
+  adapter?: StorageAdapterExtended
 }
 
 export function StorageProvider({ children, engine = 'fs', adapter }: StorageProviderProps) {

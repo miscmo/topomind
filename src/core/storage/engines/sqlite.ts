@@ -1,34 +1,45 @@
-import type { StorageAdapter } from '../adapter'
+import type { StorageAdapterExtended } from '../adapter'
 
-export const sqliteStorageAdapter: StorageAdapter = {
-  initWorkspace: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  setWorkspace: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  selectWorkspaceCandidate: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  createWorkspace: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  getWorkspaceRoot: async () => null,
-  clearWorkspace: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  listKnowledgeBases: async () => [],
-  createKnowledgeBase: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  deleteKnowledgeBase: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  renameKnowledgeBase: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  setKnowledgeBaseOrder: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  saveKnowledgeBaseCover: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  importKnowledgeBase: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  getLastOpenedKnowledgeBase: async () => null,
-  setLastOpenedKnowledgeBase: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+export const sqliteStorageAdapter: StorageAdapterExtended = {
+  // IVaultStorage
+  createVault: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  isValidVault: async () => false,
+  getVaultInfo: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  removeVault: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+
+  // IKBSStorage
+  listKBS: async () => [],
+  createKB: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  deleteKB: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  renameKB: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  importKB: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+
+  // ICardStorage
   listCards: async () => [],
   createCard: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   deleteCard: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   renameCard: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  countSubCards: async () => 0,
+
+  // IGraphStorage
+  readCardLayout: async () => ({ nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }),
+  writeCardLayout: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+
+  // StorageAdapterExtended
+  setVault: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  selectVaultCandidate: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  getVaultRoot: async () => null,
+  clearVault: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  setKnowledgeBaseOrder: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  saveKnowledgeBaseCover: async () => { throw new Error('sqliteStorageAdapter not implemented') },
+  getLastOpenedKnowledgeBase: async () => null,
+  setLastOpenedKnowledgeBase: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   ensureCard: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  countCards: async () => 0,
   openCardLocation: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  readCardLayout: async () => ({ children: undefined, edges: [] }),
-  writeCardLayout: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   writeCardAsset: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  readCardAsset: async () => null,
+  readCardAsset: async () => null as ArrayBuffer | null,
   readAppConfig: async () => ({}),
   writeAppConfig: async () => { throw new Error('sqliteStorageAdapter not implemented') },
 }

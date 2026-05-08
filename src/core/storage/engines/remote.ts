@@ -1,34 +1,45 @@
-import type { StorageAdapter } from '../adapter'
+import type { StorageAdapterExtended } from '../adapter'
 
-export const remoteStorageAdapter: StorageAdapter = {
-  initWorkspace: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  setWorkspace: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  selectWorkspaceCandidate: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  createWorkspace: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  getWorkspaceRoot: async () => null,
-  clearWorkspace: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  listKnowledgeBases: async () => [],
-  createKnowledgeBase: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  deleteKnowledgeBase: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  renameKnowledgeBase: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  setKnowledgeBaseOrder: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  saveKnowledgeBaseCover: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  importKnowledgeBase: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  getLastOpenedKnowledgeBase: async () => null,
-  setLastOpenedKnowledgeBase: async () => { throw new Error('remoteStorageAdapter not implemented') },
+export const remoteStorageAdapter: StorageAdapterExtended = {
+  // IVaultStorage
+  createVault: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  isValidVault: async () => false,
+  getVaultInfo: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  removeVault: async () => { throw new Error('remoteStorageAdapter not implemented') },
+
+  // IKBSStorage
+  listKBS: async () => [],
+  createKB: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  deleteKB: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  renameKB: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  importKB: async () => { throw new Error('remoteStorageAdapter not implemented') },
+
+  // ICardStorage
   listCards: async () => [],
   createCard: async () => { throw new Error('remoteStorageAdapter not implemented') },
   deleteCard: async () => { throw new Error('remoteStorageAdapter not implemented') },
   renameCard: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  countSubCards: async () => 0,
+
+  // IGraphStorage
+  readCardLayout: async () => ({ nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }),
+  writeCardLayout: async () => { throw new Error('remoteStorageAdapter not implemented') },
+
+  // StorageAdapterExtended
+  setVault: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  selectVaultCandidate: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  getVaultRoot: async () => null,
+  clearVault: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  setKnowledgeBaseOrder: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  saveKnowledgeBaseCover: async () => { throw new Error('remoteStorageAdapter not implemented') },
+  getLastOpenedKnowledgeBase: async () => null,
+  setLastOpenedKnowledgeBase: async () => { throw new Error('remoteStorageAdapter not implemented') },
   ensureCard: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  countCards: async () => 0,
   openCardLocation: async () => { throw new Error('remoteStorageAdapter not implemented') },
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  readCardLayout: async () => ({ children: undefined, edges: [] }),
-  writeCardLayout: async () => { throw new Error('remoteStorageAdapter not implemented') },
   writeCardAsset: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  readCardAsset: async () => null,
+  readCardAsset: async () => null as ArrayBuffer | null,
   readAppConfig: async () => ({}),
   writeAppConfig: async () => { throw new Error('remoteStorageAdapter not implemented') },
 }

@@ -1,7 +1,6 @@
 import type { EdgeRelation, EdgeWeight } from '../../../types'
-import { CardInfo } from './card'
-import { KBRef } from './kb'
-
+import type { CardInfo } from './card'
+import type { KBRef } from './kb'
 
 interface KBNode {
   id: string
@@ -10,7 +9,7 @@ interface KBNode {
   width: number
 }
 
-interface KBEdge {
+export interface KBEdge {
   id: string
   source: CardInfo
   target: CardInfo
@@ -28,7 +27,6 @@ interface KBViewport {
   zoom: number
   pan: { x: number; y: number }
 }
-
 
 export interface GraphMeta {
   nodes: Record<string, KBNode>
