@@ -13,7 +13,7 @@ const ALLOWED_CHANNELS = new Set([
   'fs:getKBCover', 'fs:saveKBCover', 'fs:renameKB',
   'fs:readFile', 'fs:writeFile', 'fs:deleteFile',
   'fs:writeBlobFile', 'fs:readBlobFile', 'fs:clearAll',
-  'fs:openInFinder', 'fs:countChildren',
+  'fs:countChildren',
   'fs:ensureCardDir',
   'fs:getRootDir',
   'fs:getLastOpenedKB', 'fs:setLastOpenedKB',

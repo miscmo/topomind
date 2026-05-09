@@ -88,7 +88,6 @@ export interface FSB {
   selectWorkDirCandidate: () => Promise<FSBResult>
   createWorkDir: (dirPath: string) => Promise<FSBResult>
   importKB: (sourcePath: string) => Promise<string>
-  openInFinder: (p: string) => Promise<unknown>
   countChildren: (p: string) => Promise<number>
   getRootDir: () => Promise<string | null>
   getLastOpenedKB: () => Promise<string | null>
@@ -128,7 +127,6 @@ const FSBImpl: FSB = {
   selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate') as Promise<FSBResult>,
   createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath) as Promise<FSBResult>,
   importKB: (sourcePath) => _call('fs:importKB', sourcePath) as Promise<string>,
-  openInFinder: (p) => _call('fs:openInFinder', p),
   countChildren: (p) => _call('fs:countChildren', p) as Promise<number>,
   getRootDir: () => _call('fs:getRootDir') as Promise<string | null>,
   getLastOpenedKB: () => _call('fs:getLastOpenedKB') as Promise<string | null>,

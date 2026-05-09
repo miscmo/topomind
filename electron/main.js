@@ -171,13 +171,6 @@ function registerIPC() {
   ipcMain.handle('fs:writeBlobFile', function(e, p, b) { fileService.writeBlobFile(p, b); });
   ipcMain.handle('fs:readBlobFile', function(e, p) { return fileService.readBlobFile(p); });
   ipcMain.handle('fs:clearAll', function() { fileService.clearAll(); });
-  ipcMain.handle('fs:openInFinder', function(e, dirPath) {
-    var kbRoot = nodePath.join(fileService.getRootDir(), 'kbs');
-    var absPath = nodePath.isAbsolute(dirPath) ? dirPath : nodePath.join(kbRoot, dirPath);
-    var rootDir = nodePath.normalize(fileService.getRootDir());
-    if (!nodePath.normalize(absPath).startsWith(rootDir)) return;
-    if (nodeFs.existsSync(absPath)) shell.openPath(absPath);
-  });
   ipcMain.handle('fs:countChildren', function(e, dirPath) {
     var kbRoot = nodePath.join(fileService.getRootDir(), 'kbs');
     var d = dirPath ? nodePath.join(kbRoot, dirPath) : kbRoot;
