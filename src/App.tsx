@@ -84,7 +84,17 @@ export default memo(function App() {
       <ConfirmModal />
       <PromptModal />
       <ReactFlowProvider>
-        {isSetup ? <SetupPage /> : (<><TabBar onCloseTab={handleCloseTab} />{activeTab?.type === 'home' && <HomePage />}{activeTab?.type === 'kb' && <GraphPage key={activeTab.id} tabId={activeTab.id} />}</>)}
+        {isSetup ? (
+          <SetupPage />
+        ) : (
+          <>
+            <TabBar onCloseTab={handleCloseTab} />
+            {activeTab?.type === 'home' && <HomePage />}
+            {activeTab?.type === 'kb' && (
+              <GraphPage key={activeTab.id} tabId={activeTab.id} />
+            )}
+          </>
+        )}
       </ReactFlowProvider>
     </>
   )
