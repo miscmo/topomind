@@ -58,7 +58,12 @@ export function createStore(adapter: StorageAdapterExtended) {
 
   const store = {
     init() { try { return adapter.createVault('') } catch (e) { logger.catch('Store.init', '初始化 Vault 失败', e); throw e } },
-    setWorkDir(dirPath: string) { try { return adapter.setVault(dirPath) } catch (e) { logger.catch('Store.setWorkDir', '设置 Vault 失败', e); throw e } },
+    async isValidVault(dirPath: string) {
+      try {
+        const valid = await adapter.isValidVault(dirPath)
+        return { valid, nodePath: valid ? dirPath : null, error: valid ? undefined : '不是有效的工作目录' }
+      } catch (e) { logger.catch('Store.isValidVault', '校验 Vault 失败', e); throw e }
+    },
     createWorkDir: async (dirPath: string) => {
       try {
         await adapter.createVault(dirPath)
@@ -234,7 +239,6 @@ const stubAdapter: StorageAdapterExtended = {
   countSubCards: async () => 0,
   readCardLayout: async () => ({ nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }),
   writeCardLayout: async () => undefined,
-  setVault: async () => ({ valid: false, nodePath: null }),
   getVaultRoot: async () => null,
   clearVault: async () => undefined,
   ensureCard: async () => undefined,

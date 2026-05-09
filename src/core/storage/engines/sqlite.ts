@@ -26,7 +26,6 @@ export const sqliteStorageAdapter: StorageAdapterExtended = {
   writeCardLayout: async () => { throw new Error('sqliteStorageAdapter not implemented') },
 
   // StorageAdapterExtended
-  setVault: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   getVaultRoot: async () => null,
   clearVault: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   ensureCard: async () => { throw new Error('sqliteStorageAdapter not implemented') },

@@ -35,12 +35,12 @@ export default memo(function SetupPage() {
       }
       logAction('已选择工作目录', 'SetupPage', { selectedPath: picked.nodePath })
 
-      // [step 2] 设置并校验工作目录格式是否为笔记本
-      const res = await storage.setWorkDir(picked.nodePath!)
+      // [step 2] 校验工作目录格式是否为笔记本
+      const res = await storage.isValidVault(picked.nodePath!)
       if (!res?.valid) {
         setIsError(true)
         setMessage(res?.error || '不是有效的工作目录')
-        logAction('设置工作目录失败', 'SetupPage', {
+        logAction('校验工作目录失败', 'SetupPage', {
           nodePath: picked.nodePath,
           error: res?.error || '不是有效的工作目录',
         })

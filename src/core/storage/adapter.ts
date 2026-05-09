@@ -16,7 +16,6 @@ export type StorageAdapter =
  */
 export interface StorageAdapterExtended extends StorageAdapter {
   // Vault operations (workspace)
-  setVault: (dirPath: string) => Promise<{ valid: boolean; nodePath: string | null; path?: string; error?: string }>
   getVaultRoot: () => Promise<string | null>
   clearVault: () => Promise<void>
 

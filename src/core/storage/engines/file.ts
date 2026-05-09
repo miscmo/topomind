@@ -121,8 +121,8 @@ export const fileStorageAdapter: StorageAdapterExtended = {
 
   isValidVault: async (vaultRef: VaultRef): Promise<boolean> => {
     try {
-      const root = await FSB.getRootDir()
-      return root === vaultRef
+      const result = await FSB.setWorkDir(vaultRef)
+      return result.valid
     } catch {
       return false
     }
@@ -203,10 +203,6 @@ export const fileStorageAdapter: StorageAdapterExtended = {
   },
 
   // ===== StorageAdapterExtended: Vault operations =====
-
-  setVault: async (dirPath: string) => {
-    return FSB.setWorkDir(dirPath)
-  },
 
   getVaultRoot: async () => {
     return FSB.getRootDir()

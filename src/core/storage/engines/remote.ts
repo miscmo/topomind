@@ -26,7 +26,6 @@ export const remoteStorageAdapter: StorageAdapterExtended = {
   writeCardLayout: async () => { throw new Error('remoteStorageAdapter not implemented') },
 
   // StorageAdapterExtended
-  setVault: async () => { throw new Error('remoteStorageAdapter not implemented') },
   getVaultRoot: async () => null,
   clearVault: async () => { throw new Error('remoteStorageAdapter not implemented') },
   ensureCard: async () => { throw new Error('remoteStorageAdapter not implemented') },
