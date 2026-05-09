@@ -20,14 +20,6 @@ export interface StorageAdapterExtended extends StorageAdapter {
   getVaultRoot: () => Promise<string | null>
   clearVault: () => Promise<void>
 
-  // KB operations not in IKBSStorage
-  setKnowledgeBaseOrder: (kbRef: string, order: number) => Promise<void>
-  saveKnowledgeBaseCover: (kbRef: string, coverPath: string | null) => Promise<void>
-
-  // Last opened KB
-  getLastOpenedKnowledgeBase: () => Promise<string | null>
-  setLastOpenedKnowledgeBase: (kbPath: string | null) => Promise<void>
-
   // Card operations not in ICardStorage
   ensureCard: (cardPath: string) => Promise<void>
   readCardMarkdown: (cardPath: string) => Promise<string>

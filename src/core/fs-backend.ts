@@ -33,11 +33,6 @@ export interface FSBChildInfo {
   order?: number
 }
 
-export interface FSBKBCover {
-  coverPath?: string | null
-  coverUrl?: string | null
-}
-
 export interface FSBGraphMeta {
   children?: Record<string, FSBChildInfo> | undefined
   edges?: Array<{
@@ -68,9 +63,6 @@ export interface FSB {
   listChildren: (parentPath: string) => Promise<FSBChildInfo[]>
   mkDir: (dirPath: string, meta?: object | null) => Promise<string>
   rmDir: (dirPath: string) => Promise<unknown>
-  saveKBOrder: (kbPath: string, order: number) => Promise<unknown>
-  getKBCover: (kbPath: string) => Promise<FSBKBCover | null>
-  saveKBCover: (kbPath: string, coverPath: string | null) => Promise<unknown>
   renameKB: (kbPath: string, newName: string) => Promise<string>
   readGraphMeta: (dirPath: string) => Promise<FSBGraphMeta>
   writeGraphMeta: (dirPath: string, meta: FSBGraphMeta) => Promise<unknown>
@@ -90,8 +82,6 @@ export interface FSB {
   importKB: (sourcePath: string) => Promise<string>
   countChildren: (p: string) => Promise<number>
   getRootDir: () => Promise<string | null>
-  getLastOpenedKB: () => Promise<string | null>
-  setLastOpenedKB: (kbPath: string | null) => Promise<unknown>
 }
 
 // ===== FSB 实现 =====
@@ -104,9 +94,6 @@ const FSBImpl: FSB = {
   listChildren: (parentPath) => _call('fs:listChildren', parentPath) as Promise<FSBChildInfo[]>,
   mkDir: (dirPath, meta) => _call('fs:mkDir', dirPath, meta || {}) as Promise<string>,
   rmDir: (dirPath) => _call('fs:rmDir', dirPath),
-  saveKBOrder: (kbPath, order) => _call('fs:saveKBOrder', kbPath, order),
-  getKBCover: (kbPath) => _call('fs:getKBCover', kbPath) as Promise<FSBKBCover | null>,
-  saveKBCover: (kbPath, coverPath) => _call('fs:saveKBCover', kbPath, coverPath),
   renameKB: (kbPath, newName) => _call('fs:renameKB', kbPath, newName) as Promise<string>,
   readGraphMeta: (dirPath) => _call('fs:readGraphMeta', dirPath) as Promise<FSBGraphMeta>,
   writeGraphMeta: (dirPath, meta) => _call('fs:writeGraphMeta', dirPath, meta),
@@ -129,8 +116,6 @@ const FSBImpl: FSB = {
   importKB: (sourcePath) => _call('fs:importKB', sourcePath) as Promise<string>,
   countChildren: (p) => _call('fs:countChildren', p) as Promise<number>,
   getRootDir: () => _call('fs:getRootDir') as Promise<string | null>,
-  getLastOpenedKB: () => _call('fs:getLastOpenedKB') as Promise<string | null>,
-  setLastOpenedKB: (kbPath) => _call('fs:setLastOpenedKB', kbPath),
 }
 
 export { FSBImpl as FSB }

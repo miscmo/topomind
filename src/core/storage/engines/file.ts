@@ -216,26 +216,6 @@ export const fileStorageAdapter: StorageAdapterExtended = {
     await FSB.clearAll()
   },
 
-  // ===== StorageAdapterExtended: KB operations =====
-
-  setKnowledgeBaseOrder: async (kbRef: string, order: number) => {
-    await FSB.saveKBOrder(kbRef, order)
-  },
-
-  saveKnowledgeBaseCover: async (kbRef: string, coverPath: string | null) => {
-    await FSB.saveKBCover(kbRef, coverPath)
-  },
-
-  // ===== StorageAdapterExtended: Last opened KB =====
-
-  getLastOpenedKnowledgeBase: async () => {
-    return FSB.getLastOpenedKB()
-  },
-
-  setLastOpenedKnowledgeBase: async (kbPath: string | null) => {
-    await FSB.setLastOpenedKB(kbPath)
-  },
-
   // ===== StorageAdapterExtended: Card operations =====
 
   ensureCard: async (cardPath: string) => {

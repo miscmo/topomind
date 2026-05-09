@@ -7,10 +7,8 @@ import nodeFs from 'fs';
 import { dialog } from 'electron';
 
 // _config.json配置文件对象配置
-let _fs_config = { 
-  orders: [], 
-  covers: {}, 
-  defaultEdgeStyle: { 
+let _fs_config = {
+  defaultEdgeStyle: {
     lineMode: 'smoothstep', 
     lineStyle: 'solid', 
     color: '#7f8c8d', 
@@ -45,18 +43,15 @@ function _fs_loadAppConfig(dir) {
     if (nodeFs.existsSync(cfgPath)) {
       var loaded = JSON.parse(nodeFs.readFileSync(cfgPath, 'utf-8')) || {};
       _fs_config = {
-        lastOpenedKB: loaded.lastOpenedKB || null,
-        orders: (loaded.orders && typeof loaded.orders === 'object') ? loaded.orders : {},
-        covers: (loaded.covers && typeof loaded.covers === 'object') ? loaded.covers : {},
         defaultEdgeStyle: (loaded.defaultEdgeStyle && typeof loaded.defaultEdgeStyle === 'object')
           ? loaded.defaultEdgeStyle
           : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
       };
     } else {
-      _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+      _fs_config = { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
     }
   } catch (e) {
-    _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+    _fs_config = { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
   }
 }
 
@@ -165,7 +160,7 @@ function _fs_validateAbsolutePath(dir) {
 function createFileService() {
   return {
     readAppConfig: function() {
-      return _fs_readJsonFile(_fs_appConfigPath()) || { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+      return _fs_readJsonFile(_fs_appConfigPath()) || { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
     },
 
     writeAppConfig: function(content) {
@@ -174,22 +169,12 @@ function createFileService() {
         try { data = JSON.parse(content); } catch (e) { data = {}; }
       }
       _fs_config = {
-        lastOpenedKB: data.lastOpenedKB || null,
-        orders: (data.orders && typeof data.orders === 'object') ? data.orders : {},
-        covers: (data.covers && typeof data.covers === 'object') ? data.covers : {},
         defaultEdgeStyle: (data.defaultEdgeStyle && typeof data.defaultEdgeStyle === 'object')
           ? data.defaultEdgeStyle
           : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
       };
       _fs_saveAppConfig();
       return _fs_config;
-    },
-
-    getLastOpenedKB: function() { return _fs_config.lastOpenedKB || null; },
-
-    setLastOpenedKB: function(kbPath) {
-      _fs_config.lastOpenedKB = kbPath || null;
-      _fs_saveAppConfig();
     },
 
     createWorkDir: function(dirPath) {
@@ -201,7 +186,7 @@ function createFileService() {
       _fs_ensureDir(_fs_kbsDir(dir));
       _fs_ensureDir(_fs_logsDir(dir));
       _fs_rootDir = dir;
-      _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+      _fs_config = { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
       _fs_saveAppConfig();
       return { valid: true, nodePath: _fs_rootDir };
     },
@@ -249,7 +234,7 @@ function createFileService() {
       _fs_ensureDir(_fs_kbsDir());
       _fs_ensureDir(_fs_logsDir());
       if (!nodeFs.existsSync(_fs_appConfigPath())) {
-        _fs_config = { lastOpenedKB: null, orders: {}, covers: {}, defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+        _fs_config = { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
         _fs_saveAppConfig();
       }
       return { valid: true, nodePath: _fs_rootDir };
@@ -269,14 +254,9 @@ function createFileService() {
           var safeName = (childGraphEntry && typeof childGraphEntry.name === 'string' && childGraphEntry.name.trim())
             ? childGraphEntry.name.trim()
             : e.name;
-          var cover = 'images/cover.png';
-          var order = Number.isFinite(_fs_config.orders[childPath]) ? _fs_config.orders[childPath] : Infinity;
-          return { path: childPath, name: safeName, isDir: true, cover: cover, order: order };
+          return { path: childPath, name: safeName, isDir: true };
         });
       children.sort(function(a, b) {
-        var orderA = Number.isFinite(a.order) ? a.order : Infinity;
-        var orderB = Number.isFinite(b.order) ? b.order : Infinity;
-        if (orderA !== orderB) return orderA - orderB;
         return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
       });
       return children;
@@ -305,27 +285,6 @@ function createFileService() {
       if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
     },
 
-    saveKBOrder: function(kbPath, order) {
-      var relPath = nodePath.relative(_fs_kbsDir(), _fs_abs(kbPath)).split(nodePath.sep).join('/');
-      _fs_config.orders[relPath] = Number.isFinite(order) ? order : 0;
-      _fs_saveAppConfig();
-    },
-
-    getKBCover: function(kbPath) {
-      var relPath = nodePath.relative(_fs_kbsDir(), _fs_abs(kbPath)).split(nodePath.sep).join('/');
-      return _fs_config.covers[relPath] || null;
-    },
-
-    saveKBCover: function(kbPath, coverPath) {
-      var relPath = nodePath.relative(_fs_kbsDir(), _fs_abs(kbPath)).split(nodePath.sep).join('/');
-      if (coverPath) {
-        _fs_config.covers[relPath] = coverPath;
-      } else {
-        delete _fs_config.covers[relPath];
-      }
-      _fs_saveAppConfig();
-    },
-
     renameKB: function(kbPath, newName) {
       var d = _fs_abs(kbPath);
       if (!nodeFs.existsSync(d)) return null;
@@ -334,20 +293,10 @@ function createFileService() {
       var newDirName = _fs_uniqueFolderName(parentDir, newSafeName);
       var oldDirName = nodePath.basename(d);
       var newDir = nodePath.join(parentDir, newDirName);
-      var oldRelPath = nodePath.relative(_fs_kbsDir(), d).split(nodePath.sep).join('/');
       if (oldDirName !== newDirName) {
         nodeFs.renameSync(d, newDir);
       }
       var newRelPath = nodePath.relative(_fs_kbsDir(), newDir).split(nodePath.sep).join('/');
-      if (oldRelPath !== newRelPath) {
-        var orderVal = _fs_config.orders[oldRelPath];
-        delete _fs_config.orders[oldRelPath];
-        _fs_config.orders[newRelPath] = orderVal;
-        if (_fs_config.lastOpenedKB === oldRelPath) {
-          _fs_config.lastOpenedKB = newRelPath;
-        }
-        _fs_saveAppConfig();
-      }
       return newRelPath;
     },
 
@@ -492,15 +441,6 @@ function createFileService() {
       }
       copyDirRecursive(src, dest);
 
-      var existing = fileService.listChildren('');
-      var maxOrder = -1;
-      for (var i = 0; i < existing.length; i++) {
-        var o = existing[i].order;
-        if (Number.isFinite(o) && o > maxOrder) maxOrder = o;
-      }
-      var relDest = nodePath.relative(_fs_kbsDir(), dest).split(nodePath.sep).join('/');
-      _fs_config.orders[relDest] = maxOrder + 1;
-      _fs_saveAppConfig();
       return nodePath.relative(_fs_kbsDir(), dest).split(nodePath.sep).join('/');
     },
   };

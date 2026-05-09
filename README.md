@@ -120,7 +120,7 @@ pnpm run build:linux  # Linux (.AppImage)
 ### 数据文件格式
 
 - **`_graph.json`**: 存储 `children`（子目录映射）、`edges`（边）、`zoom`、`pan`、`canvasBounds`
-- **`_config.json`**: 存储 `lastOpenedKB`、`orders`（排序）、`covers`（封面）
+- **`_config.json`**: 存储应用配置
 
 ### 节点标识
 
@@ -161,9 +161,6 @@ pnpm run build:linux  # Linux (.AppImage)
 - `fs:listChildren`
 - `fs:mkDir`
 - `fs:rmDir`
-- `fs:saveKBOrder`
-- `fs:getKBCover`
-- `fs:saveKBCover`
 - `fs:renameKB`
 - `fs:readGraphMeta`
 - `fs:writeGraphMeta`
@@ -175,12 +172,9 @@ pnpm run build:linux  # Linux (.AppImage)
 - `fs:writeBlobFile`
 - `fs:readBlobFile`
 - `fs:clearAll`
-- `fs:openInFinder`
 - `fs:countChildren`
 - `fs:ensureCardDir`
 - `fs:getRootDir`
-- `fs:getLastOpenedKB`
-- `fs:setLastOpenedKB`
 - `fs:setWorkDir`
 - `fs:selectWorkDirCandidate`
 - `fs:createWorkDir`

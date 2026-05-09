@@ -156,9 +156,6 @@ function registerIPC() {
     return nodePath.relative(fileService.getRootDir(), abs);
   });
   ipcMain.handle('fs:rmDir', function(e, p) { fileService.rmDir(p); });
-  ipcMain.handle('fs:saveKBOrder', function(e, p, o) { fileService.saveKBOrder(p, o); });
-  ipcMain.handle('fs:getKBCover', function(e, p) { return fileService.getKBCover(p); });
-  ipcMain.handle('fs:saveKBCover', function(e, p, c) { fileService.saveKBCover(p, c); });
   ipcMain.handle('fs:renameKB', function(e, p, n) { return fileService.renameKB(p, n); });
   ipcMain.handle('fs:readGraphMeta', function(e, p) { return fileService.readGraphMeta(p); });
   ipcMain.handle('fs:writeGraphMeta', function(e, p, m) { fileService.writeGraphMeta(p, m); });
@@ -193,21 +190,6 @@ function registerIPC() {
   });
   ipcMain.handle('fs:writeAppConfig', function(e, content) {
     return fileService.writeAppConfig(content);
-  });
-  ipcMain.handle('fs:getLastOpenedKB', function() {
-    var kb = fileService.getLastOpenedKB();
-    LogService.write({
-      level: 'DEBUG', module: 'Main', action: 'fs:getLastOpenedKB',
-      message: '获取上次打开的知识库', params: { lastOpenedKB: kb },
-    });
-    return kb;
-  });
-  ipcMain.handle('fs:setLastOpenedKB', function(e, kbPath) {
-    fileService.setLastOpenedKB(kbPath);
-    LogService.write({
-      level: 'INFO', module: 'Main', action: 'fs:setLastOpenedKB',
-      message: '设置上次打开的知识库', params: { kbPath },
-    });
   });
   ipcMain.handle('fs:setWorkDir', function(e, dirPath) {
     var result = fileService.setWorkDir(dirPath);

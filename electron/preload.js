@@ -9,14 +9,12 @@ const ALLOWED_CHANNELS = new Set([
   // fs
   'fs:init', 'fs:listChildren', 'fs:mkDir', 'fs:rmDir',
   'fs:readGraphMeta', 'fs:writeGraphMeta', 'fs:getDir',
-  'fs:updateCardMeta', 'fs:saveKBOrder',
-  'fs:getKBCover', 'fs:saveKBCover', 'fs:renameKB',
+  'fs:updateCardMeta', 'fs:renameKB',
   'fs:readFile', 'fs:writeFile', 'fs:deleteFile',
   'fs:writeBlobFile', 'fs:readBlobFile', 'fs:clearAll',
   'fs:countChildren',
   'fs:ensureCardDir',
   'fs:getRootDir',
-  'fs:getLastOpenedKB', 'fs:setLastOpenedKB',
   'fs:readAppConfig', 'fs:writeAppConfig',
   'fs:setWorkDir', 'fs:selectWorkDirCandidate', 'fs:createWorkDir', 'fs:importKB',
   // git: basic

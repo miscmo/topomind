@@ -494,7 +494,7 @@ interface KBEdge {
 
 ```
 {工作目录}/
-├── _config.json                 # 应用配置（lastOpenedKB、orders、covers）
+├── _config.json                 # 应用配置
 ├── 知识库-A/
 │   ├── _graph.json              # children + edges + zoom + pan + canvasBounds
 │   ├── images/
@@ -932,9 +932,6 @@ return (
 | `fs:listChildren` | 列出子目录 |
 | `fs:mkDir` | 创建目录 |
 | `fs:rmDir` | 删除目录 |
-| `fs:saveKBOrder` | 保存 KB 排序 |
-| `fs:getKBCover` | 获取 KB 封面 |
-| `fs:saveKBCover` | 保存 KB 封面 |
 | `fs:renameKB` | 重命名 KB |
 | `fs:readGraphMeta` | 读取图元数据 |
 | `fs:writeGraphMeta` | 写入图元数据 |
@@ -946,12 +943,9 @@ return (
 | `fs:writeBlobFile` | 写入二进制文件 |
 | `fs:readBlobFile` | 读取二进制文件 |
 | `fs:clearAll` | 清除所有数据 |
-| `fs:openInFinder` | 在文件管理器中打开 |
 | `fs:countChildren` | 统计子节点数 |
 | `fs:ensureCardDir` | 确保卡片目录存在 |
 | `fs:getRootDir` | 获取根目录 |
-| `fs:getLastOpenedKB` | 获取上次打开的 KB |
-| `fs:setLastOpenedKB` | 设置上次打开的 KB |
 | `fs:setWorkDir` | 验证并设置工作目录 |
 | `fs:selectWorkDirCandidate` | 选择工作目录候选 |
 | `fs:createWorkDir` | 创建工作目录 |

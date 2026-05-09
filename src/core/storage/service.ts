@@ -8,9 +8,6 @@ import type { GraphMeta } from './adapter/graph'
 import type { KBListItem } from '../../types'
 
 interface VaultConfig {
-  lastOpenedKB?: string | null
-  orders?: Record<string, number>
-  covers?: Record<string, unknown>
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
   [key: string]: unknown
 }
@@ -33,9 +30,6 @@ function normalizeConfig(configRaw: unknown): VaultConfig {
   const c = (configRaw && typeof configRaw === 'object' && !Array.isArray(configRaw)) ? configRaw as Record<string, unknown> : {}
   const s = (c.defaultEdgeStyle && typeof c.defaultEdgeStyle === 'object' && !Array.isArray(c.defaultEdgeStyle)) ? c.defaultEdgeStyle as Record<string, unknown> : {}
   return {
-    lastOpenedKB: typeof c.lastOpenedKB === 'string' ? c.lastOpenedKB : null,
-    orders: (c.orders && typeof c.orders === 'object' && !Array.isArray(c.orders)) ? c.orders as Record<string, number> : {},
-    covers: (c.covers && typeof c.covers === 'object' && !Array.isArray(c.covers)) ? c.covers as Record<string, unknown> : {},
     defaultEdgeStyle: {
       lineMode: s.lineMode === 'straight' ? 'straight' : 'smoothstep',
       lineStyle: s.lineStyle === 'dashed' ? 'dashed' : 'solid',
@@ -83,7 +77,6 @@ export function createStore(adapter: StorageAdapterExtended) {
       const safeName = ensureValidName(name, '知识库名称')
       try {
         const kbInfo = await adapter.createKB('', safeName)
-        await adapter.setKnowledgeBaseOrder(kbInfo.ref, 0)
         return kbInfo.ref || safeName
       } catch (e) { logger.catch('Store.createKB', `创建知识库失败: ${name}`, e); throw e }
     },
@@ -91,9 +84,6 @@ export function createStore(adapter: StorageAdapterExtended) {
       try {
         await adapter.deleteKB({ ref: kbPath, name: '', coverRef: null })
       } catch (e) { logger.catch('Store.deleteKB', `删除知识库失败: ${kbPath}`, e); throw e }
-    },
-    async saveKBCover(kbPath: string, coverPath: string | null) {
-      try { await adapter.saveKnowledgeBaseCover(kbPath, coverPath) } catch (e) { logger.catch('Store.saveKBCover', `保存知识库封面失败: ${kbPath}`, e); throw e }
     },
     async renameKB(kbPath: string, newName: unknown) {
       const safeName = ensureValidName(newName, '知识库名称')
@@ -198,12 +188,6 @@ export function createStore(adapter: StorageAdapterExtended) {
     async getRootDir(): Promise<string | null> {
       try { return await adapter.getVaultRoot() } catch (e) { logger.catch('Store.getRootDir', '获取根目录失败', e); throw e }
     },
-    getLastOpenedKB() {
-      try { return adapter.getLastOpenedKnowledgeBase() } catch (e) { logger.catch('Store.getLastOpenedKB', '获取上次打开的知识库失败', e); throw e }
-    },
-    setLastOpenedKB(kbPath: string | null) {
-      try { return adapter.setLastOpenedKnowledgeBase(kbPath) } catch (e) { logger.catch('Store.setLastOpenedKB', `设置上次打开的知识库失败: ${kbPath}`, e); throw e }
-    },
     ensureCardDir(cardPath: string) {
       try { return adapter.ensureCard(cardPath) } catch (e) { logger.catch('Store.ensureCardDir', `确保目录存在失败: ${cardPath}`, e); throw e }
     },
@@ -253,10 +237,6 @@ const stubAdapter: StorageAdapterExtended = {
   setVault: async () => ({ valid: false, nodePath: null }),
   getVaultRoot: async () => null,
   clearVault: async () => undefined,
-  setKnowledgeBaseOrder: async () => undefined,
-  saveKnowledgeBaseCover: async () => undefined,
-  getLastOpenedKnowledgeBase: async () => null,
-  setLastOpenedKnowledgeBase: async () => undefined,
   ensureCard: async () => undefined,
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => undefined,
