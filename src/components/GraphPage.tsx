@@ -5,7 +5,7 @@
 import { memo } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useGraphPageController } from '../hooks/useGraphPageController'
-import { useNavContext } from '../hooks/useNavContext'
+import { getNavStateForTab } from '../hooks/useNavContext'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
 import { useResizePanel } from '../hooks/useResizePanel'
@@ -23,7 +23,6 @@ interface GraphPageProps {
 
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const { nav, graph } = useGraphPageController({ tabId })
-  const { getNavState } = useNavContext({ tabId })
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
   const rightPanelTab = useAppStore((s) => s.rightPanelTab)
@@ -42,7 +41,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   useKeyboard({
     tabId,
     onDelete: () => {
-      const { selectedNodeId } = getNavState()
+      const { selectedNodeId } = getNavStateForTab(tabId)
       if (!selectedNodeId) return
       deleteSelectedNode(selectedNodeId)
     },

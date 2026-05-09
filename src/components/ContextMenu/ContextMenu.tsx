@@ -66,8 +66,6 @@ export default memo(function ContextMenu({
   // Keyboard navigation: tracks focused item index among non-separator items
   const [focusedIndex, setFocusedIndex] = useState(-1)
 
-  if (!visible) return null
-
   const isEdge = type === 'edge'
   const isPane = type === 'pane'
   const paneTargetId = isPane ? '' : targetId
@@ -150,6 +148,7 @@ export default memo(function ContextMenu({
 
   // Reset focus to first item when menu opens
   useEffect(() => {
+    if (!visible) return
     setFocusedIndex(navigableItems.length > 0 ? 0 : -1)
   }, [visible, navigableItems.length])
 
@@ -162,6 +161,7 @@ export default memo(function ContextMenu({
 
   // Close on mousedown/contextmenu outside
   useEffect(() => {
+    if (!visible) return
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose()
@@ -173,10 +173,11 @@ export default memo(function ContextMenu({
       document.removeEventListener('mousedown', handler)
       document.removeEventListener('contextmenu', handler)
     }
-  }, [onClose])
+  }, [visible, onClose])
 
   // Close on scroll or resize
   useEffect(() => {
+    if (!visible) return
     const handler = () => onClose()
     window.addEventListener('scroll', handler, true)
     window.addEventListener('resize', handler)
@@ -184,10 +185,11 @@ export default memo(function ContextMenu({
       window.removeEventListener('scroll', handler, true)
       window.removeEventListener('resize', handler)
     }
-  }, [onClose])
+  }, [visible, onClose])
 
   // Keyboard: Escape closes, Arrow keys navigate, Enter activates
   useEffect(() => {
+    if (!visible) return
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -210,7 +212,7 @@ export default memo(function ContextMenu({
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [onClose, navigableItems, focusedIndex])
+  }, [visible, onClose, navigableItems, focusedIndex])
 
   // Adjust position to keep menu in viewport — x stays at 0 if it would go negative
   const adjustedX = Math.max(0, Math.min(x, window.innerWidth - menuSize.width))
@@ -219,6 +221,8 @@ export default memo(function ContextMenu({
 
   // Build index → position map so button refs can be focused
   const itemButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  if (!visible) return null
 
   return (
     <div

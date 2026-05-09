@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Background, ReactFlow, type BackgroundVariant, type Node, type NodeTypes } from '@xyflow/react'
 import { useAppStore } from '../stores/appStore'
 import { useContextMenu } from '../hooks/useContextMenu'
@@ -10,6 +10,7 @@ import type { KnowledgeNode } from '../types'
 import { logAction } from '../core/log-backend'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
+const RIGHT_DRAG_THRESHOLD = 6
 
 interface GraphCanvasProps {
   onEdgeContextMenu?: (edgeId: string, event: React.MouseEvent) => void
@@ -18,10 +19,14 @@ interface GraphCanvasProps {
 
 export default memo(function GraphCanvas({ onEdgeContextMenu, tabId }: GraphCanvasProps) {
   const showGrid = useAppStore((s) => s.showGrid)
+  const showContextMenu = useAppStore((s) => s.showContextMenu)
   const graph = useGraphContext()
   const { showCM, hideCM } = useContextMenu()
   const [zoomLevel, setZoomLevel] = useState(1)
   const lastLogTimeRef = useRef<number>(0)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const rightMouseDownRef = useRef<{ x: number; y: number } | null>(null)
+  const suppressNextPaneContextMenuRef = useRef(false)
 
   const logViewportChange = useCallback((viewport: { zoom: number; x: number; y: number }) => {
     setZoomLevel(viewport.zoom)
@@ -42,8 +47,75 @@ export default memo(function GraphCanvas({ onEdgeContextMenu, tabId }: GraphCanv
     onSingleClick: () => useAppStore.getState().clearSelection(),
   })
 
+  const isPaneTarget = useCallback((target: EventTarget | null) => {
+    const el = target instanceof Element ? target : null
+    if (!el) return false
+    if (el.closest('.react-flow__node, .react-flow__edge, .react-flow__handle')) return false
+    return !!canvasRef.current?.contains(el)
+  }, [])
+
+  const openPaneContextMenu = useCallback((x: number, y: number) => {
+    logAction('右键菜单:显示', 'GraphCanvas', { type: 'pane', x, y })
+    showContextMenu(x, y, 'pane', '__pane__')
+  }, [showContextMenu])
+
+  useEffect(() => {
+    const root = canvasRef.current
+    if (!root) return
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.button !== 2 || !isPaneTarget(e.target)) return
+      rightMouseDownRef.current = { x: e.clientX, y: e.clientY }
+    }
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button !== 2) return
+      const start = rightMouseDownRef.current
+      rightMouseDownRef.current = null
+      if (!start) return
+
+      const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
+      if (moved > RIGHT_DRAG_THRESHOLD) return
+
+      e.preventDefault()
+      e.stopPropagation()
+      suppressNextPaneContextMenuRef.current = true
+      openPaneContextMenu(e.clientX, e.clientY)
+    }
+
+    const handleContextMenu = (e: MouseEvent) => {
+      if (!isPaneTarget(e.target)) return
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (suppressNextPaneContextMenuRef.current) {
+        suppressNextPaneContextMenuRef.current = false
+        return
+      }
+
+      const start = rightMouseDownRef.current
+      rightMouseDownRef.current = null
+      if (start) {
+        const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
+        if (moved > RIGHT_DRAG_THRESHOLD) return
+      }
+
+      openPaneContextMenu(e.clientX, e.clientY)
+    }
+
+    root.addEventListener('mousedown', handleMouseDown, true)
+    window.addEventListener('mouseup', handleMouseUp, true)
+    root.addEventListener('contextmenu', handleContextMenu, true)
+    return () => {
+      root.removeEventListener('mousedown', handleMouseDown, true)
+      window.removeEventListener('mouseup', handleMouseUp, true)
+      root.removeEventListener('contextmenu', handleContextMenu, true)
+    }
+  }, [isPaneTarget, openPaneContextMenu])
+
   return (
-    <>
+    <div ref={canvasRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ReactFlow
         nodes={graph.nodes as Node[]}
         edges={graph.edges}
@@ -66,7 +138,6 @@ export default memo(function GraphCanvas({ onEdgeContextMenu, tabId }: GraphCanv
           if (edge) graph.onEdgeClick(e, edge)
         }}
         onPaneClick={handlePaneClick}
-        onPaneContextMenu={(e) => showCM('', e)}
         onEdgeContextMenu={(e, edge) => {
           if (edge) {
             onEdgeContextMenu?.(edge.id, e)
@@ -90,6 +161,6 @@ export default memo(function GraphCanvas({ onEdgeContextMenu, tabId }: GraphCanv
         )}
       </ReactFlow>
       <Toolbar zoomLevel={zoomLevel} />
-    </>
+    </div>
   )
 })

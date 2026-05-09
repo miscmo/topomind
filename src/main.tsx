@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { PlatformProvider } from './core/platform-context'
 import { StorageProvider } from './core/storage'
+import '@xyflow/react/dist/style.css'
 import './styles/base.css'
 import './styles/tokens.css'
 

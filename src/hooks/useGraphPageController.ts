@@ -16,8 +16,7 @@ export interface UseGraphPageControllerOptions {
 }
 
 export function useGraphPageController({ tabId }: UseGraphPageControllerOptions) {
-  const { getNavState } = useNavContext({ tabId })
-  const nav = getNavState()
+  const { nav } = useNavContext({ tabId })
   const graph = useGraph(tabId)
 
   usePageLogging({
