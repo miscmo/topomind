@@ -3,7 +3,7 @@
  * 业务层通过 useStorage() 调用，底层存储由 StorageAdapter 隔离。
  */
 import { logger } from '../logger'
-import type { StorageAdapterExtended } from './adapter'
+import type { StorageAdapter } from './adapter'
 import type { GraphMeta } from './adapter/graph'
 import type { KBListItem } from '../../types'
 
@@ -40,7 +40,7 @@ function ensureValidName(name: unknown, label = '名称'): string {
 }
 
 export interface DirEntry { path: string; name: string; isDir: boolean; order?: number }
-export function createStore(adapter: StorageAdapterExtended) {
+export function createStore(adapter: StorageAdapter) {
   const saveManager = new SaveManager()
   let cachedConfig: VaultConfig = normalizeConfig({})
   let cachedConfigTimestamp = 0
@@ -184,7 +184,7 @@ export function createStore(adapter: StorageAdapterExtended) {
 
 export type Store = ReturnType<typeof createStore>
 
-const stubAdapter: StorageAdapterExtended = {
+const stubAdapter: StorageAdapter = {
   createVault: async () => ({ ref: '' }),
   isValidVault: async () => false,
   getVaultInfo: async () => ({ ref: '' }),
@@ -205,7 +205,7 @@ const stubAdapter: StorageAdapterExtended = {
   writeCardMarkdown: async () => undefined,
   readAppConfig: async () => ({}),
   writeAppConfig: async () => undefined,
-} as unknown as StorageAdapterExtended
+} as unknown as StorageAdapter
 
 export const Store = createStore(stubAdapter)
 

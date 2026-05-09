@@ -1,6 +1,6 @@
-import type { StorageAdapterExtended } from '../adapter'
+import type { StorageAdapter } from '../adapter'
 
-export const sqliteStorageAdapter: StorageAdapterExtended = {
+export const sqliteStorageAdapter: StorageAdapter = {
   // IVaultStorage
   createVault: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   isValidVault: async () => false,
@@ -29,7 +29,7 @@ export const sqliteStorageAdapter: StorageAdapterExtended = {
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => { throw new Error('sqliteStorageAdapter not implemented') },
 
-  // StorageAdapterExtended
+  // IVaultStorage: App config
   readAppConfig: async () => ({}),
   writeAppConfig: async () => { throw new Error('sqliteStorageAdapter not implemented') },
 }

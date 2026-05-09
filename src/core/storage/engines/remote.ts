@@ -1,6 +1,6 @@
-import type { StorageAdapterExtended } from '../adapter'
+import type { StorageAdapter } from '../adapter'
 
-export const remoteStorageAdapter: StorageAdapterExtended = {
+export const remoteStorageAdapter: StorageAdapter = {
   // IVaultStorage
   createVault: async () => { throw new Error('remoteStorageAdapter not implemented') },
   isValidVault: async () => false,
@@ -29,7 +29,7 @@ export const remoteStorageAdapter: StorageAdapterExtended = {
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => { throw new Error('remoteStorageAdapter not implemented') },
 
-  // StorageAdapterExtended
+  // IVaultStorage: App config
   readAppConfig: async () => ({}),
   writeAppConfig: async () => { throw new Error('remoteStorageAdapter not implemented') },
 }

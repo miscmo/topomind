@@ -34,4 +34,17 @@ export interface IVaultStorage {
    * @returns The result of the removal
    */
   removeVault: (vaultRef: VaultRef) => Promise<void>
+
+  /**
+   * Read the app config of the vault
+   * @returns The app config
+   */
+  readAppConfig: () => Promise<unknown>
+
+  /**
+   * Write the app config of the vault
+   * @param content - The app config content
+   * @returns void
+   */
+  writeAppConfig: (content: unknown) => Promise<void>
 }

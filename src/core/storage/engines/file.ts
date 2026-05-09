@@ -1,5 +1,5 @@
 import { FSB } from '../../fs-backend'
-import type { CardInfo, GraphMeta, KBInfo, StorageAdapterExtended, VaultInfo } from '../adapter'
+import type { CardInfo, GraphMeta, KBInfo, StorageAdapter, VaultInfo } from '../adapter'
 import type { VaultRef } from '../adapter/vault'
 import type { KBRef } from '../adapter/kb'
 import type { CardRef } from '../adapter/card'
@@ -111,7 +111,7 @@ function convertGraphToFSB(meta: GraphMeta): {
   }
 }
 
-export const fileStorageAdapter: StorageAdapterExtended = {
+export const fileStorageAdapter: StorageAdapter = {
   // ===== Core StorageAdapter (IVaultStorage) =====
 
   createVault: async (vaultRef: VaultRef): Promise<VaultInfo> => {
@@ -212,7 +212,7 @@ export const fileStorageAdapter: StorageAdapterExtended = {
     await FSB.writeFile(`${cardPath}/_content.md`, content)
   },
 
-  // ===== StorageAdapterExtended: App config =====
+  // ===== Core StorageAdapter (IVaultStorage): App config =====
 
   readAppConfig: () => {
     return FSB.readAppConfig()

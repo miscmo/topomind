@@ -1,9 +1,9 @@
 import { fileStorageAdapter } from './engines/file'
-import type { StorageAdapterExtended } from './adapter'
+import type { StorageAdapter } from './adapter'
 
 export type StorageEngine = 'fs'
 
-export function createStorageAdapter(engine: StorageEngine = 'fs'): StorageAdapterExtended {
+export function createStorageAdapter(engine: StorageEngine = 'fs'): StorageAdapter {
   switch (engine) {
     case 'fs':
     default:
