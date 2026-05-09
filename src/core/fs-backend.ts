@@ -70,7 +70,7 @@ export interface FSB {
   writeAppConfig: (rootDir: string, content: unknown) => Promise<unknown>
   writeFile: (rootDir: string, filePath: string, content: string) => Promise<unknown>
   deleteFile: (rootDir: string, filePath: string) => Promise<unknown>
-  setWorkDir: (dirPath: string) => Promise<FSBResult>
+  isValidWorkDir: (dirPath: string) => Promise<FSBResult>
   selectDirectory: () => Promise<FSBResult>
   createWorkDir: (dirPath: string) => Promise<FSBResult>
   importKB: (rootDir: string, sourcePath: string) => Promise<string>
@@ -95,7 +95,7 @@ const FSBImpl: FSB = {
   writeFile: (rootDir, filePath, content) => _call('fs:writeFile', rootDir, filePath, content),
   deleteFile: (rootDir, filePath) => _call('fs:deleteFile', rootDir, filePath),
 
-  setWorkDir: (dirPath) => _call('fs:setWorkDir', dirPath) as Promise<FSBResult>,
+  isValidWorkDir: (dirPath) => _call('fs:isValidWorkDir', dirPath) as Promise<FSBResult>,
   selectDirectory: () => _call('fs:selectDirectory') as Promise<FSBResult>,
   createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath) as Promise<FSBResult>,
   importKB: (rootDir, sourcePath) => _call('fs:importKB', rootDir, sourcePath) as Promise<string>,

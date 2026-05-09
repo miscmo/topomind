@@ -128,7 +128,7 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
 
   isValidVault: async (vaultRef: VaultRef): Promise<boolean> => {
     try {
-      const result = await FSB.setWorkDir(vaultRef)
+      const result = await FSB.isValidWorkDir(vaultRef)
       return result.valid
     } catch {
       return false

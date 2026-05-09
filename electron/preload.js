@@ -13,7 +13,7 @@ const ALLOWED_CHANNELS = new Set([
   'fs:readFile', 'fs:writeFile', 'fs:deleteFile',
   'fs:countChildren',
   'fs:readAppConfig', 'fs:writeAppConfig',
-  'fs:setWorkDir', 'fs:selectDirectory', 'fs:createWorkDir', 'fs:importKB',
+  'fs:isValidWorkDir', 'fs:selectDirectory', 'fs:createWorkDir', 'fs:importKB',
   // git: basic
   'git:checkAvailable', 'git:init', 'git:status',
   'git:statusBatch', 'git:isDirty',

@@ -4,17 +4,10 @@
  */
 import nodePath from 'path';
 import nodeFs from 'fs';
-import { dialog } from 'electron';
 
-// _config.json配置文件对象配置
-let _fs_config = {
-  defaultEdgeStyle: {
-    lineMode: 'smoothstep', 
-    lineStyle: 'solid', 
-    color: '#7f8c8d', 
-    arrow: true 
-  } 
-};
+function _fs_defaultAppConfig() {
+  return { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+}
 
 // 返回dir/kbs知识库目录
 function _fs_kbsDir(dir) {
@@ -29,42 +22,6 @@ function _fs_logsDir(dir) {
 // 返回dir/_config.json配置文件路径
 function _fs_appConfigPath(dir) {
   return nodePath.join(dir, '_config.json');
-}
-
-/**
-* @description 加载根目录_config.json配置
-* @returns { void }
-* @param { string } dir: 工作目录路径
-* @throws { Error } 路径为相对路径时抛出错误
-*/
-function _fs_loadAppConfig(dir) {
-  try {
-    var cfgPath = _fs_appConfigPath(dir);
-    if (nodeFs.existsSync(cfgPath)) {
-      var loaded = JSON.parse(nodeFs.readFileSync(cfgPath, 'utf-8')) || {};
-      _fs_config = {
-        defaultEdgeStyle: (loaded.defaultEdgeStyle && typeof loaded.defaultEdgeStyle === 'object')
-          ? loaded.defaultEdgeStyle
-          : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
-      };
-    } else {
-      _fs_config = { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-    }
-  } catch (e) {
-    _fs_config = { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-  }
-}
-
-// TODO：这个函数感觉并不需要，保存应该做一个更通用的接口
-function _fs_saveAppConfig(dir) {
-  try {
-    _fs_ensureDir(dir);
-    _fs_ensureDir(_fs_kbsDir(dir));
-    _fs_ensureDir(_fs_logsDir(dir));
-    nodeFs.writeFileSync(_fs_appConfigPath(dir), JSON.stringify(_fs_config, null, 2), 'utf-8');
-  } catch (e) {
-    // 静默处理：配置保存失败不影响应用运行
-  }
 }
 
 function _fs_isDirEmpty(dirPath) {
@@ -157,10 +114,9 @@ function _fs_validateAbsolutePath(dir) {
   return nodePath.resolve(dir);
 }
 
-function createFileService() {
-  return {
+const fileService = {
     readAppConfig: function(rootDir) {
-      return _fs_readJsonFile(_fs_appConfigPath(rootDir)) || { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+      return _fs_readJsonFile(_fs_appConfigPath(rootDir)) || _fs_defaultAppConfig();
     },
 
     writeAppConfig: function(rootDir, content) {
@@ -168,13 +124,14 @@ function createFileService() {
       if (typeof content === 'string') {
         try { data = JSON.parse(content); } catch (e) { data = {}; }
       }
-      _fs_config = {
+      var config = {
         defaultEdgeStyle: (data.defaultEdgeStyle && typeof data.defaultEdgeStyle === 'object')
           ? data.defaultEdgeStyle
-          : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
+          : _fs_defaultAppConfig().defaultEdgeStyle,
       };
-      _fs_saveAppConfig(rootDir);
-      return _fs_config;
+      _fs_ensureDir(rootDir);
+      nodeFs.writeFileSync(_fs_appConfigPath(rootDir), JSON.stringify(config, null, 2), 'utf-8');
+      return config;
     },
 
     createWorkDir: function(dirPath) {
@@ -185,27 +142,10 @@ function createFileService() {
       _fs_ensureDir(dir);
       _fs_ensureDir(_fs_kbsDir(dir));
       _fs_ensureDir(_fs_logsDir(dir));
-      _fs_config = { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-      _fs_saveAppConfig(dir);
+      nodeFs.writeFileSync(_fs_appConfigPath(dir), JSON.stringify(_fs_defaultAppConfig(), null, 2), 'utf-8');
       return { valid: true, nodePath: dir };
     },
 
-
-    /**
-    * @description 选择工作目录候选者
-    * @returns { valid: boolean, nodePath: string | null, error?: string }
-    * @param { boolean } valid: 是否选择成功
-    * @param { string | null } nodePath: 选择的工作目录路径
-    * @param { string | null } error: 选择失败的原因
-    */
-    selectDirectory: function() {
-      var result = dialog.showOpenDialogSync({
-        title: '选择工作目录',
-        properties: ['openDirectory'],
-      });
-      if (!result || !result[0]) return { valid: false, nodePath: null, error: '已取消选择' };
-      return { valid: true, nodePath: nodePath.resolve(result[0]) };
-    },
 
     /** 
     * @description 设置工作目录：检查目录是否存在 -> 是否为有效工作目录 -> 加载根目录_config.json配置
@@ -215,7 +155,7 @@ function createFileService() {
     * @param { string | null } nodePath: 设置的工作目录路径
     * @param { string | null } error: 设置失败的原因
     */
-    setWorkDir: function(dirPath) {
+    isValidWorkDir: function(dirPath) {
       var dir = dirPath;
       if (!dir) {
         return { valid: false, nodePath: null, error: '工作目录路径为空' };      }
@@ -223,7 +163,6 @@ function createFileService() {
       if (!_fs_isValidWorkDir(dir)) {
         return { valid: false, nodePath: dir, error: '不是有效的工作目录' };
       }
-      _fs_loadAppConfig(dir);
       return { valid: true, nodePath: dir };
     },
 
@@ -249,8 +188,8 @@ function createFileService() {
       return children;
     },
 
-    mkDir: function(rootDir, dirPath, _meta, customRootDir) {
-      var parent = customRootDir ? nodePath.resolve(customRootDir) : _fs_kbsDir(rootDir);
+    mkDir: function(rootDir, dirPath, _meta) {
+      var parent = _fs_kbsDir(rootDir);
       _fs_ensureDir(parent);
       var segments = (dirPath || '').split('/').filter(Boolean);
       if (segments.length === 0) return parent;
@@ -386,10 +325,6 @@ function createFileService() {
       return nodePath.relative(_fs_kbsDir(rootDir), dest).split(nodePath.sep).join('/');
     },
   };
-}
 
-// Singleton instance — internal methods use this instead of re-creating via factory
-const fileService = createFileService();
-
-export { createFileService, fileService };
+export { fileService };
 export default fileService;

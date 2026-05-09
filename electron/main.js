@@ -16,6 +16,7 @@ import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import nodePath from 'path';
 import nodeFs from 'fs';
 import { fileService } from './file-service.js';
+import { dialogService } from './dialog-service.js';
 import { gitService } from './git-service.js';
 import { gitAuth } from './git-auth.js';
 import LogService from './log-service.js';
@@ -167,20 +168,20 @@ function registerIPC() {
   ipcMain.handle('fs:writeAppConfig', function(e, rootDir, content) {
     return fileService.writeAppConfig(rootDir, content);
   });
-  ipcMain.handle('fs:setWorkDir', function(e, dirPath) {
-    var result = fileService.setWorkDir(dirPath);
+  ipcMain.handle('fs:isValidWorkDir', function(e, dirPath) {
+    var result = fileService.isValidWorkDir(dirPath);
     if (result.valid) {
       LogService.clear();
       LogService.init(result.nodePath);
     }
     LogService.write({
-      level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:setWorkDir',
-      message: result.valid ? '工作目录已切换' : '工作目录切换失败', params: { dirPath, valid: result.valid, error: result.error || null },
+      level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:isValidWorkDir',
+      message: result.valid ? '工作目录校验成功' : '工作目录校验失败', params: { dirPath, valid: result.valid, error: result.error || null },
     });
     return result;
   });
   ipcMain.handle('fs:selectDirectory', function() {
-    var result = fileService.selectDirectory();
+    var result = dialogService.selectDirectory();
     LogService.write({
       level: 'INFO', module: 'Main', action: 'fs:selectDirectory',
       message: '文件对话框已关闭', params: { valid: result.valid, path: result.nodePath || null, error: result.error || null },
