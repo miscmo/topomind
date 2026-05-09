@@ -14,7 +14,7 @@ const root = createRoot(container)
 root.render(
   <StrictMode>
     <PlatformProvider>
-      <StorageProvider engine="fs">
+      <StorageProvider>
         <App />
       </StorageProvider>
     </PlatformProvider>

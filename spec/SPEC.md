@@ -928,7 +928,6 @@ return (
 
 | 通道 | 说明 |
 |------|------|
-| `fs:init` | 初始化工作目录 |
 | `fs:listChildren` | 列出子目录 |
 | `fs:mkDir` | 创建目录 |
 | `fs:rmDir` | 删除目录 |
@@ -941,8 +940,8 @@ return (
 | `fs:writeFile` | 写入文本文件 |
 | `fs:deleteFile` | 删除文件 |
 | `fs:countChildren` | 统计子节点数 |
-| `fs:setWorkDir` | 验证并设置工作目录 |
-| `fs:selectWorkDirCandidate` | 选择工作目录候选 |
+| `fs:isValidWorkDir` | 验证工作目录 |
+| `fs:selectDirectory` | 选择目录 |
 | `fs:createWorkDir` | 创建工作目录 |
 | `fs:importKB` | 导入知识库 |
 

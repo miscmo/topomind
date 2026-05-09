@@ -55,8 +55,10 @@ export function createStore(adapter: StorageAdapter) {
     },
     async isValidVault(dirPath: string) {
       try {
-        const valid = await adapter.isValidVault(dirPath)
-        return { valid, nodePath: valid ? dirPath : null, error: valid ? undefined : '不是有效的工作目录' }
+        const result = await adapter.isValidVault(dirPath)
+        const valid = result.valid
+        const error = result.error
+        return { valid, nodePath: valid ? dirPath : null, error: valid ? undefined : error || '不是有效的工作目录' }
       } catch (e) { logger.catch('Store.isValidVault', '校验 Vault 失败', e); throw e }
     },
     createWorkDir: async (dirPath: string) => {

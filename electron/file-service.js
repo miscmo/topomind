@@ -26,7 +26,7 @@ function _fs_appConfigPath(dir) {
 
 function _fs_isDirEmpty(dirPath) {
   try {
-    if (!nodeFs.existsSync(dirPath)) 
+    if (!nodeFs.existsSync(dirPath))
       return true;
     return nodeFs.readdirSync(dirPath).length === 0;
   } catch (e) { return false; }
@@ -34,19 +34,22 @@ function _fs_isDirEmpty(dirPath) {
 
 /**
 * @description 验证路径是否为有效工作目录：工作目录存在且为目录  -> 存在_config.json -> 存在kbs目录 -> 存在logs目录
-* @returns { boolean } 是否为有效工作目录
+* @returns { { valid: boolean, error?: string } } 工作目录校验结果
 * @param { string } dirPath: 工作目录路径
 * @throws { Error } 路径为相对路径时抛出错误
 */
 function _fs_isValidWorkDir(dirPath) {
   try {
-    return dirPath
-      && nodeFs.existsSync(dirPath)
-      && nodeFs.statSync(dirPath).isDirectory()
-      && nodeFs.existsSync(nodePath.join(dirPath, '_config.json'))
-      && nodeFs.existsSync(_fs_kbsDir(dirPath))
-      && nodeFs.existsSync(_fs_logsDir(dirPath));
-  } catch (e) { return false; }
+    if (!dirPath) return { valid: false, error: '工作目录路径为空' };
+    if (!nodeFs.existsSync(dirPath)) return { valid: false, error: '工作目录不存在' };
+    if (!nodeFs.statSync(dirPath).isDirectory()) return { valid: false, error: '工作目录路径不是文件夹' };
+    if (!nodeFs.existsSync(nodePath.join(dirPath, '_config.json'))) return { valid: false, error: '缺少工作目录配置文件 _config.json' };
+    if (!nodeFs.existsSync(_fs_kbsDir(dirPath))) return { valid: false, error: '缺少知识库目录 kbs' };
+    if (!nodeFs.existsSync(_fs_logsDir(dirPath))) return { valid: false, error: '缺少日志目录 logs' };
+    return { valid: true };
+  } catch (e) {
+    return { valid: false, error: e && e.message ? e.message : '工作目录校验失败' };
+  }
 }
 
 /**
@@ -55,7 +58,7 @@ function _fs_isValidWorkDir(dirPath) {
  * @returns { void }
  */
 function _fs_ensureDir(d) {
-  if (!nodeFs.existsSync(d)) 
+  if (!nodeFs.existsSync(d))
     nodeFs.mkdirSync(d, { recursive: true });
 }
 
@@ -146,22 +149,23 @@ const fileService = {
       return { valid: true, nodePath: dir };
     },
 
-
-    /** 
-    * @description 设置工作目录：检查目录是否存在 -> 是否为有效工作目录 -> 加载根目录_config.json配置
+    /**
+    * @description 校验工作目录：检查目录是否存在且为有效工作目录
     * @returns { valid: boolean, nodePath: string | null, error?: string }
     * @param { string } dirPath: 工作目录路径
-    * @param { boolean } valid: 是否设置成功
-    * @param { string | null } nodePath: 设置的工作目录路径
-    * @param { string | null } error: 设置失败的原因
+    * @param { boolean } valid: 是否校验成功
+    * @param { string | null } nodePath: 校验的工作目录路径
+    * @param { string | null } error: 校验失败的原因
     */
     isValidWorkDir: function(dirPath) {
       var dir = dirPath;
       if (!dir) {
-        return { valid: false, nodePath: null, error: '工作目录路径为空' };      }
+        return { valid: false, nodePath: null, error: '工作目录路径为空' };
+      }
       dir = _fs_validateAbsolutePath(dir);
-      if (!_fs_isValidWorkDir(dir)) {
-        return { valid: false, nodePath: dir, error: '不是有效的工作目录' };
+      var validation = _fs_isValidWorkDir(dir);
+      if (!validation.valid) {
+        return { valid: false, nodePath: dir, error: validation.error || '不是有效的工作目录' };
       }
       return { valid: true, nodePath: dir };
     },

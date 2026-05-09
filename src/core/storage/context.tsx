@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo } from 'react'
-import { createStorageAdapter, type StorageEngine } from './factory'
+import { createStorageAdapter } from './factory'
 import { createStore, type Store as StoreType } from './service'
 import type { StorageAdapter } from './adapter'
 import { useAppStore } from '../../stores/appStore'
@@ -8,12 +8,11 @@ const StorageContext = createContext<StoreType | null>(null)
 
 export interface StorageProviderProps {
   children: React.ReactNode
-  engine?: StorageEngine
   adapter?: StorageAdapter
 }
 
-export function StorageProvider({ children, engine = 'fs', adapter }: StorageProviderProps) {
-  const store = useMemo(() => createStore(adapter ?? createStorageAdapter(engine, () => useAppStore.getState().currentWorkDir)), [adapter, engine])
+export function StorageProvider({ children, adapter }: StorageProviderProps) {
+  const store = useMemo(() => createStore(adapter ?? createStorageAdapter(() => useAppStore.getState().currentWorkDir)), [adapter])
   return <StorageContext.Provider value={store}>{children}</StorageContext.Provider>
 }
 

@@ -6,6 +6,11 @@ export interface VaultInfo {
   updatedAt?: string
 }
 
+export interface VaultValidationResult {
+  valid: boolean
+  error?: string
+}
+
 export interface IVaultStorage {
   /**
    * Create a new vault
@@ -17,9 +22,9 @@ export interface IVaultStorage {
   /**
    * Check if the vault is valid
    * @param vaultRef - The root reference of the vault
-   * @returns boolean of validity
+   * @returns validation result
    */
-  isValidVault: (vaultRef: VaultRef) => Promise<boolean>
+  isValidVault: (vaultRef: VaultRef) => Promise<VaultValidationResult>
 
   /**
    * Get the information of the vault

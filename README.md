@@ -157,7 +157,6 @@ pnpm run build:linux  # Linux (.AppImage)
 与 Electron 主进程通信的通道（通过 `window.electronAPI.invoke`）：
 
 ### 文件系统
-- `fs:init`
 - `fs:listChildren`
 - `fs:mkDir`
 - `fs:rmDir`
@@ -170,8 +169,8 @@ pnpm run build:linux  # Linux (.AppImage)
 - `fs:writeFile`
 - `fs:deleteFile`
 - `fs:countChildren`
-- `fs:setWorkDir`
-- `fs:selectWorkDirCandidate`
+- `fs:isValidWorkDir`
+- `fs:selectDirectory`
 - `fs:createWorkDir`
 - `fs:importKB`
 
