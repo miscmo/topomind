@@ -1,6 +1,6 @@
 /**
  * 工具栏组件
- * 搜索、布局控制、缩放等
+ * 缩放和视图控制
  */
 import { memo, useCallback } from 'react'
 import { useReactFlow } from '@xyflow/react'

@@ -6,18 +6,24 @@
  */
 import type { Connection } from '@xyflow/react'
 import type { KnowledgeNode, KnowledgeEdge, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../../types'
+import type { GraphMeta } from '../../core/storage/adapter/graph'
 import { buildMetaFromNodesEdges } from './graphBuilder'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
+import {
+  createChildCard,
+  deleteCardAndPruneGraph,
+  renameCard as renameCardInService,
+} from '../../domain/card/cardService'
 
 export interface StorageApi {
   createCard: (parentPath: string, cardName: string) => Promise<string | null>
   deleteCard: (cardPath: string) => Promise<unknown>
   renameCard: (cardPath: string, newName: string) => Promise<unknown>
-  saveGraphDebounced: (dirPath: string, buildMeta: () => object, onFlush: () => void) => void
-  flushGraphSave: (dirPath: string, buildMeta: () => object, onFlush: () => void) => Promise<void>
-  readLayout: (dirPath: string) => Promise<{ nodes: Record<string, unknown>; edges: unknown[]; viewport: { zoom: number; pan: { x: number; y: number } } }>
-  writeLayout: (dirPath: string, meta: { nodes: Record<string, unknown>; edges: unknown[]; viewport: { zoom: number; pan: { x: number; y: number } } }) => Promise<void>
+  saveGraphDebounced: (dirPath: string, buildMeta: () => GraphMeta, onFlush: () => void) => Promise<void>
+  flushGraphSave: (dirPath: string, buildMeta: () => GraphMeta, onFlush: () => void) => Promise<void>
+  readLayout: (dirPath: string) => Promise<GraphMeta>
+  writeLayout: (dirPath: string, meta: GraphMeta) => Promise<void>
 }
 
 export interface GraphOpsDeps {
@@ -61,6 +67,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   const scheduleSave = (dirPath: string) => {
     if (!dirPath) return
+    setDirtyState(true)
     storage.saveGraphDebounced(
       dirPath,
       () => buildMetaFromNodesEdges(
@@ -73,6 +80,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   const saveNow = async (dirPath: string) => {
     if (!dirPath) return
+    setDirtyState(true)
     await storage.flushGraphSave(
       dirPath,
       () => buildMetaFromNodesEdges(
@@ -107,88 +115,20 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     isCreatingRef.current = true
 
     try {
-      const newPath = await storage.createCard(targetPath, name)
       const reloadPath = dirPath || getActiveNavState().kbPath || ''
+      const result = await createChildCard(storage, {
+        name,
+        parentRef: targetPath,
+        reloadRef: reloadPath,
+        nodesById: nodesMapRef.current,
+      })
       logAction('节点:创建', 'graphOperations', {
         nodeName: name,
         parentPath: targetPath,
-        newPath: newPath ?? null,
+        newPath: result.newRef ?? null,
         roomPath: nav.roomPath || null,
         kbPath: nav.kbPath || null,
         reloadPath: reloadPath || null,
-      })
-
-      // Update parent's _graph.json immediately so loadRoom discovers the new child.
-      // Without this, the parent's children map doesn't include the new entry,
-      // so buildNodes skips it and the node never appears on canvas.
-      // (The old e2e mock updated storedGraphMeta in fs:mkDir, but the real
-      // Electron backend only creates the directory — save is debounced 300ms later.)
-      const parentLayout = await storage.readLayout(targetPath).catch(() => ({
-        nodes: {} as Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }>,
-        edges: [] as KnowledgeEdge[],
-        viewport: { zoom: 1, pan: { x: 0, y: 0 } },
-      }))
-      const resolvedPath = (newPath ?? '').trim()
-      const cardKey = resolvedPath
-        ? (resolvedPath.split(/[/\\]/).pop() ?? resolvedPath)
-        : name
-      const nodesWithNew: Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }> = {
-        ...(parentLayout.nodes as Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }>),
-        [cardKey]: { id: cardKey, card: { ref: resolvedPath, name, updatedAt: undefined }, height: 150, width: 200 },
-      }
-      await storage.writeLayout(targetPath, {
-        ...parentLayout,
-        nodes: nodesWithNew,
-        edges: parentLayout.edges,
-      })
-
-      // Also update the current room's _graph.json so that when this room is
-      // displayed, buildNodes finds the child entry and the node appears on canvas.
-      // Two things must happen:
-      // 1. The parent's entry must have hasChildren: true (so it shows "1 child")
-      // 2. The new child entry must be added to the room's children map
-      //    (otherwise loadRoom never discovers it and the node count stays the same)
-      const currentRoomLayout = await storage.readLayout(reloadPath).catch(() => ({
-        nodes: {} as Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }>,
-        edges: [] as KnowledgeEdge[],
-        viewport: { zoom: 1, pan: { x: 0, y: 0 } },
-      }))
-      const roomNodesBase = currentRoomLayout.nodes as Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }>
-
-      // Find the parent's key in the room's nodes map.
-      // Keys are name-only (e.g. "父节点") at the room level, not full paths.
-      // Match by comparing normalized entry names against the parent's display name.
-      const parentName = nodesMapRef.current.get(targetPath)?.data.label ?? (targetPath.split(/[/\\]/).pop() ?? targetPath)
-      let parentEntryKey: string | null = null
-      for (const [key, value] of Object.entries(roomNodesBase)) {
-        const normalizedKey = key.includes('/') || key.includes('\\')
-          ? (key.split(/[/\\]/).pop() ?? key)
-          : key
-        const entry = value as { card?: { name?: string } }
-        if (normalizedKey === parentName || entry.card?.name === parentName || key === parentName) {
-          parentEntryKey = key
-          break
-        }
-      }
-
-      // Determine the child's key in the room's nodes map: name-only (e.g. "子节点A")
-      const childName = cardKey
-
-      const updatedRoomNodes: Record<string, { id: string; card: { ref: string; name: string; updatedAt?: number }; height: number; width: number }> = { ...roomNodesBase }
-      if (parentEntryKey && updatedRoomNodes[parentEntryKey]) {
-        updatedRoomNodes[parentEntryKey] = {
-          ...updatedRoomNodes[parentEntryKey],
-        }
-      }
-      // Add the new child entry (only if not already present)
-      if (!updatedRoomNodes[childName]) {
-        updatedRoomNodes[childName] = { id: childName, card: { ref: resolvedPath, name, updatedAt: undefined }, height: 150, width: 200 }
-      }
-
-      await storage.writeLayout(reloadPath, {
-        ...currentRoomLayout,
-        nodes: updatedRoomNodes,
-        edges: currentRoomLayout.edges,
       })
 
       await loadRoom(reloadPath, true)
@@ -198,7 +138,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
       // forever and test 6.2 ("保存后脏标记消失") times out.
       scheduleSave(getActiveNavState().roomPath)
 
-      return newPath
+      return result.newRef
     } catch (e) {
       isCreatingRef.current = false
       logger.catch('graphOperations', 'createChildNode', e)
@@ -219,13 +159,9 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     const dirPath = getActiveNavState().roomPath
     const currentRoomPath = dirPath || getActiveNavState().kbPath || ''
     try {
-      await storage.deleteCard(nodeId)
+      await deleteCardAndPruneGraph(storage, nodeId, nodesMapRef.current, edgesMapRef.current)
       logAction('节点:删除', 'graphOperations', { nodeId, label: nodeLabel, path: nodeId })
 
-      // Remove from nodesMapRef so saveNow doesn't re-write the stale entry to _graph.json.
-      nodesMapRef.current.delete(nodeId)
-
-      setDirtyState(true)
       if (dirPath) await saveNow(dirPath)
       await loadRoom(currentRoomPath)
       if (getActiveSelectedNodeId() === nodeId) {
@@ -241,7 +177,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
   const renameNode = async (nodeId: string, newName: string): Promise<boolean> => {
     const dirPath = getActiveNavState().roomPath
     try {
-      await storage.renameCard(nodeId, newName)
+      await renameCardInService(storage, nodeId, newName)
       const oldName = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
       logAction('节点:重命名', 'graphOperations', { nodeId, oldName, newName, path: nodeId })
       // Update node in local state without full reload

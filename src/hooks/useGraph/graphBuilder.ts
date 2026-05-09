@@ -9,8 +9,10 @@
 import type { KnowledgeNode, KnowledgeEdge } from '../../types'
 import { DOMAIN_COLORS } from '../../types'
 import type { GraphMeta } from '../../core/storage/adapter/graph'
-import type { CardInfo } from '../../core/storage/adapter/card'
 import type { useStorage } from '../useStorage'
+import { basenameRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
+import { graphMetaToRoomGraph, roomGraphToGraphMeta } from '../../domain/graph/graphMapper'
+import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph/model'
 
 const AUTO_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
@@ -43,22 +45,22 @@ export function buildMetaFromNodesEdges(
   edges: KnowledgeEdge[],
   viewport?: { zoom: number; pan: { x: number; y: number } } | null
 ): GraphMeta {
-  const metaNodes: Record<string, { id: string; card: CardInfo; height: number; width: number }> = {}
+  const roomNodes: RoomGraph['nodes'] = {}
   for (const node of nodes) {
-    const rawId = node.id.includes('/') ? (node.id.split('/').pop() ?? node.id) : node.id
-    metaNodes[node.id] = {
+    roomNodes[node.id] = {
       id: node.id,
-      card: { ref: node.id, name: node.data.label, updatedAt: undefined },
-      height: 150,
-      width: 200,
+      cardRef: node.id,
+      name: node.data.label,
+      position: node.position,
+      size: { width: 200, height: 150 },
     }
   }
-  const metaEdges = edges.map((e) => ({
+  const roomEdges: RoomGraphEdge[] = edges.map((e) => ({
     id: e.id,
-    source: { ref: e.source, name: '', updatedAt: undefined } as CardInfo,
-    target: { ref: e.target, name: '', updatedAt: undefined } as CardInfo,
-    relation: (e.data?.relation ?? '相关') as import('../../core/storage/adapter/graph').KBEdge['relation'],
-    weight: (e.data?.weight ?? 'minor') as import('../../core/storage/adapter/graph').KBEdge['weight'],
+    sourceRef: e.source,
+    targetRef: e.target,
+    relation: e.data?.relation ?? '相关',
+    weight: e.data?.weight ?? 'minor',
     lineMode: e.data?.lineMode ?? 'smoothstep',
     lineStyle: e.data?.lineStyle ?? 'solid',
     color: e.data?.color ?? '#7f8c8d',
@@ -66,11 +68,12 @@ export function buildMetaFromNodesEdges(
     highlighted: e.data?.highlighted ?? false,
     faded: e.data?.faded ?? false,
   }))
-  return {
-    nodes: metaNodes,
-    edges: metaEdges,
+  return roomGraphToGraphMeta({
+    roomRef: '',
+    nodes: roomNodes,
+    edges: roomEdges,
     viewport: viewport ?? { zoom: 1, pan: { x: 0, y: 0 } },
-  }
+  })
 }
 
 /**
@@ -84,12 +87,10 @@ export async function buildNodes(
   savedPositions: Record<string, { x: number; y: number }>,
   kbPath: string
 ): Promise<KnowledgeNode[]> {
-  const nodeEntries = Object.entries(meta.nodes)
-  const normalizedChildren = nodeEntries.map(([nodeId, kbNode]) => {
-    const rawChildName = nodeId.includes('/') || nodeId.includes('\\')
-      ? (nodeId.split(/[/\\]/).pop() ?? nodeId)
-      : nodeId
-    return [rawChildName, kbNode] as [string, { card: { name: string }; height: number; width: number }]
+  const roomGraph = graphMetaToRoomGraph(dirPath, meta)
+  const normalizedChildren = Object.values(roomGraph.nodes).map((roomNode) => {
+    const childPath = resolveRoomChildRef(dirPath, roomNode.cardRef || roomNode.id)
+    return [childPath, roomNode] as [string, RoomGraphNode]
   })
 
   const nodeCount = normalizedChildren.length
@@ -99,8 +100,7 @@ export async function buildNodes(
 
   // Parallelize child count checks
   const childCountResults = await Promise.all(
-    normalizedChildren.map(async ([childName]) => {
-      const childPath = dirPath ? `${dirPath}/${childName}` : childName
+    normalizedChildren.map(async ([childPath]) => {
       try {
         return await storage.countChildren(childPath)
       } catch {
@@ -109,14 +109,13 @@ export async function buildNodes(
     })
   )
 
-  return normalizedChildren.map(([childName, kbNode]: [string, { card: { name: string }; height: number; width: number }], i) => {
-    const childPath = dirPath ? `${dirPath}/${childName}` : childName
+  return normalizedChildren.map(([childPath, roomNode], i) => {
     const nodeId = childPath
     const childCount = childCountResults[i]
     const hasChildren = childCount > 0
     const domainColor = DOMAIN_COLORS[i % DOMAIN_COLORS.length]
     const saved = savedPositions[nodeId]
-    const position = saved ?? {
+    const position = roomNode.position ?? saved ?? {
       x: 50 + i * spacingX,
       y: 50 + i * spacingY,
     }
@@ -126,7 +125,7 @@ export async function buildNodes(
       type: 'knowledgeCard',
       position,
       data: {
-        label: kbNode.card.name,
+        label: roomNode.name || basenameRef(childPath),
         path: childPath,
         parent: dirPath || kbPath || undefined,
         hasChildren,
@@ -139,11 +138,12 @@ export async function buildNodes(
 }
 
 /** Build React Flow edges from graph metadata */
-export function buildEdges(meta: GraphMeta): KnowledgeEdge[] {
-  return meta.edges.map((e) => ({
+export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
+  const roomGraph = graphMetaToRoomGraph(dirPath, meta)
+  return roomGraph.edges.map((e) => ({
     id: e.id,
-    source: e.source.ref,
-    target: e.target.ref,
+    source: e.sourceRef,
+    target: e.targetRef,
     type: e.lineMode ?? 'smoothstep',
     animated: e.weight === 'main',
     style: {

@@ -7,6 +7,7 @@ interface KBNode {
   card: CardInfo
   height: number
   width: number
+  position?: { x: number; y: number }
 }
 
 export interface KBEdge {

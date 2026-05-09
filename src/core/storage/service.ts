@@ -6,17 +6,12 @@ import { logger } from '../logger'
 import type { StorageAdapter } from './adapter'
 import type { GraphMeta } from './adapter/graph'
 import type { KBListItem } from '../../types'
+import { SaveCoordinator } from '../../domain/persistence/saveCoordinator'
+import { normalizeGraphMeta } from '../../domain/graph/normalizeGraphMeta'
 
 interface VaultConfig {
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
   [key: string]: unknown
-}
-
-export class SaveManager {
-  private timers = new Map<string, ReturnType<typeof setTimeout>>()
-  setTimer(key: string, timer: ReturnType<typeof setTimeout>) { const old = this.timers.get(key); if (old) clearTimeout(old); this.timers.set(key, timer) }
-  clearTimer(key: string) { const timer = this.timers.get(key); if (timer) { clearTimeout(timer); this.timers.delete(key) } }
-  clearAll() { for (const timer of this.timers.values()) clearTimeout(timer); this.timers.clear() }
 }
 
 function normalizeName(name: unknown): string { return String(name || '').trim() }
@@ -41,7 +36,15 @@ function ensureValidName(name: unknown, label = '名称'): string {
 
 export interface DirEntry { path: string; name: string; isDir: boolean; order?: number }
 export function createStore(adapter: StorageAdapter) {
-  const saveManager = new SaveManager()
+  const layoutSaveCoordinator = new SaveCoordinator<GraphMeta>({
+    delayMs: 300,
+    save: async (kbPath, meta) => {
+      await adapter.writeCardLayout(kbPath, normalizeGraphMeta(meta))
+    },
+    onError: (error, kbPath) => {
+      logger.catch('Store.saveCoordinator', `保存布局失败: ${kbPath}`, error)
+    },
+  })
   let cachedConfig: VaultConfig = normalizeConfig({})
   let cachedConfigTimestamp = 0
   const CONFIG_CACHE_TTL = 30000
@@ -129,30 +132,21 @@ export function createStore(adapter: StorageAdapter) {
       try { await adapter.writeCardMarkdown(cardPath, content) } catch (e) { logger.catch('Store.writeMarkdown', `写入文档失败: ${cardPath}`, e); throw e }
     },
     writeLayout: async (kbPath: string, meta: GraphMeta) => {
-      try { await adapter.writeCardLayout(kbPath, meta) } catch (e) { logger.catch('Store.writeLayout', `写入布局失败: ${kbPath}`, e); throw e }
+      try { await adapter.writeCardLayout(kbPath, normalizeGraphMeta(meta)) } catch (e) { logger.catch('Store.writeLayout', `写入布局失败: ${kbPath}`, e); throw e }
     },
     readLayout: async (kbPath: string): Promise<GraphMeta> => {
-      try { return await adapter.readCardLayout(kbPath) } catch (e) { logger.catch('Store.readLayout', `读取布局失败: ${kbPath}`, e); throw e }
+      try { return normalizeGraphMeta(await adapter.readCardLayout(kbPath)) } catch (e) { logger.catch('Store.readLayout', `读取布局失败: ${kbPath}`, e); throw e }
     },
     async saveLayout(kbPath: string, meta: GraphMeta) {
-      try { await adapter.writeCardLayout(kbPath, meta) } catch (e) { logger.catch('Store.saveLayout', `保存布局失败: ${kbPath}`, e); throw e }
+      try { await adapter.writeCardLayout(kbPath, normalizeGraphMeta(meta)) } catch (e) { logger.catch('Store.saveLayout', `保存布局失败: ${kbPath}`, e); throw e }
     },
     saveGraphDebounced(kbPath: string, buildMetaFn: () => GraphMeta, onSaved?: () => void): Promise<void> {
       if (!kbPath) return Promise.resolve()
-      saveManager.clearTimer(kbPath)
-      return new Promise(resolve => {
-        const timer = setTimeout(async () => {
-          try { await store.saveLayout(kbPath, buildMetaFn()); onSaved?.() }
-          catch (e) { logger.catch('Store.saveGraphDebounced', `保存布局失败: ${kbPath}`, e) }
-          finally { resolve() }
-        }, 300)
-        saveManager.setTimer(kbPath, timer)
-      })
+      return layoutSaveCoordinator.schedule(kbPath, buildMetaFn, onSaved)
     },
     flushGraphSave(kbPath: string, buildMetaFn: () => GraphMeta, onSaved?: () => void): Promise<void> {
       if (!kbPath) return Promise.resolve()
-      saveManager.clearTimer(kbPath)
-      return store.saveLayout(kbPath, buildMetaFn()).then(() => onSaved?.())
+      return layoutSaveCoordinator.flush(kbPath, buildMetaFn, onSaved)
     },
     async importKB(sourcePath: string) {
       try {

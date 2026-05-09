@@ -86,6 +86,16 @@ function _fs_abs(rootDir, relPath) {
   return result;
 }
 
+function _fs_relativeToKbs(rootDir, absPath) {
+  return nodePath.relative(_fs_kbsDir(rootDir), absPath).split(nodePath.sep).join('/');
+}
+
+function _fs_kbRelativePath(relPath) {
+  var parts = String(relPath || '').split('/').filter(Boolean);
+  if (parts.length <= 1) return '';
+  return parts.slice(1).join('/');
+}
+
 function _fs_readJsonFile(filePath) {
   if (!nodeFs.existsSync(filePath)) return null;
   try { return JSON.parse(nodeFs.readFileSync(filePath, 'utf-8')); } catch (e) { return null; }
@@ -179,7 +189,7 @@ const fileService = {
         .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
         .map(function(e) {
           var childPath = parentPath ? parentPath + '/' + e.name : e.name;
-          var childGraphEntry = parentChildren[childPath];
+          var childGraphEntry = parentChildren[_fs_kbRelativePath(childPath)];
           var safeName = (childGraphEntry && typeof childGraphEntry.name === 'string' && childGraphEntry.name.trim())
             ? childGraphEntry.name.trim()
             : e.name;
@@ -206,7 +216,7 @@ const fileService = {
       if (!nodeFs.existsSync(_fs_graphFilePath(d))) {
         _fs_writeJsonFile(_fs_graphFilePath(d), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
       }
-      return d;
+      return _fs_relativeToKbs(rootDir, d);
     },
 
     rmDir: function(rootDir, dirPath) {
@@ -257,9 +267,10 @@ const fileService = {
       var graphPath = _fs_graphFilePath(parentDir);
       var graph = _fs_readJsonFile(graphPath) || { children: {}, edges: [] };
       var children = graph.children || {};
-      var entry = children[cardPath];
+      var key = _fs_kbRelativePath(cardPath);
+      var entry = children[key];
       if (entry) {
-        children[cardPath] = Object.assign({}, entry, { name: newName });
+        children[key] = Object.assign({}, entry, { name: newName });
         graph.children = children;
         _fs_writeJsonFile(graphPath, graph);
       }

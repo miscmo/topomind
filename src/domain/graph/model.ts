@@ -1,0 +1,55 @@
+import type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../../types'
+
+export interface GraphPoint {
+  x: number
+  y: number
+}
+
+export interface GraphSize {
+  width: number
+  height: number
+}
+
+export interface RoomGraphNode {
+  id: string
+  cardRef: string
+  name: string
+  position?: GraphPoint
+  size?: GraphSize
+}
+
+export interface RoomGraphEdge {
+  id: string
+  sourceRef: string
+  targetRef: string
+  relation: EdgeRelation
+  weight: EdgeWeight
+  lineMode?: EdgeLineMode
+  lineStyle?: EdgeLineStyle
+  color?: string
+  arrow?: boolean
+  highlighted?: boolean
+  faded?: boolean
+}
+
+export interface RoomGraphViewport {
+  zoom: number
+  pan: GraphPoint
+}
+
+export interface RoomGraph {
+  roomRef: string
+  nodes: Record<string, RoomGraphNode>
+  edges: RoomGraphEdge[]
+  viewport: RoomGraphViewport
+}
+
+export const DEFAULT_VIEWPORT: RoomGraphViewport = {
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+}
+
+export const DEFAULT_NODE_SIZE: GraphSize = {
+  width: 200,
+  height: 150,
+}

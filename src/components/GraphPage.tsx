@@ -1,6 +1,6 @@
 /**
  * 图谱页面：两栏布局
- * React Flow 图谱 + 右侧详情+样式配置+Git面板
+ * React Flow 图谱 + 右侧详情和样式配置
  */
 import { memo } from 'react'
 import { useAppStore } from '../stores/appStore'
@@ -37,7 +37,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     maxWidth: 800,
   })
   const { contextMenu, hideCM } = useContextMenu()
-  const { deleteSelectedNode, addChildNode, handleNewChild, handleRename, handleDelete, handleEdgeDelete, handleEdgeStyle, handleFocus, handleProperties } = useNodeActions({ graph, tabId })
+  const { deleteSelectedNode, addChildNode, handleNewChild, handleRename, handleDelete, handleEdgeDelete, handleEdgeStyle, handleFocus, handleProperties } = useNodeActions({ graph })
 
   useKeyboard({
     tabId,

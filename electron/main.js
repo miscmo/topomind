@@ -2,14 +2,12 @@
  * Electron 主进程入口
  *
  * 职责：
- * 1. 注册所有 IPC 通道（文件系统、Git、认证、日志、应用）
+ * 1. 注册所有 IPC 通道（文件系统、日志、应用）
  * 2. 管理窗口生命周期（主窗口、日志监控窗口）
  * 3. 构建应用菜单
  *
  * 所有业务逻辑委托给独立模块：
  *   - file-service.js   — 文件系统操作
- *   - git-service.js    — Git 操作
- *   - git-auth.js       — Git 认证（Token / SSH）
  *   - log-service.js     — 日志服务
  */
 import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
@@ -17,8 +15,6 @@ import nodePath from 'path';
 import nodeFs from 'fs';
 import { fileService } from './file-service.js';
 import { dialogService } from './dialog-service.js';
-import { gitService } from './git-service.js';
-import { gitAuth } from './git-auth.js';
 import LogService from './log-service.js';
 
 // 兼容生产运行、Playwright 直接启动 dist-electron/main.js、以及 dev 模式。
@@ -59,18 +55,6 @@ if (nodeFs.existsSync(E2E_ENV_FILE)) {
 // ============================================================
 // IPC HANDLERS
 // ============================================================
-
-/**
- * 将知识库相对路径解析为工作目录下的绝对路径。
- * 未传入路径时返回当前工作目录本身。
- *
- * @param {string} [kbPath] 知识库相对路径
- * @returns {string} 知识库绝对路径
- */
-function absKbPath(rootDir, kbPath) {
-  if (!kbPath) return rootDir;
-  return nodePath.resolve(rootDir, kbPath);
-}
 
 /**
  * 注册渲染进程与主进程之间的所有 IPC 通道。
@@ -268,71 +252,6 @@ function registerIPC() {
       event.returnValue = false;
     }
   });
-
-  // ----- Git handlers -----
-  ipcMain.handle('git:checkAvailable', function() {
-    return gitService.checkGitAvailable().then(function(available) { return { ok: true, available: available }; });
-  });
-  ipcMain.handle('git:init', function(e, rootDir, kbPath) { return gitService.initRepo(absKbPath(rootDir, kbPath)); });
-  ipcMain.handle('git:status', function(e, rootDir, kbPath) { return gitService.getStatus(absKbPath(rootDir, kbPath)); });
-  ipcMain.handle('git:statusBatch', function(e, rootDir, kbPaths) {
-    var absPaths = (kbPaths || []).map(function(p) { return absKbPath(rootDir, p); });
-    return gitService.getStatusBatch(absPaths)
-      .then(function(results) {
-        var out = {};
-        kbPaths.forEach(function(rel, i) { out[rel] = results[absPaths[i]] || { state: 'uninit', ahead: 0, behind: 0 }; });
-        return out;
-      });
-  });
-  ipcMain.handle('git:isDirty', function(e, rootDir, kbPath) {
-    return gitService.isDirty(absKbPath(rootDir, kbPath)).then(function(dirty) { return { ok: true, dirty: dirty }; });
-  });
-  ipcMain.handle('git:commit', function(e, rootDir, kbPath, message) { return gitService.commit(absKbPath(rootDir, kbPath), message); });
-  ipcMain.handle('git:diff', function(e, rootDir, kbPath, opts) { return gitService.getDiff(absKbPath(rootDir, kbPath), opts); });
-  ipcMain.handle('git:diffFiles', function(e, rootDir, kbPath, opts) { return gitService.getDiffFiles(absKbPath(rootDir, kbPath), opts); });
-  ipcMain.handle('git:log', function(e, rootDir, kbPath, opts) { return gitService.getLog(absKbPath(rootDir, kbPath), opts); });
-  ipcMain.handle('git:commitDiffFiles', function(e, rootDir, kbPath, hash) { return gitService.getCommitDiffFiles(absKbPath(rootDir, kbPath), hash); });
-  ipcMain.handle('git:commitFileDiff', function(e, rootDir, kbPath, hash, filePath) { return gitService.getCommitFileDiff(absKbPath(rootDir, kbPath), hash, filePath); });
-  ipcMain.handle('git:remote:get', function(e, rootDir, kbPath) { return gitService.getRemote(absKbPath(rootDir, kbPath)); });
-  ipcMain.handle('git:remote:set', function(e, rootDir, kbPath, url) { return gitService.setRemote(absKbPath(rootDir, kbPath), url); });
-  ipcMain.handle('git:fetch', function(e, rootDir, kbPath) {
-    return gitService.getRemote(absKbPath(rootDir, kbPath))
-      .then(function(r) { return gitAuth.buildGitEnv(kbPath, r.url || ''); })
-      .then(function(env) { return gitService.fetchRemote(absKbPath(rootDir, kbPath), env); });
-  });
-  ipcMain.handle('git:push', function(e, rootDir, kbPath) {
-    return gitService.getRemote(absKbPath(rootDir, kbPath))
-      .then(function(r) { return gitAuth.buildGitEnv(kbPath, r.url || ''); })
-      .then(function(env) { return gitService.push(absKbPath(rootDir, kbPath), env); });
-  });
-  ipcMain.handle('git:pull', function(e, rootDir, kbPath) {
-    return gitService.getRemote(absKbPath(rootDir, kbPath))
-      .then(function(r) { return gitAuth.buildGitEnv(kbPath, r.url || ''); })
-      .then(function(env) { return gitService.pull(absKbPath(rootDir, kbPath), env); });
-  });
-  ipcMain.handle('git:conflict:list', function(e, rootDir, kbPath) { return gitService.getConflictList(absKbPath(rootDir, kbPath)); });
-  ipcMain.handle('git:conflict:show', function(e, rootDir, kbPath, filePath) {
-    return gitService.getConflictContent(absKbPath(rootDir, kbPath), filePath)
-      .then(function(result) {
-        if (result.ok && !result.isBinary && filePath.endsWith('_graph.json')) {
-          var autoMerge = gitService.autoMergeMetaJson(result.ours, result.theirs);
-          result.autoMerge = autoMerge.ok ? autoMerge.merged : null;
-        }
-        return result;
-      });
-  });
-  ipcMain.handle('git:conflict:resolve', function(e, rootDir, kbPath, filePath, content) {
-    return gitService.resolveConflict(absKbPath(rootDir, kbPath), filePath, content);
-  });
-  ipcMain.handle('git:conflict:complete', function(e, rootDir, kbPath) {
-    return gitService.completeConflictResolution(absKbPath(rootDir, kbPath));
-  });
-
-  // ----- Git auth handlers -----
-  ipcMain.handle('git:auth:setToken', function(e, rootDir, kbPath, token) { return gitAuth.saveToken(kbPath, token); });
-  ipcMain.handle('git:auth:getSSHKey', function() { return gitAuth.getSSHPublicKey(); });
-  ipcMain.handle('git:auth:setAuthType', function(e, rootDir, kbPath, authType) { return gitAuth.setAuthType(kbPath, authType); });
-  ipcMain.handle('git:auth:getAuthType', function(e, rootDir, kbPath) { return gitAuth.getAuthType(kbPath); });
 
   // ----- Log handlers -----
   ipcMain.handle('log:write', function(e, entry) { return LogService.write(entry); });

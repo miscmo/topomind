@@ -36,7 +36,6 @@ TopoMind 是一个知识大脑工具，核心是**知识卡片房间**模型—�
 | Markdown | marked.js | 12.0.0 | Markdown → HTML 渲染 |
 | 持久化 | Node.js fs | 原生 | 纯文件系统存储（Electron 端） |
 | 桌面端 | Electron | 30.5.1 | 桌面应用壳 |
-| Git | simple-git | 3.35.2 | 知识库版本控制 |
 
 ---
 
@@ -51,7 +50,7 @@ topomind_cc/
 ├── SPEC.md                        # 本规范文档
 ├── README.md
 ├── electron/                      # Electron 桌面端
-│   ├── main.js                   # 主进程（合并版：窗口、菜单、IPC、文件服务、Git 服务）
+│   ├── main.js                   # 主进程（窗口、菜单、IPC、文件服务、日志服务）
 │   └── preload.js               # 预加载（contextBridge 暴露 IPC 白名单）
 └── src/
     ├── main.tsx                  # React 应用入口
@@ -60,23 +59,19 @@ topomind_cc/
     │   └── index.ts             # 全局 TypeScript 类型定义
     ├── stores/
     │   ├── appStore.ts          # 应用状态（view、selectedNodeId、edgeMode 等）
-    │   ├── roomStore.ts         # 房间状态（currentKBPath、currentRoomPath、roomHistory）
     │   ├── tabStore.ts          # 多知识库 Tab 管理（tabs、活跃 Tab、脏状态、每 Tab 房间状态）
     │   ├── confirmStore.ts      # Confirm 弹窗（Promise-based 替代 window.confirm）
     │   ├── promptStore.ts       # Prompt 弹窗（Promise-based 替代 window.prompt）
-    │   ├── gitStore.ts          # Git 状态（token、authType、SSHKey）
     │   └── monitorStore.ts      # 日志/性能监控窗口状态
     ├── core/                     # 核心工具层（Electron IPC 桥接）
     │   ├── fs-backend.ts        # IPC 桥接（调用 window.electronAPI）
     │   ├── storage.ts           # 统一存储适配器（业务层唯一入口）
-    │   ├── git-backend.ts       # Git 后端（缓存 + 批处理）
     │   ├── logger.ts            # 日志工具（logger.catch 记录带堆栈的异常）
     │   └── log-backend.ts       # 日志 IPC 桥接（读写主进程日志服务）（业务层唯一入口）
     ├── hooks/
     │   ├── useGraph.ts          # 图谱引擎（房间加载、节点/边 CRUD、布局保存、交互事件）
     │   ├── useLayout.ts         # ELK 布局封装
     │   ├── useStorage.ts        # 存储层 hook（封装 FSB）
-    │   ├── useGit.ts            # Git 操作 hook
     │   ├── useKeyboard.ts       # 快捷键处理（Esc/Tab/Delete/Backspace）
     │   └── useContextMenu.ts    # 右键菜单逻辑
     ├── nodes/
@@ -111,15 +106,9 @@ topomind_cc/
     │   ├── Toolbar/             # 工具栏
     │   │   ├── Toolbar.tsx
     │   │   └── Toolbar.module.css
-    │   ├── SearchBar/           # 搜索框
-    │   │   ├── SearchBar.tsx
-    │   │   └── SearchBar.module.css
     │   ├── ContextMenu/         # 右键菜单
     │   │   ├── ContextMenu.tsx
     │   │   └── ContextMenu.module.css
-    │   └── GitPanel/           # Git 状态面板（底部弹出）
-    │       ├── GitPanel.tsx
-    │       └── GitPanel.module.css
     │   └── MonitorPage/        # 日志性能监控窗口（独立页面）
     │       ├── MonitorPage.tsx
     │       └── MonitorPage.module.css
@@ -281,7 +270,6 @@ interface KBEdge {
   - 顶部居中：标题栏（当前房间名或应用名称）
   - 标题下方：面包屑导航（仅在房间内显示）
   - 左上角：关系图例（演进绿/依赖橙/相关灰虚线）
-  - 右上角：搜索输入框
   - 左下角：缩放百分比指示器
   - 右下角：缩放控制按钮组（＋/－/⊡）
   - 底部居中：工具栏
@@ -372,7 +360,7 @@ interface KBEdge {
 
 | 按键 | 前提条件 | 效果 |
 |------|---------|------|
-| `Escape` | 任何时候 | 关闭所有模态框；取消连线模式；清空搜索；关闭详情面板收起；输入框失焦 |
+| `Escape` | 任何时候 | 关闭所有模态框；取消连线模式；关闭详情面板收起；输入框失焦 |
 | `Tab` | 有选中节点，不在输入框/模态框中 | 弹出输入框为选中节点添加子概念 |
 | `Delete` | 有选中节点，不在输入框/模态框中 | 弹出删除确认，删除选中节点 |
 | `Backspace` | 有选中节点，不在输入框/模态框中 | 同 Delete — 弹出删除确认，删除选中节点 |
@@ -408,7 +396,6 @@ interface KBEdge {
 | ⤯ 连线 | 进入连线模式（以选中节点为源，依次点击源→目标） |
 | ⊞ 网格 | 切换网格背景显示/隐藏 |
 | ↺ 重置 | 清除所有保存数据，恢复默认（带确认） |
-| Git | 展开/收起 Git 状态面板 |
 
 #### 缩放控制按钮
 
@@ -442,13 +429,6 @@ interface KBEdge {
 - 选择本地已有知识库目录
 - 操作：取消 / 导入
 
-#### 设置面板
-
-- 字段：Git Token、认证类型选择
-- 操作：保存 / 取消
-
----
-
 ### 5.8 Markdown 详情
 
 每个卡片的 Markdown 文档渲染：
@@ -467,18 +447,7 @@ interface KBEdge {
 
 ---
 
-### 5.9 搜索功能
-
-- 位于图谱面板右上角
-- 实时搜索（`input` 事件触发）
-- 搜索范围：节点 `label` 和目录名
-- 匹配方式：大小写不敏感子串匹配
-- 匹配节点添加高亮边框
-- 清空输入 / 按 Esc 移除高亮
-
----
-
-### 5.10 网格背景系统
+### 5.9 网格背景系统
 
 - **实现**：React Flow 内置 `<Background>` 组件
 - **网格样式**：点阵 dots，间距 20px，大小 1px，颜色 `#c8cdd6`
@@ -486,7 +455,7 @@ interface KBEdge {
 
 ---
 
-### 5.11 持久化存储（纯文件系统）
+### 5.10 持久化存储（纯文件系统）
 
 #### 存储架构
 
@@ -516,7 +485,7 @@ interface KBEdge {
 | `src/core/fs-backend.ts` | IPC 桥接层，通过 `window.electronAPI.invoke()` 调用 Electron 主进程 |
 | `src/core/storage.ts` | 统一存储适配器，业务层唯一入口。封装 FSB 调用，添加校验、防抖、Blob URL 管理 |
 | `src/core/log-backend.ts` | 日志 IPC 桥接。封装日志读写、实时订阅、`logAction` 快捷构造器 |
-| `electron/main.js` | 主进程实现，包含文件服务（Node.js fs）、Git 服务（simple-git）和日志服务（LogService） |
+| `electron/main.js` | 主进程实现，包含文件服务（Node.js fs）和日志服务（LogService） |
 
 #### 保存触发时机
 
@@ -536,60 +505,11 @@ interface KBEdge {
 | 场景 | 方式 |
 |------|------|
 | 拷贝到另一台电脑 | 整个工作目录拷贝 → 打开 TopoMind → 选择该目录 |
-| Git 版本管理 | 对工作目录 `git init`，内置 Git 支持 |
 | 网盘同步 | 工作目录放在 iCloud/OneDrive 中 |
 
 ---
 
-### 5.12 Git 版本控制
-
-内置 Git 支持（通过 `simple-git`），允许对知识库进行版本管理。
-
-#### Git 功能
-
-- 初始化仓库（init）
-- 状态查看（status）
-- 批量状态查询（statusBatch，并发 3 个）
-- 脏检测（isDirty）
-- 提交变更（commit）
-- 查看日志（log）
-- 查看差异（diff）
-- 文件差异（diffFiles）
-- 推送（push）/ 拉取（pull）/ 获取（fetch）
-- 远程管理（remote get/set）
-- 冲突检测与解决（conflict list/show/resolve/complete）
-- 认证管理（token / SSH key）
-
-#### 认证方式
-
-支持两种认证方式（通过 `git:auth:setAuthType` 设置）：
-
-- **Token 认证**：通过 `git:auth:setToken` 设置 GitHub/Gitea token
-- **SSH 密钥**：通过 `git:auth:getSSHKey` 获取应用生成的 SSH 公钥
-
-#### Git 面板 UI
-
-Git 面板是底部弹出的可折叠面板，通过工具栏 Git 按钮展开/收起。面板结构：
-
-- **标题栏**：左侧显示 "Git" 标签 + 状态徽章（修改数/未跟踪数/已删除数） + 工作状态指示器（● dirty / ✓ clean）；右侧显示远程 URL + 操作按钮组（Fetch / Pull / Push / Commit）
-- **状态徽章**：修改数（橙）、未跟踪数（绿）、已删除数（红）
-- **提交框**（点击 Commit 按钮展开）：显示变更文件列表 + 提交信息 textarea + 确认/取消按钮
-- **按钮状态**：无远程仓库时 Fetch/Pull/Push 禁用；无变更时 Commit 禁用；操作进行中所有按钮禁用
-
-#### Git 功能列表
-
-| 按钮 | 功能 |
-|------|------|
-| ↓ Fetch | 获取远程引用（不合并） |
-| ↓ Pull | 拉取远程变更并合并 |
-| ↑ Push | 推送本地提交到远程 |
-| ✓ Commit | 展开提交框，输入提交信息后确认提交 |
-
----
-
----
-
-### 5.13 缩放联动显示规则
+### 5.11 缩放联动显示规则
 
 | 缩放级别 | 显示内容 |
 |----------|----------|
@@ -599,7 +519,7 @@ Git 面板是底部弹出的可折叠面板，通过工具栏 Git 按钮展开/�
 
 ---
 
-### 5.14 日志与性能监控系统
+### 5.12 日志与性能监控系统
 
 通过 Electron 菜单「视图 → 日志性能监控」打开独立的监控窗口。
 
@@ -685,7 +605,6 @@ interface LogEntry {
 | 边框 | `#e0e4ea` / `#e8ecf0` | 分割线 |
 | 危险色 | `#e74c3c` | 删除按钮 |
 | 成功色 | `#2ecc71` | 保存指示器 |
-| 搜索匹配 | `#f1c40f` | 搜索高亮 |
 | 悬停高亮 | `#f39c12` | 节点悬停边框 |
 | 演进边色 | `#5cb85c` | 演进关系 |
 | 依赖边色 | `#e8913a` | 依赖关系 |
@@ -707,7 +626,7 @@ interface LogEntry {
 
 ### 6.4 交互效果
 
-- 毛玻璃：`backdrop-filter:blur(6px)` + 半透明白（标题、工具栏、图例、搜索、面包屑）
+- 毛玻璃：`backdrop-filter:blur(6px)` + 半透明白（标题、工具栏、图例、面包屑）
 - 过渡动画：节点属性 0.3s、按钮 hover 0.12~0.15s
 - 节点阴影：微阴影增加层次
 - 模态框遮罩：`backdrop-filter:blur(2px)` + 半透明黑
@@ -748,7 +667,6 @@ interface LogEntry {
 | 叶子节点（hasChildren=false） | 深色填充 + 白色文字 |
 | 选中 | 蓝色 `#3498db` 边框 |
 | 悬停 | 橙色边框 |
-| 高亮搜索匹配 | 金黄色边框 |
 | 淡化 | 透明度降低 |
 | 房间活动（父容器） | 完全透明不可交互 |
 
@@ -777,69 +695,71 @@ interface LogEntry {
 
 ### 8.1 appStore
 
+`appStore` 只管理应用级状态，不承载 KB 房间导航状态。
+
 | 状态/动作 | 类型 | 说明 |
 |----------|------|------|
-| `view` | `'setup' \| 'home' \| 'graph'` | 当前视图 |
+| `view` | `'setup' \| 'workspace'` | 当前应用级页面 |
 | `selectedNodeId` | `string \| null` | 当前选中节点 ID |
 | `edgeMode` | `boolean` | 是否处于连线模式 |
 | `edgeModeSourceId` | `string \| null` | 连线模式的源节点 ID |
-| `autoIdCounter` | `number` | 自动 ID 计数器 |
-| `showGrid` | `boolean` | 是否显示网格背景 |
-| `searchQuery` | `string` | 搜索关键词 |
 | `rightPanelCollapsed` | `boolean` | 右侧面板是否折叠 |
 | `rightPanelWidth` | `number` | 右侧面板宽度 |
-| `autoId()` | action | 生成唯一节点 ID |
-| `showGraph()` | action | 进入图谱视图 |
-| `showHome()` | action | 返回首页 |
+| `contextMenu` | `object` | 全局右键菜单状态 |
+| `kbRefreshTrigger` | `number` | KB 列表刷新触发器 |
+| `showGrid` | `boolean` | 是否显示网格背景 |
+| `rightPanelTab` | `'detail' | 'style'` | 右侧面板当前 Tab |
+| `currentWorkDir` | `string \| null` | 当前工作目录 |
+| `selectedEdgeId` | `string \| null` | 当前选中的连线 ID |
+| `defaultEdgeStyle` | `object` | 默认连线样式 |
+| `showWorkspace()` | action | 进入工作区 |
+| `showSetup()` | action | 返回设置页 |
 | `selectNode(nodeId)` | action | 选中节点 |
-| `clearSelection()` | action | 取消选中 |
+| `clearSelection()` | action | 取消选中并退出连线模式 |
 | `enterEdgeMode(sourceId)` | action | 进入连线模式 |
 | `exitEdgeMode()` | action | 退出连线模式 |
+| `toggleGrid()` | action | 切换网格背景 |
+| `setCurrentWorkDir(workDir)` | action | 设置当前工作目录 |
 
-### 8.2 roomStore（vanilla store 模式，支持 `getState()` 外部访问）
+### 8.2 tabStore（多知识库 Tab 管理 + 每 Tab 房间状态）
 
-| 状态/动作 | 类型 | 说明 |
-|----------|------|------|
-| `currentKBPath` | `string` | 当前知识库路径 |
-| `currentRoomPath` | `string` | 当前房间路径（null = 全局） |
-| `roomHistory` | `RoomHistory[]` | 房间历史栈 |
-| `enterRoom({ path, kbPath, name })` | action | 进入房间 |
-| `goBack()` | action | 返回上一层 |
-| `goToRoom(item)` | action | 跳转到历史栈中的指定房间 |
-| `setCurrentKB(path)` | action | 设置当前 KB |
-
-### 8.3 tabStore（多知识库 Tab 管理 + 每 Tab 房间状态持久化）
+`tabStore` 是工作区内部页面和 KB 房间导航状态的唯一来源。主页是 `home` Tab；每个 KB 使用 `kb:{kbPath}` Tab。
 
 | 状态/动作 | 类型 | 说明 |
 |----------|------|------|
 | `tabs` | `Tab[]` | Tab 列表（home + KB tabs） |
 | `activeTabId` | `string` | 当前活跃 Tab ID |
 | `initHomeTab()` | action | 初始化主页 Tab |
-| `addTab(tab)` | action | 添加新 Tab |
+| `addKBTab(tab)` | action | 新增 KB Tab，并初始化房间状态 |
 | `removeTab(tabId)` | action | 移除 Tab（排除 home） |
 | `setActiveTab(tabId)` | action | 切换活跃 Tab |
 | `setTabDirty(tabId, isDirty)` | action | 设置脏状态 |
 | `getActiveTab()` | action | 获取当前活跃 Tab |
-| `saveRoomStateToTab(tabId, roomState)` | action | 保存房间导航状态到 Tab |
-| `getRoomStateFromTab(tabId)` | action | 从 Tab 恢复房间导航状态 |
+| `getTabById(tabId)` | action | 根据 ID 获取 Tab |
+| `restoreRoomStateToTab(tabId, roomState)` | action | 恢复指定 Tab 的房间状态 |
+| `enterRoomInTab(tabId, room)` | action | 在指定 Tab 内进入房间 |
+| `goBackInTab(tabId)` | action | 在指定 Tab 内返回上一层 |
+| `navigateToHistoryIndexInTab(tabId, index)` | action | 在指定 Tab 内跳转到历史层级 |
+| `getRoomStateFromTab(tabId)` | action | 读取指定 Tab 的房间状态快照 |
+| `setTabSelectedNode(tabId, nodeId)` | action | 设置指定 Tab 的选中节点 |
+| `getTabSelectedNode(tabId)` | action | 读取指定 Tab 的选中节点 |
 
 **Tab 接口**：
 ```typescript
 interface Tab {
-  id: string                    // 'home' 或 'kb:{kbPath}'
-  type: 'home' | 'kb'          // Tab 类型
-  label: string                // 显示标签
-  kbPath?: string             // 知识库路径（type='kb' 时）
-  isDirty: boolean           // 是否有未保存的更改
-  roomHistory?: RoomHistoryItem[]  // 房间导航历史
-  currentRoomPath?: string        // 当前房间路径
-  currentRoomName?: string      // 当前房间名称
+  id: string
+  type: 'home' | 'kb'
+  label: string
+  isDirty: boolean
+  kbPath?: string
+  roomHistory?: RoomHistoryItem[]
+  currentRoomPath?: string | null
+  currentRoomName?: string
+  selectedNodeId?: string | null
 }
 ```
 
-**每 Tab 房间状态持久化**：切换 Tab 时自动保存当前房间导航状态（roomHistory、currentRoomPath、currentRoomName）到 tabStore，切换回来时恢复，实现独立的房间导航历史。
-
-### 8.4 confirmStore（Promise-based confirm 替代 window.confirm）
+### 8.3 confirmStore（Promise-based confirm 替代 window.confirm）
 
 | 状态/动作 | 类型 | 说明 |
 |----------|------|------|
@@ -851,23 +771,7 @@ interface Tab {
 | `confirm()` | action | 确认（resolve true） |
 | `cancel()` | action | 取消（resolve false） |
 
-```typescript
-// 使用示例
-const confirmed = await confirmOpen({
-  title: '关闭知识库',
-  message: '有未保存的更改，是否确认关闭？'
-})
-```
-
-### 8.5 gitStore
-
-| 状态/动作 | 类型 | 说明 |
-|----------|------|------|
-| `token` | `string` | Git 认证 Token |
-| `authType` | `'token' \| 'ssh'` | 认证类型 |
-| `SSHKey` | `string` | SSH 公钥 |
-
-### 8.6 GraphContext
+### 8.4 GraphContext
 
 `GraphContext` 是图谱状态的单例共享机制，避免多个 `useGraph()` 调用导致状态碎片化。
 
@@ -892,16 +796,15 @@ const confirmed = await confirmOpen({
 | `renameNode` | `(nodeId, newName) => Promise<boolean>` | 重命名节点 |
 | `updateEdgeRelation` | `(edgeId, relation, weight) => void` | 更新边关系 |
 | `layoutNodes` | `(direction?) => Promise<void>` | 执行布局 |
-| `highlightSearch` | `(query) => void` | 高亮搜索匹配 |
+| `flushCurrentRoomSave` | `() => Promise<void>` | 立即保存当前房间 |
 
 **重要**：所有需要访问图谱状态的组件必须使用 `useGraphContext()` 而非直接调用 `useGraph()`。`GraphContextProvider` 在 `GraphPage` 根级别挂载，单次调用 `useGraph()` 实例后通过 Context 共享。
 
-### 8.7 ReactFlowProvider 放置原则
+### 8.5 ReactFlowProvider 放置原则
 
-⚠️ **重要**：`ReactFlowProvider` 必须位于 `App.tsx` 根级别，包裹所有视图组件。
+`ReactFlowProvider` 必须位于 `App.tsx` 根级别，包裹所有视图组件。
 
 ```tsx
-// App.tsx - Tab-based routing
 return (
   <ReactFlowProvider>
     {isSetup && <SetupPage />}
@@ -945,34 +848,6 @@ return (
 | `fs:createWorkDir` | 创建工作目录 |
 | `fs:importKB` | 导入知识库 |
 
-### Git
-
-| 通道 | 说明 |
-|------|------|
-| `git:checkAvailable` | 检查 Git 是否可用 |
-| `git:init` | 初始化仓库 |
-| `git:status` | 获取状态 |
-| `git:statusBatch` | 批量获取状态 |
-| `git:isDirty` | 检测是否有未提交变更 |
-| `git:commit` | 提交 |
-| `git:log` | 查看日志 |
-| `git:diff` | 查看差异 |
-| `git:diffFiles` | 查看文件差异 |
-| `git:commitDiffFiles` | 提交差异文件 |
-| `git:commitFileDiff` | 提交单个文件差异 |
-| `git:push` | 推送 |
-| `git:pull` | 拉取 |
-| `git:fetch` | 获取 |
-| `git:remote:get` | 获取远程仓库 |
-| `git:remote:set` | 设置远程仓库 |
-| `git:conflict:list` | 列出冲突文件 |
-| `git:conflict:show` | 显示冲突内容 |
-| `git:conflict:resolve` | 解决冲突 |
-| `git:conflict:complete` | 完成冲突解决 |
-| `git:auth:setToken` | 设置认证 Token |
-| `git:auth:getSSHKey` | 获取 SSH 公钥 |
-| `git:auth:setAuthType` | 设置认证类型 |
-| `git:auth:getAuthType` | 获取认证类型 |
 
 ### 应用
 
@@ -1045,16 +920,16 @@ return (
    - 历史文档中存在旧版 IPC 名称、旧命令、旧版本号，说明项目缺少一套“功能变更后同步更新文档”的流程。
 
 2. **页面与业务逻辑边界仍可继续拆分**
-   - `GraphPage.tsx` 仍承担页面编排、日志埋点、搜索联动、右键菜单接线、键盘交互等多类职责。
+   - `GraphPage.tsx` 仍承担页面编排、日志埋点、右键菜单接线、键盘交互等多类职责。
    - 建议继续拆分为页面骨架层与图谱交互控制层。
 
 3. **`useGraph.ts` 单体职责偏多**
-   - 当前集成了房间加载、布局、CRUD、导航、持久化和搜索高亮。
+   - 当前集成了房间加载、布局、CRUD、导航和持久化。
    - 此类“大 hook” 可维护性一般，后续修改容易引入回归。
 
 4. **导航状态语义复杂**
-   - `roomStore` 中 `enterRoom`、`goBack`、`goToRoom`、`navigateToHistoryIndex` 对历史栈的处理存在较强心智负担。
-   - 建议补充单元测试或将状态机显式化。
+   - `tabStore` 中每 Tab 房间历史、当前房间和脏状态的边界仍需要持续用测试保护。
+   - 建议持续补充 tab/room 导航状态机的单元测试。
 
 5. **日志体系尚未完全收口**
    - 渲染层大多使用 `logger` / `logAction`，但 preload 仍直接输出 `console.warn/error`。
@@ -1071,9 +946,9 @@ return (
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
-| v5.0.0 | 2026-04-17 | **架构大重构**：Vite + Vue 3 + Pinia 构建系统替代纯 HTML/CDN；纯文件系统存储（移除 IndexedDB），使用 `_graph.json` 和 `_config.json`；目录即结构（KB=目录，Card=子目录）；项目结构重组为 `composables/` + `core/` + `components/` + `stores/`；Electron 主进程合并为单文件；内置 Git 版本控制；移除 vendor/、docs/ 等旧目录 |
-| v5.1.0 | 2026-04-19 | **Vue 3 → React 18 + React Flow + Zustand 迁移**：渲染进程从 Vue 3 迁移到 React 18 + TypeScript + React Flow；状态管理从 Pinia 迁移到 Zustand（`appStore` 使用 `create`，`roomStore` 使用 vanilla `createStore` 支持外部 `getState()`）；样式从全局 CSS 迁移到 CSS Modules；`ReactFlowProvider` 移动到 App.tsx 根级别；移除 `vendor/` 和 `src/css/` 遗留文件；修复多处 stale closure 和 async/await bug |
-| v5.1.1 | 2026-04-20 | **BUG 修复与架构优化**：修复双击画布创建节点（实现 `onPaneClick` 双击检测）、Tab 添加子节点（stale closure 修复）、面包屑显示完整历史链、Git 面板 `statusClass` TS 错误；添加 Git 面板组件（底部弹出式，状态徽章 + Fetch/Pull/Push/Commit）；新增 `GraphContext` 单例共享；补充 SPEC.md Git 面板 UI 规范和项目结构 |
+| v5.0.0 | 2026-04-17 | **架构大重构**：Vite + Vue 3 + Pinia 构建系统替代纯 HTML/CDN；纯文件系统存储（移除 IndexedDB），使用 `_graph.json` 和 `_config.json`；目录即结构（KB=目录，Card=子目录）；项目结构重组为 `composables/` + `core/` + `components/` + `stores/`；Electron 主进程合并为单文件；移除 vendor/、docs/ 等旧目录 |
+| v5.1.0 | 2026-04-19 | **Vue 3 → React 18 + React Flow + Zustand 迁移**：渲染进程从 Vue 3 迁移到 React 18 + TypeScript + React Flow；状态管理从 Pinia 迁移到 Zustand（`appStore` 使用 `create`，后续逐步收敛到 `tabStore` 管理工作区状态）；样式从全局 CSS 迁移到 CSS Modules；`ReactFlowProvider` 移动到 App.tsx 根级别；移除 `vendor/` 和 `src/css/` 遗留文件；修复多处 stale closure 和 async/await bug |
+| v5.1.1 | 2026-04-20 | **BUG 修复与架构优化**：修复双击画布创建节点（实现 `onPaneClick` 双击检测）、Tab 添加子节点（stale closure 修复）、面包屑显示完整历史链；新增 `GraphContext` 单例共享；补充 SPEC.md 项目结构 |
 | v5.2.0 | 2026-04-20 | **BUG 修复与文档更新**：修复 `GraphPage.tsx` 中 `selectNode` stale closure bug（解构赋值导致每次渲染创建新对象 → 改为直接订阅）；修复 `useGraph.ts` 中 `updateSelectedNode` stale closure bug（`selectedNodeId` 被 Promise 回调捕获 → 改用 `useAppStore.getState()`）；修复 `GraphPage.tsx` 删除确认中 `label` 可能为 undefined 的 bug；更新右键菜单文档描述以匹配实际实现（节点菜单：新建子节点/聚焦节点/重命名/属性/删除节点；边菜单：删除连线）；`package.json` 版本号同步更新为 v5.2.0 |
 | v5.2.1 | 2026-04-20 | **连线删除 BUG 修复与死代码清理**：修复 `onEdgesChange` 在删除边时未调用 `scheduleDebouncedSave` 导致 `_graph.json` 未更新的 bug；修复 `handleEdgeDelete` 使用 `graph.deleteEdge()` 而非 React Flow `deleteElements()` 导致边在画布上视觉残留的 bug；移除 `GraphContext` 中已废弃的 `deleteEdge` 方法；移除 `useGraph.ts` 中的 `deleteEdge` 死代码函数 |
 | v5.2.1-docs | 2026-04-21 | **文档同步更新**：统一 README、CLAUDE、SPEC 中的脚本命令、项目结构、IPC 白名单、日志能力和当前版本信息；新增“已知问题与改进建议”章节，反映当前代码审查结论 |
@@ -1133,21 +1008,18 @@ return (
 
 ### B.2 Zustand Store 模式选择
 
-- **`appStore`**：使用 `create` 创建，支持组件内直接 `useStore()` 订阅。
-- **`roomStore`**：使用 vanilla `createStore` 创建，支持外部 `getState()` 调用。
+- **`appStore`**：使用 `create` 创建，管理 setup/workspace 等应用级状态。
+- **`tabStore`**：使用 Zustand store 管理工作区内所有 Tab，以及每个 KB Tab 独立的房间导航状态。
 
 ```typescript
-// roomStore.ts
-export const roomStore = createStore<RoomState>()((set, get) => ({
-  currentKBPath: '',
-  currentRoomPath: '',
-  roomHistory: [],
-  enterRoom({ path, kbPath, name }) { ... },
-  goBack() { ... },
-  goToRoom(item) {
-    get().enterRoom({ path: item.room.path, kbPath: item.room.kbPath, name: item.room.name })
-  },
-  setCurrentKB(path) { ... }
+// tabStore.ts
+export const tabStore = create<TabState>()((set, get) => ({
+  tabs: [],
+  activeTabId: 'home',
+  enterRoomInTab(tabId, room) { ... },
+  goBackInTab(tabId) { ... },
+  navigateToHistoryIndexInTab(tabId, index) { ... },
+  setTabSelectedNode(tabId, nodeId) { ... }
 }))
 ```
 

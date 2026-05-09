@@ -14,20 +14,6 @@ const ALLOWED_CHANNELS = new Set([
   'fs:countChildren',
   'fs:readAppConfig', 'fs:writeAppConfig',
   'fs:isValidWorkDir', 'fs:selectDirectory', 'fs:createWorkDir', 'fs:importKB',
-  // git: basic
-  'git:checkAvailable', 'git:init', 'git:status',
-  'git:statusBatch', 'git:isDirty',
-  'git:commit', 'git:log', 'git:diff',
-  'git:diffFiles', 'git:commitDiffFiles', 'git:commitFileDiff',
-  // git: remote
-  'git:push', 'git:pull', 'git:fetch',
-  'git:remote:get', 'git:remote:set',
-  // git: conflict
-  'git:conflict:list', 'git:conflict:show',
-  'git:conflict:resolve', 'git:conflict:complete',
-  // git: auth
-  'git:auth:setToken', 'git:auth:getSSHKey',
-  'git:auth:setAuthType', 'git:auth:getAuthType',
   // app
   'app:openExternal',
   'app:navigateHome',

@@ -31,6 +31,8 @@ export interface FSBChildInfo {
   name: string
   isDir: boolean
   order?: number
+  x?: number
+  y?: number
 }
 
 export interface FSBGraphMeta {

@@ -24,6 +24,7 @@ import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData } from '../types'
 import { buildMetaFromNodesEdges, buildNodes, buildEdges, generateId } from './useGraph/graphBuilder'
 import { buildGraphOperations, type StorageApi } from './useGraph/graphOperations'
 import { buildGraphNavigation } from './useGraph/navigation'
+import { resolveRoomChildRef } from '../domain/graph/path-utils'
 
 export interface GraphState {
   nodes: KnowledgeNode[]
@@ -137,8 +138,8 @@ export function useGraph(tabId: string) {
         const nodeEntries = Object.entries(meta.nodes ?? {})
         if (nodeEntries.length > 0) {
           const positionResults = await Promise.allSettled(
-            nodeEntries.map(async ([nodeId]) => {
-              const childPath = dirPath ? `${dirPath}/${nodeId}` : nodeId
+            nodeEntries.map(async ([nodeId, node]) => {
+              const childPath = resolveRoomChildRef(dirPath, node.card?.ref || node.id || nodeId)
               const childMeta = await storage.readLayout(childPath)
               return { childPath, childMeta }
             })
@@ -158,7 +159,7 @@ export function useGraph(tabId: string) {
         }
 
         const nodes = await buildNodes(storage, dirPath, meta, savedPositions, kbPath)
-        const edges = buildEdges(meta)
+        const edges = buildEdges(meta, dirPath)
 
         if (requestSeq < loadRequestSeqRef.current) {
           logAction('房间:加载丢弃', 'useGraph', { roomPath: dirPath, kbPath, requestSeq })
@@ -238,8 +239,11 @@ export function useGraph(tabId: string) {
 
       const dirPath = getActiveNavState().roomPath
       if (dirPath) {
-        await storage.saveLayout(dirPath, buildMetaFromNodesEdges(updatedNodes, edgesRef.current))
-        setDirtyState(false)
+        await storage.flushGraphSave(
+          dirPath,
+          () => buildMetaFromNodesEdges(updatedNodes, edgesRef.current),
+          () => setDirtyState(false)
+        )
       }
     },
     [computeLayout, rebuildMaps, getActiveNavState, storage, setDirtyState]

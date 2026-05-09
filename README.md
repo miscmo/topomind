@@ -32,8 +32,6 @@ pnpm run build:linux  # Linux (.AppImage)
 │   ├── main.js
 │   ├── preload.js
 │   ├── file-service.js
-│   ├── git-service.js
-│   ├── git-auth.js
 │   └── log-service.js
 ├── src/
 │   ├── App.tsx                # 应用入口与视图切换
@@ -46,10 +44,8 @@ pnpm run build:linux  # Linux (.AppImage)
 │   │   ├── DetailPanel/
 │   │   ├── NavTree/
 │   │   ├── Toolbar/
-│   │   ├── SearchBar/
 │   │   ├── Breadcrumb/
 │   │   ├── ContextMenu/
-│   │   ├── GitPanel/
 │   │   └── PromptModal/
 │   ├── contexts/
 │   │   └── GraphContext.tsx   # 共享单例 graph 实例，避免多次 useGraph()
@@ -59,20 +55,16 @@ pnpm run build:linux  # Linux (.AppImage)
 │   │   ├── useNodeActions.ts
 │   │   ├── useLayout.ts
 │   │   ├── useStorage.ts
-│   │   ├── useGit.ts
 │   │   ├── useKeyboard.ts
 │   │   ├── useContextMenu.ts
 │   │   └── useDoubleClick.ts
 │   ├── stores/
 │   │   ├── appStore.ts
-│   │   ├── roomStore.ts
 │   │   ├── promptStore.ts
 │   │   ├── monitorStore.ts
-│   │   └── gitStore.ts
 │   ├── core/
 │   │   ├── fs-backend.ts
 │   │   ├── storage.ts
-│   │   ├── git-backend.ts
 │   │   ├── log-backend.ts
 │   │   └── logger.ts
 │   ├── nodes/
@@ -93,7 +85,6 @@ pnpm run build:linux  # Linux (.AppImage)
 - **状态管理**: [Zustand](https://zustand.docs.pmnd.rs/)
 - **图谱引擎**: [React Flow](https://reactflow.dev/) + [ELK.js](https://github.com/kieler/elkjs) 分层布局
 - **Markdown**: [marked.js](https://marked.js.org/)
-- **Git 集成**: [simple-git](https://github.com/steveukx/git-js)
 - **桌面端**: [Electron](https://www.electronjs.org/)
 - **样式**: CSS Modules（无 Tailwind）
 
@@ -135,8 +126,6 @@ pnpm run build:linux  # Linux (.AppImage)
 - **边模式**: 点击节点拖拽创建关联
 - **Markdown 支持**: 完整的 Markdown 渲染与编辑
 - **图片支持**: 嵌入图片，自动清理 Blob URL
-- **Git 版本控制**: 内置 Git 支持（本地仓库）
-- **搜索**: 支持节点名称搜索，高亮匹配
 - **日志监控**: 内置日志系统查看页面
 
 ## 快捷键
@@ -174,32 +163,6 @@ pnpm run build:linux  # Linux (.AppImage)
 - `fs:createWorkDir`
 - `fs:importKB`
 
-### Git
-- `git:checkAvailable`
-- `git:init`
-- `git:status`
-- `git:statusBatch`
-- `git:isDirty`
-- `git:commit`
-- `git:log`
-- `git:diff`
-- `git:diffFiles`
-- `git:commitDiffFiles`
-- `git:commitFileDiff`
-- `git:fetch`
-- `git:push`
-- `git:pull`
-- `git:remote:get`
-- `git:remote:set`
-- `git:conflict:list`
-- `git:conflict:show`
-- `git:conflict:resolve`
-- `git:conflict:complete`
-- `git:auth:setToken`
-- `git:auth:getSSHKey`
-- `git:auth:setAuthType`
-- `git:auth:getAuthType`
-
 ### 应用 / 其他
 - `app:openExternal`
 - `log:write`
@@ -212,18 +175,18 @@ pnpm run build:linux  # Linux (.AppImage)
 
 ## 当前代码审查结论
 
-通读当前代码后，项目整体结构已经比较清晰，Electron 主进程、React 渲染层、存储层和 Git/日志能力边界也较明确；但仍有一些值得优先关注的问题：
+通读当前代码后，项目整体结构已经比较清晰，Electron 主进程、React 渲染层、存储层和日志能力边界也较明确；但仍有一些值得优先关注的问题：
 
 1. **文档与实现多处不一致**
    - README / SPEC 中曾使用了旧版 IPC 名称、旧脚本命令、旧版本号。
    - 这会直接误导后续开发者或 AI 代理。
 
 2. **GraphPage 责任仍然偏重**
-   - `GraphPage.tsx` 同时处理页面骨架、图谱初始化、搜索联动、快捷键、上下文菜单、日志埋点。
+   - `GraphPage.tsx` 同时处理页面骨架、图谱初始化、快捷键、上下文菜单、日志埋点。
    - 目前虽已通过 `GraphContext` 和 `useNodeActions` 做过拆分，但后续仍建议继续把页面级编排和图谱交互进一步解耦。
 
 3. **`useGraph` 负担较大**
-   - 该 hook 同时负责 room 加载、状态维护、节点边 CRUD、持久化、防抖保存、导航和搜索高亮。
+   - 该 hook 同时负责 room 加载、状态维护、节点边 CRUD、持久化、防抖保存和导航。
    - 后续维护时容易出现 stale closure、状态同步、保存时机相关 bug。
 
 4. **渲染层对存储模型耦合较深**
@@ -231,7 +194,7 @@ pnpm run build:linux  # Linux (.AppImage)
    - 这保证了效率，但会提高未来做存储演进或批量迁移时的成本。
 
 5. **部分实现细节存在潜在一致性风险**
-   - 例如 `roomStore` 的历史栈语义、`goBack` / `navigateToHistoryIndex` / `enterRoom` 之间的关系较绕。
+   - 例如 `tabStore` 中每个 KB Tab 的历史栈、当前房间和脏状态边界较复杂。
    - 这类逻辑在复杂导航路径下容易回归，需要测试覆盖。
 
 6. **预加载层仍有 `console.error` / `console.warn`**

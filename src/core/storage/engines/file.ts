@@ -4,6 +4,36 @@ import type { VaultRef } from '../adapter/vault'
 import type { KBRef } from '../adapter/kb'
 import type { CardRef } from '../adapter/card'
 import type { EdgeRelation, EdgeWeight } from '../../../types'
+import { basenameRef, joinRefs, normalizeRef } from '../../../domain/graph/path-utils'
+
+interface FSBGraphChild {
+  path?: string
+  name: string
+  hasChildren?: boolean
+  x?: number
+  y?: number
+}
+
+interface FSBGraphEdge {
+  id: string
+  source: string
+  target: string
+  relation?: EdgeRelation
+  weight?: EdgeWeight
+  lineMode?: 'smoothstep' | 'straight'
+  lineStyle?: 'solid' | 'dashed'
+  color?: string
+  arrow?: boolean
+  highlighted?: boolean
+  faded?: boolean
+}
+
+interface FSBGraphLike {
+  edges?: FSBGraphEdge[]
+  children?: Record<string, FSBGraphChild>
+  zoom?: number | null
+  pan?: { x: number; y: number } | null
+}
 
 const toKBInfo = (child: { path: string; name: string; order?: number }, vaultRef: VaultRef): KBInfo => ({
   ref: child.path,
@@ -17,27 +47,42 @@ const toCardInfo = (child: { path: string; name: string }, kbRef: KBRef): CardIn
   updatedAt: undefined,
 })
 
-/**
- * Convert old FSBGraphMeta format (string refs in edges) to new GraphMeta format (CardInfo objects).
- */
-function convertFSBToGraph(raw: {
-  edges?: Array<{
-    id: string; source: string; target: string; relation?: EdgeRelation; weight?: EdgeWeight
-    lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'
-    color?: string; arrow?: boolean; highlighted?: boolean; faded?: boolean
-  }>
-  children?: Record<string, { name: string; hasChildren?: boolean }>
-  zoom?: number | null; pan?: { x: number; y: number } | null
-}): GraphMeta {
+function kbRootRef(roomRef: string): string {
+  return normalizeRef(roomRef).split('/')[0] ?? ''
+}
+
+function toKBRelativeRef(roomRef: string, ref: string): string {
+  const normalizedRoom = normalizeRef(roomRef)
+  const normalizedRef = normalizeRef(ref)
+  const kbRoot = kbRootRef(normalizedRoom)
+  if (!kbRoot || !normalizedRef) return normalizedRef
+  if (normalizedRef === kbRoot) return ''
+  const prefix = `${kbRoot}/`
+  return normalizedRef.startsWith(prefix) ? normalizedRef.slice(prefix.length) : normalizedRef
+}
+
+function fromKBRelativeRef(roomRef: string, ref: string): string {
+  const normalizedRoom = normalizeRef(roomRef)
+  const normalizedRef = normalizeRef(ref)
+  const kbRoot = kbRootRef(normalizedRoom)
+  if (!normalizedRef) return ''
+  return kbRoot ? joinRefs(kbRoot, normalizedRef) : normalizedRef
+}
+
+export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
   const children = raw.children ?? {}
 
-  const nodes: Record<string, { id: string; card: CardInfo; height: number; width: number }> = {}
-  for (const [path, child] of Object.entries(children)) {
-    nodes[path] = {
-      id: path,
-      card: { ref: path, name: child.name, updatedAt: undefined },
+  const nodes: GraphMeta['nodes'] = {}
+  for (const [key, child] of Object.entries(children)) {
+    const ref = fromKBRelativeRef(roomRef, child.path || key)
+    nodes[ref] = {
+      id: ref,
+      card: { ref, name: child.name, updatedAt: undefined },
       height: 150,
       width: 200,
+      position: Number.isFinite(child.x) && Number.isFinite(child.y)
+        ? { x: child.x as number, y: child.y as number }
+        : undefined,
     }
   }
 
@@ -47,8 +92,8 @@ function convertFSBToGraph(raw: {
     color?: string; arrow?: boolean; highlighted?: boolean; faded?: boolean
   }> = (raw.edges ?? []).map(e => ({
     id: e.id,
-    source: { ref: e.source, name: '', updatedAt: undefined },
-    target: { ref: e.target, name: '', updatedAt: undefined },
+    source: { ref: fromKBRelativeRef(roomRef, e.source), name: '', updatedAt: undefined },
+    target: { ref: fromKBRelativeRef(roomRef, e.target), name: '', updatedAt: undefined },
     relation: e.relation ?? '相关',
     weight: e.weight ?? 'minor',
     lineMode: e.lineMode,
@@ -71,11 +116,8 @@ function convertFSBToGraph(raw: {
   }
 }
 
-/**
- * Convert new GraphMeta format (CardInfo objects in edges) to old FSBGraphMeta format (string refs).
- */
-function convertGraphToFSB(meta: GraphMeta): {
-  children?: Record<string, { name: string; hasChildren?: boolean }>
+export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
+  children?: Record<string, FSBGraphChild>
   edges?: Array<{
     id: string; source: string; target: string; relation: EdgeRelation; weight: EdgeWeight
     lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'
@@ -83,20 +125,25 @@ function convertGraphToFSB(meta: GraphMeta): {
   }>
   zoom?: number; pan?: { x: number; y: number }
 } {
-  const children: Record<string, { name: string; hasChildren?: boolean }> = {}
+  const children: Record<string, FSBGraphChild> = {}
   for (const node of Object.values(meta.nodes)) {
-    const name = node.id.includes('/') || node.id.includes('\\')
-      ? (node.id.split(/[/\\]/).pop() ?? node.id)
-      : node.id
-    children[name] = { name: node.card.name, hasChildren: false }
+    const ref = normalizeRef(node.card?.ref || node.id)
+    const key = toKBRelativeRef(roomRef, ref) || basenameRef(ref) || basenameRef(node.id) || node.id
+    children[key] = {
+      path: key || undefined,
+      name: node.card.name,
+      hasChildren: false,
+      x: node.position?.x,
+      y: node.position?.y,
+    }
   }
 
   return {
     children,
     edges: meta.edges.map(e => ({
       id: e.id,
-      source: e.source.ref,
-      target: e.target.ref,
+      source: toKBRelativeRef(roomRef, e.source.ref),
+      target: toKBRelativeRef(roomRef, e.target.ref),
       relation: e.relation,
       weight: e.weight,
       lineMode: e.lineMode,
@@ -202,14 +249,14 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
     readCardLayout: async (kbRef: KBRef): Promise<GraphMeta> => {
       try {
         const raw = await FSB.readGraphMeta(requireRootDir(), kbRef)
-        return convertFSBToGraph(raw as Parameters<typeof convertFSBToGraph>[0])
+        return convertFSBToGraph(raw as Parameters<typeof convertFSBToGraph>[0], kbRef)
       } catch {
         return { nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }
       }
     },
 
     writeCardLayout: async (kbRef: KBRef, meta: GraphMeta): Promise<void> => {
-      await FSB.writeGraphMeta(requireRootDir(), kbRef, convertGraphToFSB(meta) as Parameters<typeof FSB.writeGraphMeta>[2])
+      await FSB.writeGraphMeta(requireRootDir(), kbRef, convertGraphToFSB(meta, kbRef) as Parameters<typeof FSB.writeGraphMeta>[2])
     },
 
     // ===== Core StorageAdapter (ICardStorage): Markdown operations =====
