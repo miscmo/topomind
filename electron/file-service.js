@@ -129,15 +129,23 @@ const fileService = {
     },
 
     createWorkDir: function(dirPath) {
-      var dir = nodePath.resolve(dirPath);
-      if (nodeFs.existsSync(dir) && !_fs_isDirEmpty(dir)) {
-        throw new Error('工作目录必须是空目录');
+      var dir = dirPath || null;
+      try {
+        if (!dir) {
+          return { valid: false, nodePath: null, error: '工作目录路径为空' };
+        }
+        dir = _fs_validateAbsolutePath(dir);
+        if (nodeFs.existsSync(dir) && !_fs_isDirEmpty(dir)) {
+          return { valid: false, nodePath: dir, error: '工作目录必须是空目录' };
+        }
+        _fs_ensureDir(dir);
+        _fs_ensureDir(_fs_kbsDir(dir));
+        _fs_ensureDir(_fs_logsDir(dir));
+        _fs_writeJsonFile(_fs_appConfigPath(dir), {});
+        return { valid: true, nodePath: dir };
+      } catch (e) {
+        return { valid: false, nodePath: dir, error: e && e.message ? e.message : '创建工作目录失败' };
       }
-      _fs_ensureDir(dir);
-      _fs_ensureDir(_fs_kbsDir(dir));
-      _fs_ensureDir(_fs_logsDir(dir));
-      _fs_writeJsonFile(_fs_appConfigPath(dir), {});
-      return { valid: true, nodePath: dir };
     },
 
     /**

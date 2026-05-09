@@ -16,7 +16,6 @@ import { useTabStore, tabStore } from './stores/tabStore'
 import { useAppStore } from './stores/appStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
-import { useStorage } from './hooks/useStorage'
 import { resetClientSession } from './core/session-reset'
 import { flushAllDirtyTabs, flushTabs } from './core/close-guard'
 
@@ -31,9 +30,6 @@ export default memo(function App() {
   const removeTab = useTabStore((s) => s.removeTab)
   const confirmOpen = useConfirmStore((s) => s.open)
   const view = useAppStore((s) => s.view)
-  const showHome = useAppStore((s) => s.showHome)
-  const currentWorkDir = useAppStore((s) => s.currentWorkDir)
-  const storage = useStorage()
 
   useEffect(() => { initHomeTab() }, [initHomeTab])
 
@@ -44,25 +40,6 @@ export default memo(function App() {
       window.electronAPI?.off('app:reset-session', onResetSession)
     }
   }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    async function checkAndNavigate() {
-      try {
-        if (currentWorkDir && !cancelled) {
-          const initResult = await storage.init()
-          const valid = typeof initResult === 'object' && (initResult as { valid?: boolean }).valid
-          if (!cancelled && valid) {
-            showHome()
-            logAction('App:auto-navigate-home', 'App', { rootDir: currentWorkDir })
-          }
-        }
-      } catch {
-      }
-    }
-    checkAndNavigate()
-    return () => { cancelled = true }
-  }, [currentWorkDir, showHome, storage])
 
   useEffect(() => {
     const handleHashChange = () => setIsMonitorWindow(window.location.hash === '#/monitor')

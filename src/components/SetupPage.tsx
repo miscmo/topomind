@@ -3,15 +3,13 @@
  * 对应原 WorkDirPage.vue
  */
 import { memo, useState } from 'react'
-import { useAppStore } from '../stores/appStore'
 import { useStorage } from '../hooks/useStorage'
 import { usePlatform } from '../hooks/usePlatform'
 import { logAction } from '../core/log-backend'
+import { enterHome } from '../core/app-flow'
 import styles from './SetupPage.module.css'
 
 export default memo(function SetupPage() {
-  const showHome = useAppStore((s) => s.showHome)
-  const setCurrentWorkDir = useAppStore((s) => s.setCurrentWorkDir)
   const storage = useStorage()
   const platform = usePlatform()
 
@@ -47,9 +45,7 @@ export default memo(function SetupPage() {
         return
       }
 
-      setCurrentWorkDir(picked.nodePath!)
-      await window.electronAPI?.invoke('app:navigateHome')
-      showHome()
+      await enterHome(picked.nodePath!)
     } catch (e) {
       setIsError(true)
       setMessage((e as { message?: string })?.message || '打开工作目录失败')
@@ -81,9 +77,7 @@ export default memo(function SetupPage() {
         })
         return
       }
-      setCurrentWorkDir(picked.nodePath!)
-      await window.electronAPI?.invoke('app:navigateHome')
-      showHome()
+      await enterHome(picked.nodePath!)
     } catch (e) {
       setIsError(true)
       setMessage((e as { message?: string })?.message || '创建工作目录失败')

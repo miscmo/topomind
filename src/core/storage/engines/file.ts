@@ -122,7 +122,10 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
     // ===== Core StorageAdapter (IVaultStorage) =====
 
     createVault: async (vaultRef: VaultRef): Promise<VaultInfo> => {
-      await FSB.createWorkDir(vaultRef)
+      const result = await FSB.createWorkDir(vaultRef)
+      if (!result.valid) {
+        throw new Error(result.error || '创建工作目录失败')
+      }
       return { ref: vaultRef }
     },
 
