@@ -30,6 +30,11 @@ const DIST_ELECTRON_DIR = nodeFs.existsSync(nodePath.join(APP_PATH, 'dist-electr
 const DIST_RENDERER_DIR = nodeFs.existsSync(nodePath.join(APP_PATH, 'dist'))
   ? nodePath.join(APP_PATH, 'dist')
   : nodePath.join(nodePath.dirname(DIST_ELECTRON_DIR), 'dist');
+const SETUP_WINDOW_WIDTH = 380;
+const SETUP_WINDOW_HEIGHT = 252;
+const HOME_WINDOW_WIDTH = 1400;
+const HOME_WINDOW_HEIGHT = 900;
+const WINDOW_BACKGROUND_COLOR = '#ffffff';
 
 // E2E 测试：尝试从工作目录根目录的 .env 文件加载环境变量。
 // global-setup.ts 会将 TOPOMIND_E2E_WORKDIR 写入项目根目录的 .env。
@@ -215,7 +220,7 @@ function registerIPC() {
       win.setResizable(true);
       win.setMinimumSize(900, 600);
       win.setMaximumSize(0, 0);
-      win.setBounds({ width: 1400, height: 900 });
+      win.setContentSize(HOME_WINDOW_WIDTH, HOME_WINDOW_HEIGHT);
       buildMenu(false);
     }
   });
@@ -362,7 +367,11 @@ function createWindow() {
   const rendererIndexPath = nodePath.join(DIST_RENDERER_DIR, 'index.html');
 
   win = new BrowserWindow({
-    width: 520, height: 420, minWidth: 520, minHeight: 420, maxWidth: 520, maxHeight: 420,
+    width: SETUP_WINDOW_WIDTH, height: SETUP_WINDOW_HEIGHT,
+    minWidth: SETUP_WINDOW_WIDTH, minHeight: SETUP_WINDOW_HEIGHT,
+    maxWidth: SETUP_WINDOW_WIDTH, maxHeight: SETUP_WINDOW_HEIGHT,
+    useContentSize: true,
+    backgroundColor: WINDOW_BACKGROUND_COLOR,
     title: 'TopoMind',
     webPreferences: {
       preload: preloadPath,
@@ -453,9 +462,9 @@ function toggleMonitorWindow() {
 function resetMainWindowToSetup() {
   if (!win || win.isDestroyed()) return;
   win.setResizable(false);
-  win.setMinimumSize(520, 420);
-  win.setMaximumSize(520, 420);
-  win.setBounds({ width: 520, height: 420 });
+  win.setMinimumSize(SETUP_WINDOW_WIDTH, SETUP_WINDOW_HEIGHT);
+  win.setMaximumSize(SETUP_WINDOW_WIDTH, SETUP_WINDOW_HEIGHT);
+  win.setContentSize(SETUP_WINDOW_WIDTH, SETUP_WINDOW_HEIGHT);
   buildMenu(true);
   win.webContents.send('app:reset-session');
 }

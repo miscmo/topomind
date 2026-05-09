@@ -59,9 +59,7 @@ export default memo(function SetupPage() {
 
   async function createNew() {
     setMessage('')
-    logAction('SetupPage:点击创建工作目录', 'SetupPage', {})
     try {
-      logAction('SetupPage:打开文件对话框', 'SetupPage', { purpose: '选择新建工作目录位置' })
       const picked = await platform.selectDirectory()
       if (!picked?.valid) {
         logAction('SetupPage:文件对话框关闭', 'SetupPage', {
@@ -72,8 +70,7 @@ export default memo(function SetupPage() {
         setMessage(picked?.error || '请选择一个空目录作为新的工作目录')
         return
       }
-      logAction('SetupPage:文件对话框已选择路径', 'SetupPage', { selectedPath: picked.nodePath })
-      logAction('SetupPage:创建工作目录', 'SetupPage', { nodePath: picked.nodePath })
+      logAction('SetupPage:选择工作目录', 'SetupPage', { selectedPath: picked.nodePath })
       const res = await storage.createWorkDir(picked.nodePath!)
       if (!res?.valid) {
         setIsError(true)

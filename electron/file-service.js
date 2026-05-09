@@ -5,10 +5,6 @@
 import nodePath from 'path';
 import nodeFs from 'fs';
 
-function _fs_defaultAppConfig() {
-  return { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-}
-
 // 返回dir/kbs知识库目录
 function _fs_kbsDir(dir) {
   return nodePath.join(dir, 'kbs');
@@ -53,7 +49,7 @@ function _fs_isValidWorkDir(dirPath) {
 }
 
 /**
- * @description 确保目录存在
+ * @description 确保目录存在，不存在则创建
  * @param { string } d: 目录路径
  * @returns { void }
  */
@@ -119,7 +115,7 @@ function _fs_validateAbsolutePath(dir) {
 
 const fileService = {
     readAppConfig: function(rootDir) {
-      return _fs_readJsonFile(_fs_appConfigPath(rootDir)) || _fs_defaultAppConfig();
+      return _fs_readJsonFile(_fs_appConfigPath(rootDir)) || {};
     },
 
     writeAppConfig: function(rootDir, content) {
@@ -127,14 +123,9 @@ const fileService = {
       if (typeof content === 'string') {
         try { data = JSON.parse(content); } catch (e) { data = {}; }
       }
-      var config = {
-        defaultEdgeStyle: (data.defaultEdgeStyle && typeof data.defaultEdgeStyle === 'object')
-          ? data.defaultEdgeStyle
-          : _fs_defaultAppConfig().defaultEdgeStyle,
-      };
       _fs_ensureDir(rootDir);
-      nodeFs.writeFileSync(_fs_appConfigPath(rootDir), JSON.stringify(config, null, 2), 'utf-8');
-      return config;
+      _fs_writeJsonFile(_fs_appConfigPath(rootDir), data);
+      return data;
     },
 
     createWorkDir: function(dirPath) {
@@ -145,7 +136,7 @@ const fileService = {
       _fs_ensureDir(dir);
       _fs_ensureDir(_fs_kbsDir(dir));
       _fs_ensureDir(_fs_logsDir(dir));
-      nodeFs.writeFileSync(_fs_appConfigPath(dir), JSON.stringify(_fs_defaultAppConfig(), null, 2), 'utf-8');
+      _fs_writeJsonFile(_fs_appConfigPath(dir), {});
       return { valid: true, nodePath: dir };
     },
 
