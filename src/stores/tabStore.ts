@@ -2,14 +2,11 @@
  * Tab 多知识库管理（Zustand）
  *
  * 管理所有 KB Tab 的 UI 状态和房间导航状态，实现多标签页间的状态隔离。
- * 每个 Tab 独立维护自己的 roomHistory 栈、当前房间路径、搜索关键词和节点选中状态，
- * 切换 Tab 时通过 saveRoomStateToTab / restoreRoomStateToTab 与 roomStore 同步。
+ * 每个 Tab 独立维护自己的 roomHistory 栈、当前房间路径和节点选中状态。
  *
  * Tab 类型分为两类：
  * - `home`：主页 Tab，仅有一个，不可关闭
  * - `kb`：知识库 Tab，每个 KB 一个，支持增删
- *
- * @see roomStore 房间导航状态（单例，当前激活 Tab 的房间状态）
  */
 import { create } from 'zustand'
 import type { RoomHistoryItem } from '../types'
@@ -24,7 +21,6 @@ import type { RoomHistoryItem } from '../types'
  * @property roomHistory - 该 Tab 的房间导航历史栈
  * @property currentRoomPath - 该 Tab 当前所在房间路径
  * @property currentRoomName - 该 Tab 当前所在房间名称
- * @property searchQuery - 该 Tab 的搜索关键词（切换 Tab 时保持）
  * @property selectedNodeId - 该 Tab 选中的节点路径
  */
 export interface Tab {
@@ -36,7 +32,6 @@ export interface Tab {
   roomHistory?: RoomHistoryItem[]
   currentRoomPath?: string
   currentRoomName?: string
-  searchQuery?: string
   selectedNodeId?: string | null
 }
 
@@ -53,7 +48,7 @@ interface TabState {
   initHomeTab: () => void
   /** 向 tabs 数组追加一个新 Tab */
   addTab: (tab: Tab) => void
-  /** 新增一个 KB Tab，id 重复则忽略；同时初始化 roomHistory 为空、搜索为空、选中为空 */
+  /** 新增一个 KB Tab，id 重复则忽略；同时初始化 roomHistory 为空、选中为空 */
   addKBTab: (tab: { id: string; label: string; kbPath: string; isDirty?: boolean }) => void
   /** 根据 tabId 移除 Tab（home Tab 不可移除）；若关闭的是当前活跃 Tab，自动切换到就近 Tab */
   removeTab: (tabId: string) => void
@@ -65,8 +60,6 @@ interface TabState {
   getActiveTab: () => Tab | undefined
   /** 根据 id 查找 Tab */
   getTabById: (tabId: string) => Tab | undefined
-  /** 将 roomStore 的房间状态快照保存到指定 Tab（Tab 切换时调用） */
-  saveRoomStateToTab: (tabId: string, roomState: { roomHistory: RoomHistoryItem[]; currentRoomPath: string | null; currentRoomName: string }) => void
   /** 从快照恢复房间状态到指定 Tab（切换回 Tab 时调用） */
   restoreRoomStateToTab: (tabId: string, roomState: { roomHistory: RoomHistoryItem[]; currentRoomPath: string | null; currentRoomName: string; kbPath?: string | null }) => void
   /** 在指定 Tab 内进入房间：将当前房间压入 history 栈，再切换到目标房间；返回切换后的目标房间信息 */
@@ -75,12 +68,8 @@ interface TabState {
   goBackInTab: (tabId: string) => { path: string; kbPath: string; name: string } | null
   /** 在指定 Tab 内按索引跳转 history：保留 index 之前项，丢弃之后项；返回目标房间信息 */
   navigateToHistoryIndexInTab: (tabId: string, index: number) => { path: string; kbPath: string; name: string } | null
-  /** 读取指定 Tab 的房间状态快照（用于 saveRoomStateToTab 的反向操作） */
+  /** 读取指定 Tab 的房间状态快照 */
   getRoomStateFromTab: (tabId: string) => { roomHistory: RoomHistoryItem[]; currentRoomPath: string | null; currentRoomName: string } | null
-  /** 更新指定 Tab 的搜索关键词（Tab 切换时保持各自的搜索状态） */
-  setTabSearchQuery: (tabId: string, query: string) => void
-  /** 读取指定 Tab 的搜索关键词 */
-  getTabSearchQuery: (tabId: string) => string
   /** 更新指定 Tab 的选中节点 ID */
   setTabSelectedNode: (tabId: string, nodeId: string | null) => void
   /** 读取指定 Tab 的选中节点 ID */
@@ -118,7 +107,7 @@ export const tabStore = create<TabState>()((set, get) => ({
   /**
    * 新增一个 KB Tab
    * - id 重复时忽略（防重）
-   * - 初始化 roomHistory 为空、searchQuery 为空、selectedNodeId 为 null
+   * - 初始化 roomHistory 为空、selectedNodeId 为 null
    * @param params.id - Tab 唯一标识（通常为 kbPath）
    * @param params.label - Tab 显示名称（KB 名）
    * @param params.kbPath - KB 根路径
@@ -140,7 +129,6 @@ export const tabStore = create<TabState>()((set, get) => ({
             roomHistory: [],
             currentRoomPath: kbPath,
             currentRoomName: label,
-            searchQuery: '',
             selectedNodeId: null,
           },
         ],
@@ -212,29 +200,7 @@ export const tabStore = create<TabState>()((set, get) => ({
   },
 
   /**
-   * 将 roomStore 的房间状态快照保存到指定 Tab（Tab 切换时调用）
-   * 切换 Tab 前：读取 roomStore 状态，调用此方法将状态持久化到对应 Tab
-   * @param tabId - 目标 Tab id
-   * @param roomState - 房间快照（roomHistory + currentRoomPath + currentRoomName）
-   */
-  saveRoomStateToTab: (tabId, roomState) => {
-    set((state) => ({
-      tabs: state.tabs.map((t) =>
-        t.id === tabId
-          ? {
-              ...t,
-              roomHistory: roomState.roomHistory,
-              currentRoomPath: roomState.currentRoomPath ?? undefined,
-              currentRoomName: roomState.currentRoomName,
-            }
-          : t
-      ),
-    }))
-  },
-
-  /**
-   * 从快照恢复房间状态到指定 Tab（切换回 Tab 时调用）
-   * 切换回 Tab 时：从 Tab 读取快照，调用此方法恢复 roomStore 状态
+   * 从快照恢复房间状态到指定 Tab
    * @param tabId - 目标 Tab id
    * @param roomState - 房间快照（包含可选 kbPath 用于更新 Tab 的 kbPath）
    */
@@ -318,25 +284,17 @@ export const tabStore = create<TabState>()((set, get) => ({
         const newHistory = history.slice(0, -1)
         const kbPath = t.kbPath || lastItem.room.kbPath || ''
 
-        if (newHistory.length === 0) {
-          target = { path: kbPath, kbPath, name: t.label }
-          return {
-            ...t,
-            kbPath,
-            roomHistory: [],
-            currentRoomPath: kbPath,
-            currentRoomName: t.label,
-          }
+        target = {
+          path: lastItem.room.path,
+          kbPath: lastItem.room.kbPath || kbPath,
+          name: lastItem.room.name,
         }
-
-        const prev = newHistory[newHistory.length - 1]
-        target = { path: prev.room.path, kbPath: prev.room.kbPath, name: prev.room.name }
         return {
           ...t,
-          kbPath: prev.room.kbPath,
+          kbPath: target.kbPath,
           roomHistory: newHistory,
-          currentRoomPath: prev.room.path,
-          currentRoomName: prev.room.name,
+          currentRoomPath: target.path,
+          currentRoomName: target.name,
         }
       }),
     }))
@@ -386,7 +344,6 @@ export const tabStore = create<TabState>()((set, get) => ({
 
   /**
    * 读取指定 Tab 的房间状态快照
-   * 用于 Tab 切换时，将状态写回 roomStore
    * @param tabId - 目标 Tab id
    * @returns 房间快照（roomHistory + currentRoomPath + currentRoomName），Tab 不存在时返回 null
    */
@@ -398,29 +355,6 @@ export const tabStore = create<TabState>()((set, get) => ({
       currentRoomPath: tab.currentRoomPath ?? null,
       currentRoomName: tab.currentRoomName ?? '全局',
     }
-  },
-
-  /**
-   * 更新指定 Tab 的搜索关键词（Tab 切换时保持各自的搜索状态）
-   * @param tabId - 目标 Tab id
-   * @param query - 搜索关键词
-   */
-  setTabSearchQuery: (tabId, query) => {
-    set((state) => ({
-      tabs: state.tabs.map((t) =>
-        t.id === tabId ? { ...t, searchQuery: query } : t
-      ),
-    }))
-  },
-
-  /**
-   * 读取指定 Tab 的搜索关键词
-   * @param tabId - 目标 Tab id
-   * @returns 该 Tab 的搜索关键词，若无则返回空字符串
-   */
-  getTabSearchQuery: (tabId) => {
-    const tab = get().tabs.find((t) => t.id === tabId)
-    return tab?.searchQuery ?? ''
   },
 
   /**

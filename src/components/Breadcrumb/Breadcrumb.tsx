@@ -13,7 +13,7 @@ import styles from './Breadcrumb.module.css'
 
 interface BreadcrumbProps {
   /** 当前 KB tab 的 id（来自 GraphPage tabId prop） */
-  tabId?: string
+  tabId: string
 }
 
 export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {

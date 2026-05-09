@@ -14,10 +14,10 @@ interface UseKeyboardOptions {
   onDelete?: () => void
   onEscape?: () => void
   onAddChild?: (parentId: string) => void
-  tabId?: string
+  tabId: string
 }
 
-export function useKeyboard(options: UseKeyboardOptions = {}) {
+export function useKeyboard(options: UseKeyboardOptions) {
   const { onDelete, onEscape, onAddChild, tabId } = options
 
   const clearSelection = useAppStore((s) => s.clearSelection)

@@ -4,7 +4,7 @@ import { logAction } from '../core/log-backend'
 export interface UseRoomLoaderOptions {
   effectiveRoomPath: string | null
   effectiveKbPath: string | null
-  tabId?: string
+  tabId: string
   loadRoom: (path: string) => Promise<void>
   isCreatingRef: React.MutableRefObject<boolean>
 }
@@ -39,7 +39,7 @@ export function useRoomLoader(options: UseRoomLoaderOptions) {
     // when queueMicrotask fires after tabId or path has changed.
     const capturedRoomPath = effectiveRoomPath || ''
     const capturedKBPath = effectiveKbPath || ''
-    const capturedTabId = tabId || ''
+    const capturedTabId = tabId
 
     queueMicrotask(() => {
       if (isCreatingRef.current) {

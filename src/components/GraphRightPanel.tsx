@@ -5,7 +5,7 @@ import styles from './GraphPage.module.css'
 
 interface GraphRightPanelProps {
   selectedNodeId: string | null
-  tabId?: string
+  tabId: string
   rightPanelTab: 'detail' | 'style'
   onTabChange: (tab: 'detail' | 'style') => void
 }

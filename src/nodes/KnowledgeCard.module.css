@@ -55,11 +55,6 @@
   transform: scale(1.05);
 }
 
-/* 搜索匹配 */
-.searchMatch {
-  background: rgba(241, 196, 15, 0.18) !important;
-  border-color: #f1c40f !important;
-}
 
 /* 悬停状态 */
 .hovered {

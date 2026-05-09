@@ -55,8 +55,6 @@ export interface GraphContextValue {
   // Layout
   layoutNodes: (direction?: 'RIGHT' | 'DOWN') => Promise<void>
 
-  // Search
-  highlightSearch: (query: string) => void
 
   // Persistence
   flushCurrentRoomSave: () => Promise<void>
@@ -93,7 +91,6 @@ const emptyContext: GraphContextValue = {
   updateEdgeRelation: () => {},
   updateEdgeStyle: () => {},
   layoutNodes: async () => {},
-  highlightSearch: () => {},
   flushCurrentRoomSave: async () => {},
 }
 
@@ -132,7 +129,6 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     updateEdgeRelation: graph.updateEdgeRelation,
     updateEdgeStyle: graph.updateEdgeStyle,
     layoutNodes: graph.layoutNodes,
-    highlightSearch: graph.highlightSearch,
     flushCurrentRoomSave: graph.flushCurrentRoomSave,
   }), [graph])
 

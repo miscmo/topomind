@@ -12,7 +12,7 @@ import { useTabDirtySync } from './useTabDirtySync'
 import { registerTabSaver } from '../core/close-guard'
 
 export interface UseGraphPageControllerOptions {
-  tabId?: string
+  tabId: string
 }
 
 export function useGraphPageController({ tabId }: UseGraphPageControllerOptions) {
@@ -31,9 +31,6 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
     onDirtyChange: graph.onDirtyChange,
   })
 
-  const graphHighlightRef = useRef(graph.highlightSearch)
-  graphHighlightRef.current = graph.highlightSearch
-
   useRoomLoader({
     effectiveRoomPath: nav.roomPath || null,
     effectiveKbPath: nav.kbPath || null,
@@ -42,15 +39,10 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
     isCreatingRef: graph.isCreatingRef,
   })
 
-  useEffect(() => {
-    graphHighlightRef.current(nav.searchQuery)
-  }, [nav.searchQuery])
-
   const flushCurrentRoomSaveRef = useRef(graph.flushCurrentRoomSave)
   flushCurrentRoomSaveRef.current = graph.flushCurrentRoomSave
 
   useEffect(() => {
-    if (!tabId) return
     return registerTabSaver(tabId, async () => {
       await flushCurrentRoomSaveRef.current()
     })

@@ -1,8 +1,7 @@
 import { tabStore } from '../../stores/tabStore'
-import { roomStore } from '../../stores/roomStore'
 
 export interface GraphNavigationDeps {
-  tabId?: string
+  tabId: string
   getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
   saveNow: (dirPath: string) => Promise<void>
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
@@ -16,34 +15,19 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
     const dirPath = getActiveNavState().roomPath
     if (dirPath) await saveNow(dirPath)
     clearSelection()
-    if (tabId) {
-      tabStore.getState().goBackInTab(tabId)
-      return
-    }
-    roomStore.getState().goBack()
-    const newPath = getActiveNavState().roomPath || getActiveNavState().kbPath || ''
-    await loadRoom(newPath)
+    tabStore.getState().goBackInTab(tabId)
   }
 
   const navigateToRoom = async (index: number) => {
-    const historyLength = tabId
-      ? (tabStore.getState().getRoomStateFromTab(tabId)?.roomHistory.length ?? 0)
-      : roomStore.getState().roomHistory.length
+    const historyLength = tabStore.getState().getRoomStateFromTab(tabId)?.roomHistory.length ?? 0
     if (index < 0 || index >= historyLength) return
 
     const dirPath = getActiveNavState().roomPath
     if (dirPath) await saveNow(dirPath)
     clearSelection()
 
-    if (tabId) {
-      const target = tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
-      if (target) await loadRoom(target.path)
-      return
-    }
-
-    roomStore.getState().navigateToHistoryIndex(index)
-    const navState = getActiveNavState()
-    await loadRoom(navState.roomPath || navState.kbPath || '')
+    const target = tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
+    if (target) await loadRoom(target.path)
   }
 
   const navigateToRoot = async () => {
@@ -53,25 +37,15 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
     if (!kbPath) return
     if (dirPath) await saveNow(dirPath)
     clearSelection()
-    if (tabId) {
-      const tab = tabStore.getState().getTabById(tabId)
-      if (tab?.type === 'kb') {
-        tabStore.getState().restoreRoomStateToTab(tabId, {
-          kbPath,
-          roomHistory: [],
-          currentRoomPath: kbPath,
-          currentRoomName: tab.label,
-        })
-      }
-      return
+    const tab = tabStore.getState().getTabById(tabId)
+    if (tab?.type === 'kb') {
+      tabStore.getState().restoreRoomStateToTab(tabId, {
+        kbPath,
+        roomHistory: [],
+        currentRoomPath: kbPath,
+        currentRoomName: tab.label,
+      })
     }
-    roomStore.getState().restoreRoomState({
-      kbPath,
-      roomHistory: [],
-      currentRoomPath: kbPath,
-      currentRoomName: navState.roomName || '全局',
-    })
-    await loadRoom(kbPath)
   }
 
   return { navigateBack, navigateToRoom, navigateToRoot }

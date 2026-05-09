@@ -1,4 +1,3 @@
-import { roomStore } from '../stores/roomStore'
 import { tabStore, type Tab } from '../stores/tabStore'
 import { flushTabs } from './close-guard'
 import type { RoomHistoryItem } from '../types'
@@ -26,18 +25,6 @@ function snapshotFromTab(tab: Tab): RoomSnapshot | null {
   }
 }
 
-function restoreActiveRoom(tab: Tab | undefined) {
-  if (!tab || tab.type === 'home') {
-    roomStore.getState().clearRoom()
-    return
-  }
-
-  const snapshot = snapshotFromTab(tab)
-  if (!snapshot) return
-  tabStore.getState().restoreRoomStateToTab(tab.id, snapshot)
-  roomStore.getState().restoreRoomState(snapshot)
-}
-
 async function flushCurrentTabBeforeLeaving(nextTabId: string): Promise<boolean> {
   const activeTab = tabStore.getState().getActiveTab()
   if (!activeTab || activeTab.id === nextTabId || !activeTab.isDirty) return true
@@ -50,7 +37,6 @@ export async function activateTab(tabId: string): Promise<boolean> {
   if (!tab) return false
   if (!(await flushCurrentTabBeforeLeaving(tabId))) return false
   tabStore.getState().setActiveTab(tabId)
-  restoreActiveRoom(tab)
   return true
 }
 
@@ -83,7 +69,6 @@ export async function openKBTab(kb: OpenKBTabInput): Promise<boolean> {
   }
 
   tabStore.getState().restoreRoomStateToTab(tabId, snapshot)
-  roomStore.getState().restoreRoomState(snapshot)
   tabStore.getState().setActiveTab(tabId)
   return true
 }
@@ -93,5 +78,4 @@ export function closeTab(tabId: string) {
   if (!tab || tab.id === 'home') return
 
   tabStore.getState().removeTab(tabId)
-  restoreActiveRoom(tabStore.getState().getActiveTab())
 }

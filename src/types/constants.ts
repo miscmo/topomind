@@ -28,7 +28,6 @@ export const COLORS = {
   danger: '#e74c3c',
   dangerHover: '#c0392b',
   success: '#2ecc71',
-  searchMatch: '#f1c40f',
   hoverHighlight: '#f39c12',
   edgeEvolution: '#5cb85c',
   edgeDepend: '#e8913a',

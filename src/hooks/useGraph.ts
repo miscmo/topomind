@@ -13,7 +13,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 import { useAppStore } from '../stores/appStore'
-import { useRoomStore, roomStore } from '../stores/roomStore'
 import { tabStore } from '../stores/tabStore'
 import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
@@ -24,7 +23,6 @@ import { logger } from '../core/logger'
 import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData } from '../types'
 import { buildMetaFromNodesEdges, buildNodes, buildEdges, generateId } from './useGraph/graphBuilder'
 import { buildGraphOperations, type StorageApi } from './useGraph/graphOperations'
-import { applySearchHighlight } from './useGraph/search'
 import { buildGraphNavigation } from './useGraph/navigation'
 
 export interface GraphState {
@@ -34,12 +32,9 @@ export interface GraphState {
   selectedNode: KnowledgeNode | null
 }
 
-export function useGraph(tabId?: string) {
+export function useGraph(tabId: string) {
   const storage = useStorage() as Store
   const { computeLayout } = useLayout()
-
-  const enterRoom = useRoomStore((s) => s.enterRoom)
-  const goBack = useRoomStore((s) => s.goBack)
 
   const selectNode = useAppStore((s) => s.selectNode)
   const clearSelection = useAppStore((s) => s.clearSelection)
@@ -105,23 +100,11 @@ export function useGraph(tabId?: string) {
   // ===== Navigation helpers =====
 
   const getActiveSelectedNodeId = useCallback(() => {
-    if (tabId) {
-      return tabStore.getState().getTabSelectedNode(tabId)
-    }
-    return useAppStore.getState().selectedNodeId
+    return tabStore.getState().getTabSelectedNode(tabId)
   }, [tabId])
 
   const setActiveSelectedNodeId = useCallback((nodeId: string | null) => {
-    if (tabId) {
-      tabStore.getState().setTabSelectedNode(tabId, nodeId)
-      return
-    }
-
-    if (nodeId === null) {
-      clearSelection()
-    } else {
-      selectNode(nodeId)
-    }
+    tabStore.getState().setTabSelectedNode(tabId, nodeId)
   }, [tabId, clearSelection, selectNode])
 
   const { getNavState } = useNavContext({ tabId })
@@ -368,17 +351,13 @@ export function useGraph(tabId?: string) {
       ? `${navState.kbPath}/${childPath}`
       : childPath
 
-    if (tabId) {
-      tabStore.getState().enterRoomInTab(tabId, {
-        path: absoluteChildPath,
-        kbPath: navState.kbPath || '',
-        name: childName,
-      })
-    } else {
-      enterRoom({ path: childPath, kbPath: navState.kbPath || '', name: childName })
-    }
+    tabStore.getState().enterRoomInTab(tabId, {
+      path: absoluteChildPath,
+      kbPath: navState.kbPath || '',
+      name: childName,
+    })
     logAction('房间:钻入', 'useGraph', { roomPath: childPath, roomName: childName, fromRoom: dirPath })
-  }, [getActiveNavState, tabId, enterRoom, ops])
+  }, [getActiveNavState, tabId, ops])
 
   const onNodeDoubleClick = useCallback(
     async (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
@@ -430,14 +409,6 @@ export function useGraph(tabId?: string) {
     clearSelection,
   })
 
-  // ===== Search highlight =====
-
-  const highlightSearch = useCallback((query: string) => {
-    setState((prev) => ({
-      ...prev,
-      nodes: applySearchHighlight(prev.nodes, query),
-    }))
-  }, [])
 
   // ===== Persistence =====
 
@@ -490,8 +461,6 @@ export function useGraph(tabId?: string) {
     // Layout
     layoutNodes,
 
-    // Search
-    highlightSearch,
 
     // Persistence
     flushCurrentRoomSave,

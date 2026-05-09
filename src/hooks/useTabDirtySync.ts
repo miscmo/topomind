@@ -7,7 +7,7 @@ import { useRef, useEffect } from 'react'
 import { tabStore } from '../stores/tabStore'
 
 export interface UseTabDirtySyncOptions {
-  tabId?: string
+  tabId: string
   onDirtyChange: (callback: (isModified: boolean) => void) => () => void
 }
 
@@ -20,7 +20,6 @@ export function useTabDirtySync(options: UseTabDirtySyncOptions) {
   }
 
   useEffect(() => {
-    if (!tabId) return
     return onDirtyChange((isModified: boolean) => {
       setTabDirtyRef.current!(tabId, isModified)
     })

@@ -8,7 +8,6 @@ import DOMPurify from 'dompurify'
 import { useStorage } from '../../hooks/useStorage'
 import { useAppStore } from '../../stores/appStore'
 import { usePromptStore } from '../../stores/promptStore'
-import { useRoomStore } from '../../stores/roomStore'
 import { tabStore } from '../../stores/tabStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
@@ -22,7 +21,7 @@ marked.setOptions({ breaks: true, gfm: true })
 
 interface DetailPanelProps {
   selectedNodeId: string | null
-  tabId?: string
+  tabId: string
 }
 
 const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailPanelProps) {
@@ -30,8 +29,6 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   const collapseRightPanel = useAppStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()
   const prompt = usePromptStore((s) => s.open)
-  const roomStore = useRoomStore()
-  const currentKBPath = useRoomStore((s) => s.currentKBPath)
 
   const [editMode, setEditMode] = useState(false)
   const [markdown, setMarkdown] = useState('')
@@ -154,13 +151,12 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   }, [selectedNodeId, prompt, graph, collapseRightPanel])
 
   const flushMarkdownSave = useCallback(async () => {
-    if (!tabId || !editMode || !selectedNodeId) return
+    if (!editMode || !selectedNodeId) return
     if (markdown === savedMarkdown) return
     await handleSave()
-  }, [tabId, editMode, selectedNodeId, markdown, savedMarkdown])
+  }, [editMode, selectedNodeId, markdown, savedMarkdown])
 
   useEffect(() => {
-    if (!tabId) return
     return registerTabSaver(tabId, flushMarkdownSave)
   }, [tabId, flushMarkdownSave])
 
@@ -194,14 +190,9 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
             className={styles.childTag}
             onClick={() => {
               logAction('房间:钻入', 'DetailPanel', { roomPath: child.path, roomName: child.name, source: 'child-tag' })
-              const idx = child.path.lastIndexOf('/')
-              const tab = tabId ? tabStore.getState().getTabById(tabId) : null
-              const kbPath = tab?.kbPath || (idx >= 0 ? child.path.slice(0, idx) : currentKBPath || child.path)
-              if (tabId) {
-                tabStore.getState().enterRoomInTab(tabId, { path: child.path, kbPath, name: child.name })
-              } else {
-                roomStore.enterRoom({ path: child.path, kbPath, name: child.name })
-              }
+              const tab = tabStore.getState().getTabById(tabId)
+              const kbPath = tab?.kbPath || child.path
+              tabStore.getState().enterRoomInTab(tabId, { path: child.path, kbPath, name: child.name })
             }}
             title={`进入 ${child.name}`}
           >

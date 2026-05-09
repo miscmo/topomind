@@ -10,7 +10,6 @@ const APP_INITIAL_STATE = {
   selectedNodeId: null as string | null,
   edgeMode: false,
   edgeModeSourceId: null as string | null,
-  showGitPanel: false,
   rightPanelCollapsed: false,
   rightPanelWidth: 320,
   contextMenu: {
@@ -22,7 +21,6 @@ const APP_INITIAL_STATE = {
   },
   kbRefreshTrigger: 0,
   showGrid: true,
-  searchQuery: '',
   rightPanelTab: 'detail' as 'detail' | 'style',
   currentWorkDir: null as string | null,
   selectedEdgeId: null as string | null,
@@ -43,8 +41,6 @@ interface AppState {
   edgeMode: boolean
   // 连线模式源节点 ID
   edgeModeSourceId: string | null
-  // 是否显示 Git 面板
-  showGitPanel: boolean
   // 右侧面板是否折叠
   rightPanelCollapsed: boolean
   // 右侧面板宽度
@@ -61,8 +57,6 @@ interface AppState {
   kbRefreshTrigger: number
   // 是否显示网格背景
   showGrid: boolean
-  // 搜索查询字符串
-  searchQuery: string
   // 右侧面板当前 Tab
   rightPanelTab: 'detail' | 'style'
   // 当前打开的工作目录
@@ -84,7 +78,6 @@ interface AppState {
   clearSelection: () => void
   enterEdgeMode: (sourceId: string) => void
   exitEdgeMode: () => void
-  toggleGitPanel: () => void
   collapseRightPanel: () => void
   expandRightPanel: () => void
   setRightPanelWidth: (width: number) => void
@@ -92,7 +85,6 @@ interface AppState {
   hideContextMenu: () => void
   triggerKBRefresh: () => void
   toggleGrid: () => void
-  setSearchQuery: (query: string) => void
   setRightPanelTab: (tab: 'detail' | 'style') => void
   setCurrentWorkDir: (workDir: string | null) => void
   setSelectedEdgeId: (edgeId: string | null) => void
@@ -127,8 +119,6 @@ export const useAppStore = create<AppState>((set) => ({
     edgeModeSourceId: null,
   }),
 
-  toggleGitPanel: () => set((state) => ({ showGitPanel: !state.showGitPanel })),
-
   collapseRightPanel: () => set({ rightPanelCollapsed: true }),
   expandRightPanel: () => set({ rightPanelCollapsed: false }),
 
@@ -147,7 +137,6 @@ export const useAppStore = create<AppState>((set) => ({
 
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
 
-  setSearchQuery: (query) => set({ searchQuery: query }),
   setRightPanelTab: (rightPanelTab) => set({ rightPanelTab }),
   setCurrentWorkDir: (currentWorkDir) => set({ currentWorkDir }),
   setSelectedEdgeId: (selectedEdgeId) => set({ selectedEdgeId }),

@@ -13,7 +13,7 @@ const nodeTypes = { knowledgeCard: KnowledgeCard }
 
 interface GraphCanvasProps {
   onEdgeContextMenu?: (edgeId: string, event: React.MouseEvent) => void
-  tabId?: string
+  tabId: string
 }
 
 export default memo(function GraphCanvas({ onEdgeContextMenu, tabId }: GraphCanvasProps) {
@@ -89,7 +89,7 @@ export default memo(function GraphCanvas({ onEdgeContextMenu, tabId }: GraphCanv
           <Background variant={'dots' as BackgroundVariant} gap={20} size={1} color="#c8cdd6" />
         )}
       </ReactFlow>
-      <Toolbar tabId={tabId} zoomLevel={zoomLevel} />
+      <Toolbar zoomLevel={zoomLevel} />
     </>
   )
 })

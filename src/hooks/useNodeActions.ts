@@ -21,11 +21,11 @@ export interface UseNodeActionsOptions {
   /** Called after an action to notify parent (e.g., for focus management) */
   onAction?: () => void
   graph?: ReturnType<typeof useGraphContext>
-  /** Tab ID for setting dirty state directly — avoids getActiveTab() which may return wrong tab */
-  tabId?: string
+  /** Tab ID for setting dirty state directly */
+  tabId: string
 }
 
-export function useNodeActions(options: UseNodeActionsOptions = {}) {
+export function useNodeActions(options: UseNodeActionsOptions) {
   const { onAction, graph: graphFromOptions, tabId } = options
   const graphFromContext = useGraphContext()
   const graph = graphFromOptions ?? graphFromContext
@@ -33,10 +33,8 @@ export function useNodeActions(options: UseNodeActionsOptions = {}) {
   const selectNode = useAppStore((s) => s.selectNode)
   const prompt = usePromptStore((s) => s.open)
 
-  // Set dirty state: use tabId directly if provided, otherwise fall back to getActiveTab()
   const setDirty = useCallback((isDirty: boolean) => {
-    const tid = tabId ?? tabStore.getState().getActiveTab()?.id
-    if (tid) tabStore.getState().setTabDirty(tid, isDirty)
+    tabStore.getState().setTabDirty(tabId, isDirty)
   }, [tabId])
 
   // Use nodesMapRef/edgesMapRef (Map) for O(1) lookup instead of nodesRef/edgesRef arrays.

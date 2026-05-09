@@ -13,7 +13,7 @@ import { useCallback } from 'react'
 import { logAction } from '../../core/log-backend'
 
 interface UseBreadcrumbActionsOptions {
-  tabId?: string
+  tabId: string
   graph: {
     navigateToRoot: () => Promise<void>
     navigateToRoom: (index: number) => Promise<void>
@@ -45,7 +45,7 @@ export function useBreadcrumbActions({
         roomName,
         roomPath,
         source: 'breadcrumb-history',
-        tabId: tabId || '',
+        tabId,
       })
       await graph.navigateToRoom(index)
     },

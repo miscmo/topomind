@@ -21,7 +21,6 @@ function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
         styles.node,
         isContainer ? styles.container : styles.leaf,
         selected ? styles.selected : '',
-        data.searchMatch ? styles.searchMatch : '',
         data.hovered ? styles.hovered : '',
         data.connectTarget ? styles.connectTarget : '',
         hasUnsaved ? styles.unsaved : '',

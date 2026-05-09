@@ -18,7 +18,7 @@ import ContextMenu from './ContextMenu/ContextMenu'
 import styles from './GraphPage.module.css'
 
 interface GraphPageProps {
-  tabId?: string
+  tabId: string
 }
 
 export default memo(function GraphPage({ tabId }: GraphPageProps) {

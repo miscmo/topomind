@@ -9,7 +9,7 @@ import { logAction } from '../core/log-backend'
 export interface UsePageLoggingOptions {
   effectiveRoomPath: string | null
   effectiveKbPath: string | null
-  tabId?: string
+  tabId: string
 }
 
 export function usePageLogging(options: UsePageLoggingOptions) {
@@ -19,7 +19,7 @@ export function usePageLogging(options: UsePageLoggingOptions) {
     logAction('页面:进入图谱', 'GraphPage', {
       currentRoomPath: effectiveRoomPath || '',
       currentKBPath: effectiveKbPath || '',
-      tabId: tabId || '',
+      tabId,
     })
   }, [effectiveRoomPath, effectiveKbPath, tabId])
 }
