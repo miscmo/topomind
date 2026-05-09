@@ -4,20 +4,17 @@
  */
 import { useEffect, useState, memo } from 'react'
 import { useAppStore } from '../../stores/appStore'
-import { useRoomStore } from '../../stores/roomStore'
 import { useStorage } from '../../hooks/useStorage'
 import { usePromptStore } from '../../stores/promptStore'
 import { logAction } from '../../core/log-backend'
 import { logger } from '../../core/logger'
+import { openKBTab } from '../../core/tab-flow'
 import type { KBListItem } from '../../types'
 import { DOMAIN_COLORS } from '../../types'
 import styles from './NavTree.module.css'
 
 export default memo(function NavTree() {
   const [kbs, setKbs] = useState<KBListItem[]>([])
-  const showGraph = useAppStore((s) => s.showGraph)
-  const setCurrentKB = useRoomStore((s) => s.setCurrentKB)
-  const enterRoom = useRoomStore((s) => s.enterRoom)
   const triggerKBRefresh = useAppStore((s) => s.triggerKBRefresh)
   const storage = useStorage()
 
@@ -33,10 +30,8 @@ export default memo(function NavTree() {
     load()
   }, [storage, triggerKBRefresh])
 
-  const handleKBOpen = (kb: KBListItem) => {
-    setCurrentKB(kb.path)
-    enterRoom({ path: kb.path, kbPath: kb.path, name: kb.name })
-    showGraph()
+  const handleKBOpen = async (kb: KBListItem) => {
+    await openKBTab(kb)
   }
 
   const prompt = usePromptStore((s) => s.open)

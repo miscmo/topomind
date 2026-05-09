@@ -4,14 +4,13 @@
  */
 import { useState, useEffect, useRef, memo } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { useRoomStore, roomStore } from '../stores/roomStore'
-import { useTabStore, tabStore } from '../stores/tabStore'
 import { useStorage } from '../hooks/useStorage'
 import { usePlatform } from '../hooks/usePlatform'
 import { logAction } from '../core/log-backend'
 import { logger } from '../core/logger'
 import { useConfirmStore } from '../stores/confirmStore'
 import { usePromptStore } from '../stores/promptStore'
+import { openKBTab } from '../core/tab-flow'
 import styles from './HomePage.module.css'
 
 interface KBItem {
@@ -31,12 +30,7 @@ interface KBContextMenu {
 }
 
 export default function HomePage() {
-  const showGraph = useAppStore((s) => s.showGraph)
   const currentWorkDir = useAppStore((s) => s.currentWorkDir)
-  const setActiveTab = useTabStore((s) => s.setActiveTab)
-  const addKBTab = useTabStore((s) => s.addKBTab)
-  const restoreRoomStateToTab = useTabStore((s) => s.restoreRoomStateToTab)
-  const tabs = useTabStore((s) => s.tabs)
   const storage = useStorage()
   const platform = usePlatform()
   const [loading, setLoading] = useState(false)
@@ -202,39 +196,9 @@ export default function HomePage() {
     }
   }
 
-  function openKB(kb: KBItem) {
-    const tabId = `kb:${kb.path}`
-    const existing = tabs.find((t) => t.id === tabId)
-
-    if (existing) {
-      const roomState = tabStore.getState().getRoomStateFromTab(tabId)
-      const restoredRoomState = {
-        kbPath: kb.path,
-        roomHistory: roomState?.roomHistory ?? [],
-        currentRoomPath: roomState?.currentRoomPath ?? kb.path,
-        currentRoomName: roomState?.currentRoomName || kb.name,
-      }
-      restoreRoomStateToTab(tabId, restoredRoomState)
-      roomStore.getState().restoreRoomState(restoredRoomState)
-      setActiveTab(tabId)
-      showGraph()
-    } else {
-      addKBTab({
-        id: tabId,
-        label: kb.name,
-        kbPath: kb.path,
-        isDirty: false,
-      })
-      roomStore.getState().restoreRoomState({
-        kbPath: kb.path,
-        roomHistory: [],
-        currentRoomPath: kb.path,
-        currentRoomName: kb.name,
-      })
-      setActiveTab(tabId)
-      showGraph()
-    }
-
+  async function openKB(kb: KBItem) {
+    const opened = await openKBTab(kb)
+    if (!opened) return
     logAction('知识库:打开', 'HomePage', { kbPath: kb.path, kbName: kb.name, nodeCount: kb.nodeCount })
   }
 

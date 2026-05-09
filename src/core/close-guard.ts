@@ -21,7 +21,11 @@ export function registerTabSaver(tabId: string, saver: Saver) {
 export async function flushTabs(tabIds: string[]): Promise<{ ok: boolean; failedTabId?: string }> {
   for (const tabId of tabIds) {
     const saver = tabSavers.get(tabId)
-    if (!saver) continue
+    if (!saver) {
+      const tab = tabStore.getState().getTabById(tabId)
+      if (tab?.isDirty) return { ok: false, failedTabId: tabId }
+      continue
+    }
     try {
       await saver()
       tabStore.getState().setTabDirty(tabId, false)

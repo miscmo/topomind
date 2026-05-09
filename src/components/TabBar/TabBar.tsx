@@ -4,7 +4,7 @@
  */
 import { memo } from 'react'
 import { useTabStore, type Tab } from '../../stores/tabStore'
-import { useAppStore } from '../../stores/appStore'
+import { activateTab } from '../../core/tab-flow'
 import styles from './TabBar.module.css'
 
 interface TabBarProps {
@@ -48,36 +48,15 @@ const TabItem = memo(function TabItem({ tab, isActive, onClick, onClose }: {
 export default memo(function TabBar({ onCloseTab }: TabBarProps) {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
-  const setActiveTab = useTabStore((s) => s.setActiveTab)
-  const getRoomStateFromTab = useTabStore((s) => s.getRoomStateFromTab)
-  const restoreRoomStateToTab = useTabStore((s) => s.restoreRoomStateToTab)
-  const showHome = useAppStore((s) => s.showHome)
 
   // 处理 Tab 切换：纯恢复已保存状态，不重放 enterRoom 导航动作
-  const handleTabClick = (tab: Tab) => {
+  const handleTabClick = async (tab: Tab) => {
     if (tab.id === activeTabId) return
-
-    if (tab.id === 'home') {
-      showHome()
-      setActiveTab(tab.id)
-      return
-    }
-
-    if (tab.type === 'kb' && tab.kbPath) {
-      setActiveTab(tab.id)
-      const roomState = getRoomStateFromTab(tab.id)
-      restoreRoomStateToTab(tab.id, {
-        kbPath: tab.kbPath,
-        roomHistory: roomState?.roomHistory ?? [],
-        currentRoomPath: roomState?.currentRoomPath ?? tab.kbPath,
-        currentRoomName: roomState?.currentRoomName || tab.label,
-      })
-    }
+    await activateTab(tab.id)
   }
 
   // 有知识库 Tab 时才渲染（主页 Tab 本身不渲染 TabBar）
-  const hasKbTab = tabs.some((t) => t.type === 'kb')
-  if (!hasKbTab) return null
+  if (tabs.length <= 1) return null
 
   return (
     <div className={styles.bar} role="tablist">

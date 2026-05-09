@@ -78,8 +78,7 @@ interface AppState {
   }
 
   // Actions
-  showGraph: () => void
-  showHome: () => void
+  showWorkspace: () => void
   showSetup: () => void
   selectNode: (nodeId: string | null) => void
   clearSelection: () => void
@@ -107,8 +106,7 @@ export const useAppStore = create<AppState>((set) => ({
   ...APP_INITIAL_STATE,
 
   // Actions
-  showGraph: () => set({ view: 'graph' }),
-  showHome: () => set({ view: 'home' }),
+  showWorkspace: () => set({ view: 'workspace' }),
   showSetup: () => set({ view: 'setup' }),
 
   selectNode: (nodeId) => set({ selectedNodeId: nodeId }),

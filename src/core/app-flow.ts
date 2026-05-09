@@ -5,5 +5,5 @@ export async function enterHome(workDir: string, options: { applyWindowState?: b
     await window.electronAPI?.invoke('app:navigateHome')
   }
   useAppStore.getState().setCurrentWorkDir(workDir)
-  useAppStore.getState().showHome()
+  useAppStore.getState().showWorkspace()
 }

@@ -18,6 +18,7 @@ import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
 import { flushAllDirtyTabs, flushTabs } from './core/close-guard'
+import { closeTab } from './core/tab-flow'
 
 export default memo(function App() {
   const [isMonitorWindow, setIsMonitorWindow] = useState(
@@ -27,7 +28,6 @@ export default memo(function App() {
   const initHomeTab = useTabStore((s) => s.initHomeTab)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
-  const removeTab = useTabStore((s) => s.removeTab)
   const confirmOpen = useConfirmStore((s) => s.open)
   const view = useAppStore((s) => s.view)
 
@@ -71,7 +71,7 @@ export default memo(function App() {
       }
     }
 
-    removeTab(tabId)
+    closeTab(tabId)
     logAction('Tab:关闭', 'App', { tabId, label: tab.label, wasDirty: tab.isDirty })
   }
 

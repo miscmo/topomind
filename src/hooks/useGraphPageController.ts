@@ -4,7 +4,6 @@
  * 等多个子模块，统一管理 GraphPage 的页面逻辑。
  */
 import { useEffect, useRef } from 'react'
-import { useAppStore } from '../stores/appStore'
 import { useNavContext } from './useNavContext'
 import { useGraph } from './useGraph'
 import { usePageLogging } from './usePageLogging'
@@ -20,10 +19,8 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
   const { getNavState } = useNavContext({ tabId })
   const nav = getNavState()
   const graph = useGraph(tabId)
-  const view = useAppStore((s) => s.view)
 
   usePageLogging({
-    view,
     effectiveRoomPath: nav.roomPath || null,
     effectiveKbPath: nav.kbPath || null,
     tabId,
@@ -59,5 +56,5 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
     })
   }, [tabId])
 
-  return { nav, graph, view }
+  return { nav, graph }
 }

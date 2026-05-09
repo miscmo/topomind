@@ -22,7 +22,7 @@ interface GraphPageProps {
 }
 
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
-  const { nav, graph, view } = useGraphPageController({ tabId })
+  const { nav, graph } = useGraphPageController({ tabId })
   const { getNavState } = useNavContext({ tabId })
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
@@ -50,8 +50,6 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
       addChildNode(parentId)
     },
   })
-
-  if (view !== 'graph') return null
 
   return (
     <GraphContextProvider graph={graph}>

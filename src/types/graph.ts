@@ -8,7 +8,7 @@ import type { Node, Edge } from '@xyflow/react'
 // ============== 视图状态 ==============
 
 /** 应用视图类型 */
-export type AppView = 'setup' | 'home' | 'graph'
+export type AppView = 'setup' | 'workspace'
 
 // ============== 图谱元数据 ==============
 

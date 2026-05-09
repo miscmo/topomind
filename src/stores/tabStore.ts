@@ -97,9 +97,13 @@ export const tabStore = create<TabState>()((set, get) => ({
    * 创建 id='home' 的 Tab，并将 activeTabId 指向它
    */
   initHomeTab: () => {
-    set({
-      tabs: [{ id: 'home', type: 'home', label: '首页', isDirty: false }],
-      activeTabId: 'home',
+    set((state) => {
+      const hasHomeTab = state.tabs.some((tab) => tab.id === 'home')
+      if (hasHomeTab) return state
+      return {
+        tabs: [{ id: 'home', type: 'home', label: '首页', isDirty: false }, ...state.tabs],
+        activeTabId: state.activeTabId || 'home',
+      }
     })
   },
 

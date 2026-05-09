@@ -9,6 +9,7 @@ import { useStorage } from '../../hooks/useStorage'
 import { useAppStore } from '../../stores/appStore'
 import { usePromptStore } from '../../stores/promptStore'
 import { useRoomStore } from '../../stores/roomStore'
+import { tabStore } from '../../stores/tabStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
 import styles from './DetailPanel.module.css'
@@ -194,8 +195,13 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
             onClick={() => {
               logAction('房间:钻入', 'DetailPanel', { roomPath: child.path, roomName: child.name, source: 'child-tag' })
               const idx = child.path.lastIndexOf('/')
-              const kbPath = idx >= 0 ? child.path.slice(0, idx) : currentKBPath || child.path
-              roomStore.enterRoom({ path: child.path, kbPath, name: child.name })
+              const tab = tabId ? tabStore.getState().getTabById(tabId) : null
+              const kbPath = tab?.kbPath || (idx >= 0 ? child.path.slice(0, idx) : currentKBPath || child.path)
+              if (tabId) {
+                tabStore.getState().enterRoomInTab(tabId, { path: child.path, kbPath, name: child.name })
+              } else {
+                roomStore.enterRoom({ path: child.path, kbPath, name: child.name })
+              }
             }}
             title={`进入 ${child.name}`}
           >
