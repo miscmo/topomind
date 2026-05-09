@@ -58,7 +58,6 @@ export interface FSBResult {
 
 export interface FSB {
   open: () => Promise<unknown>
-  clearAll: () => Promise<unknown>
   initWorkDir: () => Promise<unknown>
   listChildren: (parentPath: string) => Promise<FSBChildInfo[]>
   mkDir: (dirPath: string, meta?: object | null) => Promise<string>
@@ -76,19 +75,16 @@ export interface FSB {
   writeBlobFile: (filePath: string, buffer: ArrayBuffer) => Promise<unknown>
   readBlobFile: (filePath: string) => Promise<ArrayBuffer | null>
   setWorkDir: (dirPath: string) => Promise<FSBResult>
-  ensureCardDir: (cardPath: string) => Promise<unknown>
   selectWorkDirCandidate: () => Promise<FSBResult>
   createWorkDir: (dirPath: string) => Promise<FSBResult>
   importKB: (sourcePath: string) => Promise<string>
   countChildren: (p: string) => Promise<number>
-  getRootDir: () => Promise<string | null>
 }
 
 // ===== FSB 实现 =====
 
 const FSBImpl: FSB = {
   open: () => _call('fs:init'),
-  clearAll: () => _call('fs:clearAll'),
   initWorkDir: () => _call('fs:init'),
 
   listChildren: (parentPath) => _call('fs:listChildren', parentPath) as Promise<FSBChildInfo[]>,
@@ -110,12 +106,10 @@ const FSBImpl: FSB = {
   readBlobFile: (filePath) => _call('fs:readBlobFile', filePath) as Promise<ArrayBuffer | null>,
 
   setWorkDir: (dirPath) => _call('fs:setWorkDir', dirPath) as Promise<FSBResult>,
-  ensureCardDir: (cardPath) => _call('fs:ensureCardDir', cardPath),
   selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate') as Promise<FSBResult>,
   createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath) as Promise<FSBResult>,
   importKB: (sourcePath) => _call('fs:importKB', sourcePath) as Promise<string>,
   countChildren: (p) => _call('fs:countChildren', p) as Promise<number>,
-  getRootDir: () => _call('fs:getRootDir') as Promise<string | null>,
 }
 
 export { FSBImpl as FSB }

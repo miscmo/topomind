@@ -32,6 +32,7 @@ export default memo(function App() {
   const confirmOpen = useConfirmStore((s) => s.open)
   const view = useAppStore((s) => s.view)
   const showHome = useAppStore((s) => s.showHome)
+  const currentWorkDir = useAppStore((s) => s.currentWorkDir)
   const storage = useStorage()
 
   useEffect(() => { initHomeTab() }, [initHomeTab])
@@ -51,13 +52,12 @@ export default memo(function App() {
     let cancelled = false
     async function checkAndNavigate() {
       try {
-        const rootDir = await storage.getRootDir()
-        if (rootDir && !cancelled) {
+        if (currentWorkDir && !cancelled) {
           const initResult = await storage.init()
           const valid = typeof initResult === 'object' && (initResult as { valid?: boolean }).valid
           if (!cancelled && valid) {
             showHome()
-            logAction('App:auto-navigate-home', 'App', { rootDir })
+            logAction('App:auto-navigate-home', 'App', { rootDir: currentWorkDir })
           }
         }
       } catch {
@@ -65,7 +65,7 @@ export default memo(function App() {
     }
     checkAndNavigate()
     return () => { cancelled = true }
-  }, [showHome, storage])
+  }, [currentWorkDir, showHome, storage])
 
   useEffect(() => {
     const handleHashChange = () => setIsMonitorWindow(window.location.hash === '#/monitor')

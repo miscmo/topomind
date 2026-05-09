@@ -307,24 +307,6 @@ function createFileService() {
       return { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
     },
 
-    ensureCardDir: function(cardPath) {
-      if (!cardPath) return;
-      var d = _fs_abs(cardPath);
-      if (nodeFs.existsSync(d)) return;
-      var segments = cardPath.split('/').filter(Boolean);
-      var parent = _fs_kbsDir();
-      for (var i = 0; i < segments.length - 1; i++) {
-        parent = nodePath.join(parent, _fs_safeSegment(segments[i]));
-        _fs_ensureDir(parent);
-      }
-      var finalName = _fs_uniqueFolderName(parent, segments[segments.length - 1]);
-      d = nodePath.join(parent, finalName);
-      _fs_ensureDir(d);
-      if (!nodeFs.existsSync(_fs_graphFilePath(d))) {
-        _fs_writeJsonFile(_fs_graphFilePath(d), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
-      }
-    },
-
     writeGraphMeta: function(dirPath, meta) {
       var d = _fs_abs(dirPath);
       if (!nodeFs.existsSync(d)) {
@@ -389,20 +371,6 @@ function createFileService() {
       if (!nodeFs.existsSync(f)) return null;
       var buf = nodeFs.readFileSync(f);
       return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-    },
-
-    clearAll: function() {
-      var kbRoot = nodePath.resolve(_fs_kbsDir());
-      if (!nodeFs.existsSync(kbRoot)) { _fs_ensureDir(kbRoot); return; }
-      try {
-        nodeFs.readdirSync(kbRoot, { withFileTypes: true }).forEach(function(e) {
-          if (e.isDirectory() && !e.name.startsWith('.')) {
-            nodeFs.rmSync(nodePath.join(kbRoot, e.name), { recursive: true, force: true });
-          }
-        });
-      } catch (e) {
-        // 静默处理：目录删除失败不影响 clearAll 后续流程
-      }
     },
 
     importKB: function(sourcePath) {

@@ -176,9 +176,6 @@ export function createStore(adapter: StorageAdapterExtended) {
       } catch (e) { logger.catch('Store.loadImage', `加载图片失败: ${imgPath}`, e); throw e }
     },
     revokeAllImageUrls() { imageUrls.revokeAll() },
-    async clearAll() {
-      try { await adapter.clearVault() } catch (e) { logger.catch('Store.clearAll', '清除所有数据失败', e); throw e }
-    },
     async importKB(sourcePath: string) {
       try {
         const imported = await adapter.importKB('', { ref: sourcePath, name: '', coverRef: null })
@@ -189,12 +186,6 @@ export function createStore(adapter: StorageAdapterExtended) {
       try {
         return await adapter.countSubCards(cardPath)
       } catch (e) { logger.catch('Store.countChildren', `统计子节点失败: ${cardPath}`, e); throw e }
-    },
-    async getRootDir(): Promise<string | null> {
-      try { return await adapter.getVaultRoot() } catch (e) { logger.catch('Store.getRootDir', '获取根目录失败', e); throw e }
-    },
-    ensureCardDir(cardPath: string) {
-      try { return adapter.ensureCard(cardPath) } catch (e) { logger.catch('Store.ensureCardDir', `确保目录存在失败: ${cardPath}`, e); throw e }
     },
     async readConfig(): Promise<VaultConfig> {
       const now = Date.now()
@@ -239,9 +230,6 @@ const stubAdapter: StorageAdapterExtended = {
   countSubCards: async () => 0,
   readCardLayout: async () => ({ nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }),
   writeCardLayout: async () => undefined,
-  getVaultRoot: async () => null,
-  clearVault: async () => undefined,
-  ensureCard: async () => undefined,
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => undefined,
   writeCardAsset: async () => undefined,

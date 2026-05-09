@@ -15,12 +15,7 @@ export type StorageAdapter =
  * engine-agnostic StorageAdapter (Vault/KB/Card/Graph interfaces).
  */
 export interface StorageAdapterExtended extends StorageAdapter {
-  // Vault operations (workspace)
-  getVaultRoot: () => Promise<string | null>
-  clearVault: () => Promise<void>
-
   // Card operations not in ICardStorage
-  ensureCard: (cardPath: string) => Promise<void>
   readCardMarkdown: (cardPath: string) => Promise<string>
   writeCardMarkdown: (cardPath: string, content: string) => Promise<void>
 

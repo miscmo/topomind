@@ -133,7 +133,7 @@ export const fileStorageAdapter: StorageAdapterExtended = {
   },
 
   removeVault: async (vaultRef: VaultRef): Promise<void> => {
-    await FSB.clearAll()
+    await FSB.rmDir(vaultRef)
   },
 
   // ===== Core StorageAdapter (IKBSStorage) =====
@@ -202,21 +202,7 @@ export const fileStorageAdapter: StorageAdapterExtended = {
     await FSB.writeGraphMeta(kbRef, convertGraphToFSB(meta) as Parameters<typeof FSB.writeGraphMeta>[1])
   },
 
-  // ===== StorageAdapterExtended: Vault operations =====
-
-  getVaultRoot: async () => {
-    return FSB.getRootDir()
-  },
-
-  clearVault: async () => {
-    await FSB.clearAll()
-  },
-
   // ===== StorageAdapterExtended: Card operations =====
-
-  ensureCard: async (cardPath: string) => {
-    await FSB.ensureCardDir(cardPath)
-  },
 
   readCardMarkdown: async (cardPath: string) => {
     return FSB.readFile(`${cardPath}/_content.md`)

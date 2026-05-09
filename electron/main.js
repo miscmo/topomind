@@ -159,7 +159,6 @@ function registerIPC() {
   ipcMain.handle('fs:renameKB', function(e, p, n) { return fileService.renameKB(p, n); });
   ipcMain.handle('fs:readGraphMeta', function(e, p) { return fileService.readGraphMeta(p); });
   ipcMain.handle('fs:writeGraphMeta', function(e, p, m) { fileService.writeGraphMeta(p, m); });
-  ipcMain.handle('fs:ensureCardDir', function(e, p) { fileService.ensureCardDir(p); });
   ipcMain.handle('fs:getDir', function(e, p) { return fileService.getDir(p); });
   ipcMain.handle('fs:updateCardMeta', function(e, p, n) { return fileService.updateCardMeta(p, n); });
   ipcMain.handle('fs:readFile', function(e, p) { return fileService.readFile(p); });
@@ -167,7 +166,6 @@ function registerIPC() {
   ipcMain.handle('fs:deleteFile', function(e, p) { fileService.deleteFile(p); });
   ipcMain.handle('fs:writeBlobFile', function(e, p, b) { fileService.writeBlobFile(p, b); });
   ipcMain.handle('fs:readBlobFile', function(e, p) { return fileService.readBlobFile(p); });
-  ipcMain.handle('fs:clearAll', function() { fileService.clearAll(); });
   ipcMain.handle('fs:countChildren', function(e, dirPath) {
     var kbRoot = nodePath.join(fileService.getRootDir(), 'kbs');
     var d = dirPath ? nodePath.join(kbRoot, dirPath) : kbRoot;
@@ -176,14 +174,6 @@ function registerIPC() {
       return nodeFs.readdirSync(d, { withFileTypes: true })
         .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; }).length;
     } catch(err) { return 0; }
-  });
-  ipcMain.handle('fs:getRootDir', function() {
-    var root = fileService.getRootDir();
-    LogService.write({
-      level: 'DEBUG', module: 'Main', action: 'fs:getRootDir',
-      message: '获取根目录', params: { rootDir: root },
-    });
-    return root;
   });
   ipcMain.handle('fs:readAppConfig', function() {
     return fileService.readAppConfig();

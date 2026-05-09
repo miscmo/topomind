@@ -32,6 +32,7 @@ interface KBContextMenu {
 
 export default function HomePage() {
   const showGraph = useAppStore((s) => s.showGraph)
+  const currentWorkDir = useAppStore((s) => s.currentWorkDir)
   const setActiveTab = useTabStore((s) => s.setActiveTab)
   const addKBTab = useTabStore((s) => s.addKBTab)
   const restoreRoomStateToTab = useTabStore((s) => s.restoreRoomStateToTab)
@@ -40,7 +41,6 @@ export default function HomePage() {
   const platform = usePlatform()
   const [loading, setLoading] = useState(false)
   const [kbs, setKbs] = useState<KBItem[]>([])
-  const [workDir, setWorkDir] = useState('')
   const [message, setMessage] = useState('')
   const [messageError, setMessageError] = useState(false)
 
@@ -165,14 +165,10 @@ export default function HomePage() {
     logAction('HomePage:开始加载知识库列表', 'HomePage', {})
     setLoading(true)
     try {
-      const [list, dir] = await Promise.all([
-        storage.listKBs(),
-        storage.getRootDir(),
-      ])
-      setWorkDir(dir || '')
+      const list = await storage.listKBs()
       logAction('HomePage:知识库列表加载成功', 'HomePage', {
         kbCount: (list || []).length,
-        workDir: dir,
+        workDir: currentWorkDir,
       })
       // listKBs() already returns only KB directories as KBListItem[]
       const kbList = list || []
@@ -254,8 +250,8 @@ export default function HomePage() {
   }
 
   function truncatedWorkDir() {
-    if (!workDir) return ''
-    return workDir.length <= 48 ? workDir : workDir.slice(0, 12) + '...' + workDir.slice(-32)
+    if (!currentWorkDir) return ''
+    return currentWorkDir.length <= 48 ? currentWorkDir : currentWorkDir.slice(0, 12) + '...' + currentWorkDir.slice(-32)
   }
 
   // ===== 新建知识库 =====
@@ -327,9 +323,9 @@ export default function HomePage() {
             <span>可漫游拓扑知识大脑</span>
           </div>
         </div>
-        {workDir && (
+        {currentWorkDir && (
           <div className={styles.workdirBar}>
-            <span className={styles.workdirPath} title={workDir}>📂 {truncatedWorkDir()}</span>
+            <span className={styles.workdirPath} title={currentWorkDir}>📂 {truncatedWorkDir()}</span>
             <button className={styles.workdirSwitch} onClick={switchWorkDir} title="切换工作目录">切换</button>
           </div>
         )}

@@ -942,10 +942,7 @@ return (
 | `fs:deleteFile` | 删除文件 |
 | `fs:writeBlobFile` | 写入二进制文件 |
 | `fs:readBlobFile` | 读取二进制文件 |
-| `fs:clearAll` | 清除所有数据 |
 | `fs:countChildren` | 统计子节点数 |
-| `fs:ensureCardDir` | 确保卡片目录存在 |
-| `fs:getRootDir` | 获取根目录 |
 | `fs:setWorkDir` | 验证并设置工作目录 |
 | `fs:selectWorkDirCandidate` | 选择工作目录候选 |
 | `fs:createWorkDir` | 创建工作目录 |

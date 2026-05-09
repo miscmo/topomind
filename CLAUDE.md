@@ -92,7 +92,7 @@ interface GraphMeta {
 
 通过 `window.electronAPI.invoke` 调用。
 
-**文件系统**：`fs:init` / `fs:listChildren` / `fs:mkDir` / `fs:rmDir` / `fs:renameKB` / `fs:readGraphMeta` / `fs:writeGraphMeta` / `fs:getDir` / `fs:updateCardMeta` / `fs:readFile` / `fs:writeFile` / `fs:deleteFile` / `fs:writeBlobFile` / `fs:readBlobFile` / `fs:clearAll` / `fs:countChildren` / `fs:ensureCardDir` / `fs:getRootDir` / `fs:setWorkDir` / `fs:selectWorkDirCandidate` / `fs:createWorkDir` / `fs:importKB`
+**文件系统**：`fs:init` / `fs:listChildren` / `fs:mkDir` / `fs:rmDir` / `fs:renameKB` / `fs:readGraphMeta` / `fs:writeGraphMeta` / `fs:getDir` / `fs:updateCardMeta` / `fs:readFile` / `fs:writeFile` / `fs:deleteFile` / `fs:writeBlobFile` / `fs:readBlobFile` / `fs:countChildren` / `fs:setWorkDir` / `fs:selectWorkDirCandidate` / `fs:createWorkDir` / `fs:importKB`
 
 **Git**：`git:checkAvailable` / `git:init` / `git:status` / `git:statusBatch` / `git:isDirty` / `git:commit` / `git:log` / `git:diff` / `git:diffFiles` / `git:commitDiffFiles` / `git:commitFileDiff` / `git:push` / `git:pull` / `git:fetch` / `git:remote:get` / `git:remote:set` / `git:conflict:list` / `git:conflict:show` / `git:conflict:resolve` / `git:conflict:complete` / `git:auth:setToken` / `git:auth:getSSHKey` / `git:auth:setAuthType` / `git:auth:getAuthType`
 
