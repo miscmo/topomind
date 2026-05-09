@@ -57,54 +57,49 @@ export interface FSBResult {
 }
 
 export interface FSB {
-  open: () => Promise<unknown>
-  initWorkDir: () => Promise<unknown>
-  listChildren: (parentPath: string) => Promise<FSBChildInfo[]>
-  mkDir: (dirPath: string, meta?: object | null) => Promise<string>
-  rmDir: (dirPath: string) => Promise<unknown>
-  renameKB: (kbPath: string, newName: string) => Promise<string>
-  readGraphMeta: (dirPath: string) => Promise<FSBGraphMeta>
-  writeGraphMeta: (dirPath: string, meta: FSBGraphMeta) => Promise<unknown>
-  getDir: (dirPath: string) => Promise<unknown>
-  updateCardMeta: (cardPath: string, newName: string) => Promise<string>
-  readFile: (filePath: string) => Promise<string>
-  readAppConfig: () => Promise<unknown>
-  writeAppConfig: (content: unknown) => Promise<unknown>
-  writeFile: (filePath: string, content: string) => Promise<unknown>
-  deleteFile: (filePath: string) => Promise<unknown>
+  listChildren: (rootDir: string, parentPath: string) => Promise<FSBChildInfo[]>
+  mkDir: (rootDir: string, dirPath: string, meta?: object | null) => Promise<string>
+  rmDir: (rootDir: string, dirPath: string) => Promise<unknown>
+  renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
+  readGraphMeta: (rootDir: string, dirPath: string) => Promise<FSBGraphMeta>
+  writeGraphMeta: (rootDir: string, dirPath: string, meta: FSBGraphMeta) => Promise<unknown>
+  getDir: (rootDir: string, dirPath: string) => Promise<unknown>
+  updateCardMeta: (rootDir: string, cardPath: string, newName: string) => Promise<string>
+  readFile: (rootDir: string, filePath: string) => Promise<string>
+  readAppConfig: (rootDir: string) => Promise<unknown>
+  writeAppConfig: (rootDir: string, content: unknown) => Promise<unknown>
+  writeFile: (rootDir: string, filePath: string, content: string) => Promise<unknown>
+  deleteFile: (rootDir: string, filePath: string) => Promise<unknown>
   setWorkDir: (dirPath: string) => Promise<FSBResult>
   selectWorkDirCandidate: () => Promise<FSBResult>
   createWorkDir: (dirPath: string) => Promise<FSBResult>
-  importKB: (sourcePath: string) => Promise<string>
-  countChildren: (p: string) => Promise<number>
+  importKB: (rootDir: string, sourcePath: string) => Promise<string>
+  countChildren: (rootDir: string, p: string) => Promise<number>
 }
 
 // ===== FSB 实现 =====
 
 const FSBImpl: FSB = {
-  open: () => _call('fs:init'),
-  initWorkDir: () => _call('fs:init'),
+  listChildren: (rootDir, parentPath) => _call('fs:listChildren', rootDir, parentPath) as Promise<FSBChildInfo[]>,
+  mkDir: (rootDir, dirPath, meta) => _call('fs:mkDir', rootDir, dirPath, meta || {}) as Promise<string>,
+  rmDir: (rootDir, dirPath) => _call('fs:rmDir', rootDir, dirPath),
+  renameKB: (rootDir, kbPath, newName) => _call('fs:renameKB', rootDir, kbPath, newName) as Promise<string>,
+  readGraphMeta: (rootDir, dirPath) => _call('fs:readGraphMeta', rootDir, dirPath) as Promise<FSBGraphMeta>,
+  writeGraphMeta: (rootDir, dirPath, meta) => _call('fs:writeGraphMeta', rootDir, dirPath, meta),
+  getDir: (rootDir, dirPath) => _call('fs:getDir', rootDir, dirPath),
+  updateCardMeta: (rootDir, cardPath, newName) => _call('fs:updateCardMeta', rootDir, cardPath, newName) as Promise<string>,
 
-  listChildren: (parentPath) => _call('fs:listChildren', parentPath) as Promise<FSBChildInfo[]>,
-  mkDir: (dirPath, meta) => _call('fs:mkDir', dirPath, meta || {}) as Promise<string>,
-  rmDir: (dirPath) => _call('fs:rmDir', dirPath),
-  renameKB: (kbPath, newName) => _call('fs:renameKB', kbPath, newName) as Promise<string>,
-  readGraphMeta: (dirPath) => _call('fs:readGraphMeta', dirPath) as Promise<FSBGraphMeta>,
-  writeGraphMeta: (dirPath, meta) => _call('fs:writeGraphMeta', dirPath, meta),
-  getDir: (dirPath) => _call('fs:getDir', dirPath),
-  updateCardMeta: (cardPath, newName) => _call('fs:updateCardMeta', cardPath, newName) as Promise<string>,
-
-  readFile: (filePath) => _call('fs:readFile', filePath) as Promise<string>,
-  readAppConfig: () => _call('fs:readAppConfig'),
-  writeAppConfig: (content) => _call('fs:writeAppConfig', content),
-  writeFile: (filePath, content) => _call('fs:writeFile', filePath, content),
-  deleteFile: (filePath) => _call('fs:deleteFile', filePath),
+  readFile: (rootDir, filePath) => _call('fs:readFile', rootDir, filePath) as Promise<string>,
+  readAppConfig: (rootDir) => _call('fs:readAppConfig', rootDir),
+  writeAppConfig: (rootDir, content) => _call('fs:writeAppConfig', rootDir, content),
+  writeFile: (rootDir, filePath, content) => _call('fs:writeFile', rootDir, filePath, content),
+  deleteFile: (rootDir, filePath) => _call('fs:deleteFile', rootDir, filePath),
 
   setWorkDir: (dirPath) => _call('fs:setWorkDir', dirPath) as Promise<FSBResult>,
   selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate') as Promise<FSBResult>,
   createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath) as Promise<FSBResult>,
-  importKB: (sourcePath) => _call('fs:importKB', sourcePath) as Promise<string>,
-  countChildren: (p) => _call('fs:countChildren', p) as Promise<number>,
+  importKB: (rootDir, sourcePath) => _call('fs:importKB', rootDir, sourcePath) as Promise<string>,
+  countChildren: (rootDir, p) => _call('fs:countChildren', rootDir, p) as Promise<number>,
 }
 
 export { FSBImpl as FSB }

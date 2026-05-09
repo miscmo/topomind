@@ -61,10 +61,9 @@ if (nodeFs.existsSync(E2E_ENV_FILE)) {
  * @param {string} [kbPath] 知识库相对路径
  * @returns {string} 知识库绝对路径
  */
-function absKbPath(kbPath) {
-  var root = fileService.getRootDir();
-  if (!kbPath) return root;
-  return nodePath.resolve(root, kbPath);
+function absKbPath(rootDir, kbPath) {
+  if (!kbPath) return rootDir;
+  return nodePath.resolve(rootDir, kbPath);
 }
 
 /**
@@ -139,33 +138,22 @@ async function confirmAndFlushBeforeExit(reason) {
 
 function registerIPC() {
   // ----- File system handlers -----
-  ipcMain.handle('fs:init', function() {
-    var result = fileService.initWorkDir();
-    if (result && result.valid) {
-      LogService.init(fileService.getRootDir());
-      LogService.write({
-        level: 'INFO', module: 'Main', action: 'fs:init',
-        message: 'fs:init 调用', params: { valid: result.valid, error: result.error || null },
-      });
-    }
-    return result;
+  ipcMain.handle('fs:listChildren', function(e, rootDir, p) { return fileService.listChildren(rootDir, p); });
+  ipcMain.handle('fs:mkDir', function(e, rootDir, p, m) {
+    var abs = fileService.mkDir(rootDir, p, m);
+    return nodePath.relative(nodePath.join(rootDir, 'kbs'), abs).split(nodePath.sep).join('/');
   });
-  ipcMain.handle('fs:listChildren', function(e, p) { return fileService.listChildren(p); });
-  ipcMain.handle('fs:mkDir', function(e, p, m) {
-    var abs = fileService.mkDir(p, m);
-    return nodePath.relative(fileService.getRootDir(), abs);
-  });
-  ipcMain.handle('fs:rmDir', function(e, p) { fileService.rmDir(p); });
-  ipcMain.handle('fs:renameKB', function(e, p, n) { return fileService.renameKB(p, n); });
-  ipcMain.handle('fs:readGraphMeta', function(e, p) { return fileService.readGraphMeta(p); });
-  ipcMain.handle('fs:writeGraphMeta', function(e, p, m) { fileService.writeGraphMeta(p, m); });
-  ipcMain.handle('fs:getDir', function(e, p) { return fileService.getDir(p); });
-  ipcMain.handle('fs:updateCardMeta', function(e, p, n) { return fileService.updateCardMeta(p, n); });
-  ipcMain.handle('fs:readFile', function(e, p) { return fileService.readFile(p); });
-  ipcMain.handle('fs:writeFile', function(e, p, c) { fileService.writeFile(p, c); });
-  ipcMain.handle('fs:deleteFile', function(e, p) { fileService.deleteFile(p); });
-  ipcMain.handle('fs:countChildren', function(e, dirPath) {
-    var kbRoot = nodePath.join(fileService.getRootDir(), 'kbs');
+  ipcMain.handle('fs:rmDir', function(e, rootDir, p) { fileService.rmDir(rootDir, p); });
+  ipcMain.handle('fs:renameKB', function(e, rootDir, p, n) { return fileService.renameKB(rootDir, p, n); });
+  ipcMain.handle('fs:readGraphMeta', function(e, rootDir, p) { return fileService.readGraphMeta(rootDir, p); });
+  ipcMain.handle('fs:writeGraphMeta', function(e, rootDir, p, m) { fileService.writeGraphMeta(rootDir, p, m); });
+  ipcMain.handle('fs:getDir', function(e, rootDir, p) { return fileService.getDir(rootDir, p); });
+  ipcMain.handle('fs:updateCardMeta', function(e, rootDir, p, n) { return fileService.updateCardMeta(rootDir, p, n); });
+  ipcMain.handle('fs:readFile', function(e, rootDir, p) { return fileService.readFile(rootDir, p); });
+  ipcMain.handle('fs:writeFile', function(e, rootDir, p, c) { fileService.writeFile(rootDir, p, c); });
+  ipcMain.handle('fs:deleteFile', function(e, rootDir, p) { fileService.deleteFile(rootDir, p); });
+  ipcMain.handle('fs:countChildren', function(e, rootDir, dirPath) {
+    var kbRoot = nodePath.join(rootDir, 'kbs');
     var d = dirPath ? nodePath.join(kbRoot, dirPath) : kbRoot;
     if (!nodeFs.existsSync(d)) return 0;
     try {
@@ -173,17 +161,17 @@ function registerIPC() {
         .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; }).length;
     } catch(err) { return 0; }
   });
-  ipcMain.handle('fs:readAppConfig', function() {
-    return fileService.readAppConfig();
+  ipcMain.handle('fs:readAppConfig', function(e, rootDir) {
+    return fileService.readAppConfig(rootDir);
   });
-  ipcMain.handle('fs:writeAppConfig', function(e, content) {
-    return fileService.writeAppConfig(content);
+  ipcMain.handle('fs:writeAppConfig', function(e, rootDir, content) {
+    return fileService.writeAppConfig(rootDir, content);
   });
   ipcMain.handle('fs:setWorkDir', function(e, dirPath) {
     var result = fileService.setWorkDir(dirPath);
     if (result.valid) {
       LogService.clear();
-      LogService.init(fileService.getRootDir());
+      LogService.init(result.nodePath);
     }
     LogService.write({
       level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:setWorkDir',
@@ -203,7 +191,7 @@ function registerIPC() {
     var result = fileService.createWorkDir(dirPath);
     if (result.valid) {
       LogService.clear();
-      LogService.init(fileService.getRootDir());
+      LogService.init(result.nodePath);
     }
     LogService.write({
       level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:createWorkDir',
@@ -211,11 +199,11 @@ function registerIPC() {
     });
     return result;
   });
-  ipcMain.handle('fs:importKB', function(e, sourcePath) {
-    var result = fileService.importKB(sourcePath);
+  ipcMain.handle('fs:importKB', function(e, rootDir, sourcePath) {
+    var result = fileService.importKB(rootDir, sourcePath);
     LogService.write({
-      level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:importKB',
-      message: result.valid ? '知识库导入成功' : '知识库导入失败', params: { sourcePath, valid: result.valid, error: result.error || null },
+      level: 'INFO', module: 'Main', action: 'fs:importKB',
+      message: '知识库导入成功', params: { sourcePath, importedPath: result },
     });
     return result;
   });
@@ -232,9 +220,10 @@ function registerIPC() {
     }
   });
   ipcMain.handle('app:getE2EState', function() {
+    var rootDir = process.env.TOPOMIND_E2E_WORKDIR || null;
     return {
-      rootDir: fileService.getRootDir(),
-      valid: !!fileService.getRootDir(),
+      rootDir: rootDir,
+      valid: !!rootDir,
       workDirConfigured: !!process.env.TOPOMIND_E2E_WORKDIR,
       windowReady: !!(win && !win.isDestroyed()),
       ipcRegistered: true,
@@ -266,9 +255,9 @@ function registerIPC() {
   });
 
   // ----- Synchronous save handler -----
-  ipcMain.on('save:layout', function(event, dirPath, meta) {
+  ipcMain.on('save:layout', function(event, rootDir, dirPath, meta) {
     try {
-      fileService.writeGraphMeta(dirPath, meta);
+      fileService.writeGraphMeta(rootDir, dirPath, meta);
       event.returnValue = true;
     } catch (e) {
       event.returnValue = false;
@@ -279,10 +268,10 @@ function registerIPC() {
   ipcMain.handle('git:checkAvailable', function() {
     return gitService.checkGitAvailable().then(function(available) { return { ok: true, available: available }; });
   });
-  ipcMain.handle('git:init', function(e, kbPath) { return gitService.initRepo(absKbPath(kbPath)); });
-  ipcMain.handle('git:status', function(e, kbPath) { return gitService.getStatus(absKbPath(kbPath)); });
-  ipcMain.handle('git:statusBatch', function(e, kbPaths) {
-    var absPaths = (kbPaths || []).map(function(p) { return absKbPath(p); });
+  ipcMain.handle('git:init', function(e, rootDir, kbPath) { return gitService.initRepo(absKbPath(rootDir, kbPath)); });
+  ipcMain.handle('git:status', function(e, rootDir, kbPath) { return gitService.getStatus(absKbPath(rootDir, kbPath)); });
+  ipcMain.handle('git:statusBatch', function(e, rootDir, kbPaths) {
+    var absPaths = (kbPaths || []).map(function(p) { return absKbPath(rootDir, p); });
     return gitService.getStatusBatch(absPaths)
       .then(function(results) {
         var out = {};
@@ -290,35 +279,35 @@ function registerIPC() {
         return out;
       });
   });
-  ipcMain.handle('git:isDirty', function(e, kbPath) {
-    return gitService.isDirty(absKbPath(kbPath)).then(function(dirty) { return { ok: true, dirty: dirty }; });
+  ipcMain.handle('git:isDirty', function(e, rootDir, kbPath) {
+    return gitService.isDirty(absKbPath(rootDir, kbPath)).then(function(dirty) { return { ok: true, dirty: dirty }; });
   });
-  ipcMain.handle('git:commit', function(e, kbPath, message) { return gitService.commit(absKbPath(kbPath), message); });
-  ipcMain.handle('git:diff', function(e, kbPath, opts) { return gitService.getDiff(absKbPath(kbPath), opts); });
-  ipcMain.handle('git:diffFiles', function(e, kbPath, opts) { return gitService.getDiffFiles(absKbPath(kbPath), opts); });
-  ipcMain.handle('git:log', function(e, kbPath, opts) { return gitService.getLog(absKbPath(kbPath), opts); });
-  ipcMain.handle('git:commitDiffFiles', function(e, kbPath, hash) { return gitService.getCommitDiffFiles(absKbPath(kbPath), hash); });
-  ipcMain.handle('git:commitFileDiff', function(e, kbPath, hash, filePath) { return gitService.getCommitFileDiff(absKbPath(kbPath), hash, filePath); });
-  ipcMain.handle('git:remote:get', function(e, kbPath) { return gitService.getRemote(absKbPath(kbPath)); });
-  ipcMain.handle('git:remote:set', function(e, kbPath, url) { return gitService.setRemote(absKbPath(kbPath), url); });
-  ipcMain.handle('git:fetch', function(e, kbPath) {
-    return gitService.getRemote(absKbPath(kbPath))
+  ipcMain.handle('git:commit', function(e, rootDir, kbPath, message) { return gitService.commit(absKbPath(rootDir, kbPath), message); });
+  ipcMain.handle('git:diff', function(e, rootDir, kbPath, opts) { return gitService.getDiff(absKbPath(rootDir, kbPath), opts); });
+  ipcMain.handle('git:diffFiles', function(e, rootDir, kbPath, opts) { return gitService.getDiffFiles(absKbPath(rootDir, kbPath), opts); });
+  ipcMain.handle('git:log', function(e, rootDir, kbPath, opts) { return gitService.getLog(absKbPath(rootDir, kbPath), opts); });
+  ipcMain.handle('git:commitDiffFiles', function(e, rootDir, kbPath, hash) { return gitService.getCommitDiffFiles(absKbPath(rootDir, kbPath), hash); });
+  ipcMain.handle('git:commitFileDiff', function(e, rootDir, kbPath, hash, filePath) { return gitService.getCommitFileDiff(absKbPath(rootDir, kbPath), hash, filePath); });
+  ipcMain.handle('git:remote:get', function(e, rootDir, kbPath) { return gitService.getRemote(absKbPath(rootDir, kbPath)); });
+  ipcMain.handle('git:remote:set', function(e, rootDir, kbPath, url) { return gitService.setRemote(absKbPath(rootDir, kbPath), url); });
+  ipcMain.handle('git:fetch', function(e, rootDir, kbPath) {
+    return gitService.getRemote(absKbPath(rootDir, kbPath))
       .then(function(r) { return gitAuth.buildGitEnv(kbPath, r.url || ''); })
-      .then(function(env) { return gitService.fetchRemote(absKbPath(kbPath), env); });
+      .then(function(env) { return gitService.fetchRemote(absKbPath(rootDir, kbPath), env); });
   });
-  ipcMain.handle('git:push', function(e, kbPath) {
-    return gitService.getRemote(absKbPath(kbPath))
+  ipcMain.handle('git:push', function(e, rootDir, kbPath) {
+    return gitService.getRemote(absKbPath(rootDir, kbPath))
       .then(function(r) { return gitAuth.buildGitEnv(kbPath, r.url || ''); })
-      .then(function(env) { return gitService.push(absKbPath(kbPath), env); });
+      .then(function(env) { return gitService.push(absKbPath(rootDir, kbPath), env); });
   });
-  ipcMain.handle('git:pull', function(e, kbPath) {
-    return gitService.getRemote(absKbPath(kbPath))
+  ipcMain.handle('git:pull', function(e, rootDir, kbPath) {
+    return gitService.getRemote(absKbPath(rootDir, kbPath))
       .then(function(r) { return gitAuth.buildGitEnv(kbPath, r.url || ''); })
-      .then(function(env) { return gitService.pull(absKbPath(kbPath), env); });
+      .then(function(env) { return gitService.pull(absKbPath(rootDir, kbPath), env); });
   });
-  ipcMain.handle('git:conflict:list', function(e, kbPath) { return gitService.getConflictList(absKbPath(kbPath)); });
-  ipcMain.handle('git:conflict:show', function(e, kbPath, filePath) {
-    return gitService.getConflictContent(absKbPath(kbPath), filePath)
+  ipcMain.handle('git:conflict:list', function(e, rootDir, kbPath) { return gitService.getConflictList(absKbPath(rootDir, kbPath)); });
+  ipcMain.handle('git:conflict:show', function(e, rootDir, kbPath, filePath) {
+    return gitService.getConflictContent(absKbPath(rootDir, kbPath), filePath)
       .then(function(result) {
         if (result.ok && !result.isBinary && filePath.endsWith('_graph.json')) {
           var autoMerge = gitService.autoMergeMetaJson(result.ours, result.theirs);
@@ -327,18 +316,18 @@ function registerIPC() {
         return result;
       });
   });
-  ipcMain.handle('git:conflict:resolve', function(e, kbPath, filePath, content) {
-    return gitService.resolveConflict(absKbPath(kbPath), filePath, content);
+  ipcMain.handle('git:conflict:resolve', function(e, rootDir, kbPath, filePath, content) {
+    return gitService.resolveConflict(absKbPath(rootDir, kbPath), filePath, content);
   });
-  ipcMain.handle('git:conflict:complete', function(e, kbPath) {
-    return gitService.completeConflictResolution(absKbPath(kbPath));
+  ipcMain.handle('git:conflict:complete', function(e, rootDir, kbPath) {
+    return gitService.completeConflictResolution(absKbPath(rootDir, kbPath));
   });
 
   // ----- Git auth handlers -----
-  ipcMain.handle('git:auth:setToken', function(e, kbPath, token) { return gitAuth.saveToken(kbPath, token); });
+  ipcMain.handle('git:auth:setToken', function(e, rootDir, kbPath, token) { return gitAuth.saveToken(kbPath, token); });
   ipcMain.handle('git:auth:getSSHKey', function() { return gitAuth.getSSHPublicKey(); });
-  ipcMain.handle('git:auth:setAuthType', function(e, kbPath, authType) { return gitAuth.setAuthType(kbPath, authType); });
-  ipcMain.handle('git:auth:getAuthType', function(e, kbPath) { return gitAuth.getAuthType(kbPath); });
+  ipcMain.handle('git:auth:setAuthType', function(e, rootDir, kbPath, authType) { return gitAuth.setAuthType(kbPath, authType); });
+  ipcMain.handle('git:auth:getAuthType', function(e, rootDir, kbPath) { return gitAuth.getAuthType(kbPath); });
 
   // ----- Log handlers -----
   ipcMain.handle('log:write', function(e, entry) { return LogService.write(entry); });

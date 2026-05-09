@@ -56,12 +56,12 @@ function _fs_loadAppConfig(dir) {
 }
 
 // TODO：这个函数感觉并不需要，保存应该做一个更通用的接口
-function _fs_saveAppConfig() {
+function _fs_saveAppConfig(dir) {
   try {
-    _fs_ensureDir();
-    _fs_ensureDir(_fs_kbsDir());
-    _fs_ensureDir(_fs_logsDir());
-    nodeFs.writeFileSync(_fs_appConfigPath(), JSON.stringify(_fs_config, null, 2), 'utf-8');
+    _fs_ensureDir(dir);
+    _fs_ensureDir(_fs_kbsDir(dir));
+    _fs_ensureDir(_fs_logsDir(dir));
+    nodeFs.writeFileSync(_fs_appConfigPath(dir), JSON.stringify(_fs_config, null, 2), 'utf-8');
   } catch (e) {
     // 静默处理：配置保存失败不影响应用运行
   }
@@ -119,8 +119,8 @@ function _fs_uniqueFolderName(parentDir, desiredName) {
   return candidate;
 }
 
-function _fs_abs(relPath) {
-  var resolvedRoot = nodePath.resolve(_fs_kbsDir());
+function _fs_abs(rootDir, relPath) {
+  var resolvedRoot = nodePath.resolve(_fs_kbsDir(rootDir));
   if (!relPath) return resolvedRoot;
   var result = nodePath.resolve(resolvedRoot, relPath);
   var rel = nodePath.relative(resolvedRoot, result);
@@ -159,11 +159,11 @@ function _fs_validateAbsolutePath(dir) {
 
 function createFileService() {
   return {
-    readAppConfig: function() {
-      return _fs_readJsonFile(_fs_appConfigPath()) || { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
+    readAppConfig: function(rootDir) {
+      return _fs_readJsonFile(_fs_appConfigPath(rootDir)) || { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
     },
 
-    writeAppConfig: function(content) {
+    writeAppConfig: function(rootDir, content) {
       var data = content;
       if (typeof content === 'string') {
         try { data = JSON.parse(content); } catch (e) { data = {}; }
@@ -173,7 +173,7 @@ function createFileService() {
           ? data.defaultEdgeStyle
           : { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true },
       };
-      _fs_saveAppConfig();
+      _fs_saveAppConfig(rootDir);
       return _fs_config;
     },
 
@@ -185,10 +185,9 @@ function createFileService() {
       _fs_ensureDir(dir);
       _fs_ensureDir(_fs_kbsDir(dir));
       _fs_ensureDir(_fs_logsDir(dir));
-      _fs_rootDir = dir;
       _fs_config = { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-      _fs_saveAppConfig();
-      return { valid: true, nodePath: _fs_rootDir };
+      _fs_saveAppConfig(dir);
+      return { valid: true, nodePath: dir };
     },
 
 
@@ -225,24 +224,12 @@ function createFileService() {
         return { valid: false, nodePath: dir, error: '不是有效的工作目录' };
       }
       _fs_loadAppConfig(dir);
-      return { valid: true, nodePath: _fs_rootDir };
+      return { valid: true, nodePath: dir };
     },
 
-    initWorkDir: function() {
-      if (!_fs_rootDir) return { valid: false, nodePath: null, error: '未选择工作目录' };
-      _fs_ensureDir(_fs_rootDir);
-      _fs_ensureDir(_fs_kbsDir());
-      _fs_ensureDir(_fs_logsDir());
-      if (!nodeFs.existsSync(_fs_appConfigPath())) {
-        _fs_config = { defaultEdgeStyle: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#7f8c8d', arrow: true } };
-        _fs_saveAppConfig();
-      }
-      return { valid: true, nodePath: _fs_rootDir };
-    },
-
-    listChildren: function(parentPath) {
-      var dir = _fs_abs(parentPath);
-      _fs_ensureDir(_fs_kbsDir());
+    listChildren: function(rootDir, parentPath) {
+      var dir = _fs_abs(rootDir, parentPath);
+      _fs_ensureDir(_fs_kbsDir(rootDir));
       _fs_ensureDir(dir);
       var parentGraph = _fs_readJsonFile(_fs_graphFilePath(dir)) || { children: {} };
       var parentChildren = parentGraph.children || {};
@@ -262,8 +249,8 @@ function createFileService() {
       return children;
     },
 
-    mkDir: function(dirPath, _meta, customRootDir) {
-      var parent = customRootDir ? nodePath.resolve(customRootDir) : _fs_kbsDir();
+    mkDir: function(rootDir, dirPath, _meta, customRootDir) {
+      var parent = customRootDir ? nodePath.resolve(customRootDir) : _fs_kbsDir(rootDir);
       _fs_ensureDir(parent);
       var segments = (dirPath || '').split('/').filter(Boolean);
       if (segments.length === 0) return parent;
@@ -280,15 +267,15 @@ function createFileService() {
       return d;
     },
 
-    rmDir: function(dirPath) {
-      var d = _fs_abs(dirPath);
+    rmDir: function(rootDir, dirPath) {
+      var d = _fs_abs(rootDir, dirPath);
       if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
     },
 
-    renameKB: function(kbPath, newName) {
-      var d = _fs_abs(kbPath);
+    renameKB: function(rootDir, kbPath, newName) {
+      var d = _fs_abs(rootDir, kbPath);
       if (!nodeFs.existsSync(d)) return null;
-      var parentDir = _fs_kbsDir();
+      var parentDir = _fs_kbsDir(rootDir);
       var newSafeName = _fs_safeSegment(newName);
       var newDirName = _fs_uniqueFolderName(parentDir, newSafeName);
       var oldDirName = nodePath.basename(d);
@@ -296,22 +283,22 @@ function createFileService() {
       if (oldDirName !== newDirName) {
         nodeFs.renameSync(d, newDir);
       }
-      var newRelPath = nodePath.relative(_fs_kbsDir(), newDir).split(nodePath.sep).join('/');
+      var newRelPath = nodePath.relative(_fs_kbsDir(rootDir), newDir).split(nodePath.sep).join('/');
       return newRelPath;
     },
 
-    readGraphMeta: function(dirPath) {
-      var d = _fs_abs(dirPath);
+    readGraphMeta: function(rootDir, dirPath) {
+      var d = _fs_abs(rootDir, dirPath);
       var graph = _fs_readJsonFile(_fs_graphFilePath(d));
       if (graph) return graph;
       return { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
     },
 
-    writeGraphMeta: function(dirPath, meta) {
-      var d = _fs_abs(dirPath);
+    writeGraphMeta: function(rootDir, dirPath, meta) {
+      var d = _fs_abs(rootDir, dirPath);
       if (!nodeFs.existsSync(d)) {
         var segments = dirPath.split('/').filter(Boolean);
-        var parent = _fs_kbsDir();
+        var parent = _fs_kbsDir(rootDir);
         for (var i = 0; i < segments.length - 1; i++) {
           parent = nodePath.join(parent, _fs_safeSegment(segments[i]));
           _fs_ensureDir(parent);
@@ -322,9 +309,9 @@ function createFileService() {
       _fs_writeJsonFile(_fs_graphFilePath(d), graphMeta);
     },
 
-    updateCardMeta: function(cardPath, newName) {
+    updateCardMeta: function(rootDir, cardPath, newName) {
       var parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : '';
-      var parentDir = _fs_abs(parentPath);
+      var parentDir = _fs_abs(rootDir, parentPath);
       var graphPath = _fs_graphFilePath(parentDir);
       var graph = _fs_readJsonFile(graphPath) || { children: {}, edges: [] };
       var children = graph.children || {};
@@ -337,39 +324,39 @@ function createFileService() {
       return cardPath;
     },
 
-    getDir: function(dirPath) {
-      var d = _fs_abs(dirPath);
+    getDir: function(rootDir, dirPath) {
+      var d = _fs_abs(rootDir, dirPath);
       if (!nodeFs.existsSync(d)) return null;
       return { nodePath: dirPath };
     },
 
-    readFile: function(filePath) {
-      var f = _fs_abs(filePath);
+    readFile: function(rootDir, filePath) {
+      var f = _fs_abs(rootDir, filePath);
       if (nodeFs.existsSync(f)) return nodeFs.readFileSync(f, 'utf-8');
       return '';
     },
 
-    writeFile: function(filePath, content) {
-      var f = _fs_abs(filePath);
+    writeFile: function(rootDir, filePath, content) {
+      var f = _fs_abs(rootDir, filePath);
       _fs_ensureDir(nodePath.dirname(f));
       nodeFs.writeFileSync(f, content, 'utf-8');
     },
 
-    deleteFile: function(filePath) {
-      var f = _fs_abs(filePath);
+    deleteFile: function(rootDir, filePath) {
+      var f = _fs_abs(rootDir, filePath);
       if (nodeFs.existsSync(f)) nodeFs.unlinkSync(f);
     },
 
-    importKB: function(sourcePath) {
+    importKB: function(rootDir, sourcePath) {
       var src = nodePath.resolve(sourcePath);
       if (!nodeFs.existsSync(src)) throw new Error('源目录不存在: ' + src);
       if (!nodeFs.existsSync(nodePath.join(src, '_graph.json'))) {
         throw new Error('不是有效的知识库目录');
       }
       var kbName = nodePath.basename(src);
-      _fs_ensureDir(_fs_kbsDir());
-      var destName = _fs_uniqueFolderName(_fs_kbsDir(), kbName);
-      var dest = nodePath.join(_fs_kbsDir(), destName);
+      _fs_ensureDir(_fs_kbsDir(rootDir));
+      var destName = _fs_uniqueFolderName(_fs_kbsDir(rootDir), kbName);
+      var dest = nodePath.join(_fs_kbsDir(rootDir), destName);
       _fs_ensureDir(dest);
 
       function copyDirRecursive(srcDir, destDir) {
@@ -396,7 +383,7 @@ function createFileService() {
       }
       copyDirRecursive(src, dest);
 
-      return nodePath.relative(_fs_kbsDir(), dest).split(nodePath.sep).join('/');
+      return nodePath.relative(_fs_kbsDir(rootDir), dest).split(nodePath.sep).join('/');
     },
   };
 }

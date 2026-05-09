@@ -3,6 +3,7 @@
  */
 import { logger } from './logger'
 import type { ElectronAPI } from '../types/electron-api'
+import { useAppStore } from '../stores/appStore'
 
 const getApi = (): ElectronAPI | null => {
   return (window as Window).electronAPI ?? null
@@ -19,6 +20,12 @@ const _call = (channel: string, ...args: unknown[]) => {
     return Promise.reject(new Error(`IPC API.invoke 不可用: ${channel}`))
   }
   return api.invoke(channel, ...args)
+}
+
+const _requireRootDir = () => {
+  const rootDir = useAppStore.getState().currentWorkDir
+  if (!rootDir) throw new Error('未选择工作目录')
+  return rootDir
 }
 
 export interface GitBackend {
@@ -66,29 +73,29 @@ export interface GitCache {
 
 export const GitBackend: GitBackend = {
   checkAvailable: () => _call('git:checkAvailable'),
-  init: (kbPath) => _call('git:init', kbPath),
-  status: (kbPath) => _call('git:status', kbPath),
-  statusBatch: (kbPaths) => _call('git:statusBatch', kbPaths),
-  isDirty: (kbPath) => _call('git:isDirty', kbPath),
-  commit: (kbPath, msg) => _call('git:commit', kbPath, msg),
-  diff: (kbPath, opts) => _call('git:diff', kbPath, opts),
-  diffFiles: (kbPath, opts) => _call('git:diffFiles', kbPath, opts),
-  log: (kbPath, opts) => _call('git:log', kbPath, opts),
-  commitDiffFiles: (kbPath, hash) => _call('git:commitDiffFiles', kbPath, hash),
-  commitFileDiff: (kbPath, hash, fp) => _call('git:commitFileDiff', kbPath, hash, fp),
-  remoteGet: (kbPath) => _call('git:remote:get', kbPath),
-  remoteSet: (kbPath, url) => _call('git:remote:set', kbPath, url),
-  fetch: (kbPath) => _call('git:fetch', kbPath),
-  push: (kbPath) => _call('git:push', kbPath),
-  pull: (kbPath) => _call('git:pull', kbPath),
-  conflictList: (kbPath) => _call('git:conflict:list', kbPath),
-  conflictShow: (kbPath, fp) => _call('git:conflict:show', kbPath, fp),
-  conflictResolve: (kbPath, fp, c) => _call('git:conflict:resolve', kbPath, fp, c),
-  conflictComplete: (kbPath) => _call('git:conflict:complete', kbPath),
-  authSetToken: (kbPath, token) => _call('git:auth:setToken', kbPath, token),
+  init: (kbPath) => _call('git:init', _requireRootDir(), kbPath),
+  status: (kbPath) => _call('git:status', _requireRootDir(), kbPath),
+  statusBatch: (kbPaths) => _call('git:statusBatch', _requireRootDir(), kbPaths),
+  isDirty: (kbPath) => _call('git:isDirty', _requireRootDir(), kbPath),
+  commit: (kbPath, msg) => _call('git:commit', _requireRootDir(), kbPath, msg),
+  diff: (kbPath, opts) => _call('git:diff', _requireRootDir(), kbPath, opts),
+  diffFiles: (kbPath, opts) => _call('git:diffFiles', _requireRootDir(), kbPath, opts),
+  log: (kbPath, opts) => _call('git:log', _requireRootDir(), kbPath, opts),
+  commitDiffFiles: (kbPath, hash) => _call('git:commitDiffFiles', _requireRootDir(), kbPath, hash),
+  commitFileDiff: (kbPath, hash, fp) => _call('git:commitFileDiff', _requireRootDir(), kbPath, hash, fp),
+  remoteGet: (kbPath) => _call('git:remote:get', _requireRootDir(), kbPath),
+  remoteSet: (kbPath, url) => _call('git:remote:set', _requireRootDir(), kbPath, url),
+  fetch: (kbPath) => _call('git:fetch', _requireRootDir(), kbPath),
+  push: (kbPath) => _call('git:push', _requireRootDir(), kbPath),
+  pull: (kbPath) => _call('git:pull', _requireRootDir(), kbPath),
+  conflictList: (kbPath) => _call('git:conflict:list', _requireRootDir(), kbPath),
+  conflictShow: (kbPath, fp) => _call('git:conflict:show', _requireRootDir(), kbPath, fp),
+  conflictResolve: (kbPath, fp, c) => _call('git:conflict:resolve', _requireRootDir(), kbPath, fp, c),
+  conflictComplete: (kbPath) => _call('git:conflict:complete', _requireRootDir(), kbPath),
+  authSetToken: (kbPath, token) => _call('git:auth:setToken', _requireRootDir(), kbPath, token),
   authGetSSHKey: () => _call('git:auth:getSSHKey'),
-  authSetType: (kbPath, type) => _call('git:auth:setAuthType', kbPath, type),
-  authGetType: (kbPath) => _call('git:auth:getAuthType', kbPath),
+  authSetType: (kbPath, type) => _call('git:auth:setAuthType', _requireRootDir(), kbPath, type),
+  authGetType: (kbPath) => _call('git:auth:getAuthType', _requireRootDir(), kbPath),
 }
 
 // In-memory status cache

@@ -47,7 +47,12 @@ export function createStore(adapter: StorageAdapter) {
   const CONFIG_CACHE_TTL = 30000
 
   const store = {
-    init() { try { return adapter.createVault('') } catch (e) { logger.catch('Store.init', '初始化 Vault 失败', e); throw e } },
+    async init() {
+      try {
+        await adapter.readAppConfig()
+        return { valid: true }
+      } catch (e) { logger.catch('Store.init', '初始化 Vault 失败', e); throw e }
+    },
     async isValidVault(dirPath: string) {
       try {
         const valid = await adapter.isValidVault(dirPath)
