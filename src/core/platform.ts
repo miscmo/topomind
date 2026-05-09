@@ -12,5 +12,5 @@ export interface PlatformService {
 }
 
 export const electronPlatformService: PlatformService = {
-  selectDirectory: () => FSB.selectWorkDirCandidate(),
+  selectDirectory: () => FSB.selectDirectory(),
 }

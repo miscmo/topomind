@@ -179,10 +179,10 @@ function registerIPC() {
     });
     return result;
   });
-  ipcMain.handle('fs:selectWorkDirCandidate', function() {
-    var result = fileService.selectWorkDirCandidate();
+  ipcMain.handle('fs:selectDirectory', function() {
+    var result = fileService.selectDirectory();
     LogService.write({
-      level: 'INFO', module: 'Main', action: 'fs:selectWorkDirCandidate',
+      level: 'INFO', module: 'Main', action: 'fs:selectDirectory',
       message: '文件对话框已关闭', params: { valid: result.valid, path: result.nodePath || null, error: result.error || null },
     });
     return result;

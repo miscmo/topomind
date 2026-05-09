@@ -198,7 +198,7 @@ function createFileService() {
     * @param { string | null } nodePath: 选择的工作目录路径
     * @param { string | null } error: 选择失败的原因
     */
-    selectWorkDirCandidate: function() {
+    selectDirectory: function() {
       var result = dialog.showOpenDialogSync({
         title: '选择工作目录',
         properties: ['openDirectory'],

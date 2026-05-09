@@ -71,7 +71,7 @@ export interface FSB {
   writeFile: (rootDir: string, filePath: string, content: string) => Promise<unknown>
   deleteFile: (rootDir: string, filePath: string) => Promise<unknown>
   setWorkDir: (dirPath: string) => Promise<FSBResult>
-  selectWorkDirCandidate: () => Promise<FSBResult>
+  selectDirectory: () => Promise<FSBResult>
   createWorkDir: (dirPath: string) => Promise<FSBResult>
   importKB: (rootDir: string, sourcePath: string) => Promise<string>
   countChildren: (rootDir: string, p: string) => Promise<number>
@@ -96,7 +96,7 @@ const FSBImpl: FSB = {
   deleteFile: (rootDir, filePath) => _call('fs:deleteFile', rootDir, filePath),
 
   setWorkDir: (dirPath) => _call('fs:setWorkDir', dirPath) as Promise<FSBResult>,
-  selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate') as Promise<FSBResult>,
+  selectDirectory: () => _call('fs:selectDirectory') as Promise<FSBResult>,
   createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath) as Promise<FSBResult>,
   importKB: (rootDir, sourcePath) => _call('fs:importKB', rootDir, sourcePath) as Promise<string>,
   countChildren: (rootDir, p) => _call('fs:countChildren', rootDir, p) as Promise<number>,
