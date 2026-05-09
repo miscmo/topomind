@@ -1,5 +1,4 @@
 export * from './adapter'
 export { createStorageAdapter, type StorageEngine } from './factory'
-export { createStore, Store } from './service'
+export { createStore, type Store } from './service'
 export { StorageProvider, useStorage } from './context'
-export { Store as default } from './service'

@@ -183,30 +183,3 @@ export function createStore(adapter: StorageAdapter) {
 }
 
 export type Store = ReturnType<typeof createStore>
-
-const stubAdapter: StorageAdapter = {
-  createVault: async () => ({ ref: '' }),
-  isValidVault: async () => false,
-  getVaultInfo: async () => ({ ref: '' }),
-  removeVault: async () => undefined,
-  listKBS: async () => [],
-  createKB: async () => { throw new Error('Default store requires injected adapter') },
-  deleteKB: async () => { throw new Error('Default store requires injected adapter') },
-  renameKB: async () => { throw new Error('Default store requires injected adapter') },
-  importKB: async () => { throw new Error('Default store requires injected adapter') },
-  listCards: async () => [],
-  createCard: async () => { throw new Error('Default store requires injected adapter') },
-  deleteCard: async () => { throw new Error('Default store requires injected adapter') },
-  renameCard: async () => { throw new Error('Default store requires injected adapter') },
-  countSubCards: async () => 0,
-  readCardLayout: async () => ({ nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }),
-  writeCardLayout: async () => undefined,
-  readCardMarkdown: async () => '',
-  writeCardMarkdown: async () => undefined,
-  readAppConfig: async () => ({}),
-  writeAppConfig: async () => undefined,
-} as unknown as StorageAdapter
-
-export const Store = createStore(stubAdapter)
-
-export default Store
