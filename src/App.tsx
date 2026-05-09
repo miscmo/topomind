@@ -38,15 +38,12 @@ export default memo(function App() {
   useEffect(() => { initHomeTab() }, [initHomeTab])
 
   useEffect(() => {
-    function onNavigateHome() { showHome() }
     function onResetSession() { resetClientSession() }
-    window.electronAPI?.on('app:navigate-home', onNavigateHome)
     window.electronAPI?.on('app:reset-session', onResetSession)
     return () => {
-      window.electronAPI?.off('app:navigate-home', onNavigateHome)
       window.electronAPI?.off('app:reset-session', onResetSession)
     }
-  }, [showHome])
+  }, [])
 
   useEffect(() => {
     let cancelled = false

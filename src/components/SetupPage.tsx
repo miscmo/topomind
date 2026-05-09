@@ -48,8 +48,8 @@ export default memo(function SetupPage() {
       }
 
       setCurrentWorkDir(picked.nodePath!)
+      await window.electronAPI?.invoke('app:navigateHome')
       showHome()
-      void window.electronAPI?.invoke('app:navigateHome')
     } catch (e) {
       setIsError(true)
       setMessage((e as { message?: string })?.message || '打开工作目录失败')
@@ -85,8 +85,8 @@ export default memo(function SetupPage() {
         return
       }
       setCurrentWorkDir(picked.nodePath!)
+      await window.electronAPI?.invoke('app:navigateHome')
       showHome()
-      void window.electronAPI?.invoke('app:navigateHome')
     } catch (e) {
       setIsError(true)
       setMessage((e as { message?: string })?.message || '创建工作目录失败')

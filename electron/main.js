@@ -217,7 +217,6 @@ function registerIPC() {
       win.setMaximumSize(0, 0);
       win.setBounds({ width: 1400, height: 900 });
       buildMenu(false);
-      win.webContents.send('app:navigate-home');
     }
   });
   ipcMain.handle('app:getE2EState', function() {
