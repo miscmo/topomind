@@ -60,7 +60,6 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     updateSelectedNode,
     setDirtyState,
     isCreatingRef,
-    isModifiedRef,
   } = deps
 
   // ===== Internal helpers =====
@@ -93,7 +92,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   // ===== Node CRUD =====
 
-  const createChildNode = async (name: string, parentId?: string): Promise<string | null> => {
+  const createChildNode = async (name: string, parentId?: string, position?: { x: number; y: number }): Promise<string | null> => {
     const nav = getActiveNavState()
     const dirPath = nav.roomPath
     const targetPath = parentId ?? (dirPath || nav.kbPath)
@@ -121,6 +120,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
         parentRef: targetPath,
         reloadRef: reloadPath,
         nodesById: nodesMapRef.current,
+        position,
       })
       logAction('节点:创建', 'graphOperations', {
         nodeName: name,

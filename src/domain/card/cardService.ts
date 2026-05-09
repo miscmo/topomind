@@ -26,12 +26,13 @@ async function readLayoutOrEmpty(storage: CardServiceStorage, roomRef: string): 
   }
 }
 
-function createLayoutNode(id: string, cardRef: string, name: string): LayoutNode {
+function createLayoutNode(id: string, cardRef: string, name: string, position?: { x: number; y: number }): LayoutNode {
   return {
     id,
     card: { ref: cardRef, name, updatedAt: undefined },
     height: 150,
     width: 200,
+    position,
   }
 }
 
@@ -51,6 +52,7 @@ export interface CreateChildCardOptions {
   parentRef: string
   reloadRef: string
   nodesById: Map<string, KnowledgeNode>
+  position?: { x: number; y: number }
 }
 
 export interface CreateChildCardResult {
@@ -74,7 +76,7 @@ export async function createChildCard(
     ...parentLayout,
     nodes: {
       ...parentLayout.nodes,
-      [cardKey]: createLayoutNode(cardKey, resolvedRef, options.name),
+      [cardKey]: createLayoutNode(cardKey, resolvedRef, options.name, options.position),
     },
     edges: parentLayout.edges,
   })
@@ -89,7 +91,9 @@ export async function createChildCard(
   }
 
   if (!roomNodes[cardKey]) {
-    roomNodes[cardKey] = createLayoutNode(cardKey, resolvedRef, options.name)
+    roomNodes[cardKey] = createLayoutNode(cardKey, resolvedRef, options.name, options.position)
+  } else if (options.position) {
+    roomNodes[cardKey] = { ...roomNodes[cardKey], position: options.position }
   }
 
   await storage.writeLayout(options.reloadRef, {

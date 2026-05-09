@@ -36,7 +36,7 @@ interface ContextMenuProps {
   y: number
   type: 'node' | 'edge' | 'pane' | null
   targetId: string | null
-  onNewChild: (nodeId: string) => void
+  onNewChild: (nodeId: string, position?: { x: number; y: number }) => void
   onRename: (nodeId: string) => void
   onDelete: (nodeId: string) => void
   onEdgeDelete: (edgeId: string) => void
@@ -76,7 +76,7 @@ export default memo(function ContextMenu({
         {
           label: '新建子节点',
           action: async () => {
-            await onNewChild('')
+            await onNewChild('', { x, y })
             onClose()
           },
         },

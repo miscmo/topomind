@@ -2,7 +2,8 @@
  * 图谱页面：两栏布局
  * React Flow 图谱 + 右侧详情和样式配置
  */
-import { memo } from 'react'
+import { memo, useCallback } from 'react'
+import { useReactFlow } from '@xyflow/react'
 import { useAppStore } from '../stores/appStore'
 import { useGraphPageController } from '../hooks/useGraphPageController'
 import { getNavStateForTab } from '../hooks/useNavContext'
@@ -23,6 +24,7 @@ interface GraphPageProps {
 
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const { nav, graph } = useGraphPageController({ tabId })
+  const { screenToFlowPosition } = useReactFlow()
   const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
   const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
   const rightPanelTab = useAppStore((s) => s.rightPanelTab)
@@ -37,6 +39,11 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   })
   const { contextMenu, hideCM } = useContextMenu()
   const { deleteSelectedNode, addChildNode, handleNewChild, handleRename, handleDelete, handleEdgeDelete, handleEdgeStyle, handleFocus, handleProperties } = useNodeActions({ graph })
+
+  const handleContextMenuNewChild = useCallback((nodeId: string, position?: { x: number; y: number }) => {
+    const flowPosition = position ? screenToFlowPosition(position) : undefined
+    handleNewChild(nodeId, flowPosition)
+  }, [handleNewChild, screenToFlowPosition])
 
   useKeyboard({
     tabId,
@@ -88,7 +95,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
           y={contextMenu.y}
           type={contextMenu.type}
           targetId={contextMenu.targetId}
-          onNewChild={handleNewChild}
+          onNewChild={handleContextMenuNewChild}
           onRename={handleRename}
           onDelete={handleDelete}
           onEdgeDelete={handleEdgeDelete}

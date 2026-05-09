@@ -44,7 +44,7 @@ export interface GraphContextValue {
   onNodeContextMenu: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
 
   // Node operations
-  createChildNode: (name: string, parentId?: string) => Promise<string | null>
+  createChildNode: (name: string, parentId?: string, position?: { x: number; y: number }) => Promise<string | null>
   deleteChildNode: (nodeId: string) => Promise<boolean>
   renameNode: (nodeId: string, newName: string) => Promise<boolean>
 
