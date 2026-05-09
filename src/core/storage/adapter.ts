@@ -15,10 +15,6 @@ export type StorageAdapter =
  * engine-agnostic StorageAdapter (Vault/KB/Card/Graph interfaces).
  */
 export interface StorageAdapterExtended extends StorageAdapter {
-  // Card operations not in ICardStorage
-  readCardMarkdown: (cardPath: string) => Promise<string>
-  writeCardMarkdown: (cardPath: string, content: string) => Promise<void>
-
   // Image assets
   writeCardAsset: (assetPath: string, buffer: ArrayBuffer) => Promise<void>
   readCardAsset: (assetPath: string) => Promise<ArrayBuffer | null>

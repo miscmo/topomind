@@ -25,9 +25,11 @@ export const remoteStorageAdapter: StorageAdapterExtended = {
   readCardLayout: async () => ({ nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }),
   writeCardLayout: async () => { throw new Error('remoteStorageAdapter not implemented') },
 
-  // StorageAdapterExtended
+  // ICardStorage: Markdown operations
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => { throw new Error('remoteStorageAdapter not implemented') },
+
+  // StorageAdapterExtended
   writeCardAsset: async () => { throw new Error('remoteStorageAdapter not implemented') },
   readCardAsset: async () => null as ArrayBuffer | null,
   readAppConfig: async () => ({}),

@@ -202,7 +202,7 @@ export const fileStorageAdapter: StorageAdapterExtended = {
     await FSB.writeGraphMeta(kbRef, convertGraphToFSB(meta) as Parameters<typeof FSB.writeGraphMeta>[1])
   },
 
-  // ===== StorageAdapterExtended: Card operations =====
+  // ===== Core StorageAdapter (ICardStorage): Markdown operations =====
 
   readCardMarkdown: async (cardPath: string) => {
     return FSB.readFile(`${cardPath}/_content.md`)

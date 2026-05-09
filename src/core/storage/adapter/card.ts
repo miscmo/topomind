@@ -45,4 +45,19 @@ export interface ICardStorage {
    * @returns The number of sub-cards
    */
   countSubCards: (cardRef: CardRef) => Promise<number>
+
+  /**
+   * Read the Markdown content of a card
+   * @param cardRef - The reference of the card
+   * @returns The Markdown content
+   */
+  readCardMarkdown: (cardRef: CardRef) => Promise<string>
+
+  /**
+   * Write the Markdown content of a card
+   * @param cardRef - The reference of the card
+   * @param content - The Markdown content
+   * @returns void
+   */
+  writeCardMarkdown: (cardRef: CardRef, content: string) => Promise<void>
 }
