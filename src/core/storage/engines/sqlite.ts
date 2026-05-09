@@ -27,7 +27,6 @@ export const sqliteStorageAdapter: StorageAdapterExtended = {
 
   // StorageAdapterExtended
   setVault: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  selectVaultCandidate: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   getVaultRoot: async () => null,
   clearVault: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   setKnowledgeBaseOrder: async () => { throw new Error('sqliteStorageAdapter not implemented') },
@@ -35,7 +34,6 @@ export const sqliteStorageAdapter: StorageAdapterExtended = {
   getLastOpenedKnowledgeBase: async () => null,
   setLastOpenedKnowledgeBase: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   ensureCard: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  openCardLocation: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => { throw new Error('sqliteStorageAdapter not implemented') },
   writeCardAsset: async () => { throw new Error('sqliteStorageAdapter not implemented') },

@@ -208,10 +208,6 @@ export const fileStorageAdapter: StorageAdapterExtended = {
     return FSB.setWorkDir(dirPath)
   },
 
-  selectVaultCandidate: async () => {
-    return FSB.selectWorkDirCandidate()
-  },
-
   getVaultRoot: async () => {
     return FSB.getRootDir()
   },
@@ -244,10 +240,6 @@ export const fileStorageAdapter: StorageAdapterExtended = {
 
   ensureCard: async (cardPath: string) => {
     await FSB.ensureCardDir(cardPath)
-  },
-
-  openCardLocation: async (cardPath: string) => {
-    await FSB.openInFinder(cardPath)
   },
 
   readCardMarkdown: async (cardPath: string) => {

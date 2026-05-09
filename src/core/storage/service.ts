@@ -3,6 +3,7 @@
  * 业务层通过 useStorage() 调用，底层存储由 StorageAdapter 隔离。
  */
 import { logger } from '../logger'
+import { electronPlatformService, type PlatformService } from '../platform'
 import type { StorageAdapterExtended } from './adapter'
 import type { GraphMeta } from './adapter/graph'
 import type { KBListItem } from '../../types'
@@ -54,7 +55,7 @@ function ensureValidName(name: unknown, label = '名称'): string {
 export interface DirEntry { path: string; name: string; isDir: boolean; order?: number }
 export interface SaveImageResult { path: string; markdownRef: string }
 
-export function createStore(adapter: StorageAdapterExtended) {
+export function createStore(adapter: StorageAdapterExtended, platform: PlatformService = electronPlatformService) {
   const saveManager = new SaveManager()
   const imageUrls = new ImageUrlRegistry()
   const MAX_IMAGE_SIZE = 5 * 1024 * 1024
@@ -65,9 +66,9 @@ export function createStore(adapter: StorageAdapterExtended) {
   const store = {
     init() { try { return adapter.createVault('') } catch (e) { logger.catch('Store.init', '初始化 Vault 失败', e); throw e } },
     setWorkDir(dirPath: string) { try { return adapter.setVault(dirPath) } catch (e) { logger.catch('Store.setWorkDir', '设置 Vault 失败', e); throw e } },
-    selectWorkDirCandidate() { try { return adapter.selectVaultCandidate() } catch (e) { logger.catch('Store.selectWorkDirCandidate', '选择 Vault 候选失败', e); throw e } },
+    selectWorkDirCandidate() { try { return platform.selectDirectory() } catch (e) { logger.catch('Store.selectWorkDirCandidate', '选择 Vault 候选失败', e); throw e } },
     createWorkDir: async (dirPath: string) => {
-      const picked = await adapter.selectVaultCandidate()
+      const picked = await platform.selectDirectory()
       if (!picked.valid) {
         return { valid: false, error: picked.error }
       }
@@ -196,7 +197,7 @@ export function createStore(adapter: StorageAdapterExtended) {
       } catch (e) { logger.catch('Store.importKB', `导入知识库失败: ${sourcePath}`, e); throw e }
     },
     async openInFinder(cardPath: string) {
-      try { await adapter.openCardLocation(cardPath) } catch (e) { logger.catch('Store.openInFinder', `打开目录失败: ${cardPath}`, e); throw e }
+      try { await platform.openPath(cardPath) } catch (e) { logger.catch('Store.openInFinder', `打开目录失败: ${cardPath}`, e); throw e }
     },
     async countChildren(cardPath: string) {
       try {
@@ -259,7 +260,6 @@ const stubAdapter: StorageAdapterExtended = {
   readCardLayout: async () => ({ nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }),
   writeCardLayout: async () => undefined,
   setVault: async () => ({ valid: false, nodePath: null }),
-  selectVaultCandidate: async () => ({ valid: false, nodePath: null }),
   getVaultRoot: async () => null,
   clearVault: async () => undefined,
   setKnowledgeBaseOrder: async () => undefined,
@@ -267,7 +267,6 @@ const stubAdapter: StorageAdapterExtended = {
   getLastOpenedKnowledgeBase: async () => null,
   setLastOpenedKnowledgeBase: async () => undefined,
   ensureCard: async () => undefined,
-  openCardLocation: async () => undefined,
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => undefined,
   writeCardAsset: async () => undefined,
@@ -276,6 +275,11 @@ const stubAdapter: StorageAdapterExtended = {
   writeAppConfig: async () => undefined,
 } as unknown as StorageAdapterExtended
 
-export const Store = createStore(stubAdapter)
+const stubPlatform: PlatformService = {
+  selectDirectory: async () => ({ valid: false, nodePath: null }),
+  openPath: async () => undefined,
+}
+
+export const Store = createStore(stubAdapter, stubPlatform)
 
 export default Store

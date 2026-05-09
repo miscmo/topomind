@@ -17,7 +17,6 @@ export type StorageAdapter =
 export interface StorageAdapterExtended extends StorageAdapter {
   // Vault operations (workspace)
   setVault: (dirPath: string) => Promise<{ valid: boolean; nodePath: string | null; path?: string; error?: string }>
-  selectVaultCandidate: () => Promise<{ valid: boolean; nodePath: string | null; path?: string; error?: string }>
   getVaultRoot: () => Promise<string | null>
   clearVault: () => Promise<void>
 
@@ -31,7 +30,6 @@ export interface StorageAdapterExtended extends StorageAdapter {
 
   // Card operations not in ICardStorage
   ensureCard: (cardPath: string) => Promise<void>
-  openCardLocation: (cardPath: string) => Promise<void>
   readCardMarkdown: (cardPath: string) => Promise<string>
   writeCardMarkdown: (cardPath: string, content: string) => Promise<void>
 

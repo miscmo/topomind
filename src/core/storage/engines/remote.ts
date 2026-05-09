@@ -27,7 +27,6 @@ export const remoteStorageAdapter: StorageAdapterExtended = {
 
   // StorageAdapterExtended
   setVault: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  selectVaultCandidate: async () => { throw new Error('remoteStorageAdapter not implemented') },
   getVaultRoot: async () => null,
   clearVault: async () => { throw new Error('remoteStorageAdapter not implemented') },
   setKnowledgeBaseOrder: async () => { throw new Error('remoteStorageAdapter not implemented') },
@@ -35,7 +34,6 @@ export const remoteStorageAdapter: StorageAdapterExtended = {
   getLastOpenedKnowledgeBase: async () => null,
   setLastOpenedKnowledgeBase: async () => { throw new Error('remoteStorageAdapter not implemented') },
   ensureCard: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  openCardLocation: async () => { throw new Error('remoteStorageAdapter not implemented') },
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => { throw new Error('remoteStorageAdapter not implemented') },
   writeCardAsset: async () => { throw new Error('remoteStorageAdapter not implemented') },
