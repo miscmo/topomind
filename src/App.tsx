@@ -73,8 +73,6 @@ export default memo(function App() {
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
-  useEffect(() => () => { storage.revokeAllImageUrls() }, [storage])
-
   useEffect(() => {
     const handler = async () => { await flushAllDirtyTabs() }
     window.electronAPI?.on('save:before-quit', handler)

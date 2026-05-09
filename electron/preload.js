@@ -11,7 +11,6 @@ const ALLOWED_CHANNELS = new Set([
   'fs:readGraphMeta', 'fs:writeGraphMeta', 'fs:getDir',
   'fs:updateCardMeta', 'fs:renameKB',
   'fs:readFile', 'fs:writeFile', 'fs:deleteFile',
-  'fs:writeBlobFile', 'fs:readBlobFile',
   'fs:countChildren',
   'fs:readAppConfig', 'fs:writeAppConfig',
   'fs:setWorkDir', 'fs:selectWorkDirCandidate', 'fs:createWorkDir', 'fs:importKB',

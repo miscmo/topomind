@@ -30,8 +30,6 @@ export const sqliteStorageAdapter: StorageAdapterExtended = {
   writeCardMarkdown: async () => { throw new Error('sqliteStorageAdapter not implemented') },
 
   // StorageAdapterExtended
-  writeCardAsset: async () => { throw new Error('sqliteStorageAdapter not implemented') },
-  readCardAsset: async () => null as ArrayBuffer | null,
   readAppConfig: async () => ({}),
   writeAppConfig: async () => { throw new Error('sqliteStorageAdapter not implemented') },
 }

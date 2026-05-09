@@ -72,8 +72,6 @@ export interface FSB {
   writeAppConfig: (content: unknown) => Promise<unknown>
   writeFile: (filePath: string, content: string) => Promise<unknown>
   deleteFile: (filePath: string) => Promise<unknown>
-  writeBlobFile: (filePath: string, buffer: ArrayBuffer) => Promise<unknown>
-  readBlobFile: (filePath: string) => Promise<ArrayBuffer | null>
   setWorkDir: (dirPath: string) => Promise<FSBResult>
   selectWorkDirCandidate: () => Promise<FSBResult>
   createWorkDir: (dirPath: string) => Promise<FSBResult>
@@ -101,9 +99,6 @@ const FSBImpl: FSB = {
   writeAppConfig: (content) => _call('fs:writeAppConfig', content),
   writeFile: (filePath, content) => _call('fs:writeFile', filePath, content),
   deleteFile: (filePath) => _call('fs:deleteFile', filePath),
-
-  writeBlobFile: (filePath, buffer) => _call('fs:writeBlobFile', filePath, buffer),
-  readBlobFile: (filePath) => _call('fs:readBlobFile', filePath) as Promise<ArrayBuffer | null>,
 
   setWorkDir: (dirPath) => _call('fs:setWorkDir', dirPath) as Promise<FSBResult>,
   selectWorkDirCandidate: () => _call('fs:selectWorkDirCandidate') as Promise<FSBResult>,

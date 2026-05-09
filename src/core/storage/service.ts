@@ -19,12 +19,6 @@ export class SaveManager {
   clearAll() { for (const timer of this.timers.values()) clearTimeout(timer); this.timers.clear() }
 }
 
-class ImageUrlRegistry {
-  private registry = new Map<string, string>()
-  register(path: string, url: string) { const old = this.registry.get(path); if (old) { try { URL.revokeObjectURL(old) } catch (e) { logger.warn('Store', `revokeImageUrl ${path}`, e) } } this.registry.set(path, url) }
-  revokeAll() { for (const [path, url] of this.registry) { try { URL.revokeObjectURL(url) } catch (e) { logger.warn('Store', `revokeImageUrl ${path}`, e) } } this.registry.clear() }
-}
-
 function normalizeName(name: unknown): string { return String(name || '').trim() }
 function normalizeConfig(configRaw: unknown): VaultConfig {
   const c = (configRaw && typeof configRaw === 'object' && !Array.isArray(configRaw)) ? configRaw as Record<string, unknown> : {}
@@ -46,12 +40,8 @@ function ensureValidName(name: unknown, label = '名称'): string {
 }
 
 export interface DirEntry { path: string; name: string; isDir: boolean; order?: number }
-export interface SaveImageResult { path: string; markdownRef: string }
-
 export function createStore(adapter: StorageAdapterExtended) {
   const saveManager = new SaveManager()
-  const imageUrls = new ImageUrlRegistry()
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024
   let cachedConfig: VaultConfig = normalizeConfig({})
   let cachedConfigTimestamp = 0
   const CONFIG_CACHE_TTL = 30000
@@ -157,25 +147,6 @@ export function createStore(adapter: StorageAdapterExtended) {
       saveManager.clearTimer(kbPath)
       return store.saveLayout(kbPath, buildMetaFn()).then(() => onSaved?.())
     },
-    async saveImage(cardPath: string, blob: Blob, filename: string): Promise<SaveImageResult> {
-      if (blob.size > MAX_IMAGE_SIZE) throw new Error(`图片大小超过限制（最大 5MB），当前 ${(blob.size / 1024 / 1024).toFixed(1)}MB`)
-      const imgPath = `${cardPath}/images/${filename}`
-      try {
-        const buffer = await blob.arrayBuffer()
-        await adapter.writeCardAsset(imgPath, buffer)
-        return { path: imgPath, markdownRef: `images/${filename}` }
-      } catch (e) { logger.catch('Store.saveImage', `保存图片失败: ${imgPath}`, e); throw e }
-    },
-    async loadImage(imgPath: string): Promise<string> {
-      try {
-        const buffer = await adapter.readCardAsset(imgPath)
-        if (!buffer) return ''
-        const url = URL.createObjectURL(new Blob([buffer]))
-        imageUrls.register(imgPath, url)
-        return url
-      } catch (e) { logger.catch('Store.loadImage', `加载图片失败: ${imgPath}`, e); throw e }
-    },
-    revokeAllImageUrls() { imageUrls.revokeAll() },
     async importKB(sourcePath: string) {
       try {
         const imported = await adapter.importKB('', { ref: sourcePath, name: '', coverRef: null })
@@ -232,8 +203,6 @@ const stubAdapter: StorageAdapterExtended = {
   writeCardLayout: async () => undefined,
   readCardMarkdown: async () => '',
   writeCardMarkdown: async () => undefined,
-  writeCardAsset: async () => undefined,
-  readCardAsset: async () => null,
   readAppConfig: async () => ({}),
   writeAppConfig: async () => undefined,
 } as unknown as StorageAdapterExtended

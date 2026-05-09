@@ -30,8 +30,6 @@ export const remoteStorageAdapter: StorageAdapterExtended = {
   writeCardMarkdown: async () => { throw new Error('remoteStorageAdapter not implemented') },
 
   // StorageAdapterExtended
-  writeCardAsset: async () => { throw new Error('remoteStorageAdapter not implemented') },
-  readCardAsset: async () => null as ArrayBuffer | null,
   readAppConfig: async () => ({}),
   writeAppConfig: async () => { throw new Error('remoteStorageAdapter not implemented') },
 }

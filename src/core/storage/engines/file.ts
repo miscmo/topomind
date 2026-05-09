@@ -212,16 +212,6 @@ export const fileStorageAdapter: StorageAdapterExtended = {
     await FSB.writeFile(`${cardPath}/_content.md`, content)
   },
 
-  // ===== StorageAdapterExtended: Asset operations =====
-
-  writeCardAsset: async (assetPath: string, buffer: ArrayBuffer) => {
-    await FSB.writeBlobFile(assetPath, buffer)
-  },
-
-  readCardAsset: async (assetPath: string) => {
-    return FSB.readBlobFile(assetPath)
-  },
-
   // ===== StorageAdapterExtended: App config =====
 
   readAppConfig: () => {

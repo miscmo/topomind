@@ -940,8 +940,6 @@ return (
 | `fs:readFile` | 读取文本文件 |
 | `fs:writeFile` | 写入文本文件 |
 | `fs:deleteFile` | 删除文件 |
-| `fs:writeBlobFile` | 写入二进制文件 |
-| `fs:readBlobFile` | 读取二进制文件 |
 | `fs:countChildren` | 统计子节点数 |
 | `fs:setWorkDir` | 验证并设置工作目录 |
 | `fs:selectWorkDirCandidate` | 选择工作目录候选 |

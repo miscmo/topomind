@@ -360,19 +360,6 @@ function createFileService() {
       if (nodeFs.existsSync(f)) nodeFs.unlinkSync(f);
     },
 
-    writeBlobFile: function(filePath, arrayBuffer) {
-      var f = _fs_abs(filePath);
-      _fs_ensureDir(nodePath.dirname(f));
-      nodeFs.writeFileSync(f, Buffer.from(arrayBuffer));
-    },
-
-    readBlobFile: function(filePath) {
-      var f = _fs_abs(filePath);
-      if (!nodeFs.existsSync(f)) return null;
-      var buf = nodeFs.readFileSync(f);
-      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-    },
-
     importKB: function(sourcePath) {
       var src = nodePath.resolve(sourcePath);
       if (!nodeFs.existsSync(src)) throw new Error('源目录不存在: ' + src);

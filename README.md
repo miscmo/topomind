@@ -169,8 +169,6 @@ pnpm run build:linux  # Linux (.AppImage)
 - `fs:readFile`
 - `fs:writeFile`
 - `fs:deleteFile`
-- `fs:writeBlobFile`
-- `fs:readBlobFile`
 - `fs:countChildren`
 - `fs:setWorkDir`
 - `fs:selectWorkDirCandidate`

@@ -164,8 +164,6 @@ function registerIPC() {
   ipcMain.handle('fs:readFile', function(e, p) { return fileService.readFile(p); });
   ipcMain.handle('fs:writeFile', function(e, p, c) { fileService.writeFile(p, c); });
   ipcMain.handle('fs:deleteFile', function(e, p) { fileService.deleteFile(p); });
-  ipcMain.handle('fs:writeBlobFile', function(e, p, b) { fileService.writeBlobFile(p, b); });
-  ipcMain.handle('fs:readBlobFile', function(e, p) { return fileService.readBlobFile(p); });
   ipcMain.handle('fs:countChildren', function(e, dirPath) {
     var kbRoot = nodePath.join(fileService.getRootDir(), 'kbs');
     var d = dirPath ? nodePath.join(kbRoot, dirPath) : kbRoot;
