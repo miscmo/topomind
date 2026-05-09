@@ -7,6 +7,7 @@ import { useAppStore } from '../stores/appStore'
 import { useRoomStore, roomStore } from '../stores/roomStore'
 import { useTabStore, tabStore } from '../stores/tabStore'
 import { useStorage } from '../hooks/useStorage'
+import { usePlatform } from '../hooks/usePlatform'
 import { logAction } from '../core/log-backend'
 import { logger } from '../core/logger'
 import { useConfirmStore } from '../stores/confirmStore'
@@ -36,6 +37,7 @@ export default function HomePage() {
   const restoreRoomStateToTab = useTabStore((s) => s.restoreRoomStateToTab)
   const tabs = useTabStore((s) => s.tabs)
   const storage = useStorage()
+  const platform = usePlatform()
   const [loading, setLoading] = useState(false)
   const [kbs, setKbs] = useState<KBItem[]>([])
   const [workDir, setWorkDir] = useState('')
@@ -283,7 +285,7 @@ export default function HomePage() {
   // ===== 导入知识库 =====
   async function handleSelectImportDir() {
     logAction('HomePage:点击选择导入文件夹', 'HomePage', {})
-    const res = await storage.selectWorkDirCandidate()
+    const res = await platform.selectDirectory()
     if (res?.valid) {
       setImportDir(res.nodePath || '')
       setImportError('')

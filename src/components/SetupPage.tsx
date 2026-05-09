@@ -5,6 +5,7 @@
 import { memo, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useStorage } from '../hooks/useStorage'
+import { usePlatform } from '../hooks/usePlatform'
 import { logAction } from '../core/log-backend'
 import styles from './SetupPage.module.css'
 
@@ -12,6 +13,7 @@ export default memo(function SetupPage() {
   const showHome = useAppStore((s) => s.showHome)
   const setCurrentWorkDir = useAppStore((s) => s.setCurrentWorkDir)
   const storage = useStorage()
+  const platform = usePlatform()
 
   // TODO：error和message是否可以合并？这俩应该都是同时变的，改成{isError, message}
   const [message, setMessage] = useState('')
@@ -22,7 +24,7 @@ export default memo(function SetupPage() {
     setIsError(false)
     try {
       // [step 1] 选择工作目录 —— 打开文件对话框确定目录路径
-      const picked = await storage.selectWorkDirCandidate()
+      const picked = await platform.selectDirectory()
       if (!picked?.valid) {
         // 用户取消或选择无效
         logAction('工作目录选择对话框关闭', 'SetupPage', {
@@ -60,7 +62,7 @@ export default memo(function SetupPage() {
     logAction('SetupPage:点击创建工作目录', 'SetupPage', {})
     try {
       logAction('SetupPage:打开文件对话框', 'SetupPage', { purpose: '选择新建工作目录位置' })
-      const picked = await storage.selectWorkDirCandidate()
+      const picked = await platform.selectDirectory()
       if (!picked?.valid) {
         logAction('SetupPage:文件对话框关闭', 'SetupPage', {
           result: 'cancelled',
