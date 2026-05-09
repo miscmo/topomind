@@ -75,7 +75,10 @@ export default memo(function GraphCanvas({ onEdgeContextMenu, tabId }: GraphCanv
       if (!start) return
 
       const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
-      if (moved > RIGHT_DRAG_THRESHOLD) return
+      if (moved > RIGHT_DRAG_THRESHOLD) {
+        suppressNextPaneContextMenuRef.current = true
+        return
+      }
 
       e.preventDefault()
       e.stopPropagation()
@@ -96,10 +99,10 @@ export default memo(function GraphCanvas({ onEdgeContextMenu, tabId }: GraphCanv
 
       const start = rightMouseDownRef.current
       rightMouseDownRef.current = null
-      if (start) {
-        const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
-        if (moved > RIGHT_DRAG_THRESHOLD) return
-      }
+      if (!start) return
+
+      const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
+      if (moved > RIGHT_DRAG_THRESHOLD) return
 
       openPaneContextMenu(e.clientX, e.clientY)
     }
