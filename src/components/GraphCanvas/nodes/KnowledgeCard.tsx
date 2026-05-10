@@ -4,11 +4,11 @@
  * container: 有子节点的容器卡片（浅色背景、彩色边框）
  * leaf: 叶子卡片（深色填充、白色文字）
  *
- * @file nodes/KnowledgeCard.tsx
+ * @file components/GraphCanvas/nodes/KnowledgeCard.tsx
  */
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import type { KnowledgeNode, KnowledgeNodeData } from '../types'
+import type { KnowledgeNode } from '../../../types'
 import styles from './KnowledgeCard.module.css'
 
 function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {

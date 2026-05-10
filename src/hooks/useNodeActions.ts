@@ -1,7 +1,6 @@
 /**
  * useNodeActions — Node/edge action handlers
  *
- * Extracted from GraphPage.tsx to reduce component complexity.
  * Handles context-menu and keyboard-triggered node/edge operations.
  *
  * NOTE: Use nodesMapRef/edgesMapRef (O(1) lookup) instead of nodesRef/edgesRef
@@ -44,7 +43,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   const handleNewChild = useCallback(async (nodeId: string, position?: { x: number; y: number }) => {
     const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
     if (!name?.trim()) return
-    logAction('节点:创建', 'GraphPage', { 
+    logAction('节点:创建', 'useNodeActions', { 
       nodeId, nodeName: name.trim(), 
       source: nodeId ? 'context-menu' : 'pane-context-menu', 
       position 
@@ -58,7 +57,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     if (!node) return
     const newName = await prompt({ title: '请输入新名称', placeholder: '节点名称', defaultValue: node.data.label })
     if (!newName?.trim() || newName === node.data.label) return
-    logAction('节点:重命名', 'GraphPage', { nodeId, oldName: node.data.label, newName: newName.trim(), source: 'context-menu' })
+    logAction('节点:重命名', 'useNodeActions', { nodeId, oldName: node.data.label, newName: newName.trim(), source: 'context-menu' })
     await graph.renameNode(nodeId, newName.trim())
     onAction?.()
   }, [findNodeById, graph, onAction, prompt])
@@ -68,14 +67,14 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     if (!node) return
     const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除`, defaultValue: node.data.label })
     if (!confirmed?.trim() || confirmed !== node.data.label) return
-    logAction('节点:删除', 'GraphPage', { nodeId, label: node.data.label, path: node.data.path, source: 'context-menu' })
+    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, path: node.data.path, source: 'context-menu' })
     await graph.deleteChildNode(nodeId)
     onAction?.()
   }, [findNodeById, graph, onAction, prompt])
 
   const handleEdgeDelete = useCallback((edgeId: string) => {
     const edge = findEdgeById(edgeId)
-    logAction('连线:删除', 'GraphPage', { edgeId, edgeSource: edge?.source, edgeTarget: edge?.target, trigger: 'context-menu' })
+    logAction('连线:删除', 'useNodeActions', { edgeId, edgeSource: edge?.source, edgeTarget: edge?.target, trigger: 'context-menu' })
     deleteElements({ edges: [{ id: edgeId }] })
     onAction?.()
   }, [findEdgeById, deleteElements, onAction])
@@ -111,13 +110,13 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     if (node) {
       fitView({ nodes: [node], padding: 0.3, duration: 300 })
     }
-    logAction('节点:聚焦', 'GraphPage', { nodeId })
+    logAction('节点:聚焦', 'useNodeActions', { nodeId })
     onAction?.()
   }, [findNodeById, selectNode, fitView, onAction])
 
   const handleProperties = useCallback((nodeId: string) => {
     selectNode(nodeId)
-    logAction('节点:属性', 'GraphPage', { nodeId })
+    logAction('节点:属性', 'useNodeActions', { nodeId })
     onAction?.()
   }, [selectNode, onAction])
 
@@ -127,7 +126,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     if (!node) return
     const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除`, defaultValue: node.data.label })
     if (!confirmed?.trim() || confirmed !== node.data.label) return
-    logAction('节点:删除', 'GraphPage', { nodeId, label: node.data.label, path: node.data.path, source: 'keyboard-delete' })
+    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, path: node.data.path, source: 'keyboard-delete' })
     await graph.deleteChildNode(nodeId)
   }, [findNodeById, graph, prompt])
 
@@ -135,7 +134,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   const addChildNode = useCallback(async (parentId: string) => {
     const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
     if (!name?.trim()) return
-    logAction('节点:创建', 'GraphPage', { nodeId: parentId, nodeName: name.trim(), source: 'keyboard-tab' })
+    logAction('节点:创建', 'useNodeActions', { nodeId: parentId, nodeName: name.trim(), source: 'keyboard-tab' })
     await graph.createChildNode(name.trim(), parentId)
   }, [graph, prompt])
 

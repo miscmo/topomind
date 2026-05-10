@@ -1,13 +1,13 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Background, ReactFlow, type BackgroundVariant, type Node, type NodeTypes } from '@xyflow/react'
-import { useAppStore } from '../stores/appStore'
-import { useContextMenu } from '../hooks/useContextMenu'
-import { useDoubleClick } from '../hooks/useDoubleClick'
-import { useGraphContext } from '../contexts/GraphContext'
-import KnowledgeCard from '../nodes/KnowledgeCard'
-import Toolbar from './Toolbar/Toolbar'
-import type { KnowledgeNode } from '../types'
-import { logAction } from '../core/log-backend'
+import { useAppStore } from '../../stores/appStore'
+import { useContextMenu } from '../../hooks/useContextMenu'
+import { useDoubleClick } from '../../hooks/useDoubleClick'
+import { useGraphContext } from '../../contexts/GraphContext'
+import KnowledgeCard from './nodes/KnowledgeCard'
+import Toolbar from '../Toolbar/Toolbar'
+import type { KnowledgeNode } from '../../types'
+import { logAction } from '../../core/log-backend'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
 const RIGHT_DRAG_THRESHOLD = 6
@@ -148,7 +148,7 @@ export default memo(function GraphCanvas({ onEdgeContextMenu, tabId }: GraphCanv
           }
         }}
         onMove={(_, viewport) => logViewportChange(viewport)}
-                minZoom={0.15}
+        minZoom={0.15}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         zoomOnDoubleClick={false}
         zoomOnScroll

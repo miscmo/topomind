@@ -11,7 +11,7 @@ import { logAction } from '../core/log-backend'
 import { useNavContext } from './useNavContext'
 
 interface UseKeyboardOptions {
-  onDelete?: () => void
+  onDelete?: (nodeId: string) => void
   onEscape?: () => void
   onAddChild?: (parentId: string) => void
   tabId: string
@@ -65,7 +65,7 @@ export function useKeyboard(options: UseKeyboardOptions) {
           const selectedNodeIdForDelete = getSelectedNodeId()
           if (selectedNodeIdForDelete) {
             logAction('快捷键:删除节点', 'useKeyboard', { nodeId: selectedNodeIdForDelete })
-            onDelete?.()
+            onDelete?.(selectedNodeIdForDelete)
           }
           break
 

@@ -4,12 +4,12 @@
  * 等多个子模块，统一管理 GraphPage 的页面逻辑。
  */
 import { useEffect, useRef } from 'react'
-import { useNavContext } from './useNavContext'
-import { useGraph } from './useGraph'
-import { usePageLogging } from './usePageLogging'
-import { useRoomLoader } from './useRoomLoader'
-import { useTabDirtySync } from './useTabDirtySync'
-import { registerTabSaver } from '../core/close-guard'
+import { useNavContext } from '../../hooks/useNavContext'
+import { useGraph } from '../../hooks/useGraph'
+import { usePageLogging } from '../../hooks/usePageLogging'
+import { useRoomLoader } from '../../hooks/useRoomLoader'
+import { useTabDirtySync } from '../../hooks/useTabDirtySync'
+import { registerTabSaver } from '../../core/close-guard'
 
 export interface UseGraphPageControllerOptions {
   tabId: string
