@@ -196,9 +196,7 @@ export default function HomePage() {
     if (!opened) {
       return
     }
-    logAction('知识库:打开', 'HomePage', { 
-      kbPath: kb.path, kbName: kb.name, nodeCount: kb.nodeCount 
-    })
+    logAction('打开知识库成功', 'HomePage', { kbInfo: kb })
   }
 
   async function switchWorkDir() {
@@ -338,7 +336,7 @@ export default function HomePage() {
 
           {/* 新建按钮 */}
           <div className={styles.cardAdd} onClick={() => { 
-            logAction('HomePage:点击新建知识库', 'HomePage', {}); 
+            logAction('点击新建知识库', 'HomePage', {}); 
             setShowCreateSheet(true); 
             setCreateName(''); 
             setCreateError(''); 
@@ -349,7 +347,7 @@ export default function HomePage() {
 
           {/* 导入按钮 */}
           <div className={styles.cardAdd} onClick={() => { 
-            logAction('HomePage:点击导入知识库', 'HomePage', {}); 
+            logAction('点击导入知识库', 'HomePage', {}); 
             setShowImportSheet(true); 
             setImportDir(''); 
             setImportError(''); 

@@ -38,7 +38,11 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     maxWidth: 800,
   })
   const { contextMenu, hideCM } = useContextMenu()
-  const { deleteSelectedNode, addChildNode, handleNewChild, handleRename, handleDelete, handleEdgeDelete, handleEdgeStyle, handleFocus, handleProperties } = useNodeActions({ graph })
+  const { 
+    deleteSelectedNode, addChildNode, handleNewChild, handleRename, 
+    handleDelete, handleEdgeDelete, handleEdgeStyle, handleFocus, 
+    handleProperties 
+  } = useNodeActions({ graph })
 
   const handleContextMenuNewChild = useCallback((nodeId: string, position?: { x: number; y: number }) => {
     const flowPosition = position ? screenToFlowPosition(position) : undefined
@@ -62,7 +66,6 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
       <div id="graph-page" className={styles.page}>
         <div id="app-layout" className={styles.layout}>
           <div id="graph-panel" className={styles.graphPanel}>
-            <div id="header" className={styles.header}>TopoMind</div>
             <Breadcrumb tabId={tabId} />
 
             <GraphCanvas

@@ -46,7 +46,9 @@ export async function openHomeTab(): Promise<boolean> {
 
 export async function openKBTab(kb: OpenKBTabInput): Promise<boolean> {
   const tabId = `kb:${kb.path}`
-  if (!(await flushCurrentTabBeforeLeaving(tabId))) return false
+  if (!(await flushCurrentTabBeforeLeaving(tabId))) {
+    return false
+  }
   const existing = tabStore.getState().getTabById(tabId)
 
   if (!existing) {

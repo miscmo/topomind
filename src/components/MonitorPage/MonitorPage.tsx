@@ -385,12 +385,6 @@ function LogList() {
               entry={entry}
               selected={selectedEntry?.id === entry.id}
               onClick={() => {
-                logAction('监控:选择日志', 'MonitorPage', {
-                  entryId: entry.id,
-                  entryLevel: entry.level,
-                  entryAction: entry.action,
-                  entryMessage: entry.message,
-                })
                 setSelectedEntry(entry)
               }}
               keyword={keyword}
