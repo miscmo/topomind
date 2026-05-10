@@ -193,8 +193,12 @@ export default function HomePage() {
 
   async function openKB(kb: KBItem) {
     const opened = await openKBTab(kb)
-    if (!opened) return
-    logAction('知识库:打开', 'HomePage', { kbPath: kb.path, kbName: kb.name, nodeCount: kb.nodeCount })
+    if (!opened) {
+      return
+    }
+    logAction('知识库:打开', 'HomePage', { 
+      kbPath: kb.path, kbName: kb.name, nodeCount: kb.nodeCount 
+    })
   }
 
   async function switchWorkDir() {
@@ -309,7 +313,7 @@ export default function HomePage() {
               key={kb.path}
               className={styles.card}
               onClick={() => { 
-                logAction('HomePage:点击知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name }); 
+                logAction('HomePage:点击知识库卡片', 'HomePage', { kbInfo: kb }); 
                 openKB(kb); 
               }}
               onContextMenu={(e) => handleKBRightClick(e, kb)}
@@ -323,7 +327,9 @@ export default function HomePage() {
                 </div>
                 <div className={styles.cardMeta}>
                   <div className={styles.cardMetaRow}>
-                    <span>📊 {kb.nodeCount !== null ? `${kb.nodeCount} 个节点` : '··· 个节点'}</span>
+                    <span>
+                      📊 {kb.nodeCount !== null ? `${kb.nodeCount} 个节点` : '··· 个节点'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -331,13 +337,23 @@ export default function HomePage() {
           ))}
 
           {/* 新建按钮 */}
-          <div className={styles.cardAdd} onClick={() => { logAction('HomePage:点击新建知识库', 'HomePage', {}); setShowCreateSheet(true); setCreateName(''); setCreateError(''); }}>
+          <div className={styles.cardAdd} onClick={() => { 
+            logAction('HomePage:点击新建知识库', 'HomePage', {}); 
+            setShowCreateSheet(true); 
+            setCreateName(''); 
+            setCreateError(''); 
+          }}>
             <div className={styles.cardAddIcon}>＋</div>
             <div className={styles.cardAddText}>新建知识库</div>
           </div>
 
           {/* 导入按钮 */}
-          <div className={styles.cardAdd} onClick={() => { logAction('HomePage:点击导入知识库', 'HomePage', {}); setShowImportSheet(true); setImportDir(''); setImportError(''); }}>
+          <div className={styles.cardAdd} onClick={() => { 
+            logAction('HomePage:点击导入知识库', 'HomePage', {}); 
+            setShowImportSheet(true); 
+            setImportDir(''); 
+            setImportError(''); 
+          }}>
             <div className={styles.cardAddIcon}>📥</div>
             <div className={styles.cardAddText}>导入知识库</div>
           </div>
