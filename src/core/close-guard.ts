@@ -52,6 +52,7 @@ export function getDirtyState() {
   }
 }
 
+// Expose close-guard helpers for the Electron main process quit/switch-workdir flow.
 if (typeof window !== 'undefined') {
   ;(window as typeof window & {
     __topomindCloseGuard?: {

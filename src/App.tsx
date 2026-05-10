@@ -17,7 +17,7 @@ import { useAppStore } from './stores/appStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
-import { flushAllDirtyTabs, flushTabs } from './core/close-guard'
+import { flushTabs } from './core/close-guard'
 import { closeTab } from './core/tab-flow'
 
 export default memo(function App() {
@@ -45,12 +45,6 @@ export default memo(function App() {
     const handleHashChange = () => setIsMonitorWindow(window.location.hash === '#/monitor')
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [])
-
-  useEffect(() => {
-    const handler = async () => { await flushAllDirtyTabs() }
-    window.electronAPI?.on('save:before-quit', handler)
-    return () => window.electronAPI?.off('save:before-quit', handler)
   }, [])
 
   async function handleCloseTab(tabId: string) {

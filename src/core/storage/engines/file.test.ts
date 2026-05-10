@@ -111,4 +111,90 @@ describe('file storage graph conversion', () => {
     expect(fsb.zoom).toBe(2)
     expect(fsb.pan).toEqual({ x: 7, y: 8 })
   })
+
+  it('strips the current room ref from children with filesystem-like refs', () => {
+    const roomRef = '../../../Code/topomind_cc/测试1'
+    const childRef = `${roomRef}/32`
+    const meta: GraphMeta = {
+      nodes: {
+        [childRef]: {
+          id: childRef,
+          card: { ref: childRef, name: '32' },
+          width: 200,
+          height: 150,
+          position: { x: 179, y: 464 },
+        },
+      },
+      edges: [
+        {
+          id: 'e1',
+          source: { ref: childRef, name: '' },
+          target: { ref: childRef, name: '' },
+          relation: '相关',
+          weight: 'minor',
+        },
+      ],
+      viewport: { zoom: 1, pan: { x: 0, y: 0 } },
+    }
+
+    const fsb = convertGraphToFSB(meta, roomRef)
+
+    expect(fsb.children?.['32']).toEqual({
+      path: '32',
+      name: '32',
+      hasChildren: false,
+      x: 179,
+      y: 464,
+    })
+    expect(fsb.children?.[childRef]).toBeUndefined()
+    expect(fsb.edges?.[0]).toMatchObject({ source: '32', target: '32' })
+  })
+
+  it('reads room-relative children under filesystem-like refs into canonical refs', () => {
+    const roomRef = '../../../Code/topomind_cc/测试1'
+
+    const meta = convertFSBToGraph({
+      children: {
+        32: { path: '32', name: '32', x: 179, y: 464 },
+      },
+      edges: [
+        { id: 'e1', source: '32', target: '32', relation: '相关', weight: 'minor' },
+      ],
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+    }, roomRef)
+
+    const childRef = `${roomRef}/32`
+    expect(meta.nodes[childRef]).toMatchObject({
+      id: childRef,
+      card: { ref: childRef, name: '32' },
+      position: { x: 179, y: 464 },
+    })
+    expect(meta.edges[0]).toMatchObject({
+      source: { ref: childRef },
+      target: { ref: childRef },
+    })
+  })
+
+  it('keeps compatibility with old KB-relative nested child refs', () => {
+    const meta = convertFSBToGraph({
+      children: {
+        'Parent/Child': { path: 'Parent/Child', name: 'Child' },
+      },
+      edges: [
+        { id: 'e1', source: 'Parent/Child', target: 'Parent/Child', relation: '相关', weight: 'minor' },
+      ],
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+    }, 'KB/Parent')
+
+    expect(meta.nodes['KB/Parent/Child']).toMatchObject({
+      id: 'KB/Parent/Child',
+      card: { ref: 'KB/Parent/Child', name: 'Child' },
+    })
+    expect(meta.edges[0]).toMatchObject({
+      source: { ref: 'KB/Parent/Child' },
+      target: { ref: 'KB/Parent/Child' },
+    })
+  })
 })

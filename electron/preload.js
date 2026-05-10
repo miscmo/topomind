@@ -32,7 +32,6 @@ const ALLOWED_SEND_CHANNELS = new Set([
 const ALLOWED_RECEIVE_CHANNELS = new Set([
   'app:menu-action',
   'app:reset-session',
-  'save:before-quit',
   'log:entry',
 ]);
 

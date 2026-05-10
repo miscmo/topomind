@@ -5,21 +5,38 @@
 import nodePath from 'path';
 import nodeFs from 'fs';
 
-// 返回dir/kbs知识库目录
+/**
+ * @description 返回工作目录下的知识库根目录路径
+ * @param { string } dir: 工作目录路径
+ * @returns { string } kbs 目录路径
+ */
 function _fs_kbsDir(dir) {
   return nodePath.join(dir, 'kbs');
 }
 
-// 返回dir/logs日志目录
+/**
+ * @description 返回工作目录下的日志目录路径
+ * @param { string } dir: 工作目录路径
+ * @returns { string } logs 目录路径
+ */
 function _fs_logsDir(dir) {
   return nodePath.join(dir, 'logs');
 }
 
-// 返回dir/_config.json配置文件路径
+/**
+ * @description 返回工作目录下的应用配置文件路径
+ * @param { string } dir: 工作目录路径
+ * @returns { string } _config.json 文件路径
+ */
 function _fs_appConfigPath(dir) {
   return nodePath.join(dir, '_config.json');
 }
 
+/**
+ * @description 判断目录是否为空，不存在的目录视为空目录
+ * @param { string } dirPath: 目录路径
+ * @returns { boolean } 是否为空目录
+ */
 function _fs_isDirEmpty(dirPath) {
   try {
     if (!nodeFs.existsSync(dirPath))
@@ -29,11 +46,11 @@ function _fs_isDirEmpty(dirPath) {
 }
 
 /**
-* @description 验证路径是否为有效工作目录：工作目录存在且为目录  -> 存在_config.json -> 存在kbs目录 -> 存在logs目录
-* @returns { { valid: boolean, error?: string } } 工作目录校验结果
-* @param { string } dirPath: 工作目录路径
-* @throws { Error } 路径为相对路径时抛出错误
-*/
+ * @description 验证路径是否为有效工作目录：工作目录存在且为目录 -> 存在 _config.json -> 存在 kbs 目录 -> 存在 logs 目录
+ * @param { string } dirPath: 工作目录路径
+ * @returns { { valid: boolean, error?: string } } 工作目录校验结果
+ * @throws { Error } 路径处理异常时抛出错误
+ */
 function _fs_isValidWorkDir(dirPath) {
   try {
     if (!dirPath) return { valid: false, error: '工作目录路径为空' };
@@ -49,7 +66,7 @@ function _fs_isValidWorkDir(dirPath) {
 }
 
 /**
- * @description 确保目录存在，不存在则创建
+ * @description 确保目录存在，不存在则递归创建
  * @param { string } d: 目录路径
  * @returns { void }
  */
@@ -58,12 +75,23 @@ function _fs_ensureDir(d) {
     nodeFs.mkdirSync(d, { recursive: true });
 }
 
+/**
+ * @description 将任意名称清洗为安全的单个目录名片段
+ * @param { string } name: 原始目录名
+ * @returns { string } 清洗后的目录名
+ */
 function _fs_safeSegment(name) {
   var s = String(name || '').trim().replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/[. ]+$/g, '');
   if (!s || s === '.' || s === '..') s = 'untitled';
   return s.slice(0, 80);
 }
 
+/**
+ * @description 在父目录下生成不重名的文件夹名称
+ * @param { string } parentDir: 父目录路径
+ * @param { string } desiredName: 期望的目录名
+ * @returns { string } 可用且唯一的目录名
+ */
 function _fs_uniqueFolderName(parentDir, desiredName) {
   var base = _fs_safeSegment(desiredName);
   var candidate = base;
@@ -75,6 +103,13 @@ function _fs_uniqueFolderName(parentDir, desiredName) {
   return candidate;
 }
 
+/**
+ * @description 将知识库相对路径解析为 kbs 根目录下的绝对路径，并阻止路径越界
+ * @param { string } rootDir: 工作目录绝对路径
+ * @param { string } relPath: 相对于 kbs 根目录的路径
+ * @returns { string } 解析后的绝对路径
+ * @throws { Error } 当解析结果越出 kbs 根目录时抛出错误
+ */
 function _fs_abs(rootDir, relPath) {
   var resolvedRoot = nodePath.resolve(_fs_kbsDir(rootDir));
   if (!relPath) return resolvedRoot;
@@ -86,48 +121,116 @@ function _fs_abs(rootDir, relPath) {
   return result;
 }
 
+/**
+ * @description 将 kbs 根目录下的绝对路径转换为知识库相对路径
+ * @param { string } rootDir: 工作目录路径
+ * @param { string } absPath: 绝对路径
+ * @returns { string } 相对于 kbs 的路径
+ */
 function _fs_relativeToKbs(rootDir, absPath) {
   return nodePath.relative(_fs_kbsDir(rootDir), absPath).split(nodePath.sep).join('/');
 }
 
+/**
+ * @description 将完整知识库路径转换为相对于知识库根节点的路径
+ * @param { string } relPath: 知识库内路径
+ * @returns { string } KB 相对路径
+ */
 function _fs_kbRelativePath(relPath) {
   var parts = String(relPath || '').split('/').filter(Boolean);
   if (parts.length <= 1) return '';
   return parts.slice(1).join('/');
 }
 
+/**
+ * @description 将子节点路径转换为相对于父房间的路径
+ * @param { string } parentPath: 父房间路径
+ * @param { string } childPath: 子节点完整路径
+ * @returns { string } 房间相对路径
+ */
+function _fs_roomRelativePath(parentPath, childPath) {
+  var parentParts = String(parentPath || '').split('/').filter(Boolean);
+  var childParts = String(childPath || '').split('/').filter(Boolean);
+  var matchesParent = parentParts.length > 0 && parentParts.every(function(part, index) {
+    return childParts[index] === part;
+  });
+  if (matchesParent) {
+    return childParts.slice(parentParts.length).join('/');
+  }
+  return childParts.length ? childParts[childParts.length - 1] : '';
+}
+
+/**
+ * @description 按多种候选 key 从 graph.children 中查找子节点元数据
+ * @param { Object } children: graph.children 映射表
+ * @param { string } parentPath: 父房间路径
+ * @param { string } childPath: 子节点完整路径
+ * @returns { Object | undefined } 命中的子节点元数据
+ */
+function _fs_getChildGraphEntry(children, parentPath, childPath) {
+  var roomKey = _fs_roomRelativePath(parentPath, childPath);
+  var kbKey = _fs_kbRelativePath(childPath);
+  return children[roomKey] || children[kbKey] || children[childPath] || children[nodePath.basename(childPath)];
+}
+
+/**
+ * @description 读取 JSON 文件并解析，失败时返回 null
+ * @param { string } filePath: JSON 文件路径
+ * @returns { Object | null } 解析后的对象
+ */
 function _fs_readJsonFile(filePath) {
   if (!nodeFs.existsSync(filePath)) return null;
   try { return JSON.parse(nodeFs.readFileSync(filePath, 'utf-8')); } catch (e) { return null; }
 }
 
+/**
+ * @description 将对象写入 JSON 文件，使用 2 空格缩进
+ * @param { string } filePath: JSON 文件路径
+ * @param { Object } data: 要写入的数据
+ * @returns { void }
+ */
 function _fs_writeJsonFile(filePath, data) {
   nodeFs.writeFileSync(filePath, JSON.stringify(data || {}, null, 2), 'utf-8');
 }
 
+/**
+ * @description 返回目录下 _graph.json 文件路径
+ * @param { string } dir: 目录路径
+ * @returns { string } _graph.json 文件路径
+ */
 function _fs_graphFilePath(dir) {
   return nodePath.join(dir, '_graph.json');
 }
 
 /**
- * 验证路径必须是绝对路径，否则抛出错误，返回标准化后的绝对路径
- * @param {string} dir - 传入的路径
- * @returns {string} 标准化后的绝对路径
- * @throws {Error} 路径为相对路径时抛出错误
+ * @description 验证路径必须是绝对路径，否则抛出错误，并返回标准化后的绝对路径
+ * @param { string } dir: 传入的路径
+ * @returns { string } 标准化后的绝对路径
+ * @throws { Error } 路径为相对路径时抛出错误
  */
 function _fs_validateAbsolutePath(dir) {
   if (!nodePath.isAbsolute(dir)) {
     throw new Error('路径必须是绝对路径');
   }
-  // 消除路径中的./ ../ 多余斜杠，标准化绝对路径
   return nodePath.resolve(dir);
 }
 
 const fileService = {
+    /**
+     * @description 读取工作目录应用配置
+     * @param { string } rootDir: 工作目录路径
+     * @returns { Object } 应用配置对象
+     */
     readAppConfig: function(rootDir) {
       return _fs_readJsonFile(_fs_appConfigPath(rootDir)) || {};
     },
 
+    /**
+     * @description 写入工作目录应用配置，支持对象或 JSON 字符串
+     * @param { string } rootDir: 工作目录路径
+     * @param { Object | string } content: 配置内容
+     * @returns { Object } 最终写入的配置对象
+     */
     writeAppConfig: function(rootDir, content) {
       var data = content;
       if (typeof content === 'string') {
@@ -138,6 +241,11 @@ const fileService = {
       return data;
     },
 
+    /**
+     * @description 创建一个新的工作目录并初始化必要结构
+     * @param { string } dirPath: 工作目录绝对路径
+     * @returns { { valid: boolean, nodePath: string | null, error?: string } } 创建结果
+     */
     createWorkDir: function(dirPath) {
       var dir = dirPath || null;
       try {
@@ -159,13 +267,10 @@ const fileService = {
     },
 
     /**
-    * @description 校验工作目录：检查目录是否存在且为有效工作目录
-    * @returns { valid: boolean, nodePath: string | null, error?: string }
-    * @param { string } dirPath: 工作目录路径
-    * @param { boolean } valid: 是否校验成功
-    * @param { string | null } nodePath: 校验的工作目录路径
-    * @param { string | null } error: 校验失败的原因
-    */
+     * @description 校验工作目录：检查目录是否存在且为有效工作目录
+     * @param { string } dirPath: 工作目录路径
+     * @returns { { valid: boolean, nodePath: string | null, error?: string } } 校验结果
+     */
     isValidWorkDir: function(dirPath) {
       var dir = dirPath;
       if (!dir) {
@@ -179,6 +284,12 @@ const fileService = {
       return { valid: true, nodePath: dir };
     },
 
+    /**
+     * @description 列出指定父路径下的子目录，并尝试合并 graph 中的显示名称
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } parentPath: 父路径
+     * @returns { Array<{ path: string, name: string, isDir: boolean }> } 子节点列表
+     */
     listChildren: function(rootDir, parentPath) {
       var dir = _fs_abs(rootDir, parentPath);
       _fs_ensureDir(_fs_kbsDir(rootDir));
@@ -189,7 +300,7 @@ const fileService = {
         .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
         .map(function(e) {
           var childPath = parentPath ? parentPath + '/' + e.name : e.name;
-          var childGraphEntry = parentChildren[_fs_kbRelativePath(childPath)];
+          var childGraphEntry = _fs_getChildGraphEntry(parentChildren, parentPath, childPath);
           var safeName = (childGraphEntry && typeof childGraphEntry.name === 'string' && childGraphEntry.name.trim())
             ? childGraphEntry.name.trim()
             : e.name;
@@ -201,6 +312,13 @@ const fileService = {
       return children;
     },
 
+    /**
+     * @description 在知识库目录下创建新目录，并初始化默认 _graph.json
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } dirPath: 待创建目录的相对路径
+     * @param { Object } _meta: 预留元数据参数
+     * @returns { string } 创建后的目录相对路径
+     */
     mkDir: function(rootDir, dirPath, _meta) {
       var parent = _fs_kbsDir(rootDir);
       _fs_ensureDir(parent);
@@ -219,11 +337,24 @@ const fileService = {
       return _fs_relativeToKbs(rootDir, d);
     },
 
+    /**
+     * @description 删除指定目录及其所有内容
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } dirPath: 待删除目录相对路径
+     * @returns { void }
+     */
     rmDir: function(rootDir, dirPath) {
       var d = _fs_abs(rootDir, dirPath);
       if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
     },
 
+    /**
+     * @description 重命名知识库目录，并返回新的相对路径
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } kbPath: 知识库相对路径
+     * @param { string } newName: 新名称
+     * @returns { string | null } 重命名后的路径，知识库不存在时返回 null
+     */
     renameKB: function(rootDir, kbPath, newName) {
       var d = _fs_abs(rootDir, kbPath);
       if (!nodeFs.existsSync(d)) return null;
@@ -239,6 +370,12 @@ const fileService = {
       return newRelPath;
     },
 
+    /**
+     * @description 读取指定目录的图元数据，不存在时返回默认结构
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } dirPath: 目录相对路径
+     * @returns { Object } 图元数据对象
+     */
     readGraphMeta: function(rootDir, dirPath) {
       var d = _fs_abs(rootDir, dirPath);
       var graph = _fs_readJsonFile(_fs_graphFilePath(d));
@@ -246,6 +383,13 @@ const fileService = {
       return { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
     },
 
+    /**
+     * @description 写入指定目录的图元数据，不存在时先创建目录结构
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } dirPath: 目录相对路径
+     * @param { Object } meta: 图元数据
+     * @returns { void }
+     */
     writeGraphMeta: function(rootDir, dirPath, meta) {
       var d = _fs_abs(rootDir, dirPath);
       if (!nodeFs.existsSync(d)) {
@@ -261,14 +405,29 @@ const fileService = {
       _fs_writeJsonFile(_fs_graphFilePath(d), graphMeta);
     },
 
+    /**
+     * @description 更新父目录 graph.children 中某个卡片的显示名称
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } cardPath: 卡片路径
+     * @param { string } newName: 新显示名称
+     * @returns { string } 原卡片路径
+     */
     updateCardMeta: function(rootDir, cardPath, newName) {
       var parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : '';
       var parentDir = _fs_abs(rootDir, parentPath);
       var graphPath = _fs_graphFilePath(parentDir);
       var graph = _fs_readJsonFile(graphPath) || { children: {}, edges: [] };
       var children = graph.children || {};
-      var key = _fs_kbRelativePath(cardPath);
+      var key = _fs_roomRelativePath(parentPath, cardPath);
       var entry = children[key];
+      if (!entry) {
+        key = _fs_kbRelativePath(cardPath);
+        entry = children[key];
+      }
+      if (!entry) {
+        key = cardPath;
+        entry = children[key];
+      }
       if (entry) {
         children[key] = Object.assign({}, entry, { name: newName });
         graph.children = children;
@@ -277,29 +436,61 @@ const fileService = {
       return cardPath;
     },
 
+    /**
+     * @description 获取目录信息，不存在时返回 null
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } dirPath: 目录相对路径
+     * @returns { Object | null } 目录信息
+     */
     getDir: function(rootDir, dirPath) {
       var d = _fs_abs(rootDir, dirPath);
       if (!nodeFs.existsSync(d)) return null;
       return { nodePath: dirPath };
     },
 
+    /**
+     * @description 读取文本文件内容，不存在时返回空字符串
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } filePath: 文件相对路径
+     * @returns { string } 文件内容
+     */
     readFile: function(rootDir, filePath) {
       var f = _fs_abs(rootDir, filePath);
       if (nodeFs.existsSync(f)) return nodeFs.readFileSync(f, 'utf-8');
       return '';
     },
 
+    /**
+     * @description 写入文本文件，不存在时先创建父目录
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } filePath: 文件相对路径
+     * @param { string } content: 文件内容
+     * @returns { void }
+     */
     writeFile: function(rootDir, filePath, content) {
       var f = _fs_abs(rootDir, filePath);
       _fs_ensureDir(nodePath.dirname(f));
       nodeFs.writeFileSync(f, content, 'utf-8');
     },
 
+    /**
+     * @description 删除指定文件，存在时执行删除
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } filePath: 文件相对路径
+     * @returns { void }
+     */
     deleteFile: function(rootDir, filePath) {
       var f = _fs_abs(rootDir, filePath);
       if (nodeFs.existsSync(f)) nodeFs.unlinkSync(f);
     },
 
+    /**
+     * @description 导入外部知识库目录到当前工作目录
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } sourcePath: 外部知识库绝对或相对路径
+     * @returns { string } 导入后知识库的相对路径
+     * @throws { Error } 源目录不存在或不是有效知识库时抛出错误
+     */
     importKB: function(rootDir, sourcePath) {
       var src = nodePath.resolve(sourcePath);
       if (!nodeFs.existsSync(src)) throw new Error('源目录不存在: ' + src);
@@ -312,6 +503,12 @@ const fileService = {
       var dest = nodePath.join(_fs_kbsDir(rootDir), destName);
       _fs_ensureDir(dest);
 
+      /**
+       * @description 递归复制目录内容到目标目录
+       * @param { string } srcDir: 源目录路径
+       * @param { string } destDir: 目标目录路径
+       * @returns { void }
+       */
       function copyDirRecursive(srcDir, destDir) {
         _fs_ensureDir(destDir);
         var entries = nodeFs.readdirSync(srcDir, { withFileTypes: true });

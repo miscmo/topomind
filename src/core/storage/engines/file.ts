@@ -4,7 +4,7 @@ import type { VaultRef } from '../adapter/vault'
 import type { KBRef } from '../adapter/kb'
 import type { CardRef } from '../adapter/card'
 import type { EdgeRelation, EdgeWeight } from '../../../types'
-import { basenameRef, joinRefs, normalizeRef } from '../../../domain/graph/path-utils'
+import { basenameRef, joinRefs, normalizeRef, parentRef, resolveRoomChildRef } from '../../../domain/graph/path-utils'
 
 interface FSBGraphChild {
   path?: string
@@ -47,26 +47,35 @@ const toCardInfo = (child: { path: string; name: string }, kbRef: KBRef): CardIn
   updatedAt: undefined,
 })
 
-function kbRootRef(roomRef: string): string {
-  return normalizeRef(roomRef).split('/')[0] ?? ''
-}
-
-function toKBRelativeRef(roomRef: string, ref: string): string {
+function toRoomRelativeRef(roomRef: string, ref: string): string {
   const normalizedRoom = normalizeRef(roomRef)
   const normalizedRef = normalizeRef(ref)
-  const kbRoot = kbRootRef(normalizedRoom)
-  if (!kbRoot || !normalizedRef) return normalizedRef
-  if (normalizedRef === kbRoot) return ''
-  const prefix = `${kbRoot}/`
+  if (!normalizedRoom || !normalizedRef) return normalizedRef
+  if (normalizedRef === normalizedRoom) return ''
+  const prefix = `${normalizedRoom}/`
   return normalizedRef.startsWith(prefix) ? normalizedRef.slice(prefix.length) : normalizedRef
 }
 
-function fromKBRelativeRef(roomRef: string, ref: string): string {
+function fromRoomRelativeRef(roomRef: string, ref: string): string {
   const normalizedRoom = normalizeRef(roomRef)
   const normalizedRef = normalizeRef(ref)
-  const kbRoot = kbRootRef(normalizedRoom)
   if (!normalizedRef) return ''
-  return kbRoot ? joinRefs(kbRoot, normalizedRef) : normalizedRef
+  if (!normalizedRoom) return normalizedRef
+  if (normalizedRef === normalizedRoom || normalizedRef.startsWith(`${normalizedRoom}/`)) {
+    return normalizedRef
+  }
+
+  const roomParent = parentRef(normalizedRoom)
+  if (roomParent && (normalizedRef === roomParent || normalizedRef.startsWith(`${roomParent}/`))) {
+    return normalizedRef
+  }
+
+  const roomName = basenameRef(normalizedRoom)
+  if (roomParent && roomName && normalizedRef.startsWith(`${roomName}/`)) {
+    return joinRefs(roomParent, normalizedRef)
+  }
+
+  return resolveRoomChildRef(normalizedRoom, normalizedRef)
 }
 
 export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
@@ -74,7 +83,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
 
   const nodes: GraphMeta['nodes'] = {}
   for (const [key, child] of Object.entries(children)) {
-    const ref = fromKBRelativeRef(roomRef, child.path || key)
+    const ref = fromRoomRelativeRef(roomRef, child.path || key)
     nodes[ref] = {
       id: ref,
       card: { ref, name: child.name, updatedAt: undefined },
@@ -92,8 +101,8 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
     color?: string; arrow?: boolean; highlighted?: boolean; faded?: boolean
   }> = (raw.edges ?? []).map(e => ({
     id: e.id,
-    source: { ref: fromKBRelativeRef(roomRef, e.source), name: '', updatedAt: undefined },
-    target: { ref: fromKBRelativeRef(roomRef, e.target), name: '', updatedAt: undefined },
+    source: { ref: fromRoomRelativeRef(roomRef, e.source), name: '', updatedAt: undefined },
+    target: { ref: fromRoomRelativeRef(roomRef, e.target), name: '', updatedAt: undefined },
     relation: e.relation ?? '相关',
     weight: e.weight ?? 'minor',
     lineMode: e.lineMode,
@@ -128,7 +137,7 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
   const children: Record<string, FSBGraphChild> = {}
   for (const node of Object.values(meta.nodes)) {
     const ref = normalizeRef(node.card?.ref || node.id)
-    const key = toKBRelativeRef(roomRef, ref) || basenameRef(ref) || basenameRef(node.id) || node.id
+    const key = toRoomRelativeRef(roomRef, ref) || basenameRef(ref) || basenameRef(node.id) || node.id
     children[key] = {
       path: key || undefined,
       name: node.card.name,
@@ -142,8 +151,8 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
     children,
     edges: meta.edges.map(e => ({
       id: e.id,
-      source: toKBRelativeRef(roomRef, e.source.ref),
-      target: toKBRelativeRef(roomRef, e.target.ref),
+      source: toRoomRelativeRef(roomRef, e.source.ref),
+      target: toRoomRelativeRef(roomRef, e.target.ref),
       relation: e.relation,
       weight: e.weight,
       lineMode: e.lineMode,

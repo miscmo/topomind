@@ -60,7 +60,20 @@ if (nodeFs.existsSync(E2E_ENV_FILE)) {
 /**
  * 注册渲染进程与主进程之间的所有 IPC 通道。
  */
-async function askRendererToFlushAllDirtyTabs() {
+async function readRendererDirtyState() {
+  if (!win || win.isDestroyed()) return { hasDirty: false, dirtyTabIds: [] };
+  try {
+    const result = await win.webContents.executeJavaScript(`(() => {
+      const guard = window.__topomindCloseGuard;
+      return guard ? guard.getDirtyState() : { hasDirty: false, dirtyTabIds: [] };
+    })()`);
+    return result || { hasDirty: false, dirtyTabIds: [] };
+  } catch (e) {
+    return { hasDirty: false, dirtyTabIds: [] };
+  }
+}
+
+async function flushRendererDirtyTabs() {
   if (!win || win.isDestroyed()) return { ok: true, hasDirty: false };
   try {
     const result = await win.webContents.executeJavaScript(`(async () => {
@@ -80,15 +93,7 @@ async function askRendererToFlushAllDirtyTabs() {
 async function confirmAndFlushBeforeExit(reason) {
   if (!win || win.isDestroyed()) return { ok: true };
 
-  let dirtyState;
-  try {
-    dirtyState = await win.webContents.executeJavaScript(`(() => {
-      const guard = window.__topomindCloseGuard;
-      return guard ? guard.getDirtyState() : { hasDirty: false, dirtyTabIds: [] };
-    })()`);
-  } catch (e) {
-    dirtyState = { hasDirty: false, dirtyTabIds: [] };
-  }
+  const dirtyState = await readRendererDirtyState();
 
   if (!dirtyState?.hasDirty) {
     return { ok: true, hasDirty: false };
@@ -112,7 +117,7 @@ async function confirmAndFlushBeforeExit(reason) {
     return { ok: false, cancelled: true };
   }
 
-  const flushResult = await askRendererToFlushAllDirtyTabs();
+  const flushResult = await flushRendererDirtyTabs();
   if (!flushResult.ok) {
     await dialog.showMessageBox(win, {
       type: 'error',
@@ -419,7 +424,7 @@ app.whenReady().then(function() {
 // Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', function() { if (process.platform !== 'darwin') app.quit(); });
 
-// Notify renderer before quit so it can save state
+// Guard against re-entering the quit flow after a successful flush.
 let _isQuittingAfterFlush = false;
 
 app.on('before-quit', async function(event) {
