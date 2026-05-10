@@ -153,14 +153,15 @@ export default function HomePage() {
   }, [])
 
   async function loadKBList() {
-    logAction('HomePage:开始加载知识库列表', 'HomePage', {})
     setLoading(true)
     try {
       const list = await storage.listKBs()
       logAction('HomePage:知识库列表加载成功', 'HomePage', {
-        kbCount: (list || []).length,
         workDir: currentWorkDir,
+        kbCount: (list || []).length,
+        list: list,
       })
+
       // listKBs() already returns only KB directories as KBListItem[]
       const kbList = list || []
       const initial: KBItem[] = kbList.map((kb) => ({
@@ -171,7 +172,6 @@ export default function HomePage() {
       setKbs(initial)
 
       // 加载子节点数量（使用初始值避免 stale closure）
-      logAction('HomePage:开始加载子节点数量', 'HomePage', { kbCount: initial.length })
       const counts = await Promise.all(
         initial.map(async (kb) => {
           try {
@@ -189,10 +189,14 @@ export default function HomePage() {
       )
       setKbs(initial.map((kb, i) => ({ ...kb, nodeCount: counts[i] })))
       logAction('HomePage:子节点数量加载完成', 'HomePage', { totalNodes: counts.reduce((a, b) => a + b, 0) })
+
     } catch (err) {
+
       const msg = err instanceof Error ? err.message : String(err)
+
       logger.catch('HomePage', 'loadKBList', err)
       logAction('HomePage:加载知识库列表异常', 'HomePage', { error: msg })
+
       setMessage(msg || '加载知识库列表失败')
       setMessageError(true)
     } finally {
@@ -317,7 +321,10 @@ export default function HomePage() {
             <div
               key={kb.path}
               className={styles.card}
-              onClick={() => { logAction('HomePage:点击知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name }); openKB(kb); }}
+              onClick={() => { 
+                logAction('HomePage:点击知识库卡片', 'HomePage', { kbPath: kb.path, kbName: kb.name }); 
+                openKB(kb); 
+              }}
               onMouseEnter={() => {
                 const timers = enterLogTimers.current
                 if (timers.has(kb.path)) return
