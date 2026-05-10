@@ -7,7 +7,8 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 type FileService = {
   mkDir: (rootDir: string, dirPath: string, meta: object | null) => string
   writeGraphMeta: (rootDir: string, dirPath: string, meta: object) => void
-  listChildren: (rootDir: string, parentPath: string) => Array<{ path: string; name: string }>
+  listKBs: (rootDir: string) => Array<{ path: string; name: string }>
+  listCards: (rootDir: string, parentPath: string) => Array<{ path: string; name: string }>
   updateCardMeta: (rootDir: string, cardPath: string, newName: string) => string
 }
 
@@ -57,7 +58,7 @@ describe('electron fileService graph path contract', () => {
       pan: null,
     })
 
-    const children = fileService.listChildren(root, 'KB')
+    const children = fileService.listCards(root, 'KB')
 
     expect(children).toContainEqual(expect.objectContaining({
       path: 'KB/Child',

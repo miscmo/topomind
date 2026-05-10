@@ -59,7 +59,8 @@ export interface FSBResult {
 }
 
 export interface FSB {
-  listChildren: (rootDir: string, parentPath: string) => Promise<FSBChildInfo[]>
+  listKBs: (rootDir: string) => Promise<FSBChildInfo[]>
+  listCards: (rootDir: string, parentPath: string) => Promise<FSBChildInfo[]>
   mkDir: (rootDir: string, dirPath: string, meta?: object | null) => Promise<string>
   rmDir: (rootDir: string, dirPath: string) => Promise<unknown>
   renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
@@ -82,7 +83,8 @@ export interface FSB {
 // ===== FSB 实现 =====
 
 const FSBImpl: FSB = {
-  listChildren: (rootDir, parentPath) => _call('fs:listChildren', rootDir, parentPath) as Promise<FSBChildInfo[]>,
+  listKBs: (rootDir) => _call('fs:listKBs', rootDir) as Promise<FSBChildInfo[]>,
+  listCards: (rootDir, parentPath) => _call('fs:listCards', rootDir, parentPath) as Promise<FSBChildInfo[]>,
   mkDir: (rootDir, dirPath, meta) => _call('fs:mkDir', rootDir, dirPath, meta || {}) as Promise<string>,
   rmDir: (rootDir, dirPath) => _call('fs:rmDir', rootDir, dirPath),
   renameKB: (rootDir, kbPath, newName) => _call('fs:renameKB', rootDir, kbPath, newName) as Promise<string>,

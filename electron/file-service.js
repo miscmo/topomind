@@ -285,12 +285,31 @@ const fileService = {
     },
 
     /**
-     * @description 列出指定父路径下的子目录，并尝试合并 graph 中的显示名称
+     * @description 列出工作目录下的所有顶层知识库目录
      * @param { string } rootDir: 工作目录路径
-     * @param { string } parentPath: 父路径
+     * @returns { Array<{ path: string, name: string, isDir: boolean }> } 知识库列表
+     */
+    listKBs: function(rootDir) {
+      var dir = _fs_kbsDir(rootDir);
+      _fs_ensureDir(dir);
+      var children = nodeFs.readdirSync(dir, { withFileTypes: true })
+        .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
+        .map(function(e) {
+          return { path: e.name, name: e.name, isDir: true };
+        });
+      children.sort(function(a, b) {
+        return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
+      });
+      return children;
+    },
+
+    /**
+     * @description 列出指定知识库或房间路径下的子目录，并尝试合并 graph 中的显示名称
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } parentPath: 知识库或房间相对路径
      * @returns { Array<{ path: string, name: string, isDir: boolean }> } 子节点列表
      */
-    listChildren: function(rootDir, parentPath) {
+    listCards: function(rootDir, parentPath) {
       var dir = _fs_abs(rootDir, parentPath);
       _fs_ensureDir(_fs_kbsDir(rootDir));
       _fs_ensureDir(dir);

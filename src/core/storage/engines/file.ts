@@ -35,13 +35,13 @@ interface FSBGraphLike {
   pan?: { x: number; y: number } | null
 }
 
-const toKBInfo = (child: { path: string; name: string; order?: number }, vaultRef: VaultRef): KBInfo => ({
+const toKBInfo = (child: { path: string; name: string; order?: number }): KBInfo => ({
   ref: child.path,
   name: child.name,
   coverRef: null,
 })
 
-const toCardInfo = (child: { path: string; name: string }, kbRef: KBRef): CardInfo => ({
+const toCardInfo = (child: { path: string; name: string }): CardInfo => ({
   ref: child.path,
   name: child.name,
   updatedAt: undefined,
@@ -204,9 +204,9 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
 
     // ===== Core StorageAdapter (IKBSStorage) =====
 
-    listKBS: async (vaultRef: VaultRef): Promise<KBInfo[]> => {
-      const children = await FSB.listChildren(requireRootDir(), vaultRef)
-      return children.map(c => toKBInfo(c, vaultRef))
+    listKBS: async (_vaultRef: VaultRef): Promise<KBInfo[]> => {
+      const children = await FSB.listKBs(requireRootDir())
+      return children.map(c => toKBInfo(c))
     },
 
     createKB: async (vaultRef: VaultRef, name: string): Promise<KBInfo> => {
@@ -232,8 +232,8 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
     // ===== Core StorageAdapter (ICardStorage) =====
 
     listCards: async (kbRef: KBRef): Promise<CardInfo[]> => {
-      const children = await FSB.listChildren(requireRootDir(), kbRef)
-      return children.map(c => toCardInfo(c, kbRef))
+      const children = await FSB.listCards(requireRootDir(), kbRef)
+      return children.map(c => toCardInfo(c))
     },
 
     createCard: async (kbRef: KBRef, name: string): Promise<CardInfo> => {

@@ -134,7 +134,8 @@ async function confirmAndFlushBeforeExit(reason) {
 
 function registerIPC() {
   // ----- File system handlers -----
-  ipcMain.handle('fs:listChildren', function(e, rootDir, p) { return fileService.listChildren(rootDir, p); });
+  ipcMain.handle('fs:listKBs', function(e, rootDir) { return fileService.listKBs(rootDir); });
+  ipcMain.handle('fs:listCards', function(e, rootDir, p) { return fileService.listCards(rootDir, p); });
   ipcMain.handle('fs:mkDir', function(e, rootDir, p, m) {
     var abs = fileService.mkDir(rootDir, p, m);
     return nodePath.relative(nodePath.join(rootDir, 'kbs'), abs).split(nodePath.sep).join('/');
