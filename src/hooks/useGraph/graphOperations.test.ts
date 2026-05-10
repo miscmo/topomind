@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GraphMeta } from '../../core/storage/adapter/graph'
+import type { GraphMeta } from '../../core/storage/types'
 import type { KnowledgeEdge, KnowledgeNode } from '../../types'
 import { buildGraphOperations, type GraphOpsDeps, type StorageApi } from './graphOperations'
 

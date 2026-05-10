@@ -1,18 +1,18 @@
 import { createContext, useContext, useMemo } from 'react'
-import { createStorageAdapter } from './factory'
+import { createFileStorageBackend } from './file'
 import { createStore, type Store as StoreType } from './service'
-import type { StorageAdapter } from './adapter'
+import type { StorageBackend } from './types'
 import { useAppStore } from '../../stores/appStore'
 
 const StorageContext = createContext<StoreType | null>(null)
 
 export interface StorageProviderProps {
   children: React.ReactNode
-  adapter?: StorageAdapter
+  backend?: StorageBackend
 }
 
-export function StorageProvider({ children, adapter }: StorageProviderProps) {
-  const store = useMemo(() => createStore(adapter ?? createStorageAdapter(() => useAppStore.getState().currentWorkDir)), [adapter])
+export function StorageProvider({ children, backend }: StorageProviderProps) {
+  const store = useMemo(() => createStore(backend ?? createFileStorageBackend(() => useAppStore.getState().currentWorkDir)), [backend])
   return <StorageContext.Provider value={store}>{children}</StorageContext.Provider>
 }
 

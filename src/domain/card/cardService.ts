@@ -1,4 +1,4 @@
-import type { GraphMeta } from '../../core/storage/adapter/graph'
+import type { GraphMeta } from '../../core/storage/types'
 import type { KnowledgeNode, KnowledgeEdge } from '../../types'
 import { basenameRef, isSameOrChildRef, joinRefs } from '../graph/path-utils'
 

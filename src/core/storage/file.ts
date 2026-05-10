@@ -1,10 +1,7 @@
-import { FSB } from '../../fs-backend'
-import type { CardInfo, GraphMeta, StorageAdapter } from '../adapter'
-import type { VaultRef } from '../adapter/vault'
-import type { KBRef } from '../adapter/kb'
-import type { CardRef } from '../adapter/card'
-import type { EdgeRelation, EdgeWeight, KBListItem } from '../../../types'
-import { basenameRef, joinRefs, normalizeRef, parentRef, resolveRoomChildRef } from '../../../domain/graph/path-utils'
+import { FSB } from '../fs-backend'
+import type { CardInfo, GraphMeta, StorageBackend } from './types'
+import type { EdgeRelation, EdgeWeight } from '../../types'
+import { basenameRef, joinRefs, normalizeRef, parentRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 
 interface FSBGraphChild {
   path?: string
@@ -161,7 +158,7 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
   }
 }
 
-export function createFileStorageAdapter(getRootDir: () => string | null): StorageAdapter {
+export function createFileStorageBackend(getRootDir: () => string | null): StorageBackend {
   const requireRootDir = () => {
     const rootDir = getRootDir()
     if (!rootDir) throw new Error('未选择工作目录')
@@ -169,106 +166,94 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
   }
 
   return {
-    // ===== Core StorageAdapter (IVaultStorage) =====
-
-    createVault: async (vaultRef: VaultRef): Promise<void> => {
-      const result = await FSB.createWorkDir(vaultRef)
+    createVault: async (dirPath: string): Promise<void> => {
+      const result = await FSB.createWorkDir(dirPath)
       if (!result.valid) {
         throw new Error(result.error || '创建工作目录失败')
       }
     },
 
-    isValidVault: async (vaultRef: VaultRef) => {
+    isValidVault: async (dirPath: string) => {
       try {
-        const result = await FSB.isValidWorkDir(vaultRef)
+        const result = await FSB.isValidWorkDir(dirPath)
         return { valid: result.valid, error: result.error }
       } catch {
         return { valid: false, error: '工作目录校验失败' }
       }
     },
 
-    removeVault: async (vaultRef: VaultRef): Promise<void> => {
-      await FSB.rmDir(requireRootDir(), vaultRef)
+    removeVault: async (dirPath: string): Promise<void> => {
+      await FSB.rmDir(requireRootDir(), dirPath)
     },
 
-    // ===== Core StorageAdapter (IKBSStorage) =====
-
-    listKBS: async (_vaultRef: VaultRef): Promise<KBListItem[]> => {
+    listKBs: async () => {
       return FSB.listKBs(requireRootDir())
     },
 
-    createKB: async (_vaultRef: VaultRef, name: string): Promise<KBRef> => {
+    createKB: async (name: string): Promise<string> => {
       return FSB.mkDir(requireRootDir(), name, null)
     },
 
-    deleteKB: async (kbRef: KBRef): Promise<void> => {
-      await FSB.rmDir(requireRootDir(), kbRef)
+    deleteKB: async (kbPath: string): Promise<void> => {
+      await FSB.rmDir(requireRootDir(), kbPath)
     },
 
-    renameKB: async (kbRef: KBRef, newName: string): Promise<void> => {
-      await FSB.renameKB(requireRootDir(), kbRef, newName)
+    renameKB: async (kbPath: string, newName: string): Promise<void> => {
+      await FSB.renameKB(requireRootDir(), kbPath, newName)
     },
 
-    importKB: async (_targetVaultRef: VaultRef, sourceKBRef: KBRef): Promise<KBRef> => {
-      return FSB.importKB(requireRootDir(), sourceKBRef)
+    importKB: async (sourcePath: string): Promise<string> => {
+      return FSB.importKB(requireRootDir(), sourcePath)
     },
 
-    // ===== Core StorageAdapter (ICardStorage) =====
-
-    listCards: async (kbRef: KBRef): Promise<CardInfo[]> => {
-      const children = await FSB.listCards(requireRootDir(), kbRef)
+    listCards: async (parentPath: string): Promise<CardInfo[]> => {
+      const children = await FSB.listCards(requireRootDir(), parentPath)
       return children.map(c => toCardInfo(c))
     },
 
-    createCard: async (kbRef: KBRef, name: string): Promise<CardInfo> => {
-      const cardPath = await FSB.mkDir(requireRootDir(), `${kbRef}/${name}`, null)
+    createCard: async (parentPath: string, name: string): Promise<CardInfo> => {
+      const cardPath = await FSB.mkDir(requireRootDir(), `${parentPath}/${name}`, null)
       return { ref: cardPath, name, updatedAt: undefined }
     },
 
-    deleteCard: async (cardRef: CardRef): Promise<void> => {
-      await FSB.rmDir(requireRootDir(), cardRef)
+    deleteCard: async (cardPath: string): Promise<void> => {
+      await FSB.rmDir(requireRootDir(), cardPath)
     },
 
-    renameCard: async (cardRef: CardRef, newName: string): Promise<void> => {
-      await FSB.updateCardMeta(requireRootDir(), cardRef, newName)
+    renameCard: async (cardPath: string, newName: string): Promise<void> => {
+      await FSB.updateCardMeta(requireRootDir(), cardPath, newName)
     },
 
-    countSubCards: async (cardRef: CardRef): Promise<number> => {
-      return FSB.countChildren(requireRootDir(), cardRef)
+    countChildren: async (cardPath: string): Promise<number> => {
+      return FSB.countChildren(requireRootDir(), cardPath)
     },
 
-    // ===== Core StorageAdapter (IGraphStorage) =====
-
-    readCardLayout: async (kbRef: KBRef): Promise<GraphMeta> => {
+    readLayout: async (roomPath: string): Promise<GraphMeta> => {
       try {
-        const raw = await FSB.readGraphMeta(requireRootDir(), kbRef)
-        return convertFSBToGraph(raw as Parameters<typeof convertFSBToGraph>[0], kbRef)
+        const raw = await FSB.readGraphMeta(requireRootDir(), roomPath)
+        return convertFSBToGraph(raw as Parameters<typeof convertFSBToGraph>[0], roomPath)
       } catch {
         return { nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }
       }
     },
 
-    writeCardLayout: async (kbRef: KBRef, meta: GraphMeta): Promise<void> => {
-      await FSB.writeGraphMeta(requireRootDir(), kbRef, convertGraphToFSB(meta, kbRef) as Parameters<typeof FSB.writeGraphMeta>[2])
+    writeLayout: async (roomPath: string, meta: GraphMeta): Promise<void> => {
+      await FSB.writeGraphMeta(requireRootDir(), roomPath, convertGraphToFSB(meta, roomPath) as Parameters<typeof FSB.writeGraphMeta>[2])
     },
 
-    // ===== Core StorageAdapter (ICardStorage): Markdown operations =====
-
-    readCardMarkdown: async (cardPath: string) => {
+    readMarkdown: async (cardPath: string) => {
       return FSB.readFile(requireRootDir(), `${cardPath}/_content.md`)
     },
 
-    writeCardMarkdown: async (cardPath: string, content: string) => {
+    writeMarkdown: async (cardPath: string, content: string) => {
       await FSB.writeFile(requireRootDir(), `${cardPath}/_content.md`, content)
     },
 
-    // ===== Core StorageAdapter (IVaultStorage): App config =====
-
-    readAppConfig: () => {
+    readConfig: () => {
       return FSB.readAppConfig(requireRootDir())
     },
 
-    writeAppConfig: async (content: unknown) => {
+    writeConfig: async (content: unknown) => {
       await FSB.writeAppConfig(requireRootDir(), content)
     },
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GraphMeta } from '../../core/storage/adapter/graph'
+import type { GraphMeta } from '../../core/storage/types'
 import { loadRoomGraph, type RoomLoaderStorage } from './roomLoader'
 
 function emptyMeta(): GraphMeta {

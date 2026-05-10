@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GraphMeta } from '../../core/storage/adapter/graph'
+import type { GraphMeta } from '../../core/storage/types'
 import { graphMetaToRoomGraph, roomGraphToGraphMeta } from './graphMapper'
 
 describe('graphMapper', () => {

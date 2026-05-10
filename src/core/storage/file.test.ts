@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GraphMeta } from '../adapter/graph'
+import type { GraphMeta } from './types'
 import { convertFSBToGraph, convertGraphToFSB } from './file'
 
 describe('file storage graph conversion', () => {

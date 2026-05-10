@@ -1,5 +1,4 @@
-import type { GraphMeta, KBEdge } from '../../core/storage/adapter/graph'
-import type { CardInfo } from '../../core/storage/adapter/card'
+import type { CardInfo, GraphMeta, KBEdge } from '../../core/storage/types'
 import type { EdgeLineMode, EdgeLineStyle, EdgeRelation, EdgeWeight } from '../../types'
 
 const DEFAULT_VIEWPORT = { zoom: 1, pan: { x: 0, y: 0 } }

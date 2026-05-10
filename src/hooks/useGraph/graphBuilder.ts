@@ -8,7 +8,7 @@
  */
 import type { KnowledgeNode, KnowledgeEdge } from '../../types'
 import { DOMAIN_COLORS } from '../../types'
-import type { GraphMeta } from '../../core/storage/adapter/graph'
+import type { GraphMeta } from '../../core/storage/types'
 import { basenameRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { graphMetaToRoomGraph, roomGraphToGraphMeta } from '../../domain/graph/graphMapper'
 import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph/model'

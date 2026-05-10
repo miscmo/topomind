@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createStore } from './service'
-import type { StorageAdapter } from './adapter'
-import type { GraphMeta } from './adapter/graph'
+import type { GraphMeta, StorageBackend } from './types'
 
-function createAdapter(overrides: Partial<StorageAdapter> = {}): StorageAdapter {
+function createBackend(overrides: Partial<StorageBackend> = {}): StorageBackend {
   return {
     createVault: vi.fn(),
     isValidVault: vi.fn(),
     removeVault: vi.fn(),
-    listKBS: vi.fn(),
+    listKBs: vi.fn(),
     createKB: vi.fn(),
     deleteKB: vi.fn(),
     renameKB: vi.fn(),
@@ -17,21 +16,21 @@ function createAdapter(overrides: Partial<StorageAdapter> = {}): StorageAdapter 
     createCard: vi.fn(),
     deleteCard: vi.fn(),
     renameCard: vi.fn(),
-    countSubCards: vi.fn(),
-    readCardMarkdown: vi.fn(),
-    writeCardMarkdown: vi.fn(),
-    readCardLayout: vi.fn(),
-    writeCardLayout: vi.fn(),
-    readAppConfig: vi.fn(),
-    writeAppConfig: vi.fn(),
+    countChildren: vi.fn(),
+    readMarkdown: vi.fn(),
+    writeMarkdown: vi.fn(),
+    readLayout: vi.fn(),
+    writeLayout: vi.fn(),
+    readConfig: vi.fn(),
+    writeConfig: vi.fn(),
     ...overrides,
-  } as StorageAdapter
+  } as StorageBackend
 }
 
 describe('storage service graph normalization', () => {
   it('normalizes graph metadata read from the adapter', async () => {
-    const adapter = createAdapter({
-      readCardLayout: vi.fn(async () => ({
+    const backend = createBackend({
+      readLayout: vi.fn(async () => ({
         nodes: {
           A: { card: { ref: 'A', name: 'A' }, width: Number.NaN, height: 150 },
         },
@@ -39,7 +38,7 @@ describe('storage service graph normalization', () => {
         viewport: { zoom: Number.POSITIVE_INFINITY, pan: { x: 2, y: 3 } },
       }) as unknown as GraphMeta),
     })
-    const store = createStore(adapter)
+    const store = createStore(backend)
 
     const meta = await store.readLayout('KB')
 
@@ -49,9 +48,9 @@ describe('storage service graph normalization', () => {
   })
 
   it('normalizes graph metadata before writing through the adapter', async () => {
-    const writeCardLayout = vi.fn(async () => undefined)
-    const adapter = createAdapter({ writeCardLayout })
-    const store = createStore(adapter)
+    const writeLayout = vi.fn(async () => undefined)
+    const backend = createBackend({ writeLayout })
+    const store = createStore(backend)
 
     await store.writeLayout('KB', {
       nodes: {
@@ -61,7 +60,7 @@ describe('storage service graph normalization', () => {
       viewport: { zoom: Number.NaN, pan: { x: 0, y: 0 } },
     })
 
-    expect(writeCardLayout).toHaveBeenCalledWith('KB', {
+    expect(writeLayout).toHaveBeenCalledWith('KB', {
       nodes: {
         A: { id: 'A', card: { ref: 'A', name: 'A', updatedAt: undefined }, width: 200, height: 150, position: undefined },
       },

@@ -5,7 +5,7 @@
  * All functions here deal with pure state transformations and storage I/O.
  */
 import type { KnowledgeNode, KnowledgeEdge } from '../../types'
-import type { GraphMeta } from '../../core/storage/adapter/graph'
+import type { GraphMeta } from '../../core/storage/types'
 import { buildMetaFromNodesEdges } from './graphBuilder'
 import { buildNodeCrudOperations } from './nodeCrudOperations'
 import { buildEdgeOperations } from './edgeOperations'

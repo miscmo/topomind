@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildEdges, buildMetaFromNodesEdges, buildNodes } from './graphBuilder'
 import type { KnowledgeEdge, KnowledgeNode } from '../../types'
-import type { GraphMeta } from '../../core/storage/adapter/graph'
+import type { GraphMeta } from '../../core/storage/types'
 
 describe('graphBuilder', () => {
   it('serializes node position into graph metadata', () => {

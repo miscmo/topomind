@@ -137,8 +137,7 @@ function registerIPC() {
   ipcMain.handle('fs:listKBs', function(e, rootDir) { return fileService.listKBs(rootDir); });
   ipcMain.handle('fs:listCards', function(e, rootDir, p) { return fileService.listCards(rootDir, p); });
   ipcMain.handle('fs:mkDir', function(e, rootDir, p, m) {
-    var abs = fileService.mkDir(rootDir, p, m);
-    return nodePath.relative(nodePath.join(rootDir, 'kbs'), abs).split(nodePath.sep).join('/');
+    return fileService.mkDir(rootDir, p, m);
   });
   ipcMain.handle('fs:rmDir', function(e, rootDir, p) { fileService.rmDir(rootDir, p); });
   ipcMain.handle('fs:renameKB', function(e, rootDir, p, n) { return fileService.renameKB(rootDir, p, n); });
