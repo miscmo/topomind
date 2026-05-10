@@ -31,6 +31,7 @@ const SETUP_WINDOW_HEIGHT = 252;
 const HOME_WINDOW_WIDTH = 1400;
 const HOME_WINDOW_HEIGHT = 900;
 const WINDOW_BACKGROUND_COLOR = '#ffffff';
+const IS_DEV = !!process.env.VITE_DEV_SERVER_URL;
 
 // E2E 测试：尝试从工作目录根目录的 .env 文件加载环境变量。
 // global-setup.ts 会将 TOPOMIND_E2E_WORKDIR 写入项目根目录的 .env。
@@ -243,16 +244,6 @@ function registerIPC() {
     return true;
   });
 
-  // ----- Synchronous save handler -----
-  ipcMain.on('save:layout', function(event, rootDir, dirPath, meta) {
-    try {
-      fileService.writeGraphMeta(rootDir, dirPath, meta);
-      event.returnValue = true;
-    } catch (e) {
-      event.returnValue = false;
-    }
-  });
-
   // ----- Log handlers -----
   ipcMain.handle('log:write', function(e, entry) { return LogService.write(entry); });
   ipcMain.handle('log:getBuffer', function() { return LogService.getBuffer(); });
@@ -297,20 +288,20 @@ function createWindow() {
       nodeIntegration: false, contextIsolation: true,
     },
   });
-  if (process.env.VITE_DEV_SERVER_URL) {
+  if (IS_DEV) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
     win.loadFile(rendererIndexPath);
   }
   win.webContents.on('console-message', function(e, level, msg, line, src) {
-    console.log('[renderer]', msg, src || '', line || '');
+    if (IS_DEV) console.log('[renderer]', msg, src || '', line || '');
   });
   win.webContents.on('did-fail-load', function(e, errorCode, errorDescription, validatedURL, isMainFrame) {
     console.error('[window:did-fail-load]', errorCode, errorDescription, validatedURL, isMainFrame);
   });
   win.webContents.on('did-finish-load', function() {
     const currentUrl = win && !win.isDestroyed() ? win.webContents.getURL() : '';
-    console.log('[window:did-finish-load]', currentUrl);
+    if (IS_DEV) console.log('[window:did-finish-load]', currentUrl);
   });
   win.webContents.on('render-process-gone', function(e, details) {
     console.error('[window:render-process-gone]', JSON.stringify(details));
@@ -344,7 +335,7 @@ function createMonitorWindow() {
       nodeIntegration: false, contextIsolation: true,
     },
   });
-  var monitorUrl = process.env.VITE_DEV_SERVER_URL
+  var monitorUrl = IS_DEV
     ? process.env.VITE_DEV_SERVER_URL + '#/monitor'
     : 'file://' + nodePath.join(DIST_ELECTRON_DIR, '..', 'dist', 'index.html') + '#/monitor';
   monitorWin.loadURL(monitorUrl);

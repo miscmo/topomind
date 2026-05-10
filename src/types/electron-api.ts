@@ -8,7 +8,6 @@ export interface ElectronAPI {
   send(channel: string, data?: unknown): void
   on(channel: string, handler: (...args: unknown[]) => void): void
   off(channel: string, handler: (...args: unknown[]) => void): void
-  sendSync?(channel: string, ...args: unknown[]): unknown
   isElectron?: boolean
 }
 

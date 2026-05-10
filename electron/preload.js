@@ -19,8 +19,6 @@ const ALLOWED_CHANNELS = new Set([
   'app:navigateHome',
   'app:getE2EState',
   'app:switchWorkDir',
-  // save
-  'save:layout',
   // log
   'log:write', 'log:getBuffer', 'log:query', 'log:setLevel', 'log:clear',
   'log:getAvailableDates', 'log:getLogDir',
@@ -29,10 +27,6 @@ const ALLOWED_CHANNELS = new Set([
 const ALLOWED_SEND_CHANNELS = new Set([
   'log:subscribe',
   'log:unsubscribe',
-]);
-
-const ALLOWED_SEND_SYNC_CHANNELS = new Set([
-  'save:layout',
 ]);
 
 const ALLOWED_RECEIVE_CHANNELS = new Set([
@@ -63,14 +57,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
     var args = Array.prototype.slice.call(arguments, 1);
     return ipcRenderer.invoke.apply(ipcRenderer, [channel].concat(args));
-  },
-  sendSync: function(channel) {
-    if (!ALLOWED_SEND_SYNC_CHANNELS.has(channel)) {
-      console.error('[preload] sendSync 通道不在白名单中:', channel);
-      return;
-    }
-    var args = Array.prototype.slice.call(arguments, 1);
-    return ipcRenderer.sendSync.apply(ipcRenderer, [channel].concat(args));
   },
   send: function(channel) {
     if (!ALLOWED_SEND_CHANNELS.has(channel)) {

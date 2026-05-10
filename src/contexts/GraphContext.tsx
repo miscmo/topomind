@@ -17,6 +17,7 @@ export interface GraphContextValue {
   edges: KnowledgeEdge[]
   loading: boolean
   selectedNode: KnowledgeNode | null
+  isLayouting: boolean
   // Refs for stable closure access to current state
   nodesRef: React.MutableRefObject<KnowledgeNode[]>
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
@@ -66,6 +67,7 @@ const emptyContext: GraphContextValue = {
   edges: [],
   loading: false,
   selectedNode: null,
+  isLayouting: false,
   isModified: false,
   nodesRef: { current: [] },
   edgesRef: { current: [] },
@@ -104,6 +106,7 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     edges: graph.edges,
     loading: graph.loading,
     selectedNode: graph.selectedNode,
+    isLayouting: graph.isLayouting,
     isModified: graph.isModified,
     nodesRef: graph.nodesRef,
     edgesRef: graph.edgesRef,

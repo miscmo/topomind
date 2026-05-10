@@ -8,11 +8,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}', 'src/**/*.spec.{ts,tsx}'],
-    pool: 'forks',
+    pool: 'threads',
     globals: true,
-    forks: {
-      singleFork: true,
-    },
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

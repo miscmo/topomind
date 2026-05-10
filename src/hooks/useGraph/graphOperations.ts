@@ -4,17 +4,13 @@
  * Extracted from useGraph.ts to keep the hook focused on coordination.
  * All functions here deal with pure state transformations and storage I/O.
  */
-import type { Connection } from '@xyflow/react'
-import type { KnowledgeNode, KnowledgeEdge, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../../types'
+import type { KnowledgeNode, KnowledgeEdge } from '../../types'
 import type { GraphMeta } from '../../core/storage/adapter/graph'
 import { buildMetaFromNodesEdges } from './graphBuilder'
-import { logger } from '../../core/logger'
-import { logAction } from '../../core/log-backend'
-import {
-  createChildCard,
-  deleteCardAndPruneGraph,
-  renameCard as renameCardInService,
-} from '../../domain/card/cardService'
+import { buildNodeCrudOperations } from './nodeCrudOperations'
+import { buildEdgeOperations } from './edgeOperations'
+import { buildNodeChangeOperations } from './nodeChangeOperations'
+import { buildSelectionOperations } from './selectionOperations'
 
 export interface StorageApi {
   createCard: (parentPath: string, cardName: string) => Promise<string | null>
@@ -92,323 +88,64 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   // ===== Node CRUD =====
 
-  const createChildNode = async (name: string, parentId?: string, position?: { x: number; y: number }): Promise<string | null> => {
-    const nav = getActiveNavState()
-    const dirPath = nav.roomPath
-    const targetPath = parentId ?? (dirPath || nav.kbPath)
-    if (!targetPath) {
-      logAction('节点:创建失败', 'graphOperations', {
-        reason: dirPath ? 'targetPath-empty' : 'not-inside-room',
-        nodeName: name,
-        parentId: parentId || null,
-        roomPath: nav.roomPath || null,
-        kbPath: nav.kbPath || null,
-      })
-      return null
-    }
-
-    // Only mark dirty when inside a room (roomPath is non-empty).
-    // At root level there is no _graph.json to save to, so the debounce
-    // mechanism never fires and dirty would persist forever.
-    if (dirPath) setDirtyState(true)
-    isCreatingRef.current = true
-
-    try {
-      const reloadPath = dirPath || getActiveNavState().kbPath || ''
-      const result = await createChildCard(storage, {
-        name,
-        parentRef: targetPath,
-        reloadRef: reloadPath,
-        nodesById: nodesMapRef.current,
-        position,
-      })
-      logAction('节点:创建', 'graphOperations', {
-        nodeName: name,
-        parentPath: targetPath,
-        newPath: result.newRef ?? null,
-        roomPath: nav.roomPath || null,
-        kbPath: nav.kbPath || null,
-        reloadPath: reloadPath || null,
-      })
-
-      await loadRoom(reloadPath, true)
-
-      // Trigger debounce save so that onFlush → setDirtyState(false) fires
-      // naturally, clearing the dirty bullet. Without this, dirty stays true
-      // forever and test 6.2 ("保存后脏标记消失") times out.
-      scheduleSave(getActiveNavState().roomPath)
-
-      return result.newRef
-    } catch (e) {
-      isCreatingRef.current = false
-      logger.catch('graphOperations', 'createChildNode', e)
-      logAction('节点:创建失败', 'graphOperations', {
-        reason: 'exception',
-        nodeName: name,
-        parentPath: targetPath,
-        roomPath: nav.roomPath || null,
-        kbPath: nav.kbPath || null,
-        error: (e as Error)?.message || String(e),
-      })
-      return null
-    }
-  }
-
-  const deleteChildNode = async (nodeId: string): Promise<boolean> => {
-    const nodeLabel = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
-    const dirPath = getActiveNavState().roomPath
-    const currentRoomPath = dirPath || getActiveNavState().kbPath || ''
-    try {
-      await deleteCardAndPruneGraph(storage, nodeId, nodesMapRef.current, edgesMapRef.current)
-      logAction('节点:删除', 'graphOperations', { nodeId, label: nodeLabel, path: nodeId })
-
-      if (dirPath) await saveNow(dirPath)
-      await loadRoom(currentRoomPath)
-      if (getActiveSelectedNodeId() === nodeId) {
-        setActiveSelectedNodeId(null)
-      }
-      return true
-    } catch (e) {
-      logger.catch('graphOperations', 'deleteChildNode', e)
-      return false
-    }
-  }
-
-  const renameNode = async (nodeId: string, newName: string): Promise<boolean> => {
-    const dirPath = getActiveNavState().roomPath
-    try {
-      await renameCardInService(storage, nodeId, newName)
-      const oldName = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
-      logAction('节点:重命名', 'graphOperations', { nodeId, oldName, newName, path: nodeId })
-      // Update node in local state without full reload
-      setState((prev) => {
-        const nodes = prev.nodes.map((n) =>
-          n.id === nodeId ? { ...n, data: { ...n.data, label: newName } } : n
-        )
-        nodesRef.current = nodes
-        rebuildMaps(nodes, prev.edges)
-        return { ...prev, nodes }
-      })
-      if (dirPath) scheduleSave(dirPath)
-      return true
-    } catch (e) {
-      logger.catch('graphOperations', 'renameNode', e)
-      return false
-    }
-  }
+  const nodeCrudOps = buildNodeCrudOperations({
+    storage,
+    nodesMapRef,
+    edgesMapRef,
+    nodesRef,
+    getActiveNavState,
+    loadRoom,
+    rebuildMaps,
+    saveNow,
+    scheduleSave,
+    setState,
+    getActiveSelectedNodeId,
+    setActiveSelectedNodeId,
+    setDirtyState,
+    isCreatingRef,
+  })
 
   // ===== Edge CRUD =====
 
-  const addEdge = (connection: Connection, edgeId: string, defaultStyle?: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean }) => {
-    const lineMode = defaultStyle?.lineMode ?? 'smoothstep'
-    const lineStyle = defaultStyle?.lineStyle ?? 'solid'
-    const color = defaultStyle?.color ?? '#7f8c8d'
-    const arrow = defaultStyle?.arrow ?? true
-    const newEdge: KnowledgeEdge = {
-      id: edgeId,
-      source: connection.source,
-      target: connection.target,
-      type: lineMode,
-      style: {
-        stroke: color,
-        strokeWidth: 2,
-        strokeDasharray: lineStyle === 'dashed' ? '6 4' : undefined,
-      },
-      markerEnd: arrow ? { type: 'arrowclosed', color } : undefined,
-      data: {
-        relation: '相关',
-        weight: 'minor',
-        lineMode,
-        lineStyle,
-        color,
-        arrow,
-        highlighted: false,
-        faded: false,
-      },
-    }
-
-    setState((prev) => {
-      const edges = [...prev.edges, newEdge]
-      edgesRef.current = edges
-      rebuildMaps(prev.nodes, edges)
-      return { ...prev, edges }
-    })
-
-    const dirPath = getActiveNavState().roomPath
-    if (dirPath) scheduleSave(dirPath)
-    logAction('连线:创建', 'graphOperations', { edgeId, source: connection.source, target: connection.target })
-  }
-
-  const deleteEdge = (edgeId: string) => {
-    setState((prev) => {
-      const edges = prev.edges.filter((e) => e.id !== edgeId)
-      edgesRef.current = edges
-      rebuildMaps(prev.nodes, edges)
-      return { ...prev, edges }
-    })
-    const dirPath = getActiveNavState().roomPath
-    if (dirPath) scheduleSave(dirPath)
-    logAction('连线:删除', 'graphOperations', { edgeId })
-  }
-
-  const updateEdgeRelation = (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => {
-    const dirPath = getActiveNavState().roomPath
-    setState((prev) => {
-      const edges = prev.edges.map((e) =>
-        e.id === edgeId
-          ? {
-              ...e,
-              animated: weight === 'main',
-              style: {
-                ...e.style,
-                strokeWidth: weight === 'main' ? 2.5 : 2,
-              },
-              data: { ...e.data, relation, weight },
-            }
-          : e
-      )
-      edgesRef.current = edges
-      rebuildMaps(prev.nodes, edges)
-      return { ...prev, edges }
-    })
-    if (dirPath) scheduleSave(dirPath)
-    logAction('连线:更新关系', 'graphOperations', { edgeId, relation, weight })
-  }
-
-  const updateEdgeStyle = (
-    edgeId: string,
-    style: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean; selected?: boolean }
-  ) => {
-    const dirPath = getActiveNavState().roomPath
-    setState((prev) => {
-      const edges = prev.edges.map((e) => {
-        if (e.id !== edgeId) return e
-        const nextColor = style.color ?? e.data?.color ?? '#7f8c8d'
-        const nextLineStyle = style.lineStyle ?? e.data?.lineStyle ?? 'solid'
-        const nextArrow = style.arrow ?? e.data?.arrow ?? true
-        const nextWeight = e.data?.weight ?? 'minor'
-        const nextSelected = style.selected ?? false
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return {
-          ...e,
-          type: style.lineMode ?? e.data?.lineMode ?? 'smoothstep',
-          style: {
-            stroke: nextColor,
-            strokeWidth: nextSelected ? (nextWeight === 'main' ? 4 : 3.5) : (nextWeight === 'main' ? 2.5 : 2),
-            strokeDasharray: nextLineStyle === 'dashed' ? '6 4' : undefined,
-            filter: nextSelected ? 'drop-shadow(0 0 6px rgba(52, 152, 219, 0.45))' : undefined,
-          },
-          markerEnd: nextArrow
-            ? {
-                type: 'arrowclosed',
-                color: nextColor,
-              }
-            : undefined,
-          data: {
-            ...e.data,
-            ...style,
-            relation: e.data?.relation ?? '相关',
-            weight: e.data?.weight ?? 'minor',
-            color: nextColor,
-            lineStyle: nextLineStyle,
-            arrow: nextArrow,
-            selected: nextSelected,
-          },
-        } as KnowledgeEdge
-      })
-      edgesRef.current = edges
-      rebuildMaps(prev.nodes, edges)
-      return { ...prev, edges }
-    })
-    if (dirPath) scheduleSave(dirPath)
-    logAction('连线:更新样式', 'graphOperations', { edgeId, ...style })
-  }
+  const edgeOps = buildEdgeOperations({
+    edgesRef,
+    getActiveNavState,
+    rebuildMaps,
+    scheduleSave,
+    setState,
+  })
 
   // ===== Node position changes =====
 
-  const applyNodePositionChanges = (changes: Array<{ id: string; position: { x: number; y: number } }>) => {
-    setState((prev) => {
-      const nodesMap = new Map(prev.nodes.map((n) => [n.id, n]))
-      for (const change of changes) {
-        const node = nodesMap.get(change.id)
-        if (node && change.position) {
-          nodesMap.set(change.id, { ...node, position: change.position })
-        }
-      }
-      const nodes = Array.from(nodesMap.values())
-      nodesRef.current = nodes
-      rebuildMaps(nodes, prev.edges)
-      updateSelectedNode(nodes, getActiveSelectedNodeId())
-      return { ...prev, nodes }
-    })
-    const dirPath = getActiveNavState().roomPath
-    if (dirPath) scheduleSave(dirPath)
-  }
-
-  const applyNodeRemoveChanges = (changeIds: string[]) => {
-    const removedSet = new Set(changeIds)
-    setState((prev) => {
-      const nodes = prev.nodes.filter((n) => !changeIds.includes(n.id))
-      // Remove edges connected to deleted nodes to avoid orphaned edges
-      const edges = prev.edges.filter((e) => !removedSet.has(e.source) && !removedSet.has(e.target))
-      nodesRef.current = nodes
-      edgesRef.current = edges
-      rebuildMaps(nodes, edges)
-      return { ...prev, nodes, edges }
-    })
-    const dirPath = getActiveNavState().roomPath
-    if (dirPath) scheduleSave(dirPath)
-  }
-
-  const applyNodeDimensionChanges = (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined }>) => {
-    setState((prev) => {
-      const nodes = prev.nodes.map((n) => {
-        const change = changes.find((c) => c.id === n.id)
-        if (!change) return n
-        return {
-          ...n,
-          measured: change.dimensions ?? undefined,
-        }
-      })
-      nodesRef.current = nodes
-      return { ...prev, nodes }
-    })
-  }
+  const nodeChangeOps = buildNodeChangeOperations({
+    nodesRef,
+    edgesRef,
+    getActiveNavState,
+    getActiveSelectedNodeId,
+    rebuildMaps,
+    scheduleSave,
+    setState,
+    updateSelectedNode,
+  })
 
   // ===== Selection =====
 
-  const selectNode = (nodeId: string) => {
-    setActiveSelectedNodeId(nodeId)
-    updateSelectedNode(nodesRef.current, nodeId)
-    logAction('节点:选中', 'graphOperations', {
-      nodeId,
-      label: nodesMapRef.current.get(nodeId)?.data.label,
-      path: nodesMapRef.current.get(nodeId)?.data.path,
-    })
-  }
-
-  const deselectNode = () => {
-    setActiveSelectedNodeId(null)
-    updateSelectedNode(nodesRef.current, null)
-  }
+  const selectionOps = buildSelectionOperations({
+    nodesMapRef,
+    nodesRef,
+    setActiveSelectedNodeId,
+    updateSelectedNode,
+  })
 
   return {
     // Node CRUD
-    createChildNode,
-    deleteChildNode,
-    renameNode,
+    ...nodeCrudOps,
     // Edge CRUD
-    addEdge,
-    deleteEdge,
-    updateEdgeRelation,
-    updateEdgeStyle,
+    ...edgeOps,
     // Position changes
-    applyNodePositionChanges,
-    applyNodeRemoveChanges,
-    applyNodeDimensionChanges,
+    ...nodeChangeOps,
     // Selection
-    selectNode,
-    deselectNode,
+    ...selectionOps,
     // Internal
     scheduleSave,
     saveNow,

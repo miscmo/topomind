@@ -4,15 +4,24 @@
  * Converts React Flow nodes → ELK graph → computed positions → updated nodes
  */
 import { useCallback } from 'react'
-import ELK from 'elkjs/lib/elk.bundled.js'
 import type { Node } from '@xyflow/react'
 import type { ELKGraph, ELKLayoutResult } from '../types/elk.d'
 import { LAYOUT } from '../types'
 import { logger } from '../core/logger'
 import { logAction } from '../core/log-backend'
 
-// Module-level ELK instance (singleton — shared across all callers)
-const elk = new ELK()
+type ElkInstance = {
+  layout: (graph: ELKGraph, options?: Record<string, unknown>) => Promise<ELKLayoutResult>
+}
+
+let elkInstancePromise: Promise<ElkInstance> | null = null
+
+function getElkInstance(): Promise<ElkInstance> {
+  if (!elkInstancePromise) {
+    elkInstancePromise = import('elkjs/lib/elk.bundled.js').then(({ default: ELK }) => new ELK())
+  }
+  return elkInstancePromise
+}
 
 /**
  * Core layout computation — a pure async function for testability.
@@ -24,7 +33,7 @@ const elk = new ELK()
  * @returns Map of node id → { x, y } position
  */
 export async function computeLayoutImpl(
-  elkInstance: { layout: (graph: ELKGraph, options?: Record<string, unknown>) => Promise<ELKLayoutResult> },
+  elkInstance: ElkInstance,
   nodes: Node[],
   direction: 'RIGHT' | 'DOWN' = 'DOWN'
 ): Promise<Record<string, { x: number; y: number }>> {
@@ -131,8 +140,8 @@ interface ELKLayoutOptions {
  */
 export function useLayout() {
   const computeLayout = useCallback(
-    (nodes: Node[], direction: 'RIGHT' | 'DOWN' = 'DOWN') =>
-      computeLayoutImpl(elk, nodes, direction),
+    async (nodes: Node[], direction: 'RIGHT' | 'DOWN' = 'DOWN') =>
+      computeLayoutImpl(await getElkInstance(), nodes, direction),
     []
   )
 

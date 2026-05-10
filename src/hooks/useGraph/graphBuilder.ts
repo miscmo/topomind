@@ -9,7 +9,6 @@
 import type { KnowledgeNode, KnowledgeEdge } from '../../types'
 import { DOMAIN_COLORS } from '../../types'
 import type { GraphMeta } from '../../core/storage/adapter/graph'
-import type { useStorage } from '../useStorage'
 import { basenameRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { graphMetaToRoomGraph, roomGraphToGraphMeta } from '../../domain/graph/graphMapper'
 import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph/model'
@@ -37,6 +36,10 @@ export interface SerializedEdge {
   arrow?: boolean
   highlighted?: boolean
   faded?: boolean
+}
+
+export interface BuildNodesStorage {
+  countChildren: (cardPath: string) => Promise<number>
 }
 
 /** Convert nodes+edges to adapter GraphMeta format */
@@ -81,7 +84,7 @@ export function buildMetaFromNodesEdges(
  * Uses Promise.all for parallel child count reads — eliminates N sequential fs operations.
  */
 export async function buildNodes(
-  storage: ReturnType<typeof useStorage>,
+  storage: BuildNodesStorage,
   dirPath: string,
   meta: GraphMeta,
   savedPositions: Record<string, { x: number; y: number }>,
