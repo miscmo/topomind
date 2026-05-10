@@ -1,9 +1,9 @@
 import { FSB } from '../../fs-backend'
-import type { CardInfo, GraphMeta, KBInfo, StorageAdapter, VaultInfo } from '../adapter'
+import type { CardInfo, GraphMeta, StorageAdapter } from '../adapter'
 import type { VaultRef } from '../adapter/vault'
 import type { KBRef } from '../adapter/kb'
 import type { CardRef } from '../adapter/card'
-import type { EdgeRelation, EdgeWeight } from '../../../types'
+import type { EdgeRelation, EdgeWeight, KBListItem } from '../../../types'
 import { basenameRef, joinRefs, normalizeRef, parentRef, resolveRoomChildRef } from '../../../domain/graph/path-utils'
 
 interface FSBGraphChild {
@@ -34,11 +34,6 @@ interface FSBGraphLike {
   zoom?: number | null
   pan?: { x: number; y: number } | null
 }
-
-const toKBInfo = (child: { path: string; name: string }): KBInfo => ({
-  ref: child.path,
-  name: child.name,
-})
 
 const toCardInfo = (child: { path: string; name: string }): CardInfo => ({
   ref: child.path,
@@ -176,12 +171,11 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
   return {
     // ===== Core StorageAdapter (IVaultStorage) =====
 
-    createVault: async (vaultRef: VaultRef): Promise<VaultInfo> => {
+    createVault: async (vaultRef: VaultRef): Promise<void> => {
       const result = await FSB.createWorkDir(vaultRef)
       if (!result.valid) {
         throw new Error(result.error || '创建工作目录失败')
       }
-      return { ref: vaultRef }
     },
 
     isValidVault: async (vaultRef: VaultRef) => {
@@ -193,39 +187,30 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
       }
     },
 
-    getVaultInfo: async (vaultRef: VaultRef): Promise<VaultInfo> => {
-      return { ref: vaultRef }
-    },
-
     removeVault: async (vaultRef: VaultRef): Promise<void> => {
       await FSB.rmDir(requireRootDir(), vaultRef)
     },
 
     // ===== Core StorageAdapter (IKBSStorage) =====
 
-    listKBS: async (_vaultRef: VaultRef): Promise<KBInfo[]> => {
-      const children = await FSB.listKBs(requireRootDir())
-      return children.map(c => toKBInfo(c))
+    listKBS: async (_vaultRef: VaultRef): Promise<KBListItem[]> => {
+      return FSB.listKBs(requireRootDir())
     },
 
-    createKB: async (_vaultRef: VaultRef, name: string): Promise<KBInfo> => {
-      const kbPath = await FSB.mkDir(requireRootDir(), name, null)
-      return { ref: kbPath, name }
+    createKB: async (_vaultRef: VaultRef, name: string): Promise<KBRef> => {
+      return FSB.mkDir(requireRootDir(), name, null)
     },
 
-    deleteKB: async (kbInfo: KBInfo): Promise<void> => {
-      await FSB.rmDir(requireRootDir(), kbInfo.ref)
+    deleteKB: async (kbRef: KBRef): Promise<void> => {
+      await FSB.rmDir(requireRootDir(), kbRef)
     },
 
-    renameKB: async (kbInfo: KBInfo, newName: string): Promise<void> => {
-      await FSB.renameKB(requireRootDir(), kbInfo.ref, newName)
+    renameKB: async (kbRef: KBRef, newName: string): Promise<void> => {
+      await FSB.renameKB(requireRootDir(), kbRef, newName)
     },
 
-    importKB: async (_targetVaultRef: VaultRef, sourceKBInfo: KBInfo): Promise<KBInfo> => {
-      const importedPath = await FSB.importKB(requireRootDir(), sourceKBInfo.ref)
-      const parts = importedPath.split('/')
-      const name = parts[parts.length - 1]
-      return { ref: importedPath, name }
+    importKB: async (_targetVaultRef: VaultRef, sourceKBRef: KBRef): Promise<KBRef> => {
+      return FSB.importKB(requireRootDir(), sourceKBRef)
     },
 
     // ===== Core StorageAdapter (ICardStorage) =====

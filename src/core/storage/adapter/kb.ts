@@ -1,11 +1,7 @@
 import type { VaultRef } from './vault'
+import type { KBListItem } from '../../../types'
 
 export type KBRef = string
-
-export interface KBInfo {
-  ref: KBRef
-  name: string
-}
 
 export interface IKBSStorage {
   /**
@@ -13,7 +9,7 @@ export interface IKBSStorage {
    * @param vaultRef - The reference of the vault
    * @returns The list of knowledge bases
    */
-  listKBS: (vaultRef: VaultRef) => Promise<KBInfo[]>
+  listKBS: (vaultRef: VaultRef) => Promise<KBListItem[]>
 
   /**
    * Create a new knowledge base
@@ -22,7 +18,7 @@ export interface IKBSStorage {
    * @param meta - The metadata of the knowledge base
    * @returns The reference of the knowledge base
    */
-  createKB: (vaultRef: VaultRef, name: string) => Promise<KBInfo>
+  createKB: (vaultRef: VaultRef, name: string) => Promise<KBRef>
 
   
   /**
@@ -30,7 +26,7 @@ export interface IKBSStorage {
    * @param kbRef - The reference of the knowledge base
    * @returns void
    */
-  deleteKB: (kbInfo: KBInfo) => Promise<void>
+  deleteKB: (kbRef: KBRef) => Promise<void>
 
   /**
    * Rename a knowledge base
@@ -38,13 +34,13 @@ export interface IKBSStorage {
    * @param newName - The new name of the knowledge base
    * @returns The reference of the knowledge base
    */
-  renameKB: (kbInfo: KBInfo, newName: string) => Promise<void>
+  renameKB: (kbRef: KBRef, newName: string) => Promise<void>
 
   /**
    * Import a knowledge base
    * @param targetVaultRef - The reference of the target vault
-   * @param sourceKBInfo - The information of the source knowledge base
-   * @returns The information of the imported knowledge base
+   * @param sourceKBRef - The reference of the source knowledge base
+   * @returns The reference of the imported knowledge base
    */
-  importKB: (targetVaultRef: VaultRef, sourceKBInfo: KBInfo) => Promise<KBInfo>
+  importKB: (targetVaultRef: VaultRef, sourceKBRef: KBRef) => Promise<KBRef>
 }

@@ -1,11 +1,5 @@
 export type VaultRef = string
 
-export interface VaultInfo {
-  ref: VaultRef
-  createdAt?: string
-  updatedAt?: string
-}
-
 export interface VaultValidationResult {
   valid: boolean
   error?: string
@@ -15,9 +9,8 @@ export interface IVaultStorage {
   /**
    * Create a new vault
    * @param vaultRef - The root reference of the vault
-   * @returns The information of the vault
    */
-  createVault: (vaultRef: VaultRef) => Promise<VaultInfo>
+  createVault: (vaultRef: VaultRef) => Promise<void>
 
   /**
    * Check if the vault is valid
@@ -25,13 +18,6 @@ export interface IVaultStorage {
    * @returns validation result
    */
   isValidVault: (vaultRef: VaultRef) => Promise<VaultValidationResult>
-
-  /**
-   * Get the information of the vault
-   * @param vaultRef - The reference of the vault
-   * @returns The information of the vault
-   */
-  getVaultInfo: (vaultRef: VaultRef) => Promise<VaultInfo>
 
   /**
    * Remove the vault

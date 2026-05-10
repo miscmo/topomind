@@ -142,4 +142,5 @@ export interface EdgeModeState {
 export interface KBListItem {
   path: string
   name: string
+  childCount?: number
 }

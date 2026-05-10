@@ -1,5 +1,5 @@
-export type { VaultRef, VaultInfo, IVaultStorage } from './vault'
-export type { KBRef, KBInfo, IKBSStorage } from './kb'
+export type { VaultRef, IVaultStorage } from './vault'
+export type { KBRef, IKBSStorage } from './kb'
 export type { CardRef, CardInfo, ICardStorage } from './card'
 export type { GraphMeta, IGraphStorage } from './graph'
 

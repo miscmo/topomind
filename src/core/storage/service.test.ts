@@ -7,7 +7,6 @@ function createAdapter(overrides: Partial<StorageAdapter> = {}): StorageAdapter 
   return {
     createVault: vi.fn(),
     isValidVault: vi.fn(),
-    getVaultInfo: vi.fn(),
     removeVault: vi.fn(),
     listKBS: vi.fn(),
     createKB: vi.fn(),

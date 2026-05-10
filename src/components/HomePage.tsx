@@ -97,7 +97,7 @@ export default function HomePage() {
     })
     if (!confirmed) return
     try {
-      await storage.deleteKB(kb.name)
+      await storage.deleteKB(kb.path)
       logAction('知识库:删除', 'HomePage', { kbName: kb.name, kbPath: kb.path })
       useAppStore.getState().triggerKBRefresh()
       await loadKBList()

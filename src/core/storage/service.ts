@@ -74,26 +74,24 @@ export function createStore(adapter: StorageAdapter) {
     },
     async listKBs(): Promise<KBListItem[]> {
       try {
-        const entries = await adapter.listKBS('')
-        return entries.map(d => ({ path: d.ref, name: d.name }))
+        return await adapter.listKBS('')
       } catch (e) { logger.catch('Store.listKBs', '列出知识库失败', e); throw e }
     },
     async createKB(name: unknown) {
       const safeName = ensureValidName(name, '知识库名称')
       try {
-        const kbInfo = await adapter.createKB('', safeName)
-        return kbInfo.ref || safeName
+        return await adapter.createKB('', safeName)
       } catch (e) { logger.catch('Store.createKB', `创建知识库失败: ${name}`, e); throw e }
     },
     async deleteKB(kbPath: string) {
       try {
-        await adapter.deleteKB({ ref: kbPath, name: '' })
+        await adapter.deleteKB(kbPath)
       } catch (e) { logger.catch('Store.deleteKB', `删除知识库失败: ${kbPath}`, e); throw e }
     },
     async renameKB(kbPath: string, newName: unknown) {
       const safeName = ensureValidName(newName, '知识库名称')
       try {
-        await adapter.renameKB({ ref: kbPath, name: '' }, safeName)
+        await adapter.renameKB(kbPath, safeName)
       } catch (e) { logger.catch('Store.renameKB', `重命名知识库失败: ${kbPath} -> ${newName}`, e); throw e }
     },
     async listCards(kbPath: string) {
@@ -150,8 +148,7 @@ export function createStore(adapter: StorageAdapter) {
     },
     async importKB(sourcePath: string) {
       try {
-        const imported = await adapter.importKB('', { ref: sourcePath, name: '' })
-        return imported.ref
+        return await adapter.importKB('', sourcePath)
       } catch (e) { logger.catch('Store.importKB', `导入知识库失败: ${sourcePath}`, e); throw e }
     },
     async countChildren(cardPath: string) {
