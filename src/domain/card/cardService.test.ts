@@ -113,4 +113,29 @@ describe('cardService', () => {
 
     expect(storage.writeLayout).not.toHaveBeenCalled()
   })
+
+  it('normalizes invalid created refs under the parent before writing layouts', async () => {
+    const layouts = new Map<string, GraphMeta>([
+      ['测试1', emptyLayout()],
+    ])
+    const storage: CardServiceStorage = {
+      createCard: vi.fn().mockResolvedValue('../../../Code/topomind_cc/测试1/测试1'),
+      deleteCard: vi.fn(),
+      renameCard: vi.fn(),
+      readLayout: vi.fn(async (roomRef) => layouts.get(roomRef) ?? emptyLayout()),
+      writeLayout: vi.fn(async (roomRef, meta) => { layouts.set(roomRef, meta) }),
+    }
+
+    await createChildCard(storage, {
+      name: '测试1',
+      parentRef: '测试1',
+      reloadRef: '测试1',
+      nodesById: new Map(),
+    })
+
+    expect(layouts.get('测试1')?.nodes['测试1']).toMatchObject({
+      id: '测试1',
+      card: { ref: '测试1/测试1', name: '测试1' },
+    })
+  })
 })

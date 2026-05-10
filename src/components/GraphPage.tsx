@@ -31,10 +31,12 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const setRightPanelWidth = useAppStore((s) => s.setRightPanelWidth)
   const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
   const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
+  const collapseRightPanel = useAppStore((s) => s.collapseRightPanel)
+  const expandRightPanel = useAppStore((s) => s.expandRightPanel)
   const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
     initialWidth: rightPanelWidth,
     onWidthChange: setRightPanelWidth,
-    minWidth: 200,
+    minWidth: 400,
     maxWidth: 800,
   })
   const { contextMenu, hideCM } = useContextMenu()
@@ -76,6 +78,15 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
               }}
             />
           </div>
+          {rightPanelCollapsed && (
+            <button
+              className={styles.panelExpandBtn}
+              onClick={expandRightPanel}
+              title="展开右侧面板"
+            >
+              ‹
+            </button>
+          )}
           {!rightPanelCollapsed && (
             <div
               className={`${styles.resizeHandle} ${isResizing ? styles.resizing : ''}`}
@@ -88,7 +99,9 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
               selectedNodeId={nav.selectedNodeId}
               tabId={tabId}
               rightPanelTab={rightPanelTab}
+              width={rightPanelWidth}
               onTabChange={setRightPanelTab}
+              onCollapse={collapseRightPanel}
             />
           )}
         </div>

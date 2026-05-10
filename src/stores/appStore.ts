@@ -11,7 +11,7 @@ const APP_INITIAL_STATE = {
   edgeMode: false,
   edgeModeSourceId: null as string | null,
   rightPanelCollapsed: false,
-  rightPanelWidth: 320,
+  rightPanelWidth: 400,
   contextMenu: {
     visible: false,
     x: 0,

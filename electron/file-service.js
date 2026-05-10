@@ -358,7 +358,7 @@ const fileService = {
     mkDir: function(rootDir, dirPath, _meta) {
       rootDir = _fs_requireValidWorkDir(rootDir);
       var parent = _fs_kbsDir(rootDir);
-      _fs_ensureDir(parent);
+
       var segments = (dirPath || '').split('/').filter(Boolean);
       if (segments.length === 0) return parent;
       for (var i = 0; i < segments.length - 1; i++) {

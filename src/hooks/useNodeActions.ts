@@ -44,7 +44,11 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   const handleNewChild = useCallback(async (nodeId: string, position?: { x: number; y: number }) => {
     const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
     if (!name?.trim()) return
-    logAction('节点:创建', 'GraphPage', { nodeId, nodeName: name.trim(), source: nodeId ? 'context-menu' : 'pane-context-menu', position })
+    logAction('节点:创建', 'GraphPage', { 
+      nodeId, nodeName: name.trim(), 
+      source: nodeId ? 'context-menu' : 'pane-context-menu', 
+      position 
+    })
     await graph.createChildNode(name.trim(), nodeId || undefined, position)
     onAction?.()
   }, [graph, onAction, prompt])

@@ -34,10 +34,17 @@
 
 .rightPanelTabs {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 12px 0;
   gap: 8px;
   border-bottom: 1px solid #e8ecf0;
   background: #fbfcfd;
+}
+
+.rightPanelTabGroup {
+  display: flex;
+  gap: 8px;
 }
 
 .rightPanelTabBtn {
@@ -56,6 +63,36 @@
   border-bottom-color: #1a3a5c;
   font-weight: 600;
 }
+
+.panelToggleBtn,
+.panelExpandBtn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e0e4ea;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #73808c;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.panelToggleBtn:hover,
+.panelExpandBtn:hover {
+  background: #f0f2f5;
+  border-color: #cfd6df;
+  color: #1a3a5c;
+}
+
+.panelExpandBtn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 30;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
+}
+
 /* 可拖拽调整宽度的分隔条 */
 .resizeHandle {
   width: 6px;

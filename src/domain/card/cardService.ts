@@ -1,6 +1,6 @@
 import type { GraphMeta } from '../../core/storage/adapter/graph'
 import type { KnowledgeNode, KnowledgeEdge } from '../../types'
-import { basenameRef } from '../graph/path-utils'
+import { basenameRef, isSameOrChildRef, joinRefs } from '../graph/path-utils'
 
 export interface CardServiceStorage {
   createCard: (parentRef: string, name: string) => Promise<string | null>
@@ -47,6 +47,14 @@ function findNodeEntryKey(nodes: GraphMeta['nodes'], targetRef: string, fallback
   return null
 }
 
+function normalizeCreatedChildRef(parentRef: string, createdRef: string, name: string): string {
+  if (isSameOrChildRef(parentRef, createdRef) && createdRef !== parentRef) {
+    return createdRef
+  }
+
+  return joinRefs(parentRef, basenameRef(createdRef) || name)
+}
+
 export interface CreateChildCardOptions {
   name: string
   parentRef: string
@@ -65,10 +73,11 @@ export async function createChildCard(
   options: CreateChildCardOptions
 ): Promise<CreateChildCardResult> {
   const newRef = await storage.createCard(options.parentRef, options.name)
-  const resolvedRef = (newRef ?? '').trim()
-  if (!resolvedRef) {
+  const createdRef = (newRef ?? '').trim()
+  if (!createdRef) {
     throw new Error('创建卡片失败：未返回卡片路径')
   }
+  const resolvedRef = normalizeCreatedChildRef(options.parentRef, createdRef, options.name)
   const cardKey = basenameRef(resolvedRef) || options.name
 
   const parentLayout = await readLayoutOrEmpty(storage, options.parentRef)
