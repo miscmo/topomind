@@ -230,6 +230,31 @@ function _fs_requireValidWorkDir(rootDir) {
   return dir;
 }
 
+function _fs_createKbsDir(rootDir, dirPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var parent = _fs_kbsDir(rootDir);
+
+  var segments = (dirPath || '').split('/').filter(Boolean);
+  if (segments.length === 0) return parent;
+  for (var i = 0; i < segments.length - 1; i++) {
+    parent = nodePath.join(parent, _fs_safeSegment(segments[i]));
+    _fs_ensureDir(parent);
+  }
+  var finalName = _fs_uniqueFolderName(parent, segments[segments.length - 1]);
+  var d = nodePath.join(parent, finalName);
+  _fs_ensureDir(d);
+  if (!nodeFs.existsSync(_fs_graphFilePath(d))) {
+    _fs_writeJsonFile(_fs_graphFilePath(d), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
+  }
+  return _fs_relativeToKbs(rootDir, d);
+}
+
+function _fs_deleteKbsDir(rootDir, dirPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var d = _fs_abs(rootDir, dirPath);
+  if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
+}
+
 const fileService = {
     /**
      * @description 读取工作目录应用配置
@@ -349,41 +374,31 @@ const fileService = {
     },
 
     /**
-     * @description 在知识库目录下创建新目录，并初始化默认 _graph.json
+     * @description 创建知识库，并初始化默认 _graph.json
      * @param { string } rootDir: 工作目录路径
-     * @param { string } dirPath: 待创建目录的相对路径
-     * @param { Object } _meta: 预留元数据参数
-     * @returns { string } 创建后的目录相对路径
+     * @param { string } name: 知识库名称
+     * @returns { string } 创建后的知识库相对路径
      */
-    mkDir: function(rootDir, dirPath, _meta) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var parent = _fs_kbsDir(rootDir);
-
-      var segments = (dirPath || '').split('/').filter(Boolean);
-      if (segments.length === 0) return parent;
-      for (var i = 0; i < segments.length - 1; i++) {
-        parent = nodePath.join(parent, _fs_safeSegment(segments[i]));
-        _fs_ensureDir(parent);
-      }
-      var finalName = _fs_uniqueFolderName(parent, segments[segments.length - 1]);
-      var d = nodePath.join(parent, finalName);
-      _fs_ensureDir(d);
-      if (!nodeFs.existsSync(_fs_graphFilePath(d))) {
-        _fs_writeJsonFile(_fs_graphFilePath(d), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
-      }
-      return _fs_relativeToKbs(rootDir, d);
+    createKB: function(rootDir, name) {
+      return _fs_createKbsDir(rootDir, name);
     },
 
     /**
-     * @description 删除指定目录及其所有内容
+     * @description 删除指定知识库及其所有内容
      * @param { string } rootDir: 工作目录路径
-     * @param { string } dirPath: 待删除目录相对路径
+     * @param { string } kbPath: 待删除知识库相对路径
      * @returns { void }
      */
-    rmDir: function(rootDir, dirPath) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_abs(rootDir, dirPath);
-      if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
+    deleteKB: function(rootDir, kbPath) {
+      _fs_deleteKbsDir(rootDir, kbPath);
+    },
+
+    createCard: function(rootDir, parentPath, name) {
+      return _fs_createKbsDir(rootDir, (parentPath ? parentPath + '/' : '') + name);
+    },
+
+    deleteCard: function(rootDir, cardPath) {
+      _fs_deleteKbsDir(rootDir, cardPath);
     },
 
     /**

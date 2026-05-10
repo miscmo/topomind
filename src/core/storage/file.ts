@@ -183,7 +183,7 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
     },
 
     removeVault: async (dirPath: string): Promise<void> => {
-      await FSB.rmDir(requireRootDir(), dirPath)
+      await FSB.deleteKB(requireRootDir(), dirPath)
     },
 
     listKBs: async () => {
@@ -191,11 +191,11 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
     },
 
     createKB: async (name: string): Promise<string> => {
-      return FSB.mkDir(requireRootDir(), name, null)
+      return FSB.createKB(requireRootDir(), name)
     },
 
     deleteKB: async (kbPath: string): Promise<void> => {
-      await FSB.rmDir(requireRootDir(), kbPath)
+      await FSB.deleteKB(requireRootDir(), kbPath)
     },
 
     renameKB: async (kbPath: string, newName: string): Promise<void> => {
@@ -212,12 +212,12 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
     },
 
     createCard: async (parentPath: string, name: string): Promise<CardInfo> => {
-      const cardPath = await FSB.mkDir(requireRootDir(), `${parentPath}/${name}`, null)
+      const cardPath = await FSB.createCard(requireRootDir(), parentPath, name)
       return { ref: cardPath, name, updatedAt: undefined }
     },
 
     deleteCard: async (cardPath: string): Promise<void> => {
-      await FSB.rmDir(requireRootDir(), cardPath)
+      await FSB.deleteCard(requireRootDir(), cardPath)
     },
 
     renameCard: async (cardPath: string, newName: string): Promise<void> => {

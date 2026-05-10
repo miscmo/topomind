@@ -5,7 +5,8 @@ import { pathToFileURL } from 'url'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 type FileService = {
-  mkDir: (rootDir: string, dirPath: string, meta: object | null) => string
+  createKB: (rootDir: string, name: string) => string
+  createCard: (rootDir: string, parentPath: string, name: string) => string
   writeGraphMeta: (rootDir: string, dirPath: string, meta: object) => void
   listKBs: (rootDir: string) => Array<{ path: string; name: string }>
   listCards: (rootDir: string, parentPath: string) => Array<{ path: string; name: string }>
@@ -37,10 +38,12 @@ beforeAll(async () => {
 })
 
 describe('electron fileService graph path contract', () => {
-  it('returns KB-relative refs from mkDir instead of absolute filesystem paths', () => {
+  it('returns KB-relative refs from createCard instead of absolute filesystem paths', () => {
     const root = createRoot()
 
-    const ref = fileService.mkDir(root, 'KB/Parent/Child', null)
+    fileService.createKB(root, 'KB')
+    fileService.createCard(root, 'KB', 'Parent')
+    const ref = fileService.createCard(root, 'KB/Parent', 'Child')
 
     expect(ref).toBe('KB/Parent/Child')
     expect(nodePath.isAbsolute(ref)).toBe(false)
@@ -48,7 +51,8 @@ describe('electron fileService graph path contract', () => {
 
   it('reads display names from KB-relative _graph children keys', () => {
     const root = createRoot()
-    fileService.mkDir(root, 'KB/Child', null)
+    fileService.createKB(root, 'KB')
+    fileService.createCard(root, 'KB', 'Child')
     fileService.writeGraphMeta(root, 'KB', {
       children: {
         Child: { path: 'Child', name: 'Display Child' },
@@ -68,7 +72,8 @@ describe('electron fileService graph path contract', () => {
 
   it('updates display names by KB-relative _graph children keys', () => {
     const root = createRoot()
-    fileService.mkDir(root, 'KB/Child', null)
+    fileService.createKB(root, 'KB')
+    fileService.createCard(root, 'KB', 'Child')
     fileService.writeGraphMeta(root, 'KB', {
       children: {
         Child: { path: 'Child', name: 'Old Name' },

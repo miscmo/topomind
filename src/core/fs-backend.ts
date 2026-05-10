@@ -64,9 +64,11 @@ export interface FSBResult {
 export interface FSB {
   listKBs: (rootDir: string) => Promise<FSBKBInfo[]>
   listCards: (rootDir: string, parentPath: string) => Promise<FSBCardInfo[]>
-  mkDir: (rootDir: string, dirPath: string, meta?: object | null) => Promise<string>
-  rmDir: (rootDir: string, dirPath: string) => Promise<unknown>
+  createKB: (rootDir: string, name: string) => Promise<string>
+  deleteKB: (rootDir: string, kbPath: string) => Promise<unknown>
   renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
+  createCard: (rootDir: string, parentPath: string, name: string) => Promise<string>
+  deleteCard: (rootDir: string, cardPath: string) => Promise<unknown>
   readGraphMeta: (rootDir: string, dirPath: string) => Promise<FSBGraphMeta>
   writeGraphMeta: (rootDir: string, dirPath: string, meta: FSBGraphMeta) => Promise<unknown>
   getDir: (rootDir: string, dirPath: string) => Promise<unknown>
@@ -88,9 +90,11 @@ export interface FSB {
 const FSBImpl: FSB = {
   listKBs: (rootDir) => _call('fs:listKBs', rootDir) as Promise<FSBKBInfo[]>,
   listCards: (rootDir, parentPath) => _call('fs:listCards', rootDir, parentPath) as Promise<FSBCardInfo[]>,
-  mkDir: (rootDir, dirPath, meta) => _call('fs:mkDir', rootDir, dirPath, meta || {}) as Promise<string>,
-  rmDir: (rootDir, dirPath) => _call('fs:rmDir', rootDir, dirPath),
+  createKB: (rootDir, name) => _call('fs:createKB', rootDir, name) as Promise<string>,
+  deleteKB: (rootDir, kbPath) => _call('fs:deleteKB', rootDir, kbPath),
   renameKB: (rootDir, kbPath, newName) => _call('fs:renameKB', rootDir, kbPath, newName) as Promise<string>,
+  createCard: (rootDir, parentPath, name) => _call('fs:createCard', rootDir, parentPath, name) as Promise<string>,
+  deleteCard: (rootDir, cardPath) => _call('fs:deleteCard', rootDir, cardPath),
   readGraphMeta: (rootDir, dirPath) => _call('fs:readGraphMeta', rootDir, dirPath) as Promise<FSBGraphMeta>,
   writeGraphMeta: (rootDir, dirPath, meta) => _call('fs:writeGraphMeta', rootDir, dirPath, meta),
   getDir: (rootDir, dirPath) => _call('fs:getDir', rootDir, dirPath),
