@@ -26,17 +26,20 @@ const _call = (channel: string, ...args: unknown[]) => {
 
 // ===== 接口定义 =====
 
-export interface FSBChildInfo {
+/** listKBs 返回的知识库信息 */
+export interface FSBKBInfo {
   path: string
   name: string
-  isDir: boolean
-  order?: number
-  x?: number
-  y?: number
+}
+
+/** listCards 返回的卡片信息 */
+export interface FSBCardInfo {
+  path: string
+  name: string
 }
 
 export interface FSBGraphMeta {
-  children?: Record<string, FSBChildInfo> | undefined
+  children?: Record<string, FSBKBInfo> | undefined
   edges?: Array<{
     id: string
     source: string
@@ -59,8 +62,8 @@ export interface FSBResult {
 }
 
 export interface FSB {
-  listKBs: (rootDir: string) => Promise<FSBChildInfo[]>
-  listCards: (rootDir: string, parentPath: string) => Promise<FSBChildInfo[]>
+  listKBs: (rootDir: string) => Promise<FSBKBInfo[]>
+  listCards: (rootDir: string, parentPath: string) => Promise<FSBCardInfo[]>
   mkDir: (rootDir: string, dirPath: string, meta?: object | null) => Promise<string>
   rmDir: (rootDir: string, dirPath: string) => Promise<unknown>
   renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
@@ -83,8 +86,8 @@ export interface FSB {
 // ===== FSB 实现 =====
 
 const FSBImpl: FSB = {
-  listKBs: (rootDir) => _call('fs:listKBs', rootDir) as Promise<FSBChildInfo[]>,
-  listCards: (rootDir, parentPath) => _call('fs:listCards', rootDir, parentPath) as Promise<FSBChildInfo[]>,
+  listKBs: (rootDir) => _call('fs:listKBs', rootDir) as Promise<FSBKBInfo[]>,
+  listCards: (rootDir, parentPath) => _call('fs:listCards', rootDir, parentPath) as Promise<FSBCardInfo[]>,
   mkDir: (rootDir, dirPath, meta) => _call('fs:mkDir', rootDir, dirPath, meta || {}) as Promise<string>,
   rmDir: (rootDir, dirPath) => _call('fs:rmDir', rootDir, dirPath),
   renameKB: (rootDir, kbPath, newName) => _call('fs:renameKB', rootDir, kbPath, newName) as Promise<string>,

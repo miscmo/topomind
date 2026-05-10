@@ -5,7 +5,6 @@ export type KBRef = string
 export interface KBInfo {
   ref: KBRef
   name: string
-  coverRef?: string | null
 }
 
 export interface IKBSStorage {

@@ -34,7 +34,7 @@ function ensureValidName(name: unknown, label = '名称'): string {
   return n
 }
 
-export interface DirEntry { path: string; name: string; isDir: boolean; order?: number }
+
 export function createStore(adapter: StorageAdapter) {
   const layoutSaveCoordinator = new SaveCoordinator<GraphMeta>({
     delayMs: 300,
@@ -75,7 +75,7 @@ export function createStore(adapter: StorageAdapter) {
     async listKBs(): Promise<KBListItem[]> {
       try {
         const entries = await adapter.listKBS('')
-        return entries.map(d => ({ path: d.ref, name: d.name, order: 0 }))
+        return entries.map(d => ({ path: d.ref, name: d.name }))
       } catch (e) { logger.catch('Store.listKBs', '列出知识库失败', e); throw e }
     },
     async createKB(name: unknown) {
@@ -87,13 +87,13 @@ export function createStore(adapter: StorageAdapter) {
     },
     async deleteKB(kbPath: string) {
       try {
-        await adapter.deleteKB({ ref: kbPath, name: '', coverRef: null })
+        await adapter.deleteKB({ ref: kbPath, name: '' })
       } catch (e) { logger.catch('Store.deleteKB', `删除知识库失败: ${kbPath}`, e); throw e }
     },
     async renameKB(kbPath: string, newName: unknown) {
       const safeName = ensureValidName(newName, '知识库名称')
       try {
-        await adapter.renameKB({ ref: kbPath, name: '', coverRef: null }, safeName)
+        await adapter.renameKB({ ref: kbPath, name: '' }, safeName)
       } catch (e) { logger.catch('Store.renameKB', `重命名知识库失败: ${kbPath} -> ${newName}`, e); throw e }
     },
     async listCards(kbPath: string) {
@@ -150,7 +150,7 @@ export function createStore(adapter: StorageAdapter) {
     },
     async importKB(sourcePath: string) {
       try {
-        const imported = await adapter.importKB('', { ref: sourcePath, name: '', coverRef: null })
+        const imported = await adapter.importKB('', { ref: sourcePath, name: '' })
         return imported.ref
       } catch (e) { logger.catch('Store.importKB', `导入知识库失败: ${sourcePath}`, e); throw e }
     },

@@ -2,7 +2,7 @@
  * 首页：知识库列表
  * 对应原 HomePage.vue
  */
-import { useState, useEffect, useRef, memo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useStorage } from '../hooks/useStorage'
 import { usePlatform } from '../hooks/usePlatform'
@@ -16,10 +16,7 @@ import styles from './HomePage.module.css'
 interface KBItem {
   path: string
   name: string
-  order: number
-  cover?: string
   nodeCount: number | null
-  coverUrl: string | null
 }
 
 interface KBContextMenu {
@@ -169,9 +166,7 @@ export default function HomePage() {
       const initial: KBItem[] = kbList.map((kb) => ({
         path: kb.path,
         name: kb.name,
-        order: kb.order ?? 0,
         nodeCount: null,
-        coverUrl: null,
       }))
       setKbs(initial)
 
@@ -335,11 +330,7 @@ export default function HomePage() {
               onContextMenu={(e) => handleKBRightClick(e, kb)}
             >
               <div className={styles.cardImage}>
-                {kb.coverUrl ? (
-                  <img src={kb.coverUrl} alt={kb.name} />
-                ) : (
-                  <span className={styles.cardImageIcon}>📚</span>
-                )}
+                <span className={styles.cardImageIcon}>📚</span>
               </div>
               <div className={styles.cardBody}>
                 <div className={styles.cardTitle}>

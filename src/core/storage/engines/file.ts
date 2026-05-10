@@ -35,10 +35,9 @@ interface FSBGraphLike {
   pan?: { x: number; y: number } | null
 }
 
-const toKBInfo = (child: { path: string; name: string; order?: number }): KBInfo => ({
+const toKBInfo = (child: { path: string; name: string }): KBInfo => ({
   ref: child.path,
   name: child.name,
-  coverRef: null,
 })
 
 const toCardInfo = (child: { path: string; name: string }): CardInfo => ({
@@ -209,9 +208,9 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
       return children.map(c => toKBInfo(c))
     },
 
-    createKB: async (vaultRef: VaultRef, name: string): Promise<KBInfo> => {
+    createKB: async (_vaultRef: VaultRef, name: string): Promise<KBInfo> => {
       const kbPath = await FSB.mkDir(requireRootDir(), name, null)
-      return { ref: kbPath, name, coverRef: null }
+      return { ref: kbPath, name }
     },
 
     deleteKB: async (kbInfo: KBInfo): Promise<void> => {
@@ -222,11 +221,11 @@ export function createFileStorageAdapter(getRootDir: () => string | null): Stora
       await FSB.renameKB(requireRootDir(), kbInfo.ref, newName)
     },
 
-    importKB: async (targetVaultRef: VaultRef, sourceKBInfo: KBInfo): Promise<KBInfo> => {
+    importKB: async (_targetVaultRef: VaultRef, sourceKBInfo: KBInfo): Promise<KBInfo> => {
       const importedPath = await FSB.importKB(requireRootDir(), sourceKBInfo.ref)
       const parts = importedPath.split('/')
       const name = parts[parts.length - 1]
-      return { ref: importedPath, name, coverRef: null }
+      return { ref: importedPath, name }
     },
 
     // ===== Core StorageAdapter (ICardStorage) =====
