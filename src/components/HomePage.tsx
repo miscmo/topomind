@@ -55,7 +55,7 @@ export default function HomePage() {
     if (!ctxMenu.visible) return
     const handler = (e: MouseEvent) => {
       const target = e.target as Element
-      if (!target.closest('[data-testid="kb-context-menu"]') && !target.closest('[class*="card"]')) {
+      if (!target.closest(`.${styles.ctxMenu}`) && !target.closest('[class*="card"]')) {
         closeCtxMenu()
       }
     }
@@ -361,7 +361,6 @@ export default function HomePage() {
       {/* KB 右键菜单 */}
       {ctxMenu.visible && ctxMenu.kb && (
         <div
-          data-testid="kb-context-menu"
           className={styles.ctxMenu}
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           onMouseLeave={closeCtxMenu}
@@ -369,14 +368,12 @@ export default function HomePage() {
           <button
             className={styles.ctxMenuItem}
             onClick={handleKBDelete}
-            data-testid="ctx-delete"
           >
             删除
           </button>
           <button
             className={styles.ctxMenuItem}
             onClick={handleKBRename}
-            data-testid="ctx-rename"
           >
             重命名
           </button>

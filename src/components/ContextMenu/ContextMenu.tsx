@@ -227,7 +227,6 @@ export default memo(function ContextMenu({
   return (
     <div
       ref={menuRef}
-      data-testid="context-menu"
       className={styles.menu}
       style={{ left: adjustedX, top: adjustedY }}
     >
@@ -238,7 +237,6 @@ export default memo(function ContextMenu({
           <button
             ref={(el) => { itemButtonRefs.current[i] = el }}
             key={i}
-            data-testid={`context-menu-${item.label}`}
             className={`${styles.item} ${item.danger ? styles.danger : ''} ${focusedIndex === i ? styles.focused : ''}`}
             onClick={async () => { await item.action() }}
             disabled={item.disabled}

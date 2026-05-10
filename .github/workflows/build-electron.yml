@@ -39,7 +39,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build (test frontend compilation)
+      - name: Build frontend
         run: npm run build
 
       - name: Build Electron main/preload (verify no syntax errors)

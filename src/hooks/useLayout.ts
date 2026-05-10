@@ -24,8 +24,8 @@ function getElkInstance(): Promise<ElkInstance> {
 }
 
 /**
- * Core layout computation — a pure async function for testability.
- * Accepts an ELK instance so tests can inject a mock.
+ * Core layout computation.
+ * Accepts an ELK instance.
  *
  * @param elkInstance - ELK instance with a `.layout()` method
  * @param nodes - React Flow nodes to layout

@@ -98,7 +98,6 @@ export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
           return (
             <button
               key={item.id}
-              data-testid="breadcrumb-root"
               className={styles.link}
               onClick={navigateToRoot}
               disabled={isLast}

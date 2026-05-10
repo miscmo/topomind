@@ -12,46 +12,21 @@
  */
 import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import nodePath from 'path';
-import nodeFs from 'fs';
 import { fileService } from './file-service.js';
 import { dialogService } from './dialog-service.js';
 import LogService from './log-service.js';
 
-// 兼容生产运行、Playwright 直接启动 dist-electron/main.js、以及 dev 模式。
+// 兼容生产运行以及 dev 模式。
 const APP_PATH = app.getAppPath();
 const MAIN_SCRIPT_DIR = process.argv[1] ? nodePath.dirname(nodePath.resolve(process.argv[1])) : APP_PATH;
-const DIST_ELECTRON_DIR = nodeFs.existsSync(nodePath.join(APP_PATH, 'dist-electron'))
-  ? nodePath.join(APP_PATH, 'dist-electron')
-  : MAIN_SCRIPT_DIR;
-const DIST_RENDERER_DIR = nodeFs.existsSync(nodePath.join(APP_PATH, 'dist'))
-  ? nodePath.join(APP_PATH, 'dist')
-  : nodePath.join(nodePath.dirname(DIST_ELECTRON_DIR), 'dist');
+const DIST_ELECTRON_DIR = MAIN_SCRIPT_DIR;
+const DIST_RENDERER_DIR = nodePath.join(nodePath.dirname(DIST_ELECTRON_DIR), 'dist');
 const SETUP_WINDOW_WIDTH = 380;
 const SETUP_WINDOW_HEIGHT = 252;
 const HOME_WINDOW_WIDTH = 1400;
 const HOME_WINDOW_HEIGHT = 900;
 const WINDOW_BACKGROUND_COLOR = '#ffffff';
 const IS_DEV = !!process.env.VITE_DEV_SERVER_URL;
-
-// E2E 测试：尝试从工作目录根目录的 .env 文件加载环境变量。
-// global-setup.ts 会将 TOPOMIND_E2E_WORKDIR 写入项目根目录的 .env。
-// 注意：此代码在 import { fileService } 之后执行，
-// 如果 vite-plugin-electron 已经通过 spawn options 传递了 env var，
-// 则此处的 .env 加载会跳过（因为 process.env[key] 已存在）。
-const E2E_ENV_FILE = nodePath.join(process.cwd(), '.env');
-if (nodeFs.existsSync(E2E_ENV_FILE)) {
-  for (const line of nodeFs.readFileSync(E2E_ENV_FILE, 'utf8').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx < 0) continue;
-    const key = trimmed.slice(0, eqIdx);
-    const val = trimmed.slice(eqIdx + 1);
-    if (key && !Object.prototype.hasOwnProperty.call(process.env, key)) {
-      process.env[key] = val;
-    }
-  }
-}
 
 // ============================================================
 // IPC HANDLERS
@@ -207,16 +182,6 @@ function registerIPC() {
       win.setContentSize(HOME_WINDOW_WIDTH, HOME_WINDOW_HEIGHT);
       buildMenu(false);
     }
-  });
-  ipcMain.handle('app:getE2EState', function() {
-    var rootDir = process.env.TOPOMIND_E2E_WORKDIR || null;
-    return {
-      rootDir: rootDir,
-      valid: !!rootDir,
-      workDirConfigured: !!process.env.TOPOMIND_E2E_WORKDIR,
-      windowReady: !!(win && !win.isDestroyed()),
-      ipcRegistered: true,
-    };
   });
   ipcMain.handle('app:switchWorkDir', async function() {
     if (!win || win.isDestroyed()) return { ok: false, cancelled: true };

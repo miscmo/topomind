@@ -11,12 +11,8 @@ export interface ElectronAPI {
   isElectron?: boolean
 }
 
-/** E2E 测试模式下暴露的 API 对象 */
-export type E2EApi = ElectronAPI
-
 declare global {
   interface Window {
     electronAPI?: ElectronAPI
-    __E2E_ELECTRON_API__?: ElectronAPI
   }
 }

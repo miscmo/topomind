@@ -44,12 +44,11 @@ export const PromptModal = memo(function PromptModal() {
   if (!visible) return null
 
   return (
-    <div className={styles.overlay} data-testid="prompt-modal" onClick={handleCancel}>
+    <div className={styles.overlay} onClick={handleCancel}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.title}>{title}</div>
         <input
           className={styles.input}
-          data-testid="prompt-modal-input"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -57,10 +56,10 @@ export const PromptModal = memo(function PromptModal() {
           autoFocus
         />
         <div className={styles.buttons}>
-          <button className={styles.cancelBtn} data-testid="prompt-modal-cancel" onClick={handleCancel}>
+          <button className={styles.cancelBtn} onClick={handleCancel}>
             取消
           </button>
-          <button className={styles.confirmBtn} data-testid="prompt-modal-confirm" onClick={handleConfirm}>
+          <button className={styles.confirmBtn} onClick={handleConfirm}>
             确定
           </button>
         </div>

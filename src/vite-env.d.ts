@@ -15,7 +15,6 @@ declare global {
       on(channel: string, handler: (...args: unknown[]) => void): void
       off(channel: string, handler: (...args: unknown[]) => void): void
     }
-    __E2E_ELECTRON_API__?: NonNullable<Window['electronAPI']>
   }
 }
 

@@ -17,7 +17,6 @@ const ALLOWED_CHANNELS = new Set([
   // app
   'app:openExternal',
   'app:navigateHome',
-  'app:getE2EState',
   'app:switchWorkDir',
   // log
   'log:write', 'log:getBuffer', 'log:query', 'log:setLevel', 'log:clear',

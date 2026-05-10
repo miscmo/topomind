@@ -195,15 +195,11 @@ pnpm run build:linux  # Linux (.AppImage)
 
 5. **部分实现细节存在潜在一致性风险**
    - 例如 `tabStore` 中每个 KB Tab 的历史栈、当前房间和脏状态边界较复杂。
-   - 这类逻辑在复杂导航路径下容易回归，需要测试覆盖。
+   - 这类逻辑在复杂导航路径下容易回归，需要谨慎维护。
 
 6. **预加载层仍有 `console.error` / `console.warn`**
    - 主体渲染层已经尽量切到 `logger`，但 preload 里仍保留原生命令行输出。
    - 如果希望日志体系彻底统一，后续可考虑收口。
-
-7. **项目缺少自动化质量说明**
-   - 仓库中有 `scripts/run-tests.mjs` 与 `playwright` 依赖，但 README 未明确测试入口与当前测试覆盖范围。
-   - 建议后续补充“如何验证”的稳定流程。
 
 ## License
 
