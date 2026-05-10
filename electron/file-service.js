@@ -215,6 +215,21 @@ function _fs_validateAbsolutePath(dir) {
   return nodePath.resolve(dir);
 }
 
+/**
+ * @description 校验并返回可安全读写的工作目录绝对路径
+ * @param { string } rootDir: 工作目录路径
+ * @returns { string } 标准化后的工作目录绝对路径
+ * @throws { Error } 当工作目录无效时抛出错误
+ */
+function _fs_requireValidWorkDir(rootDir) {
+  var dir = _fs_validateAbsolutePath(rootDir);
+  var validation = _fs_isValidWorkDir(dir);
+  if (!validation.valid) {
+    throw new Error(validation.error || '不是有效的工作目录');
+  }
+  return dir;
+}
+
 const fileService = {
     /**
      * @description 读取工作目录应用配置
@@ -222,6 +237,7 @@ const fileService = {
      * @returns { Object } 应用配置对象
      */
     readAppConfig: function(rootDir) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       return _fs_readJsonFile(_fs_appConfigPath(rootDir)) || {};
     },
 
@@ -232,6 +248,7 @@ const fileService = {
      * @returns { Object } 最终写入的配置对象
      */
     writeAppConfig: function(rootDir, content) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var data = content;
       if (typeof content === 'string') {
         try { data = JSON.parse(content); } catch (e) { data = {}; }
@@ -290,8 +307,8 @@ const fileService = {
      * @returns { Array<{ path: string, name: string, isDir: boolean }> } 知识库列表
      */
     listKBs: function(rootDir) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var dir = _fs_kbsDir(rootDir);
-      _fs_ensureDir(dir);
       var children = nodeFs.readdirSync(dir, { withFileTypes: true })
         .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
         .map(function(e) {
@@ -310,9 +327,8 @@ const fileService = {
      * @returns { Array<{ path: string, name: string, isDir: boolean }> } 子节点列表
      */
     listCards: function(rootDir, parentPath) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var dir = _fs_abs(rootDir, parentPath);
-      _fs_ensureDir(_fs_kbsDir(rootDir));
-      _fs_ensureDir(dir);
       var parentGraph = _fs_readJsonFile(_fs_graphFilePath(dir)) || { children: {} };
       var parentChildren = parentGraph.children || {};
       var children = nodeFs.readdirSync(dir, { withFileTypes: true })
@@ -339,6 +355,7 @@ const fileService = {
      * @returns { string } 创建后的目录相对路径
      */
     mkDir: function(rootDir, dirPath, _meta) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var parent = _fs_kbsDir(rootDir);
       _fs_ensureDir(parent);
       var segments = (dirPath || '').split('/').filter(Boolean);
@@ -363,6 +380,7 @@ const fileService = {
      * @returns { void }
      */
     rmDir: function(rootDir, dirPath) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var d = _fs_abs(rootDir, dirPath);
       if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
     },
@@ -375,6 +393,7 @@ const fileService = {
      * @returns { string | null } 重命名后的路径，知识库不存在时返回 null
      */
     renameKB: function(rootDir, kbPath, newName) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var d = _fs_abs(rootDir, kbPath);
       if (!nodeFs.existsSync(d)) return null;
       var parentDir = _fs_kbsDir(rootDir);
@@ -396,6 +415,7 @@ const fileService = {
      * @returns { Object } 图元数据对象
      */
     readGraphMeta: function(rootDir, dirPath) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var d = _fs_abs(rootDir, dirPath);
       var graph = _fs_readJsonFile(_fs_graphFilePath(d));
       if (graph) return graph;
@@ -410,6 +430,7 @@ const fileService = {
      * @returns { void }
      */
     writeGraphMeta: function(rootDir, dirPath, meta) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var d = _fs_abs(rootDir, dirPath);
       if (!nodeFs.existsSync(d)) {
         var segments = dirPath.split('/').filter(Boolean);
@@ -432,6 +453,7 @@ const fileService = {
      * @returns { string } 原卡片路径
      */
     updateCardMeta: function(rootDir, cardPath, newName) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : '';
       var parentDir = _fs_abs(rootDir, parentPath);
       var graphPath = _fs_graphFilePath(parentDir);
@@ -462,6 +484,7 @@ const fileService = {
      * @returns { Object | null } 目录信息
      */
     getDir: function(rootDir, dirPath) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var d = _fs_abs(rootDir, dirPath);
       if (!nodeFs.existsSync(d)) return null;
       return { nodePath: dirPath };
@@ -474,6 +497,7 @@ const fileService = {
      * @returns { string } 文件内容
      */
     readFile: function(rootDir, filePath) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var f = _fs_abs(rootDir, filePath);
       if (nodeFs.existsSync(f)) return nodeFs.readFileSync(f, 'utf-8');
       return '';
@@ -487,6 +511,7 @@ const fileService = {
      * @returns { void }
      */
     writeFile: function(rootDir, filePath, content) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var f = _fs_abs(rootDir, filePath);
       _fs_ensureDir(nodePath.dirname(f));
       nodeFs.writeFileSync(f, content, 'utf-8');
@@ -499,6 +524,7 @@ const fileService = {
      * @returns { void }
      */
     deleteFile: function(rootDir, filePath) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var f = _fs_abs(rootDir, filePath);
       if (nodeFs.existsSync(f)) nodeFs.unlinkSync(f);
     },
@@ -511,6 +537,7 @@ const fileService = {
      * @throws { Error } 源目录不存在或不是有效知识库时抛出错误
      */
     importKB: function(rootDir, sourcePath) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
       var src = nodePath.resolve(sourcePath);
       if (!nodeFs.existsSync(src)) throw new Error('源目录不存在: ' + src);
       if (!nodeFs.existsSync(nodePath.join(src, '_graph.json'))) {

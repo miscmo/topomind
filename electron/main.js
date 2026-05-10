@@ -150,13 +150,7 @@ function registerIPC() {
   ipcMain.handle('fs:writeFile', function(e, rootDir, p, c) { fileService.writeFile(rootDir, p, c); });
   ipcMain.handle('fs:deleteFile', function(e, rootDir, p) { fileService.deleteFile(rootDir, p); });
   ipcMain.handle('fs:countChildren', function(e, rootDir, dirPath) {
-    var kbRoot = nodePath.join(rootDir, 'kbs');
-    var d = dirPath ? nodePath.join(kbRoot, dirPath) : kbRoot;
-    if (!nodeFs.existsSync(d)) return 0;
-    try {
-      return nodeFs.readdirSync(d, { withFileTypes: true })
-        .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; }).length;
-    } catch(err) { return 0; }
+    return fileService.listCards(rootDir, dirPath || '').length;
   });
   ipcMain.handle('fs:readAppConfig', function(e, rootDir) {
     return fileService.readAppConfig(rootDir);

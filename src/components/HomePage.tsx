@@ -181,7 +181,13 @@ export default function HomePage() {
         initial.map(async (kb) => {
           try {
             return await storage.countChildren(kb.path)
-          } catch {
+          } catch (err) {
+            logger.catch('HomePage', 'loadKBList:countChildren', err)
+            logAction('HomePage:统计子节点异常', 'HomePage', {
+              kbPath: kb.path,
+              kbName: kb.name,
+              error: err instanceof Error ? err.message : String(err),
+            })
             return 0
           }
         })
@@ -189,8 +195,11 @@ export default function HomePage() {
       setKbs(initial.map((kb, i) => ({ ...kb, nodeCount: counts[i] })))
       logAction('HomePage:子节点数量加载完成', 'HomePage', { totalNodes: counts.reduce((a, b) => a + b, 0) })
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
       logger.catch('HomePage', 'loadKBList', err)
-      logAction('HomePage:加载知识库列表异常', 'HomePage', { error: (err as Error)?.message || String(err) })
+      logAction('HomePage:加载知识库列表异常', 'HomePage', { error: msg })
+      setMessage(msg || '加载知识库列表失败')
+      setMessageError(true)
     } finally {
       setLoading(false)
     }

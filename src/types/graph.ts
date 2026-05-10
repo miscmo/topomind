@@ -138,13 +138,6 @@ export interface EdgeModeState {
 
 // ============== IPC 响应类型 ==============
 
-/** 目录信息 */
-export interface DirInfo {
-  path: string
-  name: string
-  isDir: boolean
-}
-
 /** KB 列表项 */
 export interface KBListItem {
   path: string
