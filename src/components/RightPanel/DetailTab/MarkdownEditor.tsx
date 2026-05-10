@@ -2,7 +2,7 @@
  * Markdown 编辑器组件
  */
 import { memo, useEffect, useRef, useCallback } from 'react'
-import styles from './DetailPanel.module.css'
+import styles from './DetailTab.module.css'
 
 interface MarkdownEditorProps {
   value: string

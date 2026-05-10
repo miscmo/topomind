@@ -1,8 +1,8 @@
 import { memo, useEffect, useRef } from 'react'
-import { useAppStore } from '../../stores/appStore'
-import { useGraphContext } from '../../contexts/GraphContext'
-import { useStorage } from '../../hooks/useStorage'
-import styles from './DetailPanel.module.css'
+import { useAppStore } from '../../../stores/appStore'
+import { useGraphContext } from '../../../contexts/GraphContext'
+import { useStorage } from '../../../hooks/useStorage'
+import styles from './StyleTab.module.css'
 
 const COLOR_PRESETS = ['#7f8c8d', '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6']
 

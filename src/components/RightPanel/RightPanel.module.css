@@ -1,0 +1,105 @@
+.rightPanel {
+  height: 100%;
+  background: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-left: 1px solid #e6ebf1;
+  display: flex;
+  flex-direction: column;
+}
+
+.rightPanelTabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 0;
+  gap: 8px;
+  border-bottom: 1px solid #e8ecf0;
+  background: #fbfcfd;
+}
+
+.rightPanelTabGroup {
+  display: flex;
+  gap: 8px;
+}
+
+.rightPanelTabBtn {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #73808c;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rightPanelTabBtnActive {
+  color: #1a3a5c;
+  border-bottom-color: #1a3a5c;
+  font-weight: 600;
+}
+
+.panelToggleBtn,
+.panelExpandBtn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e0e4ea;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #73808c;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.panelToggleBtn:hover,
+.panelExpandBtn:hover {
+  background: #f0f2f5;
+  border-color: #cfd6df;
+  color: #1a3a5c;
+}
+
+.panelExpandBtn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 30;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
+}
+
+.resizeHandle {
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  flex-shrink: 0;
+  background: #e8eaed;
+  z-index: 999;
+  position: relative;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.resizeHandle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  background: #c5c8ce;
+}
+
+.resizeHandle:hover,
+.resizeHandle:active,
+.resizing {
+  background: #d5d8de;
+}
+
+.resizeHandle:hover::before,
+.resizeHandle:active::before,
+.resizing::before {
+  background: #9ea3ad;
+}

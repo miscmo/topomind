@@ -1,9 +1,9 @@
 import { memo } from 'react'
-import DetailPanel from './DetailPanel/DetailPanel'
-import StyleSection from './DetailPanel/StyleSection'
-import styles from './GraphPage.module.css'
+import DetailPanel from './DetailTab/DetailPanel'
+import StyleSection from './StyleTab/StyleSection'
+import styles from './RightPanel.module.css'
 
-interface GraphRightPanelProps {
+interface RightPanelShellProps {
   selectedNodeId: string | null
   tabId: string
   rightPanelTab: 'detail' | 'style'
@@ -12,7 +12,7 @@ interface GraphRightPanelProps {
   onCollapse: () => void
 }
 
-export default memo(function GraphRightPanel({ selectedNodeId, tabId, rightPanelTab, width, onTabChange, onCollapse }: GraphRightPanelProps) {
+export default memo(function RightPanelShell({ selectedNodeId, tabId, rightPanelTab, width, onTabChange, onCollapse }: RightPanelShellProps) {
   return (
     <div className={styles.rightPanel} style={{ width }}>
       <div className={styles.rightPanelTabs}>

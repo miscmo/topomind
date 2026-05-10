@@ -4,16 +4,14 @@
  */
 import { memo, useCallback } from 'react'
 import { useReactFlow } from '@xyflow/react'
-import { useAppStore } from '../stores/appStore'
 import { useGraphPageController } from '../hooks/useGraphPageController'
 import { getNavStateForTab } from '../hooks/useNavContext'
 import { useNodeActions } from '../hooks/useNodeActions'
 import { useContextMenu } from '../hooks/useContextMenu'
-import { useResizePanel } from '../hooks/useResizePanel'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { GraphContextProvider } from '../contexts/GraphContext'
 import Breadcrumb from './Breadcrumb/Breadcrumb'
-import GraphRightPanel from './GraphRightPanel'
+import RightPanelContainer, { useRightPanelActions } from './RightPanel/RightPanelContainer'
 import GraphCanvas from './GraphCanvas'
 import ContextMenu from './ContextMenu/ContextMenu'
 import styles from './GraphPage.module.css'
@@ -25,20 +23,7 @@ interface GraphPageProps {
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const { nav, graph } = useGraphPageController({ tabId })
   const { screenToFlowPosition } = useReactFlow()
-  const rightPanelCollapsed = useAppStore((s) => s.rightPanelCollapsed)
-  const rightPanelWidth = useAppStore((s) => s.rightPanelWidth)
-  const rightPanelTab = useAppStore((s) => s.rightPanelTab)
-  const setRightPanelWidth = useAppStore((s) => s.setRightPanelWidth)
-  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
-  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
-  const collapseRightPanel = useAppStore((s) => s.collapseRightPanel)
-  const expandRightPanel = useAppStore((s) => s.expandRightPanel)
-  const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
-    initialWidth: rightPanelWidth,
-    onWidthChange: setRightPanelWidth,
-    minWidth: 400,
-    maxWidth: 800,
-  })
+  const { openEdgeStylePanel } = useRightPanelActions()
   const { contextMenu, hideCM } = useContextMenu()
   const { 
     deleteSelectedNode, addChildNode, handleNewChild, handleRename, 
@@ -72,38 +57,10 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
 
             <GraphCanvas
               tabId={tabId}
-              onEdgeContextMenu={(edgeId) => {
-                if (rightPanelTab !== 'style') setRightPanelTab('style')
-                setSelectedEdgeId(edgeId)
-              }}
+              onEdgeContextMenu={openEdgeStylePanel}
             />
           </div>
-          {rightPanelCollapsed && (
-            <button
-              className={styles.panelExpandBtn}
-              onClick={expandRightPanel}
-              title="展开右侧面板"
-            >
-              ‹
-            </button>
-          )}
-          {!rightPanelCollapsed && (
-            <div
-              className={`${styles.resizeHandle} ${isResizing ? styles.resizing : ''}`}
-              onMouseDown={handleResizeMouseDown}
-              title="拖拽调整宽度"
-            />
-          )}
-          {!rightPanelCollapsed && (
-            <GraphRightPanel
-              selectedNodeId={nav.selectedNodeId}
-              tabId={tabId}
-              rightPanelTab={rightPanelTab}
-              width={rightPanelWidth}
-              onTabChange={setRightPanelTab}
-              onCollapse={collapseRightPanel}
-            />
-          )}
+          <RightPanelContainer selectedNodeId={nav.selectedNodeId} tabId={tabId} />
         </div>
         <ContextMenu
           visible={contextMenu.visible}
