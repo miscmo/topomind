@@ -12,6 +12,7 @@
  */
 import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import nodePath from 'path';
+import nodeFs from 'fs';
 import { fileService } from './file-service.js';
 import { dialogService } from './dialog-service.js';
 import LogService from './log-service.js';
@@ -19,8 +20,15 @@ import LogService from './log-service.js';
 // 兼容生产运行以及 dev 模式。
 const APP_PATH = app.getAppPath();
 const MAIN_SCRIPT_DIR = process.argv[1] ? nodePath.dirname(nodePath.resolve(process.argv[1])) : APP_PATH;
-const DIST_ELECTRON_DIR = MAIN_SCRIPT_DIR;
-const DIST_RENDERER_DIR = nodePath.join(nodePath.dirname(DIST_ELECTRON_DIR), 'dist');
+const DIST_ELECTRON_DIR = nodeFs.existsSync(nodePath.join(APP_PATH, 'dist-electron'))
+  ? nodePath.join(APP_PATH, 'dist-electron')
+  : MAIN_SCRIPT_DIR;
+const DIST_RENDERER_DIR = [
+  nodePath.join(APP_PATH, 'dist'),
+  nodePath.join(process.cwd(), 'dist'),
+  nodePath.join(nodePath.dirname(DIST_ELECTRON_DIR), 'dist'),
+].find((dir) => nodeFs.existsSync(nodePath.join(dir, 'index.html')))
+  || nodePath.join(APP_PATH, 'dist');
 const SETUP_WINDOW_WIDTH = 380;
 const SETUP_WINDOW_HEIGHT = 252;
 const HOME_WINDOW_WIDTH = 1400;
@@ -301,7 +309,7 @@ function createMonitorWindow() {
   });
   var monitorUrl = IS_DEV
     ? process.env.VITE_DEV_SERVER_URL + '#/monitor'
-    : 'file://' + nodePath.join(DIST_ELECTRON_DIR, '..', 'dist', 'index.html') + '#/monitor';
+    : 'file://' + nodePath.join(DIST_RENDERER_DIR, 'index.html') + '#/monitor';
   monitorWin.loadURL(monitorUrl);
   LogService.write({
     level: 'INFO', module: 'Main', action: 'monitor:created',
