@@ -9,7 +9,7 @@
 
 ## 1. 项目概述
 
-TopoMind 是一个知识大脑工具，核心是**知识卡片房间**模型——每个知识域是一个可视化容器卡片，双击即可"走进"查看内部子概念，支持无限层级嵌套。用于 AI / 计算机领域知识沉淀与学习。
+TopoMind 是一个知识大脑工具，核心是**知识卡片房间**模型——每个知识域是一个可视化容器卡片，双击即可"走进"查看内部子概念，支持无限层级嵌套。用于各领域知识沉淀与学习。
 
 ### 1.1 核心定位
 
@@ -40,78 +40,7 @@ TopoMind 是一个知识大脑工具，核心是**知识卡片房间**模型—�
 
 ## 3. 项目结构
 
-```
-topomind_cc/
-├── index.html                    # 主入口
-├── package.json                   # 依赖 + 构建脚本
-├── vite.config.js                 # Vite 配置（含 Electron 插件）
-├── tsconfig.json                  # TypeScript 配置
-├── SPEC.md                        # 本规范文档
-├── README.md
-├── electron/                      # Electron 桌面端
-│   ├── main.js                   # 主进程（窗口、菜单、IPC、文件服务、日志服务）
-│   └── preload.js               # 预加载（contextBridge 暴露 IPC 白名单）
-└── src/
-    ├── main.tsx                  # React 应用入口
-    ├── App.tsx                   # 根组件（ReactFlowProvider + Tab 路由：主页 + 多 KB Tab）
-    ├── types/
-    │   └── index.ts             # 全局 TypeScript 类型定义
-    ├── stores/
-    │   ├── appStore.ts          # 应用状态（view、selectedNodeId、edgeMode 等）
-    │   ├── tabStore.ts          # 多知识库 Tab 管理（tabs、活跃 Tab、脏状态、每 Tab 房间状态）
-    │   ├── confirmStore.ts      # Confirm 弹窗（Promise-based 替代 window.confirm）
-    │   ├── promptStore.ts       # Prompt 弹窗（Promise-based 替代 window.prompt）
-    │   └── monitorStore.ts      # 日志/性能监控窗口状态
-    ├── core/                     # 核心工具层（Electron IPC 桥接）
-    │   ├── fs-backend.ts        # IPC 桥接（调用 window.electronAPI）
-    │   ├── storage.ts           # 统一存储适配器（业务层唯一入口）
-    │   ├── logger.ts            # 日志工具（logger.catch 记录带堆栈的异常）
-    │   └── log-backend.ts       # 日志 IPC 桥接（读写主进程日志服务）（业务层唯一入口）
-    ├── hooks/
-    │   ├── useGraph.ts          # 图谱引擎（房间加载、节点/边 CRUD、用户布局保存、交互事件）
-    │   ├── useStorage.ts        # 存储层 hook（封装 FSB）
-    │   ├── useKeyboard.ts       # 快捷键处理（Esc/Tab/Delete/Backspace）
-    │   └── useContextMenu.ts    # 右键菜单逻辑
-    ├── nodes/
-    │   ├── KnowledgeCard.tsx    # React Flow 自定义节点组件
-    │   └── KnowledgeCard.module.css
-    ├── components/
-    │   ├── SetupPage.tsx        # 工作目录选择页
-    │   ├── SetupPage.module.css
-    │   ├── HomePage.tsx         # 知识库首页（KB 卡片列表）
-    │   ├── HomePage.module.css
-    │   ├── GraphPage.tsx        # 图谱视图（画布 + 覆盖层 UI）
-    │   ├── GraphPage.module.css
-    │   ├── TabBar/              # 多知识库 Tab 栏
-    │   │   ├── TabBar.tsx
-    │   │   └── TabBar.module.css
-    │   ├── PromptModal/         # Prompt 弹窗（Promise-based 替代 window.prompt）
-    │   │   ├── PromptModal.tsx
-    │   │   └── PromptModal.module.css
-    │   ├── ConfirmModal/        # Confirm 弹窗（Promise-based 替代 window.confirm）
-    │   │   ├── ConfirmModal.tsx
-    │   │   └── ConfirmModal.module.css
-    │   ├── DetailPanel/         # 右侧详情面板
-    │   │   ├── DetailPanel.tsx
-    │   │   ├── MarkdownEditor.tsx
-    │   │   └── DetailPanel.module.css
-    │   ├── Breadcrumb/          # 面包屑导航
-    │   │   ├── Breadcrumb.tsx
-    │   │   └── Breadcrumb.module.css
-    │   ├── Toolbar/             # 工具栏
-    │   │   ├── Toolbar.tsx
-    │   │   └── Toolbar.module.css
-    │   ├── ContextMenu/         # 右键菜单
-    │   │   ├── ContextMenu.tsx
-    │   │   └── ContextMenu.module.css
-    │   └── MonitorPage/        # 日志性能监控窗口（独立页面）
-    │       ├── MonitorPage.tsx
-    │       └── MonitorPage.module.css
-    └── styles/
-        └── base.css             # 全局基础样式（Markdown 渲染、字体等）
-```
-
----
+暂无
 
 ## 4. 数据结构规范
 
