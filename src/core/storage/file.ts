@@ -32,11 +32,27 @@ interface FSBGraphLike {
   pan?: { x: number; y: number } | null
 }
 
-const toCardInfo = (child: { path: string; name: string }): CardInfo => ({
-  ref: child.path,
-  name: child.name,
-  updatedAt: undefined,
-})
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+)
+
+const toCardInfo = (parentCardPath: string, key: string, rawChild: unknown): CardInfo => {
+  const child = isRecord(rawChild) ? rawChild : {}
+  const rawPath = child.path
+  const rawName = child.name
+  const childRelPath = (typeof rawPath === 'string' && rawPath.trim()) ? rawPath.trim() : key
+  const childPath = parentCardPath && !childRelPath.startsWith(`${parentCardPath}/`)
+    ? joinRefs(parentCardPath, childRelPath)
+    : normalizeRef(childRelPath)
+  const fallbackName = basenameRef(childPath) || key
+  const safeName = (typeof rawName === 'string' && rawName.trim()) ? rawName.trim() : fallbackName
+
+  return {
+    ref: childPath,
+    name: safeName,
+    updatedAt: undefined,
+  }
+}
 
 function toRoomRelativeRef(roomRef: string, ref: string): string {
   const normalizedRoom = normalizeRef(roomRef)
@@ -67,6 +83,39 @@ function fromRoomRelativeRef(roomRef: string, ref: string): string {
   }
 
   return resolveRoomChildRef(normalizedRoom, normalizedRef)
+}
+
+function kbRelativeRef(ref: string): string {
+  const parts = normalizeRef(ref).split('/').filter(Boolean)
+  return parts.length <= 1 ? '' : parts.slice(1).join('/')
+}
+
+function roomRelativeChildRef(parentPath: string, childPath: string): string {
+  const parentParts = normalizeRef(parentPath).split('/').filter(Boolean)
+  const childParts = normalizeRef(childPath).split('/').filter(Boolean)
+  const matchesParent = parentParts.length > 0 && parentParts.every((part, index) => childParts[index] === part)
+  if (matchesParent) return childParts.slice(parentParts.length).join('/')
+  return childParts.length ? childParts[childParts.length - 1] : ''
+}
+
+async function updateCardName(rootDir: string, cardPath: string, newName: string): Promise<void> {
+  const parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : ''
+  const graph = await FSB.readGraphMeta(rootDir, parentPath)
+  const children = isRecord(graph.children) ? { ...graph.children } : {}
+  const candidateKeys = [
+    roomRelativeChildRef(parentPath, cardPath),
+    kbRelativeRef(cardPath),
+    cardPath,
+  ]
+
+  for (const key of candidateKeys) {
+    const entry = children[key]
+    if (isRecord(entry)) {
+      children[key] = { ...entry, name: newName }
+      await FSB.writeGraphMeta(rootDir, parentPath, { ...graph, children })
+      return
+    }
+  }
 }
 
 export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
@@ -182,20 +231,16 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       }
     },
 
-    removeVault: async (dirPath: string): Promise<void> => {
-      await FSB.deleteKB(requireRootDir(), dirPath)
-    },
-
     listKBs: async () => {
       return FSB.listKBs(requireRootDir())
     },
 
     createKB: async (name: string): Promise<string> => {
-      return FSB.createKB(requireRootDir(), name)
+      return FSB.createKbsDir(requireRootDir(), name)
     },
 
     deleteKB: async (kbPath: string): Promise<void> => {
-      await FSB.deleteKB(requireRootDir(), kbPath)
+      await FSB.deleteKbsDir(requireRootDir(), kbPath)
     },
 
     renameKB: async (kbPath: string, newName: string): Promise<void> => {
@@ -206,26 +251,24 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.importKB(requireRootDir(), sourcePath)
     },
 
-    listCards: async (parentPath: string): Promise<CardInfo[]> => {
-      const children = await FSB.listCards(requireRootDir(), parentPath)
-      return children.map(c => toCardInfo(c))
+    listCards: async (parentCardPath: string): Promise<CardInfo[]> => {
+      const children = await FSB.readCardChildren(requireRootDir(), parentCardPath)
+      return Object.entries(children)
+        .map(([key, child]) => toCardInfo(parentCardPath, key, child))
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN'))
     },
 
     createCard: async (parentPath: string, name: string): Promise<CardInfo> => {
-      const cardPath = await FSB.createCard(requireRootDir(), parentPath, name)
+      const cardPath = await FSB.createKbsDir(requireRootDir(), joinRefs(parentPath, name))
       return { ref: cardPath, name, updatedAt: undefined }
     },
 
     deleteCard: async (cardPath: string): Promise<void> => {
-      await FSB.deleteCard(requireRootDir(), cardPath)
+      await FSB.deleteKbsDir(requireRootDir(), cardPath)
     },
 
     renameCard: async (cardPath: string, newName: string): Promise<void> => {
-      await FSB.updateCardMeta(requireRootDir(), cardPath, newName)
-    },
-
-    countChildren: async (cardPath: string): Promise<number> => {
-      return FSB.countChildren(requireRootDir(), cardPath)
+      await updateCardName(requireRootDir(), cardPath, newName)
     },
 
     readLayout: async (roomPath: string): Promise<GraphMeta> => {

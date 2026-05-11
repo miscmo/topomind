@@ -152,7 +152,7 @@ export function createStore(backend: StorageBackend) {
     },
     async countChildren(cardPath: string) {
       try {
-        return await backend.countChildren(cardPath)
+        return (await backend.listCards(cardPath)).length
       } catch (e) { logger.catch('Store.countChildren', `统计子节点失败: ${cardPath}`, e); throw e }
     },
     async readConfig(): Promise<VaultConfig> {

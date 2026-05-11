@@ -118,22 +118,14 @@ async function confirmAndFlushBeforeExit(reason) {
 function registerIPC() {
   // ----- File system handlers -----
   ipcMain.handle('fs:listKBs', function(e, rootDir) { return fileService.listKBs(rootDir); });
-  ipcMain.handle('fs:listCards', function(e, rootDir, p) { return fileService.listCards(rootDir, p); });
-  ipcMain.handle('fs:createKB', function(e, rootDir, name) { return fileService.createKB(rootDir, name); });
-  ipcMain.handle('fs:deleteKB', function(e, rootDir, p) { fileService.deleteKB(rootDir, p); });
+  ipcMain.handle('fs:readCardChildren', function(e, rootDir, p) { return fileService.readCardChildren(rootDir, p); });
+  ipcMain.handle('fs:createKbsDir', function(e, rootDir, p) { return fileService.createKbsDir(rootDir, p); });
+  ipcMain.handle('fs:deleteKbsDir', function(e, rootDir, p) { fileService.deleteKbsDir(rootDir, p); });
   ipcMain.handle('fs:renameKB', function(e, rootDir, p, n) { return fileService.renameKB(rootDir, p, n); });
-  ipcMain.handle('fs:createCard', function(e, rootDir, p, name) { return fileService.createCard(rootDir, p, name); });
-  ipcMain.handle('fs:deleteCard', function(e, rootDir, p) { fileService.deleteCard(rootDir, p); });
   ipcMain.handle('fs:readGraphMeta', function(e, rootDir, p) { return fileService.readGraphMeta(rootDir, p); });
   ipcMain.handle('fs:writeGraphMeta', function(e, rootDir, p, m) { fileService.writeGraphMeta(rootDir, p, m); });
-  ipcMain.handle('fs:getDir', function(e, rootDir, p) { return fileService.getDir(rootDir, p); });
-  ipcMain.handle('fs:updateCardMeta', function(e, rootDir, p, n) { return fileService.updateCardMeta(rootDir, p, n); });
   ipcMain.handle('fs:readFile', function(e, rootDir, p) { return fileService.readFile(rootDir, p); });
   ipcMain.handle('fs:writeFile', function(e, rootDir, p, c) { fileService.writeFile(rootDir, p, c); });
-  ipcMain.handle('fs:deleteFile', function(e, rootDir, p) { fileService.deleteFile(rootDir, p); });
-  ipcMain.handle('fs:countChildren', function(e, rootDir, dirPath) {
-    return fileService.listCards(rootDir, dirPath || '').length;
-  });
   ipcMain.handle('fs:readAppConfig', function(e, rootDir) {
     return fileService.readAppConfig(rootDir);
   });

@@ -42,7 +42,6 @@ export interface GraphMeta {
 export interface StorageBackend {
   createVault: (dirPath: string) => Promise<void>
   isValidVault: (dirPath: string) => Promise<{ valid: boolean; error?: string }>
-  removeVault: (dirPath: string) => Promise<void>
 
   listKBs: () => Promise<KBListItem[]>
   createKB: (name: string) => Promise<string>
@@ -50,11 +49,10 @@ export interface StorageBackend {
   renameKB: (kbPath: string, newName: string) => Promise<void>
   importKB: (sourcePath: string) => Promise<string>
 
-  listCards: (parentPath: string) => Promise<CardInfo[]>
+  listCards: (parentCardPath: string) => Promise<CardInfo[]>
   createCard: (parentPath: string, name: string) => Promise<CardInfo>
   deleteCard: (cardPath: string) => Promise<void>
   renameCard: (cardPath: string, newName: string) => Promise<void>
-  countChildren: (cardPath: string) => Promise<number>
 
   readMarkdown: (cardPath: string) => Promise<string>
   writeMarkdown: (cardPath: string, content: string) => Promise<void>

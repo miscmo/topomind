@@ -103,7 +103,7 @@ function _fs_uniqueFolderName(parentDir, desiredName) {
   return candidate;
 }
 
-/**
+/** Note：该函数逻辑已定，不要擅自修改  --TO AI
  * @description 把 kbs 内的相对路径转换成绝对路径；禁止通过 ../ 或绝对路径访问 kbs 之外的文件
  * @param { string } rootDir: 工作目录绝对路径
  * @param { string } relPath: 相对于工作目录 kbs/ 的路径；为空时返回 kbs 根目录
@@ -158,19 +158,6 @@ function _fs_roomRelativePath(parentPath, childPath) {
     return childParts.slice(parentParts.length).join('/');
   }
   return childParts.length ? childParts[childParts.length - 1] : '';
-}
-
-/**
- * @description 按多种候选 key 从 graph.children 中查找子节点元数据
- * @param { Object } children: graph.children 映射表
- * @param { string } parentPath: 父房间路径
- * @param { string } childPath: 子节点完整路径
- * @returns { Object | undefined } 命中的子节点元数据
- */
-function _fs_getChildGraphEntry(children, parentPath, childPath) {
-  var roomKey = _fs_roomRelativePath(parentPath, childPath);
-  var kbKey = _fs_kbRelativePath(childPath);
-  return children[roomKey] || children[kbKey] || children[childPath] || children[nodePath.basename(childPath)];
 }
 
 /**
@@ -347,58 +334,36 @@ const fileService = {
     },
 
     /**
-     * @description 列出指定知识库或房间路径下的子目录，并尝试合并 graph 中的显示名称
+     * @description 读取指定父卡片的 _graph.json.children 原始内容
      * @param { string } rootDir: 工作目录路径
-     * @param { string } parentPath: 知识库或房间相对路径
-     * @returns { Array<{ path: string, name: string, isDir: boolean }> } 子节点列表
+     * @param { string } cardPath: 卡片相对于 kbs/ 的路径
+     * @returns { Object } _graph.json.children 原始映射表
      */
-    listCards: function(rootDir, parentPath) {
+    readCardChildren: function(rootDir, cardPath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var dir = _fs_resolveKbsPath(rootDir, parentPath);
+      var dir = _fs_resolveKbsPath(rootDir, cardPath);
       var parentGraph = _fs_readJsonFile(_fs_graphFilePath(dir)) || { children: {} };
-      var parentChildren = parentGraph.children || {};
-      var children = nodeFs.readdirSync(dir, { withFileTypes: true })
-        .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
-        .map(function(e) {
-          var childPath = parentPath ? parentPath + '/' + e.name : e.name;
-          var childGraphEntry = _fs_getChildGraphEntry(parentChildren, parentPath, childPath);
-          var safeName = (childGraphEntry && typeof childGraphEntry.name === 'string' && childGraphEntry.name.trim())
-            ? childGraphEntry.name.trim()
-            : e.name;
-          return { path: childPath, name: safeName, isDir: true };
-        });
-      children.sort(function(a, b) {
-        return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
-      });
-      return children;
+      return parentGraph.children || {};
     },
 
     /**
-     * @description 创建知识库，并初始化默认 _graph.json
+     * @description 创建 kbs/ 下的目录，并初始化默认文件
      * @param { string } rootDir: 工作目录路径
-     * @param { string } name: 知识库名称
-     * @returns { string } 创建后的知识库相对路径
+     * @param { string } dirPath: 相对于 kbs/ 的目录路径
+     * @returns { string } 创建后的目录相对路径
      */
-    createKB: function(rootDir, name) {
-      return _fs_createKbsDir(rootDir, name);
+    createKbsDir: function(rootDir, dirPath) {
+      return _fs_createKbsDir(rootDir, dirPath);
     },
 
     /**
-     * @description 删除指定知识库及其所有内容
+     * @description 删除 kbs/ 下的目录及其所有内容
      * @param { string } rootDir: 工作目录路径
-     * @param { string } kbPath: 待删除知识库相对路径
+     * @param { string } dirPath: 相对于 kbs/ 的目录路径
      * @returns { void }
      */
-    deleteKB: function(rootDir, kbPath) {
-      _fs_deleteKbsDir(rootDir, kbPath);
-    },
-
-    createCard: function(rootDir, parentPath, name) {
-      return _fs_createKbsDir(rootDir, (parentPath ? parentPath + '/' : '') + name);
-    },
-
-    deleteCard: function(rootDir, cardPath) {
-      _fs_deleteKbsDir(rootDir, cardPath);
+    deleteKbsDir: function(rootDir, dirPath) {
+      _fs_deleteKbsDir(rootDir, dirPath);
     },
 
     /**
@@ -462,51 +427,6 @@ const fileService = {
     },
 
     /**
-     * @description 更新父目录 graph.children 中某个卡片的显示名称
-     * @param { string } rootDir: 工作目录路径
-     * @param { string } cardPath: 卡片路径
-     * @param { string } newName: 新显示名称
-     * @returns { string } 原卡片路径
-     */
-    updateCardMeta: function(rootDir, cardPath, newName) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : '';
-      var parentDir = _fs_resolveKbsPath(rootDir, parentPath);
-      var graphPath = _fs_graphFilePath(parentDir);
-      var graph = _fs_readJsonFile(graphPath) || { children: {}, edges: [] };
-      var children = graph.children || {};
-      var key = _fs_roomRelativePath(parentPath, cardPath);
-      var entry = children[key];
-      if (!entry) {
-        key = _fs_kbRelativePath(cardPath);
-        entry = children[key];
-      }
-      if (!entry) {
-        key = cardPath;
-        entry = children[key];
-      }
-      if (entry) {
-        children[key] = Object.assign({}, entry, { name: newName });
-        graph.children = children;
-        _fs_writeJsonFile(graphPath, graph);
-      }
-      return cardPath;
-    },
-
-    /**
-     * @description 获取目录信息，不存在时返回 null
-     * @param { string } rootDir: 工作目录路径
-     * @param { string } dirPath: 目录相对路径
-     * @returns { Object | null } 目录信息
-     */
-    getDir: function(rootDir, dirPath) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_resolveKbsPath(rootDir, dirPath);
-      if (!nodeFs.existsSync(d)) return null;
-      return { nodePath: dirPath };
-    },
-
-    /**
      * @description 读取文本文件内容，不存在时返回空字符串
      * @param { string } rootDir: 工作目录路径
      * @param { string } filePath: 文件相对路径
@@ -531,18 +451,6 @@ const fileService = {
       var f = _fs_resolveKbsPath(rootDir, filePath);
       _fs_ensureDir(nodePath.dirname(f));
       nodeFs.writeFileSync(f, content, 'utf-8');
-    },
-
-    /**
-     * @description 删除指定文件，存在时执行删除
-     * @param { string } rootDir: 工作目录路径
-     * @param { string } filePath: 文件相对路径
-     * @returns { void }
-     */
-    deleteFile: function(rootDir, filePath) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var f = _fs_resolveKbsPath(rootDir, filePath);
-      if (nodeFs.existsSync(f)) nodeFs.unlinkSync(f);
     },
 
     /**
