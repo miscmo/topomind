@@ -4,7 +4,6 @@ import type { RoomHistoryItem } from '../types'
 import type { RoomSnapshot, RoomTarget } from '../stores/tabTypes'
 
 interface OpenKBTabInput {
-  path: string
   name: string
 }
 
@@ -45,7 +44,7 @@ export async function openHomeTab(): Promise<boolean> {
 }
 
 export async function openKBTab(kb: OpenKBTabInput): Promise<boolean> {
-  const tabId = `kb:${kb.path}`
+  const tabId = `kb:${kb.name}`
   if (!(await flushCurrentTabBeforeLeaving(tabId))) {
     return false
   }
@@ -55,7 +54,7 @@ export async function openKBTab(kb: OpenKBTabInput): Promise<boolean> {
     tabStore.getState().addKBTab({
       id: tabId,
       label: kb.name,
-      kbPath: kb.path,
+      kbPath: kb.name,
       isDirty: false,
     })
   }
@@ -64,9 +63,9 @@ export async function openKBTab(kb: OpenKBTabInput): Promise<boolean> {
   if (!tab || tab.type !== 'kb') return false
 
   const snapshot = snapshotFromTab(tab) ?? {
-    kbPath: kb.path,
+    kbPath: kb.name,
     roomHistory: [],
-    currentRoomPath: kb.path,
+    currentRoomPath: kb.name,
     currentRoomName: kb.name,
   }
 

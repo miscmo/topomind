@@ -55,8 +55,8 @@ export function useHomeKBContextMenu(options: UseHomeKBContextMenuOptions) {
     })
     if (!confirmed) return
     try {
-      await storage.deleteKB(kb.path)
-      logAction('知识库:删除', 'HomePage', { kbName: kb.name, kbPath: kb.path })
+      await storage.deleteKB(kb.name)
+      logAction('知识库:删除', 'HomePage', { kbName: kb.name })
       await refreshKBList()
     } catch (err) {
       logger.catch('HomePage', 'handleKBDelete', err)
@@ -74,8 +74,8 @@ export function useHomeKBContextMenu(options: UseHomeKBContextMenuOptions) {
     })
     if (!newName?.trim() || newName === kb.name) return
     try {
-      await storage.renameKB(kb.path, newName.trim())
-      logAction('知识库:重命名', 'HomePage', { kbName: kb.name, newName, kbPath: kb.path })
+      await storage.renameKB(kb.name, newName.trim())
+      logAction('知识库:重命名', 'HomePage', { kbName: kb.name, newName })
       await refreshKBList()
     } catch (err) {
       logger.catch('HomePage', 'handleKBRename', err)

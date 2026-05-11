@@ -28,7 +28,6 @@ const _call = (channel: string, ...args: unknown[]) => {
 
 /** listKBs 返回的知识库信息 */
 export interface FSBKBInfo {
-  path: string
   name: string
 }
 

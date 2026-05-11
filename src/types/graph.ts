@@ -132,7 +132,6 @@ export interface RoomHistoryItem {
 
 /** KB 列表项 */
 export interface KBListItem {
-  path: string
   name: string
   childCount?: number
 }

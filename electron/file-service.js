@@ -329,7 +329,7 @@ const fileService = {
     /**
      * @description 列出工作目录下的所有顶层知识库列表
      * @param { string } rootDir: 工作目录路径
-     * @returns { Array<{ path: string, name: string }> } 知识库列表
+     * @returns { Array<{ name: string }> } 知识库列表
      */
     listKBs: function(rootDir) {
       rootDir = _fs_requireValidWorkDir(rootDir);
@@ -337,7 +337,7 @@ const fileService = {
       var children = nodeFs.readdirSync(dir, { withFileTypes: true })
         .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
         .map(function(e) {
-          return { path: e.name, name: e.name };
+          return { name: e.name };
         });
       // 默认按照名字排序，后续再优化
       children.sort(function(a, b) {

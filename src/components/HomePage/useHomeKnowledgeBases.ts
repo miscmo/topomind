@@ -5,7 +5,6 @@ import { logger } from '../../core/logger'
 import { openKBTab } from '../../core/tab-flow'
 
 export interface KBItem {
-  path: string
   name: string
   nodeCount: number | null
 }
@@ -34,7 +33,6 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
 
       const kbList = list || []
       const initial: KBItem[] = kbList.map((kb) => ({
-        path: kb.path,
         name: kb.name,
         nodeCount: null,
       }))
@@ -43,11 +41,10 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
       const counts = await Promise.all(
         initial.map(async (kb) => {
           try {
-            return await storage.countChildren(kb.path)
+            return await storage.countChildren(kb.name)
           } catch (err) {
             logger.catch('HomePage', 'loadKBList:countChildren', err)
             logAction('HomePage:统计子节点异常', 'HomePage', {
-              kbPath: kb.path,
               kbName: kb.name,
               error: err instanceof Error ? err.message : String(err),
             })

@@ -17,7 +17,7 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
     <div className={styles.grid}>
       {kbs.map((kb) => (
         <div
-          key={kb.path}
+          key={kb.name}
           className={styles.card}
           onClick={() => {
             logAction('HomePage:点击知识库卡片', 'HomePage', { kbInfo: kb })
