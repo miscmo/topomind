@@ -1,6 +1,5 @@
 /**
  * 首页：知识库列表
- * 对应原 HomePage.vue
  */
 import { useState } from 'react'
 import { useWorkspaceStore } from '../../stores/workspaceStore'

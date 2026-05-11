@@ -1,11 +1,18 @@
 import { create } from 'zustand'
-import type { RightPanelStoreState } from './uiStoreTypes'
+import type { RightPanelTab } from './uiStoreTypes'
 
-interface RightPanelStore extends RightPanelStoreState {
+interface RightPanelStore {
+  rightPanelCollapsed: boolean
+  rightPanelWidth: number
+  rightPanelTab: RightPanelTab
+  collapseRightPanel: () => void
+  expandRightPanel: () => void
+  setRightPanelWidth: (width: number) => void
+  setRightPanelTab: (tab: RightPanelTab) => void
   resetRightPanel: () => void
 }
 
-export const RIGHT_PANEL_INITIAL_STATE: Pick<RightPanelStoreState, 'rightPanelCollapsed' | 'rightPanelWidth' | 'rightPanelTab'> = {
+export const RIGHT_PANEL_INITIAL_STATE: Pick<RightPanelStore, 'rightPanelCollapsed' | 'rightPanelWidth' | 'rightPanelTab'> = {
   rightPanelCollapsed: false,
   rightPanelWidth: 400,
   rightPanelTab: 'detail',

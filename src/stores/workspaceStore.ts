@@ -1,11 +1,15 @@
 import { create } from 'zustand'
-import type { WorkspaceStoreState } from './uiStoreTypes'
+import type { AppView } from '../types'
 
-interface WorkspaceStore extends WorkspaceStoreState {
+interface WorkspaceStore {
+  view: AppView
+  currentWorkDir: string | null
+  showWorkspace: () => void
+  setCurrentWorkDir: (workDir: string | null) => void
   resetWorkspace: () => void
 }
 
-export const WORKSPACE_INITIAL_STATE: Pick<WorkspaceStoreState, 'view' | 'currentWorkDir'> = {
+export const WORKSPACE_INITIAL_STATE: Pick<WorkspaceStore, 'view' | 'currentWorkDir'> = {
   view: 'setup',
   currentWorkDir: null,
 }

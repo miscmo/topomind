@@ -1,11 +1,14 @@
 import { create } from 'zustand'
-import type { ContextMenuStoreState } from './uiStoreTypes'
+import type { ContextMenuState, ContextMenuType } from './uiStoreTypes'
 
-interface ContextMenuStore extends ContextMenuStoreState {
+interface ContextMenuStore {
+  contextMenu: ContextMenuState
+  showContextMenu: (x: number, y: number, type: Exclude<ContextMenuType, null>, targetId?: string | null) => void
+  hideContextMenu: () => void
   resetContextMenu: () => void
 }
 
-export const CONTEXT_MENU_INITIAL_STATE: Pick<ContextMenuStoreState, 'contextMenu'> = {
+export const CONTEXT_MENU_INITIAL_STATE: Pick<ContextMenuStore, 'contextMenu'> = {
   contextMenu: {
     visible: false,
     x: 0,
