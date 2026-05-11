@@ -2,7 +2,7 @@ import { memo, useEffect, useRef } from 'react'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
 import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
-import { useStorage } from '../../../hooks/useStorage'
+import { useStorage } from '../../../core/storage'
 import styles from './StyleTab.module.css'
 
 const COLOR_PRESETS = ['#7f8c8d', '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6']

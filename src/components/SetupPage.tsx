@@ -3,7 +3,7 @@
  * 对应原 WorkDirPage.vue
  */
 import { memo, useState } from 'react'
-import { useStorage } from '../hooks/useStorage'
+import { useStorage } from '../core/storage'
 import { usePlatform } from '../hooks/usePlatform'
 import { logAction } from '../core/log-backend'
 import { enterHome } from '../core/app-flow'

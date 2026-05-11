@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useStorage } from '../../hooks/useStorage'
+import { useStorage } from '../../core/storage'
 import { logAction } from '../../core/log-backend'
 import { logger } from '../../core/logger'
 import { useConfirmStore } from '../../stores/confirmStore'

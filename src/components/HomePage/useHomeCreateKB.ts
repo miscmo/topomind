@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useStorage } from '../../hooks/useStorage'
+import { useStorage } from '../../core/storage'
 import { logAction } from '../../core/log-backend'
 
 interface UseHomeCreateKBOptions {

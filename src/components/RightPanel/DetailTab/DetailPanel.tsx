@@ -5,7 +5,7 @@
 import { useEffect, useState, useRef, memo, useMemo, useCallback } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { useStorage } from '../../../hooks/useStorage'
+import { useStorage } from '../../../core/storage'
 import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { usePromptStore } from '../../../stores/promptStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
