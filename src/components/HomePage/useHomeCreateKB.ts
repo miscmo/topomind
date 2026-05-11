@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useStorage } from '../../core/storage'
 import { logAction } from '../../core/log-backend'
 
@@ -13,24 +13,16 @@ export function useHomeCreateKB({ refreshKBList }: UseHomeCreateKBOptions) {
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  const prevShowCreateSheet = useRef(false)
-  useEffect(() => {
-    if (showCreateSheet && !prevShowCreateSheet.current) {
-      logAction('HomePage:新建知识库弹窗:打开', 'HomePage', {})
-    } else if (!showCreateSheet && prevShowCreateSheet.current) {
-      logAction('HomePage:新建知识库弹窗:关闭', 'HomePage', { createName })
-    }
-    prevShowCreateSheet.current = showCreateSheet
-  }, [showCreateSheet, createName])
-
   const openCreateSheet = () => {
     logAction('点击新建知识库', 'HomePage', {})
+    logAction('HomePage:新建知识库弹窗:打开', 'HomePage', {})
     setShowCreateSheet(true)
     setCreateName('')
     setCreateError('')
   }
 
   const closeCreateSheet = () => {
+    logAction('HomePage:新建知识库弹窗:关闭', 'HomePage', { createName })
     setShowCreateSheet(false)
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useStorage } from '../../core/storage'
 import { usePlatform } from '../../hooks/usePlatform'
 import { logAction } from '../../core/log-backend'
@@ -15,24 +15,16 @@ export function useHomeImportKB({ refreshKBList }: UseHomeImportKBOptions) {
   const [importLoading, setImportLoading] = useState(false)
   const [importError, setImportError] = useState('')
 
-  const prevShowImportSheet = useRef(false)
-  useEffect(() => {
-    if (showImportSheet && !prevShowImportSheet.current) {
-      logAction('HomePage:导入知识库弹窗:打开', 'HomePage', {})
-    } else if (!showImportSheet && prevShowImportSheet.current) {
-      logAction('HomePage:导入知识库弹窗:关闭', 'HomePage', { importDir })
-    }
-    prevShowImportSheet.current = showImportSheet
-  }, [showImportSheet, importDir])
-
   const openImportSheet = () => {
     logAction('点击导入知识库', 'HomePage', {})
+    logAction('HomePage:导入知识库弹窗:打开', 'HomePage', {})
     setShowImportSheet(true)
     setImportDir('')
     setImportError('')
   }
 
   const closeImportSheet = () => {
+    logAction('HomePage:导入知识库弹窗:关闭', 'HomePage', { importDir })
     setShowImportSheet(false)
   }
 
