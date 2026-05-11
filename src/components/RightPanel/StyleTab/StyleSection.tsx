@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from 'react'
-import { useAppStore } from '../../../stores/appStore'
+import { useGraphUiStore } from '../../../stores/graphUiStore'
+import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { useStorage } from '../../../hooks/useStorage'
 import styles from './StyleTab.module.css'
@@ -8,11 +9,12 @@ const COLOR_PRESETS = ['#7f8c8d', '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#
 
 export default memo(function StyleSection() {
   const storage = useStorage()
-  const selectedEdgeId = useAppStore((s) => s.selectedEdgeId)
-  const defaultEdgeStyle = useAppStore((s) => s.defaultEdgeStyle)
-  const setDefaultEdgeStyle = useAppStore((s) => s.setDefaultEdgeStyle)
-  const replaceDefaultEdgeStyle = useAppStore((s) => s.replaceDefaultEdgeStyle)
-  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
+  const selectedEdgeId = useGraphUiStore((s) => s.selectedEdgeId)
+  const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
+  const setDefaultEdgeStyle = useGraphUiStore((s) => s.setDefaultEdgeStyle)
+  const replaceDefaultEdgeStyle = useGraphUiStore((s) => s.replaceDefaultEdgeStyle)
+  const setRightPanelTab = useRightPanelStore((s) => s.setRightPanelTab)
+
   const graph = useGraphContext()
 
   const selectedEdge = selectedEdgeId ? graph.edgesMapRef.current.get(selectedEdgeId) : null

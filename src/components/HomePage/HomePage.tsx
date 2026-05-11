@@ -3,7 +3,7 @@
  * 对应原 HomePage.vue
  */
 import { useState } from 'react'
-import { useAppStore } from '../../stores/appStore'
+import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { useHomeKnowledgeBases } from './useHomeKnowledgeBases'
 import { useHomeKBContextMenu } from './useHomeKBContextMenu'
 import { useHomeCreateKB } from './useHomeCreateKB'
@@ -14,7 +14,7 @@ import { KnowledgeBaseGrid } from './KnowledgeBaseGrid'
 import styles from './HomePage.module.css'
 
 export default function HomePage() {
-  const currentWorkDir = useAppStore((s) => s.currentWorkDir)
+  const currentWorkDir = useWorkspaceStore((s) => s.currentWorkDir)
   const [message, setMessage] = useState('')
   const [messageError, setMessageError] = useState(false)
   const {

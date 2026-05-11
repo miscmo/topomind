@@ -13,7 +13,8 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
-import { useAppStore } from '../stores/appStore'
+import { useGraphUiStore } from '../stores/graphUiStore'
+import { useRightPanelStore } from '../stores/rightPanelStore'
 import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
 import { useNavContext } from './useNavContext'
@@ -34,9 +35,9 @@ export function useGraph(tabId: string) {
   const storage = useStorage() as Store
   const { computeLayout } = useLayout()
 
-  const defaultEdgeStyle = useAppStore((s) => s.defaultEdgeStyle)
-  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
-  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
+  const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
+  const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
+  const setRightPanelTab = useRightPanelStore((s) => s.setRightPanelTab)
 
   const [state, setState] = useState<GraphState>({
     nodes: [],

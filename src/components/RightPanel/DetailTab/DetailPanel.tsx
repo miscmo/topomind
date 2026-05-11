@@ -6,15 +6,15 @@ import { useEffect, useState, useRef, memo, useMemo, useCallback } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useStorage } from '../../../hooks/useStorage'
-import { useAppStore } from '../../../stores/appStore'
+import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { usePromptStore } from '../../../stores/promptStore'
-import { tabStore } from '../../../stores/tabStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
 import styles from './DetailTab.module.css'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { registerTabSaver } from '../../../core/close-guard'
+import { enterChildRoomInTab } from '../../../core/tab-flow'
 
 // Configure marked once — called at module load time, not inside components
 marked.setOptions({ breaks: true, gfm: true })
@@ -26,7 +26,7 @@ interface DetailPanelProps {
 
 const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailPanelProps) {
   const storage = useStorage()
-  const collapseRightPanel = useAppStore((s) => s.collapseRightPanel)
+  const collapseRightPanel = useRightPanelStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()
   const prompt = usePromptStore((s) => s.open)
 
@@ -190,9 +190,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
             className={styles.childTag}
             onClick={() => {
               logAction('房间:钻入', 'DetailPanel', { roomPath: child.path, roomName: child.name, source: 'child-tag' })
-              const tab = tabStore.getState().getTabById(tabId)
-              const kbPath = tab?.kbPath || child.path
-              tabStore.getState().enterRoomInTab(tabId, { path: child.path, kbPath, name: child.name })
+              enterChildRoomInTab(tabId, child)
             }}
             title={`进入 ${child.name}`}
           >

@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo } from 'react'
 import { createFileStorageBackend } from './file'
 import { createStore, type Store as StoreType } from './service'
 import type { StorageBackend } from './types'
-import { useAppStore } from '../../stores/appStore'
+import { useWorkspaceStore } from '../../stores/workspaceStore'
 
 const StorageContext = createContext<StoreType | null>(null)
 
@@ -12,7 +12,7 @@ export interface StorageProviderProps {
 }
 
 export function StorageProvider({ children, backend }: StorageProviderProps) {
-  const store = useMemo(() => createStore(backend ?? createFileStorageBackend(() => useAppStore.getState().currentWorkDir)), [backend])
+  const store = useMemo(() => createStore(backend ?? createFileStorageBackend(() => useWorkspaceStore.getState().currentWorkDir)), [backend])
   return <StorageContext.Provider value={store}>{children}</StorageContext.Provider>
 }
 

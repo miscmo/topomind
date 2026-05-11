@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
-import { tabStore } from '../../stores/tabStore'
+import { enterRoomInTab } from '../../core/tab-flow'
 import { logAction } from '../../core/log-backend'
 import type { KnowledgeEdge, KnowledgeNode, KnowledgeNodeData } from '../../types'
 import { generateId } from './graphBuilder'
@@ -136,7 +136,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       ? `${navState.kbPath}/${childPath}`
       : childPath
 
-    tabStore.getState().enterRoomInTab(tabId, {
+    enterRoomInTab(tabId, {
       path: absoluteChildPath,
       kbPath: navState.kbPath || '',
       name: childName,

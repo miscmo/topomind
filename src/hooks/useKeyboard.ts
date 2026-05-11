@@ -6,7 +6,7 @@
  * - Delete / Backspace: 删除选中节点
  */
 import { useCallback, useEffect } from 'react'
-import { useAppStore } from '../stores/appStore'
+import { useContextMenuStore } from '../stores/contextMenuStore'
 import { logAction } from '../core/log-backend'
 import { useNavContext } from './useNavContext'
 
@@ -20,7 +20,7 @@ interface UseKeyboardOptions {
 export function useKeyboard(options: UseKeyboardOptions) {
   const { onDelete, onEscape, onAddChild, tabId } = options
 
-  const hideContextMenu = useAppStore((s) => s.hideContextMenu)
+  const hideContextMenu = useContextMenuStore((s) => s.hideContextMenu)
   const { getNavState } = useNavContext({ tabId })
 
   // Read the selection node respecting tab context when active.

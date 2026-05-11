@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useAppStore } from '../../stores/appStore'
+import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useContextMenu } from '../../hooks/useContextMenu'
 import { useDoubleClick } from '../../hooks/useDoubleClick'
 import { logAction } from '../../core/log-backend'
@@ -12,7 +12,7 @@ interface UsePaneContextMenuOptions {
 }
 
 export function usePaneContextMenu({ canvasRef, onPaneClick }: UsePaneContextMenuOptions) {
-  const showContextMenu = useAppStore((s) => s.showContextMenu)
+  const showContextMenu = useContextMenuStore((s) => s.showContextMenu)
   const { hideCM } = useContextMenu()
   const rightMouseDownRef = useRef<{ x: number; y: number } | null>(null)
   const suppressNextPaneContextMenuRef = useRef(false)

@@ -12,13 +12,13 @@ import MonitorPage from './components/MonitorPage/MonitorPage'
 import PromptModal from './components/PromptModal/PromptModal'
 import ConfirmModal from './components/ConfirmModal/ConfirmModal'
 import TabBar from './components/TabBar/TabBar'
-import { useTabStore, tabStore } from './stores/tabStore'
-import { useAppStore } from './stores/appStore'
+import { useTabStore } from './stores/tabStore'
+import { useWorkspaceStore } from './stores/workspaceStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
 import { flushTabs } from './core/close-guard'
-import { closeTab } from './core/tab-flow'
+import { closeTab, getClosableTabInfo } from './core/tab-flow'
 
 export default memo(function App() {
   const [isMonitorWindow, setIsMonitorWindow] = useState(
@@ -29,7 +29,7 @@ export default memo(function App() {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const confirmOpen = useConfirmStore((s) => s.open)
-  const view = useAppStore((s) => s.view)
+  const view = useWorkspaceStore((s) => s.view)
 
   useEffect(() => { initHomeTab() }, [initHomeTab])
 
@@ -48,8 +48,8 @@ export default memo(function App() {
   }, [])
 
   async function handleCloseTab(tabId: string) {
-    const tab = tabStore.getState().getTabById(tabId)
-    if (!tab || tab.id === 'home') return
+    const tab = getClosableTabInfo(tabId)
+    if (!tab) return
 
     if (tab.isDirty) {
       const confirmed = await confirmOpen({

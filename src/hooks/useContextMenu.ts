@@ -8,13 +8,13 @@
  * - hideCM(): 关闭菜单
  */
 import { useCallback } from 'react'
-import { useAppStore } from '../stores/appStore'
+import { useContextMenuStore } from '../stores/contextMenuStore'
 import { logAction } from '../core/log-backend'
 
 export function useContextMenu() {
-  const contextMenu = useAppStore((s) => s.contextMenu)
-  const showContextMenu = useAppStore((s) => s.showContextMenu)
-  const hideContextMenu = useAppStore((s) => s.hideContextMenu)
+  const contextMenu = useContextMenuStore((s) => s.contextMenu)
+  const showContextMenu = useContextMenuStore((s) => s.showContextMenu)
+  const hideContextMenu = useContextMenuStore((s) => s.hideContextMenu)
 
   const showCM = useCallback(
     (nodeId: string, e: MouseEvent | React.MouseEvent) => {

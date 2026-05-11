@@ -3,7 +3,8 @@ import { useReactFlow } from '@xyflow/react'
 import { useContextMenu } from '../../hooks/useContextMenu'
 import { useKeyboard } from '../../hooks/useKeyboard'
 import { useNodeActions } from '../../hooks/useNodeActions'
-import { useAppStore } from '../../stores/appStore'
+import { useGraphUiStore } from '../../stores/graphUiStore'
+import { useRightPanelStore } from '../../stores/rightPanelStore'
 import type { GraphContextValue } from '../../contexts/GraphContext'
 
 interface UseGraphPageActionsOptions {
@@ -13,8 +14,8 @@ interface UseGraphPageActionsOptions {
 
 export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions) {
   const { screenToFlowPosition } = useReactFlow()
-  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
-  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
+  const setRightPanelTab = useRightPanelStore((s) => s.setRightPanelTab)
+  const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
   const { contextMenu, hideCM } = useContextMenu()
   const {
     deleteSelectedNode,

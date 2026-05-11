@@ -1,17 +1,17 @@
 import { tabStore, type Tab } from '../stores/tabStore'
 import { flushTabs } from './close-guard'
 import type { RoomHistoryItem } from '../types'
+import type { RoomSnapshot, RoomTarget } from '../stores/tabTypes'
 
 interface OpenKBTabInput {
   path: string
   name: string
 }
 
-interface RoomSnapshot {
-  kbPath: string
-  roomHistory: RoomHistoryItem[]
-  currentRoomPath: string | null
-  currentRoomName: string
+export interface ClosableTabInfo {
+  id: string
+  label: string
+  isDirty: boolean
 }
 
 function snapshotFromTab(tab: Tab): RoomSnapshot | null {
@@ -80,4 +80,42 @@ export function closeTab(tabId: string) {
   if (!tab || tab.id === 'home') return
 
   tabStore.getState().removeTab(tabId)
+}
+
+export function getClosableTabInfo(tabId: string): ClosableTabInfo | null {
+  const tab = tabStore.getState().getTabById(tabId)
+  if (!tab || tab.id === 'home') return null
+  return {
+    id: tab.id,
+    label: tab.label,
+    isDirty: tab.isDirty,
+  }
+}
+
+export function enterRoomInTab(tabId: string, room: RoomTarget) {
+  tabStore.getState().enterRoomInTab(tabId, room)
+}
+
+export function enterChildRoomInTab(tabId: string, child: { path: string; name: string }, kbPathFallback?: string) {
+  const tab = tabStore.getState().getTabById(tabId)
+  const kbPath = tab?.type === 'kb' ? tab.kbPath : kbPathFallback ?? child.path
+  enterRoomInTab(tabId, { path: child.path, kbPath, name: child.name })
+}
+
+export function goBackInTab(tabId: string) {
+  return tabStore.getState().goBackInTab(tabId)
+}
+
+export function getRoomHistoryLength(tabId: string) {
+  return tabStore.getState().getRoomStateFromTab(tabId)?.roomHistory.length ?? 0
+}
+
+export function navigateToHistoryIndexInTab(tabId: string, index: number) {
+  return tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
+}
+
+export function restoreRootRoomInTab(tabId: string, snapshot: RoomSnapshot) {
+  const tab = tabStore.getState().getTabById(tabId)
+  if (tab?.type !== 'kb') return
+  tabStore.getState().restoreRoomStateToTab(tabId, snapshot)
 }

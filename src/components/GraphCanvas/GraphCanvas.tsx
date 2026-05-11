@@ -1,6 +1,6 @@
 import { memo, useRef } from 'react'
 import { Background, ReactFlow, type BackgroundVariant, type Node, type NodeTypes } from '@xyflow/react'
-import { useAppStore } from '../../stores/appStore'
+import { useGraphUiStore } from '../../stores/graphUiStore'
 import KnowledgeCard from './nodes/KnowledgeCard'
 import Toolbar from '../Toolbar/Toolbar'
 import { useGraphCanvasEvents } from './useGraphCanvasEvents'
@@ -14,7 +14,7 @@ interface GraphCanvasProps {
 }
 
 export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps) {
-  const showGrid = useAppStore((s) => s.showGrid)
+  const showGrid = useGraphUiStore((s) => s.showGrid)
   const canvasRef = useRef<HTMLDivElement>(null)
   const { zoomLevel, handleViewportChange } = useViewportLogger()
   const {

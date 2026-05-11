@@ -1,32 +1,16 @@
-import type { RoomHistoryItem } from '../types'
-import type { Tab } from './tabStore'
+import type { KBTab, RoomSnapshot, RoomTarget, Tab } from './tabTypes'
 
-export interface RoomTarget {
-  path: string
-  kbPath: string
-  name: string
-}
-
-export interface RoomSnapshot {
-  roomHistory: RoomHistoryItem[]
-  currentRoomPath: string | null
-  currentRoomName: string
-  kbPath?: string | null
-}
-
-export function restoreRoomState(tab: Tab, roomState: RoomSnapshot): Tab {
+export function restoreRoomState(tab: KBTab, roomState: RoomSnapshot): KBTab {
   return {
     ...tab,
     kbPath: roomState.kbPath ?? tab.kbPath,
     roomHistory: roomState.roomHistory,
-    currentRoomPath: roomState.currentRoomPath ?? undefined,
+    currentRoomPath: roomState.currentRoomPath ?? tab.kbPath,
     currentRoomName: roomState.currentRoomName,
   }
 }
 
-export function enterRoom(tab: Tab, room: RoomTarget): Tab {
-  if (tab.type !== 'kb') return tab
-
+export function enterRoom(tab: KBTab, room: RoomTarget): KBTab {
   const currentRoomPath = tab.currentRoomPath ?? tab.kbPath ?? null
   const currentRoomName = tab.currentRoomName ?? tab.label
   const baseKbPath = room.kbPath || tab.kbPath || ''
@@ -53,9 +37,7 @@ export function enterRoom(tab: Tab, room: RoomTarget): Tab {
   }
 }
 
-export function goBack(tab: Tab): { tab: Tab; target: RoomTarget | null } {
-  if (tab.type !== 'kb') return { tab, target: null }
-
+export function goBack(tab: KBTab): { tab: KBTab; target: RoomTarget | null } {
   const history = tab.roomHistory ?? []
   if (history.length === 0) {
     return { tab, target: null }
@@ -82,9 +64,7 @@ export function goBack(tab: Tab): { tab: Tab; target: RoomTarget | null } {
   }
 }
 
-export function navigateToHistoryIndex(tab: Tab, index: number): { tab: Tab; target: RoomTarget | null } {
-  if (tab.type !== 'kb') return { tab, target: null }
-
+export function navigateToHistoryIndex(tab: KBTab, index: number): { tab: KBTab; target: RoomTarget | null } {
   const history = tab.roomHistory ?? []
   if (index < 0 || index >= history.length) return { tab, target: null }
 

@@ -1,0 +1,125 @@
+import type { StoreApi } from 'zustand'
+import { enterRoom, goBack, navigateToHistoryIndex, restoreRoomState } from './tabNavigation'
+import {
+  appendKBTab,
+  ensureHomeTab,
+  findActiveTab,
+  findTabById,
+  getRoomState,
+  getSelectedNodeId,
+  removeTabById,
+  tabExists,
+  TAB_INITIAL_STATE,
+  updateKBTabById,
+} from './tabState'
+import type {
+  RoomTarget,
+  TabDirtyActions,
+  TabLifecycleActions,
+  TabRoomActions,
+  TabSelectors,
+  TabSelectionActions,
+  TabState,
+} from './tabTypes'
+
+type SetState = StoreApi<TabState>['setState']
+type GetState = StoreApi<TabState>['getState']
+
+export function createTabLifecycleActions(set: SetState, get: GetState): TabLifecycleActions {
+  return {
+    initHomeTab: () => {
+      set((state) => {
+        const next = ensureHomeTab(state.tabs, state.activeTabId)
+        return next.tabs === state.tabs && next.activeTabId === state.activeTabId ? state : next
+      })
+    },
+    addKBTab: ({ id, label, kbPath, isDirty = false }) => {
+      set((state) => {
+        const tabs = appendKBTab(state.tabs, { id, label, kbPath, isDirty })
+        return tabs === state.tabs ? state : { tabs }
+      })
+    },
+    removeTab: (tabId) => {
+      const { tabs, activeTabId } = get()
+      set(removeTabById(tabs, activeTabId, tabId))
+    },
+    setActiveTab: (tabId) => {
+      if (!tabExists(get().tabs, tabId)) return
+      set({ activeTabId: tabId })
+    },
+    reset: () => set({ ...TAB_INITIAL_STATE }),
+  }
+}
+
+export function createTabDirtyActions(set: SetState): TabDirtyActions {
+  return {
+    setTabDirty: (tabId, isDirty) => {
+      set((state) => ({
+        tabs: updateKBTabById(state.tabs, tabId, (tab) => ({ ...tab, isDirty })),
+      }))
+    },
+  }
+}
+
+export function createTabSelectors(get: GetState): TabSelectors {
+  return {
+    getActiveTab: () => {
+      const { tabs, activeTabId } = get()
+      return findActiveTab(tabs, activeTabId)
+    },
+    getTabById: (tabId) => findTabById(get().tabs, tabId),
+  }
+}
+
+export function createTabRoomActions(set: SetState, get: GetState): TabRoomActions {
+  return {
+    restoreRoomStateToTab: (tabId, roomState) => {
+      set((state) => ({
+        tabs: updateKBTabById(state.tabs, tabId, (tab) => restoreRoomState(tab, roomState)),
+      }))
+    },
+    enterRoomInTab: (tabId, room) => {
+      set((state) => ({
+        tabs: updateKBTabById(state.tabs, tabId, (tab) => enterRoom(tab, room)),
+      }))
+    },
+    goBackInTab: (tabId) => {
+      let target: RoomTarget | null = null
+
+      set((state) => ({
+        tabs: updateKBTabById(state.tabs, tabId, (tab) => {
+          const result = goBack(tab)
+          target = result.target
+          return result.tab
+        }),
+      }))
+
+      return target
+    },
+    navigateToHistoryIndexInTab: (tabId, index) => {
+      let target: RoomTarget | null = null
+
+      set((state) => ({
+        tabs: updateKBTabById(state.tabs, tabId, (tab) => {
+          const result = navigateToHistoryIndex(tab, index)
+          target = result.target
+          return result.tab
+        }),
+      }))
+
+      return target
+    },
+    getRoomStateFromTab: (tabId) => getRoomState(findTabById(get().tabs, tabId)),
+  }
+}
+
+export function createTabSelectionActions(set: SetState, get: GetState): TabSelectionActions {
+  return {
+    setTabSelectedNode: (tabId, nodeId) => {
+      set((state) => ({
+        tabs: updateKBTabById(state.tabs, tabId, (tab) => ({ ...tab, selectedNodeId: nodeId })),
+      }))
+    },
+    getTabSelectedNode: (tabId) => getSelectedNodeId(findTabById(get().tabs, tabId)),
+  }
+}

@@ -1,4 +1,9 @@
-import { tabStore } from '../../stores/tabStore'
+import {
+  getRoomHistoryLength,
+  goBackInTab,
+  navigateToHistoryIndexInTab,
+  restoreRootRoomInTab,
+} from '../../core/tab-flow'
 
 export interface GraphNavigationDeps {
   tabId: string
@@ -15,18 +20,18 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
     const dirPath = getActiveNavState().roomPath
     if (dirPath) await saveNow(dirPath)
     deselectNode()
-    tabStore.getState().goBackInTab(tabId)
+    goBackInTab(tabId)
   }
 
   const navigateToRoom = async (index: number) => {
-    const historyLength = tabStore.getState().getRoomStateFromTab(tabId)?.roomHistory.length ?? 0
+    const historyLength = getRoomHistoryLength(tabId)
     if (index < 0 || index >= historyLength) return
 
     const dirPath = getActiveNavState().roomPath
     if (dirPath) await saveNow(dirPath)
     deselectNode()
 
-    const target = tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
+    const target = navigateToHistoryIndexInTab(tabId, index)
     if (target) await loadRoom(target.path)
   }
 
@@ -37,15 +42,12 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
     if (!kbPath) return
     if (dirPath) await saveNow(dirPath)
     deselectNode()
-    const tab = tabStore.getState().getTabById(tabId)
-    if (tab?.type === 'kb') {
-      tabStore.getState().restoreRoomStateToTab(tabId, {
-        kbPath,
-        roomHistory: [],
-        currentRoomPath: kbPath,
-        currentRoomName: tab.label,
-      })
-    }
+    restoreRootRoomInTab(tabId, {
+      kbPath,
+      roomHistory: [],
+      currentRoomPath: kbPath,
+      currentRoomName: navState.roomName || '全局',
+    })
   }
 
   return { navigateBack, navigateToRoom, navigateToRoot }

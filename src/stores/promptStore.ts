@@ -1,5 +1,5 @@
 /**
- * Global prompt modal state — accessed via useAppStore.getState().prompt()
+ * Global prompt modal state — accessed via usePromptStore.
  * The PromptModal component is rendered in App.tsx and reads from this store.
  */
 import { create } from 'zustand'
