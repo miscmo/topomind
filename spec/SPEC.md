@@ -97,9 +97,6 @@ topomind_cc/
     │   │   ├── DetailPanel.tsx
     │   │   ├── MarkdownEditor.tsx
     │   │   └── DetailPanel.module.css
-    │   ├── NavTree/             # 左侧导航树
-    │   │   ├── NavTree.tsx
-    │   │   └── NavTree.module.css
     │   ├── Breadcrumb/          # 面包屑导航
     │   │   ├── Breadcrumb.tsx
     │   │   └── Breadcrumb.module.css

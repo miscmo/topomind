@@ -5,16 +5,16 @@ export interface GraphNavigationDeps {
   getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
   saveNow: (dirPath: string) => Promise<void>
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
-  clearSelection: () => void
+  deselectNode: () => void
 }
 
 export function buildGraphNavigation(deps: GraphNavigationDeps) {
-  const { tabId, getActiveNavState, saveNow, loadRoom, clearSelection } = deps
+  const { tabId, getActiveNavState, saveNow, loadRoom, deselectNode } = deps
 
   const navigateBack = async () => {
     const dirPath = getActiveNavState().roomPath
     if (dirPath) await saveNow(dirPath)
-    clearSelection()
+    deselectNode()
     tabStore.getState().goBackInTab(tabId)
   }
 
@@ -24,7 +24,7 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
 
     const dirPath = getActiveNavState().roomPath
     if (dirPath) await saveNow(dirPath)
-    clearSelection()
+    deselectNode()
 
     const target = tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
     if (target) await loadRoom(target.path)
@@ -36,7 +36,7 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
     const kbPath = navState.kbPath || dirPath || ''
     if (!kbPath) return
     if (dirPath) await saveNow(dirPath)
-    clearSelection()
+    deselectNode()
     const tab = tabStore.getState().getTabById(tabId)
     if (tab?.type === 'kb') {
       tabStore.getState().restoreRoomStateToTab(tabId, {

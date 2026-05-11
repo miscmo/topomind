@@ -37,7 +37,6 @@ export interface GraphOpsDeps {
   updateSelectedNode: (nodes: KnowledgeNode[], nodeId: string | null) => void
   setDirtyState: (next: boolean) => void
   isCreatingRef: React.MutableRefObject<boolean>
-  isModifiedRef: React.MutableRefObject<boolean>
 }
 
 export function buildGraphOperations(deps: GraphOpsDeps) {

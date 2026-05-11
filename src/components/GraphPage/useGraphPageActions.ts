@@ -3,7 +3,7 @@ import { useReactFlow } from '@xyflow/react'
 import { useContextMenu } from '../../hooks/useContextMenu'
 import { useKeyboard } from '../../hooks/useKeyboard'
 import { useNodeActions } from '../../hooks/useNodeActions'
-import { useRightPanelActions } from '../RightPanel/useRightPanelActions'
+import { useAppStore } from '../../stores/appStore'
 import type { GraphContextValue } from '../../contexts/GraphContext'
 
 interface UseGraphPageActionsOptions {
@@ -13,7 +13,8 @@ interface UseGraphPageActionsOptions {
 
 export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions) {
   const { screenToFlowPosition } = useReactFlow()
-  const { openEdgeStylePanel } = useRightPanelActions()
+  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
+  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
   const { contextMenu, hideCM } = useContextMenu()
   const {
     deleteSelectedNode,
@@ -31,6 +32,11 @@ export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions
     const flowPosition = position ? screenToFlowPosition(position) : undefined
     handleNewChild(nodeId, flowPosition)
   }, [handleNewChild, screenToFlowPosition])
+
+  const openEdgeStylePanel = useCallback((edgeId: string) => {
+    setRightPanelTab('style')
+    setSelectedEdgeId(edgeId)
+  }, [setRightPanelTab, setSelectedEdgeId])
 
   useKeyboard({
     tabId,

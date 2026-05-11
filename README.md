@@ -42,7 +42,6 @@ pnpm run build:linux  # Linux (.AppImage)
 │   │   ├── SetupPage.tsx
 │   │   ├── MonitorPage/
 │   │   ├── DetailPanel/
-│   │   ├── NavTree/
 │   │   ├── Toolbar/
 │   │   ├── Breadcrumb/
 │   │   ├── ContextMenu/

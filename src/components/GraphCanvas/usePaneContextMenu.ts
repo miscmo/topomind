@@ -8,9 +8,10 @@ const RIGHT_DRAG_THRESHOLD = 6
 
 interface UsePaneContextMenuOptions {
   canvasRef: React.RefObject<HTMLDivElement>
+  onPaneClick: () => void
 }
 
-export function usePaneContextMenu({ canvasRef }: UsePaneContextMenuOptions) {
+export function usePaneContextMenu({ canvasRef, onPaneClick }: UsePaneContextMenuOptions) {
   const showContextMenu = useAppStore((s) => s.showContextMenu)
   const { hideCM } = useContextMenu()
   const rightMouseDownRef = useRef<{ x: number; y: number } | null>(null)
@@ -18,8 +19,8 @@ export function usePaneContextMenu({ canvasRef }: UsePaneContextMenuOptions) {
 
   const { handleClick: handlePaneClick } = useDoubleClick({
     onClick: () => hideCM(),
-    onDoubleClick: () => useAppStore.getState().clearSelection(),
-    onSingleClick: () => useAppStore.getState().clearSelection(),
+    onDoubleClick: onPaneClick,
+    onSingleClick: onPaneClick,
   })
 
   const isPaneTarget = useCallback((target: EventTarget | null) => {

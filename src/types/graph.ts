@@ -128,14 +128,6 @@ export interface RoomHistoryItem {
   savedPan?: { x: number; y: number }
 }
 
-// ============== 应用状态 ==============
-
-/** 连线模式状态 */
-export interface EdgeModeState {
-  active: boolean
-  sourceId: string | null
-}
-
 // ============== IPC 响应类型 ==============
 
 /** KB 列表项 */

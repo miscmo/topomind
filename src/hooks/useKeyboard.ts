@@ -20,7 +20,6 @@ interface UseKeyboardOptions {
 export function useKeyboard(options: UseKeyboardOptions) {
   const { onDelete, onEscape, onAddChild, tabId } = options
 
-  const clearSelection = useAppStore((s) => s.clearSelection)
   const hideContextMenu = useAppStore((s) => s.hideContextMenu)
   const { getNavState } = useNavContext({ tabId })
 
@@ -53,7 +52,6 @@ export function useKeyboard(options: UseKeyboardOptions) {
         case 'Escape':
           e.preventDefault()
           logAction('快捷键:ESC', 'useKeyboard', { action: 'clear-selection' })
-          clearSelection()
           logAction('右键菜单:关闭', 'useKeyboard', { source: 'Escape' })
           hideContextMenu()
           onEscape?.()
@@ -85,5 +83,5 @@ export function useKeyboard(options: UseKeyboardOptions) {
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [clearSelection, hideContextMenu, onDelete, onEscape, onAddChild, tabId, getSelectedNodeId])
+  }, [hideContextMenu, onDelete, onEscape, onAddChild, tabId, getSelectedNodeId])
 }

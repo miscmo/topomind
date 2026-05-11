@@ -14,7 +14,6 @@ export interface GraphEventHandlerDeps {
   getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   setState: React.Dispatch<React.SetStateAction<{ nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }>>
-  clearSelection: () => void
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
   setSelectedEdgeId: (edgeId: string | null) => void
   setRightPanelTab: (tab: 'detail' | 'style') => void
@@ -29,7 +28,6 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     getActiveNavState,
     rebuildMaps,
     setState,
-    clearSelection,
     defaultEdgeStyle,
     setSelectedEdgeId,
     setRightPanelTab,
@@ -102,7 +100,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
 
   const onEdgeClick = useCallback(
     (_: React.MouseEvent, edge: Edge) => {
-      clearSelection()
+      ops.deselectNode()
       for (const current of edgesRef.current) {
         if (current.data?.selected && current.id !== edge.id) {
           ops.updateEdgeStyle(current.id, { selected: false })
@@ -112,7 +110,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       setSelectedEdgeId(edge.id)
       setRightPanelTab('style')
     },
-    [clearSelection, setSelectedEdgeId, setRightPanelTab, ops, edgesRef]
+    [setSelectedEdgeId, setRightPanelTab, ops, edgesRef]
   )
 
   const onPaneClick = useCallback(() => {

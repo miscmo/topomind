@@ -9,7 +9,6 @@
  */
 import { useCallback } from 'react'
 import { useReactFlow } from '@xyflow/react'
-import { useAppStore } from '../stores/appStore'
 import { usePromptStore } from '../stores/promptStore'
 import { logAction } from '../core/log-backend'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
@@ -24,7 +23,6 @@ export interface UseNodeActionsOptions {
 export function useNodeActions(options: UseNodeActionsOptions) {
   const { onAction, graph } = options
   const { fitView, deleteElements } = useReactFlow()
-  const selectNode = useAppStore((s) => s.selectNode)
   const prompt = usePromptStore((s) => s.open)
 
   // Use nodesMapRef/edgesMapRef (Map) for O(1) lookup instead of nodesRef/edgesRef arrays.
@@ -103,20 +101,20 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   }, [findEdgeById, graph, prompt, onAction])
 
   const handleFocus = useCallback((nodeId: string) => {
-    selectNode(nodeId)
+    graph.selectNode(nodeId)
     const node = findNodeById(nodeId)
     if (node) {
       fitView({ nodes: [node], padding: 0.3, duration: 300 })
     }
     logAction('节点:聚焦', 'useNodeActions', { nodeId })
     onAction?.()
-  }, [findNodeById, selectNode, fitView, onAction])
+  }, [findNodeById, graph, fitView, onAction])
 
   const handleProperties = useCallback((nodeId: string) => {
-    selectNode(nodeId)
+    graph.selectNode(nodeId)
     logAction('节点:属性', 'useNodeActions', { nodeId })
     onAction?.()
-  }, [selectNode, onAction])
+  }, [graph, onAction])
 
   /** Delete selected node — used by keyboard shortcut */
   const deleteSelectedNode = useCallback(async (nodeId: string) => {

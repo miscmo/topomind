@@ -13,7 +13,7 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
-import { tabStore } from '../stores/tabStore'
+import { useAppStore } from '../stores/appStore'
 import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
 import { useNavContext } from './useNavContext'
@@ -27,19 +27,16 @@ import { useGraphLayout } from './useGraph/useGraphLayout'
 import { useGraphRoomLoader } from './useGraph/useGraphRoomLoader'
 import { useGraphStorageApi } from './useGraph/useGraphStorageApi'
 import type { GraphState } from './useGraph/types'
-import { useGraphStoreActions } from './useGraph/useGraphStoreActions'
 import { useGraphPersistence } from './useGraph/useGraphPersistence'
+import { useGraphSelectionState } from './useGraph/useGraphSelectionState'
 
 export function useGraph(tabId: string) {
   const storage = useStorage() as Store
   const { computeLayout } = useLayout()
 
-  const {
-    clearSelection,
-    defaultEdgeStyle,
-    setSelectedEdgeId,
-    setRightPanelTab,
-  } = useGraphStoreActions()
+  const defaultEdgeStyle = useAppStore((s) => s.defaultEdgeStyle)
+  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
+  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
 
   const [state, setState] = useState<GraphState>({
     nodes: [],
@@ -49,7 +46,7 @@ export function useGraph(tabId: string) {
   })
 
   const isCreatingRef = useRef(false)
-  const { isModified, isModifiedRef, setDirtyState, onDirtyChange } = useGraphDirtyState()
+  const { isModified, setDirtyState, onDirtyChange } = useGraphDirtyState()
   const setSelectedNodeState = useCallback((selectedNode: KnowledgeNode | null) => {
     setState((s) => ({ ...s, selectedNode }))
   }, [])
@@ -64,15 +61,10 @@ export function useGraph(tabId: string) {
     setSelectedNode: setSelectedNodeState,
   })
 
-  // ===== Navigation helpers =====
-
-  const getActiveSelectedNodeId = useCallback(() => {
-    return tabStore.getState().getTabSelectedNode(tabId)
-  }, [tabId])
-
-  const setActiveSelectedNodeId = useCallback((nodeId: string | null) => {
-    tabStore.getState().setTabSelectedNode(tabId, nodeId)
-  }, [tabId])
+  const {
+    getActiveSelectedNodeId,
+    setActiveSelectedNodeId,
+  } = useGraphSelectionState(tabId)
 
   const { getNavState } = useNavContext({ tabId })
 
@@ -108,7 +100,6 @@ export function useGraph(tabId: string) {
       updateSelectedNode,
       setDirtyState,
       isCreatingRef,
-      isModifiedRef,
     }),
     [
       storageApi,
@@ -146,7 +137,6 @@ export function useGraph(tabId: string) {
     getActiveNavState,
     rebuildMaps,
     setState: setState as React.Dispatch<React.SetStateAction<{ nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }>>,
-    clearSelection,
     defaultEdgeStyle,
     setSelectedEdgeId,
     setRightPanelTab,
@@ -160,9 +150,9 @@ export function useGraph(tabId: string) {
       getActiveNavState,
       saveNow: ops.saveNow,
       loadRoom,
-      clearSelection,
+      deselectNode: ops.deselectNode,
     }),
-    [tabId, getActiveNavState, ops.saveNow, loadRoom, clearSelection]
+    [tabId, getActiveNavState, ops.saveNow, ops.deselectNode, loadRoom]
   )
 
 
@@ -206,6 +196,8 @@ export function useGraph(tabId: string) {
     createChildNode: ops.createChildNode,
     deleteChildNode: ops.deleteChildNode,
     renameNode: ops.renameNode,
+    selectNode: ops.selectNode,
+    deselectNode: ops.deselectNode,
 
     // Edge operations (delegated to ops)
     updateEdgeRelation: ops.updateEdgeRelation,

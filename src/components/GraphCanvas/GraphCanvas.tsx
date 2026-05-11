@@ -17,7 +17,6 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
   const showGrid = useAppStore((s) => s.showGrid)
   const canvasRef = useRef<HTMLDivElement>(null)
   const { zoomLevel, handleViewportChange } = useViewportLogger()
-  const { handlePaneClick } = usePaneContextMenu({ canvasRef })
   const {
     graph,
     handleNodeClick,
@@ -26,6 +25,7 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
     handleEdgeClick,
     handleEdgeContextMenu,
   } = useGraphCanvasEvents({ onEdgeContextMenu })
+  const { handlePaneClick } = usePaneContextMenu({ canvasRef, onPaneClick: graph.onPaneClick })
 
   return (
     <div ref={canvasRef} style={{ width: '100%', height: '100%', position: 'relative' }}>

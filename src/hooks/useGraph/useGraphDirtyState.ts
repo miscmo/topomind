@@ -22,7 +22,6 @@ export function useGraphDirtyState() {
 
   return {
     isModified,
-    isModifiedRef,
     setDirtyState,
     onDirtyChange,
   }

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useAppStore } from '../../stores/appStore'
 import { useStorage } from '../../hooks/useStorage'
 import { logAction } from '../../core/log-backend'
 import { logger } from '../../core/logger'
@@ -80,7 +79,6 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
   }, [])
 
   const refreshKBList = useCallback(async () => {
-    useAppStore.getState().triggerKBRefresh()
     await loadKBList()
   }, [loadKBList])
 

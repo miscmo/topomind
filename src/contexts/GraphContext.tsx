@@ -38,7 +38,7 @@ export interface GraphContextValue {
   onConnect: (connection: Connection) => void
   onNodeClick: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
   onEdgeClick: (event: React.MouseEvent, edge: Edge) => void
-  onPaneClick: (event: React.MouseEvent) => void
+  onPaneClick: () => void
   onConnectStart: (event: unknown, params: { nodeId?: string | null }) => void
   onConnectEnd: () => void
   onNodeDoubleClick: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
@@ -48,6 +48,8 @@ export interface GraphContextValue {
   createChildNode: (name: string, parentId?: string, position?: { x: number; y: number }) => Promise<string | null>
   deleteChildNode: (nodeId: string) => Promise<boolean>
   renameNode: (nodeId: string, newName: string) => Promise<boolean>
+  selectNode: (nodeId: string) => void
+  deselectNode: () => void
 
   // Edge operations
   updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => void
@@ -90,6 +92,8 @@ const emptyContext: GraphContextValue = {
   createChildNode: async () => null as string | null,
   deleteChildNode: async () => false,
   renameNode: async () => false,
+  selectNode: () => {},
+  deselectNode: () => {},
   updateEdgeRelation: () => {},
   updateEdgeStyle: () => {},
   layoutNodes: async () => {},
@@ -130,6 +134,8 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     createChildNode: graph.createChildNode,
     deleteChildNode: graph.deleteChildNode,
     renameNode: graph.renameNode,
+    selectNode: graph.selectNode,
+    deselectNode: graph.deselectNode,
     updateEdgeRelation: graph.updateEdgeRelation,
     updateEdgeStyle: graph.updateEdgeStyle,
     layoutNodes: graph.layoutNodes,

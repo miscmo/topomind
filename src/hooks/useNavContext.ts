@@ -3,7 +3,7 @@
  * 提供统一的导航状态读取接口，从 tabStore 读取当前 KB Tab 的导航状态。
  */
 import { useCallback, useMemo } from 'react'
-import { tabStore, useTabStore } from '../stores/tabStore'
+import { tabStore, useTabStore, type Tab } from '../stores/tabStore'
 
 export interface NavState {
   kbPath: string
@@ -28,8 +28,7 @@ const emptyNavState = (): NavState => ({
   clearSelectedNode: () => {},
 })
 
-export function getNavStateForTab(tabId: string): NavState {
-  const tab = tabStore.getState().getTabById(tabId)
+function createNavState(tabId: string, tab: Tab | undefined): NavState {
   if (!tab || tab.type !== 'kb' || !tab.kbPath) {
     return emptyNavState()
   }
@@ -44,23 +43,17 @@ export function getNavStateForTab(tabId: string): NavState {
   }
 }
 
+export function getNavStateForTab(tabId: string): NavState {
+  const tab = tabStore.getState().getTabById(tabId)
+  return createNavState(tabId, tab)
+}
+
 export function useNavContext(options: UseNavContextOptions) {
   const { tabId } = options
   const tab = useTabStore((s) => s.getTabById(tabId))
 
   const nav = useMemo<NavState>(() => {
-    if (!tab || tab.type !== 'kb' || !tab.kbPath) {
-      return emptyNavState()
-    }
-
-    return {
-      kbPath: tab.kbPath,
-      roomPath: tab.currentRoomPath || tab.kbPath,
-      roomName: tab.currentRoomName || tab.label,
-      selectedNodeId: tab.selectedNodeId ?? null,
-      setSelectedNodeId: (nodeId) => tabStore.getState().setTabSelectedNode(tabId, nodeId),
-      clearSelectedNode: () => tabStore.getState().setTabSelectedNode(tabId, null),
-    }
+    return createNavState(tabId, tab)
   }, [tab, tabId])
 
   const getNavState = useCallback((): NavState => {

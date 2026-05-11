@@ -10,6 +10,7 @@
  */
 import { create } from 'zustand'
 import type { RoomHistoryItem } from '../types'
+import { enterRoom, goBack, navigateToHistoryIndex, restoreRoomState, type RoomTarget } from './tabNavigation'
 
 /**
  * Tab 实例数据结构
@@ -46,8 +47,6 @@ interface TabState {
 
   /** 初始化主页 Tab（仅在首次启动时调用一次） */
   initHomeTab: () => void
-  /** 向 tabs 数组追加一个新 Tab */
-  addTab: (tab: Tab) => void
   /** 新增一个 KB Tab，id 重复则忽略；同时初始化 roomHistory 为空、选中为空 */
   addKBTab: (tab: { id: string; label: string; kbPath: string; isDirty?: boolean }) => void
   /** 根据 tabId 移除 Tab（home Tab 不可移除）；若关闭的是当前活跃 Tab，自动切换到就近 Tab */
@@ -65,9 +64,9 @@ interface TabState {
   /** 在指定 Tab 内进入房间：将当前房间压入 history 栈，再切换到目标房间；返回切换后的目标房间信息 */
   enterRoomInTab: (tabId: string, room: { path: string; kbPath: string; name: string }) => void
   /** 在指定 Tab 内执行 goBack：弹出 history 最后一项；若新 history 为空则退回 KB 全局视图；返回弹出项的房间信息 */
-  goBackInTab: (tabId: string) => { path: string; kbPath: string; name: string } | null
+  goBackInTab: (tabId: string) => RoomTarget | null
   /** 在指定 Tab 内按索引跳转 history：保留 index 之前项，丢弃之后项；返回目标房间信息 */
-  navigateToHistoryIndexInTab: (tabId: string, index: number) => { path: string; kbPath: string; name: string } | null
+  navigateToHistoryIndexInTab: (tabId: string, index: number) => RoomTarget | null
   /** 读取指定 Tab 的房间状态快照 */
   getRoomStateFromTab: (tabId: string) => { roomHistory: RoomHistoryItem[]; currentRoomPath: string | null; currentRoomName: string } | null
   /** 更新指定 Tab 的选中节点 ID */
@@ -94,14 +93,6 @@ export const tabStore = create<TabState>()((set, get) => ({
         activeTabId: state.activeTabId || 'home',
       }
     })
-  },
-
-  /**
-   * 向 tabs 数组追加一个新 Tab
-   * @param tab - 要添加的 Tab 对象（type='home' 或 'kb'）
-   */
-  addTab: (tab: Tab) => {
-    set((state) => ({ tabs: [...state.tabs, tab] }))
   },
 
   /**
@@ -208,13 +199,7 @@ export const tabStore = create<TabState>()((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((t) =>
         t.id === tabId
-          ? {
-              ...t,
-              kbPath: roomState.kbPath ?? t.kbPath,
-              roomHistory: roomState.roomHistory,
-              currentRoomPath: roomState.currentRoomPath ?? undefined,
-              currentRoomName: roomState.currentRoomName,
-            }
+          ? restoreRoomState(t, roomState)
           : t
       ),
     }))
@@ -231,31 +216,7 @@ export const tabStore = create<TabState>()((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((t) => {
         if (t.id !== tabId || t.type !== 'kb') return t
-
-        const currentRoomPath = t.currentRoomPath ?? t.kbPath ?? null
-        const currentRoomName = t.currentRoomName ?? t.label
-        const baseKbPath = room.kbPath || t.kbPath || ''
-
-        if (currentRoomPath) {
-          return {
-            ...t,
-            kbPath: baseKbPath,
-            roomHistory: [
-              ...(t.roomHistory ?? []),
-              { room: { path: currentRoomPath, kbPath: baseKbPath, name: currentRoomName } },
-            ],
-            currentRoomPath: room.path,
-            currentRoomName: room.name,
-          }
-        }
-
-        return {
-          ...t,
-          kbPath: baseKbPath,
-          roomHistory: [],
-          currentRoomPath: room.path,
-          currentRoomName: room.name,
-        }
+        return enterRoom(t, room)
       }),
     }))
   },
@@ -269,33 +230,14 @@ export const tabStore = create<TabState>()((set, get) => ({
    * @returns 被弹出的房间信息（path/kbPath/name），history 为空时返回 null
    */
   goBackInTab: (tabId) => {
-    let target: { path: string; kbPath: string; name: string } | null = null
+    let target: RoomTarget | null = null
 
     set((state) => ({
       tabs: state.tabs.map((t) => {
         if (t.id !== tabId || t.type !== 'kb') return t
-
-        const history = t.roomHistory ?? []
-        if (history.length === 0) {
-          return t
-        }
-
-        const lastItem = history[history.length - 1]
-        const newHistory = history.slice(0, -1)
-        const kbPath = t.kbPath || lastItem.room.kbPath || ''
-
-        target = {
-          path: lastItem.room.path,
-          kbPath: lastItem.room.kbPath || kbPath,
-          name: lastItem.room.name,
-        }
-        return {
-          ...t,
-          kbPath: target.kbPath,
-          roomHistory: newHistory,
-          currentRoomPath: target.path,
-          currentRoomName: target.name,
-        }
+        const result = goBack(t)
+        target = result.target
+        return result.tab
       }),
     }))
 
@@ -311,31 +253,14 @@ export const tabStore = create<TabState>()((set, get) => ({
    * @returns 跳转后的目标房间信息，忽略时返回 null
    */
   navigateToHistoryIndexInTab: (tabId, index) => {
-    let target: { path: string; kbPath: string; name: string } | null = null
+    let target: RoomTarget | null = null
 
     set((state) => ({
       tabs: state.tabs.map((t) => {
         if (t.id !== tabId || t.type !== 'kb') return t
-
-        const history = t.roomHistory ?? []
-        if (index < 0 || index >= history.length) return t
-
-        const targetItem = history[index]
-        const newHistory = history.slice(0, index)
-        const kbPath = t.kbPath || targetItem.room.kbPath || ''
-
-        target = {
-          path: targetItem.room.path,
-          kbPath: targetItem.room.kbPath || kbPath,
-          name: targetItem.room.name,
-        }
-        return {
-          ...t,
-          kbPath,
-          roomHistory: newHistory,
-          currentRoomPath: targetItem.room.path,
-          currentRoomName: targetItem.room.name,
-        }
+        const result = navigateToHistoryIndex(t, index)
+        target = result.target
+        return result.tab
       }),
     }))
 

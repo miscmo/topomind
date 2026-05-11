@@ -12,7 +12,6 @@ export type {
   KnowledgeEdge,
 } from './graph'
 export type { Room, RoomHistoryItem } from './graph'
-export type { EdgeModeState } from './graph'
 export type { KBListItem } from './graph'
 
 export { COLORS, LAYOUT, SIZES, DOMAIN_COLORS } from './constants'
