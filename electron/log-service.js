@@ -73,6 +73,11 @@ function init(workDir) {
   return true;
 }
 
+function enterWorkDir(workDir) {
+  clear();
+  return init(workDir);
+}
+
 /**
  * 确保日志目录存在
  */
@@ -344,4 +349,4 @@ function getAvailableDates() {
   }
 }
 
-export default { init, write, getLogDir, getAvailableDates, getBuffer, query, setLevel, clear };
+export default { init, enterWorkDir, write, getLogDir, getAvailableDates, getBuffer, query, setLevel, clear };

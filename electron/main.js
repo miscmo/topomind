@@ -142,10 +142,6 @@ function registerIPC() {
   });
   ipcMain.handle('fs:isValidWorkDir', function(e, dirPath) {
     var result = fileService.isValidWorkDir(dirPath);
-    if (result.valid) {
-      LogService.clear();
-      LogService.init(result.nodePath);
-    }
     LogService.write({
       level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:isValidWorkDir',
       message: result.valid ? '工作目录校验成功' : '工作目录校验失败', params: { dirPath, valid: result.valid, error: result.error || null },
@@ -162,10 +158,6 @@ function registerIPC() {
   });
   ipcMain.handle('fs:createWorkDir', function(e, dirPath) {
     var result = fileService.createWorkDir(dirPath);
-    if (result.valid) {
-      LogService.clear();
-      LogService.init(result.nodePath);
-    }
     LogService.write({
       level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:createWorkDir',
       message: result.valid ? '工作目录创建成功' : '工作目录创建失败', params: { dirPath, valid: result.valid, error: result.error || null },
@@ -190,6 +182,21 @@ function registerIPC() {
       win.setContentSize(HOME_WINDOW_WIDTH, HOME_WINDOW_HEIGHT);
       buildMenu(false);
     }
+  });
+  ipcMain.handle('app:enterWorkDir', function(e, workDir) {
+    var ok = LogService.enterWorkDir(workDir);
+    if (win && !win.isDestroyed()) {
+      win.setResizable(true);
+      win.setMinimumSize(900, 600);
+      win.setMaximumSize(0, 0);
+      win.setContentSize(HOME_WINDOW_WIDTH, HOME_WINDOW_HEIGHT);
+      buildMenu(false);
+    }
+    LogService.write({
+      level: ok ? 'INFO' : 'ERROR', module: 'Main', action: 'app:enterWorkDir',
+      message: ok ? '进入工作目录' : '进入工作目录失败', params: { workDir, ok },
+    });
+    return { ok };
   });
   ipcMain.handle('app:switchWorkDir', async function() {
     if (!win || win.isDestroyed()) return { ok: false, cancelled: true };

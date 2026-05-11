@@ -1,9 +1,7 @@
 import { useWorkspaceStore } from '../stores/workspaceStore'
 
-export async function enterHome(workDir: string, options: { applyWindowState?: boolean } = {}) {
-  if (options.applyWindowState !== false) {
-    await window.electronAPI?.invoke('app:navigateHome')
-  }
+export async function enterHome(workDir: string) {
+  await window.electronAPI?.invoke('app:enterWorkDir', workDir)
   useWorkspaceStore.getState().setCurrentWorkDir(workDir)
   useWorkspaceStore.getState().showWorkspace()
 }
