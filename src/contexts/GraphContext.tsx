@@ -99,9 +99,10 @@ const emptyContext: GraphContextValue = {
 // Create context with null default — must be provided by GraphPage
 const GraphContext: Context<GraphContextValue> = createContext<GraphContextValue>(emptyContext)
 
-export function GraphContextProvider({ graph, children }: { graph: ReturnType<typeof useGraph>; children: React.ReactNode }) {
-  // Single useGraph instance from GraphPage — shared across all components via context
-  const value = useMemo<GraphContextValue>(() => ({
+type GraphContextSource = Pick<ReturnType<typeof useGraph>, keyof GraphContextValue>
+
+function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
+  return {
     nodes: graph.nodes,
     edges: graph.edges,
     loading: graph.loading,
@@ -133,7 +134,11 @@ export function GraphContextProvider({ graph, children }: { graph: ReturnType<ty
     updateEdgeStyle: graph.updateEdgeStyle,
     layoutNodes: graph.layoutNodes,
     flushCurrentRoomSave: graph.flushCurrentRoomSave,
-  }), [graph])
+  }
+}
+
+export function GraphContextProvider({ graph, children }: { graph: GraphContextSource; children: React.ReactNode }) {
+  const value = useMemo<GraphContextValue>(() => createGraphContextValue(graph), [graph])
 
   return (
     <GraphContext.Provider value={value}>

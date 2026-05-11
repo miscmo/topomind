@@ -11,20 +11,18 @@ import { useCallback } from 'react'
 import { useReactFlow } from '@xyflow/react'
 import { useAppStore } from '../stores/appStore'
 import { usePromptStore } from '../stores/promptStore'
-import { useGraphContext } from '../contexts/GraphContext'
 import { logAction } from '../core/log-backend'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
+import type { GraphContextValue } from '../contexts/GraphContext'
 
 export interface UseNodeActionsOptions {
   /** Called after an action to notify parent (e.g., for focus management) */
   onAction?: () => void
-  graph?: ReturnType<typeof useGraphContext>
+  graph: GraphContextValue
 }
 
 export function useNodeActions(options: UseNodeActionsOptions) {
-  const { onAction, graph: graphFromOptions } = options
-  const graphFromContext = useGraphContext()
-  const graph = graphFromOptions ?? graphFromContext
+  const { onAction, graph } = options
   const { fitView, deleteElements } = useReactFlow()
   const selectNode = useAppStore((s) => s.selectNode)
   const prompt = usePromptStore((s) => s.open)

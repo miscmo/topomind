@@ -4,11 +4,11 @@ import { useContextMenu } from '../../hooks/useContextMenu'
 import { useKeyboard } from '../../hooks/useKeyboard'
 import { useNodeActions } from '../../hooks/useNodeActions'
 import { useRightPanelActions } from '../RightPanel/useRightPanelActions'
-import type { useGraphContext } from '../../contexts/GraphContext'
+import type { GraphContextValue } from '../../contexts/GraphContext'
 
 interface UseGraphPageActionsOptions {
   tabId: string
-  graph: ReturnType<typeof useGraphContext>
+  graph: GraphContextValue
 }
 
 export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions) {
