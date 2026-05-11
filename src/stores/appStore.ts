@@ -53,7 +53,7 @@ interface AppState {
     type: 'node' | 'edge' | 'pane' | null
     targetId: string | null
   }
-  // KB 列表刷新触发器（NavTree 监听此字段以保持同步）
+  // KB 列表刷新触发器
   kbRefreshTrigger: number
   // 是否显示网格背景
   showGrid: boolean
