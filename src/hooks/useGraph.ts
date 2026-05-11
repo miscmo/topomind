@@ -1,18 +1,18 @@
 /**
- * useGraph — Core graph logic hook
+ * useGraph — graph orchestration hook
  *
- * Responsibilities:
- * - Load room graph data from filesystem (_graph.json)
- * - Persist layout changes (debounced)
- * - Handle room navigation (drill-in / drill-out)
- * - Coordinate React Flow event handlers
- *
- * Node/edge building is delegated to ./graphBuilder.ts
- * Node/edge CRUD operations are delegated to ./graphOperations.ts
+ * Owns the public graph API for GraphContext and wires together:
+ * - graph state and stable refs
+ * - app store graph actions
+ * - room loading
+ * - graph persistence adapter
+ * - node/edge operations
+ * - layout
+ * - React Flow event handlers
+ * - room navigation
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
-import { useAppStore } from '../stores/appStore'
 import { tabStore } from '../stores/tabStore'
 import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
@@ -27,15 +27,19 @@ import { useGraphLayout } from './useGraph/useGraphLayout'
 import { useGraphRoomLoader } from './useGraph/useGraphRoomLoader'
 import { useGraphStorageApi } from './useGraph/useGraphStorageApi'
 import type { GraphState } from './useGraph/types'
+import { useGraphStoreActions } from './useGraph/useGraphStoreActions'
+import { useGraphPersistence } from './useGraph/useGraphPersistence'
 
 export function useGraph(tabId: string) {
   const storage = useStorage() as Store
   const { computeLayout } = useLayout()
 
-  const clearSelection = useAppStore((s) => s.clearSelection)
-  const defaultEdgeStyle = useAppStore((s) => s.defaultEdgeStyle)
-  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
-  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
+  const {
+    clearSelection,
+    defaultEdgeStyle,
+    setSelectedEdgeId,
+    setRightPanelTab,
+  } = useGraphStoreActions()
 
   const [state, setState] = useState<GraphState>({
     nodes: [],
@@ -162,14 +166,10 @@ export function useGraph(tabId: string) {
   )
 
 
-  // ===== Persistence =====
-
-  const flushCurrentRoomSave = useCallback(async () => {
-    const navState = getActiveNavState()
-    const dirPath = navState.roomPath || navState.kbPath || ''
-    if (!dirPath) return
-    await ops.saveNow(dirPath)
-  }, [getActiveNavState, ops])
+  const { flushCurrentRoomSave } = useGraphPersistence({
+    getActiveNavState,
+    saveNow: ops.saveNow,
+  })
 
   // ===== Public API =====
 

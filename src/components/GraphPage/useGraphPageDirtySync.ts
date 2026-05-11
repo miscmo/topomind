@@ -1,17 +1,12 @@
-/**
- * Tab 脏状态同步钩子
- * 将子组件的脏状态回调同步到 tabStore。
- * 使用 ref 模式避免 stale closure 问题。
- */
-import { useRef, useEffect } from 'react'
-import { tabStore } from '../stores/tabStore'
+import { useEffect, useRef } from 'react'
+import { tabStore } from '../../stores/tabStore'
 
-export interface UseTabDirtySyncOptions {
+export interface UseGraphPageDirtySyncOptions {
   tabId: string
   onDirtyChange: (callback: (isModified: boolean) => void) => () => void
 }
 
-export function useTabDirtySync(options: UseTabDirtySyncOptions) {
+export function useGraphPageDirtySync(options: UseGraphPageDirtySyncOptions) {
   const { tabId, onDirtyChange } = options
 
   const setTabDirtyRef = useRef<(tabId: string, isDirty: boolean) => void>()

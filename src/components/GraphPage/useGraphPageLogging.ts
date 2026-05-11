@@ -1,18 +1,13 @@
-/**
- * 页面日志记录钩子
- * 监听视图切换，当进入 GraphPage 时记录日志。
- * 用于页面访问追踪和用户行为分析。
- */
 import { useEffect } from 'react'
-import { logAction } from '../core/log-backend'
+import { logAction } from '../../core/log-backend'
 
-export interface UsePageLoggingOptions {
+export interface UseGraphPageLoggingOptions {
   effectiveRoomPath: string | null
   effectiveKbPath: string | null
   tabId: string
 }
 
-export function usePageLogging(options: UsePageLoggingOptions) {
+export function useGraphPageLogging(options: UseGraphPageLoggingOptions) {
   const { effectiveRoomPath, effectiveKbPath, tabId } = options
 
   useEffect(() => {
