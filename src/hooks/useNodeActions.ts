@@ -11,8 +11,9 @@ import { useCallback } from 'react'
 import { useReactFlow } from '@xyflow/react'
 import { usePromptStore } from '../stores/promptStore'
 import { logAction } from '../core/log-backend'
-import type { KnowledgeNode, KnowledgeEdge } from '../types'
+import type { KnowledgeNode } from '../types'
 import type { GraphContextValue } from '../contexts/GraphContext'
+import { useEdgeActions } from './useEdgeActions'
 
 export interface UseNodeActionsOptions {
   /** Called after an action to notify parent (e.g., for focus management) */
@@ -22,8 +23,9 @@ export interface UseNodeActionsOptions {
 
 export function useNodeActions(options: UseNodeActionsOptions) {
   const { onAction, graph } = options
-  const { fitView, deleteElements } = useReactFlow()
+  const { fitView } = useReactFlow()
   const prompt = usePromptStore((s) => s.open)
+  const { handleEdgeDelete, handleEdgeStyle } = useEdgeActions({ graph, onAction })
 
   // Use nodesMapRef/edgesMapRef (Map) for O(1) lookup instead of nodesRef/edgesRef arrays.
   // Maps are consistently updated by rebuildMaps() on every state change.
@@ -31,10 +33,6 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   const findNodeById = useCallback((nodeId: string): KnowledgeNode | undefined => {
     return graph.nodesMapRef.current.get(nodeId)
   }, [graph.nodesMapRef])
-
-  const findEdgeById = useCallback((edgeId: string): KnowledgeEdge | undefined => {
-    return graph.edgesMapRef.current.get(edgeId)
-  }, [graph.edgesMapRef])
 
   const handleNewChild = useCallback(async (nodeId: string, position?: { x: number; y: number }) => {
     const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
@@ -58,47 +56,20 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     onAction?.()
   }, [findNodeById, graph, onAction, prompt])
 
-  const handleDelete = useCallback(async (nodeId: string) => {
+  const confirmAndDeleteNode = useCallback(async (nodeId: string, source: 'context-menu' | 'keyboard-delete') => {
     const node = findNodeById(nodeId)
-    if (!node) return
+    if (!node) return false
     const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除`, defaultValue: node.data.label })
-    if (!confirmed?.trim() || confirmed !== node.data.label) return
-    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, path: node.data.path, source: 'context-menu' })
+    if (!confirmed?.trim() || confirmed !== node.data.label) return false
+    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, path: node.data.path, source })
     await graph.deleteChildNode(nodeId)
-    onAction?.()
-  }, [findNodeById, graph, onAction, prompt])
+    return true
+  }, [findNodeById, graph, prompt])
 
-  const handleEdgeDelete = useCallback((edgeId: string) => {
-    const edge = findEdgeById(edgeId)
-    logAction('连线:删除', 'useNodeActions', { edgeId, edgeSource: edge?.source, edgeTarget: edge?.target, trigger: 'context-menu' })
-    deleteElements({ edges: [{ id: edgeId }] })
-    onAction?.()
-  }, [findEdgeById, deleteElements, onAction])
-
-  const handleEdgeStyle = useCallback(async (edgeId: string) => {
-    const edge = findEdgeById(edgeId)
-    if (!edge) return
-    const current = (edge.data ?? {}) as KnowledgeEdge['data']
-    const raw = await prompt({
-      title: '编辑连线样式',
-      placeholder: '输入 JSON，例如 {"lineMode":"straight","lineStyle":"dashed","color":"#e74c3c","arrow":true}',
-      defaultValue: JSON.stringify({
-        lineMode: current?.lineMode ?? 'smoothstep',
-        lineStyle: current?.lineStyle ?? 'solid',
-        color: current?.color ?? '#7f8c8d',
-        arrow: current?.arrow ?? true,
-      }),
-    })
-    if (!raw?.trim()) return
-    let parsed: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      return
-    }
-    graph.updateEdgeStyle(edgeId, parsed)
-    onAction?.()
-  }, [findEdgeById, graph, prompt, onAction])
+  const handleDelete = useCallback(async (nodeId: string) => {
+    const deleted = await confirmAndDeleteNode(nodeId, 'context-menu')
+    if (deleted) onAction?.()
+  }, [confirmAndDeleteNode, onAction])
 
   const handleFocus = useCallback((nodeId: string) => {
     graph.selectNode(nodeId)
@@ -118,13 +89,8 @@ export function useNodeActions(options: UseNodeActionsOptions) {
 
   /** Delete selected node — used by keyboard shortcut */
   const deleteSelectedNode = useCallback(async (nodeId: string) => {
-    const node = findNodeById(nodeId)
-    if (!node) return
-    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除`, defaultValue: node.data.label })
-    if (!confirmed?.trim() || confirmed !== node.data.label) return
-    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, path: node.data.path, source: 'keyboard-delete' })
-    await graph.deleteChildNode(nodeId)
-  }, [findNodeById, graph, prompt])
+    await confirmAndDeleteNode(nodeId, 'keyboard-delete')
+  }, [confirmAndDeleteNode])
 
   /** Add child node — used by keyboard Tab shortcut */
   const addChildNode = useCallback(async (parentId: string) => {
