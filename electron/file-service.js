@@ -104,13 +104,13 @@ function _fs_uniqueFolderName(parentDir, desiredName) {
 }
 
 /**
- * @description 将知识库相对路径解析为 kbs 根目录下的绝对路径，并阻止路径越界
+ * @description 把 kbs 内的相对路径转换成绝对路径；禁止通过 ../ 或绝对路径访问 kbs 之外的文件
  * @param { string } rootDir: 工作目录绝对路径
- * @param { string } relPath: 相对于 kbs 根目录的路径
- * @returns { string } 解析后的绝对路径
- * @throws { Error } 当解析结果越出 kbs 根目录时抛出错误
+ * @param { string } relPath: 相对于工作目录 kbs/ 的路径；为空时返回 kbs 根目录
+ * @returns { string } kbs 内目标文件或目录的绝对路径
+ * @throws { Error } relPath 指向 kbs 目录之外时抛出错误
  */
-function _fs_abs(rootDir, relPath) {
+function _fs_resolveKbsPath(rootDir, relPath) {
   var resolvedRoot = nodePath.resolve(_fs_kbsDir(rootDir));
   if (!relPath) return resolvedRoot;
   var result = nodePath.resolve(resolvedRoot, relPath);
@@ -251,7 +251,7 @@ function _fs_createKbsDir(rootDir, dirPath) {
 
 function _fs_deleteKbsDir(rootDir, dirPath) {
   rootDir = _fs_requireValidWorkDir(rootDir);
-  var d = _fs_abs(rootDir, dirPath);
+  var d = _fs_resolveKbsPath(rootDir, dirPath);
   if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
 }
 
@@ -354,7 +354,7 @@ const fileService = {
      */
     listCards: function(rootDir, parentPath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var dir = _fs_abs(rootDir, parentPath);
+      var dir = _fs_resolveKbsPath(rootDir, parentPath);
       var parentGraph = _fs_readJsonFile(_fs_graphFilePath(dir)) || { children: {} };
       var parentChildren = parentGraph.children || {};
       var children = nodeFs.readdirSync(dir, { withFileTypes: true })
@@ -410,7 +410,7 @@ const fileService = {
      */
     renameKB: function(rootDir, kbPath, newName) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_abs(rootDir, kbPath);
+      var d = _fs_resolveKbsPath(rootDir, kbPath);
       if (!nodeFs.existsSync(d)) return null;
       var parentDir = _fs_kbsDir(rootDir);
       var newSafeName = _fs_safeSegment(newName);
@@ -432,7 +432,7 @@ const fileService = {
      */
     readGraphMeta: function(rootDir, dirPath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_abs(rootDir, dirPath);
+      var d = _fs_resolveKbsPath(rootDir, dirPath);
       var graph = _fs_readJsonFile(_fs_graphFilePath(d));
       if (graph) return graph;
       return { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
@@ -447,7 +447,7 @@ const fileService = {
      */
     writeGraphMeta: function(rootDir, dirPath, meta) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_abs(rootDir, dirPath);
+      var d = _fs_resolveKbsPath(rootDir, dirPath);
       if (!nodeFs.existsSync(d)) {
         var segments = dirPath.split('/').filter(Boolean);
         var parent = _fs_kbsDir(rootDir);
@@ -471,7 +471,7 @@ const fileService = {
     updateCardMeta: function(rootDir, cardPath, newName) {
       rootDir = _fs_requireValidWorkDir(rootDir);
       var parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : '';
-      var parentDir = _fs_abs(rootDir, parentPath);
+      var parentDir = _fs_resolveKbsPath(rootDir, parentPath);
       var graphPath = _fs_graphFilePath(parentDir);
       var graph = _fs_readJsonFile(graphPath) || { children: {}, edges: [] };
       var children = graph.children || {};
@@ -501,7 +501,7 @@ const fileService = {
      */
     getDir: function(rootDir, dirPath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_abs(rootDir, dirPath);
+      var d = _fs_resolveKbsPath(rootDir, dirPath);
       if (!nodeFs.existsSync(d)) return null;
       return { nodePath: dirPath };
     },
@@ -514,7 +514,7 @@ const fileService = {
      */
     readFile: function(rootDir, filePath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var f = _fs_abs(rootDir, filePath);
+      var f = _fs_resolveKbsPath(rootDir, filePath);
       if (nodeFs.existsSync(f)) return nodeFs.readFileSync(f, 'utf-8');
       return '';
     },
@@ -528,7 +528,7 @@ const fileService = {
      */
     writeFile: function(rootDir, filePath, content) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var f = _fs_abs(rootDir, filePath);
+      var f = _fs_resolveKbsPath(rootDir, filePath);
       _fs_ensureDir(nodePath.dirname(f));
       nodeFs.writeFileSync(f, content, 'utf-8');
     },
@@ -541,7 +541,7 @@ const fileService = {
      */
     deleteFile: function(rootDir, filePath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var f = _fs_abs(rootDir, filePath);
+      var f = _fs_resolveKbsPath(rootDir, filePath);
       if (nodeFs.existsSync(f)) nodeFs.unlinkSync(f);
     },
 
