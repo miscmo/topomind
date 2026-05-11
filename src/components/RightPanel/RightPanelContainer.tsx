@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react'
+import { memo } from 'react'
 import { useAppStore } from '../../stores/appStore'
 import { useResizePanel } from '../../hooks/useResizePanel'
 import RightPanelShell from './RightPanelShell'
@@ -7,18 +7,6 @@ import styles from './RightPanel.module.css'
 interface RightPanelContainerProps {
   selectedNodeId: string | null
   tabId: string
-}
-
-export function useRightPanelActions() {
-  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab)
-  const setSelectedEdgeId = useAppStore((s) => s.setSelectedEdgeId)
-
-  const openEdgeStylePanel = useCallback((edgeId: string) => {
-    setRightPanelTab('style')
-    setSelectedEdgeId(edgeId)
-  }, [setRightPanelTab, setSelectedEdgeId])
-
-  return { openEdgeStylePanel }
 }
 
 export default memo(function RightPanelContainer({ selectedNodeId, tabId }: RightPanelContainerProps) {

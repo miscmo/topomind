@@ -3,7 +3,7 @@ import { useReactFlow } from '@xyflow/react'
 import { useContextMenu } from '../../hooks/useContextMenu'
 import { useKeyboard } from '../../hooks/useKeyboard'
 import { useNodeActions } from '../../hooks/useNodeActions'
-import { useRightPanelActions } from '../RightPanel/RightPanelContainer'
+import { useRightPanelActions } from '../RightPanel/useRightPanelActions'
 import type { useGraphContext } from '../../contexts/GraphContext'
 
 interface UseGraphPageActionsOptions {
@@ -44,7 +44,6 @@ export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions
 
   return {
     canvasProps: {
-      tabId,
       onEdgeContextMenu: openEdgeStylePanel,
     },
     contextMenuProps: {
