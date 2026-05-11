@@ -5,20 +5,14 @@ import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { loadRoomGraph } from './roomLoader'
 import type { NavState } from '../useNavContext'
-
-interface GraphRoomState {
-  nodes: KnowledgeNode[]
-  edges: KnowledgeEdge[]
-  loading: boolean
-  selectedNode: KnowledgeNode | null
-}
+import type { GraphState } from './types'
 
 interface UseGraphRoomLoaderOptions {
   storage: Store
   getActiveNavState: () => NavState
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   updateSelectedNode: (nodes: KnowledgeNode[], nodeId: string | null) => void
-  setState: React.Dispatch<React.SetStateAction<GraphRoomState>>
+  setState: React.Dispatch<React.SetStateAction<GraphState>>
   nodesRef: React.MutableRefObject<KnowledgeNode[]>
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
 }

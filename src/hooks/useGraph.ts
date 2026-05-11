@@ -26,13 +26,7 @@ import { useGraphRefs } from './useGraph/useGraphRefs'
 import { useGraphLayout } from './useGraph/useGraphLayout'
 import { useGraphRoomLoader } from './useGraph/useGraphRoomLoader'
 import { useGraphStorageApi } from './useGraph/useGraphStorageApi'
-
-export interface GraphState {
-  nodes: KnowledgeNode[]
-  edges: KnowledgeEdge[]
-  loading: boolean
-  selectedNode: KnowledgeNode | null
-}
+import type { GraphState } from './useGraph/types'
 
 export function useGraph(tabId: string) {
   const storage = useStorage() as Store
