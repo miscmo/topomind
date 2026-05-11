@@ -15,7 +15,7 @@ TopoMind 是一个知识大脑工具，核心是**知识卡片房间**模型—�
 
 | 维度 | 说明 |
 |------|------|
-| 可视化 | 拓扑地图、React Flow + ELK 分层布局 |
+| 可视化 | 拓扑地图、React Flow 手动布局 |
 | 交互 | 卡片房间钻入/钻出、缩放漫游、分层显示 |
 | 内容 | 节点 = 知识卡片；连线 = 概念关系；每张卡片绑定 Markdown 文档 |
 | 编辑 | 双击空白创建、Tab 添加子节点、右侧面板内联编辑 Markdown |
@@ -32,7 +32,6 @@ TopoMind 是一个知识大脑工具，核心是**知识卡片房间**模型—�
 | 渲染库 | React Flow | 12.4.0 | 节点/边渲染、交互 |
 | 构建工具 | Vite | 5.2.8 | 开发服务器 + 生产构建 |
 | 状态管理 | Zustand | 5.0.3 | 全局状态管理 |
-| 布局算法 | elkjs | 0.9.3 | ELK 分层拓扑布局计算 |
 | Markdown | marked.js | 12.0.0 | Markdown → HTML 渲染 |
 | 持久化 | Node.js fs | 原生 | 纯文件系统存储（Electron 端） |
 | 桌面端 | Electron | 30.5.1 | 桌面应用壳 |
@@ -69,8 +68,7 @@ topomind_cc/
     │   ├── logger.ts            # 日志工具（logger.catch 记录带堆栈的异常）
     │   └── log-backend.ts       # 日志 IPC 桥接（读写主进程日志服务）（业务层唯一入口）
     ├── hooks/
-    │   ├── useGraph.ts          # 图谱引擎（房间加载、节点/边 CRUD、布局保存、交互事件）
-    │   ├── useLayout.ts         # ELK 布局封装
+    │   ├── useGraph.ts          # 图谱引擎（房间加载、节点/边 CRUD、用户布局保存、交互事件）
     │   ├── useStorage.ts        # 存储层 hook（封装 FSB）
     │   ├── useKeyboard.ts       # 快捷键处理（Esc/Tab/Delete/Backspace）
     │   └── useContextMenu.ts    # 右键菜单逻辑
@@ -308,9 +306,7 @@ interface KBEdge {
    - 全局视野（null）：仅显示顶层 KB 节点 + 它们之间的边
    - 房间内（非 null）：父容器设为透明不可交互，仅显示其直接子节点 + 子节点之间的边
 3. 次线边（`weight=minor`）仅在 zoom ≥ 0.8 时显示
-4. **智能布局判断**：
-   - 如果可见节点已有合理位置（非零、非重叠 >30%）→ 仅居中
-   - 否则 → 执行 ELK 布局（全局方向 RIGHT，房间内方向 DOWN）
+4. 使用已保存的用户布局坐标渲染节点
 5. 更新面包屑、导航树、标题、缩放指示器
 6. 自动保存状态
 
@@ -678,13 +674,11 @@ interface LogEntry {
 | 高亮边 | 3px，透明度 1 |
 | 淡化边 | 透明度极低 |
 
-### 7.4 布局算法
+### 7.4 布局策略
 
-- 算法：ELK js（`elkjs` 库）
-- 全局视野方向：RIGHT
-- 房间内方向：DOWN
-- 节点间距：动态 `max(30, 70 - nodeCount * 2)`
-- 层间距：节点间距 + 25
+- 不使用自动布局算法
+- 节点位置由用户拖拽管理
+- React Flow 节点坐标保存到存储层并在下次加载时恢复
 
 ---
 
@@ -792,7 +786,6 @@ interface Tab {
 | `deleteChildNode` | `(nodeId) => Promise<boolean>` | 删除节点 |
 | `renameNode` | `(nodeId, newName) => Promise<boolean>` | 重命名节点 |
 | `updateEdgeRelation` | `(edgeId, relation, weight) => void` | 更新边关系 |
-| `layoutNodes` | `(direction?) => Promise<void>` | 执行布局 |
 | `flushCurrentRoomSave` | `() => Promise<void>` | 立即保存当前房间 |
 
 **重要**：所有需要访问图谱状态的组件必须使用 `useGraphContext()` 而非直接调用 `useGraph()`。`GraphContextProvider` 在 `GraphPage` 根级别挂载，单次调用 `useGraph()` 实例后通过 Context 共享。
@@ -957,7 +950,7 @@ return (
 | 维度 | v5.0.0（Vue 3） | v5.1.0（React 18） |
 |------|------|--------|
 | 渲染框架 | Vue 3 + Composition API | React 18 + Hooks |
-| 图谱引擎 | Cytoscape.js + cytoscape-elk | React Flow + elkjs |
+| 图谱引擎 | Cytoscape.js + cytoscape-elk | React Flow |
 | 状态管理 | Pinia | Zustand（`create` + vanilla `createStore`） |
 | 节点组件 | Vue 组件作为 Cytoscape HTML 标签 | React Flow 自定义节点 `KnowledgeCard.tsx` |
 | 样式 | Vue SFC `<style>` 或全局 CSS | CSS Modules（`.module.css`） |

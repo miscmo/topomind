@@ -7,7 +7,6 @@
  * - room loading
  * - graph persistence adapter
  * - node/edge operations
- * - layout
  * - React Flow event handlers
  * - room navigation
  */
@@ -15,7 +14,6 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
 import { useGraphUiStore } from '../stores/graphUiStore'
 import { useRightPanelStore } from '../stores/rightPanelStore'
-import { useLayout } from './useLayout'
 import { useStorage } from './useStorage'
 import { useNavContext } from './useNavContext'
 import type { Store } from '../core/storage'
@@ -24,7 +22,6 @@ import { buildGraphNavigation } from './useGraph/navigation'
 import { useGraphEventHandlers } from './useGraph/graphEventHandlers'
 import { useGraphDirtyState } from './useGraph/useGraphDirtyState'
 import { useGraphRefs } from './useGraph/useGraphRefs'
-import { useGraphLayout } from './useGraph/useGraphLayout'
 import { useGraphRoomLoader } from './useGraph/useGraphRoomLoader'
 import { useGraphStorageApi } from './useGraph/useGraphStorageApi'
 import type { GraphState } from './useGraph/types'
@@ -33,7 +30,6 @@ import { useGraphSelectionState } from './useGraph/useGraphSelectionState'
 
 export function useGraph(tabId: string) {
   const storage = useStorage() as Store
-  const { computeLayout } = useLayout()
 
   const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
   const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
@@ -114,20 +110,6 @@ export function useGraph(tabId: string) {
     ]
   )
 
-  const setNodesState = useCallback((nodes: KnowledgeNode[]) => {
-    setState((s) => ({ ...s, nodes }))
-  }, [])
-  const { isLayouting, layoutNodes } = useGraphLayout({
-    computeLayout,
-    storage,
-    getActiveNavState,
-    nodesRef,
-    edgesRef,
-    rebuildMaps,
-    setNodes: setNodesState,
-    setDirtyState,
-  })
-
   // ===== React Flow event handlers =====
 
   const graphEvents = useGraphEventHandlers({
@@ -171,7 +153,6 @@ export function useGraph(tabId: string) {
     loading: state.loading,
     selectedNode: state.selectedNode,
     isModified,
-    isLayouting,
 
     onDirtyChange,
 
@@ -203,10 +184,6 @@ export function useGraph(tabId: string) {
     // Edge operations (delegated to ops)
     updateEdgeRelation: ops.updateEdgeRelation,
     updateEdgeStyle: ops.updateEdgeStyle,
-
-    // Layout
-    layoutNodes,
-
 
     // Persistence
     flushCurrentRoomSave,

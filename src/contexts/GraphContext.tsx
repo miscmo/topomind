@@ -17,7 +17,6 @@ export interface GraphContextValue {
   edges: KnowledgeEdge[]
   loading: boolean
   selectedNode: KnowledgeNode | null
-  isLayouting: boolean
   // Refs for stable closure access to current state
   nodesRef: React.MutableRefObject<KnowledgeNode[]>
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
@@ -55,10 +54,6 @@ export interface GraphContextValue {
   updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => void
   updateEdgeStyle: (edgeId: string, style: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean; selected?: boolean }) => void
 
-  // Layout
-  layoutNodes: (direction?: 'RIGHT' | 'DOWN') => Promise<void>
-
-
   // Persistence
   flushCurrentRoomSave: () => Promise<void>
 }
@@ -69,7 +64,6 @@ const emptyContext: GraphContextValue = {
   edges: [],
   loading: false,
   selectedNode: null,
-  isLayouting: false,
   isModified: false,
   nodesRef: { current: [] },
   edgesRef: { current: [] },
@@ -96,7 +90,6 @@ const emptyContext: GraphContextValue = {
   deselectNode: () => {},
   updateEdgeRelation: () => {},
   updateEdgeStyle: () => {},
-  layoutNodes: async () => {},
   flushCurrentRoomSave: async () => {},
 }
 
@@ -111,7 +104,6 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     edges: graph.edges,
     loading: graph.loading,
     selectedNode: graph.selectedNode,
-    isLayouting: graph.isLayouting,
     isModified: graph.isModified,
     nodesRef: graph.nodesRef,
     edgesRef: graph.edgesRef,
@@ -138,7 +130,6 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     deselectNode: graph.deselectNode,
     updateEdgeRelation: graph.updateEdgeRelation,
     updateEdgeStyle: graph.updateEdgeStyle,
-    layoutNodes: graph.layoutNodes,
     flushCurrentRoomSave: graph.flushCurrentRoomSave,
   }
 }

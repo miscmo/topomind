@@ -60,9 +60,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('elkjs')) {
-              return 'vendor-elk'
-            }
             if (id.includes('@xyflow') || id.includes('reactflow')) {
               return 'vendor-reactflow'
             }
