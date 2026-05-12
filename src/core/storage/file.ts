@@ -5,9 +5,7 @@ import type { EdgeRelation, EdgeWeight } from '../../types'
 import { basenameRef, joinRefs, normalizeRef, parentRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 
 interface FSBGraphChild {
-  path?: string
   name: string
-  hasChildren?: boolean
   x?: number
   y?: number
 }
@@ -39,12 +37,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 
 const toCardInfo = (parentCardPath: string, key: string, rawChild: unknown): CardInfo => {
   const child = isRecord(rawChild) ? rawChild : {}
-  const rawPath = child.path
   const rawName = child.name
-  const childRelPath = (typeof rawPath === 'string' && rawPath.trim()) ? rawPath.trim() : key
-  const childPath = parentCardPath && !childRelPath.startsWith(`${parentCardPath}/`)
-    ? joinRefs(parentCardPath, childRelPath)
-    : normalizeRef(childRelPath)
+  const childPath = parentCardPath && !key.startsWith(`${parentCardPath}/`)
+    ? joinRefs(parentCardPath, key)
+    : normalizeRef(key)
   const fallbackName = basenameRef(childPath) || key
   const safeName = (typeof rawName === 'string' && rawName.trim()) ? rawName.trim() : fallbackName
 
@@ -124,7 +120,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
 
   const nodes: GraphMeta['nodes'] = {}
   for (const [key, child] of Object.entries(children)) {
-    const ref = fromRoomRelativeRef(roomRef, child.path || key)
+    const ref = fromRoomRelativeRef(roomRef, key)
     nodes[ref] = {
       id: ref,
       card: { ref, name: child.name, updatedAt: undefined },
@@ -180,9 +176,7 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
     const ref = normalizeRef(node.card?.ref || node.id)
     const key = toRoomRelativeRef(roomRef, ref) || basenameRef(ref) || basenameRef(node.id) || node.id
     children[key] = {
-      path: key || undefined,
       name: node.card.name,
-      hasChildren: false,
       x: node.position?.x,
       y: node.position?.y,
     }
@@ -275,7 +269,10 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
     readLayout: async (roomPath: string): Promise<GraphMeta> => {
       try {
         const raw = await FSB.readGraphMeta(requireRootDir(), roomPath)
-        return convertFSBToGraph(raw as Parameters<typeof convertFSBToGraph>[0], roomPath)
+        return convertFSBToGraph(
+          raw as Parameters<typeof convertFSBToGraph>[0], 
+          roomPath
+        )
       } catch {
         return { nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }
       }

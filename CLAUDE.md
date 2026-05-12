@@ -66,7 +66,8 @@ TopoMind 是一个可漫游拓扑知识大脑桌面应用，基于 Electron + Re
 
 interface GraphChild {
   name: string        // 显示名称
-  hasChildren?: boolean
+  x?: number          // 节点 x 坐标
+  y?: number          // 节点 y 坐标
 }
 
 interface GraphEdge {

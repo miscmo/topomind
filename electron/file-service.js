@@ -161,13 +161,14 @@ function _fs_roomRelativePath(parentPath, childPath) {
 }
 
 /**
- * @description 读取 JSON 文件并解析，失败时返回 null
+ * @description 读取 JSON 文件并解析，不存在时返回空对象，读取或解析失败时抛出异常
  * @param { string } filePath: JSON 文件路径
- * @returns { Object | null } 解析后的对象
+ * @returns { Object } 解析后的对象
  */
 function _fs_readJsonFile(filePath) {
-  if (!nodeFs.existsSync(filePath)) return null;
-  try { return JSON.parse(nodeFs.readFileSync(filePath, 'utf-8')); } catch (e) { return null; }
+  if (!nodeFs.existsSync(filePath)) return {};
+  var content = nodeFs.readFileSync(filePath, 'utf-8');
+  return JSON.parse(content);
 }
 
 /**
@@ -250,7 +251,7 @@ const fileService = {
      */
     readAppConfig: function(rootDir) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      return _fs_readJsonFile(_fs_appConfigPath(rootDir)) || {};
+      return _fs_readJsonFile(_fs_appConfigPath(rootDir));
     },
 
     /**
@@ -342,7 +343,7 @@ const fileService = {
     readCardChildren: function(rootDir, cardPath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
       var dir = _fs_resolveKbsPath(rootDir, cardPath);
-      var parentGraph = _fs_readJsonFile(_fs_graphFilePath(dir)) || { children: {} };
+      var parentGraph = _fs_readJsonFile(_fs_graphFilePath(dir));
       return parentGraph.children || {};
     },
 
@@ -398,9 +399,7 @@ const fileService = {
     readGraphMeta: function(rootDir, roomPath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
       var d = _fs_resolveKbsPath(rootDir, roomPath);
-      var graph = _fs_readJsonFile(_fs_graphFilePath(d));
-      if (graph) return graph;
-      return {};
+      return _fs_readJsonFile(_fs_graphFilePath(d));
     },
 
     /**
@@ -413,17 +412,11 @@ const fileService = {
     writeGraphMeta: function(rootDir, roomPath, meta) {
       rootDir = _fs_requireValidWorkDir(rootDir);
       var d = _fs_resolveKbsPath(rootDir, roomPath);
-      if (!nodeFs.existsSync(d)) {
-        var segments = roomPath.split('/').filter(Boolean);
-        var parent = _fs_kbsDir(rootDir);
-        for (var i = 0; i < segments.length - 1; i++) {
-          parent = nodePath.join(parent, _fs_safeSegment(segments[i]));
-          _fs_ensureDir(parent);
-        }
-        _fs_ensureDir(d);
+      _fs_ensureDir(d);
+      if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+        throw new Error('writeGraphMeta: meta 必须是普通对象');
       }
-      var graphMeta = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
-      _fs_writeJsonFile(_fs_graphFilePath(d), graphMeta);
+      _fs_writeJsonFile(_fs_graphFilePath(d), meta);
     },
 
     /**
