@@ -12,6 +12,7 @@ import type { GraphMeta } from '../../core/storage'
 import { basenameRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { graphMetaToRoomGraph, roomGraphToGraphMeta } from '../../domain/graph/graphMapper'
 import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph/model'
+import { buildEdgeView } from './edgeView'
 
 const AUTO_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
@@ -143,32 +144,27 @@ export async function buildNodes(
 /** Build React Flow edges from graph metadata */
 export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
   const roomGraph = graphMetaToRoomGraph(dirPath, meta)
-  return roomGraph.edges.map((e) => ({
-    id: e.id,
-    source: e.sourceRef,
-    target: e.targetRef,
-    type: e.lineMode ?? 'smoothstep',
-    animated: e.weight === 'main',
-    style: {
-      stroke: e.color ?? '#7f8c8d',
-      strokeWidth: e.weight === 'main' ? 2.5 : 2,
-      strokeDasharray: (e.lineStyle ?? 'solid') === 'dashed' ? '6 4' : undefined,
-    },
-    markerEnd: (e.arrow ?? true)
-      ? {
-          type: 'arrowclosed',
-          color: e.color ?? '#7f8c8d',
-        }
-      : undefined,
-    data: {
-      relation: e.relation,
-      weight: e.weight,
-      lineMode: e.lineMode ?? 'smoothstep',
-      lineStyle: e.lineStyle ?? 'solid',
-      color: e.color ?? '#7f8c8d',
-      arrow: e.arrow ?? true,
-      highlighted: e.highlighted ?? false,
-      faded: e.faded ?? false,
-    },
-  }))
+  return roomGraph.edges.map((e) => {
+    const lineMode = e.lineMode ?? 'smoothstep'
+    const lineStyle = e.lineStyle ?? 'solid'
+    const color = e.color ?? '#7f8c8d'
+    const arrow = e.arrow ?? true
+
+    return {
+      id: e.id,
+      source: e.sourceRef,
+      target: e.targetRef,
+      ...buildEdgeView({ lineMode, lineStyle, color, arrow, weight: e.weight }),
+      data: {
+        relation: e.relation,
+        weight: e.weight,
+        lineMode,
+        lineStyle,
+        color,
+        arrow,
+        highlighted: e.highlighted ?? false,
+        faded: e.faded ?? false,
+      },
+    }
+  })
 }

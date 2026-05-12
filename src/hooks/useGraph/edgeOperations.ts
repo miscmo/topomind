@@ -1,6 +1,7 @@
 import type { Connection } from '@xyflow/react'
 import type { EdgeLineMode, EdgeLineStyle, EdgeRelation, EdgeWeight, KnowledgeEdge, KnowledgeNode } from '../../types'
 import { logAction } from '../../core/log-backend'
+import { buildEdgeView } from './edgeView'
 
 export interface EdgeOperationsDeps {
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
@@ -32,13 +33,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       id: edgeId,
       source: connection.source,
       target: connection.target,
-      type: lineMode,
-      style: {
-        stroke: color,
-        strokeWidth: 2,
-        strokeDasharray: lineStyle === 'dashed' ? '6 4' : undefined,
-      },
-      markerEnd: arrow ? { type: 'arrowclosed', color } : undefined,
+      ...buildEdgeView({ lineMode, lineStyle, color, arrow }),
       data: {
         relation: '相关',
         weight: 'minor',
@@ -82,11 +77,14 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
         e.id === edgeId
           ? {
               ...e,
-              animated: weight === 'main',
-              style: {
-                ...e.style,
-                strokeWidth: weight === 'main' ? 2.5 : 2,
-              },
+              ...buildEdgeView({
+                lineMode: e.data?.lineMode,
+                lineStyle: e.data?.lineStyle,
+                color: e.data?.color,
+                arrow: e.data?.arrow,
+                weight,
+                selected: e.data?.selected,
+              }),
               data: { ...e.data, relation, weight },
             }
           : e
@@ -114,19 +112,14 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
         const nextSelected = style.selected ?? false
         return {
           ...e,
-          type: style.lineMode ?? e.data?.lineMode ?? 'smoothstep',
-          style: {
-            stroke: nextColor,
-            strokeWidth: nextSelected ? (nextWeight === 'main' ? 4 : 3.5) : (nextWeight === 'main' ? 2.5 : 2),
-            strokeDasharray: nextLineStyle === 'dashed' ? '6 4' : undefined,
-            filter: nextSelected ? 'drop-shadow(0 0 6px rgba(52, 152, 219, 0.45))' : undefined,
-          },
-          markerEnd: nextArrow
-            ? {
-                type: 'arrowclosed',
-                color: nextColor,
-              }
-            : undefined,
+          ...buildEdgeView({
+            lineMode: style.lineMode ?? e.data?.lineMode,
+            lineStyle: nextLineStyle,
+            color: nextColor,
+            arrow: nextArrow,
+            weight: nextWeight,
+            selected: nextSelected,
+          }),
           data: {
             ...e.data,
             ...style,
