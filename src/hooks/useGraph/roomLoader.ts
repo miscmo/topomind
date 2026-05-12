@@ -1,4 +1,4 @@
-import type { GraphMeta } from '../../core/storage/types'
+import type { GraphMeta } from '../../core/storage'
 import type { KnowledgeEdge, KnowledgeNode } from '../../types'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { buildEdges, buildNodes } from './graphBuilder'

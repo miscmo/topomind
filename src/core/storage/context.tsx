@@ -1,7 +1,6 @@
 import { createContext, useContext, useMemo } from 'react'
 import { createFileStorageBackend } from './file'
-import { createStore, type Store as StoreType } from './service'
-import type { StorageBackend } from './types'
+import { createStore, type Store as StoreType, type StorageBackend } from './service'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 
 const StorageContext = createContext<StoreType | null>(null)

@@ -1,5 +1,6 @@
 import { FSB } from '../fs-backend'
-import type { CardInfo, GraphMeta, StorageBackend } from './types'
+import type { StorageBackend } from './service'
+import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import type { EdgeRelation, EdgeWeight } from '../../types'
 import { basenameRef, joinRefs, normalizeRef, parentRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 

@@ -3,14 +3,39 @@
  * 业务层通过 useStorage() 调用，底层存储由 StorageBackend 隔离。
  */
 import { logger } from '../logger'
-import type { GraphMeta, StorageBackend } from './types'
 import type { KBListItem } from '../../types'
+import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import { SaveCoordinator } from '../../domain/persistence/saveCoordinator'
 import { normalizeGraphMeta } from '../../domain/graph/normalizeGraphMeta'
 
 interface VaultConfig {
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
   [key: string]: unknown
+}
+
+export interface StorageBackend {
+  createVault: (dirPath: string) => Promise<void>
+  isValidVault: (dirPath: string) => Promise<{ valid: boolean; error?: string }>
+
+  listKBs: () => Promise<KBListItem[]>
+  createKB: (name: string) => Promise<string>
+  deleteKB: (kbPath: string) => Promise<void>
+  renameKB: (kbPath: string, newName: string) => Promise<void>
+  importKB: (sourcePath: string) => Promise<string>
+
+  listCards: (parentCardPath: string) => Promise<CardInfo[]>
+  createCard: (parentPath: string, name: string) => Promise<CardInfo>
+  deleteCard: (cardPath: string) => Promise<void>
+  renameCard: (cardPath: string, newName: string) => Promise<void>
+
+  readMarkdown: (cardPath: string) => Promise<string>
+  writeMarkdown: (cardPath: string, content: string) => Promise<void>
+
+  readLayout: (roomPath: string) => Promise<GraphMeta>
+  writeLayout: (roomPath: string, meta: GraphMeta) => Promise<void>
+
+  readConfig: () => Promise<unknown>
+  writeConfig: (content: unknown) => Promise<void>
 }
 
 function normalizeName(name: unknown): string { return String(name || '').trim() }

@@ -1,4 +1,4 @@
-import type { CardInfo, GraphMeta } from '../../core/storage/types'
+import type { CardInfo, GraphMeta } from './model'
 import { basenameRef, normalizeRef, resolveRoomChildRef } from './path-utils'
 import {
   DEFAULT_NODE_SIZE,
