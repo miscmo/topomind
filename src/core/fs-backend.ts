@@ -63,8 +63,8 @@ export interface FSB {
   createKbsDir: (rootDir: string, dirPath: string) => Promise<string>
   deleteKbsDir: (rootDir: string, dirPath: string) => Promise<unknown>
   renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
-  readGraphMeta: (rootDir: string, dirPath: string) => Promise<FSBGraphMeta>
-  writeGraphMeta: (rootDir: string, dirPath: string, meta: FSBGraphMeta) => Promise<unknown>
+  readGraphMeta: (rootDir: string, roomPath: string) => Promise<FSBGraphMeta>
+  writeGraphMeta: (rootDir: string, roomPath: string, meta: FSBGraphMeta) => Promise<unknown>
   readFile: (rootDir: string, filePath: string) => Promise<string>
   readAppConfig: (rootDir: string) => Promise<unknown>
   writeAppConfig: (rootDir: string, content: unknown) => Promise<unknown>
@@ -83,8 +83,8 @@ const FSBImpl: FSB = {
   createKbsDir: (rootDir, dirPath) => _call('fs:createKbsDir', rootDir, dirPath) as Promise<string>,
   deleteKbsDir: (rootDir, dirPath) => _call('fs:deleteKbsDir', rootDir, dirPath),
   renameKB: (rootDir, kbPath, newName) => _call('fs:renameKB', rootDir, kbPath, newName) as Promise<string>,
-  readGraphMeta: (rootDir, dirPath) => _call('fs:readGraphMeta', rootDir, dirPath) as Promise<FSBGraphMeta>,
-  writeGraphMeta: (rootDir, dirPath, meta) => _call('fs:writeGraphMeta', rootDir, dirPath, meta),
+  readGraphMeta: (rootDir, roomPath) => _call('fs:readGraphMeta', rootDir, roomPath) as Promise<FSBGraphMeta>,
+  writeGraphMeta: (rootDir, roomPath, meta) => _call('fs:writeGraphMeta', rootDir, roomPath, meta),
 
   readFile: (rootDir, filePath) => _call('fs:readFile', rootDir, filePath) as Promise<string>,
   readAppConfig: (rootDir) => _call('fs:readAppConfig', rootDir),

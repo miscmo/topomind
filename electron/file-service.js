@@ -390,31 +390,31 @@ const fileService = {
     },
 
     /**
-     * @description 读取指定目录的图元数据，不存在时返回默认结构
+     * @description 读取房间的图元数据，不存在时返回空对象
      * @param { string } rootDir: 工作目录路径
-     * @param { string } dirPath: 目录相对路径
+     * @param { string } roomPath: 房间相对路径
      * @returns { Object } 图元数据对象
      */
-    readGraphMeta: function(rootDir, dirPath) {
+    readGraphMeta: function(rootDir, roomPath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_resolveKbsPath(rootDir, dirPath);
+      var d = _fs_resolveKbsPath(rootDir, roomPath);
       var graph = _fs_readJsonFile(_fs_graphFilePath(d));
       if (graph) return graph;
       return {};
     },
 
     /**
-     * @description 写入指定目录的图元数据，不存在时先创建目录结构
+     * @description 写入房间的图元数据，不存在时先创建目录结构
      * @param { string } rootDir: 工作目录路径
-     * @param { string } dirPath: 目录相对路径
+     * @param { string } roomPath: 房间相对路径
      * @param { Object } meta: 图元数据
      * @returns { void }
      */
-    writeGraphMeta: function(rootDir, dirPath, meta) {
+    writeGraphMeta: function(rootDir, roomPath, meta) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_resolveKbsPath(rootDir, dirPath);
+      var d = _fs_resolveKbsPath(rootDir, roomPath);
       if (!nodeFs.existsSync(d)) {
-        var segments = dirPath.split('/').filter(Boolean);
+        var segments = roomPath.split('/').filter(Boolean);
         var parent = _fs_kbsDir(rootDir);
         for (var i = 0; i < segments.length - 1; i++) {
           parent = nodePath.join(parent, _fs_safeSegment(segments[i]));
