@@ -400,7 +400,7 @@ const fileService = {
       var d = _fs_resolveKbsPath(rootDir, dirPath);
       var graph = _fs_readJsonFile(_fs_graphFilePath(d));
       if (graph) return graph;
-      return { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null };
+      return {};
     },
 
     /**
