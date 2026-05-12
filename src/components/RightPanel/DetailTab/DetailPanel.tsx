@@ -14,7 +14,6 @@ import styles from './DetailTab.module.css'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { registerTabSaver } from '../../../core/close-guard'
-import { enterChildRoomInTab } from '../../../core/tab-flow'
 
 // Configure marked once — called at module load time, not inside components
 marked.setOptions({ breaks: true, gfm: true })
@@ -35,10 +34,8 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   const [savedMarkdown, setSavedMarkdown] = useState('')
   const [renameMode, setRenameMode] = useState(false)
   const [newName, setNewName] = useState('')
-  const [childTags, setChildTags] = useState<Array<{ path: string; name: string }>>([])
   const renameInputRef = useRef<HTMLInputElement>(null)
   const markdownRequestSeqRef = useRef(0)
-  const childTagsRequestSeqRef = useRef(0)
 
   const selectedNode = graph.selectedNode
   const nodePath = selectedNode?.data.path ?? null
@@ -65,27 +62,6 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
       setSavedMarkdown('')
     })
   }, [selectedNodeId, selectedNode?.data.path, storage])
-
-  // Load child concept tags when node has children
-  useEffect(() => {
-    const requestSeq = ++childTagsRequestSeqRef.current
-
-    if (!hasChildren || !nodePath) {
-      setChildTags([])
-      return
-    }
-
-    storage.listCards(nodePath).then(async (cards: Array<{ ref: string; name: string; updatedAt?: string }>) => {
-      if (childTagsRequestSeqRef.current !== requestSeq) return
-      if (!cards.length) { setChildTags([]); return }
-      const withCounts = await Promise.all(cards.map(async (c) => ({ path: c.ref, name: c.name, count: await storage.countChildren(c.ref) })))
-      if (childTagsRequestSeqRef.current !== requestSeq) return
-      setChildTags(withCounts.filter(c => c.count > 0))
-    }).catch(() => {
-      if (childTagsRequestSeqRef.current !== requestSeq) return
-      setChildTags([])
-    })
-  }, [hasChildren, nodePath, storage])
 
   // Focus rename input when entering rename mode
   useEffect(() => {
@@ -176,31 +152,6 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   }
 
   const { data } = selectedNode
-
-  // Build child concept tags from directory listing
-  // Clicking a tag navigates into that child room
-  const renderChildTags = () => {
-    if (!hasChildren || childTags.length === 0) return null
-    return (
-      <div className={styles.childTags}>
-        <span className={styles.childTagsLabel}>子概念</span>
-        {childTags.map((child) => (
-          <span
-            key={child.path}
-            className={styles.childTag}
-            onClick={() => {
-              logAction('房间:钻入', 'DetailPanel', { roomPath: child.path, roomName: child.name, source: 'child-tag' })
-              enterChildRoomInTab(tabId, child)
-            }}
-            title={`进入 ${child.name}`}
-          >
-            {child.name}
-          </span>
-        ))}
-      </div>
-    )
-  }
-
 
   return (
     <div id="detail-panel" className={styles.detailPanel}>
@@ -304,7 +255,6 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
               className={styles.markdownBody}
               dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
             />
-            {renderChildTags()}
           </>
         )}
       </div>
