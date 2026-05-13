@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useContextMenu } from '../../hooks/useContextMenu'
 import { useDoubleClick } from '../../hooks/useDoubleClick'
-import { logAction } from '../../core/log-backend'
 
 const RIGHT_DRAG_THRESHOLD = 6
 
@@ -12,13 +10,12 @@ interface UsePaneContextMenuOptions {
 }
 
 export function usePaneContextMenu({ canvasRef, onPaneClick }: UsePaneContextMenuOptions) {
-  const showContextMenu = useContextMenuStore((s) => s.showContextMenu)
-  const { hideCM } = useContextMenu()
+  const { openPaneMenu, closeContextMenu } = useContextMenu()
   const rightMouseDownRef = useRef<{ x: number; y: number } | null>(null)
   const suppressNextPaneContextMenuRef = useRef(false)
 
   const { handleClick: handlePaneClick } = useDoubleClick({
-    onClick: () => hideCM(),
+    onClick: () => closeContextMenu(),
     onDoubleClick: onPaneClick,
     onSingleClick: onPaneClick,
   })
@@ -29,11 +26,6 @@ export function usePaneContextMenu({ canvasRef, onPaneClick }: UsePaneContextMen
     if (el.closest('.react-flow__node, .react-flow__edge, .react-flow__handle')) return false
     return !!canvasRef.current?.contains(el)
   }, [canvasRef])
-
-  const openPaneContextMenu = useCallback((x: number, y: number) => {
-    logAction('右键菜单:显示', 'GraphCanvas', { type: 'pane', x, y })
-    showContextMenu(x, y, 'pane', '__pane__')
-  }, [showContextMenu])
 
   useEffect(() => {
     const root = canvasRef.current
@@ -59,7 +51,7 @@ export function usePaneContextMenu({ canvasRef, onPaneClick }: UsePaneContextMen
       e.preventDefault()
       e.stopPropagation()
       suppressNextPaneContextMenuRef.current = true
-      openPaneContextMenu(e.clientX, e.clientY)
+      openPaneMenu(e.clientX, e.clientY)
     }
 
     const handleContextMenu = (e: MouseEvent) => {
@@ -80,7 +72,7 @@ export function usePaneContextMenu({ canvasRef, onPaneClick }: UsePaneContextMen
       const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
       if (moved > RIGHT_DRAG_THRESHOLD) return
 
-      openPaneContextMenu(e.clientX, e.clientY)
+      openPaneMenu(e.clientX, e.clientY)
     }
 
     root.addEventListener('mousedown', handleMouseDown, true)
@@ -91,7 +83,7 @@ export function usePaneContextMenu({ canvasRef, onPaneClick }: UsePaneContextMen
       window.removeEventListener('mouseup', handleMouseUp, true)
       root.removeEventListener('contextmenu', handleContextMenu, true)
     }
-  }, [canvasRef, isPaneTarget, openPaneContextMenu])
+  }, [canvasRef, isPaneTarget, openPaneMenu])
 
   return { handlePaneClick }
 }

@@ -16,7 +16,7 @@ export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions
   const { screenToFlowPosition } = useReactFlow()
   const setRightPanelTab = useRightPanelStore((s) => s.setRightPanelTab)
   const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
-  const { contextMenu, hideCM } = useContextMenu()
+  const { contextMenu, closeContextMenu } = useContextMenu()
   const {
     deleteSelectedNode,
     addChildNode,
@@ -66,7 +66,7 @@ export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions
       onEdgeStyle: handleEdgeStyle,
       onFocus: handleFocus,
       onProperties: handleProperties,
-      onClose: hideCM,
+      onClose: closeContextMenu,
     },
   }
 }

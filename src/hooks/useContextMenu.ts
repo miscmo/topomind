@@ -3,9 +3,10 @@
  *
  * Returns:
  * - contextMenu: { visible, x, y, type, targetId } | null
- * - showCM(nodeId, e): 打开节点菜单
- * - showEdgeCM(edgeId, e): 打开连线菜单
- * - hideCM(): 关闭菜单
+ * - openNodeMenu(nodeId, e): 打开节点菜单
+ * - openEdgeMenu(edgeId, e): 打开连线菜单
+ * - openPaneMenu(x, y): 打开画布菜单
+ * - closeContextMenu(): 关闭菜单
  */
 import { useCallback } from 'react'
 import { useContextMenuStore } from '../stores/contextMenuStore'
@@ -16,19 +17,17 @@ export function useContextMenu() {
   const showContextMenu = useContextMenuStore((s) => s.showContextMenu)
   const hideContextMenu = useContextMenuStore((s) => s.hideContextMenu)
 
-  const showCM = useCallback(
+  const openNodeMenu = useCallback(
     (nodeId: string, e: MouseEvent | React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      const type = nodeId ? 'node' : 'pane'
-      const targetId = nodeId || '__pane__'
-      logAction('右键菜单:显示', 'useContextMenu', { type, nodeId: nodeId || null, x: e.clientX, y: e.clientY })
-      showContextMenu(e.clientX, e.clientY, type, targetId)
+      logAction('右键菜单:显示', 'useContextMenu', { type: 'node', nodeId, x: e.clientX, y: e.clientY })
+      showContextMenu(e.clientX, e.clientY, 'node', nodeId)
     },
     [showContextMenu]
   )
 
-  const showEdgeCM = useCallback(
+  const openEdgeMenu = useCallback(
     (edgeId: string, e: MouseEvent | React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
@@ -38,10 +37,15 @@ export function useContextMenu() {
     [showContextMenu]
   )
 
-  const hideCM = useCallback(() => {
+  const openPaneMenu = useCallback((x: number, y: number) => {
+    logAction('右键菜单:显示', 'useContextMenu', { type: 'pane', x, y })
+    showContextMenu(x, y, 'pane', '__pane__')
+  }, [showContextMenu])
+
+  const closeContextMenu = useCallback(() => {
     logAction('右键菜单:关闭', 'useContextMenu', {})
     hideContextMenu()
   }, [hideContextMenu])
 
-  return { contextMenu, showCM, showEdgeCM, hideCM }
+  return { contextMenu, openNodeMenu, openEdgeMenu, openPaneMenu, closeContextMenu }
 }
