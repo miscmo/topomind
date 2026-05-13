@@ -39,7 +39,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
 
   const selectedNode = graph.selectedNode
   const nodePath = selectedNode?.data.path ?? null
-  const hasChildren = selectedNode?.data.hasChildren ?? false
+  const childCount = selectedNode?.data.childCount ?? 0
 
   // Load markdown when node changes
   useEffect(() => {
@@ -175,9 +175,9 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
               {data.label}
             </span>
           )}
-          {hasChildren && (
+          {childCount > 0 && (
             <span className={styles.badge} title="含有子概念">
-              {data.childCount ?? '?'} 子
+              {childCount} 子
             </span>
           )}
         </div>

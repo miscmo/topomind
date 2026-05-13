@@ -146,7 +146,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
 
   const onNodeDoubleClick = useCallback(
     async (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
-      if (!node.data.hasChildren) return
+      if (!node.data.childCount) return
       await navigateToChildRoom(node.data.path, node.data.label)
     },
     [navigateToChildRoom]

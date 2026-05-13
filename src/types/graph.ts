@@ -75,8 +75,6 @@ export interface KnowledgeNodeData {
   path: string
   /** 父节点 ID（顶层 KB 无 parent） */
   parent?: string
-  /** 是否有子节点（决定是否为容器节点） */
-  hasChildren: boolean
   /** 域颜色 */
   domainColor?: string
   /** 是否有未保存的编辑 */

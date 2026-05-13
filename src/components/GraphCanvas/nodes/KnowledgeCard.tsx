@@ -31,7 +31,7 @@ function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
       <div className={styles.label}>{data.label}</div>
 
       {/* 子节点徽章 */}
-      {data.hasChildren && data.childCount !== undefined && data.childCount > 0 && (
+      {data.childCount !== undefined && data.childCount > 0 && (
         <div className={styles.badge}>{data.childCount}</div>
       )}
 

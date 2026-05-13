@@ -116,7 +116,6 @@ export async function buildNodes(
   return normalizedChildren.map(([childPath, roomNode], i) => {
     const nodeId = childPath
     const childCount = childCountResults[i]
-    const hasChildren = childCount > 0
     const domainColor = DOMAIN_COLORS[i % DOMAIN_COLORS.length]
     const saved = savedPositions[nodeId]
     const position = roomNode.position ?? saved ?? {
@@ -132,9 +131,8 @@ export async function buildNodes(
         label: roomNode.name || basenameRef(childPath),
         path: childPath,
         parent: dirPath || kbPath || undefined,
-        hasChildren,
         domainColor,
-        childCount: hasChildren ? childCount : undefined,
+        childCount,
       },
     }
   })
