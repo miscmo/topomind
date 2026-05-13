@@ -7,7 +7,7 @@ export interface EdgeOperationsDeps {
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
   getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
-  scheduleSave: (dirPath: string) => void
+  saveNow: (dirPath: string) => Promise<void>
   setState: (updater: (prev: { nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }) => { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; loading?: boolean; selectedNode?: KnowledgeNode | null }) => void
 }
 
@@ -16,11 +16,11 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     edgesRef,
     getActiveNavState,
     rebuildMaps,
-    scheduleSave,
+    saveNow,
     setState,
   } = deps
 
-  const addEdge = (
+  const addEdge = async (
     connection: Connection,
     edgeId: string,
     defaultStyle?: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean }
@@ -54,11 +54,11 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     })
 
     const dirPath = getActiveNavState().roomPath
-    if (dirPath) scheduleSave(dirPath)
+    if (dirPath) await saveNow(dirPath)
     logAction('连线:创建', 'graphOperations', { edgeId, source: connection.source, target: connection.target })
   }
 
-  const deleteEdge = (edgeId: string) => {
+  const deleteEdge = async (edgeId: string) => {
     setState((prev) => {
       const edges = prev.edges.filter((e) => e.id !== edgeId)
       edgesRef.current = edges
@@ -66,11 +66,11 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       return { ...prev, edges }
     })
     const dirPath = getActiveNavState().roomPath
-    if (dirPath) scheduleSave(dirPath)
+    if (dirPath) await saveNow(dirPath)
     logAction('连线:删除', 'graphOperations', { edgeId })
   }
 
-  const updateEdgeRelation = (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => {
+  const updateEdgeRelation = async (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => {
     const dirPath = getActiveNavState().roomPath
     setState((prev) => {
       const edges = prev.edges.map((e) =>
@@ -93,11 +93,11 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       rebuildMaps(prev.nodes, edges)
       return { ...prev, edges }
     })
-    if (dirPath) scheduleSave(dirPath)
+    if (dirPath) await saveNow(dirPath)
     logAction('连线:更新关系', 'graphOperations', { edgeId, relation, weight })
   }
 
-  const updateEdgeStyle = (
+  const updateEdgeStyle = async (
     edgeId: string,
     style: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean; selected?: boolean }
   ) => {
@@ -136,7 +136,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       rebuildMaps(prev.nodes, edges)
       return { ...prev, edges }
     })
-    if (dirPath) scheduleSave(dirPath)
+    if (dirPath) await saveNow(dirPath)
     logAction('连线:更新样式', 'graphOperations', { edgeId, ...style })
   }
 

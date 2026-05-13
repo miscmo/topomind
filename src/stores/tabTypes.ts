@@ -23,14 +23,12 @@ export interface CreateKBTabInput {
   id: string
   label: string
   kbPath: string
-  isDirty?: boolean
 }
 
 export interface HomeTab {
   id: 'home'
   type: 'home'
   label: string
-  isDirty: false
 }
 
 export interface KBTab {
@@ -38,7 +36,6 @@ export interface KBTab {
   type: 'kb'
   label: string
   kbPath: string
-  isDirty: boolean
   roomHistory: RoomHistoryItem[]
   currentRoomPath: string
   currentRoomName: string
@@ -58,10 +55,6 @@ export interface TabLifecycleActions {
   removeTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
   reset: () => void
-}
-
-export interface TabDirtyActions {
-  setTabDirty: (tabId: string, isDirty: boolean) => void
 }
 
 export interface TabSelectors {
@@ -85,7 +78,6 @@ export interface TabSelectionActions {
 export type TabState =
   TabDataState &
   TabLifecycleActions &
-  TabDirtyActions &
   TabSelectors &
   TabRoomActions &
   TabSelectionActions

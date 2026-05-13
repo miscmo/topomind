@@ -17,7 +17,6 @@ import { useWorkspaceStore } from './stores/workspaceStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
-import { flushTabs } from './core/close-guard'
 import { closeTab, getClosableTabInfo } from './core/tab-flow'
 
 export default memo(function App() {
@@ -51,22 +50,8 @@ export default memo(function App() {
     const tab = getClosableTabInfo(tabId)
     if (!tab) return
 
-    if (tab.isDirty) {
-      const confirmed = await confirmOpen({
-        title: '关闭知识库',
-        message: `知识库 "${tab.label}" 有未保存的更改，确认后会先保存再关闭。是否继续？`,
-      })
-      if (!confirmed) return
-
-      const result = await flushTabs([tabId])
-      if (!result.ok) {
-        await confirmOpen({ title: '保存失败', message: `知识库 "${tab.label}" 保存失败，无法关闭。` })
-        return
-      }
-    }
-
     closeTab(tabId)
-    logAction('Tab:关闭', 'App', { tabId, label: tab.label, wasDirty: tab.isDirty })
+    logAction('Tab:关闭', 'App', { tabId, label: tab.label })
   }
 
   if (isMonitorWindow) return <MonitorPage />

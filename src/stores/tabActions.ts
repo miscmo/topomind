@@ -14,7 +14,6 @@ import {
 } from './tabState'
 import type {
   RoomTarget,
-  TabDirtyActions,
   TabLifecycleActions,
   TabRoomActions,
   TabSelectors,
@@ -33,9 +32,9 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
         return next.tabs === state.tabs && next.activeTabId === state.activeTabId ? state : next
       })
     },
-    addKBTab: ({ id, label, kbPath, isDirty = false }) => {
+    addKBTab: ({ id, label, kbPath }) => {
       set((state) => {
-        const tabs = appendKBTab(state.tabs, { id, label, kbPath, isDirty })
+        const tabs = appendKBTab(state.tabs, { id, label, kbPath })
         return tabs === state.tabs ? state : { tabs }
       })
     },
@@ -48,16 +47,6 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
       set({ activeTabId: tabId })
     },
     reset: () => set({ ...TAB_INITIAL_STATE }),
-  }
-}
-
-export function createTabDirtyActions(set: SetState): TabDirtyActions {
-  return {
-    setTabDirty: (tabId, isDirty) => {
-      set((state) => ({
-        tabs: updateKBTabById(state.tabs, tabId, (tab) => ({ ...tab, isDirty })),
-      }))
-    },
   }
 }
 

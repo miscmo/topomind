@@ -19,7 +19,6 @@ import { useStorage, type Store } from '../core/storage'
 import { buildGraphOperations } from './useGraph/graphOperations'
 import { buildGraphNavigation } from './useGraph/navigation'
 import { useGraphEventHandlers } from './useGraph/graphEventHandlers'
-import { useGraphDirtyState } from './useGraph/useGraphDirtyState'
 import { useGraphRefs } from './useGraph/useGraphRefs'
 import { useGraphRoomLoader } from './useGraph/useGraphRoomLoader'
 import { useGraphStorageApi } from './useGraph/useGraphStorageApi'
@@ -42,7 +41,6 @@ export function useGraph(tabId: string) {
   })
 
   const isCreatingRef = useRef(false)
-  const { isModified, setDirtyState, onDirtyChange } = useGraphDirtyState()
   const setSelectedNodeState = useCallback((selectedNode: KnowledgeNode | null) => {
     setState((s) => ({ ...s, selectedNode }))
   }, [])
@@ -94,7 +92,6 @@ export function useGraph(tabId: string) {
       getActiveSelectedNodeId,
       setActiveSelectedNodeId,
       updateSelectedNode,
-      setDirtyState,
       isCreatingRef,
     }),
     [
@@ -105,7 +102,6 @@ export function useGraph(tabId: string) {
       getActiveSelectedNodeId,
       setActiveSelectedNodeId,
       updateSelectedNode,
-      setDirtyState,
     ]
   )
 
@@ -151,9 +147,6 @@ export function useGraph(tabId: string) {
     edges: state.edges,
     loading: state.loading,
     selectedNode: state.selectedNode,
-    isModified,
-
-    onDirtyChange,
 
     // Room lifecycle
     loadRoom,

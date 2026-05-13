@@ -1,12 +1,6 @@
-import { tabStore } from '../stores/tabStore'
-
 type Saver = () => Promise<void>
 
 const tabSavers = new Map<string, Saver>()
-
-function getDirtyTabIds(): string[] {
-  return tabStore.getState().tabs.filter((tab) => tab.type === 'kb' && tab.isDirty).map((tab) => tab.id)
-}
 
 export function registerTabSaver(tabId: string, saver: Saver) {
   tabSavers.set(tabId, saver)
@@ -21,14 +15,9 @@ export function registerTabSaver(tabId: string, saver: Saver) {
 export async function flushTabs(tabIds: string[]): Promise<{ ok: boolean; failedTabId?: string }> {
   for (const tabId of tabIds) {
     const saver = tabSavers.get(tabId)
-    if (!saver) {
-      const tab = tabStore.getState().getTabById(tabId)
-      if (tab?.isDirty) return { ok: false, failedTabId: tabId }
-      continue
-    }
+    if (!saver) continue
     try {
       await saver()
-      tabStore.getState().setTabDirty(tabId, false)
     } catch {
       return { ok: false, failedTabId: tabId }
     }
@@ -36,33 +25,18 @@ export async function flushTabs(tabIds: string[]): Promise<{ ok: boolean; failed
   return { ok: true }
 }
 
-export async function flushAllDirtyTabs(): Promise<{ ok: boolean; failedTabId?: string }> {
-  return flushTabs(getDirtyTabIds())
-}
-
-export function hasDirtyTabs(): boolean {
-  return getDirtyTabIds().length > 0
-}
-
-export function getDirtyState() {
-  const dirtyTabIds = getDirtyTabIds()
-  return {
-    hasDirty: dirtyTabIds.length > 0,
-    dirtyTabIds,
-  }
+export async function flushAllTabs(): Promise<{ ok: boolean; failedTabId?: string }> {
+  const allTabIds = Array.from(tabSavers.keys())
+  return flushTabs(allTabIds)
 }
 
 // Expose close-guard helpers for the Electron main process quit/switch-workdir flow.
 if (typeof window !== 'undefined') {
   ;(window as typeof window & {
     __topomindCloseGuard?: {
-      hasDirtyTabs: () => boolean
-      getDirtyState: () => { hasDirty: boolean; dirtyTabIds: string[] }
-      flushAllDirtyTabs: () => Promise<{ ok: boolean; failedTabId?: string }>
+      flushAllTabs: () => Promise<{ ok: boolean; failedTabId?: string }>
     }
   }).__topomindCloseGuard = {
-    hasDirtyTabs,
-    getDirtyState,
-    flushAllDirtyTabs,
+    flushAllTabs,
   }
 }

@@ -17,11 +17,9 @@ export interface NodeCrudOperationsDeps {
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   saveNow: (dirPath: string) => Promise<void>
-  scheduleSave: (dirPath: string) => void
   setState: (updater: (prev: { nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }) => { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; loading?: boolean; selectedNode?: KnowledgeNode | null }) => void
   getActiveSelectedNodeId: () => string | null
   setActiveSelectedNodeId: (nodeId: string | null) => void
-  setDirtyState: (next: boolean) => void
   isCreatingRef: React.MutableRefObject<boolean>
 }
 
@@ -35,11 +33,9 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     loadRoom,
     rebuildMaps,
     saveNow,
-    scheduleSave,
     setState,
     getActiveSelectedNodeId,
     setActiveSelectedNodeId,
-    setDirtyState,
     isCreatingRef,
   } = deps
 
@@ -58,7 +54,6 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       return null
     }
 
-    if (dirPath) setDirtyState(true)
     isCreatingRef.current = true
 
     try {
@@ -80,7 +75,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       })
 
       await loadRoom(reloadPath, true)
-      scheduleSave(getActiveNavState().roomPath)
+      await saveNow(getActiveNavState().roomPath)
 
       return result.newRef
     } catch (e) {
@@ -132,7 +127,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
         rebuildMaps(nodes, prev.edges)
         return { ...prev, nodes }
       })
-      if (dirPath) scheduleSave(dirPath)
+      if (dirPath) await saveNow(dirPath)
       return true
     } catch (e) {
       logger.catch('graphOperations', 'renameNode', e)

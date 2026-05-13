@@ -51,18 +51,6 @@
   transform: scale(1.02);
 }
 
-/* 未保存编辑 */
-.unsaved {
-  background: rgba(243, 156, 18, 0.08) !important;
-}
-
-.unsaved .label::after {
-  content: ' ●';
-  color: #f39c12;
-  font-size: 8px;
-  vertical-align: middle;
-}
-
 /* 标签文字 */
 .label {
   font-size: 13px;
@@ -90,19 +78,6 @@
   align-items: center;
   justify-content: center;
   padding: 0 4px;
-  border: 2px solid #fff;
-  pointer-events: none;
-}
-
-/* 未保存圆点 */
-.unsavedDot {
-  position: absolute;
-  top: -4px;
-  left: -4px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #f39c12;
   border: 2px solid #fff;
   pointer-events: none;
 }

@@ -13,18 +13,17 @@ export function ensureHomeTab(tabs: Tab[], activeTabId: string) {
   }
 
   return {
-    tabs: [{ id: 'home', type: 'home', label: '首页', isDirty: false } satisfies Tab, ...tabs],
+    tabs: [{ id: 'home', type: 'home', label: '首页' } satisfies Tab, ...tabs],
     activeTabId: activeTabId || 'home',
   }
 }
 
-export function createKBTab(tab: { id: string; label: string; kbPath: string; isDirty?: boolean }): Tab {
+export function createKBTab(tab: { id: string; label: string; kbPath: string }): Tab {
   return {
     id: tab.id,
     type: 'kb',
     label: tab.label,
     kbPath: tab.kbPath,
-    isDirty: tab.isDirty ?? false,
     roomHistory: [],
     currentRoomPath: tab.kbPath,
     currentRoomName: tab.label,
@@ -32,7 +31,7 @@ export function createKBTab(tab: { id: string; label: string; kbPath: string; is
   }
 }
 
-export function appendKBTab(tabs: Tab[], tab: { id: string; label: string; kbPath: string; isDirty?: boolean }) {
+export function appendKBTab(tabs: Tab[], tab: { id: string; label: string; kbPath: string }) {
   if (tabs.some((item) => item.id === tab.id)) return tabs
   return [...tabs, createKBTab(tab)]
 }

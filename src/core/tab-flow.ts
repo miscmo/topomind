@@ -1,16 +1,9 @@
 import { tabStore, type Tab } from '../stores/tabStore'
-import { flushTabs } from './close-guard'
 import type { RoomHistoryItem } from '../types'
 import type { RoomSnapshot, RoomTarget } from '../stores/tabTypes'
 
 interface OpenKBTabInput {
   name: string
-}
-
-export interface ClosableTabInfo {
-  id: string
-  label: string
-  isDirty: boolean
 }
 
 function snapshotFromTab(tab: Tab): RoomSnapshot | null {
@@ -24,17 +17,9 @@ function snapshotFromTab(tab: Tab): RoomSnapshot | null {
   }
 }
 
-async function flushCurrentTabBeforeLeaving(nextTabId: string): Promise<boolean> {
-  const activeTab = tabStore.getState().getActiveTab()
-  if (!activeTab || activeTab.id === nextTabId || !activeTab.isDirty) return true
-  const result = await flushTabs([activeTab.id])
-  return result.ok
-}
-
 export async function activateTab(tabId: string): Promise<boolean> {
   const tab = tabStore.getState().getTabById(tabId)
   if (!tab) return false
-  if (!(await flushCurrentTabBeforeLeaving(tabId))) return false
   tabStore.getState().setActiveTab(tabId)
   return true
 }
@@ -45,9 +30,6 @@ export async function openHomeTab(): Promise<boolean> {
 
 export async function openKBTab(kb: OpenKBTabInput): Promise<boolean> {
   const tabId = `kb:${kb.name}`
-  if (!(await flushCurrentTabBeforeLeaving(tabId))) {
-    return false
-  }
   const existing = tabStore.getState().getTabById(tabId)
 
   if (!existing) {
@@ -55,7 +37,6 @@ export async function openKBTab(kb: OpenKBTabInput): Promise<boolean> {
       id: tabId,
       label: kb.name,
       kbPath: kb.name,
-      isDirty: false,
     })
   }
 
@@ -81,13 +62,12 @@ export function closeTab(tabId: string) {
   tabStore.getState().removeTab(tabId)
 }
 
-export function getClosableTabInfo(tabId: string): ClosableTabInfo | null {
+export function getClosableTabInfo(tabId: string) {
   const tab = tabStore.getState().getTabById(tabId)
   if (!tab || tab.id === 'home') return null
   return {
     id: tab.id,
     label: tab.label,
-    isDirty: tab.isDirty,
   }
 }
 

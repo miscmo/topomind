@@ -23,7 +23,6 @@ export interface GraphContextValue {
   // O(1) lookup maps — consistently updated by rebuildMaps() on every state change
   nodesMapRef: React.MutableRefObject<Map<string, KnowledgeNode>>
   edgesMapRef: React.MutableRefObject<Map<string, KnowledgeEdge>>
-  isModified: boolean
 
   // Room lifecycle
   loadRoom: (dirPath: string) => Promise<void>
@@ -64,7 +63,6 @@ const emptyContext: GraphContextValue = {
   edges: [],
   loading: false,
   selectedNode: null,
-  isModified: false,
   nodesRef: { current: [] },
   edgesRef: { current: [] },
   nodesMapRef: { current: new Map() },
@@ -104,7 +102,6 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     edges: graph.edges,
     loading: graph.loading,
     selectedNode: graph.selectedNode,
-    isModified: graph.isModified,
     nodesRef: graph.nodesRef,
     edgesRef: graph.edgesRef,
     nodesMapRef: graph.nodesMapRef,

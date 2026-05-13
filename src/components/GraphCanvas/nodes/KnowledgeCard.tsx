@@ -10,8 +10,6 @@ import type { KnowledgeNode } from '../../../types'
 import styles from './KnowledgeCard.module.css'
 
 function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
-  const hasUnsaved = data.hasUnsavedEdit
-
   return (
     <div
       className={[
@@ -19,7 +17,6 @@ function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
         selected ? styles.selected : '',
         data.hovered ? styles.hovered : '',
         data.connectTarget ? styles.connectTarget : '',
-        hasUnsaved ? styles.unsaved : '',
         dragging ? styles.dragging : '',
       ].filter(Boolean).join(' ')}
       style={data.domainColor ? { borderColor: data.domainColor } : undefined}
@@ -34,9 +31,6 @@ function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
       {data.childCount !== undefined && data.childCount > 0 && (
         <div className={styles.badge}>{data.childCount}</div>
       )}
-
-      {/* 未保存指示器 */}
-      {hasUnsaved && <div className={styles.unsavedDot} title="有未保存的编辑" />}
     </div>
   )
 }

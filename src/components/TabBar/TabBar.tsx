@@ -27,7 +27,6 @@ const TabItem = memo(function TabItem({ tab, isActive, onClick, onClose }: {
     >
       <span className={styles.tabLabel}>
         {tab.label}
-        {tab.isDirty && <span className={styles.tabDirty}> •</span>}
       </span>
       {tab.id !== 'home' && (
         <button

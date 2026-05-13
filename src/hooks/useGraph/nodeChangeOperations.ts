@@ -6,7 +6,7 @@ export interface NodeChangeOperationsDeps {
   getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
   getActiveSelectedNodeId: () => string | null
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
-  scheduleSave: (dirPath: string) => void
+  saveNow: (dirPath: string) => Promise<void>
   setState: (updater: (prev: { nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }) => { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; loading?: boolean; selectedNode?: KnowledgeNode | null }) => void
   updateSelectedNode: (nodes: KnowledgeNode[], nodeId: string | null) => void
 }
@@ -18,12 +18,12 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     getActiveNavState,
     getActiveSelectedNodeId,
     rebuildMaps,
-    scheduleSave,
+    saveNow,
     setState,
     updateSelectedNode,
   } = deps
 
-  const applyNodePositionChanges = (changes: Array<{ id: string; position: { x: number; y: number } }>) => {
+  const applyNodePositionChanges = async (changes: Array<{ id: string; position: { x: number; y: number } }>) => {
     setState((prev) => {
       const nodesMap = new Map(prev.nodes.map((n) => [n.id, n]))
       for (const change of changes) {
@@ -39,10 +39,10 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       return { ...prev, nodes }
     })
     const dirPath = getActiveNavState().roomPath
-    if (dirPath) scheduleSave(dirPath)
+    if (dirPath) await saveNow(dirPath)
   }
 
-  const applyNodeRemoveChanges = (changeIds: string[]) => {
+  const applyNodeRemoveChanges = async (changeIds: string[]) => {
     const removedSet = new Set(changeIds)
     setState((prev) => {
       const nodes = prev.nodes.filter((n) => !changeIds.includes(n.id))
@@ -53,7 +53,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       return { ...prev, nodes, edges }
     })
     const dirPath = getActiveNavState().roomPath
-    if (dirPath) scheduleSave(dirPath)
+    if (dirPath) await saveNow(dirPath)
   }
 
   const applyNodeDimensionChanges = (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined }>) => {

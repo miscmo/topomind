@@ -16,8 +16,7 @@ export interface StorageApi {
   createCard: (parentPath: string, cardName: string) => Promise<string | null>
   deleteCard: (cardPath: string) => Promise<unknown>
   renameCard: (cardPath: string, newName: string) => Promise<unknown>
-  saveGraphDebounced: (dirPath: string, buildMeta: () => GraphMeta, onFlush: () => void) => Promise<void>
-  flushGraphSave: (dirPath: string, buildMeta: () => GraphMeta, onFlush: () => void) => Promise<void>
+  flushGraphSave: (dirPath: string, buildMeta: () => GraphMeta, onFlush: (() => void) | undefined) => Promise<void>
   readLayout: (dirPath: string) => Promise<GraphMeta>
   writeLayout: (dirPath: string, meta: GraphMeta) => Promise<void>
 }
@@ -35,7 +34,6 @@ export interface GraphOpsDeps {
   getActiveSelectedNodeId: () => string | null
   setActiveSelectedNodeId: (nodeId: string | null) => void
   updateSelectedNode: (nodes: KnowledgeNode[], nodeId: string | null) => void
-  setDirtyState: (next: boolean) => void
   isCreatingRef: React.MutableRefObject<boolean>
 }
 
@@ -53,35 +51,20 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     getActiveSelectedNodeId,
     setActiveSelectedNodeId,
     updateSelectedNode,
-    setDirtyState,
     isCreatingRef,
   } = deps
 
   // ===== Internal helpers =====
 
-  const scheduleSave = (dirPath: string) => {
-    if (!dirPath) return
-    setDirtyState(true)
-    storage.saveGraphDebounced(
-      dirPath,
-      () => buildMetaFromNodesEdges(
-        Array.from(nodesMapRef.current.values()),
-        Array.from(edgesMapRef.current.values())
-      ),
-      () => setDirtyState(false)
-    )
-  }
-
   const saveNow = async (dirPath: string) => {
     if (!dirPath) return
-    setDirtyState(true)
     await storage.flushGraphSave(
       dirPath,
       () => buildMetaFromNodesEdges(
         Array.from(nodesMapRef.current.values()),
         Array.from(edgesMapRef.current.values())
       ),
-      () => setDirtyState(false)
+      undefined
     )
   }
 
@@ -96,11 +79,9 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     loadRoom,
     rebuildMaps,
     saveNow,
-    scheduleSave,
     setState,
     getActiveSelectedNodeId,
     setActiveSelectedNodeId,
-    setDirtyState,
     isCreatingRef,
   })
 
@@ -110,7 +91,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     edgesRef,
     getActiveNavState,
     rebuildMaps,
-    scheduleSave,
+    saveNow,
     setState,
   })
 
@@ -122,7 +103,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     getActiveNavState,
     getActiveSelectedNodeId,
     rebuildMaps,
-    scheduleSave,
+    saveNow,
     setState,
     updateSelectedNode,
   })
@@ -146,7 +127,6 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     // Selection
     ...selectionOps,
     // Internal
-    scheduleSave,
     saveNow,
   }
 }

@@ -1,6 +1,6 @@
 /**
  * GraphPage 页面控制器
- * 编排 useGraphPageLogging / useGraphPageDirtySync / useGraphPageRoomLoader / useNavContext / useGraph
+ * 编排 useGraphPageLogging / useGraphPageRoomLoader / useNavContext / useGraph
  * 等多个子模块，统一管理 GraphPage 的页面逻辑。
  */
 import { useEffect, useRef } from 'react'
@@ -9,7 +9,6 @@ import { useGraph } from '../../hooks/useGraph'
 import { registerTabSaver } from '../../core/close-guard'
 import { useGraphPageRoomLoader } from './useGraphPageRoomLoader'
 import { useGraphPageLogging } from './useGraphPageLogging'
-import { useGraphPageDirtySync } from './useGraphPageDirtySync'
 
 export interface UseGraphPageControllerOptions {
   tabId: string
@@ -23,11 +22,6 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
     effectiveRoomPath: nav.roomPath || null,
     effectiveKbPath: nav.kbPath || null,
     tabId,
-  })
-
-  useGraphPageDirtySync({
-    tabId,
-    onDirtyChange: graph.onDirtyChange,
   })
 
   useGraphPageRoomLoader({

@@ -77,8 +77,6 @@ export interface KnowledgeNodeData {
   parent?: string
   /** 域颜色 */
   domainColor?: string
-  /** 是否有未保存的编辑 */
-  hasUnsavedEdit?: boolean
   /** 子节点数量（用于徽章显示） */
   childCount?: number
   /** 选中状态 */
