@@ -87,6 +87,26 @@ function _fs_safeSegment(name) {
 }
 
 /**
+ * @description 校验目录名必须是单个且安全的名称；不允许路径片段、特殊字符或被自动修正
+ * @param { string } name: 原始目录名
+ * @param { string } label: 字段名
+ * @returns { string } 通过校验后的目录名
+ * @throws { Error } 名称非法时抛出错误
+ */
+function _fs_requireSafeDirName(name, label) {
+  var raw = String(name || '').trim();
+  var fieldLabel = label || '目录名称';
+  if (!raw) {
+    throw new Error(fieldLabel + '不能为空');
+  }
+  var safe = _fs_safeSegment(raw);
+  if (raw !== safe) {
+    throw new Error(fieldLabel + '包含非法字符');
+  }
+  return safe;
+}
+
+/**
  * @description 在父目录下生成不重名的文件夹名称
  * @param { string } parentDir: 父目录路径
  * @param { string } desiredName: 期望的目录名
@@ -218,22 +238,22 @@ function _fs_requireValidWorkDir(rootDir) {
   return dir;
 }
 
-function _fs_createKbsDir(rootDir, dirPath) {
+function _fs_createCardDir(rootDir, parentPath, cardName) {
   rootDir = _fs_requireValidWorkDir(rootDir);
-  var parent = _fs_kbsDir(rootDir);
-
-  var segments = (dirPath || '').split('/').filter(Boolean);
-  if (segments.length === 0) return parent;
-  for (var i = 0; i < segments.length - 1; i++) {
-    parent = nodePath.join(parent, _fs_safeSegment(segments[i]));
-    _fs_ensureDir(parent);
+  var parent = _fs_resolveKbsPath(rootDir, parentPath);
+  if (!nodeFs.existsSync(parent)) {
+    throw new Error('父目录不存在: ' + String(parentPath || ''));
   }
-  var finalName = _fs_uniqueFolderName(parent, segments[segments.length - 1]);
+  var finalName = _fs_safeSegment(cardName);
+  if (!String(cardName || '').trim()) {
+    throw new Error('卡片名称不能为空');
+  }
   var d = nodePath.join(parent, finalName);
-  _fs_ensureDir(d);
-  if (!nodeFs.existsSync(_fs_graphFilePath(d))) {
-    _fs_writeJsonFile(_fs_graphFilePath(d), { children: {}, edges: [], zoom: null, pan: null, canvasBounds: null });
+  if (nodeFs.existsSync(d)) {
+    throw new Error('目录已存在: ' + _fs_relativeToKbs(rootDir, d));
   }
+  _fs_ensureDir(d);
+  _fs_writeJsonFile(_fs_graphFilePath(d), {});
   return _fs_relativeToKbs(rootDir, d);
 }
 
@@ -347,14 +367,31 @@ const fileService = {
       return parentGraph.children || {};
     },
 
-    /**
-     * @description 创建 kbs/ 下的目录，并初始化默认文件
+    /** 不能再改这部分代码了  --to ai
+     * @description 在 kbs/ 根目录下创建知识库目录，并初始化默认文件
      * @param { string } rootDir: 工作目录路径
-     * @param { string } dirPath: 相对于 kbs/ 的目录路径
+     * @param { string } kbName: 知识库目录名，只允许单个安全目录名
+     * @returns { void }
+     */
+    createKbsDir: function(rootDir, kbName) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      var finalName = _fs_requireSafeDirName(kbName, '知识库名称');
+      var d = nodePath.join(_fs_kbsDir(rootDir), finalName);
+      if (nodeFs.existsSync(d)) {
+        throw new Error('目录已存在: ' + _fs_relativeToKbs(rootDir, d));
+      }
+      _fs_ensureDir(d);
+    },
+
+    /**
+     * @description 在指定父目录下创建卡片目录，并初始化默认文件
+     * @param { string } rootDir: 工作目录路径
+     * @param { string } parentPath: 父目录相对于 kbs/ 的路径
+     * @param { string } cardName: 卡片目录名
      * @returns { string } 创建后的目录相对路径
      */
-    createKbsDir: function(rootDir, dirPath) {
-      return _fs_createKbsDir(rootDir, dirPath);
+    createCardDir: function(rootDir, parentPath, cardName) {
+      return _fs_createCardDir(rootDir, parentPath, cardName);
     },
 
     /**

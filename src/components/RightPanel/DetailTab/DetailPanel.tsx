@@ -14,6 +14,8 @@ import styles from './DetailTab.module.css'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { registerTabSaver } from '../../../core/close-guard'
+import { useNavContext } from '../../../hooks/useNavContext'
+import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
 
 // Configure marked once — called at module load time, not inside components
 marked.setOptions({ breaks: true, gfm: true })
@@ -28,6 +30,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   const collapseRightPanel = useRightPanelStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()
   const prompt = usePromptStore((s) => s.open)
+  const { getNavState } = useNavContext({ tabId })
 
   const [editMode, setEditMode] = useState(false)
   const [markdown, setMarkdown] = useState('')
@@ -38,7 +41,11 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   const markdownRequestSeqRef = useRef(0)
 
   const selectedNode = graph.selectedNode
-  const nodePath = selectedNode?.data.path ?? null
+  const resolveNodePath = useCallback((nodeId: string) => {
+    const nav = getNavState()
+    return resolveRoomChildRef(nav.roomPath || nav.kbPath, nodeId)
+  }, [getNavState])
+  const nodePath = selectedNodeId ? resolveNodePath(selectedNodeId) : null
   const childCount = selectedNode?.data.childCount ?? 0
 
   // Load markdown when node changes
@@ -51,7 +58,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
     const requestSeq = ++markdownRequestSeqRef.current
     if (!selectedNodeId) return
 
-    const path = selectedNode?.data.path ?? selectedNodeId
+    const path = resolveNodePath(selectedNodeId)
     storage.readMarkdown(path).then((content: string) => {
       if (markdownRequestSeqRef.current !== requestSeq) return
       setMarkdown(content)
@@ -61,7 +68,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
       setMarkdown('')
       setSavedMarkdown('')
     })
-  }, [selectedNodeId, selectedNode?.data.path, storage])
+  }, [selectedNodeId, resolveNodePath, storage])
 
   // Focus rename input when entering rename mode
   useEffect(() => {
@@ -77,7 +84,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   const handleSave = async () => {
     if (!selectedNodeId) return
     const node = graph.nodesMapRef.current.get(selectedNodeId)
-    const path = node?.data.path ?? selectedNodeId
+    const path = resolveNodePath(selectedNodeId)
     const label = node?.data.label
     try {
       await storage.writeMarkdown(path, markdown)
@@ -99,7 +106,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
     }
     const node = graph.nodesMapRef.current.get(selectedNodeId)
     const oldLabel = node?.data.label ?? selectedNode?.data.label
-    const path = node?.data.path ?? selectedNode?.data.path
+    const path = resolveNodePath(selectedNodeId)
     logAction('节点:重命名', 'DetailPanel', {
       nodeId: selectedNodeId,
       oldName: oldLabel,
@@ -118,13 +125,13 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
     if (!selectedNodeId) return
     const node = graph.nodesMapRef.current.get(selectedNodeId)
     const label = node?.data.label ?? selectedNodeId
-    const path = node?.data.path ?? selectedNodeId
+    const path = resolveNodePath(selectedNodeId)
     const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${label}" 确认删除` })
     if (!confirmed?.trim() || confirmed !== label) return
     logAction('节点:删除', 'DetailPanel', { nodeId: selectedNodeId, label, path })
     graph.deleteChildNode(selectedNodeId)
     collapseRightPanel()
-  }, [selectedNodeId, prompt, graph, collapseRightPanel])
+  }, [selectedNodeId, prompt, graph, collapseRightPanel, resolveNodePath])
 
   const flushMarkdownSave = useCallback(async () => {
     if (!editMode || !selectedNodeId) return
@@ -216,8 +223,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
             <button
               onClick={() => {
                 // Reload original content — use nodesMapRef for stale-closure-safe access
-                const node = graph.nodesMapRef.current.get(selectedNodeId)
-                const path = node?.data.path ?? selectedNodeId
+                const path = resolveNodePath(selectedNodeId)
                 const requestSeq = ++markdownRequestSeqRef.current
                 storage.readMarkdown(path).then((content: string) => {
                   if (markdownRequestSeqRef.current !== requestSeq) return

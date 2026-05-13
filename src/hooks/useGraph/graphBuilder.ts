@@ -93,8 +93,9 @@ export async function buildNodes(
 ): Promise<KnowledgeNode[]> {
   const roomGraph = graphMetaToRoomGraph(dirPath, meta)
   const normalizedChildren = Object.values(roomGraph.nodes).map((roomNode) => {
-    const childPath = resolveRoomChildRef(dirPath, roomNode.cardRef || roomNode.id)
-    return [childPath, roomNode] as [string, RoomGraphNode]
+    const nodeId = roomNode.id || roomNode.cardRef
+    const childPath = resolveRoomChildRef(dirPath, roomNode.cardRef || nodeId)
+    return [nodeId, childPath, roomNode] as [string, string, RoomGraphNode]
   })
 
   const nodeCount = normalizedChildren.length
@@ -104,7 +105,7 @@ export async function buildNodes(
 
   // Parallelize child count checks
   const childCountResults = await Promise.all(
-    normalizedChildren.map(async ([childPath]) => {
+    normalizedChildren.map(async ([, childPath]) => {
       try {
         return await storage.countChildren(childPath)
       } catch {
@@ -113,8 +114,7 @@ export async function buildNodes(
     })
   )
 
-  return normalizedChildren.map(([childPath, roomNode], i) => {
-    const nodeId = childPath
+  return normalizedChildren.map(([nodeId, childPath, roomNode], i) => {
     const childCount = childCountResults[i]
     const domainColor = DOMAIN_COLORS[i % DOMAIN_COLORS.length]
     const saved = savedPositions[nodeId]
@@ -129,7 +129,6 @@ export async function buildNodes(
       position,
       data: {
         label: roomNode.name || basenameRef(childPath),
-        path: childPath,
         parent: dirPath || kbPath || undefined,
         domainColor,
         childCount,

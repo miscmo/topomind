@@ -1,6 +1,6 @@
 import type { GraphMeta } from '../../core/storage'
 import type { KnowledgeEdge, KnowledgeNode } from '../../types'
-import { resolveRoomChildRef } from '../../domain/graph/path-utils'
+import { normalizeRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { buildEdges, buildNodes } from './graphBuilder'
 
 export interface RoomLoaderStorage {
@@ -27,9 +27,10 @@ export async function loadRoomGraph(
   if (nodeEntries.length > 0) {
     const positionResults = await Promise.allSettled(
       nodeEntries.map(async ([nodeId, node]) => {
-        const childPath = resolveRoomChildRef(dirPath, node.card?.ref || node.id || nodeId)
+        const childId = normalizeRef(node.card?.ref || node.id || nodeId)
+        const childPath = resolveRoomChildRef(dirPath, childId)
         const childMeta = await storage.readLayout(childPath)
-        return { childPath, childMeta }
+        return { childId, childMeta }
       })
     )
 
@@ -39,7 +40,7 @@ export async function loadRoomGraph(
         result.value.childMeta.viewport.zoom != null &&
         result.value.childMeta.viewport.pan != null
       ) {
-        savedPositions[result.value.childPath] = {
+        savedPositions[result.value.childId] = {
           x: result.value.childMeta.viewport.pan.x,
           y: result.value.childMeta.viewport.pan.y,
         }

@@ -1,5 +1,5 @@
 import type { CardInfo, GraphMeta } from './model'
-import { basenameRef, normalizeRef, resolveRoomChildRef } from './path-utils'
+import { basenameRef, normalizeRef } from './path-utils'
 import {
   DEFAULT_NODE_SIZE,
   DEFAULT_VIEWPORT,
@@ -24,10 +24,8 @@ export function graphMetaToRoomGraph(roomRef: string, meta: GraphMeta): RoomGrap
   const normalizedRoomRef = normalizeRef(roomRef)
 
   for (const [nodeKey, node] of Object.entries(meta.nodes ?? {})) {
-    const rawId = node.id || nodeKey
-    const rawCardRef = node.card?.ref || rawId
-    const cardRef = resolveRoomChildRef(normalizedRoomRef, rawCardRef)
-    const id = cardRef || resolveRoomChildRef(normalizedRoomRef, rawId)
+    const id = normalizeRef(node.id || nodeKey)
+    const cardRef = normalizeRef(node.card?.ref || id)
     nodes[id] = {
       id,
       cardRef,
@@ -45,8 +43,8 @@ export function graphMetaToRoomGraph(roomRef: string, meta: GraphMeta): RoomGrap
     nodes,
     edges: (meta.edges ?? []).map<RoomGraphEdge>((edge) => ({
       id: edge.id,
-      sourceRef: resolveRoomChildRef(normalizedRoomRef, edge.source.ref),
-      targetRef: resolveRoomChildRef(normalizedRoomRef, edge.target.ref),
+      sourceRef: normalizeRef(edge.source.ref),
+      targetRef: normalizeRef(edge.target.ref),
       relation: edge.relation,
       weight: edge.weight,
       lineMode: edge.lineMode,

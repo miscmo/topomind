@@ -71,8 +71,6 @@ export type EdgeWeight = 'main' | 'minor'
 export interface KnowledgeNodeData {
   /** 显示名称（来自 _graph.children[name].name） */
   label: string
-  /** 磁盘路径（相对路径） */
-  path: string
   /** 父节点 ID（顶层 KB 无 parent） */
   parent?: string
   /** 域颜色 */

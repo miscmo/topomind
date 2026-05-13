@@ -2,7 +2,7 @@ import { FSB } from '../fs-backend'
 import type { StorageBackend } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import type { EdgeRelation, EdgeWeight } from '../../types'
-import { basenameRef, joinRefs, normalizeRef, parentRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
+import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
 
 interface FSBGraphChild {
   name: string
@@ -51,67 +51,16 @@ const toCardInfo = (parentCardPath: string, key: string, rawChild: unknown): Car
   }
 }
 
-function toRoomRelativeRef(roomRef: string, ref: string): string {
-  const normalizedRoom = normalizeRef(roomRef)
-  const normalizedRef = normalizeRef(ref)
-  if (!normalizedRoom || !normalizedRef) return normalizedRef
-  if (normalizedRef === normalizedRoom) return ''
-  const prefix = `${normalizedRoom}/`
-  return normalizedRef.startsWith(prefix) ? normalizedRef.slice(prefix.length) : normalizedRef
-}
-
-function fromRoomRelativeRef(roomRef: string, ref: string): string {
-  const normalizedRoom = normalizeRef(roomRef)
-  const normalizedRef = normalizeRef(ref)
-  if (!normalizedRef) return ''
-  if (!normalizedRoom) return normalizedRef
-  if (normalizedRef === normalizedRoom || normalizedRef.startsWith(`${normalizedRoom}/`)) {
-    return normalizedRef
-  }
-
-  const roomParent = parentRef(normalizedRoom)
-  if (roomParent && (normalizedRef === roomParent || normalizedRef.startsWith(`${roomParent}/`))) {
-    return normalizedRef
-  }
-
-  const roomName = basenameRef(normalizedRoom)
-  if (roomParent && roomName && normalizedRef.startsWith(`${roomName}/`)) {
-    return joinRefs(roomParent, normalizedRef)
-  }
-
-  return resolveRoomChildRef(normalizedRoom, normalizedRef)
-}
-
-function kbRelativeRef(ref: string): string {
-  const parts = normalizeRef(ref).split('/').filter(Boolean)
-  return parts.length <= 1 ? '' : parts.slice(1).join('/')
-}
-
-function roomRelativeChildRef(parentPath: string, childPath: string): string {
-  const parentParts = normalizeRef(parentPath).split('/').filter(Boolean)
-  const childParts = normalizeRef(childPath).split('/').filter(Boolean)
-  const matchesParent = parentParts.length > 0 && parentParts.every((part, index) => childParts[index] === part)
-  if (matchesParent) return childParts.slice(parentParts.length).join('/')
-  return childParts.length ? childParts[childParts.length - 1] : ''
-}
-
 async function updateCardName(rootDir: string, cardPath: string, newName: string): Promise<void> {
   const parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : ''
+  const cardId = basenameRef(cardPath)
   const graph = await FSB.readGraphMeta(rootDir, parentPath)
   const children = isRecord(graph.children) ? { ...graph.children } : {}
-  const candidateKeys = [
-    roomRelativeChildRef(parentPath, cardPath),
-    kbRelativeRef(cardPath),
-    cardPath,
-  ]
 
-  for (const key of candidateKeys) {
-    const entry = children[key]
-    if (isRecord(entry)) {
-      children[key] = { ...entry, name: newName }
-      await FSB.writeGraphMeta(rootDir, parentPath, { ...graph, children })
-      return
-    }
+  const entry = children[cardId]
+  if (isRecord(entry)) {
+    children[cardId] = { ...entry, name: newName }
+    await FSB.writeGraphMeta(rootDir, parentPath, { ...graph, children })
   }
 }
 
@@ -120,7 +69,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
 
   const nodes: GraphMeta['nodes'] = {}
   for (const [key, child] of Object.entries(children)) {
-    const ref = fromRoomRelativeRef(roomRef, key)
+    const ref = normalizeRef(key)
     nodes[ref] = {
       id: ref,
       card: { ref, name: child.name, updatedAt: undefined },
@@ -138,8 +87,8 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
     color?: string; arrow?: boolean; highlighted?: boolean; faded?: boolean
   }> = (raw.edges ?? []).map(e => ({
     id: e.id,
-    source: { ref: fromRoomRelativeRef(roomRef, e.source), name: '', updatedAt: undefined },
-    target: { ref: fromRoomRelativeRef(roomRef, e.target), name: '', updatedAt: undefined },
+    source: { ref: normalizeRef(e.source), name: '', updatedAt: undefined },
+    target: { ref: normalizeRef(e.target), name: '', updatedAt: undefined },
     relation: e.relation ?? '相关',
     weight: e.weight ?? 'minor',
     lineMode: e.lineMode,
@@ -174,7 +123,7 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
   const children: Record<string, FSBGraphChild> = {}
   for (const node of Object.values(meta.nodes)) {
     const ref = normalizeRef(node.card?.ref || node.id)
-    const key = toRoomRelativeRef(roomRef, ref) || basenameRef(ref) || basenameRef(node.id) || node.id
+    const key = ref || basenameRef(node.id) || node.id
     children[key] = {
       name: node.card.name,
       x: node.position?.x,
@@ -186,8 +135,8 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
     children,
     edges: meta.edges.map(e => ({
       id: e.id,
-      source: toRoomRelativeRef(roomRef, e.source.ref),
-      target: toRoomRelativeRef(roomRef, e.target.ref),
+      source: normalizeRef(e.source.ref),
+      target: normalizeRef(e.target.ref),
       relation: e.relation,
       weight: e.weight,
       lineMode: e.lineMode,
@@ -230,8 +179,8 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.listKBs(requireRootDir())
     },
 
-    createKB: async (name: string): Promise<string> => {
-      return FSB.createKbsDir(requireRootDir(), name)
+    createKB: async (name: string): Promise<void> => {
+      await FSB.createKbsDir(requireRootDir(), name)
     },
 
     deleteKB: async (kbPath: string): Promise<void> => {
@@ -254,7 +203,7 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
     },
 
     createCard: async (parentPath: string, name: string): Promise<CardInfo> => {
-      const cardPath = await FSB.createKbsDir(requireRootDir(), joinRefs(parentPath, name))
+      const cardPath = await FSB.createCardDir(requireRootDir(), parentPath, name)
       return { ref: cardPath, name, updatedAt: undefined }
     },
 

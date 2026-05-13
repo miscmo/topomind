@@ -7,7 +7,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 // IPC 通道白名单，只允许渲染进程调用这些通道
 const ALLOWED_CHANNELS = new Set([
   // fs
-  'fs:listKBs', 'fs:readCardChildren', 'fs:createKbsDir', 'fs:deleteKbsDir',
+  'fs:listKBs', 'fs:readCardChildren', 'fs:createKbsDir', 'fs:createCardDir', 'fs:deleteKbsDir',
   'fs:readGraphMeta', 'fs:writeGraphMeta',
   'fs:renameKB',
   'fs:readFile', 'fs:writeFile',

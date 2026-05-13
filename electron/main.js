@@ -120,6 +120,7 @@ function registerIPC() {
   ipcMain.handle('fs:listKBs', function(e, rootDir) { return fileService.listKBs(rootDir); });
   ipcMain.handle('fs:readCardChildren', function(e, rootDir, p) { return fileService.readCardChildren(rootDir, p); });
   ipcMain.handle('fs:createKbsDir', function(e, rootDir, p) { return fileService.createKbsDir(rootDir, p); });
+  ipcMain.handle('fs:createCardDir', function(e, rootDir, parentPath, cardName) { return fileService.createCardDir(rootDir, parentPath, cardName); });
   ipcMain.handle('fs:deleteKbsDir', function(e, rootDir, p) { fileService.deleteKbsDir(rootDir, p); });
   ipcMain.handle('fs:renameKB', function(e, rootDir, p, n) { return fileService.renameKB(rootDir, p, n); });
   ipcMain.handle('fs:readGraphMeta', function(e, rootDir, p) { return fileService.readGraphMeta(rootDir, p); });

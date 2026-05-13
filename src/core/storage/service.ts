@@ -18,7 +18,7 @@ export interface StorageBackend {
   isValidVault: (dirPath: string) => Promise<{ valid: boolean; error?: string }>
 
   listKBs: () => Promise<KBListItem[]>
-  createKB: (name: string) => Promise<string>
+  createKB: (name: string) => Promise<void>
   deleteKB: (kbPath: string) => Promise<void>
   renameKB: (kbPath: string, newName: string) => Promise<void>
   importKB: (sourcePath: string) => Promise<string>
@@ -101,10 +101,9 @@ export function createStore(backend: StorageBackend) {
         return await backend.listKBs()
       } catch (e) { logger.catch('Store.listKBs', '列出知识库失败', e); throw e }
     },
-    async createKB(name: unknown) {
-      const safeName = ensureValidName(name, '知识库名称')
+    async createKB(name: string): Promise<void> {
       try {
-        return await backend.createKB(safeName)
+        await backend.createKB(name)
       } catch (e) { logger.catch('Store.createKB', `创建知识库失败: ${name}`, e); throw e }
     },
     async deleteKB(kbPath: string) {
@@ -124,10 +123,8 @@ export function createStore(backend: StorageBackend) {
       } catch (e) { logger.catch('Store.listCards', `列出卡片失败: ${kbPath}`, e); throw e }
     },
     async createCard(kbPath: string, cardName: unknown) {
-      const safeName = ensureValidName(cardName, '卡片名称')
+      const safeName = ensureValidName(cardName, '卡片目录名')
       try {
-        const existing = await backend.listCards(kbPath)
-        if (existing.some(c => (c?.name || '').trim() === safeName)) throw new Error(`同级下已存在同名卡片：${safeName}`)
         const cardInfo = await backend.createCard(kbPath, safeName)
         return cardInfo.ref
       } catch (e) { logger.catch('Store.createCard', `创建卡片失败: ${kbPath}/${cardName}`, e); throw e }

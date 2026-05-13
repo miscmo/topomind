@@ -61,7 +61,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     if (!node) return false
     const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除`, defaultValue: node.data.label })
     if (!confirmed?.trim() || confirmed !== node.data.label) return false
-    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, path: node.data.path, source })
+    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, source })
     await graph.deleteChildNode(nodeId)
     return true
   }, [findNodeById, graph, prompt])

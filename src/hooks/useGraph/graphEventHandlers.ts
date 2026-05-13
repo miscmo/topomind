@@ -5,6 +5,7 @@ import { logAction } from '../../core/log-backend'
 import type { KnowledgeEdge, KnowledgeNode, KnowledgeNodeData } from '../../types'
 import { generateId } from './graphBuilder'
 import type { GraphOperations } from './graphOperations'
+import { resolveRoomChildRef } from '../../domain/graph/path-utils'
 
 export interface GraphEventHandlerDeps {
   tabId: string
@@ -133,9 +134,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       await ops.saveNow(dirPath)
     }
 
-    const absoluteChildPath = navState.kbPath && !childPath.startsWith(navState.kbPath)
-      ? `${navState.kbPath}/${childPath}`
-      : childPath
+    const absoluteChildPath = resolveRoomChildRef(dirPath || navState.kbPath, childPath)
 
     enterRoomInTab(tabId, {
       path: absoluteChildPath,
@@ -148,7 +147,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   const onNodeDoubleClick = useCallback(
     async (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
       if (!node.data.childCount) return
-      await navigateToChildRoom(node.data.path, node.data.label)
+      await navigateToChildRoom(node.id, node.data.label)
     },
     [navigateToChildRoom]
   )

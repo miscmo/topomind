@@ -23,8 +23,7 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
   const { showCM } = useContextMenu()
   const { handlePaneClick } = usePaneContextMenu({ canvasRef, onPaneClick: graph.onPaneClick })
 
-  const handleNodeContextMenu = useCallback(
-  (event: React.MouseEvent, node: Node) => {
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     graph.onNodeContextMenu(event, node as KnowledgeNode)
     showCM(node.id, event)
   }, [graph, showCM])

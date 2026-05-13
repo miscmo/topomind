@@ -60,7 +60,8 @@ export interface FSBResult {
 export interface FSB {
   listKBs: (rootDir: string) => Promise<FSBKBInfo[]>
   readCardChildren: (rootDir: string, cardPath: string) => Promise<FSBCardChildren>
-  createKbsDir: (rootDir: string, dirPath: string) => Promise<string>
+  createKbsDir: (rootDir: string, kbName: string) => Promise<void>
+  createCardDir: (rootDir: string, parentPath: string, cardName: string) => Promise<string>
   deleteKbsDir: (rootDir: string, dirPath: string) => Promise<unknown>
   renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
   readGraphMeta: (rootDir: string, roomPath: string) => Promise<FSBGraphMeta>
@@ -80,7 +81,8 @@ export interface FSB {
 const FSBImpl: FSB = {
   listKBs: (rootDir) => _call('fs:listKBs', rootDir) as Promise<FSBKBInfo[]>,
   readCardChildren: (rootDir, cardPath) => _call('fs:readCardChildren', rootDir, cardPath) as Promise<FSBCardChildren>,
-  createKbsDir: (rootDir, dirPath) => _call('fs:createKbsDir', rootDir, dirPath) as Promise<string>,
+  createKbsDir: (rootDir, kbName) => _call('fs:createKbsDir', rootDir, kbName) as Promise<void>,
+  createCardDir: (rootDir, parentPath, cardName) => _call('fs:createCardDir', rootDir, parentPath, cardName) as Promise<string>,
   deleteKbsDir: (rootDir, dirPath) => _call('fs:deleteKbsDir', rootDir, dirPath),
   renameKB: (rootDir, kbPath, newName) => _call('fs:renameKB', rootDir, kbPath, newName) as Promise<string>,
   readGraphMeta: (rootDir, roomPath) => _call('fs:readGraphMeta', rootDir, roomPath) as Promise<FSBGraphMeta>,

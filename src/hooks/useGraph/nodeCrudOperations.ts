@@ -1,6 +1,8 @@
 import type { KnowledgeEdge, KnowledgeNode } from '../../types'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
+import { generateId } from './graphBuilder'
+import { resolveRoomChildRef } from '../../domain/graph/path-utils'
 import {
   createChildCard,
   deleteCardAndPruneGraph,
@@ -42,7 +44,8 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
   const createChildNode = async (name: string, parentId?: string, position?: { x: number; y: number }): Promise<string | null> => {
     const nav = getActiveNavState()
     const dirPath = nav.roomPath
-    const targetPath = parentId ?? (dirPath || nav.kbPath)
+    const currentRoomPath = dirPath || nav.kbPath
+    const targetPath = parentId ? resolveRoomChildRef(currentRoomPath, parentId) : currentRoomPath
     if (!targetPath) {
       logAction('节点:创建失败', 'graphOperations', {
         reason: dirPath ? 'targetPath-empty' : 'not-inside-room',
@@ -57,16 +60,18 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     isCreatingRef.current = true
 
     try {
-      const reloadPath = dirPath || getActiveNavState().kbPath || ''
+      const reloadPath = currentRoomPath || getActiveNavState().kbPath || ''
+      const cardId = generateId('card-')
       const result = await createChildCard(storage, {
         name,
         parentRef: targetPath,
         reloadRef: reloadPath,
-        nodesById: nodesMapRef.current,
+        cardId,
         position,
       })
       logAction('节点:创建', 'graphOperations', {
         nodeName: name,
+        nodeId: cardId,
         parentPath: targetPath,
         newPath: result.newRef ?? null,
         roomPath: nav.roomPath || null,
@@ -75,9 +80,10 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       })
 
       await loadRoom(reloadPath, true)
-      await saveNow(getActiveNavState().roomPath)
+      const savePath = getActiveNavState().roomPath || getActiveNavState().kbPath
+      if (savePath) await saveNow(savePath)
 
-      return result.newRef
+      return cardId
     } catch (e) {
       isCreatingRef.current = false
       logger.catch('graphOperations', 'createChildNode', e)
@@ -97,9 +103,10 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     const nodeLabel = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
     const dirPath = getActiveNavState().roomPath
     const currentRoomPath = dirPath || getActiveNavState().kbPath || ''
+    const cardPath = resolveRoomChildRef(currentRoomPath, nodeId)
     try {
-      await deleteCardAndPruneGraph(storage, nodeId, nodesMapRef.current, edgesMapRef.current)
-      logAction('节点:删除', 'graphOperations', { nodeId, label: nodeLabel, path: nodeId })
+      await deleteCardAndPruneGraph(storage, cardPath, nodeId, nodesMapRef.current, edgesMapRef.current)
+      logAction('节点:删除', 'graphOperations', { nodeId, label: nodeLabel, path: cardPath })
 
       if (dirPath) await saveNow(dirPath)
       await loadRoom(currentRoomPath)
@@ -115,10 +122,12 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
 
   const renameNode = async (nodeId: string, newName: string): Promise<boolean> => {
     const dirPath = getActiveNavState().roomPath
+    const currentRoomPath = dirPath || getActiveNavState().kbPath || ''
+    const cardPath = resolveRoomChildRef(currentRoomPath, nodeId)
     try {
-      await renameCardInService(storage, nodeId, newName)
+      await renameCardInService(storage, cardPath, newName)
       const oldName = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
-      logAction('节点:重命名', 'graphOperations', { nodeId, oldName, newName, path: nodeId })
+      logAction('节点:重命名', 'graphOperations', { nodeId, oldName, newName, path: cardPath })
       setState((prev) => {
         const nodes = prev.nodes.map((n) =>
           n.id === nodeId ? { ...n, data: { ...n.data, label: newName } } : n

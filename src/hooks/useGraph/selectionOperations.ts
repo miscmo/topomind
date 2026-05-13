@@ -22,7 +22,7 @@ export function buildSelectionOperations(deps: SelectionOperationsDeps) {
     logAction('节点:选中', 'graphOperations', {
       nodeId,
       label: nodesMapRef.current.get(nodeId)?.data.label,
-      path: nodesMapRef.current.get(nodeId)?.data.path,
+      path: nodeId,
     })
   }
 
