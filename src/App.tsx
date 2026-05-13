@@ -51,7 +51,7 @@ export default memo(function App() {
     if (!tab) return
 
     closeTab(tabId)
-    logAction('Tab:关闭', 'App', { tabId, label: tab.label })
+    logAction('Tab:关闭', 'App', { tab })
   }
 
   if (isMonitorWindow) return <MonitorPage />
