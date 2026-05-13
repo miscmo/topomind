@@ -135,7 +135,6 @@ export async function buildNodes(
         hasChildren,
         domainColor,
         childCount: hasChildren ? childCount : undefined,
-        nodeType: hasChildren ? 'container' : 'leaf',
       },
     }
   })

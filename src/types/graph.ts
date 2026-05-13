@@ -83,8 +83,6 @@ export interface KnowledgeNodeData {
   hasUnsavedEdit?: boolean
   /** 子节点数量（用于徽章显示） */
   childCount?: number
-  /** 节点类型：container=容器卡片，leaf=叶子卡片 */
-  nodeType: 'container' | 'leaf'
   /** 选中状态 */
   selected?: boolean
   /** 悬停状态 */

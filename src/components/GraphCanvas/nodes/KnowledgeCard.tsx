@@ -1,8 +1,6 @@
 /**
  * TopoMind 知识卡片节点
  * React Flow 自定义节点
- * container: 有子节点的容器卡片（浅色背景、彩色边框）
- * leaf: 叶子卡片（深色填充、白色文字）
  *
  * @file components/GraphCanvas/nodes/KnowledgeCard.tsx
  */
@@ -12,14 +10,12 @@ import type { KnowledgeNode } from '../../../types'
 import styles from './KnowledgeCard.module.css'
 
 function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
-  const isContainer = data.nodeType === 'container'
   const hasUnsaved = data.hasUnsavedEdit
 
   return (
     <div
       className={[
         styles.node,
-        isContainer ? styles.container : styles.leaf,
         selected ? styles.selected : '',
         data.hovered ? styles.hovered : '',
         data.connectTarget ? styles.connectTarget : '',

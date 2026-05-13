@@ -7,7 +7,10 @@
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  border: 2px solid transparent;
+  border: 2px solid var(--node-border, #3498db);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 12px rgba(16, 24, 40, 0.08);
+  backdrop-filter: blur(6px);
   cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
   min-width: 120px;
@@ -21,25 +24,6 @@
   content: '';
   position: absolute;
   inset: -10px;
-}
-
-/* 容器卡片 */
-.container {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: var(--node-border, #3498db);
-  box-shadow: 0 2px 12px rgba(16, 24, 40, 0.08);
-  backdrop-filter: blur(6px);
-}
-
-/* 叶子卡片 */
-.leaf {
-  background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);
-  border-color: transparent;
-  box-shadow: 0 4px 16px rgba(26, 58, 92, 0.3);
-}
-
-.leaf .label {
-  color: #fff;
 }
 
 /* 选中状态 */
