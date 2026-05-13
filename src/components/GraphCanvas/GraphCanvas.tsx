@@ -1,9 +1,11 @@
-import { memo, useRef } from 'react'
-import { Background, ReactFlow, type BackgroundVariant, type Node, type NodeTypes } from '@xyflow/react'
+import { memo, useCallback, useRef } from 'react'
+import { Background, ReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
+import { useGraphContext } from '../../contexts/GraphContext'
+import { useContextMenu } from '../../hooks/useContextMenu'
+import type { KnowledgeNode } from '../../types'
 import KnowledgeCard from './nodes/KnowledgeCard'
 import Toolbar from '../Toolbar/Toolbar'
-import { useGraphCanvasEvents } from './useGraphCanvasEvents'
 import { usePaneContextMenu } from './usePaneContextMenu'
 import { useViewportLogger } from './useViewportLogger'
 
@@ -17,15 +19,24 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
   const showGrid = useGraphUiStore((s) => s.showGrid)
   const canvasRef = useRef<HTMLDivElement>(null)
   const { zoomLevel, handleViewportChange } = useViewportLogger()
-  const {
-    graph,
-    handleNodeClick,
-    handleNodeDoubleClick,
-    handleNodeContextMenu,
-    handleEdgeClick,
-    handleEdgeContextMenu,
-  } = useGraphCanvasEvents({ onEdgeContextMenu })
+  const graph = useGraphContext()
+  const { showCM } = useContextMenu()
   const { handlePaneClick } = usePaneContextMenu({ canvasRef, onPaneClick: graph.onPaneClick })
+
+  const handleNodeContextMenu = useCallback(
+  (event: React.MouseEvent, node: Node) => {
+    graph.onNodeContextMenu(event, node as KnowledgeNode)
+    showCM(node.id, event)
+  }, [graph, showCM])
+
+  const handleEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    graph.onEdgeClick(event, edge)
+  }, [graph])
+
+  const handleEdgeContextMenu = useCallback((event: React.MouseEvent, edge: Edge) => {
+    onEdgeContextMenu?.(edge.id, event)
+    showCM(edge.id, event)
+  }, [onEdgeContextMenu, showCM])
 
   return (
     <div ref={canvasRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -39,8 +50,8 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
         onConnectStart={graph.onConnectStart}
         onConnectEnd={graph.onConnectEnd}
         connectionRadius={48}
-        onNodeClick={handleNodeClick}
-        onNodeDoubleClick={handleNodeDoubleClick}
+        onNodeClick={graph.onNodeClick as (event: React.MouseEvent, node: Node) => void}
+        onNodeDoubleClick={graph.onNodeDoubleClick as (event: React.MouseEvent, node: Node) => void}
         onNodeContextMenu={handleNodeContextMenu}
         onEdgeClick={handleEdgeClick}
         onPaneClick={handlePaneClick}

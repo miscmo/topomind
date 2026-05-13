@@ -92,6 +92,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
+      logAction('节点:点击', 'useGraph', { node })
       setSelectedEdgeId(null)
       ops.selectNode(node.id)
     },
