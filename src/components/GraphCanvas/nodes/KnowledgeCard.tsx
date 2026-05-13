@@ -24,12 +24,8 @@ function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
       ].filter(Boolean).join(' ')}
       style={data.domainColor ? { borderColor: data.domainColor } : undefined}
     >
-      {/* 轻量连接入口 */}
-      <Handle type="target" position={Position.Left} className={styles.handleTarget} />
-      <Handle type="source" position={Position.Right} className={styles.handleSource} />
-      <div className={styles.connectHint} aria-hidden="true">
-        <span className={styles.connectHintIcon}>＋</span>
-      </div>
+      <Handle type="target" position={Position.Left} className={styles.handle} />
+      <Handle type="source" position={Position.Right} className={styles.handle} />
 
       {/* 标签 */}
       <div className={styles.label}>{data.label}</div>
