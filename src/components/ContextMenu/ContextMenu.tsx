@@ -41,7 +41,6 @@ interface ContextMenuProps {
   onDelete: (nodeId: string) => void
   onEdgeDelete: (edgeId: string) => void
   onEdgeStyle: (edgeId: string) => void
-  onFocus: (nodeId: string) => void
   onProperties: (nodeId: string) => void
   onClose: () => void
 }
@@ -57,7 +56,6 @@ export default memo(function ContextMenu({
   onDelete,
   onEdgeDelete,
   onEdgeStyle,
-  onFocus,
   onProperties,
   onClose,
 }: ContextMenuProps) {
@@ -105,13 +103,6 @@ export default memo(function ContextMenu({
             label: '新建子节点',
             action: async () => {
               await onNewChild(paneTargetId ?? '')
-              onClose()
-            },
-          },
-          {
-            label: '聚焦节点',
-            action: () => {
-              if (paneTargetId) onFocus(paneTargetId)
               onClose()
             },
           },

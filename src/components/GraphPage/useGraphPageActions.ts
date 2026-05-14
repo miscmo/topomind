@@ -25,7 +25,6 @@ export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions
     handleDelete,
     handleEdgeDelete,
     handleEdgeStyle,
-    handleFocus,
     handleProperties,
   } = useNodeActions({ graph })
 
@@ -64,7 +63,6 @@ export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions
       onDelete: handleDelete,
       onEdgeDelete: handleEdgeDelete,
       onEdgeStyle: handleEdgeStyle,
-      onFocus: handleFocus,
       onProperties: handleProperties,
       onClose: closeContextMenu,
     },

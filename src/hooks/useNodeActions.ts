@@ -8,7 +8,6 @@
  * causing stale closures. The Map objects are consistently updated by rebuildMaps().
  */
 import { useCallback } from 'react'
-import { useReactFlow } from '@xyflow/react'
 import { usePromptStore } from '../stores/promptStore'
 import { logAction } from '../core/log-backend'
 import type { KnowledgeNode } from '../types'
@@ -23,7 +22,6 @@ export interface UseNodeActionsOptions {
 
 export function useNodeActions(options: UseNodeActionsOptions) {
   const { onAction, graph } = options
-  const { fitView } = useReactFlow()
   const prompt = usePromptStore((s) => s.open)
   const { handleEdgeDelete, handleEdgeStyle } = useEdgeActions({ graph, onAction })
 
@@ -71,16 +69,6 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     if (deleted) onAction?.()
   }, [confirmAndDeleteNode, onAction])
 
-  const handleFocus = useCallback((nodeId: string) => {
-    graph.selectNode(nodeId)
-    const node = findNodeById(nodeId)
-    if (node) {
-      fitView({ nodes: [node], padding: 0.3, duration: 300 })
-    }
-    logAction('节点:聚焦', 'useNodeActions', { nodeId })
-    onAction?.()
-  }, [findNodeById, graph, fitView, onAction])
-
   const handleProperties = useCallback((nodeId: string) => {
     graph.selectNode(nodeId)
     logAction('节点:属性', 'useNodeActions', { nodeId })
@@ -106,7 +94,6 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     handleDelete,
     handleEdgeDelete,
     handleEdgeStyle,
-    handleFocus,
     handleProperties,
     deleteSelectedNode,
     addChildNode,
