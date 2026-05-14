@@ -2,17 +2,21 @@ import type { Connection } from '@xyflow/react'
 import type { EdgeLineMode, EdgeLineStyle, EdgeRelation, EdgeWeight, KnowledgeEdge, KnowledgeNode } from '../../types'
 import { logAction } from '../../core/log-backend'
 import { buildEdgeView } from './edgeView'
-import { useGraphStore } from '../../stores/graphStore'
+import type { GraphSession } from '../../stores/tabStore'
+import type { GraphState } from '../../stores/graphStore'
+import type { StoreApi } from 'zustand'
 
 export interface EdgeOperationsDeps {
-  getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
+  getActiveGraphSession: () => GraphSession | undefined
   saveNow: (dirPath: string) => Promise<void>
+  storeApi: StoreApi<GraphState>
 }
 
 export function buildEdgeOperations(deps: EdgeOperationsDeps) {
   const {
     getActiveGraphSession,
     saveNow,
+    storeApi,
   } = deps
 
   const addEdge = async (
@@ -43,28 +47,28 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       },
     }
 
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     store.setEdges([...store.edges, newEdge])
 
     const graphSession = getActiveGraphSession()
-    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
+    const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     if (currentRoomPath) await saveNow(currentRoomPath)
     logAction('连线:创建', 'graphOperations', { edgeId, source: connection.source, target: connection.target })
   }
 
   const deleteEdge = async (edgeId: string) => {
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     store.setEdges(store.edges.filter((e) => e.id !== edgeId))
     const graphSession = getActiveGraphSession()
-    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
+    const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     if (currentRoomPath) await saveNow(currentRoomPath)
     logAction('连线:删除', 'graphOperations', { edgeId })
   }
 
   const updateEdgeRelation = async (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => {
     const graphSession = getActiveGraphSession()
-    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-    const store = useGraphStore.getState()
+    const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
+    const store = storeApi.getState()
     store.setEdges(store.edges.map((e) =>
       e.id === edgeId
         ? {
@@ -90,8 +94,8 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     style: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean; selected?: boolean }
   ) => {
     const graphSession = getActiveGraphSession()
-    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-    const store = useGraphStore.getState()
+    const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
+    const store = storeApi.getState()
     store.setEdges(store.edges.map((e) => {
       if (e.id !== edgeId) return e
       const nextColor = style.color ?? e.data?.color ?? '#7f8c8d'

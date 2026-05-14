@@ -74,20 +74,25 @@ function collectMermaidBlocks(html: string): string[] {
 }
 
 function applyMermaidMap(html: string, mermaidMap?: Record<string, string>): string {
-  if (!mermaidMap || Object.keys(mermaidMap).length === 0) return html
   const doc = new DOMParser().parseFromString(html, 'text/html')
+  let changed = false
   doc.querySelectorAll('pre > code').forEach((code) => {
     if (!Array.from(code.classList).some((className) => className === 'language-mermaid' || className === 'mermaid')) return
+    changed = true
     const source = normalizeMermaidCode(code.innerHTML)
-    const rendered = mermaidMap[source]
-    if (!rendered) return
+    const rendered = mermaidMap?.[source]
 
     const container = doc.createElement('div')
-    container.className = styles.mermaid
-    container.innerHTML = rendered
+    if (rendered) {
+      container.className = styles.mermaid
+      container.innerHTML = rendered
+    } else {
+      container.className = styles.mermaidLoading
+      container.innerHTML = '<div class="' + styles.mermaidLoadingSpinner + '"></div><span>图表渲染中...</span>'
+    }
     code.parentElement?.replaceWith(container)
   })
-  return doc.body.innerHTML
+  return changed ? doc.body.innerHTML : html
 }
 
 export function renderMarkdownToHtml(
@@ -110,7 +115,7 @@ export function renderMarkdownToHtml(
 
 export default memo(function MarkdownViewer({ content, compact = false, className, attachmentCardPath }: MarkdownViewerProps) {
   const storage = useStorage()
-  const baseHtml = useMemo(() => renderMarkdownToHtml(content), [content])
+  const rawHtml = useMemo(() => DOMPurify.sanitize(marked.parse(content) as string), [content])
   const [imageMap, setImageMap] = useState<Record<string, string>>({})
   const [mermaidMap, setMermaidMap] = useState<Record<string, string>>({})
   const sanitizedHtml = useMemo(() => renderMarkdownToHtml(content, imageMap, mermaidMap), [content, imageMap, mermaidMap])
@@ -120,7 +125,7 @@ export default memo(function MarkdownViewer({ content, compact = false, classNam
       setImageMap({})
       return
     }
-    const refs = collectLocalImageRefs(baseHtml)
+    const refs = collectLocalImageRefs(rawHtml)
     if (!refs.length) {
       setImageMap({})
       return
@@ -142,35 +147,50 @@ export default memo(function MarkdownViewer({ content, compact = false, classNam
     return () => {
       cancelled = true
     }
-  }, [attachmentCardPath, baseHtml, storage])
+  }, [attachmentCardPath, rawHtml, storage])
 
   useEffect(() => {
-    const blocks = collectMermaidBlocks(baseHtml)
+    const blocks = collectMermaidBlocks(rawHtml)
     if (!blocks.length) {
       setMermaidMap({})
       return
     }
 
     let cancelled = false
-    Promise.all(
-      blocks.map(async (source, index) => {
-        try {
-          const mermaid = await loadMermaid()
-          const id = `mermaid-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`
-          const { svg } = await mermaid.render(id, source)
-          return [source, DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })] as const
-        } catch (error) {
-          return [source, `<pre class="${styles.mermaidError}">${escapeHtml(error instanceof Error ? error.message : 'Mermaid 渲染失败')}</pre>`] as const
+    
+    // Check if we need to render anything new. If all blocks are already rendered, do nothing.
+    setMermaidMap(prevMap => {
+      const needsRender = blocks.some(source => !prevMap[source])
+      if (!needsRender) return prevMap
+
+      Promise.all(
+        blocks.map(async (source, index) => {
+          try {
+            if (prevMap[source]) {
+              return [source, prevMap[source]] as const
+            }
+            const mermaid = await loadMermaid()
+            const id = `mermaid-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`
+            const { svg } = await mermaid.render(id, source)
+            return [source, DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })] as const
+          } catch (error) {
+            return [source, `<pre class="${styles.mermaidError}">${escapeHtml(error instanceof Error ? error.message : 'Mermaid 渲染失败')}</pre>`] as const
+          }
+        })
+      ).then((entries) => {
+        if (!cancelled) {
+          // Merge with previous entries to ensure we don't drop previously rendered svgs
+          setMermaidMap(currentMap => ({ ...currentMap, ...Object.fromEntries(entries) }))
         }
       })
-    ).then((entries) => {
-      if (!cancelled) setMermaidMap(Object.fromEntries(entries))
+      
+      return prevMap // keep previous map while rendering new ones
     })
 
     return () => {
       cancelled = true
     }
-  }, [baseHtml])
+  }, [rawHtml])
 
   return (
     <div

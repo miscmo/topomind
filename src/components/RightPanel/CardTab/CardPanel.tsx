@@ -4,7 +4,7 @@ import { registerTabSaver } from '../../../core/close-guard'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
-import { useGraphStore, useSelectedNodeId } from '../../../stores/graphStore'
+import { useGraphStore, useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
 import { tabStore } from '../../../stores/tabStore'
 import { useCardContentStore } from '../../../stores/cardContentStore'
 import { useDraftStore } from '../../../stores/draftStore'
@@ -18,6 +18,7 @@ interface CardPanelProps {
 
 const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
   const selectedNodeId = useSelectedNodeId()
+  const storeApi = useGraphStoreApi()
   const storage = useStorage()
 
   const resolveNodePath = useCallback((nodeId: string) => {
@@ -30,6 +31,7 @@ const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
   const setEditMode = useDraftStore((s) => s.setCardEditMode)
   const draftMarkdown = useDraftStore((s) => nodePath ? (s.cardDrafts[nodePath] ?? '') : '')
   const setDraftMarkdown = useDraftStore((s) => s.setCardDraft)
+  const cardEntry = useCardContentStore((s) => nodePath ? s.entries[nodePath] : undefined)
 
   const [savedMarkdown, setSavedMarkdown] = useState('')
   const requestSeqRef = useRef(0)
@@ -39,6 +41,14 @@ const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
   useEffect(() => {
     const requestSeq = ++requestSeqRef.current
     if (!selectedNodeId || !nodePath) return
+
+    const cachedContent = useCardContentStore.getState().entries[nodePath]?.content
+    if (cachedContent !== undefined) {
+      setSavedMarkdown(cachedContent)
+      if (useDraftStore.getState().cardDrafts[nodePath] === undefined) {
+        setDraftMarkdown(nodePath, cachedContent)
+      }
+    }
 
     storage.readCardMarkdown(nodePath).then((content: string) => {
       if (requestSeqRef.current !== requestSeq) return
@@ -57,9 +67,15 @@ const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
     })
   }, [selectedNodeId, nodePath, storage, setDraftMarkdown])
 
+  useEffect(() => {
+    if (cardEntry) {
+      setSavedMarkdown(cardEntry.content)
+    }
+  }, [cardEntry])
+
   const handleSave = useCallback(async () => {
     if (!selectedNodeId || !nodePath) return
-    const label = useGraphStore.getState().nodesMap.get(selectedNodeId)?.data.label
+    const label = storeApi.getState().nodesMap.get(selectedNodeId)?.data.label
     try {
       await storage.writeCardMarkdown(nodePath, draftMarkdown)
       useCardContentStore.getState().setCardMarkdown(nodePath, draftMarkdown)

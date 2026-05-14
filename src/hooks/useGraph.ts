@@ -22,10 +22,11 @@ import { useGraphEventHandlers } from './useGraph/graphEventHandlers'
 import { useGraphRoomLoader } from './useGraph/useGraphRoomLoader'
 import { useGraphStorageApi } from './useGraph/useGraphStorageApi'
 import { useGraphPersistence } from './useGraph/useGraphPersistence'
-import { useGraphStore } from '../stores/graphStore'
+import { useGraphStoreApi } from '../stores/graphStore'
 import type { GraphState } from './useGraph/types'
 
 export function useGraph(tabId: string) {
+  const storeApi = useGraphStoreApi()
   const storage = useStorage() as Store
 
   const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
@@ -39,6 +40,7 @@ export function useGraph(tabId: string) {
   const { loadRoom } = useGraphRoomLoader({
     storage,
     getActiveGraphSession,
+    storeApi,
   })
 
   const storageApi = useGraphStorageApi(storage)
@@ -52,8 +54,9 @@ export function useGraph(tabId: string) {
       getActiveGraphSession,
       loadRoom,
       isCreatingRef,
+      storeApi,
     }),
-    [tabId, storageApi, getActiveGraphSession, loadRoom]
+    [tabId, storageApi, getActiveGraphSession, loadRoom, storeApi]
   )
 
   // ===== React Flow event handlers =====
@@ -65,6 +68,7 @@ export function useGraph(tabId: string) {
     defaultEdgeStyle,
     setSelectedEdgeId,
     setRightPanelTab,
+    storeApi,
   })
 
   // ===== Room navigation =====
@@ -75,8 +79,9 @@ export function useGraph(tabId: string) {
       getActiveGraphSession,
       saveNow: ops.saveNow,
       loadRoom,
+      storeApi,
     }),
-    [tabId, getActiveGraphSession, ops.saveNow, loadRoom]
+    [tabId, getActiveGraphSession, ops.saveNow, loadRoom, storeApi]
   )
 
   const { flushCurrentRoomSave } = useGraphPersistence({

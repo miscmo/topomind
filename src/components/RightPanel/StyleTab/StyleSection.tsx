@@ -2,7 +2,7 @@ import { memo, useEffect, useRef } from 'react'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
 import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
-import { useGraphStore } from '../../../stores/graphStore'
+import { useGraphStore, useGraphStoreApi } from '../../../stores/graphStore'
 import { useStorage } from '../../../core/storage'
 import styles from './StyleTab.module.css'
 
@@ -16,6 +16,7 @@ export default memo(function StyleSection() {
   const replaceDefaultEdgeStyle = useGraphUiStore((s) => s.replaceDefaultEdgeStyle)
   const setRightPanelTab = useRightPanelStore((s) => s.setRightPanelTab)
 
+  const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
 
   const selectedEdge = useGraphStore((s) => selectedEdgeId ? s.edgesMap.get(selectedEdgeId) : null)

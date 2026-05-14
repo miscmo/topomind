@@ -24,9 +24,9 @@ export function buildEdgeView(options: EdgeViewOptions = {}): Pick<KnowledgeEdge
     animated: weight === 'main',
     style: {
       stroke: color,
-      strokeWidth: selected ? (weight === 'main' ? 4 : 3.5) : (weight === 'main' ? 2.5 : 2),
+      strokeWidth: selected ? (weight === 'main' ? 2.5 : 2) : (weight === 'main' ? 1.5 : 1.2),
       strokeDasharray: lineStyle === 'dashed' ? '6 4' : undefined,
-      filter: selected ? 'drop-shadow(0 0 6px rgba(52, 152, 219, 0.45))' : undefined,
+      opacity: selected ? 1 : 0.6,
     },
     markerEnd: arrow
       ? {

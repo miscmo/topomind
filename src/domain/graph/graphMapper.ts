@@ -35,6 +35,7 @@ export function graphMetaToRoomGraph(roomRef: string, meta: GraphMeta): RoomGrap
         width: Number.isFinite(node.width) ? node.width : DEFAULT_NODE_SIZE.width,
         height: Number.isFinite(node.height) ? node.height : DEFAULT_NODE_SIZE.height,
       },
+      color: node.color,
     }
   }
 
@@ -75,6 +76,7 @@ export function roomGraphToGraphMeta(graph: RoomGraph): GraphMeta {
       height: node.size?.height ?? DEFAULT_NODE_SIZE.height,
       width: node.size?.width ?? DEFAULT_NODE_SIZE.width,
       position: node.position,
+      color: node.color,
     }
   }
 

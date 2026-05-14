@@ -4,17 +4,20 @@ import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { loadRoomGraph } from './roomLoader'
 import type { GraphSession } from '../../stores/tabStore'
-import { useGraphStore } from '../../stores/graphStore'
+import type { GraphState } from '../../stores/graphStore'
+import type { StoreApi } from 'zustand'
 
 interface UseGraphRoomLoaderOptions {
   storage: Store
   getActiveGraphSession: () => GraphSession
+  storeApi: StoreApi<GraphState>
 }
 
 export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
   const {
     storage,
     getActiveGraphSession,
+    storeApi,
   } = options
   const loadRequestSeqRef = useRef(0)
   const latestAppliedLoadSeqRef = useRef(0)
@@ -22,7 +25,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
   const loadRoom = useCallback(
     async (dirPath: string) => {
       const requestSeq = ++loadRequestSeqRef.current
-      const store = useGraphStore.getState()
+      const store = storeApi.getState()
       store.setLoading(true)
 
       try {
@@ -37,7 +40,11 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
         }
 
         latestAppliedLoadSeqRef.current = requestSeq
-        store.setGraph(loaded.nodes, loaded.edges)
+        store.setGraph(loaded.nodes, loaded.edges, {
+          x: loaded.meta.viewport.pan.x,
+          y: loaded.meta.viewport.pan.y,
+          zoom: loaded.meta.viewport.zoom,
+        })
         store.setLoading(false)
         
         logAction('房间:加载完成', 'useGraph', {
@@ -50,11 +57,11 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
       } catch (e) {
         logger.catch('useGraph', 'loadRoom', e)
         if (requestSeq === loadRequestSeqRef.current && requestSeq >= latestAppliedLoadSeqRef.current) {
-          useGraphStore.getState().setLoading(false)
+          storeApi.getState().setLoading(false)
         }
       }
     },
-    [storage, getActiveGraphSession]
+    [storage, getActiveGraphSession, storeApi]
   )
 
   return { loadRoom }

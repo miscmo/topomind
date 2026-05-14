@@ -1,31 +1,27 @@
-import { create } from 'zustand'
+import { createStore, useStore, type StoreApi } from 'zustand'
+import { createContext, useContext, useRef } from 'react'
+import type { ReactNode } from 'react'
 import type { KnowledgeEdge, KnowledgeNode } from '../types'
 
-interface GraphState {
+export interface GraphState {
   nodes: KnowledgeNode[]
   edges: KnowledgeEdge[]
   loading: boolean
+  viewport: { x: number; y: number; zoom: number }
   
   // Derived O(1) maps, automatically kept in sync
   nodesMap: Map<string, KnowledgeNode>
   edgesMap: Map<string, KnowledgeEdge>
 
-  setGraph: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
+  setGraph: (nodes: KnowledgeNode[], edges: KnowledgeEdge[], viewport?: { x: number; y: number; zoom: number }) => void
   setNodes: (nodes: KnowledgeNode[]) => void
   setEdges: (edges: KnowledgeEdge[]) => void
   setLoading: (loading: boolean) => void
+  setViewport: (viewport: { x: number; y: number; zoom: number }) => void
 
   updateNode: (nodeId: string, updater: (node: KnowledgeNode) => KnowledgeNode) => void
   removeNodes: (nodeIds: string[]) => void
   removeEdgesByNodeIds: (nodeIds: string[]) => void
-}
-
-export function useSelectedNodeId() {
-  return useGraphStore((s) => s.nodes.find((n) => n.selected)?.id ?? null)
-}
-
-export function useSelectedNode() {
-  return useGraphStore((s) => s.nodes.find((n) => n.selected) ?? null)
 }
 
 function buildMaps(nodes: KnowledgeNode[], edges: KnowledgeEdge[]) {
@@ -36,18 +32,20 @@ function buildMaps(nodes: KnowledgeNode[], edges: KnowledgeEdge[]) {
   return { nodesMap, edgesMap }
 }
 
-export const useGraphStore = create<GraphState>((set) => ({
+export const createGraphStore = () => createStore<GraphState>((set) => ({
   nodes: [],
   edges: [],
   loading: false,
+  viewport: { x: 0, y: 0, zoom: 1 },
   nodesMap: new Map(),
   edgesMap: new Map(),
 
-  setGraph: (nodes, edges) => set({
+  setGraph: (nodes, edges, viewport) => set((state) => ({
     nodes,
     edges,
+    viewport: viewport ?? state.viewport,
     ...buildMaps(nodes, edges),
-  }),
+  })),
 
   setNodes: (nodes) => set((state) => ({
     nodes,
@@ -60,6 +58,7 @@ export const useGraphStore = create<GraphState>((set) => ({
   })),
 
   setLoading: (loading) => set({ loading }),
+  setViewport: (viewport) => set({ viewport }),
 
   updateNode: (nodeId, updater) => set((state) => {
     const node = state.nodesMap.get(nodeId)
@@ -90,3 +89,32 @@ export const useGraphStore = create<GraphState>((set) => ({
     }
   }),
 }))
+
+export const GraphStoreContext = createContext<StoreApi<GraphState> | null>(null)
+
+export function GraphStoreProvider({ children }: { children: ReactNode }) {
+  const storeRef = useRef<StoreApi<GraphState> | null>(null)
+  if (!storeRef.current) {
+    storeRef.current = createGraphStore()
+  }
+  return <GraphStoreContext.Provider value={storeRef.current}>{children}</GraphStoreContext.Provider>
+}
+
+export function useGraphStoreApi() {
+  const store = useContext(GraphStoreContext)
+  if (!store) throw new Error('Missing GraphStoreProvider')
+  return store
+}
+
+export function useGraphStore<T>(selector: (state: GraphState) => T): T {
+  const store = useGraphStoreApi()
+  return useStore(store, selector)
+}
+
+export function useSelectedNodeId() {
+  return useGraphStore((s) => s.nodes.find((n) => n.selected)?.id ?? null)
+}
+
+export function useSelectedNode() {
+  return useGraphStore((s) => s.nodes.find((n) => n.selected) ?? null)
+}

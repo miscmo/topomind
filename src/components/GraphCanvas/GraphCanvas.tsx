@@ -1,5 +1,5 @@
-import { memo, useCallback, useState } from 'react'
-import { Background, ReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
+import { memo, useCallback, useEffect, useState } from 'react'
+import { Background, ReactFlow, useReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import { useGraphStore } from '../../stores/graphStore'
@@ -26,7 +26,10 @@ export default memo(function GraphCanvas({
   const showGrid = useGraphUiStore((s) => s.showGrid)
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
+  const storedViewport = useGraphStore((s) => s.viewport)
+  const setStoredViewport = useGraphStore((s) => s.setViewport)
   const [zoomLevel, setZoomLevel] = useState(1)
+  const reactFlow = useReactFlow()
   const graph = useGraphContext()
   const { handleClick: handlePaneClick } = useDoubleClick({
     onClick: () => onCloseContextMenu?.(),
@@ -38,6 +41,26 @@ export default memo(function GraphCanvas({
     setZoomLevel(viewport.zoom)
   }, [])
 
+  useEffect(() => {
+    setZoomLevel(storedViewport.zoom)
+  }, [storedViewport.zoom])
+
+  useEffect(() => {
+    const currentViewport = reactFlow.getViewport()
+    const viewportChanged =
+      Math.abs(currentViewport.x - storedViewport.x) > 0.5 ||
+      Math.abs(currentViewport.y - storedViewport.y) > 0.5 ||
+      Math.abs(currentViewport.zoom - storedViewport.zoom) > 0.001
+
+    if (!viewportChanged) return
+
+    const frame = requestAnimationFrame(() => {
+      reactFlow.setViewport(storedViewport, { duration: 0 })
+    })
+
+    return () => cancelAnimationFrame(frame)
+  }, [reactFlow, storedViewport])
+
   const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     graph.onNodeContextMenu(event, node as KnowledgeNode)
     onNodeContextMenu?.(node.id, event)
@@ -48,8 +71,9 @@ export default memo(function GraphCanvas({
   }, [graph])
 
   const handleEdgeContextMenu = useCallback((event: React.MouseEvent, edge: Edge) => {
+    graph.onEdgeClick(event, edge)
     onEdgeContextMenu?.(edge.id, event)
-  }, [onEdgeContextMenu])
+  }, [graph, onEdgeContextMenu])
 
   const handlePaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
     event.preventDefault()
@@ -95,9 +119,10 @@ export default memo(function GraphCanvas({
 
         // 视图变化时触发，包括平移和缩放
         onMove={(_, viewport) => handleViewportChange(viewport)}
+        onMoveEnd={(_, viewport) => setStoredViewport(viewport)}
         // 最小缩放倍数
         minZoom={0.15}
-        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+        defaultViewport={storedViewport}
         // 禁止双击放大
         zoomOnDoubleClick={false}
         // 允许滚轮缩放
@@ -107,6 +132,13 @@ export default memo(function GraphCanvas({
 
         // 隐藏attribution标识
         proOptions={{ hideAttribution: true }}
+        
+        // 禁用默认的框选和多选快捷键
+        selectionOnDrag={false}
+        selectionKeyCode={null}
+        multiSelectionKeyCode={null}
+        deleteKeyCode={null}
+
         // 允许拖动节点
         nodesDraggable
         // 允许节点建立连线

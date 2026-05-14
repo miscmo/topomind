@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import { useReactFlow } from '@xyflow/react'
-import { useKeyboard } from '../../hooks/useKeyboard'
 import { useNodeActions } from '../../hooks/useNodeActions'
 import { logAction } from '../../core/log-backend'
 import { useGraphUiStore } from '../../stores/graphUiStore'
@@ -85,15 +84,9 @@ export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions
     handleNewChild(nodeId, flowPosition)
   }, [handleNewChild, screenToFlowPosition])
 
-  const openEdgeStylePanel = useCallback((edgeId: string) => {
-    setRightPanelTab('style')
-    setSelectedEdgeId(edgeId)
-  }, [setRightPanelTab, setSelectedEdgeId])
-
   const handleCanvasEdgeContextMenu = useCallback((edgeId: string, event: React.MouseEvent) => {
-    openEdgeStylePanel(edgeId)
     openEdgeMenu(edgeId, event)
-  }, [openEdgeMenu, openEdgeStylePanel])
+  }, [openEdgeMenu])
 
   useKeyboard({
     tabId,

@@ -69,6 +69,7 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       position: isRecord(rawNode.position)
         ? normalizePoint(rawNode.position, { x: 0, y: 0 })
         : undefined,
+      color: typeof rawNode.color === 'string' ? rawNode.color : undefined,
     }
   }
 

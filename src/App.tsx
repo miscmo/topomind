@@ -15,6 +15,7 @@ import TabBar from './components/TabBar/TabBar'
 import { useTabStore } from './stores/tabStore'
 import { useWorkspaceStore } from './stores/workspaceStore'
 import { useConfirmStore } from './stores/confirmStore'
+import { GraphStoreProvider } from './stores/graphStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
 
@@ -60,19 +61,53 @@ export default memo(function App() {
     <>
       <ConfirmModal />
       <PromptModal />
-      <ReactFlowProvider>
-        {isSetup ? (
-          <SetupPage />
-        ) : (
-          <>
-            <TabBar onCloseTab={handleCloseTab} />
-            {activeTab?.type === 'home' && <HomePage />}
-            {activeTab?.type === 'kb' && (
-              <GraphPage key={activeTab.id} tabId={activeTab.id} />
-            )}
-          </>
-        )}
-      </ReactFlowProvider>
+      {isSetup ? (
+        <SetupPage />
+      ) : (
+        <>
+          <TabBar onCloseTab={handleCloseTab} />
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: 'calc(100vh - 40px)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                visibility: activeTab?.type === 'home' ? 'visible' : 'hidden',
+                opacity: activeTab?.type === 'home' ? 1 : 0,
+                pointerEvents: activeTab?.type === 'home' ? 'auto' : 'none',
+                transition: 'opacity 120ms ease',
+              }}
+            >
+              <HomePage />
+            </div>
+            {tabs.filter(t => t.type === 'kb').map(tab => (
+              <div
+                key={tab.id}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  visibility: activeTabId === tab.id ? 'visible' : 'hidden',
+                  opacity: activeTabId === tab.id ? 1 : 0,
+                  pointerEvents: activeTabId === tab.id ? 'auto' : 'none',
+                  transition: 'opacity 120ms ease',
+                }}
+              >
+                <ReactFlowProvider>
+                  <GraphStoreProvider>
+                    <GraphPage tabId={tab.id} />
+                  </GraphStoreProvider>
+                </ReactFlowProvider>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </>
   )
 })

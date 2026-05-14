@@ -4,7 +4,7 @@
  *
  * @file components/GraphCanvas/nodes/KnowledgeCard.tsx
  */
-import { memo, useEffect, useMemo } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
 import type { KnowledgeNode } from '../../../types'
 import { useStorage } from '../../../core/storage'
@@ -18,9 +18,11 @@ const MARKDOWN_MIN_HEIGHT = 96
 
 function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProps<KnowledgeNode>) {
   const storage = useStorage()
+  const [isPressed, setIsPressed] = useState(false)
   const nodeWidth = width ?? 120
   const nodeHeight = height ?? 52
   const shouldShowMarkdown = nodeWidth >= MARKDOWN_MIN_WIDTH && nodeHeight >= MARKDOWN_MIN_HEIGHT
+  const visuallySelected = selected || isPressed
   const cardPath = useMemo(() => {
     const parent = typeof data.parent === 'string' ? data.parent : ''
     return resolveRoomChildRef(parent, id)
@@ -35,16 +37,21 @@ function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProp
 
   return (
     <div
+      onPointerDown={() => setIsPressed(true)}
+      onPointerUp={() => setIsPressed(false)}
+      onPointerLeave={() => setIsPressed(false)}
+      onPointerCancel={() => setIsPressed(false)}
       className={[
         styles.node,
         shouldShowMarkdown ? styles.hasMarkdown : '',
-        selected ? styles.selected : '',
+        shouldShowMarkdown ? 'nowheel' : '',
+        visuallySelected ? styles.selected : '',
         data.hovered ? styles.hovered : '',
         data.connectTarget ? styles.connectTarget : '',
         dragging ? styles.dragging : '',
       ].filter(Boolean).join(' ')}
       style={{
-        borderColor: selected ? undefined : data.domainColor,
+        borderColor: visuallySelected ? undefined : data.domainColor,
         width: width ?? undefined,
         height: height ?? undefined,
       }}
@@ -67,7 +74,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProp
       <div className={styles.content}>
         <div className={styles.label}>{data.label}</div>
         {shouldShowMarkdown && (
-          <div className={styles.markdown}>
+          <div className={`${styles.markdown} nowheel`}>
             {entry?.loading ? (
               <div className={styles.muted}>加载中...</div>
             ) : entry?.content ? (

@@ -4,7 +4,7 @@ import { usePromptStore } from '../stores/promptStore'
 import { logAction } from '../core/log-backend'
 import type { KnowledgeEdge } from '../types'
 import type { GraphContextValue } from '../contexts/GraphContext'
-import { useGraphStore } from '../stores/graphStore'
+import { useGraphStoreApi } from '../stores/graphStore'
 
 export interface UseEdgeActionsOptions {
   onAction?: () => void
@@ -12,13 +12,14 @@ export interface UseEdgeActionsOptions {
 }
 
 export function useEdgeActions(options: UseEdgeActionsOptions) {
+  const storeApi = useGraphStoreApi()
   const { onAction, graph } = options
   const { deleteElements } = useReactFlow()
   const prompt = usePromptStore((s) => s.open)
 
   const findEdgeById = useCallback((edgeId: string): KnowledgeEdge | undefined => {
-    return useGraphStore.getState().edgesMap.get(edgeId)
-  }, [])
+    return storeApi.getState().edgesMap.get(edgeId)
+  }, [storeApi])
 
   const handleEdgeDelete = useCallback((edgeId: string) => {
     const edge = findEdgeById(edgeId)

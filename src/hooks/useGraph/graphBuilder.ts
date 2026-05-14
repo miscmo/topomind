@@ -7,7 +7,6 @@
  * - Serialize nodes+edges to _graph.json format
  */
 import type { KnowledgeNode, KnowledgeEdge } from '../../types'
-import { DOMAIN_COLORS } from '../../types'
 import type { GraphMeta } from '../../core/storage'
 import { basenameRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { graphMetaToRoomGraph, roomGraphToGraphMeta } from '../../domain/graph/graphMapper'
@@ -60,6 +59,7 @@ export function buildMetaFromNodesEdges(
         width: node.width ?? node.initialWidth ?? node.measured?.width ?? 120,
         height: node.height ?? node.initialHeight ?? node.measured?.height ?? 52,
       },
+      color: node.data.domainColor,
     }
   }
   const roomEdges: RoomGraphEdge[] = edges.map((e) => ({
@@ -119,7 +119,6 @@ export async function buildNodes(
 
   return normalizedChildren.map(([nodeId, childPath, roomNode], i) => {
     const childCount = childCountResults[i]
-    const domainColor = DOMAIN_COLORS[i % DOMAIN_COLORS.length]
     const saved = savedPositions[nodeId]
     const position = roomNode.position ?? saved ?? {
       x: 50 + i * spacingX,
@@ -135,7 +134,7 @@ export async function buildNodes(
       data: {
         label: roomNode.name || basenameRef(childPath),
         parent: dirPath || kbPath || undefined,
-        domainColor,
+        domainColor: roomNode.color, // Only use explicitly saved color
         childCount,
       },
     }

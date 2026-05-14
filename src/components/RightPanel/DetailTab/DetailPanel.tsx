@@ -7,8 +7,9 @@ import { useStorage } from '../../../core/storage'
 import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { usePromptStore } from '../../../stores/promptStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
-import { useGraphStore, useSelectedNodeId } from '../../../stores/graphStore'
+import { useGraphStore, useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
 import { useDraftStore } from '../../../stores/draftStore'
+import { useCardContentStore } from '../../../stores/cardContentStore'
 import MarkdownEditor from './MarkdownEditor'
 import MarkdownViewer from '../../MarkdownViewer'
 import styles from './DetailTab.module.css'
@@ -24,6 +25,7 @@ interface DetailPanelProps {
 
 const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const selectedNodeId = useSelectedNodeId()
+  const storeApi = useGraphStoreApi()
   const storage = useStorage()
   const collapseRightPanel = useRightPanelStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()
@@ -40,6 +42,9 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const setEditMode = useDraftStore((s) => s.setDetailEditMode)
   const draftMarkdown = useDraftStore((s) => nodePath ? (s.detailDrafts[nodePath] ?? '') : '')
   const setDraftMarkdown = useDraftStore((s) => s.setDetailDraft)
+  const detailEntry = useCardContentStore((s) => nodePath ? s.detailEntries[nodePath] : undefined)
+  const loadDetailMarkdown = useCardContentStore((s) => s.loadDetailMarkdown)
+  const setDetailMarkdown = useCardContentStore((s) => s.setDetailMarkdown)
 
   const [savedMarkdown, setSavedMarkdown] = useState('')
   const [renameMode, setRenameMode] = useState(false)
@@ -57,8 +62,19 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     const requestSeq = ++markdownRequestSeqRef.current
     if (!selectedNodeId || !nodePath) return
 
+    const cachedContent = useCardContentStore.getState().detailEntries[nodePath]?.content
+    if (cachedContent !== undefined) {
+      setSavedMarkdown(cachedContent)
+      if (useDraftStore.getState().detailDrafts[nodePath] === undefined) {
+        setDraftMarkdown(nodePath, cachedContent)
+      }
+    }
+
+    loadDetailMarkdown(nodePath, storage)
+
     storage.readMarkdown(nodePath).then((content: string) => {
       if (markdownRequestSeqRef.current !== requestSeq) return
+      setDetailMarkdown(nodePath, content)
       setSavedMarkdown(content)
       // Initialize draft only if there is none
       if (useDraftStore.getState().detailDrafts[nodePath] === undefined) {
@@ -66,12 +82,19 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       }
     }).catch(() => {
       if (markdownRequestSeqRef.current !== requestSeq) return
+      setDetailMarkdown(nodePath, '')
       setSavedMarkdown('')
       if (useDraftStore.getState().detailDrafts[nodePath] === undefined) {
         setDraftMarkdown(nodePath, '')
       }
     })
-  }, [selectedNodeId, nodePath, storage, setDraftMarkdown])
+  }, [selectedNodeId, nodePath, storage, setDraftMarkdown, loadDetailMarkdown, setDetailMarkdown])
+
+  useEffect(() => {
+    if (detailEntry) {
+      setSavedMarkdown(detailEntry.content)
+    }
+  }, [detailEntry])
 
   // Focus rename input when entering rename mode
   useEffect(() => {
@@ -86,10 +109,11 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   // closure can be stale when the selected node changes without re-rendering DetailPanel.
   const handleSave = async () => {
     if (!selectedNodeId || !nodePath) return
-    const node = useGraphStore.getState().nodesMap.get(selectedNodeId)
+    const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label
     try {
       await storage.writeMarkdown(nodePath, draftMarkdown)
+      setDetailMarkdown(nodePath, draftMarkdown)
       setSavedMarkdown(draftMarkdown)
       logAction('内容:保存', 'DetailPanel', { nodePath, label })
       setEditMode(nodePath, false)
@@ -106,7 +130,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       setRenameMode(false)
       return
     }
-    const node = useGraphStore.getState().nodesMap.get(selectedNodeId)
+    const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const oldLabel = node?.data.label ?? selectedNode?.data.label
     const path = resolveNodePath(selectedNodeId)
     logAction('节点:重命名', 'DetailPanel', {
@@ -125,7 +149,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   // without triggering a DetailPanel re-render (e.g., via React Flow selection).
   const handleDelete = useCallback(async () => {
     if (!selectedNodeId) return
-    const node = useGraphStore.getState().nodesMap.get(selectedNodeId)
+    const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label ?? selectedNodeId
     const path = resolveNodePath(selectedNodeId)
     const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${label}" 确认删除` })
@@ -133,7 +157,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     logAction('节点:删除', 'DetailPanel', { nodeId: selectedNodeId, label, path })
     graph.deleteChildNode(selectedNodeId)
     collapseRightPanel()
-  }, [selectedNodeId, prompt, graph, collapseRightPanel, resolveNodePath])
+  }, [selectedNodeId, prompt, graph, collapseRightPanel, resolveNodePath, storeApi])
 
   const flushMarkdownSave = useCallback(async () => {
     if (!editMode || !selectedNodeId || !nodePath) return
@@ -223,10 +247,12 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
                 const requestSeq = ++markdownRequestSeqRef.current
                 storage.readMarkdown(nodePath).then((content: string) => {
                   if (markdownRequestSeqRef.current !== requestSeq) return
+                  setDetailMarkdown(nodePath, content)
                   setDraftMarkdown(nodePath, content)
                   setSavedMarkdown(content)
                 }).catch(() => {
                   if (markdownRequestSeqRef.current !== requestSeq) return
+                  setDetailMarkdown(nodePath, '')
                   setDraftMarkdown(nodePath, '')
                   setSavedMarkdown('')
                 })

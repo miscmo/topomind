@@ -9,7 +9,8 @@ import {
   renameCard as renameCardInService,
 } from '../../domain/card/cardService'
 import type { StorageApi } from './graphOperations'
-import { useGraphStore } from '../../stores/graphStore'
+import type { GraphState } from '../../stores/graphStore'
+import type { StoreApi } from 'zustand'
 import { tabStore } from '../../stores/tabStore'
 
 export interface NodeCrudOperationsDeps {
@@ -19,6 +20,7 @@ export interface NodeCrudOperationsDeps {
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   saveNow: (dirPath: string) => Promise<void>
   isCreatingRef: { current: boolean }
+  storeApi: StoreApi<GraphState>
 }
 
 export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
@@ -29,6 +31,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     loadRoom,
     saveNow,
     isCreatingRef,
+    storeApi,
   } = deps
 
   const createChildNode = async (name: string, parentId?: string, position?: { x: number; y: number }): Promise<string | null> => {
@@ -91,7 +94,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
   }
 
   const deleteChildNode = async (nodeId: string): Promise<boolean> => {
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     const nodeLabel = store.nodesMap.get(nodeId)?.data.label ?? nodeId
     const dirPath = getActiveGraphSession().roomPath
     const currentRoomPath = dirPath || getActiveGraphSession().kbPath || ''
@@ -102,13 +105,13 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
 
       if (currentRoomPath) await saveNow(currentRoomPath)
       await loadRoom(currentRoomPath)
-      const isSelected = useGraphStore.getState().nodes.find(n => n.id === nodeId)?.selected
+      const isSelected = storeApi.getState().nodes.find(n => n.id === nodeId)?.selected
       if (isSelected) {
-        const nextNodes = useGraphStore.getState().nodes.map(n => {
+        const nextNodes = storeApi.getState().nodes.map(n => {
           if (!n.selected) return n
           return { ...n, selected: false }
         })
-        useGraphStore.getState().setNodes(nextNodes)
+        storeApi.getState().setNodes(nextNodes)
       }
       return true
     } catch (e) {
@@ -123,7 +126,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     const cardPath = resolveRoomChildRef(currentRoomPath, nodeId)
     try {
       await renameCardInService(storage, cardPath, newName)
-      const store = useGraphStore.getState()
+      const store = storeApi.getState()
       const oldName = store.nodesMap.get(nodeId)?.data.label ?? nodeId
       logAction('节点:重命名', 'graphOperations', { nodeId, oldName, newName, path: cardPath })
       

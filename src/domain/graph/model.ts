@@ -22,6 +22,7 @@ export interface RoomGraphNode {
   name: string
   position?: GraphPoint
   size?: GraphSize
+  color?: string
 }
 
 export interface RoomGraphEdge {
@@ -49,6 +50,7 @@ export interface KBNode {
   height: number
   width: number
   position?: GraphPoint
+  color?: string
 }
 
 export interface KBEdge {

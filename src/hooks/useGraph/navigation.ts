@@ -1,18 +1,20 @@
 import { tabStore } from '../../stores/tabStore'
-import { useGraphStore } from '../../stores/graphStore'
+import type { GraphState } from '../../stores/graphStore'
+import type { StoreApi } from 'zustand'
 
 export interface GraphNavigationDeps {
   tabId: string
+  storeApi: StoreApi<GraphState>
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   saveNow: (dirPath: string) => Promise<void>
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
 }
 
 export function buildGraphNavigation(deps: GraphNavigationDeps) {
-  const { tabId, getActiveGraphSession, saveNow, loadRoom } = deps
+  const { tabId, storeApi, getActiveGraphSession, saveNow, loadRoom } = deps
 
   const clearSelection = () => {
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     const nextNodes = store.nodes.map(n => {
       if (!n.selected) return n
       return { ...n, selected: false }

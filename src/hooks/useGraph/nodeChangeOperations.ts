@@ -1,12 +1,12 @@
 import type { KnowledgeEdge, KnowledgeNode } from '../../types'
-import { useGraphStore } from '../../stores/graphStore'
-
-import { tabStore } from '../../stores/tabStore'
+import type { GraphState } from '../../stores/graphStore'
+import type { StoreApi } from 'zustand'
 
 export interface NodeChangeOperationsDeps {
   tabId: string
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   saveNow: (dirPath: string) => Promise<void>
+  storeApi: StoreApi<GraphState>
 }
 
 export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
@@ -14,11 +14,12 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     tabId,
     getActiveGraphSession,
     saveNow,
+    storeApi,
   } = deps
 
   const applyNodePositionChanges = async (changes: Array<{ id: string; position: { x: number; y: number } }>) => {
     let changed = false
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     const nextNodes = store.nodes.map((n) => {
       const change = changes.find(c => c.id === n.id)
       if (change && change.position) {
@@ -37,7 +38,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
   }
 
   const applyNodeRemoveChanges = async (changeIds: string[]) => {
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     store.removeNodes(changeIds)
     store.removeEdgesByNodeIds(changeIds)
     const graphSession = getActiveGraphSession()
@@ -47,7 +48,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
 
   const applyNodeDimensionChanges = async (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean }>) => {
     let shouldSave = false
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     const nextNodes = store.nodes.map((n) => {
       const change = changes.find((c) => c.id === n.id)
       if (!change) return n
@@ -73,7 +74,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
 
   const applyNodeSelectionChanges = (changes: Array<{ id: string; selected: boolean }>) => {
     let changed = false
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     const nextNodes = store.nodes.map((n) => {
       const change = changes.find(c => c.id === n.id)
       if (change && n.selected !== change.selected) {

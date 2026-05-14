@@ -1,18 +1,21 @@
 import type { KnowledgeNode } from '../../types'
 import { logAction } from '../../core/log-backend'
-import { useGraphStore } from '../../stores/graphStore'
+import type { GraphState } from '../../stores/graphStore'
+import type { StoreApi } from 'zustand'
 
-export interface SelectionOperationsDeps {
+export interface SelectionOpsDeps {
   tabId: string
+  storeApi: StoreApi<GraphState>
 }
 
-export function buildSelectionOperations(deps: SelectionOperationsDeps) {
+export function buildSelectionOperations(deps: SelectionOpsDeps) {
   const {
     tabId,
+    storeApi,
   } = deps
 
   const selectNode = (nodeId: string) => {
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     const nextNodes = store.nodes.map(n => ({
       ...n,
       selected: n.id === nodeId
@@ -27,7 +30,7 @@ export function buildSelectionOperations(deps: SelectionOperationsDeps) {
   }
 
   const deselectNode = () => {
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     const nextNodes = store.nodes.map(n => {
       if (!n.selected) return n
       return { ...n, selected: false }

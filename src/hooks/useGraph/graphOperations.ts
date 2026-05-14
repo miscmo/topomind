@@ -11,7 +11,10 @@ import { buildNodeCrudOperations } from './nodeCrudOperations'
 import { buildEdgeOperations } from './edgeOperations'
 import { buildNodeChangeOperations } from './nodeChangeOperations'
 import { buildSelectionOperations } from './selectionOperations'
-import { useGraphStore } from '../../stores/graphStore'
+import type { GraphState } from '../../stores/graphStore'
+import type { StoreApi } from 'zustand'
+
+import type { GraphSession } from '../../stores/tabStore'
 
 export interface StorageApi {
   createCard: (parentPath: string, cardName: string) => Promise<string | null>
@@ -25,9 +28,10 @@ export interface StorageApi {
 export interface GraphOpsDeps {
   tabId: string
   storage: StorageApi
-  getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
+  getActiveGraphSession: () => GraphSession
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   isCreatingRef: { current: boolean }
+  storeApi: StoreApi<GraphState>
 }
 
 export function buildGraphOperations(deps: GraphOpsDeps) {
@@ -37,18 +41,20 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     getActiveGraphSession,
     loadRoom,
     isCreatingRef,
+    storeApi,
   } = deps
 
   // ===== Internal helpers =====
 
   const saveNow = async (dirPath: string) => {
     if (!dirPath) return
-    const store = useGraphStore.getState()
+    const store = storeApi.getState()
     await storage.flushGraphSave(
       dirPath,
       () => buildMetaFromNodesEdges(
         Array.from(store.nodesMap.values()),
-        Array.from(store.edgesMap.values())
+        Array.from(store.edgesMap.values()),
+        { zoom: store.viewport.zoom, pan: { x: store.viewport.x, y: store.viewport.y } }
       ),
       undefined
     )
@@ -63,6 +69,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     loadRoom,
     saveNow,
     isCreatingRef,
+    storeApi,
   })
 
   // ===== Edge CRUD =====
@@ -70,6 +77,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
   const edgeOps = buildEdgeOperations({
     getActiveGraphSession,
     saveNow,
+    storeApi,
   })
 
   // ===== Node position changes =====
@@ -78,12 +86,14 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     tabId,
     getActiveGraphSession,
     saveNow,
+    storeApi,
   })
 
   // ===== Selection =====
 
   const selectionOps = buildSelectionOperations({
     tabId,
+    storeApi,
   })
 
   return {
