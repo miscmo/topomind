@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { logAction } from '../../core/log-backend'
 import type { KBItem } from './useHomeKnowledgeBases'
 import styles from './HomePage.module.css'
@@ -5,13 +6,13 @@ import styles from './HomePage.module.css'
 interface KnowledgeBaseGridProps {
   kbs: KBItem[]
   onOpenKB: (kb: KBItem) => void
-  onKBRightClick: (event: React.MouseEvent, kb: KBItem) => void
   onCreateKB: () => void
   onImportKB: () => void
+  onOpenSettings: (kb: KBItem) => void
 }
 
 export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
-  const { kbs, onOpenKB, onKBRightClick, onCreateKB, onImportKB } = props
+  const { kbs, onOpenKB, onCreateKB, onImportKB, onOpenSettings } = props
 
   return (
     <div className={styles.grid}>
@@ -23,10 +24,23 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
             logAction('HomePage:点击知识库卡片', 'HomePage', { kbInfo: kb })
             onOpenKB(kb)
           }}
-          onContextMenu={(e) => onKBRightClick(e, kb)}
         >
           <div className={styles.cardImage}>
-            <span className={styles.cardImageIcon}>📚</span>
+            {kb.coverUrl ? (
+              <img src={kb.coverUrl} alt={kb.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span className={styles.cardImageIcon}>📚</span>
+            )}
+            <button
+              className={styles.settingsBtn}
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenSettings(kb)
+              }}
+              title="知识库设置"
+            >
+              ⚙️
+            </button>
           </div>
           <div className={styles.cardBody}>
             <div className={styles.cardTitle}>

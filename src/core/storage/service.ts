@@ -10,6 +10,8 @@ import { normalizeGraphMeta } from '../../domain/graph/normalizeGraphMeta'
 
 interface VaultConfig {
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
+  kbCovers?: Record<string, string>
+  kbOrder?: string[]
   [key: string]: unknown
 }
 
@@ -47,6 +49,15 @@ function normalizeName(name: unknown): string { return String(name || '').trim()
 function normalizeConfig(configRaw: unknown): VaultConfig {
   const c = (configRaw && typeof configRaw === 'object' && !Array.isArray(configRaw)) ? configRaw as Record<string, unknown> : {}
   const s = (c.defaultEdgeStyle && typeof c.defaultEdgeStyle === 'object' && !Array.isArray(c.defaultEdgeStyle)) ? c.defaultEdgeStyle as Record<string, unknown> : {}
+  
+  const covers = (c.kbCovers && typeof c.kbCovers === 'object' && !Array.isArray(c.kbCovers)) ? c.kbCovers as Record<string, unknown> : {}
+  const kbCovers: Record<string, string> = {}
+  for (const [k, v] of Object.entries(covers)) {
+    if (typeof v === 'string') kbCovers[k] = v
+  }
+
+  const kbOrder = Array.isArray(c.kbOrder) ? c.kbOrder.filter(item => typeof item === 'string') : undefined
+
   return {
     defaultEdgeStyle: {
       lineMode: s.lineMode === 'straight' ? 'straight' : 'smoothstep',
@@ -54,6 +65,8 @@ function normalizeConfig(configRaw: unknown): VaultConfig {
       color: typeof s.color === 'string' ? s.color : '#7f8c8d',
       arrow: typeof s.arrow === 'boolean' ? s.arrow : true,
     },
+    kbCovers,
+    kbOrder,
   }
 }
 function ensureValidName(name: unknown, label = '名称'): string {
@@ -212,7 +225,14 @@ export function createStore(backend: StorageBackend) {
     },
     async writeConfig(config: VaultConfig) {
       try {
-        const next = normalizeConfig({ ...cachedConfig, ...config, defaultEdgeStyle: { ...cachedConfig.defaultEdgeStyle, ...config.defaultEdgeStyle } })
+        const nextConfig = { ...cachedConfig, ...config }
+        if (config.defaultEdgeStyle) {
+          nextConfig.defaultEdgeStyle = { ...cachedConfig.defaultEdgeStyle, ...config.defaultEdgeStyle }
+        }
+        if (config.kbCovers !== undefined) {
+          nextConfig.kbCovers = config.kbCovers
+        }
+        const next = normalizeConfig(nextConfig)
         cachedConfig = next
         await backend.writeConfig(next)
       } catch (e) { logger.catch('Store.writeConfig', '保存工作目录配置失败', e); throw e }

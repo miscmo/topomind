@@ -7,6 +7,7 @@ import { tabStore } from '../../stores/tabStore'
 export interface KBItem {
   name: string
   nodeCount: number | null
+  coverUrl: string | null
 }
 
 interface UseHomeKnowledgeBasesOptions {
@@ -32,9 +33,33 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
       })
 
       const kbList = list || []
-      const initial: KBItem[] = kbList.map((kb) => ({
-        name: kb.name,
-        nodeCount: null,
+      const config = await storage.readConfig()
+      const kbCovers = config.kbCovers || {}
+      const kbOrder = config.kbOrder || []
+
+      // Sort according to kbOrder
+      const orderMap = new Map(kbOrder.map((name, i) => [name, i]))
+      kbList.sort((a, b) => {
+        const orderA = orderMap.has(a.name) ? orderMap.get(a.name)! : Infinity
+        const orderB = orderMap.has(b.name) ? orderMap.get(b.name)! : Infinity
+        if (orderA !== orderB) return orderA - orderB
+        return a.name.localeCompare(b.name, 'zh-CN')
+      })
+
+      const initial: KBItem[] = await Promise.all(kbList.map(async (kb) => {
+        let coverUrl = null
+        if (kbCovers[kb.name]) {
+          try {
+            coverUrl = await storage.readAttachmentDataUrl('__ROOT__', kbCovers[kb.name])
+          } catch (e) {
+            // Ignore error
+          }
+        }
+        return {
+          name: kb.name,
+          nodeCount: null,
+          coverUrl,
+        }
       }))
       setKbs(initial)
 

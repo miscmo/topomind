@@ -3,12 +3,12 @@
  */
 import { useState } from 'react'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
-import { useHomeKnowledgeBases } from './useHomeKnowledgeBases'
-import { useHomeKBContextMenu } from './useHomeKBContextMenu'
+import { useHomeKnowledgeBases, type KBItem } from './useHomeKnowledgeBases'
 import { useHomeCreateKB } from './useHomeCreateKB'
 import { useHomeImportKB } from './useHomeImportKB'
 import { CreateKBDialog } from './CreateKBDialog'
 import { ImportKBDialog } from './ImportKBDialog'
+import { KBSettingsDialog } from './KBSettingsDialog'
 import { KnowledgeBaseGrid } from './KnowledgeBaseGrid'
 import styles from './HomePage.module.css'
 
@@ -25,16 +25,6 @@ export default function HomePage() {
     currentWorkDir,
     setMessage,
     setMessageError,
-  })
-  const {
-    ctxMenu,
-    closeCtxMenu,
-    handleKBRightClick,
-    handleKBDelete,
-    handleKBRename,
-  } = useHomeKBContextMenu({
-    ctxMenuClassName: styles.ctxMenu,
-    refreshKBList,
   })
   const {
     showCreateSheet,
@@ -57,6 +47,8 @@ export default function HomePage() {
     handleSelectImportDir,
     handleImportKB,
   } = useHomeImportKB({ refreshKBList })
+
+  const [settingsKB, setSettingsKB] = useState<KBItem | null>(null)
 
   async function switchWorkDir() {
     setMessage('')
@@ -109,33 +101,11 @@ export default function HomePage() {
         <KnowledgeBaseGrid
           kbs={kbs}
           onOpenKB={openKB}
-          onKBRightClick={handleKBRightClick}
           onCreateKB={openCreateSheet}
           onImportKB={openImportSheet}
+          onOpenSettings={setSettingsKB}
         />
       </div>
-
-      {/* KB 右键菜单 */}
-      {ctxMenu.visible && ctxMenu.kb && (
-        <div
-          className={styles.ctxMenu}
-          style={{ left: ctxMenu.x, top: ctxMenu.y }}
-          onMouseLeave={closeCtxMenu}
-        >
-          <button
-            className={styles.ctxMenuItem}
-            onClick={handleKBDelete}
-          >
-            删除
-          </button>
-          <button
-            className={styles.ctxMenuItem}
-            onClick={handleKBRename}
-          >
-            重命名
-          </button>
-        </div>
-      )}
 
       <CreateKBDialog
         visible={showCreateSheet}
@@ -156,6 +126,13 @@ export default function HomePage() {
         onClose={closeImportSheet}
         onSelectDir={handleSelectImportDir}
         onSubmit={handleImportKB}
+      />
+
+      <KBSettingsDialog
+        visible={!!settingsKB}
+        kb={settingsKB}
+        onClose={() => setSettingsKB(null)}
+        refreshKBList={refreshKBList}
       />
     </div>
   )

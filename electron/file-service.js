@@ -300,7 +300,7 @@ function _fs_uniqueFilePath(dir, desiredName) {
 
 function _fs_writeAttachmentBuffer(rootDir, cardPath, fileName, buffer) {
   rootDir = _fs_requireValidWorkDir(rootDir);
-  var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
+  var cardDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, cardPath);
   var attachDir = nodePath.join(cardDir, '_attach');
   _fs_ensureDir(attachDir);
   var target = _fs_uniqueFilePath(attachDir, fileName);
@@ -319,7 +319,8 @@ function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
   if (!normalizedRef.startsWith('_attach/')) {
     normalizedRef = '_attach/' + nodePath.basename(normalizedRef);
   }
-  return _fs_resolveKbsPath(rootDir, nodePath.posix.join(String(cardPath || ''), normalizedRef));
+  var baseDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, String(cardPath || ''));
+  return nodePath.resolve(baseDir, normalizedRef);
 }
 
 const fileService = {
