@@ -8,6 +8,7 @@ import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { usePromptStore } from '../../../stores/promptStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { useGraphStore, useSelectedNodeId } from '../../../stores/graphStore'
+import { useDraftStore } from '../../../stores/draftStore'
 import MarkdownEditor from './MarkdownEditor'
 import MarkdownViewer from '../../MarkdownViewer'
 import styles from './DetailTab.module.css'
@@ -28,43 +29,49 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const graph = useGraphContext()
   const prompt = usePromptStore((s) => s.open)
 
-  const [editMode, setEditMode] = useState(false)
-  const [markdown, setMarkdown] = useState('')
-  const [savedMarkdown, setSavedMarkdown] = useState('')
-  const [renameMode, setRenameMode] = useState(false)
-  const [newName, setNewName] = useState('')
-  const renameInputRef = useRef<HTMLInputElement>(null)
-  const markdownRequestSeqRef = useRef(0)
-
   const selectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId) : null)
   const resolveNodePath = useCallback((nodeId: string) => {
     const graphSession = tabStore.getState().getGraphSession(tabId)
     return resolveRoomChildRef(graphSession.roomPath || graphSession.kbPath, nodeId)
   }, [tabId])
   const nodePath = selectedNodeId ? resolveNodePath(selectedNodeId) : null
+
+  const editMode = useDraftStore((s) => nodePath ? (s.detailEditModes[nodePath] || false) : false)
+  const setEditMode = useDraftStore((s) => s.setDetailEditMode)
+  const draftMarkdown = useDraftStore((s) => nodePath ? (s.detailDrafts[nodePath] ?? '') : '')
+  const setDraftMarkdown = useDraftStore((s) => s.setDetailDraft)
+
+  const [savedMarkdown, setSavedMarkdown] = useState('')
+  const [renameMode, setRenameMode] = useState(false)
+  const [newName, setNewName] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  const markdownRequestSeqRef = useRef(0)
+
   const childCount = selectedNode?.data.childCount ?? 0
 
   // Load markdown when node changes
   useEffect(() => {
-    setEditMode(false)
-    setMarkdown('')
     setRenameMode(false)
     setNewName('')
 
     const requestSeq = ++markdownRequestSeqRef.current
-    if (!selectedNodeId) return
+    if (!selectedNodeId || !nodePath) return
 
-    const path = resolveNodePath(selectedNodeId)
-    storage.readMarkdown(path).then((content: string) => {
+    storage.readMarkdown(nodePath).then((content: string) => {
       if (markdownRequestSeqRef.current !== requestSeq) return
-      setMarkdown(content)
       setSavedMarkdown(content)
+      // Initialize draft only if there is none
+      if (useDraftStore.getState().detailDrafts[nodePath] === undefined) {
+        setDraftMarkdown(nodePath, content)
+      }
     }).catch(() => {
       if (markdownRequestSeqRef.current !== requestSeq) return
-      setMarkdown('')
       setSavedMarkdown('')
+      if (useDraftStore.getState().detailDrafts[nodePath] === undefined) {
+        setDraftMarkdown(nodePath, '')
+      }
     })
-  }, [selectedNodeId, resolveNodePath, storage])
+  }, [selectedNodeId, nodePath, storage, setDraftMarkdown])
 
   // Focus rename input when entering rename mode
   useEffect(() => {
@@ -78,15 +85,14 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   // Use nodesMapRef for stale-closure-safe access. selectedNode from render-time
   // closure can be stale when the selected node changes without re-rendering DetailPanel.
   const handleSave = async () => {
-    if (!selectedNodeId) return
+    if (!selectedNodeId || !nodePath) return
     const node = useGraphStore.getState().nodesMap.get(selectedNodeId)
-    const path = resolveNodePath(selectedNodeId)
     const label = node?.data.label
     try {
-      await storage.writeMarkdown(path, markdown)
-      setSavedMarkdown(markdown)
-      logAction('内容:保存', 'DetailPanel', { nodePath: path, label })
-      setEditMode(false)
+      await storage.writeMarkdown(nodePath, draftMarkdown)
+      setSavedMarkdown(draftMarkdown)
+      logAction('内容:保存', 'DetailPanel', { nodePath, label })
+      setEditMode(nodePath, false)
     } catch (e) {
       logger.catch('DetailPanel', 'handleSave', e)
     }
@@ -130,10 +136,10 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   }, [selectedNodeId, prompt, graph, collapseRightPanel, resolveNodePath])
 
   const flushMarkdownSave = useCallback(async () => {
-    if (!editMode || !selectedNodeId) return
-    if (markdown === savedMarkdown) return
+    if (!editMode || !selectedNodeId || !nodePath) return
+    if (draftMarkdown === savedMarkdown) return
     await handleSave()
-  }, [editMode, selectedNodeId, markdown, savedMarkdown])
+  }, [editMode, selectedNodeId, nodePath, draftMarkdown, savedMarkdown, handleSave])
 
   useEffect(() => {
     return registerTabSaver(tabId, flushMarkdownSave)
@@ -185,7 +191,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       <div className={styles.actions}>
         {!editMode ? (
           <>
-            <button onClick={() => setEditMode(true)} title="编辑 Markdown">
+            <button onClick={() => nodePath && setEditMode(nodePath, true)} title="编辑 Markdown">
               编辑
             </button>
             <button
@@ -212,19 +218,19 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
             </button>
             <button
               onClick={() => {
+                if (!nodePath) return
                 // Reload original content — use nodesMapRef for stale-closure-safe access
-                const path = resolveNodePath(selectedNodeId)
                 const requestSeq = ++markdownRequestSeqRef.current
-                storage.readMarkdown(path).then((content: string) => {
+                storage.readMarkdown(nodePath).then((content: string) => {
                   if (markdownRequestSeqRef.current !== requestSeq) return
-                  setMarkdown(content)
+                  setDraftMarkdown(nodePath, content)
                   setSavedMarkdown(content)
                 }).catch(() => {
                   if (markdownRequestSeqRef.current !== requestSeq) return
-                  setMarkdown('')
+                  setDraftMarkdown(nodePath, '')
                   setSavedMarkdown('')
                 })
-                setEditMode(false)
+                setEditMode(nodePath, false)
               }}
             >
               取消
@@ -238,8 +244,8 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         {editMode ? (
           <div className={styles.mdEditorWrap}>
             <MarkdownEditor
-              value={markdown}
-              onChange={setMarkdown}
+              value={draftMarkdown}
+              onChange={(val) => nodePath && setDraftMarkdown(nodePath, val)}
               onSave={handleSave}
               attachmentCardPath={nodePath}
               placeholder="在此输入 Markdown 内容..."
@@ -247,7 +253,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           </div>
         ) : (
           <>
-            <MarkdownViewer content={markdown} className={styles.markdownBody} attachmentCardPath={nodePath} />
+            <MarkdownViewer content={draftMarkdown} className={styles.markdownBody} attachmentCardPath={nodePath} />
           </>
         )}
       </div>

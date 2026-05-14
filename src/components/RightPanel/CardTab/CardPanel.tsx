@@ -7,6 +7,7 @@ import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
 import { useGraphStore, useSelectedNodeId } from '../../../stores/graphStore'
 import { tabStore } from '../../../stores/tabStore'
 import { useCardContentStore } from '../../../stores/cardContentStore'
+import { useDraftStore } from '../../../stores/draftStore'
 import MarkdownViewer from '../../MarkdownViewer'
 import MarkdownEditor from '../DetailTab/MarkdownEditor'
 import styles from '../DetailTab/DetailTab.module.css'
@@ -18,61 +19,63 @@ interface CardPanelProps {
 const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
   const selectedNodeId = useSelectedNodeId()
   const storage = useStorage()
-  const [editMode, setEditMode] = useState(false)
-  const [markdown, setMarkdown] = useState('')
-  const [savedMarkdown, setSavedMarkdown] = useState('')
-  const requestSeqRef = useRef(0)
 
-  const selectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId) : null)
   const resolveNodePath = useCallback((nodeId: string) => {
     const graphSession = tabStore.getState().getGraphSession(tabId)
     return resolveRoomChildRef(graphSession.roomPath || graphSession.kbPath, nodeId)
   }, [tabId])
-
   const nodePath = selectedNodeId ? resolveNodePath(selectedNodeId) : null
 
+  const editMode = useDraftStore((s) => nodePath ? (s.cardEditModes[nodePath] || false) : false)
+  const setEditMode = useDraftStore((s) => s.setCardEditMode)
+  const draftMarkdown = useDraftStore((s) => nodePath ? (s.cardDrafts[nodePath] ?? '') : '')
+  const setDraftMarkdown = useDraftStore((s) => s.setCardDraft)
+
+  const [savedMarkdown, setSavedMarkdown] = useState('')
+  const requestSeqRef = useRef(0)
+
+  const selectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId) : null)
+
   useEffect(() => {
-    setEditMode(false)
-    setMarkdown('')
-    setSavedMarkdown('')
-
     const requestSeq = ++requestSeqRef.current
-    if (!selectedNodeId) return
+    if (!selectedNodeId || !nodePath) return
 
-    const path = resolveNodePath(selectedNodeId)
-    storage.readCardMarkdown(path).then((content: string) => {
+    storage.readCardMarkdown(nodePath).then((content: string) => {
       if (requestSeqRef.current !== requestSeq) return
-      useCardContentStore.getState().setCardMarkdown(path, content)
-      setMarkdown(content)
+      useCardContentStore.getState().setCardMarkdown(nodePath, content)
       setSavedMarkdown(content)
+      if (useDraftStore.getState().cardDrafts[nodePath] === undefined) {
+        setDraftMarkdown(nodePath, content)
+      }
     }).catch(() => {
       if (requestSeqRef.current !== requestSeq) return
-      useCardContentStore.getState().setCardMarkdown(path, '')
-      setMarkdown('')
+      useCardContentStore.getState().setCardMarkdown(nodePath, '')
       setSavedMarkdown('')
+      if (useDraftStore.getState().cardDrafts[nodePath] === undefined) {
+        setDraftMarkdown(nodePath, '')
+      }
     })
-  }, [selectedNodeId, resolveNodePath, storage])
+  }, [selectedNodeId, nodePath, storage, setDraftMarkdown])
 
   const handleSave = useCallback(async () => {
-    if (!selectedNodeId) return
-    const path = resolveNodePath(selectedNodeId)
+    if (!selectedNodeId || !nodePath) return
     const label = useGraphStore.getState().nodesMap.get(selectedNodeId)?.data.label
     try {
-      await storage.writeCardMarkdown(path, markdown)
-      useCardContentStore.getState().setCardMarkdown(path, markdown)
-      setSavedMarkdown(markdown)
-      setEditMode(false)
-      logAction('卡片:保存', 'CardPanel', { nodePath: path, label })
+      await storage.writeCardMarkdown(nodePath, draftMarkdown)
+      useCardContentStore.getState().setCardMarkdown(nodePath, draftMarkdown)
+      setSavedMarkdown(draftMarkdown)
+      setEditMode(nodePath, false)
+      logAction('卡片:保存', 'CardPanel', { nodePath, label })
     } catch (error) {
       logger.catch('CardPanel', 'handleSave', error)
     }
-  }, [selectedNodeId, resolveNodePath, markdown, storage])
+  }, [selectedNodeId, nodePath, draftMarkdown, storage, setEditMode])
 
   const flushCardSave = useCallback(async () => {
-    if (!editMode || !selectedNodeId) return
-    if (markdown === savedMarkdown) return
+    if (!editMode || !selectedNodeId || !nodePath) return
+    if (draftMarkdown === savedMarkdown) return
     await handleSave()
-  }, [editMode, selectedNodeId, markdown, savedMarkdown, handleSave])
+  }, [editMode, selectedNodeId, nodePath, draftMarkdown, savedMarkdown, handleSave])
 
   useEffect(() => {
     return registerTabSaver(tabId, flushCardSave)
@@ -99,7 +102,7 @@ const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
 
       <div className={styles.actions}>
         {!editMode ? (
-          <button onClick={() => setEditMode(true)} title="编辑卡片 Markdown">
+          <button onClick={() => nodePath && setEditMode(nodePath, true)} title="编辑卡片 Markdown">
             编辑
           </button>
         ) : (
@@ -109,8 +112,10 @@ const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
             </button>
             <button
               onClick={() => {
-                setMarkdown(savedMarkdown)
-                setEditMode(false)
+                if (nodePath) {
+                  setDraftMarkdown(nodePath, savedMarkdown)
+                  setEditMode(nodePath, false)
+                }
               }}
             >
               取消
@@ -123,15 +128,15 @@ const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
         {editMode ? (
           <div className={styles.mdEditorWrap}>
             <MarkdownEditor
-              value={markdown}
-              onChange={setMarkdown}
+              value={draftMarkdown}
+              onChange={(val) => nodePath && setDraftMarkdown(nodePath, val)}
               onSave={handleSave}
               attachmentCardPath={nodePath}
               placeholder="在此输入卡片 Markdown。建议写成详情文档的摘要、预览或关键结论..."
             />
           </div>
         ) : (
-          <MarkdownViewer content={markdown} className={styles.markdownBody} attachmentCardPath={nodePath} />
+          <MarkdownViewer content={draftMarkdown} className={styles.markdownBody} attachmentCardPath={nodePath} />
         )}
       </div>
     </div>
