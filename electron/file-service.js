@@ -263,6 +263,65 @@ function _fs_deleteKbsDir(rootDir, dirPath) {
   if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
 }
 
+function _fs_safeFileName(name) {
+  var raw = String(name || 'image').trim();
+  var dot = raw.lastIndexOf('.');
+  var base = dot > 0 ? raw.slice(0, dot) : raw;
+  var ext = dot > 0 ? raw.slice(dot + 1) : '';
+  base = _fs_safeSegment(base).slice(0, 60) || 'image';
+  ext = String(ext || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
+  return ext ? base + '.' + ext : base;
+}
+
+function _fs_extFromMime(mime) {
+  var type = String(mime || '').toLowerCase().split(';')[0].trim();
+  if (type === 'image/jpeg' || type === 'image/jpg') return 'jpg';
+  if (type === 'image/png') return 'png';
+  if (type === 'image/gif') return 'gif';
+  if (type === 'image/webp') return 'webp';
+  if (type === 'image/svg+xml') return 'svg';
+  if (type === 'image/bmp') return 'bmp';
+  return 'bin';
+}
+
+function _fs_uniqueFilePath(dir, desiredName) {
+  var safeName = _fs_safeFileName(desiredName);
+  var dot = safeName.lastIndexOf('.');
+  var base = dot > 0 ? safeName.slice(0, dot) : safeName;
+  var ext = dot > 0 ? safeName.slice(dot) : '';
+  var candidate = safeName;
+  var i = 1;
+  while (nodeFs.existsSync(nodePath.join(dir, candidate))) {
+    candidate = base + '-' + i + ext;
+    i += 1;
+  }
+  return nodePath.join(dir, candidate);
+}
+
+function _fs_writeAttachmentBuffer(rootDir, cardPath, fileName, buffer) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
+  var attachDir = nodePath.join(cardDir, '_attach');
+  _fs_ensureDir(attachDir);
+  var target = _fs_uniqueFilePath(attachDir, fileName);
+  nodeFs.writeFileSync(target, buffer);
+  return '_attach/' + nodePath.basename(target);
+}
+
+function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var rawRef = String(attachmentRef || '').trim();
+  if (!rawRef) throw new Error('附件路径为空');
+  if (/^[a-z]+:/i.test(rawRef) || rawRef.startsWith('/') || rawRef.startsWith('\\')) {
+    throw new Error('不支持的附件路径: ' + rawRef);
+  }
+  var normalizedRef = rawRef.replace(/\\/g, '/').replace(/^\.\/+/, '');
+  if (!normalizedRef.startsWith('_attach/')) {
+    normalizedRef = '_attach/' + nodePath.basename(normalizedRef);
+  }
+  return _fs_resolveKbsPath(rootDir, nodePath.posix.join(String(cardPath || ''), normalizedRef));
+}
+
 const fileService = {
     /**
      * @description 读取工作目录应用配置
@@ -481,6 +540,50 @@ const fileService = {
       var f = _fs_resolveKbsPath(rootDir, filePath);
       _fs_ensureDir(nodePath.dirname(f));
       nodeFs.writeFileSync(f, content, 'utf-8');
+    },
+
+    writeAttachmentBase64: function(rootDir, cardPath, fileName, mimeType, base64) {
+      var ext = _fs_extFromMime(mimeType);
+      var safeName = _fs_safeFileName(fileName || ('image.' + ext));
+      if (safeName.indexOf('.') < 0) safeName += '.' + ext;
+      return _fs_writeAttachmentBuffer(rootDir, cardPath, safeName, Buffer.from(String(base64 || ''), 'base64'));
+    },
+
+    downloadAttachment: async function(rootDir, cardPath, url) {
+      var targetUrl = String(url || '').trim();
+      if (!/^https?:\/\//i.test(targetUrl)) {
+        throw new Error('只支持 http/https 图片链接');
+      }
+      var response = await fetch(targetUrl);
+      if (!response.ok) {
+        throw new Error('下载失败: ' + response.status);
+      }
+      var mimeType = response.headers.get('content-type') || '';
+      if (!/^image\//i.test(mimeType)) {
+        throw new Error('链接不是图片: ' + mimeType);
+      }
+      var urlPath = new URL(targetUrl).pathname;
+      var fileName = nodePath.basename(urlPath) || ('image.' + _fs_extFromMime(mimeType));
+      if (fileName.indexOf('.') < 0) fileName += '.' + _fs_extFromMime(mimeType);
+      var arrayBuffer = await response.arrayBuffer();
+      return _fs_writeAttachmentBuffer(rootDir, cardPath, fileName, Buffer.from(arrayBuffer));
+    },
+
+    readAttachmentDataUrl: function(rootDir, cardPath, attachmentRef) {
+      var filePath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef);
+      if (!nodeFs.existsSync(filePath)) return '';
+      var ext = nodePath.extname(filePath).slice(1).toLowerCase();
+      var mimeMap = {
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        gif: 'image/gif',
+        webp: 'image/webp',
+        svg: 'image/svg+xml',
+        bmp: 'image/bmp',
+      };
+      var mimeType = mimeMap[ext] || 'application/octet-stream';
+      return 'data:' + mimeType + ';base64,' + nodeFs.readFileSync(filePath).toString('base64');
     },
 
     /**

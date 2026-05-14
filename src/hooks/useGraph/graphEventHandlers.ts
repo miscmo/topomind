@@ -3,6 +3,7 @@ import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/rea
 import { tabStore } from '../../stores/tabStore'
 import { logAction } from '../../core/log-backend'
 import type { KnowledgeEdge, KnowledgeNode, KnowledgeNodeData } from '../../types'
+import type { RightPanelTab } from '../../stores/uiStoreTypes'
 import { generateId } from './graphBuilder'
 import type { GraphOperations } from './graphOperations'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
@@ -17,7 +18,7 @@ export interface GraphEventHandlerDeps {
   setState: React.Dispatch<React.SetStateAction<{ nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }>>
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
   setSelectedEdgeId: (edgeId: string | null) => void
-  setRightPanelTab: (tab: 'detail' | 'style') => void
+  setRightPanelTab: (tab: RightPanelTab) => void
 }
 
 export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {

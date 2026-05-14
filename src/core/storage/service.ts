@@ -30,6 +30,11 @@ export interface StorageBackend {
 
   readMarkdown: (cardPath: string) => Promise<string>
   writeMarkdown: (cardPath: string, content: string) => Promise<void>
+  readCardMarkdown: (cardPath: string) => Promise<string>
+  writeCardMarkdown: (cardPath: string, content: string) => Promise<void>
+  writeAttachmentBase64: (cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
+  downloadAttachment: (cardPath: string, url: string) => Promise<string>
+  readAttachmentDataUrl: (cardPath: string, attachmentRef: string) => Promise<string>
 
   readLayout: (roomPath: string) => Promise<GraphMeta>
   writeLayout: (roomPath: string, meta: GraphMeta) => Promise<void>
@@ -149,6 +154,21 @@ export function createStore(backend: StorageBackend) {
     },
     async writeMarkdown(cardPath: string, content: string) {
       try { await backend.writeMarkdown(cardPath, content) } catch (e) { logger.catch('Store.writeMarkdown', `写入文档失败: ${cardPath}`, e); throw e }
+    },
+    async readCardMarkdown(cardPath: string) {
+      try { return await backend.readCardMarkdown(cardPath) } catch (e) { logger.catch('Store.readCardMarkdown', `读取卡片内容失败: ${cardPath}`, e); throw e }
+    },
+    async writeCardMarkdown(cardPath: string, content: string) {
+      try { await backend.writeCardMarkdown(cardPath, content) } catch (e) { logger.catch('Store.writeCardMarkdown', `写入卡片内容失败: ${cardPath}`, e); throw e }
+    },
+    async writeAttachmentBase64(cardPath: string, fileName: string, mimeType: string, base64: string) {
+      try { return await backend.writeAttachmentBase64(cardPath, fileName, mimeType, base64) } catch (e) { logger.catch('Store.writeAttachmentBase64', `写入附件失败: ${cardPath}/${fileName}`, e); throw e }
+    },
+    async downloadAttachment(cardPath: string, url: string) {
+      try { return await backend.downloadAttachment(cardPath, url) } catch (e) { logger.catch('Store.downloadAttachment', `下载附件失败: ${cardPath}`, e); throw e }
+    },
+    async readAttachmentDataUrl(cardPath: string, attachmentRef: string) {
+      try { return await backend.readAttachmentDataUrl(cardPath, attachmentRef) } catch (e) { logger.catch('Store.readAttachmentDataUrl', `读取附件失败: ${cardPath}/${attachmentRef}`, e); throw e }
     },
     writeLayout: async (kbPath: string, meta: GraphMeta) => {
       try { await backend.writeLayout(kbPath, normalizeGraphMeta(meta)) } catch (e) { logger.catch('Store.writeLayout', `写入布局失败: ${kbPath}`, e); throw e }

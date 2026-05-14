@@ -1,14 +1,16 @@
 import { memo } from 'react'
+import CardPanel from './CardTab/CardPanel'
 import DetailPanel from './DetailTab/DetailPanel'
 import StyleSection from './StyleTab/StyleSection'
+import type { RightPanelTab } from '../../stores/uiStoreTypes'
 import styles from './RightPanel.module.css'
 
 interface RightPanelShellProps {
   selectedNodeId: string | null
   tabId: string
-  rightPanelTab: 'detail' | 'style'
+  rightPanelTab: RightPanelTab
   width: number
-  onTabChange: (tab: 'detail' | 'style') => void
+  onTabChange: (tab: RightPanelTab) => void
   onCollapse: () => void
 }
 
@@ -24,6 +26,12 @@ export default memo(function RightPanelShell({ selectedNodeId, tabId, rightPanel
             详情
           </button>
           <button
+            className={`${styles.rightPanelTabBtn} ${rightPanelTab === 'card' ? styles.rightPanelTabBtnActive : ''}`}
+            onClick={() => onTabChange('card')}
+          >
+            卡片
+          </button>
+          <button
             className={`${styles.rightPanelTabBtn} ${rightPanelTab === 'style' ? styles.rightPanelTabBtnActive : ''}`}
             onClick={() => onTabChange('style')}
           >
@@ -36,6 +44,8 @@ export default memo(function RightPanelShell({ selectedNodeId, tabId, rightPanel
       </div>
       {rightPanelTab === 'detail' ? (
         <DetailPanel selectedNodeId={selectedNodeId} tabId={tabId} />
+      ) : rightPanelTab === 'card' ? (
+        <CardPanel selectedNodeId={selectedNodeId} tabId={tabId} />
       ) : (
         <StyleSection />
       )}

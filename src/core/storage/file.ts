@@ -243,6 +243,26 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       await FSB.writeFile(requireRootDir(), `${cardPath}/_content.md`, content)
     },
 
+    readCardMarkdown: async (cardPath: string) => {
+      return FSB.readFile(requireRootDir(), `${cardPath}/_card.md`)
+    },
+
+    writeCardMarkdown: async (cardPath: string, content: string) => {
+      await FSB.writeFile(requireRootDir(), `${cardPath}/_card.md`, content)
+    },
+
+    writeAttachmentBase64: async (cardPath: string, fileName: string, mimeType: string, base64: string) => {
+      return FSB.writeAttachmentBase64(requireRootDir(), cardPath, fileName, mimeType, base64)
+    },
+
+    downloadAttachment: async (cardPath: string, url: string) => {
+      return FSB.downloadAttachment(requireRootDir(), cardPath, url)
+    },
+
+    readAttachmentDataUrl: async (cardPath: string, attachmentRef: string) => {
+      return FSB.readAttachmentDataUrl(requireRootDir(), cardPath, attachmentRef)
+    },
+
     readConfig: () => {
       return FSB.readAppConfig(requireRootDir())
     },

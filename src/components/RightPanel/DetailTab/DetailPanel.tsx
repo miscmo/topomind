@@ -2,23 +2,19 @@
  * 右侧详情面板
  * 显示节点 Markdown 内容，支持预览/编辑切换
  */
-import { useEffect, useState, useRef, memo, useMemo, useCallback } from 'react'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import { useEffect, useState, useRef, memo, useCallback } from 'react'
 import { useStorage } from '../../../core/storage'
 import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { usePromptStore } from '../../../stores/promptStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import MarkdownEditor from './MarkdownEditor'
+import MarkdownViewer from '../../MarkdownViewer'
 import styles from './DetailTab.module.css'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { registerTabSaver } from '../../../core/close-guard'
 import { tabStore } from '../../../stores/tabStore'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
-
-// Configure marked once — called at module load time, not inside components
-marked.setOptions({ breaks: true, gfm: true })
 
 interface DetailPanelProps {
   selectedNodeId: string | null
@@ -142,12 +138,6 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
     return registerTabSaver(tabId, flushMarkdownSave)
   }, [tabId, flushMarkdownSave])
 
-  // Memoize parsed HTML — must be declared before any early returns (Rules of Hooks)
-  const sanitizedHtml = useMemo(
-    () => DOMPurify.sanitize(marked.parse(markdown) as string),
-    [markdown]
-  )
-
   // ===== Empty state =====
   if (!selectedNodeId || !selectedNode) {
     return (
@@ -250,16 +240,13 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
               value={markdown}
               onChange={setMarkdown}
               onSave={handleSave}
+              attachmentCardPath={nodePath}
               placeholder="在此输入 Markdown 内容..."
             />
           </div>
         ) : (
           <>
-            {/* Markdown 渲染 */}
-            <div
-              className={styles.markdownBody}
-              dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
-            />
+            <MarkdownViewer content={markdown} className={styles.markdownBody} attachmentCardPath={nodePath} />
           </>
         )}
       </div>

@@ -67,6 +67,9 @@ export interface FSB {
   readGraphMeta: (rootDir: string, roomPath: string) => Promise<FSBGraphMeta>
   writeGraphMeta: (rootDir: string, roomPath: string, meta: FSBGraphMeta) => Promise<unknown>
   readFile: (rootDir: string, filePath: string) => Promise<string>
+  writeAttachmentBase64: (rootDir: string, cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
+  downloadAttachment: (rootDir: string, cardPath: string, url: string) => Promise<string>
+  readAttachmentDataUrl: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<string>
   readAppConfig: (rootDir: string) => Promise<unknown>
   writeAppConfig: (rootDir: string, content: unknown) => Promise<unknown>
   writeFile: (rootDir: string, filePath: string, content: string) => Promise<unknown>
@@ -89,6 +92,12 @@ const FSBImpl: FSB = {
   writeGraphMeta: (rootDir, roomPath, meta) => _call('fs:writeGraphMeta', rootDir, roomPath, meta),
 
   readFile: (rootDir, filePath) => _call('fs:readFile', rootDir, filePath) as Promise<string>,
+  writeAttachmentBase64: (rootDir, cardPath, fileName, mimeType, base64) =>
+    _call('fs:writeAttachmentBase64', rootDir, cardPath, fileName, mimeType, base64) as Promise<string>,
+  downloadAttachment: (rootDir, cardPath, url) =>
+    _call('fs:downloadAttachment', rootDir, cardPath, url) as Promise<string>,
+  readAttachmentDataUrl: (rootDir, cardPath, attachmentRef) =>
+    _call('fs:readAttachmentDataUrl', rootDir, cardPath, attachmentRef) as Promise<string>,
   readAppConfig: (rootDir) => _call('fs:readAppConfig', rootDir),
   writeAppConfig: (rootDir, content) => _call('fs:writeAppConfig', rootDir, content),
   writeFile: (rootDir, filePath, content) => _call('fs:writeFile', rootDir, filePath, content),
