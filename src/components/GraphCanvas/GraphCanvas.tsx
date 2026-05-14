@@ -1,12 +1,12 @@
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { Background, ReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import { useContextMenu } from '../../hooks/useContextMenu'
+import { useDoubleClick } from '../../hooks/useDoubleClick'
 import type { KnowledgeNode } from '../../types'
 import KnowledgeCard from './nodes/KnowledgeCard'
 import Toolbar from '../Toolbar/Toolbar'
-import { usePaneContextMenu } from './usePaneContextMenu'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
 
@@ -16,11 +16,14 @@ interface GraphCanvasProps {
 
 export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps) {
   const showGrid = useGraphUiStore((s) => s.showGrid)
-  const canvasRef = useRef<HTMLDivElement>(null)
   const [zoomLevel, setZoomLevel] = useState(1)
   const graph = useGraphContext()
-  const { openNodeMenu, openEdgeMenu } = useContextMenu()
-  const { handlePaneClick } = usePaneContextMenu({ canvasRef, onPaneClick: graph.onPaneClick })
+  const { openNodeMenu, openEdgeMenu, openPaneMenu, closeContextMenu } = useContextMenu()
+  const { handleClick: handlePaneClick } = useDoubleClick({
+    onClick: () => closeContextMenu(),
+    onDoubleClick: graph.onPaneClick,
+    onSingleClick: graph.onPaneClick,
+  })
 
   const handleViewportChange = useCallback((viewport: Viewport) => {
     setZoomLevel(viewport.zoom)
@@ -40,8 +43,14 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
     openEdgeMenu(edge.id, event)
   }, [onEdgeContextMenu, openEdgeMenu])
 
+  const handlePaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    openPaneMenu(event.clientX, event.clientY)
+  }, [openPaneMenu])
+
   return (
-    <div ref={canvasRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ReactFlow
         nodes={graph.nodes as Node[]}
         edges={graph.edges}
@@ -71,6 +80,8 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
         onEdgeClick={handleEdgeClick}
         // 点击画布空白区域触发
         onPaneClick={handlePaneClick}
+        // 右键画布空白区域触发。使用 React Flow 原生 pane context menu 事件，不再额外监听 DOM。
+        onPaneContextMenu={handlePaneContextMenu}
         // 右键边时触发
         onEdgeContextMenu={handleEdgeContextMenu}
 
@@ -83,8 +94,8 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
         zoomOnDoubleClick={false}
         // 允许滚轮缩放
         zoomOnScroll
-        // 右键拖动画布平移
-        panOnDrag={[2]}
+        // 左键拖动画布平移
+        panOnDrag={[0]}
 
         // 隐藏attribution标识
         proOptions={{ hideAttribution: true }}
