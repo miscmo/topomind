@@ -80,6 +80,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       })
 
       await loadRoom(reloadPath, true)
+      isCreatingRef.current = false
       const savePath = getActiveGraphSession().roomPath || getActiveGraphSession().kbPath
       if (savePath) await saveNow(savePath)
 
