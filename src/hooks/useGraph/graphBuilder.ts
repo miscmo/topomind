@@ -56,7 +56,10 @@ export function buildMetaFromNodesEdges(
       cardRef: node.id,
       name: node.data.label,
       position: node.position,
-      size: { width: 200, height: 150 },
+      size: {
+        width: node.width ?? node.initialWidth ?? node.measured?.width ?? 120,
+        height: node.height ?? node.initialHeight ?? node.measured?.height ?? 52,
+      },
     }
   }
   const roomEdges: RoomGraphEdge[] = edges.map((e) => ({
@@ -127,6 +130,8 @@ export async function buildNodes(
       id: nodeId,
       type: 'knowledgeCard',
       position,
+      width: roomNode.size?.width,
+      height: roomNode.size?.height,
       data: {
         label: roomNode.name || basenameRef(childPath),
         parent: dirPath || kbPath || undefined,

@@ -7,7 +7,7 @@ import { GraphContextProvider } from '../../contexts/GraphContext'
 import Breadcrumb from '../Breadcrumb/Breadcrumb'
 import RightPanelContainer from '../RightPanel/RightPanelContainer'
 import GraphCanvas from '../GraphCanvas'
-import ContextMenu from '../ContextMenu/ContextMenu'
+import GraphPageContextMenu from './GraphPageContextMenu'
 import { useGraphPageController } from './useGraphPageController'
 import { useGraphPageActions } from './useGraphPageActions'
 import styles from './GraphPage.module.css'
@@ -31,7 +31,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
           </div>
           <RightPanelContainer selectedNodeId={graphSession.selectedNodeId} tabId={tabId} />
         </div>
-        <ContextMenu {...contextMenuProps} />
+        <GraphPageContextMenu {...contextMenuProps} />
       </div>
     </GraphContextProvider>
   )

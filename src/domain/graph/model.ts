@@ -84,6 +84,6 @@ export const DEFAULT_VIEWPORT: RoomGraphViewport = {
 }
 
 export const DEFAULT_NODE_SIZE: GraphSize = {
-  width: 200,
-  height: 150,
+  width: 120,
+  height: 52,
 }

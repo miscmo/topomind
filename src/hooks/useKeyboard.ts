@@ -6,7 +6,6 @@
  * - Delete / Backspace: 删除选中节点
  */
 import { useCallback, useEffect } from 'react'
-import { useContextMenuStore } from '../stores/contextMenuStore'
 import { logAction } from '../core/log-backend'
 import { tabStore } from '../stores/tabStore'
 
@@ -19,8 +18,6 @@ interface UseKeyboardOptions {
 
 export function useKeyboard(options: UseKeyboardOptions) {
   const { onDelete, onEscape, onAddChild, tabId } = options
-
-  const hideContextMenu = useContextMenuStore((s) => s.hideContextMenu)
 
   // Read the selection node respecting tab context when active.
   // useCallback ensures the function identity is stable across renders so
@@ -52,7 +49,6 @@ export function useKeyboard(options: UseKeyboardOptions) {
           e.preventDefault()
           logAction('快捷键:ESC', 'useKeyboard', { action: 'clear-selection' })
           logAction('右键菜单:关闭', 'useKeyboard', { source: 'Escape' })
-          hideContextMenu()
           onEscape?.()
           break
 
@@ -82,5 +78,5 @@ export function useKeyboard(options: UseKeyboardOptions) {
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [hideContextMenu, onDelete, onEscape, onAddChild, tabId, getSelectedNodeId])
+  }, [onDelete, onEscape, onAddChild, tabId, getSelectedNodeId])
 }

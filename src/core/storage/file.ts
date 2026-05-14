@@ -8,6 +8,8 @@ interface FSBGraphChild {
   name: string
   x?: number
   y?: number
+  width?: number
+  height?: number
 }
 
 interface FSBGraphEdge {
@@ -73,8 +75,8 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
     nodes[ref] = {
       id: ref,
       card: { ref, name: child.name, updatedAt: undefined },
-      height: 150,
-      width: 200,
+      height: Number.isFinite(child.height) ? child.height as number : 52,
+      width: Number.isFinite(child.width) ? child.width as number : 120,
       position: Number.isFinite(child.x) && Number.isFinite(child.y)
         ? { x: child.x as number, y: child.y as number }
         : undefined,
@@ -128,6 +130,8 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
       name: node.card.name,
       x: node.position?.x,
       y: node.position?.y,
+      width: node.width,
+      height: node.height,
     }
   }
 

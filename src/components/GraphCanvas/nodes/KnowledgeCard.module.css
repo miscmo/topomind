@@ -14,8 +14,10 @@
   cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
   min-width: 120px;
-  max-width: 200px;
   min-height: 52px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
   padding: 10px 16px;
   user-select: none;
 }
@@ -89,4 +91,15 @@
   background: #555;
   border: 2px solid #fff;
   z-index: 1;
+}
+
+.resizeHandle {
+  width: 9px !important;
+  height: 9px !important;
+  border: 2px solid #fff !important;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.22);
+}
+
+.resizeLine {
+  border-color: #3498db !important;
 }

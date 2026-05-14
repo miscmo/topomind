@@ -2,7 +2,6 @@ import { memo, useCallback, useState } from 'react'
 import { Background, ReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
-import { useContextMenu } from '../../hooks/useContextMenu'
 import { useDoubleClick } from '../../hooks/useDoubleClick'
 import type { KnowledgeNode } from '../../types'
 import KnowledgeCard from './nodes/KnowledgeCard'
@@ -11,16 +10,23 @@ import Toolbar from '../Toolbar/Toolbar'
 const nodeTypes = { knowledgeCard: KnowledgeCard }
 
 interface GraphCanvasProps {
+  onNodeContextMenu?: (nodeId: string, event: React.MouseEvent) => void
   onEdgeContextMenu?: (edgeId: string, event: React.MouseEvent) => void
+  onPaneContextMenu?: (x: number, y: number) => void
+  onCloseContextMenu?: () => void
 }
 
-export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps) {
+export default memo(function GraphCanvas({
+  onNodeContextMenu,
+  onEdgeContextMenu,
+  onPaneContextMenu,
+  onCloseContextMenu,
+}: GraphCanvasProps) {
   const showGrid = useGraphUiStore((s) => s.showGrid)
   const [zoomLevel, setZoomLevel] = useState(1)
   const graph = useGraphContext()
-  const { openNodeMenu, openEdgeMenu, openPaneMenu, closeContextMenu } = useContextMenu()
   const { handleClick: handlePaneClick } = useDoubleClick({
-    onClick: () => closeContextMenu(),
+    onClick: () => onCloseContextMenu?.(),
     onDoubleClick: graph.onPaneClick,
     onSingleClick: graph.onPaneClick,
   })
@@ -31,8 +37,8 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
 
   const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     graph.onNodeContextMenu(event, node as KnowledgeNode)
-    openNodeMenu(node.id, event)
-  }, [graph, openNodeMenu])
+    onNodeContextMenu?.(node.id, event)
+  }, [graph, onNodeContextMenu])
 
   const handleEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     graph.onEdgeClick(event, edge)
@@ -40,14 +46,13 @@ export default memo(function GraphCanvas({ onEdgeContextMenu }: GraphCanvasProps
 
   const handleEdgeContextMenu = useCallback((event: React.MouseEvent, edge: Edge) => {
     onEdgeContextMenu?.(edge.id, event)
-    openEdgeMenu(edge.id, event)
-  }, [onEdgeContextMenu, openEdgeMenu])
+  }, [onEdgeContextMenu])
 
   const handlePaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
-    openPaneMenu(event.clientX, event.clientY)
-  }, [openPaneMenu])
+    onPaneContextMenu?.(event.clientX, event.clientY)
+  }, [onPaneContextMenu])
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>

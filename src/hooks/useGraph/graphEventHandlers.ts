@@ -51,7 +51,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     (changes: NodeChange[]) => {
       const positionChanges: Array<{ id: string; position: { x: number; y: number } }> = []
       const removeIds: string[] = []
-      const dimensionChanges: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined }> = []
+      const dimensionChanges: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean }> = []
 
       for (const change of changes) {
         if (change.type === 'position' && change.position) {
@@ -59,7 +59,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
         } else if (change.type === 'remove') {
           removeIds.push(change.id)
         } else if (change.type === 'dimensions') {
-          dimensionChanges.push({ id: change.id, dimensions: change.dimensions })
+          dimensionChanges.push({ id: change.id, dimensions: change.dimensions, resizing: change.resizing })
         }
       }
 

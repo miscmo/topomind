@@ -2,7 +2,7 @@ import type { CardInfo, GraphMeta, KBEdge } from './model'
 import type { EdgeLineMode, EdgeLineStyle, EdgeRelation, EdgeWeight } from '../../types'
 
 const DEFAULT_VIEWPORT = { zoom: 1, pan: { x: 0, y: 0 } }
-const DEFAULT_NODE_SIZE = { width: 200, height: 150 }
+const DEFAULT_NODE_SIZE = { width: 120, height: 52 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)

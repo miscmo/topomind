@@ -1,16 +1,5 @@
-/**
- * ContextMenu — 右键菜单
- *
- * Appears at cursor position when right-clicking a node or edge.
- * Items (node):
- * - 新建子节点
- * - 重命名
- * - 删除
- * Items (edge):
- * - 删除连线
- */
-import { memo, useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import styles from './ContextMenu.module.css'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import styles from './GraphPageContextMenu.module.css'
 
 interface MenuItem {
   label: string
@@ -30,7 +19,7 @@ interface MenuSeparator {
 
 type MenuEntry = MenuItem | MenuSeparator
 
-interface ContextMenuProps {
+interface GraphPageContextMenuProps {
   visible: boolean
   x: number
   y: number
@@ -45,7 +34,7 @@ interface ContextMenuProps {
   onClose: () => void
 }
 
-export default memo(function ContextMenu({
+export default memo(function GraphPageContextMenu({
   visible,
   x,
   y,
@@ -58,17 +47,15 @@ export default memo(function ContextMenu({
   onEdgeStyle,
   onProperties,
   onClose,
-}: ContextMenuProps) {
+}: GraphPageContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuSize, setMenuSize] = useState({ width: 160, height: 0 })
-  // Keyboard navigation: tracks focused item index among non-separator items
   const [focusedIndex, setFocusedIndex] = useState(-1)
 
   const isEdge = type === 'edge'
   const isPane = type === 'pane'
-  const paneTargetId = isPane ? '' : targetId
+  const menuTargetId = isPane ? '' : targetId
 
-  // Build menu items — must be before useEffect that references `items`
   const items: MenuEntry[] = isPane
     ? [
         {
@@ -102,21 +89,21 @@ export default memo(function ContextMenu({
           {
             label: '新建子节点',
             action: async () => {
-              await onNewChild(paneTargetId ?? '')
+              await onNewChild(menuTargetId ?? '')
               onClose()
             },
           },
           {
             label: '重命名',
             action: async () => {
-              if (paneTargetId) await onRename(paneTargetId)
+              if (menuTargetId) await onRename(menuTargetId)
               onClose()
             },
           },
           {
             label: '属性',
             action: () => {
-              if (paneTargetId) onProperties(paneTargetId)
+              if (menuTargetId) onProperties(menuTargetId)
               onClose()
             },
           },
@@ -124,33 +111,29 @@ export default memo(function ContextMenu({
           {
             label: '删除节点',
             action: async () => {
-              if (paneTargetId) await onDelete(paneTargetId)
+              if (menuTargetId) await onDelete(menuTargetId)
               onClose()
             },
             danger: true,
           },
         ]
 
-  // Memoize navigable (non-separator) items so focusedIndex maps correctly
   const navigableItems = useMemo(
     () => items.filter((item): item is MenuItem => !('separator' in item)),
     [items]
   )
 
-  // Reset focus to first item when menu opens
   useEffect(() => {
     if (!visible) return
     setFocusedIndex(navigableItems.length > 0 ? 0 : -1)
   }, [visible, navigableItems.length])
 
-  // Measure menu size when it becomes visible
   useEffect(() => {
-    if (!menuRef.current) return
+    if (!menuRef.current || !visible) return
     const measured = menuRef.current.getBoundingClientRect()
     setMenuSize({ width: measured.width, height: measured.height })
   }, [visible])
 
-  // Close on mousedown/contextmenu outside
   useEffect(() => {
     if (!visible) return
     const handler = (e: MouseEvent) => {
@@ -166,7 +149,6 @@ export default memo(function ContextMenu({
     }
   }, [visible, onClose])
 
-  // Close on scroll or resize
   useEffect(() => {
     if (!visible) return
     const handler = () => onClose()
@@ -178,26 +160,30 @@ export default memo(function ContextMenu({
     }
   }, [visible, onClose])
 
-  // Keyboard: Escape closes, Arrow keys navigate, Enter activates
   useEffect(() => {
     if (!visible) return
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
         onClose()
-      } else if (e.key === 'ArrowDown') {
+        return
+      }
+
+      if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setFocusedIndex((prev) =>
-          prev < navigableItems.length - 1 ? prev + 1 : 0
-        )
-      } else if (e.key === 'ArrowUp') {
+        setFocusedIndex((prev) => (prev < navigableItems.length - 1 ? prev + 1 : 0))
+        return
+      }
+
+      if (e.key === 'ArrowUp') {
         e.preventDefault()
-        setFocusedIndex((prev) =>
-          prev > 0 ? prev - 1 : navigableItems.length - 1
-        )
-      } else if (e.key === 'Enter' && focusedIndex >= 0 && focusedIndex < navigableItems.length) {
+        setFocusedIndex((prev) => (prev > 0 ? prev - 1 : navigableItems.length - 1))
+        return
+      }
+
+      if (e.key === 'Enter' && focusedIndex >= 0 && focusedIndex < navigableItems.length) {
         e.preventDefault()
-        const item = navigableItems[focusedIndex]!
+        const item = navigableItems[focusedIndex]
         if (item && !item.disabled) item.action()
       }
     }
@@ -205,15 +191,12 @@ export default memo(function ContextMenu({
     return () => document.removeEventListener('keydown', handler)
   }, [visible, onClose, navigableItems, focusedIndex])
 
-  // Adjust position to keep menu in viewport — x stays at 0 if it would go negative
   const adjustedX = Math.max(0, Math.min(x, window.innerWidth - menuSize.width))
-  // y stays at 0 if it would go negative
   const adjustedY = Math.max(0, Math.min(y, window.innerHeight - menuSize.height))
 
-  // Build index → position map so button refs can be focused
-  const itemButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
-
   if (!visible) return null
+
+  let navigableIndex = -1
 
   return (
     <div
@@ -221,21 +204,25 @@ export default memo(function ContextMenu({
       className={styles.menu}
       style={{ left: adjustedX, top: adjustedY }}
     >
-      {items.map((item, i) =>
-        'separator' in item ? (
-          <div key={i} className={styles.sep} />
-        ) : (
+      {items.map((item, i) => {
+        if ('separator' in item) {
+          return <div key={i} className={styles.sep} />
+        }
+
+        navigableIndex += 1
+        const isFocused = focusedIndex === navigableIndex
+
+        return (
           <button
-            ref={(el) => { itemButtonRefs.current[i] = el }}
             key={i}
-            className={`${styles.item} ${item.danger ? styles.danger : ''} ${focusedIndex === i ? styles.focused : ''}`}
+            className={`${styles.item} ${item.danger ? styles.danger : ''} ${isFocused ? styles.focused : ''}`}
             onClick={async () => { await item.action() }}
             disabled={item.disabled}
           >
             {item.label}
           </button>
         )
-      )}
+      })}
     </div>
   )
 })

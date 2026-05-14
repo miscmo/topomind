@@ -5,11 +5,11 @@
  * @file components/GraphCanvas/nodes/KnowledgeCard.tsx
  */
 import { memo } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
 import type { KnowledgeNode } from '../../../types'
 import styles from './KnowledgeCard.module.css'
 
-function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
+function KnowledgeCard({ data, selected, dragging, width, height }: NodeProps<KnowledgeNode>) {
   return (
     <div
       className={[
@@ -19,8 +19,23 @@ function KnowledgeCard({ data, selected, dragging }: NodeProps<KnowledgeNode>) {
         data.connectTarget ? styles.connectTarget : '',
         dragging ? styles.dragging : '',
       ].filter(Boolean).join(' ')}
-      style={data.domainColor ? { borderColor: data.domainColor } : undefined}
+      style={{
+        borderColor: selected ? undefined : data.domainColor,
+        width: width ?? undefined,
+        height: height ?? undefined,
+      }}
     >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={120}
+        minHeight={52}
+        maxWidth={640}
+        maxHeight={480}
+        color="#3498db"
+        handleClassName={styles.resizeHandle}
+        lineClassName={styles.resizeLine}
+      />
+
       <Handle type="target" position={Position.Left} className={styles.handle} />
       <Handle type="source" position={Position.Right} className={styles.handle} />
 

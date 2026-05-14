@@ -56,19 +56,31 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     if (dirPath) await saveNow(dirPath)
   }
 
-  const applyNodeDimensionChanges = (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined }>) => {
+  const applyNodeDimensionChanges = async (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean }>) => {
+    let shouldSave = false
     setState((prev) => {
       const nodes = prev.nodes.map((n) => {
         const change = changes.find((c) => c.id === n.id)
         if (!change) return n
+        if (change.dimensions && !change.resizing) {
+          shouldSave = true
+        }
         return {
           ...n,
+          width: change.dimensions?.width ?? n.width,
+          height: change.dimensions?.height ?? n.height,
           measured: change.dimensions ?? undefined,
         }
       })
       nodesRef.current = nodes
+      rebuildMaps(nodes, prev.edges)
+      updateSelectedNode(nodes, getActiveSelectedNodeId())
       return { ...prev, nodes }
     })
+    if (shouldSave) {
+      const dirPath = getActiveGraphSession().roomPath
+      if (dirPath) await saveNow(dirPath)
+    }
   }
 
   return {

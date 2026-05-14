@@ -30,8 +30,8 @@ function createLayoutNode(id: string, cardRef: string, name: string, position?: 
   return {
     id,
     card: { ref: cardRef, name, updatedAt: undefined },
-    height: 150,
-    width: 200,
+    height: 52,
+    width: 120,
     position,
   }
 }
