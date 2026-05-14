@@ -4,7 +4,7 @@ import { registerTabSaver } from '../../../core/close-guard'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
-import { useGraphStore } from '../../../stores/graphStore'
+import { useGraphStore, useSelectedNodeId } from '../../../stores/graphStore'
 import { tabStore } from '../../../stores/tabStore'
 import { useCardContentStore } from '../../../stores/cardContentStore'
 import MarkdownViewer from '../../MarkdownViewer'
@@ -12,11 +12,11 @@ import MarkdownEditor from '../DetailTab/MarkdownEditor'
 import styles from '../DetailTab/DetailTab.module.css'
 
 interface CardPanelProps {
-  selectedNodeId: string | null
   tabId: string
 }
 
-const CardPanel = memo(function CardPanel({ selectedNodeId, tabId }: CardPanelProps) {
+const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
+  const selectedNodeId = useSelectedNodeId()
   const storage = useStorage()
   const [editMode, setEditMode] = useState(false)
   const [markdown, setMarkdown] = useState('')

@@ -5,11 +5,10 @@ import RightPanelShell from './RightPanelShell'
 import styles from './RightPanel.module.css'
 
 interface RightPanelContainerProps {
-  selectedNodeId: string | null
   tabId: string
 }
 
-export default memo(function RightPanelContainer({ selectedNodeId, tabId }: RightPanelContainerProps) {
+export default memo(function RightPanelContainer({ tabId }: RightPanelContainerProps) {
   const collapsed = useRightPanelStore((s) => s.rightPanelCollapsed)
   const width = useRightPanelStore((s) => s.rightPanelWidth)
   const activeTab = useRightPanelStore((s) => s.rightPanelTab)
@@ -45,7 +44,6 @@ export default memo(function RightPanelContainer({ selectedNodeId, tabId }: Righ
         title="拖拽调整宽度"
       />
       <RightPanelShell
-        selectedNodeId={selectedNodeId}
         tabId={tabId}
         rightPanelTab={activeTab}
         width={width}

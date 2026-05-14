@@ -20,6 +20,14 @@ interface GraphState {
   removeEdgesByNodeIds: (nodeIds: string[]) => void
 }
 
+export function useSelectedNodeId() {
+  return useGraphStore((s) => s.nodes.find((n) => n.selected)?.id ?? null)
+}
+
+export function useSelectedNode() {
+  return useGraphStore((s) => s.nodes.find((n) => n.selected) ?? null)
+}
+
 function buildMaps(nodes: KnowledgeNode[], edges: KnowledgeEdge[]) {
   const nodesMap = new Map<string, KnowledgeNode>()
   const edgesMap = new Map<string, KnowledgeEdge>()

@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect } from 'react'
 import { logAction } from '../core/log-backend'
-import { tabStore } from '../stores/tabStore'
+import { useGraphStore } from '../stores/graphStore'
 
 interface UseKeyboardOptions {
   onDelete?: (nodeId: string) => void
@@ -19,12 +19,12 @@ interface UseKeyboardOptions {
 export function useKeyboard(options: UseKeyboardOptions) {
   const { onDelete, onEscape, onAddChild, tabId } = options
 
-  // Read the selection node respecting tab context when active.
+  // Read the selection node from the single source of truth (graphStore)
   // useCallback ensures the function identity is stable across renders so
   // the useEffect deps array remains accurate without stale-closure risk.
   const getSelectedNodeId = useCallback(
-    () => tabStore.getState().getGraphSession(tabId).selectedNodeId,
-    [tabId]
+    () => useGraphStore.getState().nodes.find(n => n.selected)?.id,
+    []
   )
 
   useEffect(() => {

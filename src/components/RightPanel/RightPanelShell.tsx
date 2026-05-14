@@ -6,7 +6,6 @@ import type { RightPanelTab } from '../../stores/uiStoreTypes'
 import styles from './RightPanel.module.css'
 
 interface RightPanelShellProps {
-  selectedNodeId: string | null
   tabId: string
   rightPanelTab: RightPanelTab
   width: number
@@ -14,7 +13,7 @@ interface RightPanelShellProps {
   onCollapse: () => void
 }
 
-export default memo(function RightPanelShell({ selectedNodeId, tabId, rightPanelTab, width, onTabChange, onCollapse }: RightPanelShellProps) {
+export default memo(function RightPanelShell({ tabId, rightPanelTab, width, onTabChange, onCollapse }: RightPanelShellProps) {
   return (
     <div className={styles.rightPanel} style={{ width }}>
       <div className={styles.rightPanelTabs}>
@@ -43,9 +42,9 @@ export default memo(function RightPanelShell({ selectedNodeId, tabId, rightPanel
         </button>
       </div>
       {rightPanelTab === 'detail' ? (
-        <DetailPanel selectedNodeId={selectedNodeId} tabId={tabId} />
+        <DetailPanel tabId={tabId} />
       ) : rightPanelTab === 'card' ? (
-        <CardPanel selectedNodeId={selectedNodeId} tabId={tabId} />
+        <CardPanel tabId={tabId} />
       ) : (
         <StyleSection />
       )}

@@ -29,7 +29,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
 
             <GraphCanvas {...canvasProps} />
           </div>
-          <RightPanelContainer selectedNodeId={graphSession.selectedNodeId} tabId={tabId} />
+          <RightPanelContainer tabId={tabId} />
         </div>
         <GraphPageContextMenu {...contextMenuProps} />
       </div>

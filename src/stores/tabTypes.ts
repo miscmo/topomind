@@ -39,7 +39,6 @@ export interface GraphSession {
   kbPath: string
   roomPath: string
   roomName: string
-  selectedNodeId: string | null
 }
 
 export interface HomeTab {
@@ -56,7 +55,6 @@ export interface KBTab {
   roomHistory: RoomHistoryItem[]
   currentRoomPath: string
   currentRoomName: string
-  selectedNodeId: string | null
 }
 
 export type Tab = HomeTab | KBTab
@@ -96,14 +94,8 @@ export interface TabRoomActions {
   getRoomStateFromTab: (tabId: string) => RoomState | null
 }
 
-export interface TabSelectionActions {
-  setTabSelectedNode: (tabId: string, nodeId: string | null) => void
-  getTabSelectedNode: (tabId: string) => string | null
-}
-
 export type TabState =
   TabDataState &
   TabLifecycleActions &
   TabSelectors &
-  TabRoomActions &
-  TabSelectionActions
+  TabRoomActions

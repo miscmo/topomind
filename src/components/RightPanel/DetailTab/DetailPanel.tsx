@@ -7,7 +7,7 @@ import { useStorage } from '../../../core/storage'
 import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { usePromptStore } from '../../../stores/promptStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
-import { useGraphStore } from '../../../stores/graphStore'
+import { useGraphStore, useSelectedNodeId } from '../../../stores/graphStore'
 import MarkdownEditor from './MarkdownEditor'
 import MarkdownViewer from '../../MarkdownViewer'
 import styles from './DetailTab.module.css'
@@ -18,11 +18,11 @@ import { tabStore } from '../../../stores/tabStore'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
 
 interface DetailPanelProps {
-  selectedNodeId: string | null
   tabId: string
 }
 
-const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailPanelProps) {
+const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
+  const selectedNodeId = useSelectedNodeId()
   const storage = useStorage()
   const collapseRightPanel = useRightPanelStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()

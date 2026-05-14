@@ -27,7 +27,6 @@ export function createKBTab(tab: { id: string; label: string; kbPath: string }):
     roomHistory: [],
     currentRoomPath: tab.kbPath,
     currentRoomName: tab.label,
-    selectedNodeId: null,
   }
 }
 
@@ -85,10 +84,6 @@ export function getRoomState(tab: Tab | undefined): RoomState | null {
   }
 }
 
-export function getSelectedNodeId(tab: Tab | undefined) {
-  return tab?.type === 'kb' ? tab.selectedNodeId : null
-}
-
 export function getGraphSession(tabId: string, tab: Tab | undefined): GraphSession {
   if (!tab || tab.type !== 'kb' || !tab.kbPath) {
     return {
@@ -96,7 +91,6 @@ export function getGraphSession(tabId: string, tab: Tab | undefined): GraphSessi
       kbPath: '',
       roomPath: '',
       roomName: '',
-      selectedNodeId: null,
     }
   }
 
@@ -105,7 +99,6 @@ export function getGraphSession(tabId: string, tab: Tab | undefined): GraphSessi
     kbPath: tab.kbPath,
     roomPath: tab.currentRoomPath || tab.kbPath,
     roomName: tab.currentRoomName || tab.label,
-    selectedNodeId: tab.selectedNodeId ?? null,
   }
 }
 

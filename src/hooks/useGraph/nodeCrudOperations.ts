@@ -102,8 +102,13 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
 
       if (currentRoomPath) await saveNow(currentRoomPath)
       await loadRoom(currentRoomPath)
-      if (tabStore.getState().getTabSelectedNode(tabId) === nodeId) {
-        tabStore.getState().setTabSelectedNode(tabId, null)
+      const isSelected = useGraphStore.getState().nodes.find(n => n.id === nodeId)?.selected
+      if (isSelected) {
+        const nextNodes = useGraphStore.getState().nodes.map(n => {
+          if (!n.selected) return n
+          return { ...n, selected: false }
+        })
+        useGraphStore.getState().setNodes(nextNodes)
       }
       return true
     } catch (e) {

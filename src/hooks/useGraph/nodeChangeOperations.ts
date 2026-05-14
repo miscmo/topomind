@@ -71,9 +71,27 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     }
   }
 
+  const applyNodeSelectionChanges = (changes: Array<{ id: string; selected: boolean }>) => {
+    let changed = false
+    const store = useGraphStore.getState()
+    const nextNodes = store.nodes.map((n) => {
+      const change = changes.find(c => c.id === n.id)
+      if (change && n.selected !== change.selected) {
+        changed = true
+        return { ...n, selected: change.selected }
+      }
+      return n
+    })
+    
+    if (changed) {
+      store.setNodes(nextNodes)
+    }
+  }
+
   return {
     applyNodePositionChanges,
     applyNodeRemoveChanges,
     applyNodeDimensionChanges,
+    applyNodeSelectionChanges,
   }
 }

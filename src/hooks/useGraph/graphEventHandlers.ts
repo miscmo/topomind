@@ -8,6 +8,7 @@ import { generateId } from './graphBuilder'
 import type { GraphOperations } from './graphOperations'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { useGraphStore } from '../../stores/graphStore'
+import { useGraphUiStore } from '../../stores/graphUiStore'
 
 export interface GraphEventHandlerDeps {
   tabId: string
@@ -45,6 +46,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       const positionChanges: Array<{ id: string; position: { x: number; y: number } }> = []
       const removeIds: string[] = []
       const dimensionChanges: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean }> = []
+      const selectionChanges: Array<{ id: string; selected: boolean }> = []
 
       for (const change of changes) {
         if (change.type === 'position' && change.position) {
@@ -53,12 +55,15 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
           removeIds.push(change.id)
         } else if (change.type === 'dimensions') {
           dimensionChanges.push({ id: change.id, dimensions: change.dimensions, resizing: change.resizing })
+        } else if (change.type === 'select') {
+          selectionChanges.push({ id: change.id, selected: change.selected })
         }
       }
 
       if (positionChanges.length) ops.applyNodePositionChanges(positionChanges)
       if (removeIds.length) ops.applyNodeRemoveChanges(removeIds)
       if (dimensionChanges.length) ops.applyNodeDimensionChanges(dimensionChanges)
+      if (selectionChanges.length) ops.applyNodeSelectionChanges(selectionChanges)
     },
     [ops]
   )
@@ -68,10 +73,20 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       for (const change of changes) {
         if (change.type === 'remove') {
           ops.deleteEdge(change.id)
+        } else if (change.type === 'select') {
+          if (change.selected) {
+            setSelectedEdgeId(change.id)
+          } else {
+            // Only clear if this was the selected edge
+            const currentSelectedEdgeId = useGraphUiStore.getState().selectedEdgeId
+            if (currentSelectedEdgeId === change.id) {
+              setSelectedEdgeId(null)
+            }
+          }
         }
       }
     },
-    [ops]
+    [ops, setSelectedEdgeId]
   )
 
   const onConnect = useCallback(
