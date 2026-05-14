@@ -8,7 +8,7 @@
 import { useCallback, useEffect } from 'react'
 import { useContextMenuStore } from '../stores/contextMenuStore'
 import { logAction } from '../core/log-backend'
-import { useNavContext } from './useNavContext'
+import { tabStore } from '../stores/tabStore'
 
 interface UseKeyboardOptions {
   onDelete?: (nodeId: string) => void
@@ -21,14 +21,13 @@ export function useKeyboard(options: UseKeyboardOptions) {
   const { onDelete, onEscape, onAddChild, tabId } = options
 
   const hideContextMenu = useContextMenuStore((s) => s.hideContextMenu)
-  const { getNavState } = useNavContext({ tabId })
 
   // Read the selection node respecting tab context when active.
   // useCallback ensures the function identity is stable across renders so
   // the useEffect deps array remains accurate without stale-closure risk.
   const getSelectedNodeId = useCallback(
-    () => getNavState().selectedNodeId,
-    [getNavState]
+    () => tabStore.getState().getGraphSession(tabId).selectedNodeId,
+    [tabId]
   )
 
   useEffect(() => {

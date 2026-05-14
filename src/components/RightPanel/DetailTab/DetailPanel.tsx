@@ -14,7 +14,7 @@ import styles from './DetailTab.module.css'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { registerTabSaver } from '../../../core/close-guard'
-import { useNavContext } from '../../../hooks/useNavContext'
+import { tabStore } from '../../../stores/tabStore'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
 
 // Configure marked once — called at module load time, not inside components
@@ -30,7 +30,6 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   const collapseRightPanel = useRightPanelStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()
   const prompt = usePromptStore((s) => s.open)
-  const { getNavState } = useNavContext({ tabId })
 
   const [editMode, setEditMode] = useState(false)
   const [markdown, setMarkdown] = useState('')
@@ -42,9 +41,9 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
 
   const selectedNode = graph.selectedNode
   const resolveNodePath = useCallback((nodeId: string) => {
-    const nav = getNavState()
-    return resolveRoomChildRef(nav.roomPath || nav.kbPath, nodeId)
-  }, [getNavState])
+    const graphSession = tabStore.getState().getGraphSession(tabId)
+    return resolveRoomChildRef(graphSession.roomPath || graphSession.kbPath, nodeId)
+  }, [tabId])
   const nodePath = selectedNodeId ? resolveNodePath(selectedNodeId) : null
   const childCount = selectedNode?.data.childCount ?? 0
 

@@ -4,12 +4,12 @@ import type { Store } from '../../core/storage'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { loadRoomGraph } from './roomLoader'
-import type { NavState } from '../useNavContext'
+import type { GraphSession } from '../../stores/tabStore'
 import type { GraphState } from './types'
 
 interface UseGraphRoomLoaderOptions {
   storage: Store
-  getActiveNavState: () => NavState
+  getActiveGraphSession: () => GraphSession
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   updateSelectedNode: (nodes: KnowledgeNode[], nodeId: string | null) => void
   setState: React.Dispatch<React.SetStateAction<GraphState>>
@@ -20,7 +20,7 @@ interface UseGraphRoomLoaderOptions {
 export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
   const {
     storage,
-    getActiveNavState,
+    getActiveGraphSession,
     rebuildMaps,
     updateSelectedNode,
     setState,
@@ -36,7 +36,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
       setState((s) => ({ ...s, loading: true }))
 
       try {
-        const kbPath = getActiveNavState().kbPath
+        const kbPath = getActiveGraphSession().kbPath
         const loaded = await loadRoomGraph(storage, dirPath, kbPath)
 
         logAction('房间:加载', 'useGraph', { roomPath: dirPath, kbPath, requestSeq })
@@ -66,7 +66,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
         }
       }
     },
-    [storage, getActiveNavState, rebuildMaps, updateSelectedNode, setState, nodesRef, edgesRef]
+    [storage, getActiveGraphSession, rebuildMaps, updateSelectedNode, setState, nodesRef, edgesRef]
   )
 
   return { loadRoom }

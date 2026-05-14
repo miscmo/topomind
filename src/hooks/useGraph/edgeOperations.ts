@@ -5,7 +5,7 @@ import { buildEdgeView } from './edgeView'
 
 export interface EdgeOperationsDeps {
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
-  getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
+  getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   saveNow: (dirPath: string) => Promise<void>
   setState: (updater: (prev: { nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }) => { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; loading?: boolean; selectedNode?: KnowledgeNode | null }) => void
@@ -14,7 +14,7 @@ export interface EdgeOperationsDeps {
 export function buildEdgeOperations(deps: EdgeOperationsDeps) {
   const {
     edgesRef,
-    getActiveNavState,
+    getActiveGraphSession,
     rebuildMaps,
     saveNow,
     setState,
@@ -53,7 +53,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       return { ...prev, edges }
     })
 
-    const dirPath = getActiveNavState().roomPath
+    const dirPath = getActiveGraphSession().roomPath
     if (dirPath) await saveNow(dirPath)
     logAction('连线:创建', 'graphOperations', { edgeId, source: connection.source, target: connection.target })
   }
@@ -65,13 +65,13 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       rebuildMaps(prev.nodes, edges)
       return { ...prev, edges }
     })
-    const dirPath = getActiveNavState().roomPath
+    const dirPath = getActiveGraphSession().roomPath
     if (dirPath) await saveNow(dirPath)
     logAction('连线:删除', 'graphOperations', { edgeId })
   }
 
   const updateEdgeRelation = async (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => {
-    const dirPath = getActiveNavState().roomPath
+    const dirPath = getActiveGraphSession().roomPath
     setState((prev) => {
       const edges = prev.edges.map((e) =>
         e.id === edgeId
@@ -101,7 +101,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     edgeId: string,
     style: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean; selected?: boolean }
   ) => {
-    const dirPath = getActiveNavState().roomPath
+    const dirPath = getActiveGraphSession().roomPath
     setState((prev) => {
       const edges = prev.edges.map((e) => {
         if (e.id !== edgeId) return e

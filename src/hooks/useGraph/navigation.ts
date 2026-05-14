@@ -1,52 +1,47 @@
-import {
-  getRoomHistoryLength,
-  goBackInTab,
-  navigateToHistoryIndexInTab,
-  restoreRootRoomInTab,
-} from '../../core/tab-flow'
+import { tabStore } from '../../stores/tabStore'
 
 export interface GraphNavigationDeps {
   tabId: string
-  getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
+  getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   saveNow: (dirPath: string) => Promise<void>
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   deselectNode: () => void
 }
 
 export function buildGraphNavigation(deps: GraphNavigationDeps) {
-  const { tabId, getActiveNavState, saveNow, loadRoom, deselectNode } = deps
+  const { tabId, getActiveGraphSession, saveNow, loadRoom, deselectNode } = deps
 
   const navigateBack = async () => {
-    const dirPath = getActiveNavState().roomPath
+    const dirPath = getActiveGraphSession().roomPath
     if (dirPath) await saveNow(dirPath)
     deselectNode()
-    goBackInTab(tabId)
+    tabStore.getState().goBackInTab(tabId)
   }
 
   const navigateToRoom = async (index: number) => {
-    const historyLength = getRoomHistoryLength(tabId)
+    const historyLength = tabStore.getState().getRoomHistoryLength(tabId)
     if (index < 0 || index >= historyLength) return
 
-    const dirPath = getActiveNavState().roomPath
+    const dirPath = getActiveGraphSession().roomPath
     if (dirPath) await saveNow(dirPath)
     deselectNode()
 
-    const target = navigateToHistoryIndexInTab(tabId, index)
+    const target = tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
     if (target) await loadRoom(target.path)
   }
 
   const navigateToRoot = async () => {
-    const navState = getActiveNavState()
-    const dirPath = navState.roomPath
-    const kbPath = navState.kbPath || dirPath || ''
+    const graphSession = getActiveGraphSession()
+    const dirPath = graphSession.roomPath
+    const kbPath = graphSession.kbPath || dirPath || ''
     if (!kbPath) return
     if (dirPath) await saveNow(dirPath)
     deselectNode()
-    restoreRootRoomInTab(tabId, {
+    tabStore.getState().restoreRootRoom(tabId, {
       kbPath,
       roomHistory: [],
       currentRoomPath: kbPath,
-      currentRoomName: navState.roomName || '全局',
+      currentRoomName: graphSession.roomName || '全局',
     })
   }
 

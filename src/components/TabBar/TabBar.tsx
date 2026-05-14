@@ -4,7 +4,6 @@
  */
 import { memo } from 'react'
 import { useTabStore, type Tab } from '../../stores/tabStore'
-import { activateTab } from '../../core/tab-flow'
 import styles from './TabBar.module.css'
 
 interface TabBarProps {
@@ -47,11 +46,12 @@ const TabItem = memo(function TabItem({ tab, isActive, onClick, onClose }: {
 export default memo(function TabBar({ onCloseTab }: TabBarProps) {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
+  const activateTab = useTabStore((s) => s.activateTab)
 
   // 处理 Tab 切换：纯恢复已保存状态，不重放 enterRoom 导航动作
   const handleTabClick = async (tab: Tab) => {
     if (tab.id === activeTabId) return
-    await activateTab(tab.id)
+    activateTab(tab.id)
   }
 
   // 有知识库 Tab 时才渲染（主页 Tab 本身不渲染 TabBar）

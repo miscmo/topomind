@@ -14,7 +14,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
 import { useGraphUiStore } from '../stores/graphUiStore'
 import { useRightPanelStore } from '../stores/rightPanelStore'
-import { useNavContext } from './useNavContext'
+import { tabStore } from '../stores/tabStore'
 import { useStorage, type Store } from '../core/storage'
 import { buildGraphOperations } from './useGraph/graphOperations'
 import { buildGraphNavigation } from './useGraph/navigation'
@@ -60,13 +60,11 @@ export function useGraph(tabId: string) {
     setActiveSelectedNodeId,
   } = useGraphSelectionState(tabId)
 
-  const { getNavState } = useNavContext({ tabId })
-
-  const getActiveNavState = useCallback(() => getNavState(), [getNavState])
+  const getActiveGraphSession = useCallback(() => tabStore.getState().getGraphSession(tabId), [tabId])
 
   const { loadRoom } = useGraphRoomLoader({
     storage,
-    getActiveNavState,
+    getActiveGraphSession,
     rebuildMaps,
     updateSelectedNode,
     setState,
@@ -85,7 +83,7 @@ export function useGraph(tabId: string) {
       edgesMapRef,
       nodesRef,
       edgesRef,
-      getActiveNavState,
+      getActiveGraphSession,
       loadRoom,
       rebuildMaps,
       setState: setState as Parameters<typeof buildGraphOperations>[0]['setState'],
@@ -96,7 +94,7 @@ export function useGraph(tabId: string) {
     }),
     [
       storageApi,
-      getActiveNavState,
+      getActiveGraphSession,
       loadRoom,
       rebuildMaps,
       getActiveSelectedNodeId,
@@ -112,7 +110,7 @@ export function useGraph(tabId: string) {
     ops,
     nodesRef,
     edgesRef,
-    getActiveNavState,
+    getActiveGraphSession,
     rebuildMaps,
     setState: setState as React.Dispatch<React.SetStateAction<{ nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }>>,
     defaultEdgeStyle,
@@ -125,17 +123,17 @@ export function useGraph(tabId: string) {
   const navigation = useMemo(
     () => buildGraphNavigation({
       tabId,
-      getActiveNavState,
+      getActiveGraphSession,
       saveNow: ops.saveNow,
       loadRoom,
       deselectNode: ops.deselectNode,
     }),
-    [tabId, getActiveNavState, ops.saveNow, ops.deselectNode, loadRoom]
+    [tabId, getActiveGraphSession, ops.saveNow, ops.deselectNode, loadRoom]
   )
 
 
   const { flushCurrentRoomSave } = useGraphPersistence({
-    getActiveNavState,
+    getActiveGraphSession,
     saveNow: ops.saveNow,
   })
 

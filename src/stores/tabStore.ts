@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { create } from 'zustand'
 import {
   createTabLifecycleActions,
@@ -8,7 +9,7 @@ import {
 import { TAB_INITIAL_STATE } from './tabState'
 import type { TabState } from './tabTypes'
 
-export type { Tab, TabState } from './tabTypes'
+export type { GraphSession, Tab, TabState } from './tabTypes'
 
 export const tabStore = create<TabState>()((set, get) => ({
   ...TAB_INITIAL_STATE,
@@ -19,3 +20,11 @@ export const tabStore = create<TabState>()((set, get) => ({
 }))
 
 export const useTabStore = tabStore
+
+export function useGraphSession(tabId: string) {
+  const tab = useTabStore((s) => s.getTabById(tabId))
+
+  return useMemo(() => {
+    return tabStore.getState().getGraphSession(tabId)
+  }, [tab, tabId])
+}

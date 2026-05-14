@@ -1,18 +1,18 @@
 import { useCallback } from 'react'
-import type { NavState } from '../useNavContext'
+import type { GraphSession } from '../../stores/tabStore'
 
 interface UseGraphPersistenceOptions {
-  getActiveNavState: () => NavState
+  getActiveGraphSession: () => GraphSession
   saveNow: (dirPath: string) => Promise<void>
 }
 
-export function useGraphPersistence({ getActiveNavState, saveNow }: UseGraphPersistenceOptions) {
+export function useGraphPersistence({ getActiveGraphSession, saveNow }: UseGraphPersistenceOptions) {
   const flushCurrentRoomSave = useCallback(async () => {
-    const navState = getActiveNavState()
-    const dirPath = navState.roomPath || navState.kbPath || ''
+    const graphSession = getActiveGraphSession()
+    const dirPath = graphSession.roomPath || graphSession.kbPath || ''
     if (!dirPath) return
     await saveNow(dirPath)
-  }, [getActiveNavState, saveNow])
+  }, [getActiveGraphSession, saveNow])
 
   return { flushCurrentRoomSave }
 }

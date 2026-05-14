@@ -3,7 +3,7 @@ import type { KnowledgeEdge, KnowledgeNode } from '../../types'
 export interface NodeChangeOperationsDeps {
   nodesRef: React.MutableRefObject<KnowledgeNode[]>
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
-  getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
+  getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   getActiveSelectedNodeId: () => string | null
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   saveNow: (dirPath: string) => Promise<void>
@@ -15,7 +15,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
   const {
     nodesRef,
     edgesRef,
-    getActiveNavState,
+    getActiveGraphSession,
     getActiveSelectedNodeId,
     rebuildMaps,
     saveNow,
@@ -38,7 +38,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       updateSelectedNode(nodes, getActiveSelectedNodeId())
       return { ...prev, nodes }
     })
-    const dirPath = getActiveNavState().roomPath
+    const dirPath = getActiveGraphSession().roomPath
     if (dirPath) await saveNow(dirPath)
   }
 
@@ -52,7 +52,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       rebuildMaps(nodes, edges)
       return { ...prev, nodes, edges }
     })
-    const dirPath = getActiveNavState().roomPath
+    const dirPath = getActiveGraphSession().roomPath
     if (dirPath) await saveNow(dirPath)
   }
 

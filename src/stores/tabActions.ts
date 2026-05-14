@@ -5,7 +5,11 @@ import {
   ensureHomeTab,
   findActiveTab,
   findTabById,
+  getClosableTabInfo,
+  getGraphSession,
   getRoomState,
+  getRoomHistoryLength,
+  getRoomSnapshot,
   getSelectedNodeId,
   removeTabById,
   tabExists,
@@ -46,6 +50,46 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
       if (!tabExists(get().tabs, tabId)) return
       set({ activeTabId: tabId })
     },
+    activateTab: (tabId) => {
+      if (!tabExists(get().tabs, tabId)) return false
+      set({ activeTabId: tabId })
+      return true
+    },
+    openHomeTab: () => {
+      return get().activateTab('home')
+    },
+    openKnowledgeBase: (kb) => {
+      const tabId = `kb:${kb.name}`
+      const existing = findTabById(get().tabs, tabId)
+
+      if (!existing) {
+        get().addKBTab({
+          id: tabId,
+          label: kb.name,
+          kbPath: kb.name,
+        })
+      }
+
+      const tab = findTabById(get().tabs, tabId)
+      if (!tab || tab.type !== 'kb') return false
+
+      const snapshot = getRoomSnapshot(tab) ?? {
+        kbPath: kb.name,
+        roomHistory: [],
+        currentRoomPath: kb.name,
+        currentRoomName: kb.name,
+      }
+
+      get().restoreRoomStateToTab(tabId, snapshot)
+      set({ activeTabId: tabId })
+      return true
+    },
+    closeTab: (tabId) => {
+      const tabInfo = getClosableTabInfo(findTabById(get().tabs, tabId))
+      if (!tabInfo) return null
+      get().removeTab(tabId)
+      return tabInfo
+    },
     reset: () => set({ ...TAB_INITIAL_STATE }),
   }
 }
@@ -57,6 +101,9 @@ export function createTabSelectors(get: GetState): TabSelectors {
       return findActiveTab(tabs, activeTabId)
     },
     getTabById: (tabId) => findTabById(get().tabs, tabId),
+    getGraphSession: (tabId) => getGraphSession(tabId, findTabById(get().tabs, tabId)),
+    getRoomHistoryLength: (tabId) => getRoomHistoryLength(findTabById(get().tabs, tabId)),
+    getClosableTabInfo: (tabId) => getClosableTabInfo(findTabById(get().tabs, tabId)),
   }
 }
 
@@ -71,6 +118,11 @@ export function createTabRoomActions(set: SetState, get: GetState): TabRoomActio
       set((state) => ({
         tabs: updateKBTabById(state.tabs, tabId, (tab) => enterRoom(tab, room)),
       }))
+    },
+    enterChildRoom: (tabId, child, kbPathFallback) => {
+      const tab = findTabById(get().tabs, tabId)
+      const kbPath = tab?.type === 'kb' ? tab.kbPath : kbPathFallback ?? child.path
+      get().enterRoomInTab(tabId, { path: child.path, kbPath, name: child.name })
     },
     goBackInTab: (tabId) => {
       let target: RoomTarget | null = null
@@ -97,6 +149,11 @@ export function createTabRoomActions(set: SetState, get: GetState): TabRoomActio
       }))
 
       return target
+    },
+    restoreRootRoom: (tabId, snapshot) => {
+      const tab = findTabById(get().tabs, tabId)
+      if (tab?.type !== 'kb') return
+      get().restoreRoomStateToTab(tabId, snapshot)
     },
     getRoomStateFromTab: (tabId) => getRoomState(findTabById(get().tabs, tabId)),
   }

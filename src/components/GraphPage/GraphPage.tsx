@@ -17,7 +17,7 @@ interface GraphPageProps {
 }
 
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
-  const { nav, graph } = useGraphPageController({ tabId })
+  const { graphSession, graph } = useGraphPageController({ tabId })
   const { canvasProps, contextMenuProps } = useGraphPageActions({ tabId, graph })
 
   return (
@@ -29,7 +29,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
 
             <GraphCanvas {...canvasProps} />
           </div>
-          <RightPanelContainer selectedNodeId={nav.selectedNodeId} tabId={tabId} />
+          <RightPanelContainer selectedNodeId={graphSession.selectedNodeId} tabId={tabId} />
         </div>
         <ContextMenu {...contextMenuProps} />
       </div>

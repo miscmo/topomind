@@ -25,6 +25,23 @@ export interface CreateKBTabInput {
   kbPath: string
 }
 
+export interface OpenKnowledgeBaseInput {
+  name: string
+}
+
+export interface ClosableTabInfo {
+  id: string
+  label: string
+}
+
+export interface GraphSession {
+  tabId: string
+  kbPath: string
+  roomPath: string
+  roomName: string
+  selectedNodeId: string | null
+}
+
 export interface HomeTab {
   id: 'home'
   type: 'home'
@@ -54,19 +71,28 @@ export interface TabLifecycleActions {
   addKBTab: (tab: CreateKBTabInput) => void
   removeTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
+  activateTab: (tabId: string) => boolean
+  openHomeTab: () => boolean
+  openKnowledgeBase: (kb: OpenKnowledgeBaseInput) => boolean
+  closeTab: (tabId: string) => ClosableTabInfo | null
   reset: () => void
 }
 
 export interface TabSelectors {
   getActiveTab: () => Tab | undefined
   getTabById: (tabId: string) => Tab | undefined
+  getGraphSession: (tabId: string) => GraphSession
+  getRoomHistoryLength: (tabId: string) => number
+  getClosableTabInfo: (tabId: string) => ClosableTabInfo | null
 }
 
 export interface TabRoomActions {
   restoreRoomStateToTab: (tabId: string, roomState: RoomSnapshot) => void
   enterRoomInTab: (tabId: string, room: RoomTarget) => void
+  enterChildRoom: (tabId: string, child: { path: string; name: string }, kbPathFallback?: string) => void
   goBackInTab: (tabId: string) => RoomTarget | null
   navigateToHistoryIndexInTab: (tabId: string, index: number) => RoomTarget | null
+  restoreRootRoom: (tabId: string, snapshot: RoomSnapshot) => void
   getRoomStateFromTab: (tabId: string) => RoomState | null
 }
 

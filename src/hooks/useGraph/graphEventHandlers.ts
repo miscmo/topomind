@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
-import { enterRoomInTab } from '../../core/tab-flow'
+import { tabStore } from '../../stores/tabStore'
 import { logAction } from '../../core/log-backend'
 import type { KnowledgeEdge, KnowledgeNode, KnowledgeNodeData } from '../../types'
 import { generateId } from './graphBuilder'
@@ -12,7 +12,7 @@ export interface GraphEventHandlerDeps {
   ops: GraphOperations
   nodesRef: React.MutableRefObject<KnowledgeNode[]>
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
-  getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
+  getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   setState: React.Dispatch<React.SetStateAction<{ nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }>>
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
@@ -26,7 +26,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     ops,
     nodesRef,
     edgesRef,
-    getActiveNavState,
+    getActiveGraphSession,
     rebuildMaps,
     setState,
     defaultEdgeStyle,
@@ -127,22 +127,22 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   }, [ops, setSelectedEdgeId, edgesRef, resetConnectTargetHighlight])
 
   const navigateToChildRoom = useCallback(async (childPath: string, childName: string) => {
-    const navState = getActiveNavState()
-    const dirPath = navState.roomPath
+    const graphSession = getActiveGraphSession()
+    const dirPath = graphSession.roomPath
 
     if (dirPath) {
       await ops.saveNow(dirPath)
     }
 
-    const absoluteChildPath = resolveRoomChildRef(dirPath || navState.kbPath, childPath)
+    const absoluteChildPath = resolveRoomChildRef(dirPath || graphSession.kbPath, childPath)
 
-    enterRoomInTab(tabId, {
+    tabStore.getState().enterRoomInTab(tabId, {
       path: absoluteChildPath,
-      kbPath: navState.kbPath || '',
+      kbPath: graphSession.kbPath || '',
       name: childName,
     })
     logAction('房间:钻入', 'useGraph', { roomPath: childPath, roomName: childName, fromRoom: dirPath })
-  }, [getActiveNavState, tabId, ops])
+  }, [getActiveGraphSession, tabId, ops])
 
   const onNodeDoubleClick = useCallback(
     async (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {

@@ -15,7 +15,7 @@ export interface NodeCrudOperationsDeps {
   nodesMapRef: React.MutableRefObject<Map<string, KnowledgeNode>>
   edgesMapRef: React.MutableRefObject<Map<string, KnowledgeEdge>>
   nodesRef: React.MutableRefObject<KnowledgeNode[]>
-  getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
+  getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   saveNow: (dirPath: string) => Promise<void>
@@ -31,7 +31,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     nodesMapRef,
     edgesMapRef,
     nodesRef,
-    getActiveNavState,
+    getActiveGraphSession,
     loadRoom,
     rebuildMaps,
     saveNow,
@@ -42,17 +42,17 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
   } = deps
 
   const createChildNode = async (name: string, parentId?: string, position?: { x: number; y: number }): Promise<string | null> => {
-    const nav = getActiveNavState()
-    const dirPath = nav.roomPath
-    const currentRoomPath = dirPath || nav.kbPath
+    const graphSession = getActiveGraphSession()
+    const dirPath = graphSession.roomPath
+    const currentRoomPath = dirPath || graphSession.kbPath
     const targetPath = parentId ? resolveRoomChildRef(currentRoomPath, parentId) : currentRoomPath
     if (!targetPath) {
       logAction('节点:创建失败', 'graphOperations', {
         reason: dirPath ? 'targetPath-empty' : 'not-inside-room',
         nodeName: name,
         parentId: parentId || null,
-        roomPath: nav.roomPath || null,
-        kbPath: nav.kbPath || null,
+        roomPath: graphSession.roomPath || null,
+        kbPath: graphSession.kbPath || null,
       })
       return null
     }
@@ -60,7 +60,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     isCreatingRef.current = true
 
     try {
-      const reloadPath = currentRoomPath || getActiveNavState().kbPath || ''
+      const reloadPath = currentRoomPath || getActiveGraphSession().kbPath || ''
       const cardId = generateId('card-')
       const result = await createChildCard(storage, {
         name,
@@ -74,13 +74,13 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
         nodeId: cardId,
         parentPath: targetPath,
         newPath: result.newRef ?? null,
-        roomPath: nav.roomPath || null,
-        kbPath: nav.kbPath || null,
+        roomPath: graphSession.roomPath || null,
+        kbPath: graphSession.kbPath || null,
         reloadPath: reloadPath || null,
       })
 
       await loadRoom(reloadPath, true)
-      const savePath = getActiveNavState().roomPath || getActiveNavState().kbPath
+      const savePath = getActiveGraphSession().roomPath || getActiveGraphSession().kbPath
       if (savePath) await saveNow(savePath)
 
       return cardId
@@ -91,8 +91,8 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
         reason: 'exception',
         nodeName: name,
         parentPath: targetPath,
-        roomPath: nav.roomPath || null,
-        kbPath: nav.kbPath || null,
+        roomPath: graphSession.roomPath || null,
+        kbPath: graphSession.kbPath || null,
         error: (e as Error)?.message || String(e),
       })
       return null
@@ -101,8 +101,8 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
 
   const deleteChildNode = async (nodeId: string): Promise<boolean> => {
     const nodeLabel = nodesMapRef.current.get(nodeId)?.data.label ?? nodeId
-    const dirPath = getActiveNavState().roomPath
-    const currentRoomPath = dirPath || getActiveNavState().kbPath || ''
+    const dirPath = getActiveGraphSession().roomPath
+    const currentRoomPath = dirPath || getActiveGraphSession().kbPath || ''
     const cardPath = resolveRoomChildRef(currentRoomPath, nodeId)
     try {
       await deleteCardAndPruneGraph(storage, cardPath, nodeId, nodesMapRef.current, edgesMapRef.current)
@@ -121,8 +121,8 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
   }
 
   const renameNode = async (nodeId: string, newName: string): Promise<boolean> => {
-    const dirPath = getActiveNavState().roomPath
-    const currentRoomPath = dirPath || getActiveNavState().kbPath || ''
+    const dirPath = getActiveGraphSession().roomPath
+    const currentRoomPath = dirPath || getActiveGraphSession().kbPath || ''
     const cardPath = resolveRoomChildRef(currentRoomPath, nodeId)
     try {
       await renameCardInService(storage, cardPath, newName)

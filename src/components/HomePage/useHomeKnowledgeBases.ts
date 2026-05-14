@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useStorage } from '../../core/storage'
 import { logAction } from '../../core/log-backend'
 import { logger } from '../../core/logger'
-import { openKBTab } from '../../core/tab-flow'
+import { tabStore } from '../../stores/tabStore'
 
 export interface KBItem {
   name: string
@@ -70,7 +70,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
   }, [loadKBList])
 
   const openKB = useCallback(async (kb: KBItem) => {
-    const opened = await openKBTab(kb)
+    const opened = tabStore.getState().openKnowledgeBase(kb)
     if (!opened) return
     logAction('打开知识库成功', 'HomePage', { kbInfo: kb })
   }, [])

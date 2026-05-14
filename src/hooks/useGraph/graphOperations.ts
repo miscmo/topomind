@@ -27,7 +27,7 @@ export interface GraphOpsDeps {
   edgesMapRef: React.MutableRefObject<Map<string, KnowledgeEdge>>
   nodesRef: React.MutableRefObject<KnowledgeNode[]>
   edgesRef: React.MutableRefObject<KnowledgeEdge[]>
-  getActiveNavState: () => { kbPath: string; roomPath: string; roomName: string }
+  getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
   setState: (updater: (prev: { nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }) => { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; loading?: boolean; selectedNode?: KnowledgeNode | null }) => void
@@ -44,7 +44,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     edgesMapRef,
     nodesRef,
     edgesRef,
-    getActiveNavState,
+    getActiveGraphSession,
     loadRoom,
     rebuildMaps,
     setState,
@@ -75,7 +75,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     nodesMapRef,
     edgesMapRef,
     nodesRef,
-    getActiveNavState,
+    getActiveGraphSession,
     loadRoom,
     rebuildMaps,
     saveNow,
@@ -89,7 +89,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   const edgeOps = buildEdgeOperations({
     edgesRef,
-    getActiveNavState,
+    getActiveGraphSession,
     rebuildMaps,
     saveNow,
     setState,
@@ -100,7 +100,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
   const nodeChangeOps = buildNodeChangeOperations({
     nodesRef,
     edgesRef,
-    getActiveNavState,
+    getActiveGraphSession,
     getActiveSelectedNodeId,
     rebuildMaps,
     saveNow,

@@ -1,4 +1,4 @@
-import type { RoomState, Tab } from './tabTypes'
+import type { ClosableTabInfo, GraphSession, RoomState, RoomSnapshot, Tab } from './tabTypes'
 
 type KBTab = Extract<Tab, { type: 'kb' }>
 
@@ -87,4 +87,46 @@ export function getRoomState(tab: Tab | undefined): RoomState | null {
 
 export function getSelectedNodeId(tab: Tab | undefined) {
   return tab?.type === 'kb' ? tab.selectedNodeId : null
+}
+
+export function getGraphSession(tabId: string, tab: Tab | undefined): GraphSession {
+  if (!tab || tab.type !== 'kb' || !tab.kbPath) {
+    return {
+      tabId,
+      kbPath: '',
+      roomPath: '',
+      roomName: '',
+      selectedNodeId: null,
+    }
+  }
+
+  return {
+    tabId,
+    kbPath: tab.kbPath,
+    roomPath: tab.currentRoomPath || tab.kbPath,
+    roomName: tab.currentRoomName || tab.label,
+    selectedNodeId: tab.selectedNodeId ?? null,
+  }
+}
+
+export function getRoomHistoryLength(tab: Tab | undefined) {
+  return tab?.type === 'kb' ? tab.roomHistory.length : 0
+}
+
+export function getClosableTabInfo(tab: Tab | undefined): ClosableTabInfo | null {
+  if (!tab || tab.id === 'home') return null
+  return {
+    id: tab.id,
+    label: tab.label,
+  }
+}
+
+export function getRoomSnapshot(tab: Tab): RoomSnapshot | null {
+  if (tab.type !== 'kb' || !tab.kbPath) return null
+  return {
+    kbPath: tab.kbPath,
+    roomHistory: tab.roomHistory ?? [],
+    currentRoomPath: tab.currentRoomPath ?? tab.kbPath,
+    currentRoomName: tab.currentRoomName || tab.label,
+  }
 }

@@ -17,7 +17,6 @@ import { useWorkspaceStore } from './stores/workspaceStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
-import { closeTab, getClosableTabInfo } from './core/tab-flow'
 
 export default memo(function App() {
   const [isMonitorWindow, setIsMonitorWindow] = useState(
@@ -47,10 +46,9 @@ export default memo(function App() {
   }, [])
 
   async function handleCloseTab(tabId: string) {
-    const tab = getClosableTabInfo(tabId)
+    const tab = useTabStore.getState().closeTab(tabId)
     if (!tab) return
 
-    closeTab(tabId)
     logAction('Tab:关闭', 'App', { tab })
   }
 
