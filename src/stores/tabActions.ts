@@ -161,11 +161,18 @@ export function createTabRoomActions(set: SetState, get: GetState): TabRoomActio
 
 export function createTabSelectionActions(set: SetState, get: GetState): TabSelectionActions {
   return {
-    setTabSelectedNode: (tabId, nodeId) => {
-      set((state) => ({
-        tabs: updateKBTabById(state.tabs, tabId, (tab) => ({ ...tab, selectedNodeId: nodeId })),
-      }))
-    },
+    setTabSelectedNode: (tabId: string, nodeId: string | null) => {
+    set((state) => {
+      const idx = state.tabs.findIndex((t) => t.id === tabId)
+      if (idx === -1) return state
+      const newTabs = [...state.tabs]
+      const tab = newTabs[idx]
+      if (tab.type === 'kb') {
+        newTabs[idx] = { ...tab, selectedNodeId: nodeId }
+      }
+      return { tabs: newTabs }
+    })
+  },
     getTabSelectedNode: (tabId) => getSelectedNodeId(findTabById(get().tabs, tabId)),
   }
 }

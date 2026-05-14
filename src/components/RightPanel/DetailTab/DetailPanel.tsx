@@ -7,6 +7,7 @@ import { useStorage } from '../../../core/storage'
 import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { usePromptStore } from '../../../stores/promptStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
+import { useGraphStore } from '../../../stores/graphStore'
 import MarkdownEditor from './MarkdownEditor'
 import MarkdownViewer from '../../MarkdownViewer'
 import styles from './DetailTab.module.css'
@@ -35,7 +36,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   const renameInputRef = useRef<HTMLInputElement>(null)
   const markdownRequestSeqRef = useRef(0)
 
-  const selectedNode = graph.selectedNode
+  const selectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId) : null)
   const resolveNodePath = useCallback((nodeId: string) => {
     const graphSession = tabStore.getState().getGraphSession(tabId)
     return resolveRoomChildRef(graphSession.roomPath || graphSession.kbPath, nodeId)
@@ -78,7 +79,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   // closure can be stale when the selected node changes without re-rendering DetailPanel.
   const handleSave = async () => {
     if (!selectedNodeId) return
-    const node = graph.nodesMapRef.current.get(selectedNodeId)
+    const node = useGraphStore.getState().nodesMap.get(selectedNodeId)
     const path = resolveNodePath(selectedNodeId)
     const label = node?.data.label
     try {
@@ -99,7 +100,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
       setRenameMode(false)
       return
     }
-    const node = graph.nodesMapRef.current.get(selectedNodeId)
+    const node = useGraphStore.getState().nodesMap.get(selectedNodeId)
     const oldLabel = node?.data.label ?? selectedNode?.data.label
     const path = resolveNodePath(selectedNodeId)
     logAction('节点:重命名', 'DetailPanel', {
@@ -118,7 +119,7 @@ const DetailPanel = memo(function DetailPanel({ selectedNodeId, tabId }: DetailP
   // without triggering a DetailPanel re-render (e.g., via React Flow selection).
   const handleDelete = useCallback(async () => {
     if (!selectedNodeId) return
-    const node = graph.nodesMapRef.current.get(selectedNodeId)
+    const node = useGraphStore.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label ?? selectedNodeId
     const path = resolveNodePath(selectedNodeId)
     const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${label}" 确认删除` })

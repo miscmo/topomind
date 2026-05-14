@@ -8,22 +8,10 @@
  */
 import { createContext, useContext, useMemo, type Context } from 'react'
 import { useGraph } from '../hooks/useGraph'
-import type { KnowledgeNode, KnowledgeEdge, KnowledgeNodeData, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../types'
+import type { KnowledgeNodeData, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../types'
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 
 export interface GraphContextValue {
-  // State
-  nodes: KnowledgeNode[]
-  edges: KnowledgeEdge[]
-  loading: boolean
-  selectedNode: KnowledgeNode | null
-  // Refs for stable closure access to current state
-  nodesRef: React.MutableRefObject<KnowledgeNode[]>
-  edgesRef: React.MutableRefObject<KnowledgeEdge[]>
-  // O(1) lookup maps — consistently updated by rebuildMaps() on every state change
-  nodesMapRef: React.MutableRefObject<Map<string, KnowledgeNode>>
-  edgesMapRef: React.MutableRefObject<Map<string, KnowledgeEdge>>
-
   // Room lifecycle
   loadRoom: (dirPath: string) => Promise<void>
   navigateBack: () => Promise<void>
@@ -59,14 +47,6 @@ export interface GraphContextValue {
 
 // Empty context value for when used outside provider
 const emptyContext: GraphContextValue = {
-  nodes: [],
-  edges: [],
-  loading: false,
-  selectedNode: null,
-  nodesRef: { current: [] },
-  edgesRef: { current: [] },
-  nodesMapRef: { current: new Map() },
-  edgesMapRef: { current: new Map() },
   loadRoom: async () => {},
   navigateBack: async () => {},
   navigateToRoom: async () => {},
@@ -98,14 +78,6 @@ type GraphContextSource = Pick<ReturnType<typeof useGraph>, keyof GraphContextVa
 
 function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
   return {
-    nodes: graph.nodes,
-    edges: graph.edges,
-    loading: graph.loading,
-    selectedNode: graph.selectedNode,
-    nodesRef: graph.nodesRef,
-    edgesRef: graph.edgesRef,
-    nodesMapRef: graph.nodesMapRef,
-    edgesMapRef: graph.edgesMapRef,
     loadRoom: graph.loadRoom,
     navigateBack: graph.navigateBack,
     navigateToRoom: graph.navigateToRoom,

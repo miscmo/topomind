@@ -4,6 +4,7 @@ import { usePromptStore } from '../stores/promptStore'
 import { logAction } from '../core/log-backend'
 import type { KnowledgeEdge } from '../types'
 import type { GraphContextValue } from '../contexts/GraphContext'
+import { useGraphStore } from '../stores/graphStore'
 
 export interface UseEdgeActionsOptions {
   onAction?: () => void
@@ -16,8 +17,8 @@ export function useEdgeActions(options: UseEdgeActionsOptions) {
   const prompt = usePromptStore((s) => s.open)
 
   const findEdgeById = useCallback((edgeId: string): KnowledgeEdge | undefined => {
-    return graph.edgesMapRef.current.get(edgeId)
-  }, [graph.edgesMapRef])
+    return useGraphStore.getState().edgesMap.get(edgeId)
+  }, [])
 
   const handleEdgeDelete = useCallback((edgeId: string) => {
     const edge = findEdgeById(edgeId)

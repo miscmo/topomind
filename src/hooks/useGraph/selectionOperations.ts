@@ -1,34 +1,30 @@
 import type { KnowledgeNode } from '../../types'
 import { logAction } from '../../core/log-backend'
+import { useGraphStore } from '../../stores/graphStore'
+
+import { tabStore } from '../../stores/tabStore'
 
 export interface SelectionOperationsDeps {
-  nodesMapRef: React.MutableRefObject<Map<string, KnowledgeNode>>
-  nodesRef: React.MutableRefObject<KnowledgeNode[]>
-  setActiveSelectedNodeId: (nodeId: string | null) => void
-  updateSelectedNode: (nodes: KnowledgeNode[], nodeId: string | null) => void
+  tabId: string
 }
 
 export function buildSelectionOperations(deps: SelectionOperationsDeps) {
   const {
-    nodesMapRef,
-    nodesRef,
-    setActiveSelectedNodeId,
-    updateSelectedNode,
+    tabId,
   } = deps
 
   const selectNode = (nodeId: string) => {
-    setActiveSelectedNodeId(nodeId)
-    updateSelectedNode(nodesRef.current, nodeId)
+    tabStore.getState().setTabSelectedNode(tabId, nodeId)
+    const store = useGraphStore.getState()
     logAction('节点:选中', 'graphOperations', {
       nodeId,
-      label: nodesMapRef.current.get(nodeId)?.data.label,
+      label: store.nodesMap.get(nodeId)?.data.label,
       path: nodeId,
     })
   }
 
   const deselectNode = () => {
-    setActiveSelectedNodeId(null)
-    updateSelectedNode(nodesRef.current, null)
+    tabStore.getState().setTabSelectedNode(tabId, null)
   }
 
   return {

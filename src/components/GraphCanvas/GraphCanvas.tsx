@@ -2,6 +2,7 @@ import { memo, useCallback, useState } from 'react'
 import { Background, ReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
+import { useGraphStore } from '../../stores/graphStore'
 import { useDoubleClick } from '../../hooks/useDoubleClick'
 import type { KnowledgeNode } from '../../types'
 import KnowledgeCard from './nodes/KnowledgeCard'
@@ -23,6 +24,8 @@ export default memo(function GraphCanvas({
   onCloseContextMenu,
 }: GraphCanvasProps) {
   const showGrid = useGraphUiStore((s) => s.showGrid)
+  const nodes = useGraphStore((s) => s.nodes)
+  const edges = useGraphStore((s) => s.edges)
   const [zoomLevel, setZoomLevel] = useState(1)
   const graph = useGraphContext()
   const { handleClick: handlePaneClick } = useDoubleClick({
@@ -57,8 +60,8 @@ export default memo(function GraphCanvas({
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ReactFlow
-        nodes={graph.nodes as Node[]}
-        edges={graph.edges}
+        nodes={nodes as Node[]}
+        edges={edges}
         // 注册自定义节点的组件类型
         nodeTypes={nodeTypes as NodeTypes}
 

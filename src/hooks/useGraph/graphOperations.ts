@@ -11,6 +11,7 @@ import { buildNodeCrudOperations } from './nodeCrudOperations'
 import { buildEdgeOperations } from './edgeOperations'
 import { buildNodeChangeOperations } from './nodeChangeOperations'
 import { buildSelectionOperations } from './selectionOperations'
+import { useGraphStore } from '../../stores/graphStore'
 
 export interface StorageApi {
   createCard: (parentPath: string, cardName: string) => Promise<string | null>
@@ -22,35 +23,19 @@ export interface StorageApi {
 }
 
 export interface GraphOpsDeps {
+  tabId: string
   storage: StorageApi
-  nodesMapRef: React.MutableRefObject<Map<string, KnowledgeNode>>
-  edgesMapRef: React.MutableRefObject<Map<string, KnowledgeEdge>>
-  nodesRef: React.MutableRefObject<KnowledgeNode[]>
-  edgesRef: React.MutableRefObject<KnowledgeEdge[]>
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
-  rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
-  setState: (updater: (prev: { nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }) => { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; loading?: boolean; selectedNode?: KnowledgeNode | null }) => void
-  getActiveSelectedNodeId: () => string | null
-  setActiveSelectedNodeId: (nodeId: string | null) => void
-  updateSelectedNode: (nodes: KnowledgeNode[], nodeId: string | null) => void
-  isCreatingRef: React.MutableRefObject<boolean>
+  isCreatingRef: { current: boolean }
 }
 
 export function buildGraphOperations(deps: GraphOpsDeps) {
   const {
+    tabId,
     storage,
-    nodesMapRef,
-    edgesMapRef,
-    nodesRef,
-    edgesRef,
     getActiveGraphSession,
     loadRoom,
-    rebuildMaps,
-    setState,
-    getActiveSelectedNodeId,
-    setActiveSelectedNodeId,
-    updateSelectedNode,
     isCreatingRef,
   } = deps
 
@@ -58,11 +43,12 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   const saveNow = async (dirPath: string) => {
     if (!dirPath) return
+    const store = useGraphStore.getState()
     await storage.flushGraphSave(
       dirPath,
       () => buildMetaFromNodesEdges(
-        Array.from(nodesMapRef.current.values()),
-        Array.from(edgesMapRef.current.values())
+        Array.from(store.nodesMap.values()),
+        Array.from(store.edgesMap.values())
       ),
       undefined
     )
@@ -71,50 +57,33 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
   // ===== Node CRUD =====
 
   const nodeCrudOps = buildNodeCrudOperations({
+    tabId,
     storage,
-    nodesMapRef,
-    edgesMapRef,
-    nodesRef,
     getActiveGraphSession,
     loadRoom,
-    rebuildMaps,
     saveNow,
-    setState,
-    getActiveSelectedNodeId,
-    setActiveSelectedNodeId,
     isCreatingRef,
   })
 
   // ===== Edge CRUD =====
 
   const edgeOps = buildEdgeOperations({
-    edgesRef,
     getActiveGraphSession,
-    rebuildMaps,
     saveNow,
-    setState,
   })
 
   // ===== Node position changes =====
 
   const nodeChangeOps = buildNodeChangeOperations({
-    nodesRef,
-    edgesRef,
+    tabId,
     getActiveGraphSession,
-    getActiveSelectedNodeId,
-    rebuildMaps,
     saveNow,
-    setState,
-    updateSelectedNode,
   })
 
   // ===== Selection =====
 
   const selectionOps = buildSelectionOperations({
-    nodesMapRef,
-    nodesRef,
-    setActiveSelectedNodeId,
-    updateSelectedNode,
+    tabId,
   })
 
   return {

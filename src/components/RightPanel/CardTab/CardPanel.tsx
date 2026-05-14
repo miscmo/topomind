@@ -4,7 +4,7 @@ import { registerTabSaver } from '../../../core/close-guard'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
-import { useGraphContext } from '../../../contexts/GraphContext'
+import { useGraphStore } from '../../../stores/graphStore'
 import { tabStore } from '../../../stores/tabStore'
 import { useCardContentStore } from '../../../stores/cardContentStore'
 import MarkdownViewer from '../../MarkdownViewer'
@@ -18,13 +18,12 @@ interface CardPanelProps {
 
 const CardPanel = memo(function CardPanel({ selectedNodeId, tabId }: CardPanelProps) {
   const storage = useStorage()
-  const graph = useGraphContext()
   const [editMode, setEditMode] = useState(false)
   const [markdown, setMarkdown] = useState('')
   const [savedMarkdown, setSavedMarkdown] = useState('')
   const requestSeqRef = useRef(0)
 
-  const selectedNode = graph.selectedNode
+  const selectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId) : null)
   const resolveNodePath = useCallback((nodeId: string) => {
     const graphSession = tabStore.getState().getGraphSession(tabId)
     return resolveRoomChildRef(graphSession.roomPath || graphSession.kbPath, nodeId)
@@ -57,7 +56,7 @@ const CardPanel = memo(function CardPanel({ selectedNodeId, tabId }: CardPanelPr
   const handleSave = useCallback(async () => {
     if (!selectedNodeId) return
     const path = resolveNodePath(selectedNodeId)
-    const label = graph.nodesMapRef.current.get(selectedNodeId)?.data.label
+    const label = useGraphStore.getState().nodesMap.get(selectedNodeId)?.data.label
     try {
       await storage.writeCardMarkdown(path, markdown)
       useCardContentStore.getState().setCardMarkdown(path, markdown)
@@ -67,7 +66,7 @@ const CardPanel = memo(function CardPanel({ selectedNodeId, tabId }: CardPanelPr
     } catch (error) {
       logger.catch('CardPanel', 'handleSave', error)
     }
-  }, [selectedNodeId, resolveNodePath, graph.nodesMapRef, markdown, storage])
+  }, [selectedNodeId, resolveNodePath, markdown, storage])
 
   const flushCardSave = useCallback(async () => {
     if (!editMode || !selectedNodeId) return

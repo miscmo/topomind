@@ -1,31 +1,20 @@
 import { useCallback, useRef } from 'react'
-import type { KnowledgeEdge, KnowledgeNode } from '../../types'
 import type { Store } from '../../core/storage'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { loadRoomGraph } from './roomLoader'
 import type { GraphSession } from '../../stores/tabStore'
-import type { GraphState } from './types'
+import { useGraphStore } from '../../stores/graphStore'
 
 interface UseGraphRoomLoaderOptions {
   storage: Store
   getActiveGraphSession: () => GraphSession
-  rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
-  updateSelectedNode: (nodes: KnowledgeNode[], nodeId: string | null) => void
-  setState: React.Dispatch<React.SetStateAction<GraphState>>
-  nodesRef: React.MutableRefObject<KnowledgeNode[]>
-  edgesRef: React.MutableRefObject<KnowledgeEdge[]>
 }
 
 export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
   const {
     storage,
     getActiveGraphSession,
-    rebuildMaps,
-    updateSelectedNode,
-    setState,
-    nodesRef,
-    edgesRef,
   } = options
   const loadRequestSeqRef = useRef(0)
   const latestAppliedLoadSeqRef = useRef(0)
@@ -33,7 +22,8 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
   const loadRoom = useCallback(
     async (dirPath: string) => {
       const requestSeq = ++loadRequestSeqRef.current
-      setState((s) => ({ ...s, loading: true }))
+      const store = useGraphStore.getState()
+      store.setLoading(true)
 
       try {
         const kbPath = getActiveGraphSession().kbPath
@@ -47,11 +37,9 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
         }
 
         latestAppliedLoadSeqRef.current = requestSeq
-        setState({ nodes: loaded.nodes, edges: loaded.edges, loading: false, selectedNode: null })
-        rebuildMaps(loaded.nodes, loaded.edges)
-        updateSelectedNode(loaded.nodes, null)
-        nodesRef.current = loaded.nodes
-        edgesRef.current = loaded.edges
+        store.setGraph(loaded.nodes, loaded.edges)
+        store.setLoading(false)
+        
         logAction('房间:加载完成', 'useGraph', {
           roomPath: dirPath,
           kbPath,
@@ -62,11 +50,11 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
       } catch (e) {
         logger.catch('useGraph', 'loadRoom', e)
         if (requestSeq === loadRequestSeqRef.current && requestSeq >= latestAppliedLoadSeqRef.current) {
-          setState((s) => ({ ...s, loading: false }))
+          useGraphStore.getState().setLoading(false)
         }
       }
     },
-    [storage, getActiveGraphSession, rebuildMaps, updateSelectedNode, setState, nodesRef, edgesRef]
+    [storage, getActiveGraphSession]
   )
 
   return { loadRoom }

@@ -13,6 +13,7 @@ import { logAction } from '../core/log-backend'
 import type { KnowledgeNode } from '../types'
 import type { GraphContextValue } from '../contexts/GraphContext'
 import { useEdgeActions } from './useEdgeActions'
+import { useGraphStore } from '../stores/graphStore'
 
 export interface UseNodeActionsOptions {
   /** Called after an action to notify parent (e.g., for focus management) */
@@ -29,8 +30,8 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   // Maps are consistently updated by rebuildMaps() on every state change.
   // Arrays via refs are recreated on every context re-creation, causing stale closures.
   const findNodeById = useCallback((nodeId: string): KnowledgeNode | undefined => {
-    return graph.nodesMapRef.current.get(nodeId)
-  }, [graph.nodesMapRef])
+    return useGraphStore.getState().nodesMap.get(nodeId)
+  }, [])
 
   const handleNewChild = useCallback(async (nodeId: string, position?: { x: number; y: number }) => {
     const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })

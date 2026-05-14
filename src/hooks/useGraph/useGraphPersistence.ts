@@ -6,12 +6,14 @@ interface UseGraphPersistenceOptions {
   saveNow: (dirPath: string) => Promise<void>
 }
 
-export function useGraphPersistence({ getActiveGraphSession, saveNow }: UseGraphPersistenceOptions) {
+export function useGraphPersistence(options: UseGraphPersistenceOptions) {
+  const { getActiveGraphSession, saveNow } = options
+
   const flushCurrentRoomSave = useCallback(async () => {
-    const graphSession = getActiveGraphSession()
-    const dirPath = graphSession.roomPath || graphSession.kbPath || ''
-    if (!dirPath) return
-    await saveNow(dirPath)
+    const dirPath = getActiveGraphSession().roomPath
+    if (dirPath) {
+      await saveNow(dirPath)
+    }
   }, [getActiveGraphSession, saveNow])
 
   return { flushCurrentRoomSave }

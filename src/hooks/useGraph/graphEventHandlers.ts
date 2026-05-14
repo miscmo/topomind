@@ -2,20 +2,17 @@ import { useCallback } from 'react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import { tabStore } from '../../stores/tabStore'
 import { logAction } from '../../core/log-backend'
-import type { KnowledgeEdge, KnowledgeNode, KnowledgeNodeData } from '../../types'
+import type { KnowledgeNodeData } from '../../types'
 import type { RightPanelTab } from '../../stores/uiStoreTypes'
 import { generateId } from './graphBuilder'
 import type { GraphOperations } from './graphOperations'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
+import { useGraphStore } from '../../stores/graphStore'
 
 export interface GraphEventHandlerDeps {
   tabId: string
   ops: GraphOperations
-  nodesRef: React.MutableRefObject<KnowledgeNode[]>
-  edgesRef: React.MutableRefObject<KnowledgeEdge[]>
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
-  rebuildMaps: (nodes: KnowledgeNode[], edges: KnowledgeEdge[]) => void
-  setState: React.Dispatch<React.SetStateAction<{ nodes: KnowledgeNode[]; edges: KnowledgeEdge[] }>>
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
   setSelectedEdgeId: (edgeId: string | null) => void
   setRightPanelTab: (tab: RightPanelTab) => void
@@ -25,11 +22,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   const {
     tabId,
     ops,
-    nodesRef,
-    edgesRef,
     getActiveGraphSession,
-    rebuildMaps,
-    setState,
     defaultEdgeStyle,
     setSelectedEdgeId,
     setRightPanelTab,
@@ -37,16 +30,15 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
 
   const resetConnectTargetHighlight = useCallback(() => {
     let changed = false
-    const nextNodes = nodesRef.current.map((node) => {
+    const store = useGraphStore.getState()
+    const nextNodes = store.nodes.map((node) => {
       if (!node.data.connectTarget) return node
       changed = true
       return { ...node, data: { ...node.data, connectTarget: false } }
     })
     if (!changed) return
-    nodesRef.current = nextNodes
-    rebuildMaps(nextNodes, edgesRef.current)
-    setState((prev) => ({ ...prev, nodes: nextNodes }))
-  }, [rebuildMaps, setState, nodesRef, edgesRef])
+    store.setNodes(nextNodes)
+  }, [])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -104,7 +96,8 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   const onEdgeClick = useCallback(
     (_: React.MouseEvent, edge: Edge) => {
       ops.deselectNode()
-      for (const current of edgesRef.current) {
+      const store = useGraphStore.getState()
+      for (const current of store.edges) {
         if (current.data?.selected && current.id !== edge.id) {
           ops.updateEdgeStyle(current.id, { selected: false })
         }
@@ -113,19 +106,20 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       setSelectedEdgeId(edge.id)
       setRightPanelTab('style')
     },
-    [setSelectedEdgeId, setRightPanelTab, ops, edgesRef]
+    [setSelectedEdgeId, setRightPanelTab, ops]
   )
 
   const onPaneClick = useCallback(() => {
     ops.deselectNode()
     resetConnectTargetHighlight()
-    for (const current of edgesRef.current) {
+    const store = useGraphStore.getState()
+    for (const current of store.edges) {
       if (current.data?.selected) {
         ops.updateEdgeStyle(current.id, { selected: false })
       }
     }
     setSelectedEdgeId(null)
-  }, [ops, setSelectedEdgeId, edgesRef, resetConnectTargetHighlight])
+  }, [ops, setSelectedEdgeId, resetConnectTargetHighlight])
 
   const navigateToChildRoom = useCallback(async (childPath: string, childName: string) => {
     const graphSession = getActiveGraphSession()
@@ -163,7 +157,8 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   const onConnectStart = useCallback((_: unknown, params: { nodeId?: string | null }) => {
     const sourceId = params.nodeId
     let changed = false
-    const nextNodes = nodesRef.current.map((node) => {
+    const store = useGraphStore.getState()
+    const nextNodes = store.nodes.map((node) => {
       const shouldHighlight = !!sourceId && node.id !== sourceId
       if (node.data.connectTarget === shouldHighlight) return node
       changed = true
@@ -176,10 +171,8 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       }
     })
     if (!changed) return
-    nodesRef.current = nextNodes
-    rebuildMaps(nextNodes, edgesRef.current)
-    setState((prev) => ({ ...prev, nodes: nextNodes }))
-  }, [nodesRef, edgesRef, rebuildMaps, setState])
+    store.setNodes(nextNodes)
+  }, [])
 
   const onConnectEnd = useCallback(() => {
     resetConnectTargetHighlight()
