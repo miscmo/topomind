@@ -100,7 +100,7 @@
 }
 
 .hasMarkdown .header {
-  padding: 1px 4px;
+  padding: 1px 3px;
   flex: 0 0 auto;
 }
 
@@ -202,7 +202,7 @@
   color: #334155;
   text-align: left;
   pointer-events: auto;
-  padding: 2px 4px 4px 6px; /* 进一步压缩内边距 */
+  padding: 1px 3px 3px 4px; /* 进一步压缩内边距 */
   border-bottom-left-radius: 8px; /* 展开时下部圆角 */
   border-bottom-right-radius: 8px;
   background: rgba(255, 255, 255, 0.98); /* 补充背景，避免父级溢出透明 */
@@ -211,7 +211,26 @@
 /* 针对 MarkdownViewer 内部样式的微调，压缩间距 */
 .markdown :global(.markdownBody) {
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.32;
+}
+
+.markdown :global(.markdownBody p),
+.markdown :global(.markdownBody ul),
+.markdown :global(.markdownBody ol),
+.markdown :global(.markdownBody blockquote),
+.markdown :global(.markdownBody pre) {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.markdown :global(.markdownBody h1),
+.markdown :global(.markdownBody h2),
+.markdown :global(.markdownBody h3),
+.markdown :global(.markdownBody h4),
+.markdown :global(.markdownBody h5),
+.markdown :global(.markdownBody h6) {
+  margin-top: 3px;
+  margin-bottom: 2px;
 }
 
 /* 进一步精简滚动条 */

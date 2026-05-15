@@ -76,7 +76,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProp
     }
   }, [id, data.expandedWidth, data.expandedHeight, shouldShowMarkdown, graph])
 
-  const hasContent = entry?.content && entry.content.trim().length > 0
+  const hasContent = entry ? entry.content.trim().length > 0 : data.hasContent === true
 
   return (
     <div

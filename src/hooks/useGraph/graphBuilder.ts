@@ -14,6 +14,26 @@ import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph
 import { buildEdgeView } from './edgeView'
 
 const AUTO_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
+const GRAPH_NODE_IO_CONCURRENCY = 8
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
+  const workerCount = Math.min(limit, items.length)
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex
+      nextIndex += 1
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex)
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
 
 export function generateId(prefix: string): string {
   let id = prefix
@@ -40,6 +60,7 @@ export interface SerializedEdge {
 
 export interface BuildNodesStorage {
   countChildren: (cardPath: string) => Promise<number>
+  readCardMarkdown: (cardPath: string) => Promise<string>
 }
 
 /** Convert nodes+edges to adapter GraphMeta format */
@@ -106,19 +127,20 @@ export async function buildNodes(
   const spacingX = Math.max(60, 200 - nodeCount * 5)
   const spacingY = Math.max(50, 120 - nodeCount * 3)
 
-  // Parallelize child count checks
-  const childCountResults = await Promise.all(
-    normalizedChildren.map(async ([, childPath]) => {
-      try {
-        return await storage.countChildren(childPath)
-      } catch {
-        return 0
-      }
-    })
+  const nodeInfoResults = await mapWithConcurrency(
+    normalizedChildren,
+    GRAPH_NODE_IO_CONCURRENCY,
+    async ([, childPath]) => {
+      const [childCount, hasContent] = await Promise.all([
+        storage.countChildren(childPath).catch(() => 0),
+        storage.readCardMarkdown(childPath).then((content) => content.trim().length > 0).catch(() => false),
+      ])
+      return { childCount, hasContent }
+    }
   )
 
   return normalizedChildren.map(([nodeId, childPath, roomNode], i) => {
-    const childCount = childCountResults[i]
+    const { childCount, hasContent } = nodeInfoResults[i]
     const saved = savedPositions[nodeId]
     const position = roomNode.position ?? saved ?? {
       x: 50 + i * spacingX,
@@ -136,6 +158,7 @@ export async function buildNodes(
         parent: dirPath || kbPath || undefined,
         domainColor: roomNode.color, // Only use explicitly saved color
         childCount,
+        hasContent,
       },
     }
   })

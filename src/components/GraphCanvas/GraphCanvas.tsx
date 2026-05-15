@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from 'react'
-import { Background, ReactFlow, useReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
+import { Background, Position, ReactFlow, getSmoothStepPath, useReactFlow, type BackgroundVariant, type ConnectionLineComponentProps, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import { useGraphStore } from '../../stores/graphStore'
@@ -20,6 +20,93 @@ function distanceToRect(point: { x: number; y: number }, rect: { x: number; y: n
   const dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.width))
   const dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.height))
   return Math.hypot(dx, dy)
+}
+
+function getPointPosition(point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) {
+  const right = rect.x + rect.width
+  const bottom = rect.y + rect.height
+  const distances = [
+    { position: Position.Left, distance: Math.abs(point.x - rect.x) },
+    { position: Position.Right, distance: Math.abs(point.x - right) },
+    { position: Position.Top, distance: Math.abs(point.y - rect.y) },
+    { position: Position.Bottom, distance: Math.abs(point.y - bottom) },
+  ]
+  return distances.reduce((best, current) => current.distance < best.distance ? current : best).position
+}
+
+function getClosestPointOnRect(point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) {
+  return {
+    x: Math.min(Math.max(point.x, rect.x), rect.x + rect.width),
+    y: Math.min(Math.max(point.y, rect.y), rect.y + rect.height),
+  }
+}
+
+function getRectIntersectionPoint(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  rect: { x: number; y: number; width: number; height: number }
+) {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const intersections: Array<{ x: number; y: number; t: number }> = []
+  const right = rect.x + rect.width
+  const bottom = rect.y + rect.height
+
+  if (dx !== 0) {
+    for (const x of [rect.x, right]) {
+      const t = (x - from.x) / dx
+      const y = from.y + t * dy
+      if (t >= 0 && t <= 1 && y >= rect.y && y <= bottom) {
+        intersections.push({ x, y, t })
+      }
+    }
+  }
+
+  if (dy !== 0) {
+    for (const y of [rect.y, bottom]) {
+      const t = (y - from.y) / dy
+      const x = from.x + t * dx
+      if (t >= 0 && t <= 1 && x >= rect.x && x <= right) {
+        intersections.push({ x, y, t })
+      }
+    }
+  }
+
+  const intersection = intersections.sort((a, b) => b.t - a.t)[0]
+  return intersection ?? getClosestPointOnRect(to, rect)
+}
+
+function CardSnappedConnectionLine({
+  fromX,
+  fromY,
+  fromPosition,
+  toX,
+  toY,
+  connectionLineStyle,
+}: ConnectionLineComponentProps) {
+  const connectingTargetId = useGraphUiStore((s) => s.connectingTargetId)
+  const targetNode = useGraphStore((s) => connectingTargetId ? s.nodesMap.get(connectingTargetId) : null)
+  const targetRect = targetNode ? {
+    x: targetNode.position.x,
+    y: targetNode.position.y,
+    width: targetNode.width ?? targetNode.initialWidth ?? targetNode.measured?.width ?? 120,
+    height: targetNode.height ?? targetNode.initialHeight ?? targetNode.measured?.height ?? 52,
+  } : null
+  const targetPoint = targetRect
+    ? getRectIntersectionPoint({ x: fromX, y: fromY }, { x: toX, y: toY }, targetRect)
+    : { x: toX, y: toY }
+  const targetPosition = targetRect ? getPointPosition(targetPoint, targetRect) : Position.Left
+  const [path] = getSmoothStepPath({
+    sourceX: fromX,
+    sourceY: fromY,
+    sourcePosition: fromPosition,
+    targetX: targetPoint.x,
+    targetY: targetPoint.y,
+    targetPosition,
+    borderRadius: 16,
+  })
+
+  return <path fill="none" d={path} style={connectionLineStyle} strokeWidth={2} stroke="#3b82f6" />
 }
 
 interface GraphCanvasProps {
@@ -150,6 +237,7 @@ export default memo(function GraphCanvas({
         onConnectEnd={graph.onConnectEnd}
         // 连线吸附半径。离目标 handle 足够近时更容易连上，值越大越容易吸附
         connectionRadius={48}
+        connectionLineComponent={CardSnappedConnectionLine}
 
         // 点击节点时触发
         onNodeClick={graph.onNodeClick as (event: React.MouseEvent, node: Node) => void}

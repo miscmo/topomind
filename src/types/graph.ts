@@ -77,6 +77,8 @@ export interface KnowledgeNodeData {
   domainColor?: string
   /** 子节点数量（用于徽章显示） */
   childCount?: number
+  /** 是否存在卡片摘要内容 */
+  hasContent?: boolean
   /** 选中状态 */
   selected?: boolean
   /** 悬停状态 */

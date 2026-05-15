@@ -6,6 +6,7 @@ import { buildEdges, buildNodes } from './graphBuilder'
 export interface RoomLoaderStorage {
   readLayout: (dirPath: string) => Promise<GraphMeta>
   countChildren: (dirPath: string) => Promise<number>
+  readCardMarkdown: (cardPath: string) => Promise<string>
 }
 
 export interface LoadedRoomGraph {
