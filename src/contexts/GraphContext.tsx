@@ -8,7 +8,7 @@
  */
 import { createContext, useContext, useMemo, type Context } from 'react'
 import { useGraph } from '../hooks/useGraph'
-import type { KnowledgeNodeData, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../types'
+import type { KnowledgeNodeData, KnowledgeNodeStyle, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../types'
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 
 export interface GraphContextValue {
@@ -31,9 +31,10 @@ export interface GraphContextValue {
   onNodeContextMenu: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
 
   // Node operations
-  createChildNode: (name: string, parentId?: string, position?: { x: number; y: number }) => Promise<string | null>
+  createChildNode: (name: string, parentId?: string, position?: { x: number; y: number }, options?: { editTitle?: boolean }) => Promise<string | null>
   deleteChildNode: (nodeId: string) => Promise<boolean>
   renameNode: (nodeId: string, newName: string) => Promise<boolean>
+  updateNodeStyle: (nodeId: string, style: KnowledgeNodeStyle) => Promise<void>
   selectNode: (nodeId: string) => void
   deselectNode: () => void
 
@@ -64,6 +65,7 @@ const emptyContext: GraphContextValue = {
   createChildNode: async () => null as string | null,
   deleteChildNode: async () => false,
   renameNode: async () => false,
+  updateNodeStyle: async () => {},
   selectNode: () => {},
   deselectNode: () => {},
   updateEdgeRelation: () => {},
@@ -95,6 +97,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     createChildNode: graph.createChildNode,
     deleteChildNode: graph.deleteChildNode,
     renameNode: graph.renameNode,
+    updateNodeStyle: graph.updateNodeStyle,
     selectNode: graph.selectNode,
     deselectNode: graph.deselectNode,
     updateEdgeRelation: graph.updateEdgeRelation,

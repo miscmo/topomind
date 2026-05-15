@@ -1,4 +1,4 @@
-import type { KnowledgeEdge, KnowledgeNode } from '../../types'
+import type { KnowledgeEdge, KnowledgeNode, KnowledgeNodeStyle } from '../../types'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { generateId } from './graphBuilder'
@@ -12,6 +12,17 @@ import type { StorageApi } from './graphOperations'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 import { tabStore } from '../../stores/tabStore'
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+
+function normalizeNodeStylePatch(style: KnowledgeNodeStyle): KnowledgeNodeStyle {
+  const next: KnowledgeNodeStyle = {}
+  if (Number.isFinite(style.headerFontSize)) next.headerFontSize = clamp(style.headerFontSize as number, 8, 28)
+  if (Number.isFinite(style.bodyFontSize)) next.bodyFontSize = clamp(style.bodyFontSize as number, 8, 24)
+  if (typeof style.headerColor === 'string') next.headerColor = style.headerColor.trim()
+  if (typeof style.headerBackgroundColor === 'string') next.headerBackgroundColor = style.headerBackgroundColor.trim()
+  return next
+}
 
 export interface NodeCrudOperationsDeps {
   tabId: string
@@ -34,7 +45,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     storeApi,
   } = deps
 
-  const createChildNode = async (name: string, parentId?: string, position?: { x: number; y: number }): Promise<string | null> => {
+  const createChildNode = async (name: string, parentId?: string, position?: { x: number; y: number }, options?: { editTitle?: boolean }): Promise<string | null> => {
     const graphSession = getActiveGraphSession()
     const dirPath = graphSession.roomPath
     const currentRoomPath = dirPath || graphSession.kbPath
@@ -54,6 +65,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
 
     try {
       const reloadPath = currentRoomPath || getActiveGraphSession().kbPath || ''
+      if (reloadPath) await saveNow(reloadPath)
       const cardId = generateId('card-')
       const result = await createChildCard(storage, {
         name,
@@ -74,6 +86,19 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
 
       await loadRoom(reloadPath, true)
       isCreatingRef.current = false
+      if (options?.editTitle) {
+        const loadedStore = storeApi.getState()
+        loadedStore.setNodes(loadedStore.nodes.map((node) => ({
+          ...node,
+          selected: node.id === cardId,
+          data: node.id === cardId
+            ? {
+                ...node.data,
+                titleEditRequested: true,
+              }
+            : node.data,
+        })))
+      }
       const savePath = getActiveGraphSession().roomPath || getActiveGraphSession().kbPath
       if (savePath) await saveNow(savePath)
 
@@ -142,9 +167,34 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     }
   }
 
+  const updateNodeStyle = async (nodeId: string, style: KnowledgeNodeStyle): Promise<void> => {
+    const store = storeApi.getState()
+    const node = store.nodesMap.get(nodeId)
+    if (!node) return
+    const patch = normalizeNodeStylePatch(style)
+    const currentStyle = node.data.nodeStyle ?? {}
+    const nextStyle = { ...currentStyle, ...patch }
+    const changed = Object.entries(patch).some(([key, value]) => currentStyle[key as keyof KnowledgeNodeStyle] !== value)
+    if (!changed) return
+
+    store.updateNode(nodeId, (currentNode) => ({
+      ...currentNode,
+      data: {
+        ...currentNode.data,
+        nodeStyle: nextStyle,
+      },
+    }))
+
+    const graphSession = getActiveGraphSession()
+    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
+    if (currentRoomPath) await saveNow(currentRoomPath)
+    logAction('节点:更新样式', 'graphOperations', { nodeId, style: patch })
+  }
+
   return {
     createChildNode,
     deleteChildNode,
     renameNode,
+    updateNodeStyle,
   }
 }

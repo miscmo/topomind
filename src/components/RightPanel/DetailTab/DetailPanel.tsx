@@ -5,7 +5,7 @@
 import { useEffect, useState, useRef, memo, useCallback } from 'react'
 import { useStorage } from '../../../core/storage'
 import { useRightPanelStore } from '../../../stores/rightPanelStore'
-import { usePromptStore } from '../../../stores/promptStore'
+import { useConfirmStore } from '../../../stores/confirmStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { useGraphStore, useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
 import { useDraftStore } from '../../../stores/draftStore'
@@ -29,7 +29,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const storage = useStorage()
   const collapseRightPanel = useRightPanelStore((s) => s.collapseRightPanel)
   const graph = useGraphContext()
-  const prompt = usePromptStore((s) => s.open)
+  const confirm = useConfirmStore((s) => s.open)
 
   const selectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId) : null)
   const resolveNodePath = useCallback((nodeId: string) => {
@@ -152,12 +152,12 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label ?? selectedNodeId
     const path = resolveNodePath(selectedNodeId)
-    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${label}" 确认删除` })
-    if (!confirmed?.trim() || confirmed !== label) return
+    const confirmed = await confirm({ title: '删除节点', message: `将删除节点「${label}」。此操作不可撤销。` })
+    if (!confirmed) return
     logAction('节点:删除', 'DetailPanel', { nodeId: selectedNodeId, label, path })
     graph.deleteChildNode(selectedNodeId)
     collapseRightPanel()
-  }, [selectedNodeId, prompt, graph, collapseRightPanel, resolveNodePath, storeApi])
+  }, [selectedNodeId, confirm, graph, collapseRightPanel, resolveNodePath, storeApi])
 
   const flushMarkdownSave = useCallback(async () => {
     if (!editMode || !selectedNodeId || !nodePath) return

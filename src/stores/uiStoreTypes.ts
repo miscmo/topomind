@@ -15,3 +15,22 @@ export interface DefaultEdgeStyle {
   color: string
   arrow: boolean
 }
+
+export interface DefaultNodeStyle {
+  headerFontSize: number
+  bodyFontSize: number
+  headerColor: string
+  headerBackgroundColor: string
+  headerFontWeight: 'normal' | 'bold'
+  headerFontStyle: 'normal' | 'italic'
+  borderColor: string
+  borderWidth: number
+  borderRadius: number
+}
+
+export interface NodeSizeLimits {
+  minWidth: number
+  minHeight: number
+  maxWidth: number
+  maxHeight: number
+}

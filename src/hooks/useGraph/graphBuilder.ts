@@ -60,6 +60,7 @@ export interface SerializedEdge {
 
 export interface BuildNodesStorage {
   countChildren: (cardPath: string) => Promise<number>
+  readMarkdown: (cardPath: string) => Promise<string>
   readCardMarkdown: (cardPath: string) => Promise<string>
 }
 
@@ -81,6 +82,7 @@ export function buildMetaFromNodesEdges(
         height: node.height ?? node.initialHeight ?? node.measured?.height ?? 52,
       },
       color: node.data.domainColor,
+      style: node.data.nodeStyle,
     }
   }
   const roomEdges: RoomGraphEdge[] = edges.map((e) => ({
@@ -89,7 +91,7 @@ export function buildMetaFromNodesEdges(
     targetRef: e.target,
     relation: e.data?.relation ?? '相关',
     weight: e.data?.weight ?? 'minor',
-    lineMode: e.data?.lineMode ?? 'smoothstep',
+    lineMode: e.data?.lineMode ?? 'straight',
     lineStyle: e.data?.lineStyle ?? 'solid',
     color: e.data?.color ?? '#7f8c8d',
     arrow: e.data?.arrow ?? true,
@@ -131,16 +133,17 @@ export async function buildNodes(
     normalizedChildren,
     GRAPH_NODE_IO_CONCURRENCY,
     async ([, childPath]) => {
-      const [childCount, hasContent] = await Promise.all([
+      const [childCount, hasContent, hasDetail] = await Promise.all([
         storage.countChildren(childPath).catch(() => 0),
         storage.readCardMarkdown(childPath).then((content) => content.trim().length > 0).catch(() => false),
+        storage.readMarkdown(childPath).then((content) => content.trim().length > 0).catch(() => false),
       ])
-      return { childCount, hasContent }
+      return { childCount, hasContent, hasDetail }
     }
   )
 
   return normalizedChildren.map(([nodeId, childPath, roomNode], i) => {
-    const { childCount, hasContent } = nodeInfoResults[i]
+    const { childCount, hasContent, hasDetail } = nodeInfoResults[i]
     const saved = savedPositions[nodeId]
     const position = roomNode.position ?? saved ?? {
       x: 50 + i * spacingX,
@@ -159,6 +162,8 @@ export async function buildNodes(
         domainColor: roomNode.color, // Only use explicitly saved color
         childCount,
         hasContent,
+        hasDetail,
+        nodeStyle: roomNode.style,
       },
     }
   })
@@ -168,7 +173,7 @@ export async function buildNodes(
 export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
   const roomGraph = graphMetaToRoomGraph(dirPath, meta)
   return roomGraph.edges.map((e) => {
-    const lineMode = e.lineMode ?? 'smoothstep'
+    const lineMode = e.lineMode ?? 'straight'
     const lineStyle = e.lineStyle ?? 'solid'
     const color = e.color ?? '#7f8c8d'
     const arrow = e.arrow ?? true

@@ -52,7 +52,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     edgeId: string,
     defaultStyle?: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean }
   ) => {
-    const lineMode = defaultStyle?.lineMode ?? 'smoothstep'
+    const lineMode = defaultStyle?.lineMode ?? 'straight'
     const lineStyle = defaultStyle?.lineStyle ?? 'solid'
     const color = defaultStyle?.color ?? '#7f8c8d'
     const arrow = defaultStyle?.arrow ?? true

@@ -36,7 +36,7 @@ export function useEdgeActions(options: UseEdgeActionsOptions) {
       title: '编辑连线样式',
       placeholder: '输入 JSON，例如 {"lineMode":"straight","lineStyle":"dashed","color":"#e74c3c","arrow":true}',
       defaultValue: JSON.stringify({
-        lineMode: current?.lineMode ?? 'smoothstep',
+        lineMode: current?.lineMode ?? 'straight',
         lineStyle: current?.lineStyle ?? 'solid',
         color: current?.color ?? '#7f8c8d',
         arrow: current?.arrow ?? true,

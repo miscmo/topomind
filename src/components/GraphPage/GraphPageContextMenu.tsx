@@ -25,12 +25,11 @@ interface GraphPageContextMenuProps {
   y: number
   type: 'node' | 'edge' | 'pane' | null
   targetId: string | null
-  onNewChild: (nodeId: string, position?: { x: number; y: number }) => void
-  onRename: (nodeId: string) => void
+  onNewChild: (position?: { x: number; y: number }) => void
+  onEnterNode: (nodeId: string) => void
   onDelete: (nodeId: string) => void
   onEdgeDelete: (edgeId: string) => void
   onEdgeStyle: (edgeId: string) => void
-  onProperties: (nodeId: string) => void
   onClose: () => void
 }
 
@@ -41,11 +40,10 @@ export default memo(function GraphPageContextMenu({
   type,
   targetId,
   onNewChild,
-  onRename,
+  onEnterNode,
   onDelete,
   onEdgeDelete,
   onEdgeStyle,
-  onProperties,
   onClose,
 }: GraphPageContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -54,14 +52,13 @@ export default memo(function GraphPageContextMenu({
 
   const isEdge = type === 'edge'
   const isPane = type === 'pane'
-  const menuTargetId = isPane ? '' : targetId
 
   const items: MenuEntry[] = isPane
     ? [
         {
-          label: '新建子节点',
+          label: '新建节点',
           action: async () => {
-            await onNewChild('', { x, y })
+            await onNewChild({ x, y })
             onClose()
           },
         },
@@ -87,23 +84,9 @@ export default memo(function GraphPageContextMenu({
         ]
       : [
           {
-            label: '新建子节点',
+            label: '进入节点',
             action: async () => {
-              await onNewChild(menuTargetId ?? '')
-              onClose()
-            },
-          },
-          {
-            label: '重命名',
-            action: async () => {
-              if (menuTargetId) await onRename(menuTargetId)
-              onClose()
-            },
-          },
-          {
-            label: '属性',
-            action: () => {
-              if (menuTargetId) onProperties(menuTargetId)
+              if (targetId) await onEnterNode(targetId)
               onClose()
             },
           },
@@ -111,7 +94,7 @@ export default memo(function GraphPageContextMenu({
           {
             label: '删除节点',
             action: async () => {
-              if (menuTargetId) await onDelete(menuTargetId)
+              if (targetId) await onDelete(targetId)
               onClose()
             },
             danger: true,

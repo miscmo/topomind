@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from 'react'
-import { Background, Position, ReactFlow, getSmoothStepPath, useReactFlow, type BackgroundVariant, type ConnectionLineComponentProps, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
+import { Background, ReactFlow, useReactFlow, type BackgroundVariant, type ConnectionLineComponentProps, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import { useGraphStore } from '../../stores/graphStore'
@@ -15,23 +15,28 @@ const edgeTypes = {
 }
 
 const CARD_CONNECT_SNAP_DISTANCE = 56
+const CONNECTION_ARROW_MARKER_ID = 'topomind-connection-arrow'
+
+function getNodeRect(node: Node) {
+  return {
+    x: node.position.x,
+    y: node.position.y,
+    width: node.width ?? node.initialWidth ?? node.measured?.width ?? 120,
+    height: node.height ?? node.initialHeight ?? node.measured?.height ?? 52,
+  }
+}
+
+function getRectCenter(rect: { x: number; y: number; width: number; height: number }) {
+  return {
+    x: rect.x + rect.width / 2,
+    y: rect.y + rect.height / 2,
+  }
+}
 
 function distanceToRect(point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) {
   const dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.width))
   const dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.height))
   return Math.hypot(dx, dy)
-}
-
-function getPointPosition(point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) {
-  const right = rect.x + rect.width
-  const bottom = rect.y + rect.height
-  const distances = [
-    { position: Position.Left, distance: Math.abs(point.x - rect.x) },
-    { position: Position.Right, distance: Math.abs(point.x - right) },
-    { position: Position.Top, distance: Math.abs(point.y - rect.y) },
-    { position: Position.Bottom, distance: Math.abs(point.y - bottom) },
-  ]
-  return distances.reduce((best, current) => current.distance < best.distance ? current : best).position
 }
 
 function getClosestPointOnRect(point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) {
@@ -79,34 +84,34 @@ function getRectIntersectionPoint(
 function CardSnappedConnectionLine({
   fromX,
   fromY,
-  fromPosition,
   toX,
   toY,
   connectionLineStyle,
 }: ConnectionLineComponentProps) {
+  const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
   const connectingTargetId = useGraphUiStore((s) => s.connectingTargetId)
+  const sourceNode = useGraphStore((s) => connectingSourceId ? s.nodesMap.get(connectingSourceId) : null)
   const targetNode = useGraphStore((s) => connectingTargetId ? s.nodesMap.get(connectingTargetId) : null)
-  const targetRect = targetNode ? {
-    x: targetNode.position.x,
-    y: targetNode.position.y,
-    width: targetNode.width ?? targetNode.initialWidth ?? targetNode.measured?.width ?? 120,
-    height: targetNode.height ?? targetNode.initialHeight ?? targetNode.measured?.height ?? 52,
-  } : null
+  const sourceRect = sourceNode ? getNodeRect(sourceNode as Node) : null
+  const targetRect = targetNode ? getNodeRect(targetNode as Node) : null
   const targetPoint = targetRect
     ? getRectIntersectionPoint({ x: fromX, y: fromY }, { x: toX, y: toY }, targetRect)
     : { x: toX, y: toY }
-  const targetPosition = targetRect ? getPointPosition(targetPoint, targetRect) : Position.Left
-  const [path] = getSmoothStepPath({
-    sourceX: fromX,
-    sourceY: fromY,
-    sourcePosition: fromPosition,
-    targetX: targetPoint.x,
-    targetY: targetPoint.y,
-    targetPosition,
-    borderRadius: 16,
-  })
+  const sourcePoint = sourceRect
+    ? getRectIntersectionPoint(targetPoint, getRectCenter(sourceRect), sourceRect)
+    : { x: fromX, y: fromY }
+  const path = `M ${sourcePoint.x},${sourcePoint.y} L ${targetPoint.x},${targetPoint.y}`
 
-  return <path fill="none" d={path} style={connectionLineStyle} strokeWidth={2} stroke="#3b82f6" />
+  return (
+    <>
+      <defs>
+        <marker id={CONNECTION_ARROW_MARKER_ID} viewBox="0 0 12 12" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+          <path d="M 2 2 L 10 6 L 2 10 z" fill="#3b82f6" />
+        </marker>
+      </defs>
+      <path fill="none" d={path} style={connectionLineStyle} strokeWidth={2} stroke="#3b82f6" markerEnd={`url(#${CONNECTION_ARROW_MARKER_ID})`} />
+    </>
+  )
 }
 
 interface GraphCanvasProps {
@@ -188,14 +193,7 @@ export default memo(function GraphCanvas({
     let bestDistance = Infinity
     for (const node of nodes) {
       if (node.id === connectingSourceId) continue
-      const width = node.width ?? node.initialWidth ?? node.measured?.width ?? 120
-      const height = node.height ?? node.initialHeight ?? node.measured?.height ?? 52
-      const distance = distanceToRect(point, {
-        x: node.position.x,
-        y: node.position.y,
-        width,
-        height,
-      })
+      const distance = distanceToRect(point, getNodeRect(node))
       if (distance <= CARD_CONNECT_SNAP_DISTANCE && distance < bestDistance) {
         bestDistance = distance
         nextTargetId = node.id

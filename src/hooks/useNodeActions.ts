@@ -8,7 +8,7 @@
  * causing stale closures. The Map objects are consistently updated by rebuildMaps().
  */
 import { useCallback } from 'react'
-import { usePromptStore } from '../stores/promptStore'
+import { useConfirmStore } from '../stores/confirmStore'
 import { logAction } from '../core/log-backend'
 import type { KnowledgeNode } from '../types'
 import type { GraphContextValue } from '../contexts/GraphContext'
@@ -24,7 +24,7 @@ export interface UseNodeActionsOptions {
 export function useNodeActions(options: UseNodeActionsOptions) {
   const storeApi = useGraphStoreApi()
   const { onAction, graph } = options
-  const prompt = usePromptStore((s) => s.open)
+  const confirm = useConfirmStore((s) => s.open)
   const { handleEdgeDelete, handleEdgeStyle } = useEdgeActions({ graph, onAction })
 
   // Use nodesMapRef/edgesMapRef (Map) for O(1) lookup instead of nodesRef/edgesRef arrays.
@@ -34,55 +34,44 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     return storeApi.getState().nodesMap.get(nodeId)
   }, [storeApi])
 
-  const handleNewChild = useCallback(async (nodeId: string, position?: { x: number; y: number }) => {
-    const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
-    if (!name?.trim()) return
+  const handleNewChild = useCallback(async (position?: { x: number; y: number }) => {
     logAction('节点:创建', 'useNodeActions', { 
-      nodeId, nodeName: name.trim(), 
-      source: nodeId ? 'context-menu' : 'pane-context-menu', 
+      nodeName: '新节点',
+      source: 'pane-context-menu',
       position 
     })
-    await graph.createChildNode(name.trim(), nodeId || undefined, position)
+    await graph.createChildNode('新节点', undefined, position, { editTitle: true })
     onAction?.()
-  }, [graph, onAction, prompt])
-
-  const handleRename = useCallback(async (nodeId: string) => {
-    const node = findNodeById(nodeId)
-    if (!node) return
-    const newName = await prompt({ title: '请输入新名称', placeholder: '节点名称', defaultValue: node.data.label })
-    if (!newName?.trim() || newName === node.data.label) return
-    logAction('节点:重命名', 'useNodeActions', { nodeId, oldName: node.data.label, newName: newName.trim(), source: 'context-menu' })
-    await graph.renameNode(nodeId, newName.trim())
-    onAction?.()
-  }, [findNodeById, graph, onAction, prompt])
+  }, [graph, onAction])
 
   const confirmAndDeleteNode = useCallback(async (nodeId: string) => {
     const node = findNodeById(nodeId)
     if (!node) return false
-    const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除`, defaultValue: node.data.label })
-    if (!confirmed?.trim() || confirmed !== node.data.label) return false
+    const confirmed = await confirm({ title: '删除节点', message: `将删除节点「${node.data.label}」。此操作不可撤销。` })
+    if (!confirmed) return false
     logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, source: 'context-menu' })
     await graph.deleteChildNode(nodeId)
     return true
-  }, [findNodeById, graph, prompt])
+  }, [confirm, findNodeById, graph])
+
+  const handleEnterNode = useCallback(async (nodeId: string) => {
+    const node = findNodeById(nodeId)
+    if (!node) return
+    logAction('节点:进入', 'useNodeActions', { nodeId, label: node.data.label, source: 'context-menu' })
+    await graph.navigateToChildRoom(nodeId, node.data.label)
+    onAction?.()
+  }, [findNodeById, graph, onAction])
 
   const handleDelete = useCallback(async (nodeId: string) => {
     const deleted = await confirmAndDeleteNode(nodeId)
     if (deleted) onAction?.()
   }, [confirmAndDeleteNode, onAction])
 
-  const handleProperties = useCallback((nodeId: string) => {
-    graph.selectNode(nodeId)
-    logAction('节点:属性', 'useNodeActions', { nodeId })
-    onAction?.()
-  }, [graph, onAction])
-
   return {
     handleNewChild,
-    handleRename,
+    handleEnterNode,
     handleDelete,
     handleEdgeDelete,
     handleEdgeStyle,
-    handleProperties,
   }
 }

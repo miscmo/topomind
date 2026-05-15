@@ -1,5 +1,5 @@
 import type { CardInfo, GraphMeta, KBEdge } from './model'
-import type { EdgeLineMode, EdgeLineStyle, EdgeRelation, EdgeWeight } from '../../types'
+import type { EdgeLineMode, EdgeLineStyle, EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
 
 const DEFAULT_VIEWPORT = { zoom: 1, pan: { x: 0, y: 0 } }
 const DEFAULT_NODE_SIZE = { width: 120, height: 52 }
@@ -51,6 +51,21 @@ function normalizeCard(value: unknown, fallbackRef: string): CardInfo {
   }
 }
 
+function normalizeNodeStyle(value: unknown): KnowledgeNodeStyle | undefined {
+  if (!isRecord(value)) return undefined
+  const style: KnowledgeNodeStyle = {}
+  if (Number.isFinite(value.headerFontSize)) style.headerFontSize = value.headerFontSize as number
+  if (Number.isFinite(value.bodyFontSize)) style.bodyFontSize = value.bodyFontSize as number
+  if (typeof value.headerColor === 'string') style.headerColor = value.headerColor
+  if (typeof value.headerBackgroundColor === 'string') style.headerBackgroundColor = value.headerBackgroundColor
+  if (value.headerFontWeight === 'normal' || value.headerFontWeight === 'bold') style.headerFontWeight = value.headerFontWeight
+  if (value.headerFontStyle === 'normal' || value.headerFontStyle === 'italic') style.headerFontStyle = value.headerFontStyle
+  if (typeof value.borderColor === 'string') style.borderColor = value.borderColor
+  if (Number.isFinite(value.borderWidth)) style.borderWidth = value.borderWidth as number
+  if (Number.isFinite(value.borderRadius)) style.borderRadius = value.borderRadius as number
+  return Object.keys(style).length > 0 ? style : undefined
+}
+
 export function normalizeGraphMeta(input: unknown): GraphMeta {
   const raw = isRecord(input) ? input : {}
   const rawNodes = isRecord(raw.nodes) ? raw.nodes : {}
@@ -70,6 +85,7 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
         ? normalizePoint(rawNode.position, { x: 0, y: 0 })
         : undefined,
       color: typeof rawNode.color === 'string' ? rawNode.color : undefined,
+      style: normalizeNodeStyle(rawNode.style),
     }
   }
 

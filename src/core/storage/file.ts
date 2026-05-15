@@ -1,7 +1,7 @@
 import { FSB } from '../fs-backend'
 import type { StorageBackend } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
-import type { EdgeRelation, EdgeWeight } from '../../types'
+import type { EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
 
 interface FSBGraphChild {
@@ -10,6 +10,7 @@ interface FSBGraphChild {
   y?: number
   width?: number
   height?: number
+  style?: KnowledgeNodeStyle
 }
 
 interface FSBGraphEdge {
@@ -80,6 +81,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
       position: Number.isFinite(child.x) && Number.isFinite(child.y)
         ? { x: child.x as number, y: child.y as number }
         : undefined,
+      style: child.style,
     }
   }
 
@@ -132,6 +134,7 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
       y: node.position?.y,
       width: node.width,
       height: node.height,
+      style: node.style,
     }
   }
 

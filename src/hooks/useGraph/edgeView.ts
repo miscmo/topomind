@@ -12,7 +12,7 @@ export interface EdgeViewOptions {
 }
 
 export function buildEdgeView(options: EdgeViewOptions = {}): Pick<KnowledgeEdge, 'type' | 'animated' | 'style' | 'markerEnd'> {
-  const lineMode = options.lineMode ?? 'smoothstep'
+  const lineMode = options.lineMode ?? 'straight'
   const lineStyle = options.lineStyle ?? 'solid'
   const color = options.color ?? DEFAULT_EDGE_COLOR
   const arrow = options.arrow ?? true

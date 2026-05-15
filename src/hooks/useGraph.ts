@@ -10,7 +10,7 @@
  * - React Flow event handlers
  * - room navigation
  */
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
 import { useGraphUiStore } from '../stores/graphUiStore'
 import { useRightPanelStore } from '../stores/rightPanelStore'
@@ -30,12 +30,30 @@ export function useGraph(tabId: string) {
   const storage = useStorage() as Store
 
   const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
+  const setDefaultEdgeStyle = useGraphUiStore((s) => s.setDefaultEdgeStyle)
+  const setDefaultNodeStyle = useGraphUiStore((s) => s.setDefaultNodeStyle)
+  const setNodeSizeLimits = useGraphUiStore((s) => s.setNodeSizeLimits)
+  const setNodeBadgeSize = useGraphUiStore((s) => s.setNodeBadgeSize)
   const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
   const setRightPanelTab = useRightPanelStore((s) => s.setRightPanelTab)
 
   const isCreatingRef = useRef(false)
 
   const getActiveGraphSession = useCallback(() => tabStore.getState().getGraphSession(tabId), [tabId])
+
+  useEffect(() => {
+    let active = true
+    storage.readConfig().then((config) => {
+      if (!active) return
+      if (config.defaultEdgeStyle) setDefaultEdgeStyle(config.defaultEdgeStyle)
+      if (config.defaultNodeStyle) setDefaultNodeStyle(config.defaultNodeStyle)
+      if (config.nodeSizeLimits) setNodeSizeLimits(config.nodeSizeLimits)
+      if (typeof config.nodeBadgeSize === 'number') setNodeBadgeSize(config.nodeBadgeSize)
+    })
+    return () => {
+      active = false
+    }
+  }, [storage, setDefaultEdgeStyle, setDefaultNodeStyle, setNodeBadgeSize, setNodeSizeLimits])
 
   const { loadRoom } = useGraphRoomLoader({
     storage,
@@ -109,6 +127,7 @@ export function useGraph(tabId: string) {
     createChildNode: ops.createChildNode,
     deleteChildNode: ops.deleteChildNode,
     renameNode: ops.renameNode,
+    updateNodeStyle: ops.updateNodeStyle,
     selectNode: ops.selectNode,
     deselectNode: ops.deselectNode,
     updateEdgeRelation: ops.updateEdgeRelation,
@@ -133,6 +152,7 @@ export function useGraph(tabId: string) {
     ops.createChildNode,
     ops.deleteChildNode,
     ops.renameNode,
+    ops.updateNodeStyle,
     ops.selectNode,
     ops.deselectNode,
     ops.updateEdgeRelation,

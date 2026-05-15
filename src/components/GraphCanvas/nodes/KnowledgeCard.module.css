@@ -13,8 +13,6 @@
   backdrop-filter: blur(8px);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
-  min-width: 120px;
-  min-height: 52px;
   width: 100%;
   height: 100%;
   box-sizing: border-box;
@@ -87,10 +85,10 @@
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   background: rgba(248, 250, 252, 0.8);
   border-bottom: 1px solid rgba(0, 0, 0, 0.03);
-  padding: 2px 4px;
+  padding: 0 1px;
   min-height: 18px;
   flex: 1;
   width: 100%;
@@ -100,7 +98,7 @@
 }
 
 .hasMarkdown .header {
-  padding: 1px 3px;
+  padding: 0 1px;
   flex: 0 0 auto;
 }
 
@@ -109,7 +107,7 @@
   font-size: 11px;
   font-weight: 600;
   color: #475569;
-  line-height: 1.1;
+  line-height: 1;
   word-break: break-all;
   white-space: nowrap;
   overflow: hidden;
@@ -144,9 +142,9 @@
 .controls {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0;
   flex-shrink: 0;
-  margin-left: 6px;
+  margin-left: 0;
   pointer-events: auto; /* 恢复内部按钮点击 */
 }
 
@@ -156,6 +154,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  line-height: 1;
+  flex-shrink: 0;
 }
 .docIcon svg {
   width: 10px;
@@ -174,7 +174,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 3px;
+  padding: 0;
+  line-height: 1;
+  box-sizing: border-box;
+  flex-shrink: 0;
   pointer-events: auto; /* 必须允许点击 */
   cursor: pointer;
   transition: transform 0.1s, background-color 0.15s;
@@ -201,6 +204,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
   pointer-events: auto;
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
@@ -231,7 +237,7 @@
 
 /* 针对 MarkdownViewer 内部样式的微调，压缩间距 */
 .markdown :global(.markdownBody) {
-  font-size: 12px;
+  font-size: var(--node-body-font-size, 12px);
   line-height: 1.32;
 }
 
@@ -285,7 +291,7 @@
   background: #fff;
   color: #1e293b;
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
-  font-size: 11px;
+  font-size: var(--node-body-font-size, 11px);
   line-height: 1.35;
   box-sizing: border-box;
 }

@@ -20,6 +20,9 @@ export interface GraphChild {
   name: string
   x?: number
   y?: number
+  width?: number
+  height?: number
+  style?: KnowledgeNodeStyle
 }
 
 /**
@@ -79,6 +82,7 @@ export interface KnowledgeNodeData {
   childCount?: number
   /** 是否存在卡片摘要内容 */
   hasContent?: boolean
+  hasDetail?: boolean
   /** 选中状态 */
   selected?: boolean
   /** 悬停状态 */
@@ -89,8 +93,22 @@ export interface KnowledgeNodeData {
   expandedHeight?: number
   /** 作为连线目标高亮 */
   connectTarget?: boolean
+  nodeStyle?: KnowledgeNodeStyle
+  titleEditRequested?: boolean
   /** Index signature for React Flow Record<string, unknown> compatibility */
   [key: string]: unknown
+}
+
+export interface KnowledgeNodeStyle {
+  headerFontSize?: number
+  bodyFontSize?: number
+  headerColor?: string
+  headerBackgroundColor?: string
+  headerFontWeight?: 'normal' | 'bold'
+  headerFontStyle?: 'normal' | 'italic'
+  borderColor?: string
+  borderWidth?: number
+  borderRadius?: number
 }
 
 /** TopoMind 知识卡片节点 */

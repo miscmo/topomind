@@ -8,6 +8,7 @@ export type { GraphChild, GraphEdge, GraphMeta } from './graph'
 export type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from './graph'
 export type {
   KnowledgeNodeData,
+  KnowledgeNodeStyle,
   KnowledgeNode,
   KnowledgeEdge,
 } from './graph'

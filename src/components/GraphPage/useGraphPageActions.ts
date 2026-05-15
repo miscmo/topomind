@@ -20,11 +20,10 @@ export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
   })
   const {
     handleNewChild,
-    handleRename,
+    handleEnterNode,
     handleDelete,
     handleEdgeDelete,
     handleEdgeStyle,
-    handleProperties,
   } = useNodeActions({ graph })
 
   const closeContextMenu = useCallback(() => {
@@ -72,9 +71,9 @@ export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
     })
   }, [])
 
-  const handleContextMenuNewChild = useCallback((nodeId: string, position?: { x: number; y: number }) => {
+  const handleContextMenuNewChild = useCallback((position?: { x: number; y: number }) => {
     const flowPosition = position ? screenToFlowPosition(position) : undefined
-    handleNewChild(nodeId, flowPosition)
+    handleNewChild(flowPosition)
   }, [handleNewChild, screenToFlowPosition])
 
   const handleCanvasEdgeContextMenu = useCallback((edgeId: string, event: React.MouseEvent) => {
@@ -95,11 +94,10 @@ export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
       type: contextMenu.type,
       targetId: contextMenu.targetId,
       onNewChild: handleContextMenuNewChild,
-      onRename: handleRename,
+      onEnterNode: handleEnterNode,
       onDelete: handleDelete,
       onEdgeDelete: handleEdgeDelete,
       onEdgeStyle: handleEdgeStyle,
-      onProperties: handleProperties,
       onClose: closeContextMenu,
     },
   }

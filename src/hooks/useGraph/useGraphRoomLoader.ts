@@ -23,9 +23,16 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
   const latestAppliedLoadSeqRef = useRef(0)
 
   const loadRoom = useCallback(
-    async (dirPath: string) => {
+    async (dirPath: string, preserveCurrentNodeLayout = false) => {
       const requestSeq = ++loadRequestSeqRef.current
       const store = storeApi.getState()
+      const currentNodeLayout = preserveCurrentNodeLayout
+        ? new Map(store.nodes.map((node) => [node.id, {
+            position: node.position,
+            width: node.width,
+            height: node.height,
+          }]))
+        : null
       store.setLoading(true)
 
       try {
@@ -40,7 +47,19 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
         }
 
         latestAppliedLoadSeqRef.current = requestSeq
-        store.setGraph(loaded.nodes, loaded.edges, {
+        const nextNodes = currentNodeLayout
+          ? loaded.nodes.map((node) => {
+              const current = currentNodeLayout.get(node.id)
+              if (!current) return node
+              return {
+                ...node,
+                position: current.position,
+                width: current.width ?? node.width,
+                height: current.height ?? node.height,
+              }
+            })
+          : loaded.nodes
+        store.setGraph(nextNodes, loaded.edges, {
           x: loaded.meta.viewport.pan.x,
           y: loaded.meta.viewport.pan.y,
           zoom: loaded.meta.viewport.zoom,

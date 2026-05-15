@@ -9,7 +9,21 @@ import { SaveCoordinator } from '../../domain/persistence/saveCoordinator'
 import { normalizeGraphMeta } from '../../domain/graph/normalizeGraphMeta'
 
 interface VaultConfig {
+  edgeDefaultsVersion?: number
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
+  defaultNodeStyle?: {
+    headerFontSize?: number
+    bodyFontSize?: number
+    headerColor?: string
+    headerBackgroundColor?: string
+    headerFontWeight?: 'normal' | 'bold'
+    headerFontStyle?: 'normal' | 'italic'
+    borderColor?: string
+    borderWidth?: number
+    borderRadius?: number
+  }
+  nodeSizeLimits?: { minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number }
+  nodeBadgeSize?: number
   kbCovers?: Record<string, string>
   kbOrder?: string[]
   [key: string]: unknown
@@ -46,9 +60,18 @@ export interface StorageBackend {
 }
 
 function normalizeName(name: unknown): string { return String(name || '').trim() }
+function finiteNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
 function normalizeConfig(configRaw: unknown): VaultConfig {
   const c = (configRaw && typeof configRaw === 'object' && !Array.isArray(configRaw)) ? configRaw as Record<string, unknown> : {}
   const s = (c.defaultEdgeStyle && typeof c.defaultEdgeStyle === 'object' && !Array.isArray(c.defaultEdgeStyle)) ? c.defaultEdgeStyle as Record<string, unknown> : {}
+  const ns = (c.defaultNodeStyle && typeof c.defaultNodeStyle === 'object' && !Array.isArray(c.defaultNodeStyle)) ? c.defaultNodeStyle as Record<string, unknown> : {}
+  const limits = (c.nodeSizeLimits && typeof c.nodeSizeLimits === 'object' && !Array.isArray(c.nodeSizeLimits)) ? c.nodeSizeLimits as Record<string, unknown> : {}
+  const edgeDefaultsVersion = c.edgeDefaultsVersion === 2 ? 2 : undefined
   
   const covers = (c.kbCovers && typeof c.kbCovers === 'object' && !Array.isArray(c.kbCovers)) ? c.kbCovers as Record<string, unknown> : {}
   const kbCovers: Record<string, string> = {}
@@ -57,14 +80,37 @@ function normalizeConfig(configRaw: unknown): VaultConfig {
   }
 
   const kbOrder = Array.isArray(c.kbOrder) ? c.kbOrder.filter(item => typeof item === 'string') : undefined
+  const minWidth = Math.max(1, finiteNumber(limits.minWidth, 120))
+  const minHeight = Math.max(1, finiteNumber(limits.minHeight, 52))
+  const maxWidth = Math.max(minWidth, finiteNumber(limits.maxWidth, 640))
+  const maxHeight = Math.max(minHeight, finiteNumber(limits.maxHeight, 480))
 
   return {
+    edgeDefaultsVersion: 2,
     defaultEdgeStyle: {
-      lineMode: s.lineMode === 'straight' ? 'straight' : 'smoothstep',
+      lineMode: edgeDefaultsVersion === 2 && s.lineMode === 'smoothstep' ? 'smoothstep' : 'straight',
       lineStyle: s.lineStyle === 'dashed' ? 'dashed' : 'solid',
       color: typeof s.color === 'string' ? s.color : '#7f8c8d',
-      arrow: typeof s.arrow === 'boolean' ? s.arrow : true,
+      arrow: edgeDefaultsVersion === 2 && typeof s.arrow === 'boolean' ? s.arrow : true,
     },
+    defaultNodeStyle: {
+      headerFontSize: clampNumber(finiteNumber(ns.headerFontSize, 11), 8, 28),
+      bodyFontSize: clampNumber(finiteNumber(ns.bodyFontSize, 12), 8, 24),
+      headerColor: typeof ns.headerColor === 'string' ? ns.headerColor : '#475569',
+      headerBackgroundColor: typeof ns.headerBackgroundColor === 'string' ? ns.headerBackgroundColor : '#f8fafc',
+      headerFontWeight: ns.headerFontWeight === 'bold' ? 'bold' : 'normal',
+      headerFontStyle: ns.headerFontStyle === 'italic' ? 'italic' : 'normal',
+      borderColor: typeof ns.borderColor === 'string' ? ns.borderColor : '#e2e8f0',
+      borderWidth: clampNumber(finiteNumber(ns.borderWidth, 1), 0, 8),
+      borderRadius: clampNumber(finiteNumber(ns.borderRadius, 8), 0, 32),
+    },
+    nodeSizeLimits: {
+      minWidth,
+      minHeight,
+      maxWidth,
+      maxHeight,
+    },
+    nodeBadgeSize: clampNumber(finiteNumber(c.nodeBadgeSize, 14), 8, 28),
     kbCovers,
     kbOrder,
   }
@@ -228,6 +274,15 @@ export function createStore(backend: StorageBackend) {
         const nextConfig = { ...cachedConfig, ...config }
         if (config.defaultEdgeStyle) {
           nextConfig.defaultEdgeStyle = { ...cachedConfig.defaultEdgeStyle, ...config.defaultEdgeStyle }
+        }
+        if (config.defaultNodeStyle) {
+          nextConfig.defaultNodeStyle = { ...cachedConfig.defaultNodeStyle, ...config.defaultNodeStyle }
+        }
+        if (config.nodeSizeLimits) {
+          nextConfig.nodeSizeLimits = { ...cachedConfig.nodeSizeLimits, ...config.nodeSizeLimits }
+        }
+        if (config.nodeBadgeSize !== undefined) {
+          nextConfig.nodeBadgeSize = config.nodeBadgeSize
         }
         if (config.kbCovers !== undefined) {
           nextConfig.kbCovers = config.kbCovers
