@@ -118,6 +118,22 @@
   user-select: none;
 }
 
+.titleInput {
+  min-width: 0;
+  height: 18px;
+  padding: 0 3px;
+  border: 1px solid #3b82f6;
+  border-radius: 4px;
+  background: #fff;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.1;
+  outline: none;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
 /* 折叠状态下标题居中 */
 .node:not(.hasMarkdown) .header {
   border-bottom-left-radius: 8px; /* 折叠时整个 header 都是圆角 */
@@ -206,6 +222,11 @@
   border-bottom-left-radius: 8px; /* 展开时下部圆角 */
   border-bottom-right-radius: 8px;
   background: rgba(255, 255, 255, 0.98); /* 补充背景，避免父级溢出透明 */
+  user-select: none;
+}
+
+.interactiveMarkdown {
+  user-select: text;
 }
 
 /* 针对 MarkdownViewer 内部样式的微调，压缩间距 */
@@ -231,6 +252,163 @@
 .markdown :global(.markdownBody h6) {
   margin-top: 3px;
   margin-bottom: 2px;
+}
+
+.interactiveMarkdown :global(img),
+.interactiveMarkdown :global(svg) {
+  cursor: zoom-in;
+}
+
+.interactiveMarkdown :global(a) {
+  cursor: pointer;
+}
+
+.markdownEditor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.markdownTextarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 5px 6px;
+  background: #fff;
+  color: #1e293b;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  box-sizing: border-box;
+}
+
+.markdownEditorBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 3px 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  color: #64748b;
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.markdownEditorActions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.markdownEditorActions button {
+  height: 16px;
+  padding: 0 5px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #475569;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.markdownEditorActions button:hover {
+  border-color: #3b82f6;
+  color: #2563eb;
+}
+
+.previewOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.previewPanel {
+  display: flex;
+  flex-direction: column;
+  max-width: min(92vw, 1280px);
+  max-height: 92vh;
+  min-width: min(480px, 90vw);
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.previewHeader button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.previewHeader button:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.previewBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  background: #f8fafc;
+  text-align: center;
+}
+
+.previewBody img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(92vh - 74px);
+  margin: 0 auto;
+  border-radius: 8px;
+}
+
+.previewSvg {
+  display: inline-block;
+  min-width: 100%;
+  padding: 16px;
+  border-radius: 8px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.previewSvg svg {
+  max-width: none;
+  height: auto;
 }
 
 /* 进一步精简滚动条 */
