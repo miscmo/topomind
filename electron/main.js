@@ -208,11 +208,6 @@ function registerIPC() {
       return { ok: false, cancelled: !!guardResult.cancelled };
     }
 
-    if (monitorWin && !monitorWin.isDestroyed()) {
-      monitorWin.destroy();
-      monitorWin = null;
-    }
-
     LogService.clear();
     resetMainWindowToSetup();
     return { ok: true };
@@ -244,7 +239,6 @@ function registerIPC() {
 // APP LIFECYCLE
 // ============================================================
 var win = null;
-var monitorWin = null;
 
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('disable-software-rasterizer');
@@ -295,58 +289,9 @@ function createWindow() {
   });
 }
 
-function createMonitorWindow() {
-  LogService.write({
-    level: 'INFO', module: 'Main', action: 'monitor:will-open',
-    message: '即将打开日志监控窗口',
-  });
-  if (monitorWin && !monitorWin.isDestroyed()) {
-    monitorWin.focus();
-    LogService.write({
-      level: 'INFO', module: 'Main', action: 'monitor:focus-existing',
-      message: '聚焦已有监控窗口',
-    });
-    return;
-  }
-  monitorWin = new BrowserWindow({
-    width: 1200, height: 700, minWidth: 800, minHeight: 500,
-    title: '日志性能监控 - TopoMind',
-    webPreferences: {
-      preload: nodePath.join(DIST_ELECTRON_DIR, 'preload.js'),
-      nodeIntegration: false, contextIsolation: true,
-    },
-  });
-  var monitorUrl = IS_DEV
-    ? process.env.VITE_DEV_SERVER_URL + '#/monitor'
-    : 'file://' + nodePath.join(DIST_RENDERER_DIR, 'index.html') + '#/monitor';
-  monitorWin.loadURL(monitorUrl);
-  LogService.write({
-    level: 'INFO', module: 'Main', action: 'monitor:created',
-    message: '监控窗口已创建', params: { url: monitorUrl },
-  });
-  monitorWin.on('closed', function() {
-    LogService.write({
-      level: 'INFO', module: 'Main', action: 'monitor:closed',
-      message: '监控窗口已关闭',
-    });
-    monitorWin = null;
-  });
-}
-
 function toggleMonitorWindow() {
-  if (monitorWin && !monitorWin.isDestroyed()) {
-    LogService.write({
-      level: 'INFO', module: 'Main', action: 'monitor:close-toggled',
-      message: '关闭监控窗口',
-    });
-    monitorWin.close();
-    monitorWin = null;
-  } else {
-    LogService.write({
-      level: 'INFO', module: 'Main', action: 'monitor:open-toggled',
-      message: '创建监控窗口',
-    });
-    createMonitorWindow();
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('app:menu-action', 'open-monitor');
   }
 }
 
@@ -405,9 +350,6 @@ let _isQuittingAfterFlush = false;
 
 app.on('before-quit', async function(event) {
   if (_isQuittingAfterFlush) {
-    if (monitorWin && !monitorWin.isDestroyed()) {
-      monitorWin.destroy();
-    }
     return;
   }
 

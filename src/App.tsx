@@ -20,10 +20,6 @@ import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
 
 export default memo(function App() {
-  const [isMonitorWindow, setIsMonitorWindow] = useState(
-    typeof window !== 'undefined' && window.location.hash === '#/monitor'
-  )
-
   const initHomeTab = useTabStore((s) => s.initHomeTab)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
@@ -41,9 +37,15 @@ export default memo(function App() {
   }, [])
 
   useEffect(() => {
-    const handleHashChange = () => setIsMonitorWindow(window.location.hash === '#/monitor')
-    window.addEventListener('hashchange', handleHashChange)
-    return () => window.removeEventListener('hashchange', handleHashChange)
+    function onMenuAction(action: string) {
+      if (action === 'open-monitor') {
+        useTabStore.getState().openMonitorTab()
+      }
+    }
+    window.electronAPI?.on('app:menu-action', onMenuAction)
+    return () => {
+      window.electronAPI?.off('app:menu-action', onMenuAction)
+    }
   }, [])
 
   async function handleCloseTab(tabId: string) {
@@ -52,8 +54,6 @@ export default memo(function App() {
 
     logAction('Tab:关闭', 'App', { tab })
   }
-
-  if (isMonitorWindow) return <MonitorPage />
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const isSetup = view === 'setup'
@@ -85,6 +85,20 @@ export default memo(function App() {
               }}
             >
               <HomePage />
+            </div>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                visibility: activeTab?.type === 'monitor' ? 'visible' : 'hidden',
+                opacity: activeTab?.type === 'monitor' ? 1 : 0,
+                pointerEvents: activeTab?.type === 'monitor' ? 'auto' : 'none',
+                transition: 'opacity 120ms ease',
+                background: '#fff',
+                zIndex: activeTab?.type === 'monitor' ? 10 : 1,
+              }}
+            >
+              {tabs.some(t => t.type === 'monitor') && <MonitorPage />}
             </div>
             {tabs.filter(t => t.type === 'kb').map(tab => (
               <div

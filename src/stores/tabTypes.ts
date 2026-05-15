@@ -57,7 +57,13 @@ export interface KBTab {
   currentRoomName: string
 }
 
-export type Tab = HomeTab | KBTab
+export interface MonitorTab {
+  id: 'monitor'
+  type: 'monitor'
+  label: string
+}
+
+export type Tab = HomeTab | KBTab | MonitorTab
 
 export interface TabDataState {
   tabs: Tab[]
@@ -72,6 +78,7 @@ export interface TabLifecycleActions {
   activateTab: (tabId: string) => boolean
   openHomeTab: () => boolean
   openKnowledgeBase: (kb: OpenKnowledgeBaseInput) => boolean
+  openMonitorTab: () => void
   closeTab: (tabId: string) => ClosableTabInfo | null
   reset: () => void
 }

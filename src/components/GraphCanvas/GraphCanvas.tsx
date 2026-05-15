@@ -3,12 +3,16 @@ import { Background, ReactFlow, useReactFlow, type BackgroundVariant, type Edge,
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import { useGraphStore } from '../../stores/graphStore'
-import { useDoubleClick } from '../../hooks/useDoubleClick'
 import type { KnowledgeNode } from '../../types'
 import KnowledgeCard from './nodes/KnowledgeCard'
+import FloatingEdge from './edges/FloatingEdge'
 import Toolbar from '../Toolbar/Toolbar'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
+const edgeTypes = {
+  smoothstep: FloatingEdge,
+  straight: FloatingEdge,
+}
 
 interface GraphCanvasProps {
   onNodeContextMenu?: (nodeId: string, event: React.MouseEvent) => void
@@ -31,11 +35,10 @@ export default memo(function GraphCanvas({
   const [zoomLevel, setZoomLevel] = useState(1)
   const reactFlow = useReactFlow()
   const graph = useGraphContext()
-  const { handleClick: handlePaneClick } = useDoubleClick({
-    onClick: () => onCloseContextMenu?.(),
-    onDoubleClick: graph.onPaneClick,
-    onSingleClick: graph.onPaneClick,
-  })
+  const handlePaneClick = () => {
+    onCloseContextMenu?.()
+    graph.onPaneClick()
+  }
 
   const handleViewportChange = useCallback((viewport: Viewport) => {
     setZoomLevel(viewport.zoom)
@@ -88,6 +91,7 @@ export default memo(function GraphCanvas({
         edges={edges}
         // 注册自定义节点的组件类型
         nodeTypes={nodeTypes as NodeTypes}
+        edgeTypes={edgeTypes}
 
         // 拖动节点、选中节点、删除节点后的位置或状态更新
         onNodesChange={graph.onNodesChange}

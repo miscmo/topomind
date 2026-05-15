@@ -2,20 +2,15 @@ import { useCallback, useState } from 'react'
 import { useReactFlow } from '@xyflow/react'
 import { useNodeActions } from '../../hooks/useNodeActions'
 import { logAction } from '../../core/log-backend'
-import { useGraphUiStore } from '../../stores/graphUiStore'
-import { useRightPanelStore } from '../../stores/rightPanelStore'
 import type { ContextMenuState } from '../../stores/uiStoreTypes'
 import type { GraphContextValue } from '../../contexts/GraphContext'
 
 interface UseGraphPageActionsOptions {
-  tabId: string
   graph: GraphContextValue
 }
 
-export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions) {
+export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
   const { screenToFlowPosition } = useReactFlow()
-  const setRightPanelTab = useRightPanelStore((s) => s.setRightPanelTab)
-  const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
     x: 0,
@@ -24,8 +19,6 @@ export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions
     targetId: null,
   })
   const {
-    deleteSelectedNode,
-    addChildNode,
     handleNewChild,
     handleRename,
     handleDelete,
@@ -87,17 +80,6 @@ export function useGraphPageActions({ tabId, graph }: UseGraphPageActionsOptions
   const handleCanvasEdgeContextMenu = useCallback((edgeId: string, event: React.MouseEvent) => {
     openEdgeMenu(edgeId, event)
   }, [openEdgeMenu])
-
-  useKeyboard({
-    tabId,
-    onDelete: (nodeId: string) => {
-      deleteSelectedNode(nodeId)
-    },
-    onAddChild: (parentId: string) => {
-      addChildNode(parentId)
-    },
-    onEscape: closeContextMenu,
-  })
 
   return {
     canvasProps: {

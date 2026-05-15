@@ -12,8 +12,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* 更轻的阴影 */
   backdrop-filter: blur(8px);
   cursor: pointer;
-  /* 移除边框颜色的渐变过渡，实现选中时立刻变色 */
-  transition: box-shadow 0.15s;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
   min-width: 120px;
   min-height: 52px;
   width: 100%;
@@ -44,10 +43,18 @@
 }
 
 
-/* 悬停状态 - 仅加深边框，不放大 */
+/* 悬停状态 - 提供轻微上浮和高亮反馈 */
+.node:hover:not(.selected):not(.connectTarget),
 .hovered {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+  border-color: #94a3b8;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1) !important;
+  transform: translateY(-1px);
+}
+
+.node:hover:not(.selected):not(.connectTarget) .label,
+.hovered .label {
+  background: rgba(241, 245, 249, 0.95);
+  color: #334155;
 }
 
 .dragging {
@@ -158,6 +165,14 @@
   background: #555;
   border: 2px solid #fff;
   z-index: 1;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+/* 仅在节点被选中或作为连线目标时显示连接手柄 */
+.selected .handle,
+.connectTarget .handle {
+  opacity: 1;
 }
 
 .resizeHandle {

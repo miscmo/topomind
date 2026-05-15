@@ -35,6 +35,22 @@ export function appendKBTab(tabs: Tab[], tab: { id: string; label: string; kbPat
   return [...tabs, createKBTab(tab)]
 }
 
+export function ensureMonitorTab(tabs: Tab[]) {
+  if (tabs.some((tab) => tab.id === 'monitor')) return tabs
+  
+  const homeIdx = tabs.findIndex(t => t.id === 'home')
+  const newTabs = [...tabs]
+  const monitorTab: Tab = { id: 'monitor', type: 'monitor', label: '系统日志' }
+  
+  if (homeIdx !== -1) {
+    newTabs.splice(homeIdx + 1, 0, monitorTab)
+  } else {
+    newTabs.push(monitorTab)
+  }
+  
+  return newTabs
+}
+
 export function removeTabById(tabs: Tab[], activeTabId: string, tabId: string) {
   if (tabId === 'home') return { tabs, activeTabId }
 

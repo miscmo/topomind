@@ -18,7 +18,7 @@ interface GraphPageProps {
 
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const { graphSession, graph } = useGraphPageController({ tabId })
-  const { canvasProps, contextMenuProps } = useGraphPageActions({ tabId, graph })
+  const { canvasProps, contextMenuProps } = useGraphPageActions({ graph })
 
   return (
     <GraphContextProvider graph={graph}>

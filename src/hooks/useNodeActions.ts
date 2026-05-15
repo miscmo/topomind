@@ -1,7 +1,7 @@
 /**
  * useNodeActions — Node/edge action handlers
  *
- * Handles context-menu and keyboard-triggered node/edge operations.
+ * Handles context-menu node/edge operations.
  *
  * NOTE: Use nodesMapRef/edgesMapRef (O(1) lookup) instead of nodesRef/edgesRef
  * arrays because refs are recreated on every context re-creation (after setState),
@@ -56,18 +56,18 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     onAction?.()
   }, [findNodeById, graph, onAction, prompt])
 
-  const confirmAndDeleteNode = useCallback(async (nodeId: string, source: 'context-menu' | 'keyboard-delete') => {
+  const confirmAndDeleteNode = useCallback(async (nodeId: string) => {
     const node = findNodeById(nodeId)
     if (!node) return false
     const confirmed = await prompt({ title: '确认删除', placeholder: `输入 "${node.data.label}" 确认删除`, defaultValue: node.data.label })
     if (!confirmed?.trim() || confirmed !== node.data.label) return false
-    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, source })
+    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, source: 'context-menu' })
     await graph.deleteChildNode(nodeId)
     return true
   }, [findNodeById, graph, prompt])
 
   const handleDelete = useCallback(async (nodeId: string) => {
-    const deleted = await confirmAndDeleteNode(nodeId, 'context-menu')
+    const deleted = await confirmAndDeleteNode(nodeId)
     if (deleted) onAction?.()
   }, [confirmAndDeleteNode, onAction])
 
@@ -77,19 +77,6 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     onAction?.()
   }, [graph, onAction])
 
-  /** Delete selected node — used by keyboard shortcut */
-  const deleteSelectedNode = useCallback(async (nodeId: string) => {
-    await confirmAndDeleteNode(nodeId, 'keyboard-delete')
-  }, [confirmAndDeleteNode])
-
-  /** Add child node — used by keyboard Tab shortcut */
-  const addChildNode = useCallback(async (parentId: string) => {
-    const name = await prompt({ title: '请输入新节点名称', placeholder: '节点名称' })
-    if (!name?.trim()) return
-    logAction('节点:创建', 'useNodeActions', { nodeId: parentId, nodeName: name.trim(), source: 'keyboard-tab' })
-    await graph.createChildNode(name.trim(), parentId)
-  }, [graph, prompt])
-
   return {
     handleNewChild,
     handleRename,
@@ -97,7 +84,5 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     handleEdgeDelete,
     handleEdgeStyle,
     handleProperties,
-    deleteSelectedNode,
-    addChildNode,
   }
 }

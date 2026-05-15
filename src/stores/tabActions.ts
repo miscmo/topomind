@@ -3,6 +3,7 @@ import { enterRoom, goBack, navigateToHistoryIndex, restoreRoomState } from './t
 import {
   appendKBTab,
   ensureHomeTab,
+  ensureMonitorTab,
   findActiveTab,
   findTabById,
   getClosableTabInfo,
@@ -81,6 +82,12 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
       get().restoreRoomStateToTab(tabId, snapshot)
       set({ activeTabId: tabId })
       return true
+    },
+    openMonitorTab: () => {
+      set((state) => ({
+        tabs: ensureMonitorTab(state.tabs),
+        activeTabId: 'monitor',
+      }))
     },
     closeTab: (tabId) => {
       const tabInfo = getClosableTabInfo(findTabById(get().tabs, tabId))
