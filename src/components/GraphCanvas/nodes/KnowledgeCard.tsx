@@ -10,6 +10,7 @@ import type { KnowledgeNode } from '../../../types'
 import { useStorage } from '../../../core/storage'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
 import { useCardContentStore } from '../../../stores/cardContentStore'
+import { useGraphUiStore } from '../../../stores/graphUiStore'
 import MarkdownViewer from '../../MarkdownViewer'
 import styles from './KnowledgeCard.module.css'
 
@@ -23,6 +24,8 @@ function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProp
   const nodeHeight = height ?? 52
   const shouldShowMarkdown = nodeWidth >= MARKDOWN_MIN_WIDTH && nodeHeight >= MARKDOWN_MIN_HEIGHT
   const visuallySelected = selected || isPressed
+  const connectingSourceId = useGraphUiStore((state) => state.connectingSourceId)
+  const isConnectTarget = !!connectingSourceId && connectingSourceId !== id
   const cardPath = useMemo(() => {
     const parent = typeof data.parent === 'string' ? data.parent : ''
     return resolveRoomChildRef(parent, id)
@@ -47,7 +50,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProp
         shouldShowMarkdown ? 'nowheel' : '',
         visuallySelected ? styles.selected : '',
         data.hovered ? styles.hovered : '',
-        data.connectTarget ? styles.connectTarget : '',
+        isConnectTarget ? styles.connectTarget : '',
         dragging ? styles.dragging : '',
       ].filter(Boolean).join(' ')}
       style={{

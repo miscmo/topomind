@@ -37,7 +37,8 @@ export default memo(function App() {
   }, [])
 
   useEffect(() => {
-    function onMenuAction(action: string) {
+    function onMenuAction(...args: unknown[]) {
+      const action = args[0]
       if (action === 'open-monitor') {
         useTabStore.getState().openMonitorTab()
       }

@@ -12,6 +12,34 @@ export interface EdgeOperationsDeps {
   storeApi: StoreApi<GraphState>
 }
 
+function withEdgeSelection(edge: KnowledgeEdge, selected: boolean): KnowledgeEdge {
+  const color = edge.data?.color ?? '#7f8c8d'
+  const lineStyle = edge.data?.lineStyle ?? 'solid'
+  const arrow = edge.data?.arrow ?? true
+  const weight = edge.data?.weight ?? 'minor'
+
+  return {
+    ...edge,
+    ...buildEdgeView({
+      lineMode: edge.data?.lineMode,
+      lineStyle,
+      color,
+      arrow,
+      weight,
+      selected,
+    }),
+    data: {
+      ...edge.data,
+      relation: edge.data?.relation ?? '相关',
+      weight,
+      color,
+      lineStyle,
+      arrow,
+      selected,
+    },
+  } as KnowledgeEdge
+}
+
 export function buildEdgeOperations(deps: EdgeOperationsDeps) {
   const {
     getActiveGraphSession,
@@ -96,17 +124,35 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     const store = storeApi.getState()
-    store.setEdges(store.edges.map((e) => {
+    const shouldPersist =
+      style.lineMode !== undefined ||
+      style.lineStyle !== undefined ||
+      style.color !== undefined ||
+      style.arrow !== undefined
+    let changed = false
+    const nextEdges = store.edges.map((e) => {
       if (e.id !== edgeId) return e
+      const currentSelected = e.data?.selected ?? false
       const nextColor = style.color ?? e.data?.color ?? '#7f8c8d'
       const nextLineStyle = style.lineStyle ?? e.data?.lineStyle ?? 'solid'
+      const nextLineMode = style.lineMode ?? e.data?.lineMode
       const nextArrow = style.arrow ?? e.data?.arrow ?? true
       const nextWeight = e.data?.weight ?? 'minor'
-      const nextSelected = style.selected ?? false
+      const nextSelected = style.selected ?? currentSelected
+      if (
+        nextLineMode === e.data?.lineMode &&
+        nextLineStyle === (e.data?.lineStyle ?? 'solid') &&
+        nextColor === (e.data?.color ?? '#7f8c8d') &&
+        nextArrow === (e.data?.arrow ?? true) &&
+        nextSelected === currentSelected
+      ) {
+        return e
+      }
+      changed = true
       return {
         ...e,
         ...buildEdgeView({
-          lineMode: style.lineMode ?? e.data?.lineMode,
+          lineMode: nextLineMode,
           lineStyle: nextLineStyle,
           color: nextColor,
           arrow: nextArrow,
@@ -124,9 +170,23 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
           selected: nextSelected,
         },
       } as KnowledgeEdge
-    }))
-    if (currentRoomPath) await saveNow(currentRoomPath)
-    logAction('连线:更新样式', 'graphOperations', { edgeId, ...style })
+    })
+    if (!changed) return
+    store.setEdges(nextEdges)
+    if (currentRoomPath && shouldPersist) await saveNow(currentRoomPath)
+    if (shouldPersist) logAction('连线:更新样式', 'graphOperations', { edgeId, ...style })
+  }
+
+  const setSelectedEdgeInGraph = (edgeId: string | null) => {
+    const store = storeApi.getState()
+    let changed = false
+    const nextEdges = store.edges.map((edge) => {
+      const nextSelected = edgeId !== null && edge.id === edgeId
+      if ((edge.data?.selected ?? false) === nextSelected) return edge
+      changed = true
+      return withEdgeSelection(edge, nextSelected)
+    })
+    if (changed) store.setEdges(nextEdges)
   }
 
   return {
@@ -134,5 +194,6 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     deleteEdge,
     updateEdgeRelation,
     updateEdgeStyle,
+    setSelectedEdgeInGraph,
   }
 }

@@ -10,6 +10,27 @@ export interface KBItem {
   coverUrl: string | null
 }
 
+const HOME_KB_IO_CONCURRENCY = 6
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
+  const workerCount = Math.min(limit, items.length)
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const index = nextIndex
+      nextIndex += 1
+      if (index >= items.length) return
+      results[index] = await mapper(items[index], index)
+    }
+  }))
+  return results
+}
+
 interface UseHomeKnowledgeBasesOptions {
   currentWorkDir: string | null
   setMessage: (message: string) => void
@@ -46,7 +67,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
         return a.name.localeCompare(b.name, 'zh-CN')
       })
 
-      const initial: KBItem[] = await Promise.all(kbList.map(async (kb) => {
+      const initial: KBItem[] = await mapWithConcurrency(kbList, HOME_KB_IO_CONCURRENCY, async (kb) => {
         let coverUrl = null
         if (kbCovers[kb.name]) {
           try {
@@ -60,11 +81,13 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
           nodeCount: null,
           coverUrl,
         }
-      }))
+      })
       setKbs(initial)
 
-      const counts = await Promise.all(
-        initial.map(async (kb) => {
+      const counts = await mapWithConcurrency(
+        initial,
+        HOME_KB_IO_CONCURRENCY,
+        async (kb) => {
           try {
             return await storage.countChildren(kb.name)
           } catch (err) {
@@ -75,7 +98,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
             })
             return 0
           }
-        })
+        }
       )
       setKbs(initial.map((kb, i) => ({ ...kb, nodeCount: counts[i] })))
       logAction('HomePage:子节点数量加载完成', 'HomePage', { totalNodes: counts.reduce((a, b) => a + b, 0) })

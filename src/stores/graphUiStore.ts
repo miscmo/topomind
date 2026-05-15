@@ -4,16 +4,19 @@ import type { DefaultEdgeStyle } from './uiStoreTypes'
 interface GraphUiStore {
   showGrid: boolean
   selectedEdgeId: string | null
+  connectingSourceId: string | null
   defaultEdgeStyle: DefaultEdgeStyle
   setSelectedEdgeId: (edgeId: string | null) => void
+  setConnectingSourceId: (nodeId: string | null) => void
   setDefaultEdgeStyle: (style: Partial<DefaultEdgeStyle>) => void
   replaceDefaultEdgeStyle: (style: DefaultEdgeStyle) => void
   resetGraphUi: () => void
 }
 
-export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEdgeId' | 'defaultEdgeStyle'> = {
+export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEdgeId' | 'connectingSourceId' | 'defaultEdgeStyle'> = {
   showGrid: true,
   selectedEdgeId: null,
+  connectingSourceId: null,
   defaultEdgeStyle: {
     lineMode: 'smoothstep',
     lineStyle: 'solid',
@@ -25,6 +28,7 @@ export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEd
 export const useGraphUiStore = create<GraphUiStore>((set) => ({
   ...GRAPH_UI_INITIAL_STATE,
   setSelectedEdgeId: (selectedEdgeId) => set({ selectedEdgeId }),
+  setConnectingSourceId: (connectingSourceId) => set({ connectingSourceId }),
   setDefaultEdgeStyle: (style) => set((state) => ({
     defaultEdgeStyle: { ...state.defaultEdgeStyle, ...style },
   })),

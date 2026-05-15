@@ -91,14 +91,11 @@ export function useGraph(tabId: string) {
 
   // ===== Public API =====
 
-  return {
-    // Room lifecycle
+  return useMemo(() => ({
     loadRoom,
     navigateBack: navigation.navigateBack,
     navigateToRoom: navigation.navigateToRoom,
     navigateToRoot: navigation.navigateToRoot,
-
-    // React Flow handlers
     onNodesChange: graphEvents.onNodesChange,
     onEdgesChange: graphEvents.onEdgesChange,
     onConnect: graphEvents.onConnect,
@@ -109,22 +106,37 @@ export function useGraph(tabId: string) {
     onPaneClick: graphEvents.onPaneClick,
     onNodeDoubleClick: graphEvents.onNodeDoubleClick,
     onNodeContextMenu: graphEvents.onNodeContextMenu,
-
-    // Node operations (delegated to ops)
     createChildNode: ops.createChildNode,
     deleteChildNode: ops.deleteChildNode,
     renameNode: ops.renameNode,
     selectNode: ops.selectNode,
     deselectNode: ops.deselectNode,
-
-    // Edge operations (delegated to ops)
     updateEdgeRelation: ops.updateEdgeRelation,
     updateEdgeStyle: ops.updateEdgeStyle,
-
-    // Persistence
     flushCurrentRoomSave,
-
-    // Stable refs
     isCreatingRef,
-  }
+  }), [
+    loadRoom,
+    navigation.navigateBack,
+    navigation.navigateToRoom,
+    navigation.navigateToRoot,
+    graphEvents.onNodesChange,
+    graphEvents.onEdgesChange,
+    graphEvents.onConnect,
+    graphEvents.onConnectStart,
+    graphEvents.onConnectEnd,
+    graphEvents.onNodeClick,
+    graphEvents.onEdgeClick,
+    graphEvents.onPaneClick,
+    graphEvents.onNodeDoubleClick,
+    graphEvents.onNodeContextMenu,
+    ops.createChildNode,
+    ops.deleteChildNode,
+    ops.renameNode,
+    ops.selectNode,
+    ops.deselectNode,
+    ops.updateEdgeRelation,
+    ops.updateEdgeStyle,
+    flushCurrentRoomSave,
+  ])
 }

@@ -16,11 +16,14 @@ export function buildSelectionOperations(deps: SelectionOpsDeps) {
 
   const selectNode = (nodeId: string) => {
     const store = storeApi.getState()
-    const nextNodes = store.nodes.map(n => ({
-      ...n,
-      selected: n.id === nodeId
-    }))
-    store.setNodes(nextNodes)
+    let changed = false
+    const nextNodes = store.nodes.map(n => {
+      const shouldSelect = n.id === nodeId
+      if ((n.selected ?? false) === shouldSelect) return n
+      changed = true
+      return { ...n, selected: shouldSelect }
+    })
+    if (changed) store.setNodes(nextNodes)
 
     logAction('节点:选中', 'graphOperations', {
       nodeId,
@@ -31,11 +34,13 @@ export function buildSelectionOperations(deps: SelectionOpsDeps) {
 
   const deselectNode = () => {
     const store = storeApi.getState()
+    let changed = false
     const nextNodes = store.nodes.map(n => {
       if (!n.selected) return n
+      changed = true
       return { ...n, selected: false }
     })
-    store.setNodes(nextNodes)
+    if (changed) store.setNodes(nextNodes)
   }
 
   return {

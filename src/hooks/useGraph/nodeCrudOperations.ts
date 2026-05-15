@@ -107,11 +107,13 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       await loadRoom(currentRoomPath)
       const isSelected = storeApi.getState().nodes.find(n => n.id === nodeId)?.selected
       if (isSelected) {
+        let changed = false
         const nextNodes = storeApi.getState().nodes.map(n => {
           if (!n.selected) return n
+          changed = true
           return { ...n, selected: false }
         })
-        storeApi.getState().setNodes(nextNodes)
+        if (changed) storeApi.getState().setNodes(nextNodes)
       }
       return true
     } catch (e) {

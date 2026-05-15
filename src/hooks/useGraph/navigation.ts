@@ -15,11 +15,13 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
 
   const clearSelection = () => {
     const store = storeApi.getState()
+    let changed = false
     const nextNodes = store.nodes.map(n => {
       if (!n.selected) return n
+      changed = true
       return { ...n, selected: false }
     })
-    store.setNodes(nextNodes)
+    if (changed) store.setNodes(nextNodes)
   }
 
   const navigateBack = async () => {

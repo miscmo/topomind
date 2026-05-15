@@ -33,27 +33,19 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   } = deps
 
   const resetConnectTargetHighlight = useCallback(() => {
-    let changed = false
-    const store = storeApi.getState()
-    const nextNodes = store.nodes.map((node) => {
-      if (!node.data.connectTarget) return node
-      changed = true
-      return { ...node, data: { ...node.data, connectTarget: false } }
-    })
-    if (!changed) return
-    store.setNodes(nextNodes)
-  }, [storeApi])
+    useGraphUiStore.getState().setConnectingSourceId(null)
+  }, [])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const positionChanges: Array<{ id: string; position: { x: number; y: number } }> = []
+      const positionChanges: Array<{ id: string; position: { x: number; y: number }; dragging?: boolean }> = []
       const removeIds: string[] = []
       const dimensionChanges: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean }> = []
       const selectionChanges: Array<{ id: string; selected: boolean }> = []
 
       for (const change of changes) {
         if (change.type === 'position' && change.position) {
-          positionChanges.push({ id: change.id, position: change.position })
+          positionChanges.push({ id: change.id, position: change.position, dragging: change.dragging })
         } else if (change.type === 'remove') {
           removeIds.push(change.id)
         } else if (change.type === 'dimensions') {
@@ -91,7 +83,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
           const currentSelectedEdgeId = useGraphUiStore.getState().selectedEdgeId
           if (currentSelectedEdgeId) {
             setSelectedEdgeId(null)
-            ops.updateEdgeStyle(currentSelectedEdgeId, { selected: false })
+            ops.setSelectedEdgeInGraph(null)
           }
         }
       }
@@ -111,14 +103,17 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
         } else if (change.type === 'select') {
           if (change.selected) {
             setSelectedEdgeId(change.id)
+            ops.setSelectedEdgeInGraph(change.id)
           } else {
             // Only clear if this was the selected edge
             const currentSelectedEdgeId = useGraphUiStore.getState().selectedEdgeId
             if (currentSelectedEdgeId === change.id) {
               setSelectedEdgeId(null)
+              ops.setSelectedEdgeInGraph(null)
+            } else {
+              ops.setSelectedEdgeInGraph(currentSelectedEdgeId)
             }
             // Ensure the edge's internal data reflects the unselected state
-            ops.updateEdgeStyle(change.id, { selected: false })
           }
         }
       }
@@ -131,65 +126,44 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       if (!connection.source || !connection.target) return
       
       ops.deselectNode()
-      const store = storeApi.getState()
-      for (const current of store.edges) {
-        if (current.data?.selected) {
-          ops.updateEdgeStyle(current.id, { selected: false })
-        }
-      }
+      ops.setSelectedEdgeInGraph(null)
 
       const edgeId = generateId('e-')
       ops.addEdge(connection, edgeId, defaultEdgeStyle).then(() => {
-        ops.updateEdgeStyle(edgeId, { selected: true })
+        ops.setSelectedEdgeInGraph(edgeId)
       })
       setSelectedEdgeId(edgeId)
       setRightPanelTab('style')
     },
-    [ops, defaultEdgeStyle, setSelectedEdgeId, storeApi, setRightPanelTab]
+    [ops, defaultEdgeStyle, setSelectedEdgeId, setRightPanelTab]
   )
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
-      logAction('节点:点击', 'useGraph', { node })
+      logAction('节点:点击', 'useGraph', { nodeId: node.id, label: node.data.label })
       setSelectedEdgeId(null)
-      const store = storeApi.getState()
-      for (const current of store.edges) {
-        if (current.data?.selected) {
-          ops.updateEdgeStyle(current.id, { selected: false })
-        }
-      }
+      ops.setSelectedEdgeInGraph(null)
       ops.selectNode(node.id)
     },
-    [ops, setSelectedEdgeId, storeApi]
+    [ops, setSelectedEdgeId]
   )
 
   const onEdgeClick = useCallback(
     (_: React.MouseEvent, edge: Edge) => {
       ops.deselectNode()
-      const store = storeApi.getState()
-      for (const current of store.edges) {
-        if (current.data?.selected && current.id !== edge.id) {
-          ops.updateEdgeStyle(current.id, { selected: false })
-        }
-      }
-      ops.updateEdgeStyle(edge.id, { selected: true })
+      ops.setSelectedEdgeInGraph(edge.id)
       setSelectedEdgeId(edge.id)
       setRightPanelTab('style')
     },
-    [setSelectedEdgeId, setRightPanelTab, ops, storeApi]
+    [setSelectedEdgeId, setRightPanelTab, ops]
   )
 
   const onPaneClick = useCallback(() => {
     ops.deselectNode()
     resetConnectTargetHighlight()
-    const store = storeApi.getState()
-    for (const current of store.edges) {
-      if (current.data?.selected) {
-        ops.updateEdgeStyle(current.id, { selected: false })
-      }
-    }
+    ops.setSelectedEdgeInGraph(null)
     setSelectedEdgeId(null)
-  }, [ops, setSelectedEdgeId, resetConnectTargetHighlight, storeApi])
+  }, [ops, setSelectedEdgeId, resetConnectTargetHighlight])
 
   const navigateToChildRoom = useCallback(async (childPath: string, childName: string) => {
     const graphSession = getActiveGraphSession()
@@ -220,36 +194,15 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   const onNodeContextMenu = useCallback(
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
       setSelectedEdgeId(null)
-      const store = storeApi.getState()
-      for (const current of store.edges) {
-        if (current.data?.selected) {
-          ops.updateEdgeStyle(current.id, { selected: false })
-        }
-      }
+      ops.setSelectedEdgeInGraph(null)
       ops.selectNode(node.id)
     },
-    [ops, setSelectedEdgeId, storeApi]
+    [ops, setSelectedEdgeId]
   )
 
   const onConnectStart = useCallback((_: unknown, params: { nodeId?: string | null }) => {
-    const sourceId = params.nodeId
-    let changed = false
-    const store = storeApi.getState()
-    const nextNodes = store.nodes.map((node) => {
-      const shouldHighlight = !!sourceId && node.id !== sourceId
-      if (node.data.connectTarget === shouldHighlight) return node
-      changed = true
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          connectTarget: shouldHighlight,
-        },
-      }
-    })
-    if (!changed) return
-    store.setNodes(nextNodes)
-  }, [storeApi])
+    useGraphUiStore.getState().setConnectingSourceId(params.nodeId ?? null)
+  }, [])
 
   const onConnectEnd = useCallback(() => {
     resetConnectTargetHighlight()

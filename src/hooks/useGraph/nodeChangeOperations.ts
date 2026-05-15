@@ -17,12 +17,14 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     storeApi,
   } = deps
 
-  const applyNodePositionChanges = async (changes: Array<{ id: string; position: { x: number; y: number } }>) => {
+  const applyNodePositionChanges = async (changes: Array<{ id: string; position: { x: number; y: number }; dragging?: boolean }>) => {
     let changed = false
     const store = storeApi.getState()
+    const changesById = new Map(changes.map((change) => [change.id, change]))
     const nextNodes = store.nodes.map((n) => {
-      const change = changes.find(c => c.id === n.id)
+      const change = changesById.get(n.id)
       if (change && change.position) {
+        if (n.position.x === change.position.x && n.position.y === change.position.y) return n
         changed = true
         return { ...n, position: change.position }
       }
@@ -33,7 +35,8 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       store.setNodes(nextNodes)
       const graphSession = getActiveGraphSession()
       const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-      if (currentRoomPath) await saveNow(currentRoomPath)
+      const shouldSaveNow = changes.some((change) => change.dragging !== true)
+      if (currentRoomPath && shouldSaveNow) await saveNow(currentRoomPath)
     }
   }
 
@@ -48,24 +51,31 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
 
   const applyNodeDimensionChanges = async (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean }>) => {
     let shouldSave = false
+    let changed = false
     const store = storeApi.getState()
+    const changesById = new Map(changes.map((change) => [change.id, change]))
     const nextNodes = store.nodes.map((n) => {
-      const change = changes.find((c) => c.id === n.id)
+      const change = changesById.get(n.id)
       if (!change) return n
+      const nextWidth = change.dimensions?.width ?? n.width
+      const nextHeight = change.dimensions?.height ?? n.height
+      const nextMeasured = change.dimensions === undefined ? n.measured : (change.dimensions || undefined)
+      if (n.width === nextWidth && n.height === nextHeight && n.measured === nextMeasured) return n
       if (change.dimensions && !change.resizing) {
         shouldSave = true
       }
+      changed = true
       return {
         ...n,
-        width: change.dimensions?.width ?? n.width,
-        height: change.dimensions?.height ?? n.height,
-        measured: change.dimensions === undefined ? n.measured : (change.dimensions || undefined),
+        width: nextWidth,
+        height: nextHeight,
+        measured: nextMeasured,
       }
     })
     
-    store.setNodes(nextNodes)
+    if (changed) store.setNodes(nextNodes)
     
-    if (shouldSave) {
+    if (changed && shouldSave) {
       const graphSession = getActiveGraphSession()
       const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
       if (currentRoomPath) await saveNow(currentRoomPath)
@@ -75,8 +85,9 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
   const applyNodeSelectionChanges = (changes: Array<{ id: string; selected: boolean }>) => {
     let changed = false
     const store = storeApi.getState()
+    const changesById = new Map(changes.map((change) => [change.id, change]))
     const nextNodes = store.nodes.map((n) => {
-      const change = changes.find(c => c.id === n.id)
+      const change = changesById.get(n.id)
       if (change && n.selected !== change.selected) {
         changed = true
         return { ...n, selected: change.selected }

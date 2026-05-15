@@ -95,12 +95,11 @@ function applyMermaidMap(html: string, mermaidMap?: Record<string, string>): str
   return changed ? doc.body.innerHTML : html
 }
 
-export function renderMarkdownToHtml(
-  markdown: string,
+function renderSanitizedMarkdownHtml(
+  sanitized: string,
   imageMap?: Record<string, string>,
   mermaidMap?: Record<string, string>
 ): string {
-  const sanitized = DOMPurify.sanitize(marked.parse(markdown) as string)
   let html = applyMermaidMap(sanitized, mermaidMap)
   if (!imageMap || Object.keys(imageMap).length === 0) return html
 
@@ -113,12 +112,20 @@ export function renderMarkdownToHtml(
   return doc.body.innerHTML
 }
 
+export function renderMarkdownToHtml(
+  markdown: string,
+  imageMap?: Record<string, string>,
+  mermaidMap?: Record<string, string>
+): string {
+  return renderSanitizedMarkdownHtml(DOMPurify.sanitize(marked.parse(markdown) as string), imageMap, mermaidMap)
+}
+
 export default memo(function MarkdownViewer({ content, compact = false, className, attachmentCardPath }: MarkdownViewerProps) {
   const storage = useStorage()
   const rawHtml = useMemo(() => DOMPurify.sanitize(marked.parse(content) as string), [content])
   const [imageMap, setImageMap] = useState<Record<string, string>>({})
   const [mermaidMap, setMermaidMap] = useState<Record<string, string>>({})
-  const sanitizedHtml = useMemo(() => renderMarkdownToHtml(content, imageMap, mermaidMap), [content, imageMap, mermaidMap])
+  const sanitizedHtml = useMemo(() => renderSanitizedMarkdownHtml(rawHtml, imageMap, mermaidMap), [rawHtml, imageMap, mermaidMap])
 
   useEffect(() => {
     if (!attachmentCardPath) {

@@ -24,12 +24,16 @@ export interface GraphState {
   removeEdgesByNodeIds: (nodeIds: string[]) => void
 }
 
-function buildMaps(nodes: KnowledgeNode[], edges: KnowledgeEdge[]) {
+function buildNodesMap(nodes: KnowledgeNode[]) {
   const nodesMap = new Map<string, KnowledgeNode>()
-  const edgesMap = new Map<string, KnowledgeEdge>()
   nodes.forEach((n) => nodesMap.set(n.id, n))
+  return nodesMap
+}
+
+function buildEdgesMap(edges: KnowledgeEdge[]) {
+  const edgesMap = new Map<string, KnowledgeEdge>()
   edges.forEach((e) => edgesMap.set(e.id, e))
-  return { nodesMap, edgesMap }
+  return edgesMap
 }
 
 export const createGraphStore = () => createStore<GraphState>((set) => ({
@@ -44,17 +48,18 @@ export const createGraphStore = () => createStore<GraphState>((set) => ({
     nodes,
     edges,
     viewport: viewport ?? state.viewport,
-    ...buildMaps(nodes, edges),
+    nodesMap: buildNodesMap(nodes),
+    edgesMap: buildEdgesMap(edges),
   })),
 
   setNodes: (nodes) => set((state) => ({
     nodes,
-    ...buildMaps(nodes, state.edges),
+    nodesMap: buildNodesMap(nodes),
   })),
 
   setEdges: (edges) => set((state) => ({
     edges,
-    ...buildMaps(state.nodes, edges),
+    edgesMap: buildEdgesMap(edges),
   })),
 
   setLoading: (loading) => set({ loading }),
@@ -67,7 +72,7 @@ export const createGraphStore = () => createStore<GraphState>((set) => ({
     const nextNodes = state.nodes.map(n => n.id === nodeId ? nextNode : n)
     return {
       nodes: nextNodes,
-      ...buildMaps(nextNodes, state.edges)
+      nodesMap: buildNodesMap(nextNodes)
     }
   }),
 
@@ -76,7 +81,7 @@ export const createGraphStore = () => createStore<GraphState>((set) => ({
     const nextNodes = state.nodes.filter(n => !removedSet.has(n.id))
     return {
       nodes: nextNodes,
-      ...buildMaps(nextNodes, state.edges)
+      nodesMap: buildNodesMap(nextNodes)
     }
   }),
 
@@ -85,7 +90,7 @@ export const createGraphStore = () => createStore<GraphState>((set) => ({
     const nextEdges = state.edges.filter(e => !removedSet.has(e.source) && !removedSet.has(e.target))
     return {
       edges: nextEdges,
-      ...buildMaps(state.nodes, nextEdges)
+      edgesMap: buildEdgesMap(nextEdges)
     }
   }),
 }))
