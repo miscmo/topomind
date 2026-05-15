@@ -28,6 +28,11 @@ export interface DefaultNodeStyle {
   borderRadius: number
 }
 
+export interface DefaultNodeSize {
+  width: number
+  height: number
+}
+
 export interface NodeSizeLimits {
   minWidth: number
   minHeight: number

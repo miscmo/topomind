@@ -69,18 +69,10 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       }
       if (dimensionChanges.length) ops.applyNodeDimensionChanges(dimensionChanges)
       if (selectionChanges.length) {
-        // Only allow selecting a single node at a time
-        const selectedNodeChanges = selectionChanges.filter(c => c.selected)
-        if (selectedNodeChanges.length > 1) {
-          // Keep only the last selected node, deselect others
-          const lastSelectedId = selectedNodeChanges[selectedNodeChanges.length - 1].id
-          selectionChanges.forEach(c => {
-            if (c.id !== lastSelectedId) c.selected = false
-          })
-        }
-
+        // Multi-select via Shift is allowed natively by React Flow.
+        // The selectionChanges array will contain all selections/deselections.
         ops.applyNodeSelectionChanges(selectionChanges)
-        const anyNodeSelected = selectionChanges.some(c => c.selected)
+        const anyNodeSelected = storeApi.getState().nodes.some(n => n.selected)
         if (anyNodeSelected) {
           const currentSelectedEdgeId = useGraphUiStore.getState().selectedEdgeId
           if (currentSelectedEdgeId) {
@@ -144,11 +136,10 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   )
 
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
+    (_event: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
       logAction('节点:点击', 'useGraph', { nodeId: node.id, label: node.data.label })
       setSelectedEdgeId(null)
       ops.setSelectedEdgeInGraph(null)
-      ops.selectNode(node.id)
     },
     [ops, setSelectedEdgeId]
   )

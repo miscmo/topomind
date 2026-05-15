@@ -22,6 +22,7 @@ interface VaultConfig {
     borderWidth?: number
     borderRadius?: number
   }
+  defaultNodeSize?: { width?: number; height?: number }
   nodeSizeLimits?: { minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number }
   nodeBadgeSize?: number
   kbCovers?: Record<string, string>
@@ -70,6 +71,7 @@ function normalizeConfig(configRaw: unknown): VaultConfig {
   const c = (configRaw && typeof configRaw === 'object' && !Array.isArray(configRaw)) ? configRaw as Record<string, unknown> : {}
   const s = (c.defaultEdgeStyle && typeof c.defaultEdgeStyle === 'object' && !Array.isArray(c.defaultEdgeStyle)) ? c.defaultEdgeStyle as Record<string, unknown> : {}
   const ns = (c.defaultNodeStyle && typeof c.defaultNodeStyle === 'object' && !Array.isArray(c.defaultNodeStyle)) ? c.defaultNodeStyle as Record<string, unknown> : {}
+  const defaultNodeSize = (c.defaultNodeSize && typeof c.defaultNodeSize === 'object' && !Array.isArray(c.defaultNodeSize)) ? c.defaultNodeSize as Record<string, unknown> : {}
   const limits = (c.nodeSizeLimits && typeof c.nodeSizeLimits === 'object' && !Array.isArray(c.nodeSizeLimits)) ? c.nodeSizeLimits as Record<string, unknown> : {}
   const edgeDefaultsVersion = c.edgeDefaultsVersion === 2 ? 2 : undefined
   
@@ -103,6 +105,10 @@ function normalizeConfig(configRaw: unknown): VaultConfig {
       borderColor: typeof ns.borderColor === 'string' ? ns.borderColor : '#e2e8f0',
       borderWidth: clampNumber(finiteNumber(ns.borderWidth, 1), 0, 8),
       borderRadius: clampNumber(finiteNumber(ns.borderRadius, 8), 0, 32),
+    },
+    defaultNodeSize: {
+      width: clampNumber(finiteNumber(defaultNodeSize.width, 120), minWidth, maxWidth),
+      height: clampNumber(finiteNumber(defaultNodeSize.height, 52), minHeight, maxHeight),
     },
     nodeSizeLimits: {
       minWidth,
@@ -277,6 +283,9 @@ export function createStore(backend: StorageBackend) {
         }
         if (config.defaultNodeStyle) {
           nextConfig.defaultNodeStyle = { ...cachedConfig.defaultNodeStyle, ...config.defaultNodeStyle }
+        }
+        if (config.defaultNodeSize) {
+          nextConfig.defaultNodeSize = { ...cachedConfig.defaultNodeSize, ...config.defaultNodeSize }
         }
         if (config.nodeSizeLimits) {
           nextConfig.nodeSizeLimits = { ...cachedConfig.nodeSizeLimits, ...config.nodeSizeLimits }

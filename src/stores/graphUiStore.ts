@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { DefaultEdgeStyle, DefaultNodeStyle, NodeSizeLimits } from './uiStoreTypes'
+import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits } from './uiStoreTypes'
 
 interface GraphUiStore {
   showGrid: boolean
@@ -8,6 +8,7 @@ interface GraphUiStore {
   connectingTargetId: string | null
   defaultEdgeStyle: DefaultEdgeStyle
   defaultNodeStyle: DefaultNodeStyle
+  defaultNodeSize: DefaultNodeSize
   nodeSizeLimits: NodeSizeLimits
   nodeBadgeSize: number
   setSelectedEdgeId: (edgeId: string | null) => void
@@ -17,13 +18,15 @@ interface GraphUiStore {
   replaceDefaultEdgeStyle: (style: DefaultEdgeStyle) => void
   setDefaultNodeStyle: (style: Partial<DefaultNodeStyle>) => void
   replaceDefaultNodeStyle: (style: DefaultNodeStyle) => void
+  setDefaultNodeSize: (size: Partial<DefaultNodeSize>) => void
+  replaceDefaultNodeSize: (size: DefaultNodeSize) => void
   setNodeSizeLimits: (limits: Partial<NodeSizeLimits>) => void
   replaceNodeSizeLimits: (limits: NodeSizeLimits) => void
   setNodeBadgeSize: (size: number) => void
   resetGraphUi: () => void
 }
 
-export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'nodeSizeLimits' | 'nodeBadgeSize'> = {
+export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'nodeSizeLimits' | 'nodeBadgeSize'> = {
   showGrid: true,
   selectedEdgeId: null,
   connectingSourceId: null,
@@ -44,6 +47,10 @@ export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEd
     borderColor: '#e2e8f0',
     borderWidth: 1,
     borderRadius: 8,
+  },
+  defaultNodeSize: {
+    width: 120,
+    height: 52,
   },
   nodeSizeLimits: {
     minWidth: 120,
@@ -67,6 +74,10 @@ export const useGraphUiStore = create<GraphUiStore>((set) => ({
     defaultNodeStyle: { ...state.defaultNodeStyle, ...style },
   })),
   replaceDefaultNodeStyle: (defaultNodeStyle) => set({ defaultNodeStyle }),
+  setDefaultNodeSize: (size) => set((state) => ({
+    defaultNodeSize: { ...state.defaultNodeSize, ...size },
+  })),
+  replaceDefaultNodeSize: (defaultNodeSize) => set({ defaultNodeSize }),
   setNodeSizeLimits: (limits) => set((state) => ({
     nodeSizeLimits: { ...state.nodeSizeLimits, ...limits },
   })),

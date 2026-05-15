@@ -14,11 +14,11 @@ export function buildSelectionOperations(deps: SelectionOpsDeps) {
     storeApi,
   } = deps
 
-  const selectNode = (nodeId: string) => {
+  const selectNode = (nodeId: string, multiSelect = false) => {
     const store = storeApi.getState()
     let changed = false
     const nextNodes = store.nodes.map(n => {
-      const shouldSelect = n.id === nodeId
+      const shouldSelect = n.id === nodeId || (multiSelect && n.selected)
       if ((n.selected ?? false) === shouldSelect) return n
       changed = true
       return { ...n, selected: shouldSelect }
@@ -29,6 +29,7 @@ export function buildSelectionOperations(deps: SelectionOpsDeps) {
       nodeId,
       label: store.nodesMap.get(nodeId)?.data.label,
       path: nodeId,
+      multiSelect
     })
   }
 

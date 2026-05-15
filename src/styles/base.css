@@ -7,6 +7,8 @@ html,body{width:100%;height:100%;overflow:hidden;
   background:#f0f2f5;color:#2d3436}
 body{display:flex;flex-direction:column}
 #root{width:100%;height:100%;display:flex;flex-direction:column}
+.react-flow__pane{cursor:default!important}
+.react-flow__pane.dragging{cursor:grabbing!important}
 
 /* ===== 通用按钮 ===== */
 .btn{height:32px;padding:0 16px;border-radius:7px;font-size:12px;cursor:pointer;border:1px solid #ddd;background:#fff;color:#555;transition:all .12s;display:inline-flex;align-items:center}

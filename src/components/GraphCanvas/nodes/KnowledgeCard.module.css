@@ -60,8 +60,7 @@
 
 .node:hover:not(.selected):not(.connectTarget) .label,
 .hovered .label {
-  background: rgba(241, 245, 249, 0.95);
-  color: #334155;
+  opacity: 0.85;
 }
 
 .dragging {
@@ -119,17 +118,30 @@
 .titleInput {
   min-width: 0;
   height: 18px;
-  padding: 0 3px;
-  border: 1px solid #3b82f6;
+  padding: 0 2px;
+  border: 1px dashed rgba(148, 163, 184, 0.5);
   border-radius: 4px;
-  background: #fff;
-  color: #334155;
-  font-size: 11px;
-  font-weight: 600;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-family: inherit;
   line-height: 1.1;
   outline: none;
   box-sizing: border-box;
   pointer-events: auto;
+  transition: all 0.2s;
+}
+
+/* 确保如果没有继承到颜色，有一个合适的默认值 */
+.header .titleInput {
+  color: var(--fallback-header-color, #475569);
+}
+
+.titleInput:focus {
+  border-style: solid;
+  background: rgba(0, 0, 0, 0.03);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 /* 折叠状态下标题居中 */
@@ -227,12 +239,18 @@
   padding: 1px 3px 3px 4px; /* 进一步压缩内边距 */
   border-bottom-left-radius: 8px; /* 展开时下部圆角 */
   border-bottom-right-radius: 8px;
-  background: rgba(255, 255, 255, 0.98); /* 补充背景，避免父级溢出透明 */
+  background: transparent; /* 继承父节点背景，避免割裂 */
   user-select: none;
 }
 
 .interactiveMarkdown {
   user-select: text;
+  cursor: auto;
+}
+
+.interactiveMarkdown :global(.markdownBody),
+.interactiveMarkdown :global(.markdownBody *) {
+  cursor: auto;
 }
 
 /* 针对 MarkdownViewer 内部样式的微调，压缩间距 */
@@ -262,7 +280,7 @@
 
 .interactiveMarkdown :global(img),
 .interactiveMarkdown :global(svg) {
-  cursor: zoom-in;
+  cursor: auto;
 }
 
 .interactiveMarkdown :global(a) {
@@ -277,7 +295,7 @@
   border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: 6px;
   overflow: hidden;
-  background: #f8fafc;
+  background: transparent;
 }
 
 .markdownTextarea {
@@ -288,8 +306,8 @@
   border: 0;
   outline: none;
   padding: 5px 6px;
-  background: #fff;
-  color: #1e293b;
+  background: transparent;
+  color: inherit;
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
   font-size: var(--node-body-font-size, 11px);
   line-height: 1.35;
@@ -530,4 +548,28 @@
 /* 隐藏 Resize 的边框线，只保留四个角的控制点和我们自己的边框高亮 */
 .resizeLine {
   display: none !important;
+}
+
+.resizeLabel {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.86);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
 }

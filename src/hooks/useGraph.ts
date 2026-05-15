@@ -32,6 +32,7 @@ export function useGraph(tabId: string) {
   const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
   const setDefaultEdgeStyle = useGraphUiStore((s) => s.setDefaultEdgeStyle)
   const setDefaultNodeStyle = useGraphUiStore((s) => s.setDefaultNodeStyle)
+  const setDefaultNodeSize = useGraphUiStore((s) => s.setDefaultNodeSize)
   const setNodeSizeLimits = useGraphUiStore((s) => s.setNodeSizeLimits)
   const setNodeBadgeSize = useGraphUiStore((s) => s.setNodeBadgeSize)
   const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
@@ -47,13 +48,14 @@ export function useGraph(tabId: string) {
       if (!active) return
       if (config.defaultEdgeStyle) setDefaultEdgeStyle(config.defaultEdgeStyle)
       if (config.defaultNodeStyle) setDefaultNodeStyle(config.defaultNodeStyle)
+      if (config.defaultNodeSize) setDefaultNodeSize(config.defaultNodeSize)
       if (config.nodeSizeLimits) setNodeSizeLimits(config.nodeSizeLimits)
       if (typeof config.nodeBadgeSize === 'number') setNodeBadgeSize(config.nodeBadgeSize)
     })
     return () => {
       active = false
     }
-  }, [storage, setDefaultEdgeStyle, setDefaultNodeStyle, setNodeBadgeSize, setNodeSizeLimits])
+  }, [storage, setDefaultEdgeStyle, setDefaultNodeSize, setDefaultNodeStyle, setNodeBadgeSize, setNodeSizeLimits])
 
   const { loadRoom } = useGraphRoomLoader({
     storage,
@@ -128,6 +130,7 @@ export function useGraph(tabId: string) {
     deleteChildNode: ops.deleteChildNode,
     renameNode: ops.renameNode,
     updateNodeStyle: ops.updateNodeStyle,
+    updateNodesStyle: ops.updateNodesStyle,
     selectNode: ops.selectNode,
     deselectNode: ops.deselectNode,
     updateEdgeRelation: ops.updateEdgeRelation,
@@ -153,6 +156,7 @@ export function useGraph(tabId: string) {
     ops.deleteChildNode,
     ops.renameNode,
     ops.updateNodeStyle,
+    ops.updateNodesStyle,
     ops.selectNode,
     ops.deselectNode,
     ops.updateEdgeRelation,

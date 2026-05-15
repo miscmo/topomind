@@ -16,6 +16,9 @@ async function loadMermaid(): Promise<MermaidApi> {
         startOnLoad: false,
         securityLevel: 'strict',
         theme: 'default',
+        flowchart: {
+          htmlLabels: false,
+        },
       })
       return module.default
     })

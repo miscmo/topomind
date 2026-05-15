@@ -269,7 +269,7 @@ export default memo(function GraphCanvas({
         // 禁用默认的框选和多选快捷键
         selectionOnDrag={false}
         selectionKeyCode={null}
-        multiSelectionKeyCode={null}
+        multiSelectionKeyCode="Shift"
         deleteKeyCode={null}
 
         // 允许拖动节点

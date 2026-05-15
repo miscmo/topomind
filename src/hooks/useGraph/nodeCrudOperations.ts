@@ -3,6 +3,7 @@ import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { generateId } from './graphBuilder'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
+import { useGraphUiStore } from '../../stores/graphUiStore'
 import {
   createChildCard,
   deleteCardAndPruneGraph,
@@ -67,12 +68,14 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       const reloadPath = currentRoomPath || getActiveGraphSession().kbPath || ''
       if (reloadPath) await saveNow(reloadPath)
       const cardId = generateId('card-')
+      const defaultNodeSize = useGraphUiStore.getState().defaultNodeSize
       const result = await createChildCard(storage, {
         name,
         parentRef: targetPath,
         reloadRef: reloadPath,
         cardId,
         position,
+        size: defaultNodeSize,
       })
       logAction('节点:创建', 'graphOperations', {
         nodeName: name,
@@ -168,27 +171,40 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
   }
 
   const updateNodeStyle = async (nodeId: string, style: KnowledgeNodeStyle): Promise<void> => {
-    const store = storeApi.getState()
-    const node = store.nodesMap.get(nodeId)
-    if (!node) return
-    const patch = normalizeNodeStylePatch(style)
-    const currentStyle = node.data.nodeStyle ?? {}
-    const nextStyle = { ...currentStyle, ...patch }
-    const changed = Object.entries(patch).some(([key, value]) => currentStyle[key as keyof KnowledgeNodeStyle] !== value)
-    if (!changed) return
+    await updateNodesStyle([nodeId], style)
+  }
 
-    store.updateNode(nodeId, (currentNode) => ({
-      ...currentNode,
-      data: {
-        ...currentNode.data,
-        nodeStyle: nextStyle,
-      },
-    }))
+  const updateNodesStyle = async (nodeIds: string[], style: KnowledgeNodeStyle): Promise<void> => {
+    const store = storeApi.getState()
+    const patch = normalizeNodeStylePatch(style)
+    let anyChanged = false
+
+    nodeIds.forEach(nodeId => {
+      const node = store.nodesMap.get(nodeId)
+      if (!node) return
+      
+      const currentStyle = node.data.nodeStyle ?? {}
+      const nextStyle = { ...currentStyle, ...patch }
+      const changed = Object.entries(patch).some(([key, value]) => currentStyle[key as keyof KnowledgeNodeStyle] !== value)
+      
+      if (changed) {
+        anyChanged = true
+        store.updateNode(nodeId, (currentNode) => ({
+          ...currentNode,
+          data: {
+            ...currentNode.data,
+            nodeStyle: nextStyle,
+          },
+        }))
+      }
+    })
+
+    if (!anyChanged) return
 
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
     if (currentRoomPath) await saveNow(currentRoomPath)
-    logAction('节点:更新样式', 'graphOperations', { nodeId, style: patch })
+    logAction('节点:更新样式(批量)', 'graphOperations', { nodeIds, style: patch })
   }
 
   return {
@@ -196,5 +212,6 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     deleteChildNode,
     renameNode,
     updateNodeStyle,
+    updateNodesStyle,
   }
 }

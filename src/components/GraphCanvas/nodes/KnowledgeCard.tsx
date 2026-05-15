@@ -22,7 +22,7 @@ const MARKDOWN_MIN_HEIGHT = 96
 const COLLAPSED_NODE_WIDTH = 120
 const COLLAPSED_NODE_HEIGHT = 36
 
-function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProps<KnowledgeNode>) {
+function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }: NodeProps<KnowledgeNode>) {
   const storage = useStorage()
   const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
@@ -31,17 +31,23 @@ function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProp
   const [titleDraft, setTitleDraft] = useState(data.label)
   const [markdownEditing, setMarkdownEditing] = useState(false)
   const [markdownDraft, setMarkdownDraft] = useState('')
+  const [resizePreviewSize, setResizePreviewSize] = useState<{ width: number; height: number } | null>(null)
   const [preview, setPreview] = useState<{ type: 'image'; src: string; title: string } | { type: 'html'; html: string; title: string } | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const markdownTextareaRef = useRef<HTMLTextAreaElement>(null)
   const titleSavingRef = useRef(false)
-  const nodeWidth = width ?? 120
-  const nodeHeight = height ?? 52
+  const resizeHideTimerRef = useRef<number | null>(null)
+  const defaultNodeStyle = useGraphUiStore((state) => state.defaultNodeStyle)
+  const defaultNodeSize = useGraphUiStore((state) => state.defaultNodeSize)
+  const nodeWidth = width ?? defaultNodeSize.width
+  const nodeHeight = height ?? defaultNodeSize.height
+  const resizeDisplaySize = resizePreviewSize ?? { width: nodeWidth, height: nodeHeight }
+  const showResizeLabel = resizing === true || resizePreviewSize !== null
+  const resizeLabel = `${Math.round(resizeDisplaySize.width)} × ${Math.round(resizeDisplaySize.height)}`
   const shouldShowMarkdown = nodeWidth >= MARKDOWN_MIN_WIDTH && nodeHeight >= MARKDOWN_MIN_HEIGHT
   const visuallySelected = selected || isPressed
   const connectingSourceId = useGraphUiStore((state) => state.connectingSourceId)
   const connectingTargetId = useGraphUiStore((state) => state.connectingTargetId)
-  const defaultNodeStyle = useGraphUiStore((state) => state.defaultNodeStyle)
   const nodeSizeLimits = useGraphUiStore((state) => state.nodeSizeLimits)
   const nodeBadgeSize = useGraphUiStore((state) => state.nodeBadgeSize)
   const isConnectTarget = !!connectingSourceId && connectingTargetId === id
@@ -154,6 +160,33 @@ function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProp
     setMarkdownEditing(false)
     setPreview(null)
   }, [contentInteractionsEnabled])
+
+  useEffect(() => {
+    return () => {
+      if (resizeHideTimerRef.current !== null) {
+        window.clearTimeout(resizeHideTimerRef.current)
+      }
+    }
+  }, [])
+
+  const clearResizeHideTimer = useCallback(() => {
+    if (resizeHideTimerRef.current === null) return
+    window.clearTimeout(resizeHideTimerRef.current)
+    resizeHideTimerRef.current = null
+  }, [])
+
+  const updateResizePreview = useCallback((params: { width: number; height: number }) => {
+    clearResizeHideTimer()
+    setResizePreviewSize({ width: params.width, height: params.height })
+  }, [clearResizeHideTimer])
+
+  const hideResizePreviewSoon = useCallback((params: { width: number; height: number }) => {
+    updateResizePreview(params)
+    resizeHideTimerRef.current = window.setTimeout(() => {
+      setResizePreviewSize(null)
+      resizeHideTimerRef.current = null
+    }, 500)
+  }, [updateResizePreview])
 
   const handleDrillDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -284,8 +317,8 @@ function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProp
         borderColor: visuallySelected ? undefined : data.domainColor ?? nodeStyle.borderColor,
         borderWidth: nodeStyle.borderWidth,
         borderRadius,
-        width: width ?? undefined,
-        height: height ?? undefined,
+        width: width ?? defaultNodeSize.width,
+        height: height ?? defaultNodeSize.height,
       }}
     >
       <NodeResizer
@@ -297,7 +330,16 @@ function KnowledgeCard({ id, data, selected, dragging, width, height }: NodeProp
         color="#3b82f6"
         handleClassName={styles.resizeHandle}
         lineClassName={styles.resizeLine}
+        onResizeStart={(_, params) => updateResizePreview(params)}
+        onResize={(_, params) => updateResizePreview(params)}
+        onResizeEnd={(_, params) => hideResizePreviewSoon(params)}
       />
+
+      {showResizeLabel && (
+        <div className={styles.resizeLabel}>
+          {resizeLabel}
+        </div>
+      )}
 
       <Handle type="target" position={Position.Left} className={styles.hiddenTargetHandle} isConnectable={false} />
       <Handle type="source" position={Position.Right} className={styles.handle} />
