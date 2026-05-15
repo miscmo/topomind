@@ -81,6 +81,10 @@ export interface KnowledgeNodeData {
   selected?: boolean
   /** 悬停状态 */
   hovered?: boolean
+  /** 上次展开时的宽度 */
+  expandedWidth?: number
+  /** 上次展开时的高度 */
+  expandedHeight?: number
   /** 作为连线目标高亮 */
   connectTarget?: boolean
   /** Index signature for React Flow Record<string, unknown> compatibility */

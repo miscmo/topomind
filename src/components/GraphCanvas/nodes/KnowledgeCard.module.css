@@ -20,7 +20,16 @@
   box-sizing: border-box;
   padding: 0; /* 移除容器内边距，内容撑满 */
   user-select: none;
-  overflow: hidden; /* 确保子元素圆角不溢出 */
+  overflow: visible;
+  /* 移除 overflow: hidden 允许外部控制点和连线点可见 */
+}
+
+:global(.react-flow__node-knowledgeCard) {
+  overflow: visible !important;
+}
+
+:global(.react-flow__node) {
+  overflow: visible !important;
 }
 
 .node::after {
@@ -30,11 +39,11 @@
   z-index: -1;
 }
 
-/* 选中状态 - 仅变色，不放大 */
+/* 选中状态 - Figma 风格高亮边框 */
 .selected {
-  border-color: #3498db !important;
-  border-width: 1.5px;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1) !important;
+  border-color: #3b82f6 !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2) !important;
 }
 
 .connectTarget {
@@ -68,34 +77,122 @@
   min-height: 0;
   flex-direction: column;
   align-items: stretch;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0; /* 移除间隙 */
   overflow: hidden;
+  border-radius: 8px; /* 修复内部元素圆角溢出 */
 }
 
-.hasMarkdown .content {
-  justify-content: flex-start;
+/* Header 层 */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(248, 250, 252, 0.8);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  padding: 2px 4px;
+  min-height: 18px;
+  flex: 1;
+  width: 100%;
+  border-top-left-radius: 8px; /* 修复内部元素圆角溢出 */
+  border-top-right-radius: 8px;
+  pointer-events: none; /* 穿透不必要的背景事件 */
 }
 
-/* 标签文字 - 顶部标题栏化 */
+.hasMarkdown .header {
+  padding: 1px 4px;
+  flex: 0 0 auto;
+}
+
+/* 标签文字 */
 .label {
   font-size: 11px;
   font-weight: 600;
   color: #475569;
-  text-align: left;
-  line-height: 1;
-  padding: 6px 10px;
-  background: rgba(248, 250, 252, 0.8);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  line-height: 1.1;
   word-break: break-all;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: auto; /* 允许标题栏点击 */
+  user-select: none;
 }
 
-.hasMarkdown .label {
-  padding: 4px 8px;
+/* 折叠状态下标题居中 */
+.node:not(.hasMarkdown) .header {
+  border-bottom-left-radius: 8px; /* 折叠时整个 header 都是圆角 */
+  border-bottom-right-radius: 8px;
+}
+
+/* 控件区 */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 6px;
+  pointer-events: auto; /* 恢复内部按钮点击 */
+}
+
+/* 文档图标 */
+.docIcon {
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.docIcon svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* 子节点数量徽章按钮 */
+.childBadgeBtn {
+  min-width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: #3498db;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  pointer-events: auto; /* 必须允许点击 */
+  cursor: pointer;
+  transition: transform 0.1s, background-color 0.15s;
+}
+
+.childBadgeBtn:hover {
+  background: #2980b9;
+  transform: scale(1.05);
+}
+
+.childBadgeBtn:active {
+  transform: scale(0.95);
+}
+
+/* 折叠/展开按钮 */
+.collapseBtn {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.collapseBtn:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: #334155;
 }
 
 .markdown {
@@ -105,7 +202,10 @@
   color: #334155;
   text-align: left;
   pointer-events: auto;
-  padding: 4px 6px 6px 8px; /* 极窄内边距 */
+  padding: 2px 4px 4px 6px; /* 进一步压缩内边距 */
+  border-bottom-left-radius: 8px; /* 展开时下部圆角 */
+  border-bottom-right-radius: 8px;
+  background: rgba(255, 255, 255, 0.98); /* 补充背景，避免父级溢出透明 */
 }
 
 /* 针对 MarkdownViewer 内部样式的微调，压缩间距 */
@@ -138,35 +238,67 @@
   text-align: center;
 }
 
-/* 子节点数量徽章 */
-.badge {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  min-width: 18px;
-  height: 18px;
-  border-radius: 9px;
-  background: #3498db;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  border: 2px solid #fff;
-  pointer-events: none;
+/* 子节点数量徽章 - 已废弃（替换为 header 里的徽章按钮） */
+
+/* 连线选择点 (Handle) 优化 */
+.handle {
+  position: absolute !important;
+  width: 14px !important;
+  height: 14px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1.5px solid #3b82f6 !important;
+  border-radius: 50% !important;
+  z-index: 30;
+  opacity: 0;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* 连接手柄 */
-.handle {
-  width: 10px;
-  height: 10px;
-  background: #555;
-  border: 2px solid #fff;
-  z-index: 1;
-  opacity: 0;
-  transition: opacity 0.2s;
+.handle::after {
+  content: '+';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #3b82f6;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.handle:global(.react-flow__handle-left) {
+  left: -16px !important;
+  transform: translateY(-50%) !important;
+}
+
+.handle:global(.react-flow__handle-right) {
+  right: -16px !important;
+  transform: translateY(-50%) !important;
+}
+
+.hiddenTargetHandle {
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.handle:hover {
+  background: #3b82f6 !important;
+}
+
+.handle:global(.react-flow__handle-left):hover {
+  transform: translateY(-50%) scale(1.2) !important;
+}
+
+.handle:global(.react-flow__handle-right):hover {
+  transform: translateY(-50%) scale(1.2) !important;
+}
+
+.handle:hover::after {
+  color: #fff;
 }
 
 /* 仅在节点被选中或作为连线目标时显示连接手柄 */
@@ -175,13 +307,24 @@
   opacity: 1;
 }
 
+/* 大小调节框 (NodeResizer) 控制点样式 */
 .resizeHandle {
-  width: 9px !important;
-  height: 9px !important;
-  border: 2px solid #fff !important;
-  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.22);
+  width: 8px !important;
+  height: 8px !important;
+  background: #fff !important;
+  border: 1.5px solid #3b82f6 !important;
+  border-radius: 2px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  z-index: 30;
+  overflow: visible !important;
 }
 
+:global(.react-flow__resize-control) {
+  overflow: visible !important;
+  z-index: 30 !important;
+}
+
+/* 隐藏 Resize 的边框线，只保留四个角的控制点和我们自己的边框高亮 */
 .resizeLine {
-  border-color: #3498db !important;
+  display: none !important;
 }

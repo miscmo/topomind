@@ -57,19 +57,27 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     const nextNodes = store.nodes.map((n) => {
       const change = changesById.get(n.id)
       if (!change) return n
-      const nextWidth = change.dimensions?.width ?? n.width
-      const nextHeight = change.dimensions?.height ?? n.height
+      const nextWidth = change.dimensions?.width ?? n.width ?? n.initialWidth ?? n.measured?.width ?? 120
+      const nextHeight = change.dimensions?.height ?? n.height ?? n.initialHeight ?? n.measured?.height ?? 52
       const nextMeasured = change.dimensions === undefined ? n.measured : (change.dimensions || undefined)
       if (n.width === nextWidth && n.height === nextHeight && n.measured === nextMeasured) return n
       if (change.dimensions && !change.resizing) {
         shouldSave = true
       }
       changed = true
+
+      const isExpanded = nextWidth >= 160 && nextHeight >= 96
+      const expandedDimensions = isExpanded ? { expandedWidth: nextWidth, expandedHeight: nextHeight } : {}
+
       return {
         ...n,
         width: nextWidth,
         height: nextHeight,
         measured: nextMeasured,
+        data: {
+          ...n.data,
+          ...expandedDimensions
+        }
       }
     })
     

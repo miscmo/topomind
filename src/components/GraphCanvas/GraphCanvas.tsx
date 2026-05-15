@@ -14,6 +14,14 @@ const edgeTypes = {
   straight: FloatingEdge,
 }
 
+const CARD_CONNECT_SNAP_DISTANCE = 56
+
+function distanceToRect(point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) {
+  const dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.width))
+  const dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.height))
+  return Math.hypot(dx, dy)
+}
+
 interface GraphCanvasProps {
   onNodeContextMenu?: (nodeId: string, event: React.MouseEvent) => void
   onEdgeContextMenu?: (edgeId: string, event: React.MouseEvent) => void
@@ -28,6 +36,8 @@ export default memo(function GraphCanvas({
   onCloseContextMenu,
 }: GraphCanvasProps) {
   const showGrid = useGraphUiStore((s) => s.showGrid)
+  const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
+  const setConnectingTargetId = useGraphUiStore((s) => s.setConnectingTargetId)
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
   const storedViewport = useGraphStore((s) => s.viewport)
@@ -84,8 +94,42 @@ export default memo(function GraphCanvas({
     onPaneContextMenu?.(event.clientX, event.clientY)
   }, [onPaneContextMenu])
 
+  const handleConnectionMouseMove = useCallback((event: React.MouseEvent) => {
+    if (!connectingSourceId) return
+    const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    let nextTargetId: string | null = null
+    let bestDistance = Infinity
+    for (const node of nodes) {
+      if (node.id === connectingSourceId) continue
+      const width = node.width ?? node.initialWidth ?? node.measured?.width ?? 120
+      const height = node.height ?? node.initialHeight ?? node.measured?.height ?? 52
+      const distance = distanceToRect(point, {
+        x: node.position.x,
+        y: node.position.y,
+        width,
+        height,
+      })
+      if (distance <= CARD_CONNECT_SNAP_DISTANCE && distance < bestDistance) {
+        bestDistance = distance
+        nextTargetId = node.id
+      }
+    }
+    if (useGraphUiStore.getState().connectingTargetId !== nextTargetId) {
+      setConnectingTargetId(nextTargetId)
+    }
+  }, [connectingSourceId, nodes, reactFlow, setConnectingTargetId])
+
+  const handleConnectionMouseLeave = useCallback(() => {
+    if (!connectingSourceId) return
+    setConnectingTargetId(null)
+  }, [connectingSourceId, setConnectingTargetId])
+
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div
+      style={{ width: '100%', height: '100%', position: 'relative' }}
+      onMouseMove={handleConnectionMouseMove}
+      onMouseLeave={handleConnectionMouseLeave}
+    >
       <ReactFlow
         nodes={nodes as Node[]}
         edges={edges}
@@ -109,7 +153,6 @@ export default memo(function GraphCanvas({
 
         // 点击节点时触发
         onNodeClick={graph.onNodeClick as (event: React.MouseEvent, node: Node) => void}
-        onNodeDoubleClick={graph.onNodeDoubleClick as (event: React.MouseEvent, node: Node) => void}
         // 右键节点时触发，通常用来打开节点级右键菜单
         onNodeContextMenu={handleNodeContextMenu}
         // 点击边

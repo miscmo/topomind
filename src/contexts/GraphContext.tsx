@@ -27,7 +27,7 @@ export interface GraphContextValue {
   onPaneClick: () => void
   onConnectStart: (event: unknown, params: { nodeId?: string | null }) => void
   onConnectEnd: () => void
-  onNodeDoubleClick: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
+  navigateToChildRoom: (childPath: string, childName: string) => Promise<void>
   onNodeContextMenu: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
 
   // Node operations
@@ -59,7 +59,7 @@ const emptyContext: GraphContextValue = {
   onPaneClick: () => {},
   onConnectStart: () => {},
   onConnectEnd: () => {},
-  onNodeDoubleClick: () => {},
+  navigateToChildRoom: async () => {},
   onNodeContextMenu: () => {},
   createChildNode: async () => null as string | null,
   deleteChildNode: async () => false,
@@ -90,7 +90,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     onPaneClick: graph.onPaneClick,
     onConnectStart: graph.onConnectStart,
     onConnectEnd: graph.onConnectEnd,
-    onNodeDoubleClick: graph.onNodeDoubleClick as GraphContextValue['onNodeDoubleClick'],
+    navigateToChildRoom: graph.navigateToChildRoom,
     onNodeContextMenu: graph.onNodeContextMenu as GraphContextValue['onNodeContextMenu'],
     createChildNode: graph.createChildNode,
     deleteChildNode: graph.deleteChildNode,

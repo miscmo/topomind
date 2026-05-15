@@ -33,7 +33,9 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   } = deps
 
   const resetConnectTargetHighlight = useCallback(() => {
-    useGraphUiStore.getState().setConnectingSourceId(null)
+    const graphUi = useGraphUiStore.getState()
+    graphUi.setConnectingSourceId(null)
+    graphUi.setConnectingTargetId(null)
   }, [])
 
   const onNodesChange = useCallback(
@@ -123,13 +125,16 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      if (!connection.source || !connection.target) return
+      const graphUi = useGraphUiStore.getState()
+      const source = connection.source ?? graphUi.connectingSourceId
+      const target = graphUi.connectingTargetId
+      if (!source || !target || source === target) return
       
       ops.deselectNode()
       ops.setSelectedEdgeInGraph(null)
 
       const edgeId = generateId('e-')
-      ops.addEdge(connection, edgeId, defaultEdgeStyle).then(() => {
+      ops.addEdge({ ...connection, source, target, targetHandle: null }, edgeId, defaultEdgeStyle).then(() => {
         ops.setSelectedEdgeInGraph(edgeId)
       })
       setSelectedEdgeId(edgeId)
@@ -183,14 +188,6 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     logAction('房间:钻入', 'useGraph', { roomPath: childPath, roomName: childName, fromRoom: dirPath })
   }, [getActiveGraphSession, tabId, ops])
 
-  const onNodeDoubleClick = useCallback(
-    async (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
-      if (!node.data.childCount) return
-      await navigateToChildRoom(node.id, node.data.label)
-    },
-    [navigateToChildRoom]
-  )
-
   const onNodeContextMenu = useCallback(
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
       setSelectedEdgeId(null)
@@ -201,12 +198,20 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   )
 
   const onConnectStart = useCallback((_: unknown, params: { nodeId?: string | null }) => {
-    useGraphUiStore.getState().setConnectingSourceId(params.nodeId ?? null)
+    const graphUi = useGraphUiStore.getState()
+    graphUi.setConnectingSourceId(params.nodeId ?? null)
+    graphUi.setConnectingTargetId(null)
   }, [])
 
   const onConnectEnd = useCallback(() => {
+    const graphUi = useGraphUiStore.getState()
+    const source = graphUi.connectingSourceId
+    const target = graphUi.connectingTargetId
+    if (source && target && source !== target) {
+      onConnect({ source, target, sourceHandle: null, targetHandle: null })
+    }
     resetConnectTargetHighlight()
-  }, [resetConnectTargetHighlight])
+  }, [onConnect, resetConnectTargetHighlight])
 
   return {
     onNodesChange,
@@ -217,7 +222,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     onNodeClick,
     onEdgeClick,
     onPaneClick,
-    onNodeDoubleClick,
+    navigateToChildRoom,
     onNodeContextMenu,
   }
 }
