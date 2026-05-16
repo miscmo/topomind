@@ -87,10 +87,12 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
     ...(nodeStyle.headerBackgroundColor ? { backgroundColor: nodeStyle.headerBackgroundColor } : {}),
     ...(nodeStyle.headerColor ? { color: nodeStyle.headerColor } : {}),
   }
-  const titleStyle: CSSProperties = {
+  const titleFieldStyle: CSSProperties = {
     flex: '1 1 auto',
     minWidth: 0,
+    justifyContent: shouldShowMarkdown ? 'flex-start' : 'center',
     textAlign: shouldShowMarkdown ? 'left' : 'center',
+    lineHeight: 1.3,
     ...(nodeStyle.headerFontSize ? { fontSize: nodeStyle.headerFontSize } : {}),
     ...(nodeStyle.headerColor ? { color: nodeStyle.headerColor } : {}),
     ...(nodeStyle.headerFontWeight ? { fontWeight: nodeStyle.headerFontWeight } : {}),
@@ -394,32 +396,35 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
           {/* 左侧占位符，用来平衡右侧控件宽度，保证标题居中 */}
           <div className={styles.headerSpacer} style={{ flex: '0 0 0', width: 0, pointerEvents: 'none' }}></div>
 
-          {titleEditing ? (
-            <input
-              ref={titleInputRef}
-              className={`${styles.titleInput} nodrag nowheel`}
-              value={titleDraft}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              onBlur={confirmTitleEdit}
-              onPointerDown={(event) => event.stopPropagation()}
-              onDoubleClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                event.stopPropagation()
-                if (event.key === 'Enter') void confirmTitleEdit()
-                if (event.key === 'Escape') cancelTitleEdit()
-              }}
-              style={titleStyle}
-            />
-          ) : (
-            <div
-              className={styles.label}
-              onDoubleClick={contentInteractionsEnabled ? startTitleEdit : undefined}
-              title={contentInteractionsEnabled ? '双击编辑标题' : undefined}
-              style={titleStyle}
-            >
-              {data.label}
-            </div>
-          )}
+          <div
+            className={`${styles.titleField} ${titleEditing ? styles.titleFieldEditing : ''}`}
+            style={titleFieldStyle}
+          >
+            {titleEditing ? (
+              <input
+                ref={titleInputRef}
+                className={`${styles.titleInput} nodrag nowheel`}
+                value={titleDraft}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onBlur={confirmTitleEdit}
+                onPointerDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key === 'Enter') void confirmTitleEdit()
+                  if (event.key === 'Escape') cancelTitleEdit()
+                }}
+              />
+            ) : (
+              <div
+                className={styles.label}
+                onDoubleClick={contentInteractionsEnabled ? startTitleEdit : undefined}
+                title={contentInteractionsEnabled ? '双击编辑标题' : undefined}
+              >
+                {data.label}
+              </div>
+            )}
+          </div>
 
           <div className={styles.controls} style={{ flex: '0 0 auto', justifyContent: 'flex-end' }}>
             {hasDetail && (

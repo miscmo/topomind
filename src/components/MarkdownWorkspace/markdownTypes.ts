@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { DetailDocumentItem } from '../../core/storage'
 
 export type MarkdownDocumentType = 'detail' | 'card'
@@ -16,8 +17,11 @@ export interface MarkdownWorkspaceProps {
   previewClassName?: string
   title?: string
   pathLabel?: string
+  detailHeader?: ReactNode
   detailDocuments?: DetailDocumentItem[]
   activeDetailDocumentPath?: string
+  detailSidebarCollapsed?: boolean
+  onDetailSidebarCollapsedChange?: (collapsed: boolean) => void
   viewMode?: MarkdownViewMode
   onViewModeChange?: (mode: MarkdownViewMode) => void
   showToolbar?: boolean

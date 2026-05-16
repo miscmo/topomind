@@ -5,6 +5,7 @@ import { MarkdownSourceEditor } from './MarkdownSourceEditor'
 import { MarkdownPreview } from './MarkdownPreview'
 import { MarkdownToolbar } from './MarkdownToolbar'
 import { MarkdownStatusBar } from './MarkdownStatusBar'
+import { useResizePanel } from '../../hooks/useResizePanel'
 import styles from './MarkdownWorkspace.module.css'
 
 interface TocItem {
@@ -90,8 +91,11 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   documentType,
   placeholder,
   previewClassName,
+  detailHeader,
   detailDocuments,
   activeDetailDocumentPath,
+  detailSidebarCollapsed: controlledDetailSidebarCollapsed,
+  onDetailSidebarCollapsedChange,
   viewMode: controlledViewMode,
   onViewModeChange,
   showToolbar = documentType !== 'card',
@@ -107,7 +111,8 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   const [editorView, setEditorView] = useState<EditorView | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [detailSidebarCollapsed, setDetailSidebarCollapsed] = useState(false)
+  const [internalDetailSidebarCollapsed, setInternalDetailSidebarCollapsed] = useState(false)
+  const [detailSidebarWidth, setDetailSidebarWidth] = useState(180)
   const [detailSidebarTab, setDetailSidebarTab] = useState<DetailSidebarTab>('documents')
   const [documentContextMenu, setDocumentContextMenu] = useState<DocumentContextMenuState | null>(null)
   const [documentInlineEdit, setDocumentInlineEdit] = useState<DocumentInlineEditState | null>(null)
@@ -117,7 +122,23 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   const cancelInlineEditOnBlurRef = useRef(false)
   const tocItems = useMemo(() => documentType === 'detail' ? extractTocItems(value) : [], [documentType, value])
   const currentDetailDocumentPath = activeDetailDocumentPath ?? '_content.md'
+  const detailSidebarCollapsed = controlledDetailSidebarCollapsed ?? internalDetailSidebarCollapsed
   const currentViewMode = controlledViewMode ?? internalViewMode
+  const statusBar = documentType !== 'card' ? (
+    <MarkdownStatusBar
+      value={value}
+      savedValue={savedValue}
+      isSaving={isSaving}
+      saveError={saveError}
+    />
+  ) : null
+  const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
+    initialWidth: detailSidebarWidth,
+    onWidthChange: setDetailSidebarWidth,
+    minWidth: 180,
+    maxWidth: 360,
+    direction: 'left',
+  })
 
   const setViewMode = useCallback((mode: MarkdownViewMode) => {
     if (controlledViewMode === undefined) {
@@ -125,6 +146,13 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
     }
     onViewModeChange?.(mode)
   }, [controlledViewMode, onViewModeChange])
+
+  const setDetailSidebarCollapsed = useCallback((collapsed: boolean) => {
+    if (controlledDetailSidebarCollapsed === undefined) {
+      setInternalDetailSidebarCollapsed(collapsed)
+    }
+    onDetailSidebarCollapsedChange?.(collapsed)
+  }, [controlledDetailSidebarCollapsed, onDetailSidebarCollapsedChange])
 
   useEffect(() => {
     if (!documentContextMenu) return
@@ -306,10 +334,13 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
       
       <div className={styles.content}>
         {documentType === 'detail' && (
-          <aside className={`${styles.sidebarPane} ${detailSidebarCollapsed ? styles.sidebarPaneCollapsed : ''}`}>
+          <aside
+            className={`${styles.sidebarPane} ${detailSidebarCollapsed ? styles.sidebarPaneCollapsed : ''}`}
+            style={detailSidebarCollapsed ? undefined : { width: detailSidebarWidth }}
+          >
             <div className={styles.sidebarHeader}>
               {!detailSidebarCollapsed ? (
-                <>
+                <div className={styles.sidebarHeaderMain}>
                   <div className={styles.sidebarTabs}>
                     <button
                       type="button"
@@ -326,24 +357,9 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                       目录
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.sidebarCollapseBtn}
-                    onClick={() => setDetailSidebarCollapsed(true)}
-                    title="收起侧栏"
-                  >
-                    <span className={styles.sidebarChevron}>▾</span>
-                  </button>
-                </>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  className={styles.sidebarCollapseBtn}
-                  onClick={() => setDetailSidebarCollapsed(false)}
-                  title="展开侧栏"
-                >
-                  <span className={`${styles.sidebarChevron} ${styles.sidebarChevronCollapsed}`}>▾</span>
-                </button>
+                <div className={styles.sidebarCollapsedSpacer} aria-hidden="true" />
               )}
             </div>
             {!detailSidebarCollapsed && (
@@ -500,45 +516,55 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
             )}
           </aside>
         )}
+        {documentType === 'detail' && !detailSidebarCollapsed && (
+          <div
+            className={`${styles.sidebarResizeHandle} ${isSidebarResizing ? styles.sidebarResizeHandleActive : ''}`}
+            onMouseDown={handleSidebarResizeMouseDown}
+            title="拖拽调整侧栏宽度"
+          />
+        )}
 
-        <div className={styles.mainPane}>
-          {currentViewMode === 'edit' && (
-            <div className={styles.pane}>
-              <MarkdownSourceEditor
-                value={value}
-                onChange={onChange}
-                onSave={handleSave}
-                onEditorCreate={handleEditorCreate}
-                attachmentCardPath={attachmentCardPath}
-                placeholder={placeholder}
-              />
+        <div className={`${styles.mainPane} ${documentType === 'detail' ? styles.detailMainPane : ''}`}>
+          {documentType === 'detail' && detailHeader && (
+            <div className={styles.detailHeaderPane}>
+              {detailHeader}
             </div>
           )}
-          
-          {currentViewMode === 'preview' && documentType !== 'card' && (
-            <div className={`${styles.pane} ${styles.previewPane}`}>
-              <MarkdownPreview
-                content={value}
-                attachmentCardPath={attachmentCardPath}
-                compact={documentType === 'card'}
-                className={previewClassName}
-                surfaceRef={previewRef}
-                headingIds={tocItems.map(item => item.id)}
-                onOpenDetailDocumentLink={documentType === 'detail' ? onOpenDetailDocumentLink : undefined}
-              />
-            </div>
-          )}
+
+          <div className={styles.mainContent}>
+            {currentViewMode === 'edit' && (
+              <div className={styles.pane}>
+                <MarkdownSourceEditor
+                  value={value}
+                  onChange={onChange}
+                  onSave={handleSave}
+                  onEditorCreate={handleEditorCreate}
+                  attachmentCardPath={attachmentCardPath}
+                  placeholder={placeholder}
+                />
+              </div>
+            )}
+            
+            {currentViewMode === 'preview' && documentType !== 'card' && (
+              <div className={`${styles.pane} ${styles.previewPane}`}>
+                <MarkdownPreview
+                  content={value}
+                  attachmentCardPath={attachmentCardPath}
+                  compact={documentType === 'card'}
+                  className={previewClassName}
+                  surfaceRef={previewRef}
+                  headingIds={tocItems.map(item => item.id)}
+                  onOpenDetailDocumentLink={documentType === 'detail' ? onOpenDetailDocumentLink : undefined}
+                />
+              </div>
+            )}
+          </div>
+
+          {documentType === 'detail' && statusBar}
         </div>
       </div>
 
-      {documentType !== 'card' && (
-        <MarkdownStatusBar
-          value={value}
-          savedValue={savedValue}
-          isSaving={isSaving}
-          saveError={saveError}
-        />
-      )}
+      {documentType !== 'detail' && statusBar}
     </div>
   )
 })

@@ -2,7 +2,7 @@
  * 右侧详情面板
  * 显示节点 Markdown 内容，支持预览/编辑切换
  */
-import { useEffect, useState, useRef, memo, useCallback } from 'react'
+import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react'
 import { useStorage, type DetailDocumentItem } from '../../../core/storage'
 import { useRightPanelStore } from '../../../stores/rightPanelStore'
 import { useConfirmStore } from '../../../stores/confirmStore'
@@ -55,13 +55,27 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const [documents, setDocuments] = useState<DetailDocumentItem[]>([])
   const [isDocumentBusy, setIsDocumentBusy] = useState(false)
   const [documentLinkNotice, setDocumentLinkNotice] = useState('')
+  const [detailSidebarCollapsed, setDetailSidebarCollapsed] = useState(false)
   const [viewMode, setViewMode] = useState<MarkdownViewMode>('preview')
   const renameInputRef = useRef<HTMLInputElement>(null)
   const markdownRequestSeqRef = useRef(0)
 
   const childCount = selectedNode?.data.childCount ?? 0
-  const currentDocumentDisplayPath = nodePath ? joinRefs(nodePath, activeDocumentPath) : ''
   const isDefaultDocument = activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH
+  const nodeLabel = selectedNode?.data.label ?? ''
+  const displayDocuments = useMemo<DetailDocumentItem[]>(() => (
+    documents.map((item) => (
+      item.isDefault
+        ? { ...item, name: nodeLabel || item.name }
+        : item
+    ))
+  ), [documents, nodeLabel])
+  const activeDocument = displayDocuments.find((item) => item.path === activeDocumentPath)
+  const activeDocumentDisplayName = activeDocument?.name ?? nodeLabel
+  const currentDocumentDisplayPath = nodePath
+    ? (isDefaultDocument ? nodePath : joinRefs(nodePath, activeDocumentDisplayName))
+    : ''
+  const canRenameNodeFromTitle = isDefaultDocument
 
   const loadDocuments = useCallback(async (cardPath: string) => {
     const nextDocuments = await storage.listDetailDocuments(cardPath)
@@ -137,6 +151,13 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       renameInputRef.current.select()
     }
   }, [renameMode])
+
+  useEffect(() => {
+    if (!canRenameNodeFromTitle && renameMode) {
+      setRenameMode(false)
+      setNewName('')
+    }
+  }, [canRenameNodeFromTitle, renameMode])
 
   // ===== Save markdown =====
   // Use nodesMapRef for stale-closure-safe access. selectedNode from render-time
@@ -294,67 +315,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
 
   return (
     <div id="detail-panel" className={styles.detailPanel}>
-      {/* 标题栏 */}
-      <div className={styles.title}>
-        <div className={styles.titleMain}>
-          <div className={styles.titleTextGroup}>
-            {renameMode ? (
-              <input
-                ref={renameInputRef}
-                className={styles.renameInput}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onBlur={handleRenameConfirm}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleRenameConfirm()
-                  if (e.key === 'Escape') setRenameMode(false)
-                }}
-              />
-            ) : (
-              <span 
-                className={styles.titleText} 
-                title={nodePath ?? undefined}
-                onDoubleClick={() => {
-                  setNewName(data.label)
-                  setRenameMode(true)
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                {data.label}
-              </span>
-            )}
-            {childCount > 0 && (
-              <span className={styles.badge} title="含有子概念">
-                {childCount} 子
-              </span>
-            )}
-          </div>
-          <div className={styles.viewSwitch}>
-            <button
-              type="button"
-              className={`${styles.viewSwitchButton} ${viewMode === 'edit' ? styles.viewSwitchButtonActive : ''}`}
-              onClick={() => setViewMode('edit')}
-            >
-              编辑
-            </button>
-            <button
-              type="button"
-              className={`${styles.viewSwitchButton} ${viewMode === 'preview' ? styles.viewSwitchButtonActive : ''}`}
-              onClick={() => setViewMode('preview')}
-            >
-              预览
-            </button>
-          </div>
-        </div>
-        <div className={styles.titleSub}>{currentDocumentDisplayPath}</div>
-        {documentLinkNotice && (
-          <div className={styles.inlineNotice} role="status">
-            {documentLinkNotice}
-          </div>
-        )}
-      </div>
-
-      {/* 内容区 */}
       <div className={styles.body}>
         <MarkdownWorkspace
           value={draftMarkdown}
@@ -364,10 +324,95 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           attachmentCardPath={nodePath}
           documentType="detail"
           previewClassName={styles.markdownBody}
-          title={data.label}
-          pathLabel={currentDocumentDisplayPath || undefined}
-          detailDocuments={documents}
+          detailHeader={(
+            <div className={styles.title}>
+              <div className={styles.titleMain}>
+                <div className={styles.titleTextGroup}>
+                  <button
+                    type="button"
+                    className={styles.sidebarToggleBtn}
+                    onClick={() => setDetailSidebarCollapsed((collapsed) => !collapsed)}
+                    title={detailSidebarCollapsed ? '展开左侧栏' : '收起左侧栏'}
+                    aria-label={detailSidebarCollapsed ? '展开左侧栏' : '收起左侧栏'}
+                  >
+                    <span className={styles.sidebarToggleIcon} aria-hidden="true">
+                      <span className={styles.sidebarToggleLine} />
+                      <span className={styles.sidebarToggleLine} />
+                      <span className={styles.sidebarToggleLine} />
+                      <span
+                        className={`${styles.sidebarToggleArrow} ${
+                          detailSidebarCollapsed
+                            ? styles.sidebarToggleArrowExpand
+                            : styles.sidebarToggleArrowCollapse
+                        }`}
+                      />
+                    </span>
+                  </button>
+                  <div className={styles.titleInfo}>
+                    <div className={styles.titlePrimary}>
+                      {renameMode ? (
+                        <input
+                          ref={renameInputRef}
+                          className={styles.renameInput}
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          onBlur={handleRenameConfirm}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameConfirm()
+                            if (e.key === 'Escape') setRenameMode(false)
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className={styles.titleText}
+                          title={currentDocumentDisplayPath || undefined}
+                          onDoubleClick={() => {
+                            if (!canRenameNodeFromTitle) return
+                            setNewName(data.label)
+                            setRenameMode(true)
+                          }}
+                          style={{ cursor: canRenameNodeFromTitle ? 'pointer' : 'default' }}
+                        >
+                          {activeDocumentDisplayName}
+                        </span>
+                      )}
+                      {childCount > 0 && (
+                        <span className={styles.badge} title="含有子概念">
+                          {childCount} 子
+                        </span>
+                      )}
+                    </div>
+                    <div className={styles.titleSub}>{currentDocumentDisplayPath}</div>
+                  </div>
+                </div>
+                <div className={styles.viewSwitch}>
+                  <button
+                    type="button"
+                    className={`${styles.viewSwitchButton} ${viewMode === 'edit' ? styles.viewSwitchButtonActive : ''}`}
+                    onClick={() => setViewMode('edit')}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.viewSwitchButton} ${viewMode === 'preview' ? styles.viewSwitchButtonActive : ''}`}
+                    onClick={() => setViewMode('preview')}
+                  >
+                    预览
+                  </button>
+                </div>
+              </div>
+              {documentLinkNotice && (
+                <div className={styles.inlineNotice} role="status">
+                  {documentLinkNotice}
+                </div>
+              )}
+            </div>
+          )}
+          detailDocuments={displayDocuments}
           activeDetailDocumentPath={activeDocumentPath}
+          detailSidebarCollapsed={detailSidebarCollapsed}
+          onDetailSidebarCollapsedChange={setDetailSidebarCollapsed}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           showToolbar={false}

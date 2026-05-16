@@ -16,10 +16,11 @@ export interface UseResizePanelOptions {
   onWidthChange: (width: number) => void
   minWidth?: number
   maxWidth?: number
+  direction?: 'left' | 'right'
 }
 
 export function useResizePanel(options: UseResizePanelOptions) {
-  const { initialWidth, onWidthChange, minWidth = 200, maxWidth = 800 } = options
+  const { initialWidth, onWidthChange, minWidth = 200, maxWidth = 800, direction = 'right' } = options
   const [isResizing, setIsResizing] = useState(false)
   const dragStartXRef = useRef(0)
   const dragStartWidthRef = useRef(0)
@@ -34,11 +35,13 @@ export function useResizePanel(options: UseResizePanelOptions) {
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return
-    // 向左拖 → delta 负 → 面板变宽；向右拖 → delta 正 → 面板变窄
     const delta = e.clientX - dragStartXRef.current
-    const newWidth = Math.max(minWidth, Math.min(maxWidth, dragStartWidthRef.current - delta))
+    const nextWidth = direction === 'left'
+      ? dragStartWidthRef.current + delta
+      : dragStartWidthRef.current - delta
+    const newWidth = Math.max(minWidth, Math.min(maxWidth, nextWidth))
     onWidthChange(newWidth)
-  }, [isResizing, minWidth, maxWidth, onWidthChange])
+  }, [direction, isResizing, minWidth, maxWidth, onWidthChange])
 
   useEffect(() => {
     if (!isResizing) return

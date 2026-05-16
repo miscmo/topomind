@@ -44,6 +44,10 @@
 .panelExpandBtn {
   width: 28px;
   height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 1px solid #e0e4ea;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.92);

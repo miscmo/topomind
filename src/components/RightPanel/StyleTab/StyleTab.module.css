@@ -59,17 +59,25 @@
   transition: background-color 0.2s;
 }
 
+.styleTitle > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
 .styleTitle:hover {
   background: #f8fafc;
 }
 
 .collapseIcon {
   font-size: 10px;
+  line-height: 1;
   color: #94a3b8;
   transition: transform 0.2s ease, color 0.2s;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: center;
   width: 24px;
   height: 24px;
   border-radius: 6px;
