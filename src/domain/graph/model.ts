@@ -22,8 +22,11 @@ export interface RoomGraphNode {
   name: string
   position?: GraphPoint
   size?: GraphSize
+  expanded?: boolean
   color?: string
   style?: KnowledgeNodeStyle
+  expandedWidth?: number
+  expandedHeight?: number
 }
 
 export interface RoomGraphEdge {
@@ -51,8 +54,11 @@ export interface KBNode {
   height: number
   width: number
   position?: GraphPoint
+  expanded?: boolean
   color?: string
   style?: KnowledgeNodeStyle
+  expandedWidth?: number
+  expandedHeight?: number
 }
 
 export interface KBEdge {

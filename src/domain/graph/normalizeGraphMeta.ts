@@ -84,8 +84,11 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       position: isRecord(rawNode.position)
         ? normalizePoint(rawNode.position, { x: 0, y: 0 })
         : undefined,
+      expanded: typeof rawNode.expanded === 'boolean' ? rawNode.expanded : undefined,
       color: typeof rawNode.color === 'string' ? rawNode.color : undefined,
       style: normalizeNodeStyle(rawNode.style),
+      expandedWidth: typeof rawNode.expandedWidth === 'number' ? rawNode.expandedWidth : undefined,
+      expandedHeight: typeof rawNode.expandedHeight === 'number' ? rawNode.expandedHeight : undefined,
     }
   }
 

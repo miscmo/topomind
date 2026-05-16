@@ -7,8 +7,10 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
 import { syntaxHighlighting, defaultHighlightStyle, foldGutter } from '@codemirror/language'
+import { githubLight } from '@uiw/codemirror-theme-github'
 import { useStorage } from '../../core/storage'
 import { handleMarkdownPaste, handleMarkdownDrop } from './AttachmentPipeline'
+import styles from './MarkdownWorkspace.module.css'
 
 interface MarkdownSourceEditorProps {
   value: string
@@ -112,11 +114,11 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
   ], [customKeymap, domEventHandlers])
 
   return (
-    <div style={{ height: '100%', overflow: 'hidden' }}>
+    <div className={styles.editorSurface}>
       <ReactCodeMirror
         value={value}
         onChange={onChange}
-        theme="light"
+        theme={githubLight}
         height="100%"
         extensions={extensions}
         onCreateEditor={handleCreate}
@@ -126,7 +128,7 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
           highlightActiveLineGutter: true,
         }}
         placeholder={placeholder}
-        style={{ height: '100%' }}
+        style={{ height: '100%', fontSize: '13px', fontFamily: '"SF Mono", "Fira Code", Consolas, monospace' }}
       />
     </div>
   )

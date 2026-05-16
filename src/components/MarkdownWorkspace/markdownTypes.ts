@@ -1,5 +1,5 @@
 export type MarkdownDocumentType = 'detail' | 'card'
-export type MarkdownViewMode = 'edit' | 'preview' | 'split'
+export type MarkdownViewMode = 'edit' | 'preview'
 
 export interface MarkdownWorkspaceProps {
   value: string
@@ -10,6 +10,7 @@ export interface MarkdownWorkspaceProps {
   attachmentCardPath: string | null
   documentType: MarkdownDocumentType
   placeholder?: string
+  previewClassName?: string
   title?: string
   pathLabel?: string
 }

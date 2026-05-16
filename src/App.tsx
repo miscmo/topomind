@@ -3,21 +3,22 @@
  * Tab-based routing: home tab + multiple KB tabs
  * Monitor window via hash (#/monitor) renders independently
  */
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, lazy, Suspense } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import SetupPage from './components/SetupPage'
-import HomePage from './components/HomePage'
-import GraphPage from './components/GraphPage'
-import MonitorPage from './components/MonitorPage/MonitorPage'
 import PromptModal from './components/PromptModal/PromptModal'
 import ConfirmModal from './components/ConfirmModal/ConfirmModal'
-import TabBar from './components/TabBar/TabBar'
 import { useTabStore } from './stores/tabStore'
 import { useWorkspaceStore } from './stores/workspaceStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { GraphStoreProvider } from './stores/graphStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
+
+const HomePage = lazy(() => import('./components/HomePage'))
+const GraphPage = lazy(() => import('./components/GraphPage'))
+const MonitorPage = lazy(() => import('./components/MonitorPage/MonitorPage'))
+const TabBar = lazy(() => import('./components/TabBar/TabBar'))
 
 export default memo(function App() {
   const initHomeTab = useTabStore((s) => s.initHomeTab)
@@ -65,63 +66,65 @@ export default memo(function App() {
       {isSetup ? (
         <SetupPage />
       ) : (
-        <>
-          <TabBar onCloseTab={handleCloseTab} />
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              height: 'calc(100vh - 40px)',
-              overflow: 'hidden',
-            }}
-          >
+        <Suspense fallback={<div style={{ width: '100%', height: '100vh', background: '#ffffff' }} />}>
+          <>
+            <TabBar onCloseTab={handleCloseTab} />
             <div
               style={{
-                position: 'absolute',
-                inset: 0,
-                visibility: activeTab?.type === 'home' ? 'visible' : 'hidden',
-                opacity: activeTab?.type === 'home' ? 1 : 0,
-                pointerEvents: activeTab?.type === 'home' ? 'auto' : 'none',
-                transition: 'opacity 120ms ease',
+                position: 'relative',
+                width: '100%',
+                height: 'calc(100vh - 40px)',
+                overflow: 'hidden',
               }}
             >
-              <HomePage />
-            </div>
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                visibility: activeTab?.type === 'monitor' ? 'visible' : 'hidden',
-                opacity: activeTab?.type === 'monitor' ? 1 : 0,
-                pointerEvents: activeTab?.type === 'monitor' ? 'auto' : 'none',
-                transition: 'opacity 120ms ease',
-                background: '#fff',
-                zIndex: activeTab?.type === 'monitor' ? 10 : 1,
-              }}
-            >
-              {tabs.some(t => t.type === 'monitor') && <MonitorPage />}
-            </div>
-            {tabs.filter(t => t.type === 'kb').map(tab => (
               <div
-                key={tab.id}
                 style={{
                   position: 'absolute',
                   inset: 0,
-                  visibility: activeTabId === tab.id ? 'visible' : 'hidden',
-                  opacity: activeTabId === tab.id ? 1 : 0,
-                  pointerEvents: activeTabId === tab.id ? 'auto' : 'none',
+                  visibility: activeTab?.type === 'home' ? 'visible' : 'hidden',
+                  opacity: activeTab?.type === 'home' ? 1 : 0,
+                  pointerEvents: activeTab?.type === 'home' ? 'auto' : 'none',
                   transition: 'opacity 120ms ease',
                 }}
               >
-                <ReactFlowProvider>
-                  <GraphStoreProvider>
-                    <GraphPage tabId={tab.id} />
-                  </GraphStoreProvider>
-                </ReactFlowProvider>
+                <HomePage />
               </div>
-            ))}
-          </div>
-        </>
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  visibility: activeTab?.type === 'monitor' ? 'visible' : 'hidden',
+                  opacity: activeTab?.type === 'monitor' ? 1 : 0,
+                  pointerEvents: activeTab?.type === 'monitor' ? 'auto' : 'none',
+                  transition: 'opacity 120ms ease',
+                  background: '#fff',
+                  zIndex: activeTab?.type === 'monitor' ? 10 : 1,
+                }}
+              >
+                {tabs.some(t => t.type === 'monitor') && <MonitorPage />}
+              </div>
+              {tabs.filter(t => t.type === 'kb').map(tab => (
+                <div
+                  key={tab.id}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    visibility: activeTabId === tab.id ? 'visible' : 'hidden',
+                    opacity: activeTabId === tab.id ? 1 : 0,
+                    pointerEvents: activeTabId === tab.id ? 'auto' : 'none',
+                    transition: 'opacity 120ms ease',
+                  }}
+                >
+                  <ReactFlowProvider>
+                    <GraphStoreProvider>
+                      <GraphPage tabId={tab.id} />
+                    </GraphStoreProvider>
+                  </ReactFlowProvider>
+                </div>
+              ))}
+            </div>
+          </>
+        </Suspense>
       )}
     </>
   )

@@ -70,11 +70,11 @@
 }
 
 .resizeHandle {
-  width: 6px;
+  width: 4px;
   height: 100%;
   cursor: col-resize;
   flex-shrink: 0;
-  background: #e8eaed;
+  background: transparent;
   z-index: 999;
   position: relative;
   user-select: none;
@@ -89,17 +89,17 @@
   left: 50%;
   transform: translateX(-50%);
   width: 1px;
-  background: #c5c8ce;
+  background: #e6ebf1;
 }
 
 .resizeHandle:hover,
 .resizeHandle:active,
 .resizing {
-  background: #d5d8de;
+  background: transparent;
 }
 
 .resizeHandle:hover::before,
 .resizeHandle:active::before,
 .resizing::before {
-  background: #9ea3ad;
+  background: #3b82f6;
 }

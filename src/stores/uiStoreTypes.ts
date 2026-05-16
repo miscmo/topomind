@@ -1,5 +1,5 @@
 export type ContextMenuType = 'node' | 'edge' | 'pane' | null
-export type RightPanelTab = 'detail' | 'card' | 'style'
+export type RightPanelTab = 'detail' | 'style'
 
 export interface ContextMenuState {
   visible: boolean

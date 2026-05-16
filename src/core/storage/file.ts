@@ -10,7 +10,10 @@ interface FSBGraphChild {
   y?: number
   width?: number
   height?: number
+  expanded?: boolean
   style?: KnowledgeNodeStyle
+  expandedWidth?: number
+  expandedHeight?: number
 }
 
 interface FSBGraphEdge {
@@ -81,7 +84,10 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
       position: Number.isFinite(child.x) && Number.isFinite(child.y)
         ? { x: child.x as number, y: child.y as number }
         : undefined,
+      expanded: typeof child.expanded === 'boolean' ? child.expanded : undefined,
       style: child.style,
+      expandedWidth: Number.isFinite(child.expandedWidth) ? child.expandedWidth as number : undefined,
+      expandedHeight: Number.isFinite(child.expandedHeight) ? child.expandedHeight as number : undefined,
     }
   }
 
@@ -134,7 +140,10 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
       y: node.position?.y,
       width: node.width,
       height: node.height,
+      expanded: node.expanded,
       style: node.style,
+      expandedWidth: node.expandedWidth,
+      expandedHeight: node.expandedHeight,
     }
   }
 

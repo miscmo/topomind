@@ -35,8 +35,11 @@ export function graphMetaToRoomGraph(roomRef: string, meta: GraphMeta): RoomGrap
         width: Number.isFinite(node.width) ? node.width : DEFAULT_NODE_SIZE.width,
         height: Number.isFinite(node.height) ? node.height : DEFAULT_NODE_SIZE.height,
       },
+      expanded: node.expanded,
       color: node.color,
       style: node.style,
+      expandedWidth: node.expandedWidth,
+      expandedHeight: node.expandedHeight,
     }
   }
 
@@ -77,8 +80,11 @@ export function roomGraphToGraphMeta(graph: RoomGraph): GraphMeta {
       height: node.size?.height ?? DEFAULT_NODE_SIZE.height,
       width: node.size?.width ?? DEFAULT_NODE_SIZE.width,
       position: node.position,
+      expanded: node.expanded,
       color: node.color,
       style: node.style,
+      expandedWidth: node.expandedWidth,
+      expandedHeight: node.expandedHeight,
     }
   }
 

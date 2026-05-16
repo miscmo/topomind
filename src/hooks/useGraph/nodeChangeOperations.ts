@@ -67,7 +67,28 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       changed = true
 
       const isExpanded = nextWidth >= 160 && nextHeight >= 96
-      const expandedDimensions = isExpanded ? { expandedWidth: nextWidth, expandedHeight: nextHeight } : {}
+      const wasExpanded = (n.width ?? 0) >= 160 && (n.height ?? 0) >= 96
+      
+      const expandedDimensions: Record<string, number> = {}
+      if (isExpanded) {
+        expandedDimensions.expandedWidth = nextWidth
+        expandedDimensions.expandedHeight = nextHeight
+      } else {
+        expandedDimensions.collapsedWidth = nextWidth
+        expandedDimensions.collapsedHeight = nextHeight
+      }
+      
+      // If transitioning from expanded to collapsed, save the previous expanded dimensions
+      if (!isExpanded && wasExpanded && n.width !== undefined && n.height !== undefined) {
+        expandedDimensions.expandedWidth = n.width
+        expandedDimensions.expandedHeight = n.height
+      }
+      
+      // If transitioning from collapsed to expanded, save the previous collapsed dimensions
+      if (isExpanded && !wasExpanded && n.width !== undefined && n.height !== undefined) {
+        expandedDimensions.collapsedWidth = n.width
+        expandedDimensions.collapsedHeight = n.height
+      }
 
       return {
         ...n,

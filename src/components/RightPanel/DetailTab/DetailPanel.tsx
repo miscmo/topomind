@@ -139,21 +139,25 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     setRenameMode(false)
   }
 
-  // ===== Delete node =====
+  // ===== Delete detail =====
   // Use nodesMapRef for stale-closure-safe node data access.
-  // selectedNode from render-time closure can be stale when the selected node changes
-  // without triggering a DetailPanel re-render (e.g., via React Flow selection).
-  const handleDelete = useCallback(async () => {
-    if (!selectedNodeId) return
+  const handleDeleteDetail = useCallback(async () => {
+    if (!selectedNodeId || !nodePath) return
     const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label ?? selectedNodeId
-    const path = resolveNodePath(selectedNodeId)
-    const confirmed = await confirm({ title: '删除节点', message: `将删除节点「${label}」。此操作不可撤销。` })
+    const confirmed = await confirm({ title: '删除详情', message: `将删除节点「${label}」的详情文档。此操作不可撤销。` })
     if (!confirmed) return
-    logAction('节点:删除', 'DetailPanel', { nodeId: selectedNodeId, label, path })
-    graph.deleteChildNode(selectedNodeId)
-    collapseRightPanel()
-  }, [selectedNodeId, confirm, graph, collapseRightPanel, resolveNodePath, storeApi])
+    logAction('详情:删除', 'DetailPanel', { nodeId: selectedNodeId, label, path: nodePath })
+    
+    try {
+      await storage.writeMarkdown(nodePath, '')
+      setDetailMarkdown(nodePath, '')
+      setSavedMarkdown('')
+      setDraftMarkdown(nodePath, '')
+    } catch (e) {
+      logger.catch('DetailPanel', 'handleDeleteDetail', e)
+    }
+  }, [selectedNodeId, nodePath, confirm, storage, setDetailMarkdown, setDraftMarkdown, storeApi])
 
   const flushMarkdownSave = useCallback(async () => {
     if (!selectedNodeId || !nodePath) return
@@ -181,50 +185,47 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       {/* 标题栏 */}
       <div className={styles.title}>
         <div className={styles.titleMain}>
-          {renameMode ? (
-            <input
-              ref={renameInputRef}
-              className={styles.renameInput}
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onBlur={handleRenameConfirm}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRenameConfirm()
-                if (e.key === 'Escape') setRenameMode(false)
-              }}
-            />
-          ) : (
-            <span className={styles.titleText} title={nodePath ?? undefined}>
-              {data.label}
-            </span>
-          )}
-          {childCount > 0 && (
-            <span className={styles.badge} title="含有子概念">
-              {childCount} 子
-            </span>
-          )}
+          <div className={styles.titleTextGroup}>
+            {renameMode ? (
+              <input
+                ref={renameInputRef}
+                className={styles.renameInput}
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onBlur={handleRenameConfirm}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameConfirm()
+                  if (e.key === 'Escape') setRenameMode(false)
+                }}
+              />
+            ) : (
+              <span 
+                className={styles.titleText} 
+                title={nodePath ?? undefined}
+                onDoubleClick={() => {
+                  setNewName(data.label)
+                  setRenameMode(true)
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                {data.label}
+              </span>
+            )}
+            {childCount > 0 && (
+              <span className={styles.badge} title="含有子概念">
+                {childCount} 子
+              </span>
+            )}
+          </div>
+          <button
+            onClick={handleDeleteDetail}
+            title="删除详情文档"
+            className={styles.deleteBtn}
+          >
+            删除详情
+          </button>
         </div>
         <div className={styles.titleSub}>{nodePath}</div>
-      </div>
-
-      {/* 操作按钮行 */}
-      <div className={styles.actions}>
-        <button
-          onClick={() => {
-            setNewName(data.label)
-            setRenameMode(true)
-          }}
-          title="重命名节点"
-        >
-          重命名
-        </button>
-        <button
-          onClick={handleDelete}
-          title="删除节点"
-          className={styles.deleteBtn}
-        >
-          删除
-        </button>
       </div>
 
       {/* 内容区 */}
@@ -236,6 +237,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           onSave={handleSave}
           attachmentCardPath={nodePath}
           documentType="detail"
+          previewClassName={styles.markdownBody}
           title={data.label}
           pathLabel={nodePath || undefined}
         />

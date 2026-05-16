@@ -14,7 +14,7 @@ interface RightPanelStore {
 
 export const RIGHT_PANEL_INITIAL_STATE: Pick<RightPanelStore, 'rightPanelCollapsed' | 'rightPanelWidth' | 'rightPanelTab'> = {
   rightPanelCollapsed: false,
-  rightPanelWidth: 400,
+  rightPanelWidth: 600,
   rightPanelTab: 'detail',
 }
 

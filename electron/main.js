@@ -256,6 +256,7 @@ function createWindow() {
     minWidth: SETUP_WINDOW_WIDTH, minHeight: SETUP_WINDOW_HEIGHT,
     maxWidth: SETUP_WINDOW_WIDTH, maxHeight: SETUP_WINDOW_HEIGHT,
     useContentSize: true,
+    show: false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
     title: 'TopoMind',
     webPreferences: {
@@ -277,6 +278,11 @@ function createWindow() {
   win.webContents.on('did-finish-load', function() {
     const currentUrl = win && !win.isDestroyed() ? win.webContents.getURL() : '';
     if (IS_DEV) console.log('[window:did-finish-load]', currentUrl);
+  });
+  win.once('ready-to-show', function() {
+    if (win && !win.isDestroyed()) {
+      win.show();
+    }
   });
   win.webContents.on('render-process-gone', function(e, details) {
     console.error('[window:render-process-gone]', JSON.stringify(details));

@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useId, useMemo, useState } from 'react'
 import mermaid from 'mermaid'
 
 mermaid.initialize({
@@ -8,34 +8,24 @@ mermaid.initialize({
   flowchart: { htmlLabels: false },
 })
 
-function hashString(str: string): string {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = (hash << 5) - hash + char
-    hash |= 0
-  }
-  return hash.toString(36)
-}
-
 interface MermaidBlockProps {
   code: string
 }
 
 export const MermaidBlock = memo(function MermaidBlock({ code }: MermaidBlockProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
   const [svgContent, setSvgContent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const instanceId = useId()
+  const renderId = useMemo(() => `mermaid-${instanceId.replace(/[^a-zA-Z0-9_-]/g, '')}`, [instanceId])
 
   useEffect(() => {
     let isCancelled = false
-    const id = `mermaid-${hashString(code)}`
 
     const renderMermaid = async () => {
       try {
         setError(null)
         setSvgContent(null)
-        const { svg } = await mermaid.render(id, code)
+        const { svg } = await mermaid.render(renderId, code)
         if (!isCancelled) {
           setSvgContent(svg)
         }
@@ -51,10 +41,10 @@ export const MermaidBlock = memo(function MermaidBlock({ code }: MermaidBlockPro
     return () => {
       isCancelled = true
     }
-  }, [code])
+  }, [code, renderId])
 
   return (
-    <div className="mermaid-block" ref={containerRef} style={{ margin: '1em 0', border: '1px solid #eaeaea', borderRadius: '4px', padding: '1em', backgroundColor: '#f9f9f9', overflow: 'auto' }}>
+    <div className="mermaid-block" style={{ margin: '1em 0', border: '1px solid #eaeaea', borderRadius: '4px', padding: '1em', backgroundColor: '#f9f9f9', overflow: 'auto' }}>
       {error ? (
         <div className="mermaid-error" style={{ color: 'red', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Mermaid Render Error:</div>

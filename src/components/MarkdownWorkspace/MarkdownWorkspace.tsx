@@ -5,6 +5,7 @@ import { MarkdownSourceEditor } from './MarkdownSourceEditor'
 import { MarkdownPreview } from './MarkdownPreview'
 import { MarkdownToolbar } from './MarkdownToolbar'
 import { MarkdownStatusBar } from './MarkdownStatusBar'
+import styles from './MarkdownWorkspace.module.css'
 
 export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   value,
@@ -13,31 +14,15 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   onSave,
   attachmentCardPath,
   documentType,
-  placeholder
+  placeholder,
+  previewClassName
 }: MarkdownWorkspaceProps) {
-  // Default to edit mode for cards, split for detail if space permits
-  const [viewMode, setViewMode] = useState<MarkdownViewMode>(documentType === 'card' ? 'edit' : 'split')
+  // Default to preview mode for details, edit mode for cards
+  const [viewMode, setViewMode] = useState<MarkdownViewMode>(documentType === 'detail' ? 'preview' : 'edit')
   const [editorView, setEditorView] = useState<EditorView | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-
-  // Responsive mode fallback
-  useEffect(() => {
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect.width < 500 && viewMode === 'split') {
-          setViewMode('edit')
-        }
-      }
-    })
-    
-    if (containerRef.current) {
-      observer.observe(containerRef.current)
-    }
-    
-    return () => observer.disconnect()
-  }, [viewMode])
 
   // Auto-save logic
   const saveTimeoutRef = useRef<number>()
@@ -72,28 +57,21 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   return (
     <div 
       ref={containerRef}
-      className={`markdown-workspace ${documentType}`} 
-      style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        height: '100%', 
-        border: '1px solid #eaeaea', 
-        borderRadius: '4px',
-        overflow: 'hidden',
-        backgroundColor: '#fff'
-      }}
+      className={`${styles.workspace} ${documentType}`} 
     >
-      <MarkdownToolbar 
-        view={editorView}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onSave={handleSave}
-        isSaving={isSaving}
-      />
+      {documentType !== 'card' && (
+        <MarkdownToolbar 
+          view={editorView}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onSave={handleSave}
+          isSaving={isSaving}
+        />
+      )}
       
-      <div className="markdown-workspace-content" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {(viewMode === 'edit' || viewMode === 'split') && (
-          <div style={{ flex: 1, minWidth: 0, borderRight: viewMode === 'split' ? '1px solid #eaeaea' : 'none' }}>
+      <div className={styles.content}>
+        {viewMode === 'edit' && (
+          <div className={styles.pane}>
             <MarkdownSourceEditor
               value={value}
               onChange={onChange}
@@ -105,23 +83,26 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
           </div>
         )}
         
-        {(viewMode === 'preview' || viewMode === 'split') && (
-          <div style={{ flex: 1, minWidth: 0, backgroundColor: '#fcfcfc' }}>
+        {viewMode === 'preview' && documentType !== 'card' && (
+          <div className={`${styles.pane} ${styles.previewPane}`}>
             <MarkdownPreview
               content={value}
               attachmentCardPath={attachmentCardPath}
               compact={documentType === 'card'}
+              className={previewClassName}
             />
           </div>
         )}
       </div>
 
-      <MarkdownStatusBar
-        value={value}
-        savedValue={savedValue}
-        isSaving={isSaving}
-        saveError={saveError}
-      />
+      {documentType !== 'card' && (
+        <MarkdownStatusBar
+          value={value}
+          savedValue={savedValue}
+          isSaving={isSaving}
+          saveError={saveError}
+        />
+      )}
     </div>
   )
 })

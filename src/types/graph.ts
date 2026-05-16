@@ -22,7 +22,10 @@ export interface GraphChild {
   y?: number
   width?: number
   height?: number
+  expanded?: boolean
   style?: KnowledgeNodeStyle
+  expandedWidth?: number
+  expandedHeight?: number
 }
 
 /**
@@ -91,6 +94,10 @@ export interface KnowledgeNodeData {
   expandedWidth?: number
   /** 上次展开时的高度 */
   expandedHeight?: number
+  /** 上次收起时的宽度 */
+  collapsedWidth?: number
+  /** 上次收起时的高度 */
+  collapsedHeight?: number
   /** 作为连线目标高亮 */
   connectTarget?: boolean
   nodeStyle?: KnowledgeNodeStyle

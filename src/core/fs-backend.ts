@@ -35,7 +35,16 @@ export interface FSBKBInfo {
 export type FSBCardChildren = Record<string, unknown>
 
 export interface FSBGraphMeta {
-  children?: Record<string, FSBKBInfo> | undefined
+  children?: Record<string, FSBKBInfo & {
+    x?: number
+    y?: number
+    width?: number
+    height?: number
+    expanded?: boolean
+    style?: unknown
+    expandedWidth?: number
+    expandedHeight?: number
+  }> | undefined
   edges?: Array<{
     id: string
     source: string

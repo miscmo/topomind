@@ -1,0 +1,258 @@
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.workspace.card {
+  border: none;
+  border-radius: 0;
+}
+
+.workspace.detail {
+  border: none;
+  border-radius: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: rgba(248, 250, 252, 0.88);
+  backdrop-filter: blur(10px);
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbarGroup {
+  display: flex;
+  gap: 2px;
+  margin-right: auto;
+  align-items: center;
+}
+
+.divider {
+  width: 1px;
+  height: 16px;
+  background-color: #cbd5e1;
+  margin: 0 6px;
+}
+
+.iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: #475569;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  font-size: 14px;
+}
+
+.iconButton:hover {
+  background-color: #e9eff7;
+  color: #0f172a;
+}
+
+.iconButton:active {
+  background-color: #dbe5f1;
+  transform: scale(0.98);
+}
+
+.rightGroup {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.saveButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #dbe4ee;
+  background: #ffffff;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.saveButton:hover:not(:disabled) {
+  background-color: #f8fbff;
+  border-color: #c7d5e5;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.segmentControl {
+  display: flex;
+  background: #eef3f8;
+  padding: 2px;
+  border: 1px solid #dde6f0;
+  border-radius: 9px;
+}
+
+.segmentButton {
+  border: none;
+  background: transparent;
+  padding: 5px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.segmentButton.active {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.pane {
+  flex: 1;
+  min-width: 0;
+}
+
+.previewPane {
+  background: linear-gradient(180deg, #fbfcfe 0%, #f8fafc 100%);
+}
+
+.statusbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: #64748b;
+  border-top: 1px solid #e2e8f0;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.statusLeft, .statusRight {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.statusIndicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.editorSurface {
+  height: 100%;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.previewSurface {
+  height: 100%;
+  overflow-y: auto;
+  background: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+.previewSurface::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.previewSurface::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.previewSurface::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  box-shadow: inset 0 0 0 10px rgba(148, 163, 184, 0.34);
+}
+
+.previewSurface:hover::-webkit-scrollbar-thumb {
+  box-shadow: inset 0 0 0 10px rgba(100, 116, 139, 0.5);
+}
+
+.previewSurface::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.editorSurface :global(.cm-editor) {
+  height: 100%;
+  background: #ffffff;
+}
+
+.editorSurface :global(.cm-scroller),
+.editorSurface :global(.cm-gutters) {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+.editorSurface :global(.cm-scroller::-webkit-scrollbar),
+.editorSurface :global(.cm-gutters::-webkit-scrollbar) {
+  width: 10px;
+  height: 10px;
+}
+
+.editorSurface :global(.cm-scroller::-webkit-scrollbar-track),
+.editorSurface :global(.cm-gutters::-webkit-scrollbar-track) {
+  background: transparent;
+}
+
+.editorSurface :global(.cm-scroller::-webkit-scrollbar-thumb),
+.editorSurface :global(.cm-gutters::-webkit-scrollbar-thumb) {
+  background: transparent;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  box-shadow: inset 0 0 0 10px rgba(148, 163, 184, 0.34);
+}
+
+.editorSurface :global(.cm-scroller:hover::-webkit-scrollbar-thumb),
+.editorSurface :global(.cm-gutters:hover::-webkit-scrollbar-thumb) {
+  box-shadow: inset 0 0 0 10px rgba(100, 116, 139, 0.5);
+}
+
+.editorSurface :global(.cm-activeLine),
+.editorSurface :global(.cm-activeLineGutter) {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.editorSurface :global(.cm-gutters) {
+  border-right: 1px solid #eef2f7;
+  background: #fbfcfe;
+}
+
+.editorSurface :global(.cm-content),
+.editorSurface :global(.cm-line) {
+  caret-color: #2563eb;
+}

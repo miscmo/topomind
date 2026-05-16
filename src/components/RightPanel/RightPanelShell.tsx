@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import CardPanel from './CardTab/CardPanel'
 import DetailPanel from './DetailTab/DetailPanel'
 import StyleSection from './StyleTab/StyleSection'
 import type { RightPanelTab } from '../../stores/uiStoreTypes'
@@ -25,12 +24,6 @@ export default memo(function RightPanelShell({ tabId, rightPanelTab, width, onTa
             详情
           </button>
           <button
-            className={`${styles.rightPanelTabBtn} ${rightPanelTab === 'card' ? styles.rightPanelTabBtnActive : ''}`}
-            onClick={() => onTabChange('card')}
-          >
-            卡片
-          </button>
-          <button
             className={`${styles.rightPanelTabBtn} ${rightPanelTab === 'style' ? styles.rightPanelTabBtnActive : ''}`}
             onClick={() => onTabChange('style')}
           >
@@ -43,8 +36,6 @@ export default memo(function RightPanelShell({ tabId, rightPanelTab, width, onTa
       </div>
       {rightPanelTab === 'detail' ? (
         <DetailPanel tabId={tabId} />
-      ) : rightPanelTab === 'card' ? (
-        <CardPanel tabId={tabId} />
       ) : (
         <StyleSection />
       )}

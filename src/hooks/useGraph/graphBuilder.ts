@@ -72,17 +72,24 @@ export function buildMetaFromNodesEdges(
 ): GraphMeta {
   const roomNodes: RoomGraph['nodes'] = {}
   for (const node of nodes) {
+    const isExpanded = (node.width ?? node.initialWidth ?? node.measured?.width ?? 120) >= 160
+      && (node.height ?? node.initialHeight ?? node.measured?.height ?? 52) >= 96
+    const collapsedWidth = node.data.collapsedWidth ?? (isExpanded ? 120 : (node.width ?? node.initialWidth ?? node.measured?.width ?? 120))
+    const collapsedHeight = node.data.collapsedHeight ?? (isExpanded ? 36 : (node.height ?? node.initialHeight ?? node.measured?.height ?? 52))
     roomNodes[node.id] = {
       id: node.id,
       cardRef: node.id,
       name: node.data.label,
       position: node.position,
       size: {
-        width: node.width ?? node.initialWidth ?? node.measured?.width ?? 120,
-        height: node.height ?? node.initialHeight ?? node.measured?.height ?? 52,
+        width: collapsedWidth,
+        height: collapsedHeight,
       },
+      expanded: isExpanded,
       color: node.data.domainColor,
       style: node.data.nodeStyle,
+      expandedWidth: node.data.expandedWidth,
+      expandedHeight: node.data.expandedHeight,
     }
   }
   const roomEdges: RoomGraphEdge[] = edges.map((e) => ({
@@ -145,6 +152,7 @@ export async function buildNodes(
   return normalizedChildren.map(([nodeId, childPath, roomNode], i) => {
     const { childCount, hasContent, hasDetail } = nodeInfoResults[i]
     const saved = savedPositions[nodeId]
+    const isExpanded = roomNode.expanded === true
     const position = roomNode.position ?? saved ?? {
       x: 50 + i * spacingX,
       y: 50 + i * spacingY,
@@ -154,8 +162,8 @@ export async function buildNodes(
       id: nodeId,
       type: 'knowledgeCard',
       position,
-      width: roomNode.size?.width,
-      height: roomNode.size?.height,
+      width: isExpanded ? (roomNode.expandedWidth ?? roomNode.size?.width) : roomNode.size?.width,
+      height: isExpanded ? (roomNode.expandedHeight ?? roomNode.size?.height) : roomNode.size?.height,
       data: {
         label: roomNode.name || basenameRef(childPath),
         parent: dirPath || kbPath || undefined,
@@ -164,6 +172,10 @@ export async function buildNodes(
         hasContent,
         hasDetail,
         nodeStyle: roomNode.style,
+        expandedWidth: roomNode.expandedWidth,
+        expandedHeight: roomNode.expandedHeight,
+        collapsedWidth: roomNode.size?.width,
+        collapsedHeight: roomNode.size?.height,
       },
     }
   })

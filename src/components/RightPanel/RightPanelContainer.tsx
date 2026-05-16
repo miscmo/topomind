@@ -20,8 +20,8 @@ export default memo(function RightPanelContainer({ tabId }: RightPanelContainerP
   const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
     initialWidth: width,
     onWidthChange: setWidth,
-    minWidth: 400,
-    maxWidth: 800,
+    minWidth: 600,
+    maxWidth: 1200,
   })
 
   if (collapsed) {

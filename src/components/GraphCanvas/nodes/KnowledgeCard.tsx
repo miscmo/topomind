@@ -15,6 +15,7 @@ import { useGraphUiStore } from '../../../stores/graphUiStore'
 import { useGraphStoreApi } from '../../../stores/graphStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { MarkdownPreview } from '../../MarkdownWorkspace/MarkdownPreview'
+import { MarkdownWorkspace } from '../../MarkdownWorkspace/MarkdownWorkspace'
 import styles from './KnowledgeCard.module.css'
 
 const MARKDOWN_MIN_WIDTH = 160
@@ -36,6 +37,7 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
   const titleInputRef = useRef<HTMLInputElement>(null)
   const markdownTextareaRef = useRef<HTMLTextAreaElement>(null)
   const titleSavingRef = useRef(false)
+  const markdownAutosaveTimerRef = useRef<number | null>(null)
   const resizeHideTimerRef = useRef<number | null>(null)
   const defaultNodeStyle = useGraphUiStore((state) => state.defaultNodeStyle)
   const defaultNodeSize = useGraphUiStore((state) => state.defaultNodeSize)
@@ -155,14 +157,10 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
   }, [cardPath])
 
   useEffect(() => {
-    if (contentInteractionsEnabled) return
-    setTitleEditing(false)
-    setMarkdownEditing(false)
-    setPreview(null)
-  }, [contentInteractionsEnabled])
-
-  useEffect(() => {
     return () => {
+      if (markdownAutosaveTimerRef.current !== null) {
+        window.clearTimeout(markdownAutosaveTimerRef.current)
+      }
       if (resizeHideTimerRef.current !== null) {
         window.clearTimeout(resizeHideTimerRef.current)
       }
@@ -237,11 +235,57 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
     setMarkdownEditing(false)
   }, [entry?.content])
 
+  const persistMarkdownDraft = useCallback(async (nextContent: string) => {
+    const savedContent = useCardContentStore.getState().entries[cardPath]?.content ?? ''
+    if (nextContent === savedContent) return
+    await storage.writeCardMarkdown(cardPath, nextContent)
+    useCardContentStore.getState().setCardMarkdown(cardPath, nextContent)
+  }, [cardPath, storage])
+
   const saveMarkdownEdit = useCallback(async () => {
-    await storage.writeCardMarkdown(cardPath, markdownDraft)
-    useCardContentStore.getState().setCardMarkdown(cardPath, markdownDraft)
+    if (markdownAutosaveTimerRef.current !== null) {
+      window.clearTimeout(markdownAutosaveTimerRef.current)
+      markdownAutosaveTimerRef.current = null
+    }
+    await persistMarkdownDraft(markdownDraft)
     setMarkdownEditing(false)
-  }, [cardPath, markdownDraft, storage])
+  }, [markdownDraft, persistMarkdownDraft])
+
+  useEffect(() => {
+    if (contentInteractionsEnabled) return
+    setTitleEditing(false)
+    setPreview(null)
+    if (!markdownEditing) return
+    if (markdownAutosaveTimerRef.current !== null) {
+      window.clearTimeout(markdownAutosaveTimerRef.current)
+      markdownAutosaveTimerRef.current = null
+    }
+    if (markdownDraft !== (entry?.content ?? '')) {
+      void persistMarkdownDraft(markdownDraft)
+    }
+    setMarkdownEditing(false)
+  }, [contentInteractionsEnabled, entry?.content, markdownDraft, markdownEditing, persistMarkdownDraft])
+
+  useEffect(() => {
+    if (!markdownEditing) return
+    if (markdownDraft === (entry?.content ?? '')) return
+
+    if (markdownAutosaveTimerRef.current !== null) {
+      window.clearTimeout(markdownAutosaveTimerRef.current)
+    }
+
+    markdownAutosaveTimerRef.current = window.setTimeout(() => {
+      markdownAutosaveTimerRef.current = null
+      void persistMarkdownDraft(markdownDraft)
+    }, 800)
+
+    return () => {
+      if (markdownAutosaveTimerRef.current !== null) {
+        window.clearTimeout(markdownAutosaveTimerRef.current)
+        markdownAutosaveTimerRef.current = null
+      }
+    }
+  }, [entry?.content, markdownDraft, markdownEditing, persistMarkdownDraft])
 
   const handleMarkdownClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (!contentInteractionsEnabled) return
@@ -274,8 +318,8 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
         id,
         type: 'dimensions',
         dimensions: {
-          width: Math.min(nodeSizeLimits.maxWidth, Math.max(nodeSizeLimits.minWidth, COLLAPSED_NODE_WIDTH)),
-          height: Math.min(nodeSizeLimits.maxHeight, Math.max(nodeSizeLimits.minHeight, COLLAPSED_NODE_HEIGHT)),
+          width: Math.min(nodeSizeLimits.maxWidth, Math.max(nodeSizeLimits.minWidth, data.collapsedWidth || COLLAPSED_NODE_WIDTH)),
+          height: Math.min(nodeSizeLimits.maxHeight, Math.max(nodeSizeLimits.minHeight, data.collapsedHeight || COLLAPSED_NODE_HEIGHT)),
         },
         updateStyle: true,
         resizing: false
@@ -292,7 +336,7 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
         resizing: false
       } as NodeDimensionChange])
     }
-  }, [id, data.expandedWidth, data.expandedHeight, shouldShowMarkdown, graph, nodeSizeLimits.maxHeight, nodeSizeLimits.maxWidth, nodeSizeLimits.minHeight, nodeSizeLimits.minWidth])
+  }, [id, data.expandedWidth, data.expandedHeight, data.collapsedWidth, data.collapsedHeight, shouldShowMarkdown, graph, nodeSizeLimits.maxHeight, nodeSizeLimits.maxWidth, nodeSizeLimits.minHeight, nodeSizeLimits.minWidth])
 
   const hasCardContent = entry ? entry.content.trim().length > 0 : data.hasContent === true
   const hasDetail = detailEntry ? detailEntry.content.trim().length > 0 : data.hasDetail === true
@@ -429,35 +473,32 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
             {entry?.loading ? (
               <div className={styles.muted}>加载中...</div>
             ) : markdownEditing && contentInteractionsEnabled ? (
-              <div className={styles.markdownEditor}>
-                <textarea
-                  ref={markdownTextareaRef}
-                  className={styles.markdownTextarea}
+              <div 
+                className={styles.markdownEditorWorkspace} 
+                onPointerDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                    event.preventDefault()
+                    void saveMarkdownEdit()
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    cancelMarkdownEdit()
+                  }
+                }}
+                style={{ height: '100%', width: '100%' }}
+              >
+                <MarkdownWorkspace
                   value={markdownDraft}
-                  onChange={(event) => setMarkdownDraft(event.target.value)}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => {
-                    event.stopPropagation()
-                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                      event.preventDefault()
-                      void saveMarkdownEdit()
-                    }
-                    if (event.key === 'Escape') {
-                      event.preventDefault()
-                      cancelMarkdownEdit()
-                    }
-                  }}
+                  savedValue={entry?.content ?? ''}
+                  onChange={setMarkdownDraft}
+                  onSave={saveMarkdownEdit}
+                  documentType="card"
+                  attachmentCardPath={cardPath}
                   placeholder="输入卡片 Markdown..."
-                  spellCheck={false}
                 />
-                <div className={styles.markdownEditorBar}>
-                  <span>Ctrl/Cmd + Enter 保存，Esc 取消</span>
-                  <div className={styles.markdownEditorActions}>
-                    <button type="button" onClick={cancelMarkdownEdit}>取消</button>
-                    <button type="button" onClick={() => void saveMarkdownEdit()}>保存</button>
-                  </div>
-                </div>
               </div>
             ) : entry?.content ? (
               <MarkdownPreview content={entry.content} compact className="markdownBody" attachmentCardPath={cardPath} />

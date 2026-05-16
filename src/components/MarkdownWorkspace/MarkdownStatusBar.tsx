@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import styles from './MarkdownWorkspace.module.css'
 
 interface MarkdownStatusBarProps {
   value: string
@@ -23,40 +24,27 @@ export const MarkdownStatusBar = memo(function MarkdownStatusBar({
   }
 
   const getStatusColor = () => {
-    if (saveError) return '#dc3545' // red
-    if (isSaving) return '#0d6efd' // blue
-    if (isDirty) return '#fd7e14' // orange
-    return '#198754' // green
+    if (saveError) return '#ef4444' // red
+    if (isSaving) return '#3b82f6' // blue
+    if (isDirty) return '#f59e0b' // orange
+    return '#10b981' // green
   }
 
   const wordCount = value.trim().split(/\s+/).filter(Boolean).length
   const charCount = value.length
 
   return (
-    <div className="markdown-statusbar" style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '2px 8px',
-      fontSize: '11px',
-      color: '#6c757d',
-      borderTop: '1px solid #eaeaea',
-      backgroundColor: '#f8f9fa'
-    }}>
-      <div style={{ display: 'flex', gap: '16px' }}>
+    <div className={styles.statusbar}>
+      <div className={styles.statusLeft}>
         <span>
-          <span style={{ 
-            display: 'inline-block', 
-            width: '8px', 
-            height: '8px', 
-            borderRadius: '50%', 
-            backgroundColor: getStatusColor(),
-            marginRight: '4px'
-          }} />
+          <span 
+            className={styles.statusIndicator}
+            style={{ backgroundColor: getStatusColor() }} 
+          />
           {getStatusText()}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: '16px' }}>
+      <div className={styles.statusRight}>
         <span>{charCount} 字符</span>
         <span>{wordCount} 词</span>
       </div>

@@ -232,7 +232,7 @@
 .markdown {
   flex: 1;
   min-height: 0;
-  overflow: overlay;
+  overflow: auto;
   color: #334155;
   text-align: left;
   pointer-events: auto;
@@ -241,6 +241,8 @@
   border-bottom-right-radius: 8px;
   background: transparent; /* 继承父节点背景，避免割裂 */
   user-select: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.38) transparent;
 }
 
 .interactiveMarkdown {
@@ -287,67 +289,14 @@
   cursor: pointer;
 }
 
-.markdownEditor {
+.markdownEditorWorkspace {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: 6px;
   overflow: hidden;
   background: transparent;
-}
-
-.markdownTextarea {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  resize: none;
-  border: 0;
-  outline: none;
-  padding: 5px 6px;
-  background: transparent;
-  color: inherit;
-  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
-  font-size: var(--node-body-font-size, 11px);
-  line-height: 1.35;
-  box-sizing: border-box;
-}
-
-.markdownEditorBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 3px 4px;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
-  color: #64748b;
-  font-size: 9px;
-  line-height: 1.2;
-}
-
-.markdownEditorActions {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex-shrink: 0;
-}
-
-.markdownEditorActions button {
-  height: 16px;
-  padding: 0 5px;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  background: #fff;
-  color: #475569;
-  font-size: 9px;
-  cursor: pointer;
-}
-
-.markdownEditorActions button:hover {
-  border-color: #3b82f6;
-  color: #2563eb;
 }
 
 .previewOverlay {
@@ -437,7 +386,8 @@
 
 /* 进一步精简滚动条 */
 .markdown::-webkit-scrollbar {
-  width: 2px; /* 极细 */
+  width: 8px;
+  height: 8px;
 }
 
 .markdown::-webkit-scrollbar-track {
@@ -445,12 +395,15 @@
 }
 
 .markdown::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.15);
-  border-radius: 4px;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  box-shadow: inset 0 0 0 10px rgba(148, 163, 184, 0.28);
 }
 
 .markdown:hover::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.4);
+  box-shadow: inset 0 0 0 10px rgba(100, 116, 139, 0.42);
 }
 
 .muted {
