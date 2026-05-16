@@ -10,8 +10,7 @@ import { useGraphContext } from '../../../contexts/GraphContext'
 import { useGraphStore, useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
 import { useDraftStore } from '../../../stores/draftStore'
 import { useCardContentStore } from '../../../stores/cardContentStore'
-import MarkdownEditor from './MarkdownEditor'
-import MarkdownViewer from '../../MarkdownViewer'
+import { MarkdownWorkspace } from '../../MarkdownWorkspace/MarkdownWorkspace'
 import styles from './DetailTab.module.css'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
@@ -38,8 +37,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   }, [tabId])
   const nodePath = selectedNodeId ? resolveNodePath(selectedNodeId) : null
 
-  const editMode = useDraftStore((s) => nodePath ? (s.detailEditModes[nodePath] || false) : false)
-  const setEditMode = useDraftStore((s) => s.setDetailEditMode)
   const draftMarkdown = useDraftStore((s) => nodePath ? (s.detailDrafts[nodePath] ?? '') : '')
   const setDraftMarkdown = useDraftStore((s) => s.setDetailDraft)
   const detailEntry = useCardContentStore((s) => nodePath ? s.detailEntries[nodePath] : undefined)
@@ -116,7 +113,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       setDetailMarkdown(nodePath, draftMarkdown)
       setSavedMarkdown(draftMarkdown)
       logAction('内容:保存', 'DetailPanel', { nodePath, label })
-      setEditMode(nodePath, false)
     } catch (e) {
       logger.catch('DetailPanel', 'handleSave', e)
     }
@@ -160,10 +156,10 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   }, [selectedNodeId, confirm, graph, collapseRightPanel, resolveNodePath, storeApi])
 
   const flushMarkdownSave = useCallback(async () => {
-    if (!editMode || !selectedNodeId || !nodePath) return
+    if (!selectedNodeId || !nodePath) return
     if (draftMarkdown === savedMarkdown) return
     await handleSave()
-  }, [editMode, selectedNodeId, nodePath, draftMarkdown, savedMarkdown, handleSave])
+  }, [selectedNodeId, nodePath, draftMarkdown, savedMarkdown, handleSave])
 
   useEffect(() => {
     return registerTabSaver(tabId, flushMarkdownSave)
@@ -213,75 +209,36 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
 
       {/* 操作按钮行 */}
       <div className={styles.actions}>
-        {!editMode ? (
-          <>
-            <button onClick={() => nodePath && setEditMode(nodePath, true)} title="编辑 Markdown">
-              编辑
-            </button>
-            <button
-              onClick={() => {
-                setNewName(data.label)
-                setRenameMode(true)
-              }}
-              title="重命名节点"
-            >
-              重命名
-            </button>
-            <button
-              onClick={handleDelete}
-              title="删除节点"
-              className={styles.deleteBtn}
-            >
-              删除
-            </button>
-          </>
-        ) : (
-          <>
-            <button className={styles.saveBtn} onClick={handleSave}>
-              保存
-            </button>
-            <button
-              onClick={() => {
-                if (!nodePath) return
-                // Reload original content — use nodesMapRef for stale-closure-safe access
-                const requestSeq = ++markdownRequestSeqRef.current
-                storage.readMarkdown(nodePath).then((content: string) => {
-                  if (markdownRequestSeqRef.current !== requestSeq) return
-                  setDetailMarkdown(nodePath, content)
-                  setDraftMarkdown(nodePath, content)
-                  setSavedMarkdown(content)
-                }).catch(() => {
-                  if (markdownRequestSeqRef.current !== requestSeq) return
-                  setDetailMarkdown(nodePath, '')
-                  setDraftMarkdown(nodePath, '')
-                  setSavedMarkdown('')
-                })
-                setEditMode(nodePath, false)
-              }}
-            >
-              取消
-            </button>
-          </>
-        )}
+        <button
+          onClick={() => {
+            setNewName(data.label)
+            setRenameMode(true)
+          }}
+          title="重命名节点"
+        >
+          重命名
+        </button>
+        <button
+          onClick={handleDelete}
+          title="删除节点"
+          className={styles.deleteBtn}
+        >
+          删除
+        </button>
       </div>
 
       {/* 内容区 */}
       <div className={styles.body}>
-        {editMode ? (
-          <div className={styles.mdEditorWrap}>
-            <MarkdownEditor
-              value={draftMarkdown}
-              onChange={(val) => nodePath && setDraftMarkdown(nodePath, val)}
-              onSave={handleSave}
-              attachmentCardPath={nodePath}
-              placeholder="在此输入 Markdown 内容..."
-            />
-          </div>
-        ) : (
-          <>
-            <MarkdownViewer content={draftMarkdown} className={styles.markdownBody} attachmentCardPath={nodePath} />
-          </>
-        )}
+        <MarkdownWorkspace
+          value={draftMarkdown}
+          savedValue={savedMarkdown}
+          onChange={(val) => nodePath && setDraftMarkdown(nodePath, val)}
+          onSave={handleSave}
+          attachmentCardPath={nodePath}
+          documentType="detail"
+          title={data.label}
+          pathLabel={nodePath || undefined}
+        />
       </div>
     </div>
   )

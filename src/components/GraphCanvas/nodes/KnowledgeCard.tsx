@@ -14,7 +14,7 @@ import { useCardContentStore } from '../../../stores/cardContentStore'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
 import { useGraphStoreApi } from '../../../stores/graphStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
-import MarkdownViewer from '../../MarkdownViewer'
+import { MarkdownPreview } from '../../MarkdownWorkspace/MarkdownPreview'
 import styles from './KnowledgeCard.module.css'
 
 const MARKDOWN_MIN_WIDTH = 160
@@ -460,7 +460,7 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
                 </div>
               </div>
             ) : entry?.content ? (
-              <MarkdownViewer content={entry.content} compact className="markdownBody" attachmentCardPath={cardPath} />
+              <MarkdownPreview content={entry.content} compact className="markdownBody" attachmentCardPath={cardPath} />
             ) : null}
           </div>
         )}

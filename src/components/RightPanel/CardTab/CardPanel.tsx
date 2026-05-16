@@ -1,15 +1,11 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useStorage } from '../../../core/storage'
-import { registerTabSaver } from '../../../core/close-guard'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
-import { useGraphStore, useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
+import { useGraphStore, useSelectedNodeId } from '../../../stores/graphStore'
 import { tabStore } from '../../../stores/tabStore'
-import { useCardContentStore } from '../../../stores/cardContentStore'
-import { useDraftStore } from '../../../stores/draftStore'
-import MarkdownViewer from '../../MarkdownViewer'
-import MarkdownEditor from '../DetailTab/MarkdownEditor'
+import { MarkdownWorkspace } from '../../MarkdownWorkspace/MarkdownWorkspace'
 import styles from '../DetailTab/DetailTab.module.css'
 
 interface CardPanelProps {
@@ -18,7 +14,6 @@ interface CardPanelProps {
 
 const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
   const selectedNodeId = useSelectedNodeId()
-  const storeApi = useGraphStoreApi()
   const storage = useStorage()
 
   const resolveNodePath = useCallback((nodeId: string) => {
@@ -27,75 +22,52 @@ const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
   }, [tabId])
   const nodePath = selectedNodeId ? resolveNodePath(selectedNodeId) : null
 
-  const editMode = useDraftStore((s) => nodePath ? (s.cardEditModes[nodePath] || false) : false)
-  const setEditMode = useDraftStore((s) => s.setCardEditMode)
-  const draftMarkdown = useDraftStore((s) => nodePath ? (s.cardDrafts[nodePath] ?? '') : '')
-  const setDraftMarkdown = useDraftStore((s) => s.setCardDraft)
-  const cardEntry = useCardContentStore((s) => nodePath ? s.entries[nodePath] : undefined)
-
-  const [savedMarkdown, setSavedMarkdown] = useState('')
-  const requestSeqRef = useRef(0)
-
   const selectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId) : null)
 
+  const [content, setContent] = useState<string>('')
+  const [savedContent, setSavedContent] = useState<string>('')
+  
+  const contentRequestSeqRef = useRef(0)
+
   useEffect(() => {
-    const requestSeq = ++requestSeqRef.current
-    if (!selectedNodeId || !nodePath) return
-
-    const cachedContent = useCardContentStore.getState().entries[nodePath]?.content
-    if (cachedContent !== undefined) {
-      setSavedMarkdown(cachedContent)
-      if (useDraftStore.getState().cardDrafts[nodePath] === undefined) {
-        setDraftMarkdown(nodePath, cachedContent)
-      }
-    }
-
-    storage.readCardMarkdown(nodePath).then((content: string) => {
-      if (requestSeqRef.current !== requestSeq) return
-      useCardContentStore.getState().setCardMarkdown(nodePath, content)
-      setSavedMarkdown(content)
-      if (useDraftStore.getState().cardDrafts[nodePath] === undefined) {
-        setDraftMarkdown(nodePath, content)
-      }
-    }).catch(() => {
-      if (requestSeqRef.current !== requestSeq) return
-      useCardContentStore.getState().setCardMarkdown(nodePath, '')
-      setSavedMarkdown('')
-      if (useDraftStore.getState().cardDrafts[nodePath] === undefined) {
-        setDraftMarkdown(nodePath, '')
-      }
+    if (!nodePath) return
+    const requestSeq = ++contentRequestSeqRef.current
+    
+    storage.readCardMarkdown(nodePath).then((loadedContent: string) => {
+      if (contentRequestSeqRef.current !== requestSeq) return
+      setContent(loadedContent)
+      setSavedContent(loadedContent)
+    }).catch((e: any) => {
+      if (contentRequestSeqRef.current !== requestSeq) return
+      setContent('')
+      setSavedContent('')
     })
-  }, [selectedNodeId, nodePath, storage, setDraftMarkdown])
+  }, [nodePath, storage])
 
-  useEffect(() => {
-    if (cardEntry) {
-      setSavedMarkdown(cardEntry.content)
-    }
-  }, [cardEntry])
-
-  const handleSave = useCallback(async () => {
-    if (!selectedNodeId || !nodePath) return
-    const label = storeApi.getState().nodesMap.get(selectedNodeId)?.data.label
+  const handleSave = async () => {
+    if (!nodePath) return
+    if (content === savedContent) return
+    
     try {
-      await storage.writeCardMarkdown(nodePath, draftMarkdown)
-      useCardContentStore.getState().setCardMarkdown(nodePath, draftMarkdown)
-      setSavedMarkdown(draftMarkdown)
-      setEditMode(nodePath, false)
-      logAction('卡片:保存', 'CardPanel', { nodePath, label })
-    } catch (error) {
-      logger.catch('CardPanel', 'handleSave', error)
+      await storage.writeCardMarkdown(nodePath, content)
+      setSavedContent(content)
+      logAction('卡片:保存', 'CardPanel', { nodePath })
+    } catch (e) {
+      logger.catch('CardPanel', 'handleSave', e)
+      throw e
     }
-  }, [selectedNodeId, nodePath, draftMarkdown, storage, setEditMode])
-
-  const flushCardSave = useCallback(async () => {
-    if (!editMode || !selectedNodeId || !nodePath) return
-    if (draftMarkdown === savedMarkdown) return
-    await handleSave()
-  }, [editMode, selectedNodeId, nodePath, draftMarkdown, savedMarkdown, handleSave])
+  }
 
   useEffect(() => {
-    return registerTabSaver(tabId, flushCardSave)
-  }, [tabId, flushCardSave])
+    if (!nodePath) return
+    return () => {
+      if (content !== savedContent) {
+        storage.writeCardMarkdown(nodePath, content).catch(e => {
+          logger.catch('CardPanel', 'unmountSave', e)
+        })
+      }
+    }
+  }, [nodePath, content, savedContent, storage])
 
   if (!selectedNodeId || !selectedNode) {
     return (
@@ -116,44 +88,17 @@ const CardPanel = memo(function CardPanel({ tabId }: CardPanelProps) {
         <div className={styles.titleSub}>卡片内容：{nodePath}</div>
       </div>
 
-      <div className={styles.actions}>
-        {!editMode ? (
-          <button onClick={() => nodePath && setEditMode(nodePath, true)} title="编辑卡片 Markdown">
-            编辑
-          </button>
-        ) : (
-          <>
-            <button className={styles.saveBtn} onClick={handleSave}>
-              保存
-            </button>
-            <button
-              onClick={() => {
-                if (nodePath) {
-                  setDraftMarkdown(nodePath, savedMarkdown)
-                  setEditMode(nodePath, false)
-                }
-              }}
-            >
-              取消
-            </button>
-          </>
-        )}
-      </div>
-
       <div className={styles.body}>
-        {editMode ? (
-          <div className={styles.mdEditorWrap}>
-            <MarkdownEditor
-              value={draftMarkdown}
-              onChange={(val) => nodePath && setDraftMarkdown(nodePath, val)}
-              onSave={handleSave}
-              attachmentCardPath={nodePath}
-              placeholder="在此输入卡片 Markdown。建议写成详情文档的摘要、预览或关键结论..."
-            />
-          </div>
-        ) : (
-          <MarkdownViewer content={draftMarkdown} className={styles.markdownBody} attachmentCardPath={nodePath} />
-        )}
+        <MarkdownWorkspace
+          value={content}
+          savedValue={savedContent}
+          onChange={setContent}
+          onSave={handleSave}
+          attachmentCardPath={nodePath}
+          documentType="card"
+          title={selectedNode.data.label}
+          pathLabel={nodePath || undefined}
+        />
       </div>
     </div>
   )
