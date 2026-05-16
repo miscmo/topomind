@@ -5,6 +5,7 @@
 import { logger } from './logger'
 import type { ElectronAPI } from '../types/electron-api'
 import type { EdgeRelation, EdgeWeight } from '../types'
+import type { DetailDocumentItem } from './storage/service'
 
 const getApi = (): ElectronAPI | null => {
   const w = window as Window
@@ -76,6 +77,10 @@ export interface FSB {
   readGraphMeta: (rootDir: string, roomPath: string) => Promise<FSBGraphMeta>
   writeGraphMeta: (rootDir: string, roomPath: string, meta: FSBGraphMeta) => Promise<unknown>
   readFile: (rootDir: string, filePath: string) => Promise<string>
+  listDetailDocuments: (rootDir: string, cardPath: string) => Promise<DetailDocumentItem[]>
+  createDetailDocument: (rootDir: string, cardPath: string, name: string) => Promise<DetailDocumentItem>
+  renameDetailDocument: (rootDir: string, cardPath: string, documentPath: string, nextName: string) => Promise<DetailDocumentItem>
+  deleteDetailDocument: (rootDir: string, cardPath: string, documentPath: string) => Promise<void>
   writeAttachmentBase64: (rootDir: string, cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
   downloadAttachment: (rootDir: string, cardPath: string, url: string) => Promise<string>
   readAttachmentDataUrl: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<string>
@@ -101,6 +106,14 @@ const FSBImpl: FSB = {
   writeGraphMeta: (rootDir, roomPath, meta) => _call('fs:writeGraphMeta', rootDir, roomPath, meta),
 
   readFile: (rootDir, filePath) => _call('fs:readFile', rootDir, filePath) as Promise<string>,
+  listDetailDocuments: (rootDir, cardPath) =>
+    _call('fs:listDetailDocuments', rootDir, cardPath) as Promise<DetailDocumentItem[]>,
+  createDetailDocument: (rootDir, cardPath, name) =>
+    _call('fs:createDetailDocument', rootDir, cardPath, name) as Promise<DetailDocumentItem>,
+  renameDetailDocument: (rootDir, cardPath, documentPath, nextName) =>
+    _call('fs:renameDetailDocument', rootDir, cardPath, documentPath, nextName) as Promise<DetailDocumentItem>,
+  deleteDetailDocument: (rootDir, cardPath, documentPath) =>
+    _call('fs:deleteDetailDocument', rootDir, cardPath, documentPath) as Promise<void>,
   writeAttachmentBase64: (rootDir, cardPath, fileName, mimeType, base64) =>
     _call('fs:writeAttachmentBase64', rootDir, cardPath, fileName, mimeType, base64) as Promise<string>,
   downloadAttachment: (rootDir, cardPath, url) =>

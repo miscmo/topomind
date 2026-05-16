@@ -127,6 +127,14 @@ function registerIPC() {
   ipcMain.handle('fs:writeGraphMeta', function(e, rootDir, p, m) { fileService.writeGraphMeta(rootDir, p, m); });
   ipcMain.handle('fs:readFile', function(e, rootDir, p) { return fileService.readFile(rootDir, p); });
   ipcMain.handle('fs:writeFile', function(e, rootDir, p, c) { fileService.writeFile(rootDir, p, c); });
+  ipcMain.handle('fs:listDetailDocuments', function(e, rootDir, cardPath) { return fileService.listDetailDocuments(rootDir, cardPath); });
+  ipcMain.handle('fs:createDetailDocument', function(e, rootDir, cardPath, name) { return fileService.createDetailDocument(rootDir, cardPath, name); });
+  ipcMain.handle('fs:renameDetailDocument', function(e, rootDir, cardPath, documentPath, nextName) {
+    return fileService.renameDetailDocument(rootDir, cardPath, documentPath, nextName);
+  });
+  ipcMain.handle('fs:deleteDetailDocument', function(e, rootDir, cardPath, documentPath) {
+    return fileService.deleteDetailDocument(rootDir, cardPath, documentPath);
+  });
   ipcMain.handle('fs:writeAttachmentBase64', function(e, rootDir, cardPath, fileName, mimeType, base64) {
     return fileService.writeAttachmentBase64(rootDir, cardPath, fileName, mimeType, base64);
   });

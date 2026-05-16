@@ -18,6 +18,7 @@ interface CardContentStore {
   loadDetailMarkdown: (path: string, storage: Pick<MarkdownStorage, 'readMarkdown'>) => Promise<void>
   setCardMarkdown: (path: string, content: string) => void
   setDetailMarkdown: (path: string, content: string) => void
+  clearDetailMarkdown: (path: string) => void
 }
 
 export const useCardContentStore = create<CardContentStore>((set, get) => ({
@@ -106,5 +107,12 @@ export const useCardContentStore = create<CardContentStore>((set, get) => ({
         [path]: { content, loading: false, error: null },
       },
     }))
+  },
+  clearDetailMarkdown: (path) => {
+    if (!path) return
+    set((state) => {
+      const { [path]: _, ...restEntries } = state.detailEntries
+      return { detailEntries: restEntries }
+    })
   },
 }))

@@ -1,5 +1,5 @@
 import { FSB } from '../fs-backend'
-import type { StorageBackend } from './service'
+import type { DetailDocumentItem, StorageBackend } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import type { EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
@@ -40,6 +40,13 @@ interface FSBGraphLike {
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
 )
+
+const DEFAULT_DETAIL_DOCUMENT_PATH = '_content.md'
+
+function normalizeDetailDocumentPath(documentPath: string | null | undefined) {
+  const normalized = String(documentPath ?? '').trim().replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+|\/+$/g, '')
+  return normalized || DEFAULT_DETAIL_DOCUMENT_PATH
+}
 
 const toCardInfo = (parentCardPath: string, key: string, rawChild: unknown): CardInfo => {
   const child = isRecord(rawChild) ? rawChild : {}
@@ -253,6 +260,30 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
 
     writeMarkdown: async (cardPath: string, content: string) => {
       await FSB.writeFile(requireRootDir(), `${cardPath}/_content.md`, content)
+    },
+
+    listDetailDocuments: async (cardPath: string): Promise<DetailDocumentItem[]> => {
+      return FSB.listDetailDocuments(requireRootDir(), cardPath)
+    },
+
+    readDetailDocument: async (cardPath: string, documentPath: string) => {
+      return FSB.readFile(requireRootDir(), `${cardPath}/${normalizeDetailDocumentPath(documentPath)}`)
+    },
+
+    writeDetailDocument: async (cardPath: string, documentPath: string, content: string) => {
+      await FSB.writeFile(requireRootDir(), `${cardPath}/${normalizeDetailDocumentPath(documentPath)}`, content)
+    },
+
+    createDetailDocument: async (cardPath: string, name: string): Promise<DetailDocumentItem> => {
+      return FSB.createDetailDocument(requireRootDir(), cardPath, name)
+    },
+
+    renameDetailDocument: async (cardPath: string, documentPath: string, nextName: string): Promise<DetailDocumentItem> => {
+      return FSB.renameDetailDocument(requireRootDir(), cardPath, normalizeDetailDocumentPath(documentPath), nextName)
+    },
+
+    deleteDetailDocument: async (cardPath: string, documentPath: string): Promise<void> => {
+      await FSB.deleteDetailDocument(requireRootDir(), cardPath, normalizeDetailDocumentPath(documentPath))
     },
 
     readCardMarkdown: async (cardPath: string) => {

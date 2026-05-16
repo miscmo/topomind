@@ -10,7 +10,8 @@ const ALLOWED_CHANNELS = new Set([
   'fs:listKBs', 'fs:readCardChildren', 'fs:createKbsDir', 'fs:createCardDir', 'fs:deleteKbsDir',
   'fs:readGraphMeta', 'fs:writeGraphMeta',
   'fs:renameKB',
-  'fs:readFile', 'fs:writeFile', 'fs:writeAttachmentBase64', 'fs:downloadAttachment', 'fs:readAttachmentDataUrl',
+  'fs:readFile', 'fs:writeFile', 'fs:listDetailDocuments', 'fs:createDetailDocument', 'fs:renameDetailDocument', 'fs:deleteDetailDocument',
+  'fs:writeAttachmentBase64', 'fs:downloadAttachment', 'fs:readAttachmentDataUrl',
   'fs:readAppConfig', 'fs:writeAppConfig',
   'fs:isValidWorkDir', 'fs:selectDirectory', 'fs:createWorkDir', 'fs:importKB',
   // app

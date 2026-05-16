@@ -323,6 +323,120 @@ function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
   return nodePath.resolve(baseDir, normalizedRef);
 }
 
+const DEFAULT_DETAIL_DOCUMENT = '_content.md';
+const DETAIL_DOCUMENT_DIR = '_content';
+
+function _fs_normalizeDetailDocumentPath(documentPath) {
+  var raw = String(documentPath || '').trim().replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+|\/+$/g, '');
+  if (!raw) return DEFAULT_DETAIL_DOCUMENT;
+  if (raw === DEFAULT_DETAIL_DOCUMENT) return DEFAULT_DETAIL_DOCUMENT;
+  if (!raw.startsWith(DETAIL_DOCUMENT_DIR + '/')) {
+    throw new Error('文档路径不合法: ' + raw);
+  }
+  var relativeName = raw.slice((DETAIL_DOCUMENT_DIR + '/').length);
+  if (!relativeName || relativeName.includes('/')) {
+    throw new Error('仅支持 _content 目录下的一级 Markdown 文档');
+  }
+  if (!/\.md$/i.test(relativeName)) {
+    throw new Error('仅支持 Markdown 文档');
+  }
+  return DETAIL_DOCUMENT_DIR + '/' + relativeName;
+}
+
+function _fs_detailDocumentAbsolutePath(rootDir, cardPath, documentPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
+  var normalizedDocumentPath = _fs_normalizeDetailDocumentPath(documentPath);
+  return nodePath.join(cardDir, normalizedDocumentPath);
+}
+
+function _fs_normalizeDetailDocumentName(name) {
+  var raw = String(name || '').trim();
+  if (!raw) throw new Error('文档名称不能为空');
+  if (raw.includes('/') || raw.includes('\\')) throw new Error('文档名称不能包含路径');
+  var dot = raw.toLowerCase().endsWith('.md') ? raw.lastIndexOf('.') : -1;
+  var base = dot > 0 ? raw.slice(0, dot) : raw;
+  var safeBase = _fs_safeSegment(base);
+  if (!safeBase || safeBase === 'untitled' && base !== 'untitled') {
+    throw new Error('文档名称包含非法字符');
+  }
+  return safeBase + '.md';
+}
+
+function _fs_detailDocumentItem(documentPath) {
+  var normalizedPath = _fs_normalizeDetailDocumentPath(documentPath);
+  var baseName = nodePath.basename(normalizedPath, '.md');
+  var isDefault = normalizedPath === DEFAULT_DETAIL_DOCUMENT;
+  return {
+    path: normalizedPath,
+    name: isDefault ? '卡片详情' : baseName,
+    isDefault: isDefault,
+  };
+}
+
+function _fs_listDetailDocuments(rootDir, cardPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
+  var contentDir = nodePath.join(cardDir, DETAIL_DOCUMENT_DIR);
+  var documents = [_fs_detailDocumentItem(DEFAULT_DETAIL_DOCUMENT)];
+  if (nodeFs.existsSync(contentDir)) {
+    nodeFs.readdirSync(contentDir, { withFileTypes: true })
+      .filter(function(entry) { return entry.isFile() && /\.md$/i.test(entry.name); })
+      .sort(function(a, b) { return a.name.localeCompare(b.name, 'zh-CN'); })
+      .forEach(function(entry) {
+        documents.push(_fs_detailDocumentItem(DETAIL_DOCUMENT_DIR + '/' + entry.name));
+      });
+  }
+  return documents;
+}
+
+function _fs_createDetailDocument(rootDir, cardPath, name) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
+  var contentDir = nodePath.join(cardDir, DETAIL_DOCUMENT_DIR);
+  _fs_ensureDir(contentDir);
+  var fileName = _fs_normalizeDetailDocumentName(name);
+  var targetPath = nodePath.join(contentDir, fileName);
+  if (nodeFs.existsSync(targetPath)) {
+    throw new Error('文档已存在: ' + fileName);
+  }
+  nodeFs.writeFileSync(targetPath, '', 'utf-8');
+  return _fs_detailDocumentItem(DETAIL_DOCUMENT_DIR + '/' + fileName);
+}
+
+function _fs_renameDetailDocument(rootDir, cardPath, documentPath, nextName) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var normalizedDocumentPath = _fs_normalizeDetailDocumentPath(documentPath);
+  if (normalizedDocumentPath === DEFAULT_DETAIL_DOCUMENT) {
+    throw new Error('默认文档不允许重命名');
+  }
+  var currentPath = _fs_detailDocumentAbsolutePath(rootDir, cardPath, normalizedDocumentPath);
+  if (!nodeFs.existsSync(currentPath)) {
+    throw new Error('文档不存在: ' + normalizedDocumentPath);
+  }
+  var fileName = _fs_normalizeDetailDocumentName(nextName);
+  var nextPath = _fs_detailDocumentAbsolutePath(rootDir, cardPath, DETAIL_DOCUMENT_DIR + '/' + fileName);
+  if (currentPath !== nextPath && nodeFs.existsSync(nextPath)) {
+    throw new Error('文档已存在: ' + fileName);
+  }
+  if (currentPath !== nextPath) {
+    nodeFs.renameSync(currentPath, nextPath);
+  }
+  return _fs_detailDocumentItem(DETAIL_DOCUMENT_DIR + '/' + fileName);
+}
+
+function _fs_deleteDetailDocument(rootDir, cardPath, documentPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var normalizedDocumentPath = _fs_normalizeDetailDocumentPath(documentPath);
+  if (normalizedDocumentPath === DEFAULT_DETAIL_DOCUMENT) {
+    throw new Error('默认文档不允许删除');
+  }
+  var filePath = _fs_detailDocumentAbsolutePath(rootDir, cardPath, normalizedDocumentPath);
+  if (nodeFs.existsSync(filePath)) {
+    nodeFs.rmSync(filePath, { force: true });
+  }
+}
+
 const fileService = {
     /**
      * @description 读取工作目录应用配置
@@ -541,6 +655,22 @@ const fileService = {
       var f = _fs_resolveKbsPath(rootDir, filePath);
       _fs_ensureDir(nodePath.dirname(f));
       nodeFs.writeFileSync(f, content, 'utf-8');
+    },
+
+    listDetailDocuments: function(rootDir, cardPath) {
+      return _fs_listDetailDocuments(rootDir, cardPath);
+    },
+
+    createDetailDocument: function(rootDir, cardPath, name) {
+      return _fs_createDetailDocument(rootDir, cardPath, name);
+    },
+
+    renameDetailDocument: function(rootDir, cardPath, documentPath, nextName) {
+      return _fs_renameDetailDocument(rootDir, cardPath, documentPath, nextName);
+    },
+
+    deleteDetailDocument: function(rootDir, cardPath, documentPath) {
+      return _fs_deleteDetailDocument(rootDir, cardPath, documentPath);
     },
 
     writeAttachmentBase64: function(rootDir, cardPath, fileName, mimeType, base64) {

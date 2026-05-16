@@ -30,6 +30,12 @@ interface VaultConfig {
   [key: string]: unknown
 }
 
+export interface DetailDocumentItem {
+  path: string
+  name: string
+  isDefault: boolean
+}
+
 export interface StorageBackend {
   createVault: (dirPath: string) => Promise<void>
   isValidVault: (dirPath: string) => Promise<{ valid: boolean; error?: string }>
@@ -47,6 +53,12 @@ export interface StorageBackend {
 
   readMarkdown: (cardPath: string) => Promise<string>
   writeMarkdown: (cardPath: string, content: string) => Promise<void>
+  listDetailDocuments: (cardPath: string) => Promise<DetailDocumentItem[]>
+  readDetailDocument: (cardPath: string, documentPath: string) => Promise<string>
+  writeDetailDocument: (cardPath: string, documentPath: string, content: string) => Promise<void>
+  createDetailDocument: (cardPath: string, name: string) => Promise<DetailDocumentItem>
+  renameDetailDocument: (cardPath: string, documentPath: string, nextName: string) => Promise<DetailDocumentItem>
+  deleteDetailDocument: (cardPath: string, documentPath: string) => Promise<void>
   readCardMarkdown: (cardPath: string) => Promise<string>
   writeCardMarkdown: (cardPath: string, content: string) => Promise<void>
   writeAttachmentBase64: (cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
@@ -219,6 +231,26 @@ export function createStore(backend: StorageBackend) {
     },
     async writeMarkdown(cardPath: string, content: string) {
       try { await backend.writeMarkdown(cardPath, content) } catch (e) { logger.catch('Store.writeMarkdown', `写入文档失败: ${cardPath}`, e); throw e }
+    },
+    async listDetailDocuments(cardPath: string) {
+      try { return await backend.listDetailDocuments(cardPath) } catch (e) { logger.catch('Store.listDetailDocuments', `列出详情文档失败: ${cardPath}`, e); throw e }
+    },
+    async readDetailDocument(cardPath: string, documentPath: string) {
+      try { return await backend.readDetailDocument(cardPath, documentPath) } catch (e) { logger.catch('Store.readDetailDocument', `读取详情文档失败: ${cardPath}/${documentPath}`, e); throw e }
+    },
+    async writeDetailDocument(cardPath: string, documentPath: string, content: string) {
+      try { await backend.writeDetailDocument(cardPath, documentPath, content) } catch (e) { logger.catch('Store.writeDetailDocument', `写入详情文档失败: ${cardPath}/${documentPath}`, e); throw e }
+    },
+    async createDetailDocument(cardPath: string, name: unknown) {
+      const safeName = ensureValidName(name, '文档名称')
+      try { return await backend.createDetailDocument(cardPath, safeName) } catch (e) { logger.catch('Store.createDetailDocument', `创建详情文档失败: ${cardPath}/${name}`, e); throw e }
+    },
+    async renameDetailDocument(cardPath: string, documentPath: string, nextName: unknown) {
+      const safeName = ensureValidName(nextName, '文档名称')
+      try { return await backend.renameDetailDocument(cardPath, documentPath, safeName) } catch (e) { logger.catch('Store.renameDetailDocument', `重命名详情文档失败: ${cardPath}/${documentPath} -> ${nextName}`, e); throw e }
+    },
+    async deleteDetailDocument(cardPath: string, documentPath: string) {
+      try { await backend.deleteDetailDocument(cardPath, documentPath) } catch (e) { logger.catch('Store.deleteDetailDocument', `删除详情文档失败: ${cardPath}/${documentPath}`, e); throw e }
     },
     async readCardMarkdown(cardPath: string) {
       try { return await backend.readCardMarkdown(cardPath) } catch (e) { logger.catch('Store.readCardMarkdown', `读取卡片内容失败: ${cardPath}`, e); throw e }
