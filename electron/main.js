@@ -13,20 +13,25 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import nodePath from 'path';
 import nodeFs from 'fs';
+import { fileURLToPath } from 'url';
 import { fileService } from './file-service.js';
 import { dialogService } from './dialog-service.js';
 import LogService from './log-service.js';
 
 // 兼容生产运行以及 dev 模式。
 const APP_PATH = app.getAppPath();
-const MAIN_SCRIPT_DIR = process.argv[1] ? nodePath.dirname(nodePath.resolve(process.argv[1])) : APP_PATH;
-const DIST_ELECTRON_DIR = nodeFs.existsSync(nodePath.join(APP_PATH, 'dist-electron'))
-  ? nodePath.join(APP_PATH, 'dist-electron')
-  : MAIN_SCRIPT_DIR;
+const CURRENT_SCRIPT_DIR = nodePath.dirname(fileURLToPath(import.meta.url));
+const DIST_ELECTRON_DIR = [
+  nodePath.join(APP_PATH, 'dist-electron'),
+  CURRENT_SCRIPT_DIR,
+  nodePath.join(CURRENT_SCRIPT_DIR, '..', 'dist-electron'),
+].find((dir) => nodeFs.existsSync(nodePath.join(dir, 'preload.js')))
+  || nodePath.join(APP_PATH, 'dist-electron');
 const DIST_RENDERER_DIR = [
   nodePath.join(APP_PATH, 'dist'),
   nodePath.join(process.cwd(), 'dist'),
   nodePath.join(nodePath.dirname(DIST_ELECTRON_DIR), 'dist'),
+  nodePath.join(CURRENT_SCRIPT_DIR, '..', 'dist'),
 ].find((dir) => nodeFs.existsSync(nodePath.join(dir, 'index.html')))
   || nodePath.join(APP_PATH, 'dist');
 const SETUP_WINDOW_WIDTH = 380;
@@ -249,7 +254,6 @@ function registerIPC() {
 var win = null;
 
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
-app.commandLine.appendSwitch('disable-software-rasterizer');
 
 if (process.env.TOPOMIND_PROFILE && process.env.TOPOMIND_PROFILE !== 'prod') {
   app.setName('TopoMind-' + process.env.TOPOMIND_PROFILE);
