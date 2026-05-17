@@ -28,6 +28,9 @@ const MAX_BUFFER_SIZE = 2000;
 // 2. 状态
 // ============================================================
 
+/** 当前工作目录 */
+let _currentWorkDir = null;
+
 /** logs/ 目录路径 */
 let _logDir = null;
 
@@ -66,6 +69,7 @@ const LEVEL_MAP = {
  */
 function init(workDir) {
   if (!workDir) return false;
+  _currentWorkDir = workDir;
   _logDir = path.join(workDir, LOG_DIR_NAME);
   _ensureLogDir();
   _initTodayFile();
@@ -76,6 +80,10 @@ function init(workDir) {
 function enterWorkDir(workDir) {
   clear();
   return init(workDir);
+}
+
+function getCurrentWorkDir() {
+  return _currentWorkDir;
 }
 
 /**
@@ -349,4 +357,4 @@ function getAvailableDates() {
   }
 }
 
-export default { init, enterWorkDir, write, getLogDir, getAvailableDates, getBuffer, query, setLevel, clear };
+export default { init, enterWorkDir, getCurrentWorkDir, write, getLogDir, getAvailableDates, getBuffer, query, setLevel, clear };

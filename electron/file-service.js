@@ -718,6 +718,32 @@ const fileService = {
     },
 
     /**
+     * @description 读取 _config.json 中的 windowState
+     * @param { string } rootDir: 工作目录路径
+     * @returns { Object|null } windowState 对象或 null
+     */
+    readWindowState: function(rootDir) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      var configPath = _fs_appConfigPath(rootDir);
+      var config = _fs_readJsonFile(configPath);
+      return config.windowState || null;
+    },
+
+    /**
+     * @description 写入 windowState 到 _config.json
+     * @param { string } rootDir: 工作目录路径
+     * @param { Object } state: windowState 对象 (x, y, width, height, isMaximized)
+     * @returns { void }
+     */
+    writeWindowState: function(rootDir, state) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      var configPath = _fs_appConfigPath(rootDir);
+      var config = _fs_readJsonFile(configPath);
+      config.windowState = state;
+      _fs_writeJsonFile(configPath, config);
+    },
+
+    /**
      * @description 导入外部知识库目录到当前工作目录
      * @param { string } rootDir: 工作目录路径
      * @param { string } sourcePath: 外部知识库绝对或相对路径

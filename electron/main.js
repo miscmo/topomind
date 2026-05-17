@@ -10,7 +10,7 @@
  *   - file-service.js   — 文件系统操作
  *   - log-service.js     — 日志服务
  */
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell, screen } from 'electron';
 import nodePath from 'path';
 import nodeFs from 'fs';
 import { fileURLToPath } from 'url';
@@ -194,7 +194,51 @@ function registerIPC() {
       win.setResizable(true);
       win.setMinimumSize(900, 600);
       win.setMaximumSize(0, 0);
-      win.setContentSize(HOME_WINDOW_WIDTH, HOME_WINDOW_HEIGHT);
+
+      // 如果有工作目录，尝试读取其保存的状态
+      let state = null;
+      try {
+        const currentWorkDir = LogService.getCurrentWorkDir();
+        if (currentWorkDir) {
+          state = fileService.readWindowState(currentWorkDir);
+        }
+      } catch (err) {
+        console.error('[window-state] Failed to read window state in navigateHome:', err);
+      }
+
+      if (state && typeof state.width === 'number' && typeof state.height === 'number') {
+        const displays = screen.getAllDisplays();
+        const isVisible = displays.some(display => {
+          const bounds = display.bounds;
+          // 修改越界判断：只要窗口有 100x100 的区域在屏幕内就认为可见，不要要求整个窗口都在屏幕内
+          return (
+            state.x + state.width > bounds.x + 100 &&
+            state.x < bounds.x + bounds.width - 100 &&
+            state.y + state.height > bounds.y + 100 &&
+            state.y < bounds.y + bounds.height - 100
+          );
+        });
+
+        if (isVisible) {
+          win.setBounds({
+            x: state.x,
+            y: state.y,
+            width: state.width,
+            height: state.height
+          });
+        } else {
+          win.setContentSize(state.width, state.height);
+          win.center();
+        }
+
+        if (state.isMaximized) {
+          win.maximize();
+        }
+      } else {
+        win.setContentSize(HOME_WINDOW_WIDTH, HOME_WINDOW_HEIGHT);
+        win.center();
+      }
+
       buildMenu(false);
     }
   });
@@ -204,7 +248,51 @@ function registerIPC() {
       win.setResizable(true);
       win.setMinimumSize(900, 600);
       win.setMaximumSize(0, 0);
-      win.setContentSize(HOME_WINDOW_WIDTH, HOME_WINDOW_HEIGHT);
+
+      // 尝试读取已保存的窗口状态
+      let state = null;
+      try {
+        state = fileService.readWindowState(workDir);
+      } catch (err) {
+        console.error('[window-state] Failed to read window state:', err);
+      }
+
+      if (state && typeof state.width === 'number' && typeof state.height === 'number') {
+        // 验证坐标是否在可见屏幕范围内（防止多屏断开导致窗口丢失）
+        const displays = screen.getAllDisplays();
+        const isVisible = displays.some(display => {
+          const bounds = display.bounds;
+          // 修改越界判断：只要窗口有 100x100 的区域在屏幕内就认为可见，不要要求整个窗口都在屏幕内
+          return (
+            state.x + state.width > bounds.x + 100 &&
+            state.x < bounds.x + bounds.width - 100 &&
+            state.y + state.height > bounds.y + 100 &&
+            state.y < bounds.y + bounds.height - 100
+          );
+        });
+
+        if (isVisible) {
+          win.setBounds({
+            x: state.x,
+            y: state.y,
+            width: state.width,
+            height: state.height
+          });
+        } else {
+          // 状态存在但坐标不可见（越界），仅恢复大小并居中
+          win.setContentSize(state.width, state.height);
+          win.center();
+        }
+
+        if (state.isMaximized) {
+          win.maximize();
+        }
+      } else {
+        // 首次打开或无状态：设置默认大小并居中
+        win.setContentSize(HOME_WINDOW_WIDTH, HOME_WINDOW_HEIGHT);
+        win.center();
+      }
+
       buildMenu(false);
     }
     LogService.write({
@@ -252,6 +340,34 @@ function registerIPC() {
 // APP LIFECYCLE
 // ============================================================
 var win = null;
+var windowStateSaveTimeout = null;
+
+function saveWindowStateDebounced() {
+  if (!win || win.isDestroyed()) return;
+  const currentWorkDir = LogService.getCurrentWorkDir();
+  if (!currentWorkDir) return;
+
+  if (windowStateSaveTimeout) {
+    clearTimeout(windowStateSaveTimeout);
+  }
+
+  windowStateSaveTimeout = setTimeout(() => {
+    if (!win || win.isDestroyed()) return;
+    try {
+      const bounds = win.getBounds();
+      const isMaximized = win.isMaximized();
+      fileService.writeWindowState(currentWorkDir, {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        isMaximized
+      });
+    } catch (e) {
+      console.error('[window-state] Failed to save window state:', e);
+    }
+  }, 1000);
+}
 
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
@@ -268,6 +384,7 @@ function createWindow() {
     minWidth: SETUP_WINDOW_WIDTH, minHeight: SETUP_WINDOW_HEIGHT,
     maxWidth: SETUP_WINDOW_WIDTH, maxHeight: SETUP_WINDOW_HEIGHT,
     useContentSize: true,
+    center: true,
     show: false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
     title: 'TopoMind',
@@ -302,6 +419,35 @@ function createWindow() {
   win.on('unresponsive', function() {
     console.error('[window:unresponsive]');
   });
+
+  win.on('resize', saveWindowStateDebounced);
+  win.on('move', saveWindowStateDebounced);
+  win.on('maximize', saveWindowStateDebounced);
+  win.on('unmaximize', saveWindowStateDebounced);
+
+  win.on('close', function() {
+    if (!win || win.isDestroyed()) return;
+    const currentWorkDir = LogService.getCurrentWorkDir();
+    if (currentWorkDir) {
+      if (windowStateSaveTimeout) {
+        clearTimeout(windowStateSaveTimeout);
+      }
+      try {
+        const bounds = win.getBounds();
+        const isMaximized = win.isMaximized();
+        fileService.writeWindowState(currentWorkDir, {
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          isMaximized
+        });
+      } catch (e) {
+        console.error('[window-state] Failed to save window state on close:', e);
+      }
+    }
+  });
+
   win.on('closed', function() {
     win = null;
   });
@@ -315,10 +461,17 @@ function toggleMonitorWindow() {
 
 function resetMainWindowToSetup() {
   if (!win || win.isDestroyed()) return;
+  
+  if (win.isMaximized()) {
+    win.unmaximize();
+  }
+  
   win.setResizable(false);
   win.setMinimumSize(SETUP_WINDOW_WIDTH, SETUP_WINDOW_HEIGHT);
   win.setMaximumSize(SETUP_WINDOW_WIDTH, SETUP_WINDOW_HEIGHT);
   win.setContentSize(SETUP_WINDOW_WIDTH, SETUP_WINDOW_HEIGHT);
+  win.center();
+  
   buildMenu(true);
   win.webContents.send('app:reset-session');
 }
