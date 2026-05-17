@@ -15,6 +15,7 @@ export function ImportKBDialog(props: ImportKBDialogProps) {
 
   return (
     <div
+      inert={!visible ? "" : undefined}
       className={`${styles.formOverlay} ${visible ? styles.active : ''}`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >

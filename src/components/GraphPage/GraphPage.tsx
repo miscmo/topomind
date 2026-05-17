@@ -27,7 +27,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
           <div id="graph-panel" className={styles.graphPanel}>
             <Breadcrumb tabId={tabId} />
 
-            <GraphCanvas {...canvasProps} />
+            <GraphCanvas tabId={tabId} {...canvasProps} />
           </div>
           <RightPanelContainer tabId={tabId} />
         </div>

@@ -6,6 +6,7 @@ import { MarkdownPreview } from './MarkdownPreview'
 import { MarkdownToolbar } from './MarkdownToolbar'
 import { MarkdownStatusBar } from './MarkdownStatusBar'
 import { useResizePanel } from '../../hooks/useResizePanel'
+import { logAction } from '../../core/log-backend'
 import styles from './MarkdownWorkspace.module.css'
 
 interface TocItem {
@@ -120,6 +121,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   const previewRef = useRef<HTMLDivElement>(null)
   const documentInlineInputRef = useRef<HTMLInputElement>(null)
   const cancelInlineEditOnBlurRef = useRef(false)
+  const lastDocumentInlineEditKeyRef = useRef<string | null>(null)
   const tocItems = useMemo(() => documentType === 'detail' ? extractTocItems(value) : [], [documentType, value])
   const currentDetailDocumentPath = activeDetailDocumentPath ?? '_content.md'
   const detailSidebarCollapsed = controlledDetailSidebarCollapsed ?? internalDetailSidebarCollapsed
@@ -170,7 +172,13 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   }, [detailSidebarCollapsed, detailSidebarTab, currentDetailDocumentPath])
 
   useEffect(() => {
-    if (!documentInlineEdit) return
+    if (!documentInlineEdit) {
+      lastDocumentInlineEditKeyRef.current = null
+      return
+    }
+    const editKey = `${documentInlineEdit.mode}:${documentInlineEdit.targetPath ?? '__new__'}`
+    if (lastDocumentInlineEditKeyRef.current === editKey) return
+    lastDocumentInlineEditKeyRef.current = editKey
     documentInlineInputRef.current?.focus()
     documentInlineInputRef.current?.select()
   }, [documentInlineEdit])
@@ -194,12 +202,14 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
     setSaveError(null)
     try {
       await onSave()
+      logAction('Markdown:保存成功', 'MarkdownWorkspace', { documentType, path: currentDetailDocumentPath })
     } catch (err: any) {
       setSaveError(err.message || '保存失败')
+      logAction('Markdown:保存失败', 'MarkdownWorkspace', { error: err.message, documentType })
     } finally {
       setIsSaving(false)
     }
-  }, [value, savedValue, isSaving, onSave])
+  }, [value, savedValue, isSaving, onSave, documentType, currentDetailDocumentPath])
 
   const handleEditorCreate = useCallback((view: EditorView) => {
     setEditorView(view)
@@ -545,16 +555,17 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
               </div>
             )}
             
-            {currentViewMode === 'preview' && documentType !== 'card' && (
+            {currentViewMode === 'preview' && documentType === 'detail' && (
               <div className={`${styles.pane} ${styles.previewPane}`}>
                 <MarkdownPreview
                   content={value}
                   attachmentCardPath={attachmentCardPath}
-                  compact={documentType === 'card'}
+                  compact={false}
                   className={previewClassName}
+                  onChange={onChange}
                   surfaceRef={previewRef}
                   headingIds={tocItems.map(item => item.id)}
-                  onOpenDetailDocumentLink={documentType === 'detail' ? onOpenDetailDocumentLink : undefined}
+                  onOpenDetailDocumentLink={onOpenDetailDocumentLink}
                 />
               </div>
             )}

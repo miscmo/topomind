@@ -24,6 +24,7 @@ import { useGraphStorageApi } from './useGraph/useGraphStorageApi'
 import { useGraphPersistence } from './useGraph/useGraphPersistence'
 import { useGraphStoreApi } from '../stores/graphStore'
 import type { GraphState } from './useGraph/types'
+import { generateId } from './useGraph/graphBuilder'
 
 export function useGraph(tabId: string) {
   const storeApi = useGraphStoreApi()
@@ -109,6 +110,13 @@ export function useGraph(tabId: string) {
     saveNow: ops.saveNow,
   })
 
+  const createEdge = useCallback(async (source: string, target: string) => {
+    if (!source || !target || source === target) return null
+    const edgeId = generateId('e-')
+    await ops.addEdge({ source, target, sourceHandle: null, targetHandle: null }, edgeId, defaultEdgeStyle)
+    return edgeId
+  }, [defaultEdgeStyle, ops])
+
   // ===== Public API =====
 
   return useMemo(() => ({
@@ -133,6 +141,7 @@ export function useGraph(tabId: string) {
     updateNodesStyle: ops.updateNodesStyle,
     selectNode: ops.selectNode,
     deselectNode: ops.deselectNode,
+    createEdge,
     updateEdgeRelation: ops.updateEdgeRelation,
     updateEdgeStyle: ops.updateEdgeStyle,
     flushCurrentRoomSave,
@@ -159,6 +168,7 @@ export function useGraph(tabId: string) {
     ops.updateNodesStyle,
     ops.selectNode,
     ops.deselectNode,
+    createEdge,
     ops.updateEdgeRelation,
     ops.updateEdgeStyle,
     flushCurrentRoomSave,

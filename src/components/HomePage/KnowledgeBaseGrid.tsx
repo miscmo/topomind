@@ -9,17 +9,65 @@ interface KnowledgeBaseGridProps {
   onCreateKB: () => void
   onImportKB: () => void
   onOpenSettings: (kb: KBItem) => void
+  onReorder?: (newOrder: string[]) => void
 }
 
 export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
-  const { kbs, onOpenKB, onCreateKB, onImportKB, onOpenSettings } = props
+  const { kbs, onOpenKB, onCreateKB, onImportKB, onOpenSettings, onReorder } = props
+  const [draggedItem, setDraggedItem] = useState<string | null>(null)
+  const [dragOverItem, setDragOverItem] = useState<string | null>(null)
+
+  const handleDragStart = (e: React.DragEvent, name: string) => {
+    setDraggedItem(name)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, name: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverItem !== name) {
+      setDragOverItem(name)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent, targetName: string) => {
+    e.preventDefault()
+    if (!draggedItem || draggedItem === targetName) {
+      setDragOverItem(null)
+      setDraggedItem(null)
+      return
+    }
+
+    const newOrder = kbs.map(k => k.name)
+    const dragIndex = newOrder.indexOf(draggedItem)
+    const dropIndex = newOrder.indexOf(targetName)
+
+    if (dragIndex !== -1 && dropIndex !== -1 && onReorder) {
+      newOrder.splice(dragIndex, 1)
+      newOrder.splice(dropIndex, 0, draggedItem)
+      onReorder(newOrder)
+    }
+
+    setDragOverItem(null)
+    setDraggedItem(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedItem(null)
+    setDragOverItem(null)
+  }
 
   return (
     <div className={styles.grid}>
       {kbs.map((kb) => (
         <div
           key={kb.name}
-          className={styles.card}
+          draggable
+          onDragStart={(e) => handleDragStart(e, kb.name)}
+          onDragOver={(e) => handleDragOver(e, kb.name)}
+          onDrop={(e) => handleDrop(e, kb.name)}
+          onDragEnd={handleDragEnd}
+          className={`${styles.card} ${draggedItem === kb.name ? styles.dragging : ''} ${dragOverItem === kb.name ? styles.dragOver : ''}`}
           onClick={() => {
             logAction('HomePage:点击知识库卡片', 'HomePage', { kbInfo: kb })
             onOpenKB(kb)

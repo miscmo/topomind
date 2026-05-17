@@ -1,12 +1,16 @@
 import { memo, useCallback, useEffect, useState } from 'react'
-import { Background, ReactFlow, useReactFlow, type BackgroundVariant, type ConnectionLineComponentProps, type Edge, type Node, type NodeTypes, type Viewport } from '@xyflow/react'
+import { Background, ReactFlow, useReactFlow, type BackgroundVariant, type ConnectionLineComponentProps, type Edge, type Node, type NodeTypes, type Viewport, type NodeChange } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import { useGraphStore } from '../../stores/graphStore'
+import { useTabStore } from '../../stores/tabStore'
 import type { KnowledgeNode } from '../../types'
 import KnowledgeCard from './nodes/KnowledgeCard'
 import FloatingEdge from './edges/FloatingEdge'
 import Toolbar from '../Toolbar/Toolbar'
+import { logAction } from '../../core/log-backend'
+import { useSmartGuides } from './useSmartGuides'
+import { SmartGuidesRenderer } from './SmartGuidesRenderer'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
 const edgeTypes = {
@@ -16,6 +20,15 @@ const edgeTypes = {
 
 const CARD_CONNECT_SNAP_DISTANCE = 56
 const CONNECTION_ARROW_MARKER_ID = 'topomind-connection-arrow'
+const KEYBOARD_NEW_NODE_VERTICAL_GAP = 48
+const KEYBOARD_NEW_NODE_HORIZONTAL_GAP = 56
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  const tagName = target.tagName.toLowerCase()
+  if (target.isContentEditable) return true
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || tagName === 'button'
+}
 
 function getNodeRect(node: Node) {
   return {
@@ -115,6 +128,7 @@ function CardSnappedConnectionLine({
 }
 
 interface GraphCanvasProps {
+  tabId: string
   onNodeContextMenu?: (nodeId: string, event: React.MouseEvent) => void
   onEdgeContextMenu?: (edgeId: string, event: React.MouseEvent) => void
   onPaneContextMenu?: (x: number, y: number) => void
@@ -122,6 +136,7 @@ interface GraphCanvasProps {
 }
 
 export default memo(function GraphCanvas({
+  tabId,
   onNodeContextMenu,
   onEdgeContextMenu,
   onPaneContextMenu,
@@ -134,9 +149,18 @@ export default memo(function GraphCanvas({
   const edges = useGraphStore((s) => s.edges)
   const storedViewport = useGraphStore((s) => s.viewport)
   const setStoredViewport = useGraphStore((s) => s.setViewport)
+  const activeTabId = useTabStore((s) => s.activeTabId)
   const [zoomLevel, setZoomLevel] = useState(1)
   const reactFlow = useReactFlow()
   const graph = useGraphContext()
+  
+  const { guideLines, onNodesChangeIntercept, clearGuides } = useSmartGuides(nodes as Node[])
+  
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    const nextChanges = onNodesChangeIntercept(changes)
+    graph.onNodesChange(nextChanges)
+  }, [graph, onNodesChangeIntercept])
+
   const handlePaneClick = () => {
     onCloseContextMenu?.()
     graph.onPaneClick()
@@ -149,6 +173,48 @@ export default memo(function GraphCanvas({
   useEffect(() => {
     setZoomLevel(storedViewport.zoom)
   }, [storedViewport.zoom])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (activeTabId !== tabId) return
+      if (event.defaultPrevented || event.repeat || event.isComposing) return
+      const isEnter = event.key === 'Enter' || event.key === 'NumpadEnter'
+      const isTab = event.key === 'Tab'
+      if (!isEnter && !isTab) return
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+      if (isEditableTarget(event.target)) return
+
+      const selectedNode = nodes.find((node) => node.selected)
+      if (!selectedNode) return
+
+      const rect = getNodeRect(selectedNode as Node)
+      const position = isTab
+        ? {
+            x: rect.x + rect.width + KEYBOARD_NEW_NODE_HORIZONTAL_GAP,
+            y: rect.y,
+          }
+        : {
+            x: rect.x,
+            y: rect.y + rect.height + KEYBOARD_NEW_NODE_VERTICAL_GAP,
+          }
+
+      event.preventDefault()
+      void (async () => {
+        logAction('节点:快捷键创建', 'GraphCanvas', {
+          source: isTab ? 'tab-create-right-sibling' : 'enter-below-selected-node',
+          selectedNodeId: selectedNode.id,
+          position,
+        })
+        const newNodeId = await graph.createChildNode('新节点', undefined, position, { editTitle: true })
+        if (isTab && newNodeId) {
+          await graph.createEdge(selectedNode.id, newNodeId)
+        }
+      })()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeTabId, graph, nodes, tabId])
 
   useEffect(() => {
     const currentViewport = reactFlow.getViewport()
@@ -223,7 +289,7 @@ export default memo(function GraphCanvas({
         edgeTypes={edgeTypes}
 
         // 拖动节点、选中节点、删除节点后的位置或状态更新
-        onNodesChange={graph.onNodesChange}
+        onNodesChange={handleNodesChange}
         // 监听边变化。常见包括删除边、选中边等
         onEdgesChange={graph.onEdgesChange}
 
@@ -266,6 +332,10 @@ export default memo(function GraphCanvas({
         // 隐藏attribution标识
         proOptions={{ hideAttribution: true }}
         
+        // 我们不开启全局的强制网格吸附，保留自由移动的可能
+        snapToGrid={false}
+        snapGrid={[20, 20]}
+
         // 禁用默认的框选和多选快捷键
         selectionOnDrag={false}
         selectionKeyCode={null}
@@ -283,6 +353,7 @@ export default memo(function GraphCanvas({
         // 设置ReactFlow 容器尺寸，确保撑满父容器。
         style={{ width: '100%', height: '100%' }}
       >
+        <SmartGuidesRenderer guideLines={guideLines} />
         {showGrid && (
           <Background variant={'dots' as BackgroundVariant} gap={20} size={1} color="#c8cdd6" />
         )}

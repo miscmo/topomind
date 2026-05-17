@@ -1,4 +1,4 @@
-import type { StorageService } from '../../core/storage'
+import type { Store } from '../../core/storage'
 
 const imageUrlPattern = /^https?:\/\/\S+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:[?#]\S*)?$/i
 
@@ -20,7 +20,7 @@ export async function handleMarkdownPaste(options: {
   selectionStart: number
   selectionEnd: number
   attachmentCardPath: string
-  storage: StorageService
+  storage: Store
 }): Promise<{
   handled: boolean
   nextValue?: string
@@ -69,7 +69,7 @@ export async function handleMarkdownDrop(options: {
   selectionStart: number
   selectionEnd: number
   attachmentCardPath: string
-  storage: StorageService
+  storage: Store
 }): Promise<{
   handled: boolean
   nextValue?: string

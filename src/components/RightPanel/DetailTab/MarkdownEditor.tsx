@@ -3,6 +3,7 @@
  */
 import { memo, useEffect, useRef, useCallback } from 'react'
 import { useStorage } from '../../../core/storage'
+import { logAction } from '../../../core/log-backend'
 import styles from './DetailTab.module.css'
 
 interface MarkdownEditorProps {
@@ -77,6 +78,7 @@ export default memo(function MarkdownEditor({ value, onChange, onSave, placehold
         snippets.push(file.type.startsWith('image/') ? `![${fileName}](${relPath})` : `[${fileName}](${relPath})`)
       }
       insertText(textarea, value, snippets.join('\n'), onChange)
+      logAction('Markdown:粘贴文件', 'MarkdownEditor', { count: files.length })
       return
     }
 
@@ -87,6 +89,7 @@ export default memo(function MarkdownEditor({ value, onChange, onSave, placehold
     const relPath = await storage.downloadAttachment(attachmentCardPath, text)
     const fileName = relPath.split('/').pop() || 'image'
     insertText(textarea, value, `![${fileName}](${relPath})`, onChange)
+    logAction('Markdown:粘贴网络图片并下载', 'MarkdownEditor', { url: text })
   }, [attachmentCardPath, onChange, storage, value])
 
   return (

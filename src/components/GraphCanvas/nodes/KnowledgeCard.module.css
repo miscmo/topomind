@@ -281,8 +281,8 @@
 
 /* 针对 MarkdownViewer 内部样式的微调，压缩间距 */
 .markdown :global(.markdownBody) {
-  font-size: var(--node-body-font-size, 12px);
-  line-height: 1.32;
+  font-size: var(--node-body-font-size, 12.5px);
+  line-height: 1.4;
 }
 
 .markdown :global(.markdownBody p),
@@ -290,8 +290,8 @@
 .markdown :global(.markdownBody ol),
 .markdown :global(.markdownBody blockquote),
 .markdown :global(.markdownBody pre) {
-  margin-top: 2px;
-  margin-bottom: 2px;
+  margin-top: 0;
+  margin-bottom: 0.35em;
 }
 
 .markdown :global(.markdownBody h1),
@@ -300,8 +300,8 @@
 .markdown :global(.markdownBody h4),
 .markdown :global(.markdownBody h5),
 .markdown :global(.markdownBody h6) {
-  margin-top: 3px;
-  margin-bottom: 2px;
+  margin-top: 0.45em;
+  margin-bottom: 0.25em;
 }
 
 .interactiveMarkdown :global(img),
@@ -499,7 +499,9 @@
   color: #fff;
 }
 
-/* 仅在节点被选中或作为连线目标时显示连接手柄 */
+/* 节点悬停、选中或作为连线目标时显示连接手柄 */
+.node:hover .handle,
+.hovered .handle,
 .selected .handle,
 .connectTarget .handle {
   opacity: 1;
@@ -522,9 +524,27 @@
   z-index: 30 !important;
 }
 
-/* 隐藏 Resize 的边框线，只保留四个角的控制点和我们自己的边框高亮 */
+/* 隐藏 Resize 的边框线视觉，但保留作为调整热区 */
 .resizeLine {
-  display: none !important;
+  border: none !important;
+  background: transparent !important;
+  z-index: 29 !important;
+}
+
+/* 上下边缘热区放大 */
+:global(.react-flow__resize-control.line.top),
+:global(.react-flow__resize-control.line.bottom) {
+  height: 16px !important;
+  transform: translateY(-50%) !important;
+  cursor: ns-resize !important;
+}
+
+/* 左右边缘热区放大 */
+:global(.react-flow__resize-control.line.left),
+:global(.react-flow__resize-control.line.right) {
+  width: 16px !important;
+  transform: translateX(-50%) !important;
+  cursor: ew-resize !important;
 }
 
 .resizeLabel {

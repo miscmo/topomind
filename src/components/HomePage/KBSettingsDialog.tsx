@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useStorage } from '../../core/storage'
 import { usePromptStore } from '../../stores/promptStore'
+import { logAction } from '../../core/log-backend'
 import type { KBItem } from './useHomeKnowledgeBases'
 import styles from './HomePage.module.css'
 
@@ -88,9 +89,11 @@ export function KBSettingsDialog({ visible, kb, onClose, refreshKBList }: KBSett
       }
 
       await refreshKBList()
+      logAction('HomePage:知识库设置已保存', 'KBSettings', { kbName: kb.name, newName, updatedCover: !!coverRef })
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      logAction('HomePage:保存知识库设置失败', 'KBSettings', { error: e instanceof Error ? e.message : String(e) })
     } finally {
       setLoading(false)
     }
@@ -132,9 +135,11 @@ export function KBSettingsDialog({ visible, kb, onClose, refreshKBList }: KBSett
       }
 
       await refreshKBList()
+      logAction('HomePage:成功删除知识库', 'KBSettings', { kbName: kb.name })
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      logAction('HomePage:删除知识库失败', 'KBSettings', { error: e instanceof Error ? e.message : String(e) })
     } finally {
       setLoading(false)
     }
@@ -170,7 +175,7 @@ export function KBSettingsDialog({ visible, kb, onClose, refreshKBList }: KBSett
   }
 
   return (
-    <div className={`${styles.formOverlay} ${visible ? styles.active : ''}`} onClick={onClose}>
+    <div inert={!visible ? "" : undefined} className={`${styles.formOverlay} ${visible ? styles.active : ''}`} onClick={onClose}>
       <div className={styles.form} onClick={e => e.stopPropagation()}>
         <div className={styles.formHeader}>
           <h3>知识库设置 - {kb.name}</h3>

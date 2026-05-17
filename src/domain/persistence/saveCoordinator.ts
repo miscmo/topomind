@@ -1,3 +1,5 @@
+import { logAction } from '../../core/log-backend'
+
 export interface SaveCoordinatorOptions<T> {
   delayMs: number
   save: (key: string, value: T) => Promise<void>
@@ -105,6 +107,7 @@ export class SaveCoordinator<T> {
       for (const callback of pending.onSavedCallbacks) callback()
     } catch (error) {
       this.onError?.(error, key)
+      logAction('SaveCoordinator:保存失败', 'SaveCoordinator', { key, error: error instanceof Error ? error.message : String(error) })
       if (!options.swallowErrors) {
         throw error
       }

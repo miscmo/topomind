@@ -10,6 +10,7 @@ import { CreateKBDialog } from './CreateKBDialog'
 import { ImportKBDialog } from './ImportKBDialog'
 import { KBSettingsDialog } from './KBSettingsDialog'
 import { KnowledgeBaseGrid } from './KnowledgeBaseGrid'
+import { logAction } from '../../core/log-backend'
 import styles from './HomePage.module.css'
 
 export default function HomePage() {
@@ -21,6 +22,7 @@ export default function HomePage() {
     kbs,
     openKB,
     refreshKBList,
+    reorderKBs,
   } = useHomeKnowledgeBases({
     currentWorkDir,
     setMessage,
@@ -55,10 +57,14 @@ export default function HomePage() {
     setMessageError(false)
     const resetResult = await window.electronAPI?.invoke('app:switchWorkDir') as { ok?: boolean; cancelled?: boolean } | undefined
     if (!resetResult?.ok) {
+      if (!resetResult?.cancelled) {
+        logAction('HomePage:切换工作目录失败', 'HomePage', { error: '用户取消或执行失败' })
+      }
       return
     }
     setMessage('工作目录已切换')
     setMessageError(false)
+    logAction('HomePage:切换工作目录成功', 'HomePage', {})
   }
 
   function truncatedWorkDir() {
@@ -104,6 +110,7 @@ export default function HomePage() {
           onCreateKB={openCreateSheet}
           onImportKB={openImportSheet}
           onOpenSettings={setSettingsKB}
+          onReorder={reorderKBs}
         />
       </div>
 

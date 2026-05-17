@@ -23,10 +23,15 @@ const MARKDOWN_MIN_HEIGHT = 96
 const COLLAPSED_NODE_WIDTH = 120
 const COLLAPSED_NODE_HEIGHT = 36
 
-function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }: NodeProps<KnowledgeNode>) {
+interface KnowledgeCardProps extends NodeProps<KnowledgeNode> {
+  resizing?: boolean
+}
+
+function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }: KnowledgeCardProps) {
   const storage = useStorage()
   const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
+  const [isHovered, setIsHovered] = useState(false)
   const [isPressed, setIsPressed] = useState(false)
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState(data.label)
@@ -53,6 +58,8 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
   const nodeSizeLimits = useGraphUiStore((state) => state.nodeSizeLimits)
   const nodeBadgeSize = useGraphUiStore((state) => state.nodeBadgeSize)
   const isConnectTarget = !!connectingSourceId && connectingTargetId === id
+  const visuallyHovered = isHovered || data.hovered === true
+  const showHoverControls = visuallyHovered || visuallySelected || isConnectTarget
   const contentInteractionsEnabled = selected
   const nodeStyle = { ...defaultNodeStyle, ...(data.nodeStyle ?? {}) }
   const borderRadius = `${nodeStyle.borderRadius}px`
@@ -187,6 +194,28 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
       resizeHideTimerRef.current = null
     }, 500)
   }, [updateResizePreview])
+
+  // 修复：React Flow 在仅点击未拖拽时可能不触发 onResizeEnd
+  // 通过全局监听 pointerup 和 pointercancel，确保任何情况下松开鼠标都会触发尺寸预览的隐藏定时器
+  useEffect(() => {
+    const handlePointerUp = () => {
+      setResizePreviewSize((current) => {
+        if (current !== null && resizeHideTimerRef.current === null) {
+          resizeHideTimerRef.current = window.setTimeout(() => {
+            setResizePreviewSize(null)
+            resizeHideTimerRef.current = null
+          }, 500)
+        }
+        return current
+      })
+    }
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerUp)
+    return () => {
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerUp)
+    }
+  }, [])
 
   const handleDrillDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -346,16 +375,20 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
 
   return (
     <div
+      onPointerEnter={() => setIsHovered(true)}
       onPointerDown={() => setIsPressed(true)}
       onPointerUp={() => setIsPressed(false)}
-      onPointerLeave={() => setIsPressed(false)}
+      onPointerLeave={() => {
+        setIsHovered(false)
+        setIsPressed(false)
+      }}
       onPointerCancel={() => setIsPressed(false)}
       className={[
         styles.node,
         shouldShowMarkdown ? styles.hasMarkdown : '',
         shouldShowMarkdown ? 'nowheel' : '',
         visuallySelected ? styles.selected : '',
-        data.hovered ? styles.hovered : '',
+        visuallyHovered ? styles.hovered : '',
         isConnectTarget ? styles.connectTarget : '',
         dragging ? styles.dragging : '',
       ].filter(Boolean).join(' ')}
@@ -368,12 +401,11 @@ function KnowledgeCard({ id, data, selected, dragging, resizing, width, height }
       }}
     >
       <NodeResizer
-        isVisible={selected}
+        isVisible={showHoverControls}
         minWidth={nodeSizeLimits.minWidth}
         minHeight={nodeSizeLimits.minHeight}
         maxWidth={nodeSizeLimits.maxWidth}
         maxHeight={nodeSizeLimits.maxHeight}
-        color="#3b82f6"
         handleClassName={styles.resizeHandle}
         lineClassName={styles.resizeLine}
         onResizeStart={(_, params) => updateResizePreview(params)}

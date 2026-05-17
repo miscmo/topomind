@@ -4,6 +4,7 @@
  */
 import { memo } from 'react'
 import { useTabStore, type Tab } from '../../stores/tabStore'
+import { logAction } from '../../core/log-backend'
 import styles from './TabBar.module.css'
 
 interface TabBarProps {
@@ -52,6 +53,7 @@ export default memo(function TabBar({ onCloseTab }: TabBarProps) {
   const handleTabClick = async (tab: Tab) => {
     if (tab.id === activeTabId) return
     activateTab(tab.id)
+    logAction('切换Tab', 'TabBar', { tabId: tab.id, tabLabel: tab.label })
   }
 
   // 有知识库 Tab 时才渲染（主页 Tab 本身不渲染 TabBar）

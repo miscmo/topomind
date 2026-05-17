@@ -78,18 +78,21 @@ export default memo(function App() {
               }}
             >
               <div
+                inert={activeTab?.type === 'home' ? undefined : ""}
                 style={{
                   position: 'absolute',
                   inset: 0,
                   visibility: activeTab?.type === 'home' ? 'visible' : 'hidden',
                   opacity: activeTab?.type === 'home' ? 1 : 0,
                   pointerEvents: activeTab?.type === 'home' ? 'auto' : 'none',
+                  zIndex: activeTab?.type === 'home' ? 5 : -1,
                   transition: 'opacity 120ms ease',
                 }}
               >
                 <HomePage />
               </div>
               <div
+                inert={activeTab?.type === 'monitor' ? undefined : ""}
                 style={{
                   position: 'absolute',
                   inset: 0,
@@ -98,7 +101,7 @@ export default memo(function App() {
                   pointerEvents: activeTab?.type === 'monitor' ? 'auto' : 'none',
                   transition: 'opacity 120ms ease',
                   background: '#fff',
-                  zIndex: activeTab?.type === 'monitor' ? 10 : 1,
+                  zIndex: activeTab?.type === 'monitor' ? 10 : -1,
                 }}
               >
                 {tabs.some(t => t.type === 'monitor') && <MonitorPage />}
@@ -106,12 +109,14 @@ export default memo(function App() {
               {tabs.filter(t => t.type === 'kb').map(tab => (
                 <div
                   key={tab.id}
+                  inert={activeTabId === tab.id ? undefined : ""}
                   style={{
                     position: 'absolute',
                     inset: 0,
                     visibility: activeTabId === tab.id ? 'visible' : 'hidden',
                     opacity: activeTabId === tab.id ? 1 : 0,
                     pointerEvents: activeTabId === tab.id ? 'auto' : 'none',
+                    zIndex: activeTabId === tab.id ? 5 : -1,
                     transition: 'opacity 120ms ease',
                   }}
                 >

@@ -38,6 +38,7 @@ export interface GraphContextValue {
   updateNodesStyle: (nodeIds: string[], style: KnowledgeNodeStyle) => Promise<void>
   selectNode: (nodeId: string, multiSelect?: boolean) => void
   deselectNode: () => void
+  createEdge: (source: string, target: string) => Promise<string | null>
 
   // Edge operations
   updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => void
@@ -70,6 +71,7 @@ const emptyContext: GraphContextValue = {
   updateNodesStyle: async () => {},
   selectNode: () => {},
   deselectNode: () => {},
+  createEdge: async () => null,
   updateEdgeRelation: () => {},
   updateEdgeStyle: () => {},
   flushCurrentRoomSave: async () => {},
@@ -103,6 +105,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     updateNodesStyle: graph.updateNodesStyle,
     selectNode: graph.selectNode,
     deselectNode: graph.deselectNode,
+    createEdge: graph.createEdge,
     updateEdgeRelation: graph.updateEdgeRelation,
     updateEdgeStyle: graph.updateEdgeStyle,
     flushCurrentRoomSave: graph.flushCurrentRoomSave,

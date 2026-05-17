@@ -127,10 +127,35 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
     await loadKBList()
   }, [loadKBList])
 
+  const reorderKBs = useCallback(async (newOrder: string[]) => {
+    // 1. Update state locally immediately for responsive UI
+    setKbs(prev => {
+      const newKbs = [...prev]
+      newKbs.sort((a, b) => {
+        const orderA = newOrder.indexOf(a.name)
+        const orderB = newOrder.indexOf(b.name)
+        return (orderA !== -1 ? orderA : Infinity) - (orderB !== -1 ? orderB : Infinity)
+      })
+      return newKbs
+    })
+
+    // 2. Persist to _config.json
+    try {
+      const config = await storage.readConfig()
+      config.kbOrder = newOrder
+      await storage.writeConfig(config)
+      logAction('HomePage:知识库排序', 'HomePage', { newOrder })
+    } catch (err) {
+      logger.catch('HomePage', 'reorderKBs', err)
+      // Revert if saving fails? Usually fine to just reload.
+    }
+  }, [storage])
+
   return {
     loading,
     kbs,
     openKB,
     refreshKBList,
+    reorderKBs,
   }
 }

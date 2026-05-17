@@ -331,31 +331,28 @@
 /* ===== Markdown body 覆写 ===== */
 /* 为了让 github-markdown-css 在右侧面板显示更和谐，覆盖部分基础样式 */
 .markdownBody {
-  font-size: 13.5px;
-}
-
-.markdownBody h1,
-.markdownBody h2,
-.markdownBody h3,
-.markdownBody h4,
-.markdownBody h5,
-.markdownBody h6 {
-  border-bottom: none;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #1f2328;
 }
 
 .markdownBody h1 {
-  font-size: 1.5em;
+  font-size: 2em;
 }
 
 .markdownBody h2 {
-  font-size: 1.25em;
+  font-size: 1.5em;
 }
 
 .markdownBody h3 {
-  font-size: 1.1em;
+  font-size: 1.25em;
 }
 
-.markdownBody p,
+.markdownBody p {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
 .markdownBody blockquote,
 .markdownBody ul,
 .markdownBody ol,
@@ -364,7 +361,7 @@
 .markdownBody pre,
 .markdownBody details {
   margin-top: 0;
-  margin-bottom: 12px;
+  margin-bottom: 1rem;
 }
 
 .markdownBody img {
