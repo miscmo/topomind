@@ -10,11 +10,11 @@
  *   - file-service.js   — 文件系统操作
  *   - log-service.js     — 日志服务
  */
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell, screen, protocol, net } from 'electron';
 import nodePath from 'path';
 import nodeFs from 'fs';
-import { fileURLToPath } from 'url';
-import { fileService } from './file-service.js';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { fileService, _fs_attachmentRefToPath, _fs_requireValidWorkDir } from './file-service.js';
 import { dialogService } from './dialog-service.js';
 import LogService from './log-service.js';
 
@@ -40,6 +40,47 @@ const HOME_WINDOW_WIDTH = 1400;
 const HOME_WINDOW_HEIGHT = 900;
 const WINDOW_BACKGROUND_COLOR = '#ffffff';
 const IS_DEV = !!process.env.VITE_DEV_SERVER_URL;
+
+function buildLocalFileUrl(absPath) {
+  return pathToFileURL(absPath).href.replace(/^file:\/\//i, 'local-file://');
+}
+
+function parseLocalFileUrl(urlString) {
+  const url = new URL(urlString);
+  let pathname = url.pathname || '';
+  // Fully decode to handle any potential double-encoding by the browser
+  while (pathname.includes('%')) {
+    try {
+      const decoded = decodeURIComponent(pathname);
+      if (decoded === pathname) break;
+      pathname = decoded;
+    } catch {
+      break;
+    }
+  }
+  let host = url.host || '';
+  while (host.includes('%')) {
+    try {
+      const decoded = decodeURIComponent(host);
+      if (decoded === host) break;
+      host = decoded;
+    } catch {
+      break;
+    }
+  }
+  if (/^[A-Za-z]$/.test(host) && pathname.startsWith('/')) {
+    return nodePath.normalize(host + ':' + pathname);
+  }
+  return nodePath.normalize(pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+}
+
+function isPathWithinDir(parentDir, targetPath) {
+  const relativePath = nodePath.relative(
+    nodePath.resolve(parentDir),
+    nodePath.resolve(targetPath)
+  );
+  return relativePath === '' || (!relativePath.startsWith('..') && !nodePath.isAbsolute(relativePath));
+}
 
 // ============================================================
 // IPC HANDLERS
@@ -148,6 +189,17 @@ function registerIPC() {
   });
   ipcMain.handle('fs:deleteAttachment', function(e, rootDir, cardPath, attachmentName) {
     return fileService.deleteAttachment(rootDir, cardPath, attachmentName);
+  });
+  ipcMain.handle('fs:getAttachmentAbsoluteUrl', function(e, rootDir, cardPath, attachmentRef) {
+    try {
+      const absPath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef);
+      return buildLocalFileUrl(absPath);
+    } catch (err) {
+      return null;
+    }
+  });
+  ipcMain.handle('fs:openAttachment', async function(e, rootDir, cardPath, attachmentRef) {
+    return fileService.openAttachment(rootDir, cardPath, attachmentRef);
   });
   ipcMain.handle('fs:writeAttachmentBase64', function(e, rootDir, cardPath, fileName, mimeType, base64) {
     return fileService.writeAttachmentBase64(rootDir, cardPath, fileName, mimeType, base64);
@@ -520,7 +572,32 @@ function buildMenu(isSetupView) {
 }
 
 // App ready
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'local-file', privileges: { standard: true, bypassCSP: true, supportFetchAPI: true, secure: true, stream: true } }
+]);
+
 app.whenReady().then(function() {
+  protocol.handle('local-file', async (request) => {
+    try {
+      const filePath = parseLocalFileUrl(request.url);
+      // Validate that it's within current workspace
+      const currentWorkDir = LogService.getCurrentWorkDir();
+      if (currentWorkDir && isPathWithinDir(currentWorkDir, filePath)) {
+        try {
+          const res = await net.fetch(pathToFileURL(filePath).href);
+          return res;
+        } catch (fetchErr) {
+          console.error('net.fetch error on local-file:', fetchErr);
+          return new Response('Not found', { status: 404 });
+        }
+      }
+      return new Response('Access denied', { status: 403 });
+    } catch (err) {
+      console.error('local-file protocol error', err);
+      return new Response('Not found', { status: 404 });
+    }
+  });
+
   registerIPC();
   buildMenu(true);
   createWindow();

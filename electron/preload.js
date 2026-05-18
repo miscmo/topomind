@@ -11,7 +11,7 @@ const ALLOWED_CHANNELS = new Set([
   'fs:readGraphMeta', 'fs:writeGraphMeta',
   'fs:renameKB',
   'fs:readFile', 'fs:writeFile', 'fs:listDetailDocuments', 'fs:createDetailDocument', 'fs:renameDetailDocument', 'fs:deleteDetailDocument',
-  'fs:writeAttachmentBase64', 'fs:downloadAttachment', 'fs:readAttachmentDataUrl', 'fs:listAttachments', 'fs:importAttachment', 'fs:deleteAttachment',
+  'fs:writeAttachmentBase64', 'fs:downloadAttachment', 'fs:readAttachmentDataUrl', 'fs:listAttachments', 'fs:importAttachment', 'fs:deleteAttachment', 'fs:openAttachment', 'fs:getAttachmentAbsoluteUrl',
   'fs:readAppConfig', 'fs:writeAppConfig',
   'fs:isValidWorkDir', 'fs:selectDirectory', 'fs:createWorkDir', 'fs:importKB',
   // app

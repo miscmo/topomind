@@ -298,6 +298,14 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       await FSB.deleteAttachment(requireRootDir(), cardPath, attachmentName)
     },
 
+    openAttachment: async (cardPath: string, attachmentRef: string) => {
+      return FSB.openAttachment(requireRootDir(), cardPath, attachmentRef)
+    },
+
+    getAttachmentAbsoluteUrl: async (cardPath: string, attachmentRef: string) => {
+      return FSB.getAttachmentAbsoluteUrl(requireRootDir(), cardPath, attachmentRef)
+    },
+
     readCardMarkdown: async (cardPath: string) => {
       return FSB.readFile(requireRootDir(), `${cardPath}/_card.md`)
     },

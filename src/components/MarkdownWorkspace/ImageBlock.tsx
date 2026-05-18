@@ -13,11 +13,20 @@ export const ImageBlock = memo(function ImageBlock({
   alt,
   onPreview,
   style,
-  onClick,
+  onDoubleClick,
   ...props
 }: ImageBlockProps) {
   const storage = useStorage()
-  const [resolvedSrc, setResolvedSrc] = useState<string | undefined>(src)
+  
+  const isLocal = src ? (!/^(?:https?:|data:|blob:|file:|mailto:)/i.test(src) && !src.startsWith('/') && !src.startsWith('\\')) : false
+
+  const [resolvedSrc, setResolvedSrc] = useState<string | undefined>(() => {
+    // 如果是本地相对路径（附件），初始不设置 src，避免浏览器触发无效的 file:// 请求导致 ERR_FILE_NOT_FOUND
+    if (isLocal && attachmentCardPath) {
+      return undefined
+    }
+    return src
+  })
 
   useEffect(() => {
     if (!src || !attachmentCardPath) {
@@ -25,15 +34,14 @@ export const ImageBlock = memo(function ImageBlock({
       return
     }
 
-    const isLocal = !/^(?:https?:|data:|blob:|file:|mailto:)/i.test(src) && !src.startsWith('/') && !src.startsWith('\\')
     if (isLocal) {
       let cancelled = false
-      storage.readAttachmentDataUrl(attachmentCardPath, src).then(dataUrl => {
-        if (!cancelled && dataUrl) {
-          setResolvedSrc(dataUrl)
+      storage.getAttachmentAbsoluteUrl(attachmentCardPath, src).then(url => {
+        if (!cancelled && url) {
+          setResolvedSrc(url)
         }
       }).catch(err => {
-        console.error('Failed to load image', src, err)
+        console.error('Failed to load image url', src, err)
       })
       return () => {
         cancelled = true
@@ -41,15 +49,15 @@ export const ImageBlock = memo(function ImageBlock({
     } else {
       setResolvedSrc(src)
     }
-  }, [src, attachmentCardPath, storage])
+  }, [src, attachmentCardPath, storage, isLocal])
 
   return (
     <img
       src={resolvedSrc}
       alt={alt}
       style={{ maxWidth: '100%', cursor: onPreview ? 'zoom-in' : undefined, ...style }}
-      onClick={(event) => {
-        onClick?.(event)
+      onDoubleClick={(event) => {
+        onDoubleClick?.(event)
         if (!event.defaultPrevented && resolvedSrc && onPreview) {
           onPreview({ src: resolvedSrc, alt })
         }

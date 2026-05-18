@@ -4,6 +4,7 @@
  */
 import nodePath from 'path';
 import nodeFs from 'fs';
+import { shell } from 'electron';
 
 /**
  * @description 返回工作目录下的知识库根目录路径
@@ -229,7 +230,7 @@ function _fs_validateAbsolutePath(dir) {
  * @returns { string } 标准化后的工作目录绝对路径
  * @throws { Error } 当工作目录无效时抛出错误
  */
-function _fs_requireValidWorkDir(rootDir) {
+export function _fs_requireValidWorkDir(rootDir) {
   var dir = _fs_validateAbsolutePath(rootDir);
   var validation = _fs_isValidWorkDir(dir);
   if (!validation.valid) {
@@ -308,7 +309,7 @@ function _fs_writeAttachmentBuffer(rootDir, cardPath, fileName, buffer) {
   return '_attach/' + nodePath.basename(target);
 }
 
-function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
+export function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
   rootDir = _fs_requireValidWorkDir(rootDir);
   var rawRef = String(attachmentRef || '').trim();
   if (!rawRef) throw new Error('附件路径为空');
@@ -739,6 +740,13 @@ const fileService = {
 
     deleteAttachment: function(rootDir, cardPath, attachmentName) {
       return _fs_deleteAttachment(rootDir, cardPath, attachmentName);
+    },
+
+    openAttachment: async function(rootDir, cardPath, attachmentRef) {
+      var filePath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef);
+      if (!nodeFs.existsSync(filePath)) return false;
+      var err = await shell.openPath(filePath);
+      return err === '';
     },
 
     writeAttachmentBase64: function(rootDir, cardPath, fileName, mimeType, base64) {

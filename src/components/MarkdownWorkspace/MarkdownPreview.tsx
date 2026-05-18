@@ -4,6 +4,7 @@ import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeHighlight from 'rehype-highlight'
+import { useStorage } from '../../core/storage'
 import { MermaidBlock } from './MermaidBlock'
 import { ImageBlock } from './ImageBlock'
 import 'github-markdown-css/github-markdown-light.css'
@@ -76,7 +77,6 @@ interface ImageMeta {
   titleText: string
 }
 
-const IMAGE_WIDTH_OPTIONS = [25, 33, 50, 66, 75, 100]
 const DEFAULT_IMAGE_ALIGN: ImageAlign = 'left'
 const DEFAULT_IMAGE_WIDTH = 100
 
@@ -356,61 +356,118 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
   onWidthChange,
   onPreview,
 }: InteractiveImageBlockProps) {
+  const [isSelected, setIsSelected] = useState(false)
+  const containerRef = useRef<HTMLSpanElement>(null)
+  
+  useEffect(() => {
+    if (!isSelected) return
+    const handleDocumentClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsSelected(false)
+      }
+    }
+    document.addEventListener('mousedown', handleDocumentClick)
+    return () => document.removeEventListener('mousedown', handleDocumentClick)
+  }, [isSelected])
+
+  const [isDragging, setIsDragging] = useState(false)
+  const [tempWidth, setTempWidth] = useState<number | null>(null)
+
+  const handleDragStart = (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!canEdit) return
+    setIsDragging(true)
+    const startX = e.clientX
+    const startWidthPct = width
+    const containerWidth = containerRef.current?.parentElement?.clientWidth || 800
+    
+    const handleDragMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - startX
+      const deltaPct = (deltaX / containerWidth) * 100
+      let newWidth = startWidthPct + deltaPct
+      newWidth = Math.max(10, Math.min(100, newWidth))
+      setTempWidth(newWidth)
+    }
+    
+    const handleDragEnd = (endEvent: PointerEvent) => {
+      setIsDragging(false)
+      document.removeEventListener('pointermove', handleDragMove)
+      document.removeEventListener('pointerup', handleDragEnd)
+      
+      const deltaX = endEvent.clientX - startX
+      const deltaPct = (deltaX / containerWidth) * 100
+      let newWidth = startWidthPct + deltaPct
+      newWidth = Math.max(10, Math.min(100, newWidth))
+      setTempWidth(null)
+      onWidthChange(newWidth)
+    }
+    
+    document.addEventListener('pointermove', handleDragMove)
+    document.addEventListener('pointerup', handleDragEnd)
+  }
+
+  const currentWidth = tempWidth !== null ? tempWidth : width
+
   return (
     <span
+      ref={containerRef}
       className={[
         styles.interactiveImageBlock,
         align === 'center' ? styles.interactiveImageCenter : '',
         align === 'right' ? styles.interactiveImageRight : '',
       ].filter(Boolean).join(' ')}
+      style={{ position: 'relative' }}
     >
-      {canEdit && (
+      {isSelected && canEdit && (
         <span className={styles.interactiveImageToolbar}>
           <span className={styles.interactiveImageToolbarGroup}>
             <button
               type="button"
               className={`${styles.interactiveImageButton} ${align === 'left' ? styles.interactiveImageButtonActive : ''}`}
-              onClick={() => onAlignChange('left')}
+              onClick={(e) => { e.stopPropagation(); onAlignChange('left') }}
             >
               左对齐
             </button>
             <button
               type="button"
               className={`${styles.interactiveImageButton} ${align === 'center' ? styles.interactiveImageButtonActive : ''}`}
-              onClick={() => onAlignChange('center')}
+              onClick={(e) => { e.stopPropagation(); onAlignChange('center') }}
             >
               居中
             </button>
             <button
               type="button"
               className={`${styles.interactiveImageButton} ${align === 'right' ? styles.interactiveImageButtonActive : ''}`}
-              onClick={() => onAlignChange('right')}
+              onClick={(e) => { e.stopPropagation(); onAlignChange('right') }}
             >
               居右
             </button>
           </span>
-          <label className={styles.interactiveImageSize}>
-            <span>宽度</span>
-            <select value={width} onChange={(event) => onWidthChange(Number.parseInt(event.target.value, 10))}>
-              {IMAGE_WIDTH_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}%
-                </option>
-              ))}
-            </select>
-          </label>
         </span>
       )}
       <span className={styles.interactiveImageFrame}>
-        <ImageBlock
-          src={src}
-          alt={alt}
-          title={title}
-          attachmentCardPath={attachmentCardPath}
-          onPreview={(payload) => onPreview({ ...payload, scale: 1, offsetX: 0, offsetY: 0 })}
-          className={styles.interactiveImage}
-          style={{ width: `${width}%` }}
-        />
+        <span 
+          className={`${isSelected ? styles.interactiveImageFrameSelected : ''}`}
+          style={{ width: `${currentWidth}%`, position: 'relative', display: 'flex', lineHeight: 0 }}
+          onClick={(e) => { e.stopPropagation(); canEdit && setIsSelected(true) }}
+        >
+          <ImageBlock
+            src={src}
+            alt={alt}
+            title={title}
+            attachmentCardPath={attachmentCardPath}
+            onPreview={(payload) => onPreview({ ...payload, scale: 1, offsetX: 0, offsetY: 0 })}
+            className={styles.interactiveImage}
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+          />
+          {isSelected && canEdit && (
+            <div 
+              className={styles.imageResizeHandle}
+              onPointerDown={handleDragStart}
+            />
+          )}
+        </span>
       </span>
     </span>
   )
@@ -446,6 +503,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
   headingIds,
   onOpenDetailDocumentLink
 }: MarkdownPreviewProps) {
+  const storage = useStorage()
   const [wrappedCodeBlocks, setWrappedCodeBlocks] = useState<Record<number, boolean>>({})
   const [copiedCodeBlockIndex, setCopiedCodeBlockIndex] = useState<number | null>(null)
   const [copiedHeadingId, setCopiedHeadingId] = useState<string | null>(null)
@@ -673,6 +731,24 @@ export const MarkdownPreview = memo(function MarkdownPreview({
         )
       },
       a({ href, children, ...props }: any) {
+        if (href && href.startsWith('_attach/') && attachmentCardPath) {
+          return (
+            <a
+              href="#"
+              onClick={async (event) => {
+                event.preventDefault()
+                try {
+                  await storage.openAttachment(attachmentCardPath, href)
+                } catch (err) {
+                  console.error('Failed to open attachment', err)
+                }
+              }}
+              {...props}
+            >
+              {children}
+            </a>
+          )
+        }
         const linkedDetailDocumentPath = normalizeLinkedDetailDocumentPath(href)
         if (linkedDetailDocumentPath && onOpenDetailDocumentLink) {
           return (
@@ -714,6 +790,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
     onOpenDetailDocumentLink,
     copiedHeadingId,
     wrappedCodeBlocks,
+    storage,
   ])
 
   return (
@@ -732,6 +809,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
         remarkPlugins={remarkPlugins as any}
         rehypePlugins={rehypePlugins as any}
         components={components}
+        urlTransform={(url) => url}
       >
         {content}
       </ReactMarkdown>
