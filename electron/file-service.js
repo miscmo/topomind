@@ -323,6 +323,56 @@ function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
   return nodePath.resolve(baseDir, normalizedRef);
 }
 
+function _fs_listAttachments(rootDir, cardPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var cardDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, cardPath);
+  var attachDir = nodePath.join(cardDir, '_attach');
+  if (!nodeFs.existsSync(attachDir)) return [];
+  
+  return nodeFs.readdirSync(attachDir, { withFileTypes: true })
+    .filter(function(entry) { return entry.isFile(); })
+    .map(function(entry) {
+      var ext = nodePath.extname(entry.name).slice(1).toLowerCase();
+      var isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
+      var stat = nodeFs.statSync(nodePath.join(attachDir, entry.name));
+      return {
+        name: entry.name,
+        path: '_attach/' + entry.name,
+        isImage: isImage,
+        size: stat.size,
+        mtime: stat.mtimeMs
+      };
+    })
+    .sort(function(a, b) { return b.mtime - a.mtime; }); // 按修改时间降序
+}
+
+function _fs_importAttachment(rootDir, cardPath, sourceFilePath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  if (!nodeFs.existsSync(sourceFilePath)) {
+    throw new Error('源文件不存在: ' + sourceFilePath);
+  }
+  var stat = nodeFs.statSync(sourceFilePath);
+  if (!stat.isFile()) {
+    throw new Error('只能导入文件');
+  }
+  
+  var fileName = nodePath.basename(sourceFilePath);
+  var cardDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, cardPath);
+  var attachDir = nodePath.join(cardDir, '_attach');
+  _fs_ensureDir(attachDir);
+  var target = _fs_uniqueFilePath(attachDir, fileName);
+  
+  nodeFs.copyFileSync(sourceFilePath, target);
+  return '_attach/' + nodePath.basename(target);
+}
+
+function _fs_deleteAttachment(rootDir, cardPath, attachmentName) {
+  var filePath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentName);
+  if (nodeFs.existsSync(filePath)) {
+    nodeFs.rmSync(filePath, { force: true });
+  }
+}
+
 const DEFAULT_DETAIL_DOCUMENT = '_content.md';
 const DETAIL_DOCUMENT_DIR = '_content';
 
@@ -330,6 +380,7 @@ function _fs_normalizeDetailDocumentPath(documentPath) {
   var raw = String(documentPath || '').trim().replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+|\/+$/g, '');
   if (!raw) return DEFAULT_DETAIL_DOCUMENT;
   if (raw === DEFAULT_DETAIL_DOCUMENT) return DEFAULT_DETAIL_DOCUMENT;
+  if (raw === '_card.md') return '_card.md';
   if (!raw.startsWith(DETAIL_DOCUMENT_DIR + '/')) {
     throw new Error('文档路径不合法: ' + raw);
   }
@@ -367,10 +418,12 @@ function _fs_detailDocumentItem(documentPath) {
   var normalizedPath = _fs_normalizeDetailDocumentPath(documentPath);
   var baseName = nodePath.basename(normalizedPath, '.md');
   var isDefault = normalizedPath === DEFAULT_DETAIL_DOCUMENT;
+  var isCard = normalizedPath === '_card.md';
   return {
     path: normalizedPath,
-    name: isDefault ? '卡片详情' : baseName,
+    name: isDefault ? '卡片详情' : (isCard ? '卡片' : baseName),
     isDefault: isDefault,
+    isCard: isCard,
   };
 }
 
@@ -378,7 +431,10 @@ function _fs_listDetailDocuments(rootDir, cardPath) {
   rootDir = _fs_requireValidWorkDir(rootDir);
   var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
   var contentDir = nodePath.join(cardDir, DETAIL_DOCUMENT_DIR);
-  var documents = [_fs_detailDocumentItem(DEFAULT_DETAIL_DOCUMENT)];
+  var documents = [
+    _fs_detailDocumentItem(DEFAULT_DETAIL_DOCUMENT),
+    _fs_detailDocumentItem('_card.md')
+  ];
   if (nodeFs.existsSync(contentDir)) {
     nodeFs.readdirSync(contentDir, { withFileTypes: true })
       .filter(function(entry) { return entry.isFile() && /\.md$/i.test(entry.name); })
@@ -407,8 +463,8 @@ function _fs_createDetailDocument(rootDir, cardPath, name) {
 function _fs_renameDetailDocument(rootDir, cardPath, documentPath, nextName) {
   rootDir = _fs_requireValidWorkDir(rootDir);
   var normalizedDocumentPath = _fs_normalizeDetailDocumentPath(documentPath);
-  if (normalizedDocumentPath === DEFAULT_DETAIL_DOCUMENT) {
-    throw new Error('默认文档不允许重命名');
+  if (normalizedDocumentPath === DEFAULT_DETAIL_DOCUMENT || normalizedDocumentPath === '_card.md') {
+    throw new Error('固定文档不允许重命名');
   }
   var currentPath = _fs_detailDocumentAbsolutePath(rootDir, cardPath, normalizedDocumentPath);
   if (!nodeFs.existsSync(currentPath)) {
@@ -428,8 +484,8 @@ function _fs_renameDetailDocument(rootDir, cardPath, documentPath, nextName) {
 function _fs_deleteDetailDocument(rootDir, cardPath, documentPath) {
   rootDir = _fs_requireValidWorkDir(rootDir);
   var normalizedDocumentPath = _fs_normalizeDetailDocumentPath(documentPath);
-  if (normalizedDocumentPath === DEFAULT_DETAIL_DOCUMENT) {
-    throw new Error('默认文档不允许删除');
+  if (normalizedDocumentPath === DEFAULT_DETAIL_DOCUMENT || normalizedDocumentPath === '_card.md') {
+    throw new Error('固定文档不允许删除');
   }
   var filePath = _fs_detailDocumentAbsolutePath(rootDir, cardPath, normalizedDocumentPath);
   if (nodeFs.existsSync(filePath)) {
@@ -671,6 +727,18 @@ const fileService = {
 
     deleteDetailDocument: function(rootDir, cardPath, documentPath) {
       return _fs_deleteDetailDocument(rootDir, cardPath, documentPath);
+    },
+
+    listAttachments: function(rootDir, cardPath) {
+      return _fs_listAttachments(rootDir, cardPath);
+    },
+
+    importAttachment: function(rootDir, cardPath, sourceFilePath) {
+      return _fs_importAttachment(rootDir, cardPath, sourceFilePath);
+    },
+
+    deleteAttachment: function(rootDir, cardPath, attachmentName) {
+      return _fs_deleteAttachment(rootDir, cardPath, attachmentName);
     },
 
     writeAttachmentBase64: function(rootDir, cardPath, fileName, mimeType, base64) {

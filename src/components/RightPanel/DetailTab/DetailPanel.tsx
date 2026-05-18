@@ -48,6 +48,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const detailEntry = useCardContentStore((s) => currentDocumentKey ? s.detailEntries[currentDocumentKey] : undefined)
   const setDetailMarkdown = useCardContentStore((s) => s.setDetailMarkdown)
   const clearDetailMarkdown = useCardContentStore((s) => s.clearDetailMarkdown)
+  const setCardMarkdown = useCardContentStore((s) => s.setCardMarkdown)
 
   const [savedMarkdown, setSavedMarkdown] = useState('')
   const [renameMode, setRenameMode] = useState(false)
@@ -64,12 +65,16 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const isDefaultDocument = activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH
   const nodeLabel = selectedNode?.data.label ?? ''
   const displayDocuments = useMemo<DetailDocumentItem[]>(() => (
-    documents.map((item) => (
-      item.isDefault
-        ? { ...item, name: nodeLabel || item.name }
-        : item
-    ))
-  ), [documents, nodeLabel])
+    documents.map((item) => {
+      if (item.isDefault) {
+        return { ...item, name: '详情' }
+      }
+      if (item.isCard) {
+        return { ...item, name: '卡片' }
+      }
+      return item
+    })
+  ), [documents])
   const activeDocument = displayDocuments.find((item) => item.path === activeDocumentPath)
   const activeDocumentDisplayName = activeDocument?.name ?? nodeLabel
   const currentDocumentDisplayPath = nodePath
@@ -117,6 +122,14 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       if (markdownRequestSeqRef.current !== requestSeq) return
       setDetailMarkdown(currentDocumentKey, content)
       setSavedMarkdown(content)
+      
+      // 同步给 KnowledgeCard
+      if (activeDocumentPath === '_card.md') {
+        setCardMarkdown(nodePath, content)
+      } else if (activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH) {
+        setDetailMarkdown(nodePath, content)
+      }
+      
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
         setDraftMarkdown(currentDocumentKey, content)
       }
@@ -124,11 +137,18 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       if (markdownRequestSeqRef.current !== requestSeq) return
       setDetailMarkdown(currentDocumentKey, '')
       setSavedMarkdown('')
+      
+      if (activeDocumentPath === '_card.md') {
+        setCardMarkdown(nodePath, '')
+      } else if (activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH) {
+        setDetailMarkdown(nodePath, '')
+      }
+      
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
         setDraftMarkdown(currentDocumentKey, '')
       }
     })
-  }, [selectedNodeId, nodePath, activeDocumentPath, currentDocumentKey, storage, setDraftMarkdown, setDetailMarkdown])
+  }, [selectedNodeId, nodePath, activeDocumentPath, currentDocumentKey, storage, setDraftMarkdown, setDetailMarkdown, setCardMarkdown])
 
   useEffect(() => {
     if (detailEntry) {
@@ -170,11 +190,19 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       await storage.writeDetailDocument(nodePath, activeDocumentPath, draftMarkdown)
       setDetailMarkdown(currentDocumentKey, draftMarkdown)
       setSavedMarkdown(draftMarkdown)
+      
+      // 同步更新给 KnowledgeCard 节点用
+      if (activeDocumentPath === '_card.md') {
+        setCardMarkdown(nodePath, draftMarkdown)
+      } else if (activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH) {
+        setDetailMarkdown(nodePath, draftMarkdown)
+      }
+      
       logAction('内容:保存', 'DetailPanel', { nodePath, documentPath: activeDocumentPath, label })
     } catch (e) {
       logger.catch('DetailPanel', 'handleSave', e)
     }
-  }, [selectedNodeId, nodePath, currentDocumentKey, storeApi, storage, draftMarkdown, setDetailMarkdown, activeDocumentPath])
+  }, [selectedNodeId, nodePath, currentDocumentKey, storeApi, storage, draftMarkdown, setDetailMarkdown, setCardMarkdown, activeDocumentPath])
 
   // ===== Rename node =====
   // Use nodesMapRef for stale-closure-safe access. selectedNode from render-time

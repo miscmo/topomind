@@ -76,6 +76,11 @@ export function insertImage(view: EditorView) {
   insertTextAtCursor(view, `![${text}](url)`, text.length + 4)
 }
 
+export function insertAttachmentLink(view: EditorView, attachmentPath: string, isImage: boolean, name: string) {
+  const md = isImage ? `![${name}](${attachmentPath})` : `[${name}](${attachmentPath})`
+  insertTextAtCursor(view, md)
+}
+
 export function insertCodeBlock(view: EditorView, language: string = '') {
   const selection = view.state.selection.main
   const text = view.state.sliceDoc(selection.from, selection.to)

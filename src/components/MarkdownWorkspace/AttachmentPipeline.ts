@@ -35,14 +35,32 @@ export async function handleMarkdownPaste(options: {
     event.preventDefault()
     const snippets: string[] = []
     for (const file of files) {
-      const base64 = await fileToBase64(file)
-      const fileName = file.name || 'attachment'
-      const relPath = await storage.writeAttachmentBase64(attachmentCardPath, fileName, file.type, base64)
-      snippets.push(file.type.startsWith('image/') ? `![${fileName}](${relPath})` : `[${fileName}](${relPath})`)
+      if (file.type.startsWith('image/')) {
+        const base64 = await fileToBase64(file)
+        const fileName = file.name || 'attachment'
+        const relPath = await storage.writeAttachmentBase64(attachmentCardPath, fileName, file.type, base64)
+        snippets.push(`![${fileName}](${relPath})`)
+      } else {
+        // 如果是系统文件，通过路径导入（需要是 electron 环境）
+        if ('path' in file && typeof (file as any).path === 'string' && window.electronAPI) {
+          try {
+            const relPath = await storage.importAttachment(attachmentCardPath, (file as any).path)
+            const fileName = file.name || 'attachment'
+            snippets.push(`[${fileName}](${relPath})`)
+          } catch (e) {
+            console.error('Failed to import file attachment:', e)
+          }
+        }
+      }
     }
-    const textToInsert = snippets.join('\n')
-    const nextValue = `${value.slice(0, selectionStart)}${textToInsert}${value.slice(selectionEnd)}`
-    return { handled: true, nextValue, nextCursor: selectionStart + textToInsert.length }
+    // only handle if we actually generated snippets
+    if (snippets.length > 0) {
+      const textToInsert = snippets.join('\n')
+      const nextValue = `${value.slice(0, selectionStart)}${textToInsert}${value.slice(selectionEnd)}`
+      return { handled: true, nextValue, nextCursor: selectionStart + textToInsert.length }
+    }
+    // if no snippets were generated (e.g. unsupported file types), do not handle
+    return { handled: false }
   }
 
   const text = clipboardData.getData('text/plain').trim()
@@ -84,14 +102,32 @@ export async function handleMarkdownDrop(options: {
     event.preventDefault()
     const snippets: string[] = []
     for (const file of files) {
-      const base64 = await fileToBase64(file)
-      const fileName = file.name || 'attachment'
-      const relPath = await storage.writeAttachmentBase64(attachmentCardPath, fileName, file.type, base64)
-      snippets.push(file.type.startsWith('image/') ? `![${fileName}](${relPath})` : `[${fileName}](${relPath})`)
+      if (file.type.startsWith('image/')) {
+        const base64 = await fileToBase64(file)
+        const fileName = file.name || 'attachment'
+        const relPath = await storage.writeAttachmentBase64(attachmentCardPath, fileName, file.type, base64)
+        snippets.push(`![${fileName}](${relPath})`)
+      } else {
+        // 如果是系统文件，通过路径导入（需要是 electron 环境）
+        if ('path' in file && typeof (file as any).path === 'string' && window.electronAPI) {
+          try {
+            const relPath = await storage.importAttachment(attachmentCardPath, (file as any).path)
+            const fileName = file.name || 'attachment'
+            snippets.push(`[${fileName}](${relPath})`)
+          } catch (e) {
+            console.error('Failed to import file attachment:', e)
+          }
+        }
+      }
     }
-    const textToInsert = snippets.join('\n')
-    const nextValue = `${value.slice(0, selectionStart)}${textToInsert}${value.slice(selectionEnd)}`
-    return { handled: true, nextValue, nextCursor: selectionStart + textToInsert.length }
+
+    // only handle if we actually generated snippets
+    if (snippets.length > 0) {
+      const textToInsert = snippets.join('\n')
+      const nextValue = `${value.slice(0, selectionStart)}${textToInsert}${value.slice(selectionEnd)}`
+      return { handled: true, nextValue, nextCursor: selectionStart + textToInsert.length }
+    }
+    return { handled: false }
   }
 
   const text = dataTransfer.getData('text/plain').trim()

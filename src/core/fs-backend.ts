@@ -81,6 +81,9 @@ export interface FSB {
   createDetailDocument: (rootDir: string, cardPath: string, name: string) => Promise<DetailDocumentItem>
   renameDetailDocument: (rootDir: string, cardPath: string, documentPath: string, nextName: string) => Promise<DetailDocumentItem>
   deleteDetailDocument: (rootDir: string, cardPath: string, documentPath: string) => Promise<void>
+  listAttachments: (rootDir: string, cardPath: string) => Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>
+  importAttachment: (rootDir: string, cardPath: string, sourceFilePath: string) => Promise<string>
+  deleteAttachment: (rootDir: string, cardPath: string, attachmentName: string) => Promise<void>
   writeAttachmentBase64: (rootDir: string, cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
   downloadAttachment: (rootDir: string, cardPath: string, url: string) => Promise<string>
   readAttachmentDataUrl: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<string>
@@ -114,6 +117,12 @@ const FSBImpl: FSB = {
     _call('fs:renameDetailDocument', rootDir, cardPath, documentPath, nextName) as Promise<DetailDocumentItem>,
   deleteDetailDocument: (rootDir, cardPath, documentPath) =>
     _call('fs:deleteDetailDocument', rootDir, cardPath, documentPath) as Promise<void>,
+  listAttachments: (rootDir, cardPath) =>
+    _call('fs:listAttachments', rootDir, cardPath) as Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>,
+  importAttachment: (rootDir, cardPath, sourceFilePath) =>
+    _call('fs:importAttachment', rootDir, cardPath, sourceFilePath) as Promise<string>,
+  deleteAttachment: (rootDir, cardPath, attachmentName) =>
+    _call('fs:deleteAttachment', rootDir, cardPath, attachmentName) as Promise<void>,
   writeAttachmentBase64: (rootDir, cardPath, fileName, mimeType, base64) =>
     _call('fs:writeAttachmentBase64', rootDir, cardPath, fileName, mimeType, base64) as Promise<string>,
   downloadAttachment: (rootDir, cardPath, url) =>

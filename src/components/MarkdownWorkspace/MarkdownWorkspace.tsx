@@ -5,6 +5,7 @@ import { MarkdownSourceEditor } from './MarkdownSourceEditor'
 import { MarkdownPreview } from './MarkdownPreview'
 import { MarkdownToolbar } from './MarkdownToolbar'
 import { MarkdownStatusBar } from './MarkdownStatusBar'
+import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../hooks/useResizePanel'
 import { logAction } from '../../core/log-backend'
 import styles from './MarkdownWorkspace.module.css'
@@ -159,11 +160,16 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   useEffect(() => {
     if (!documentContextMenu) return
     const handleClose = () => setDocumentContextMenu(null)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose()
+    }
     window.addEventListener('pointerdown', handleClose)
     window.addEventListener('blur', handleClose)
+    window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('pointerdown', handleClose)
       window.removeEventListener('blur', handleClose)
+      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [documentContextMenu])
 
@@ -357,7 +363,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                       className={`${styles.sidebarTab} ${detailSidebarTab === 'documents' ? styles.sidebarTabActive : ''}`}
                       onClick={() => setDetailSidebarTab('documents')}
                     >
-                      文档列表
+                      文档
                     </button>
                     <button
                       type="button"
@@ -365,6 +371,15 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                       onClick={() => setDetailSidebarTab('toc')}
                     >
                       目录
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.sidebarTab} ${detailSidebarTab === 'attachments' ? styles.sidebarTabActive : ''}`}
+                      onClick={() => setDetailSidebarTab('attachments')}
+                      disabled={!attachmentCardPath}
+                      title={!attachmentCardPath ? '当前环境暂不支持附件' : '附件'}
+                    >
+                      附件
                     </button>
                   </div>
                 </div>
@@ -425,15 +440,23 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                               <button
                                 key={item.path}
                                 type="button"
-                                className={`${styles.documentItem} ${isActive ? styles.documentItemActive : ''}`}
+                                className={`${styles.documentItem} ${isActive ? styles.documentItemActive : ''} ${(item.isDefault || item.isCard) ? styles.documentItemFixed : ''}`}
                                 onClick={() => onSelectDetailDocument?.(item.path)}
                                 onContextMenu={(event) => {
                                   event.stopPropagation()
-                                  openDocumentContextMenu(event, item.path, item.isDefault)
+                                  openDocumentContextMenu(event, item.path, item.isDefault || item.isCard)
                                 }}
                                 title={item.name}
                               >
                                 <span className={styles.documentName}>{item.name}</span>
+                                {(item.isDefault || item.isCard) && (
+                                  <span className={styles.documentFixedIcon} title="固定文档，不可重命名或删除">
+                                    <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none">
+                                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                    </svg>
+                                  </span>
+                                )}
                               </button>
                             )
                           )
@@ -463,7 +486,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                       )
                     )}
                   </div>
-                ) : (
+                ) : detailSidebarTab === 'toc' ? (
                   tocItems.length > 0 ? (
                     <div className={styles.tocList}>
                       {tocItems.map(item => (
@@ -482,7 +505,16 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                   ) : (
                     <div className={styles.sidebarEmpty}>当前文档暂无目录</div>
                   )
-                )}
+                ) : detailSidebarTab === 'attachments' ? (
+                  <div className={styles.sidebarBody} style={{ padding: 0 }}>
+                    {attachmentCardPath && (
+                      <AttachmentsTab 
+                        attachmentCardPath={attachmentCardPath} 
+                        view={currentViewMode === 'edit' ? editorView : null}
+                      />
+                    )}
+                  </div>
+                ) : null}
               </>
             )}
 

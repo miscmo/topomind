@@ -69,6 +69,11 @@
   transform: scale(0.98);
 }
 
+.iconButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .rightGroup {
   display: flex;
   gap: 12px;
@@ -318,7 +323,9 @@
 
 .documentItem {
   width: 100%;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 2px;
   padding: 7px 10px;
   border: none;
@@ -331,6 +338,23 @@
 
 .documentItemActive {
   background: #edf4fb;
+}
+
+.documentItemFixed {
+  color: #1e293b;
+}
+
+.documentFixedIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  color: #94a3b8;
+  opacity: 0.6;
+}
+
+.documentItem:hover .documentFixedIcon {
+  opacity: 1;
 }
 
 .documentName {
@@ -357,6 +381,7 @@
 }
 
 .documentInlineInput {
+  flex: 1;
   width: 100%;
   min-height: calc(1em * 1.35 + 10px);
   padding: 4px 10px;
@@ -471,9 +496,140 @@
 }
 
 .sidebarEmpty {
-  padding: 14px 12px;
-  font-size: 12px;
+  padding: 32px 16px;
+  text-align: center;
   color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.sidebarTab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Attachments Tab Styles */
+.attachmentsContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.attachmentsHeader {
+  padding: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.uploadButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.uploadButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.uploadButton:not(:disabled):hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #334155;
+}
+
+.uploadIcon {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.attachmentList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attachmentItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.attachmentItem:hover {
+  background-color: #f1f5f9;
+}
+
+.attachmentIcon {
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex-shrink: 0;
+  color: #64748b;
+}
+
+.attachmentInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attachmentName {
+  font-size: 13px;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attachmentMeta {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.attachmentDeleteBtn {
+  opacity: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 14px;
+}
+
+.attachmentItem:hover .attachmentDeleteBtn {
+  opacity: 1;
+}
+
+.attachmentDeleteBtn:hover {
+  background-color: #fee2e2;
+  color: #ef4444;
 }
 
 .statusbar {

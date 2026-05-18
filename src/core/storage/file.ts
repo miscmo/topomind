@@ -286,6 +286,18 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       await FSB.deleteDetailDocument(requireRootDir(), cardPath, normalizeDetailDocumentPath(documentPath))
     },
 
+    listAttachments: async (cardPath: string) => {
+      return FSB.listAttachments(requireRootDir(), cardPath)
+    },
+
+    importAttachment: async (cardPath: string, sourceFilePath: string) => {
+      return FSB.importAttachment(requireRootDir(), cardPath, sourceFilePath)
+    },
+
+    deleteAttachment: async (cardPath: string, attachmentName: string) => {
+      await FSB.deleteAttachment(requireRootDir(), cardPath, attachmentName)
+    },
+
     readCardMarkdown: async (cardPath: string) => {
       return FSB.readFile(requireRootDir(), `${cardPath}/_card.md`)
     },

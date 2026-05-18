@@ -3,7 +3,7 @@ import type { DetailDocumentItem } from '../../core/storage'
 
 export type MarkdownDocumentType = 'detail' | 'card'
 export type MarkdownViewMode = 'edit' | 'preview'
-export type DetailSidebarTab = 'documents' | 'toc'
+export type DetailSidebarTab = 'documents' | 'toc' | 'attachments'
 
 export interface MarkdownWorkspaceProps {
   value: string

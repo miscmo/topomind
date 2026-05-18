@@ -11,7 +11,7 @@ const ALLOWED_CHANNELS = new Set([
   'fs:readGraphMeta', 'fs:writeGraphMeta',
   'fs:renameKB',
   'fs:readFile', 'fs:writeFile', 'fs:listDetailDocuments', 'fs:createDetailDocument', 'fs:renameDetailDocument', 'fs:deleteDetailDocument',
-  'fs:writeAttachmentBase64', 'fs:downloadAttachment', 'fs:readAttachmentDataUrl',
+  'fs:writeAttachmentBase64', 'fs:downloadAttachment', 'fs:readAttachmentDataUrl', 'fs:listAttachments', 'fs:importAttachment', 'fs:deleteAttachment',
   'fs:readAppConfig', 'fs:writeAppConfig',
   'fs:isValidWorkDir', 'fs:selectDirectory', 'fs:createWorkDir', 'fs:importKB',
   // app
@@ -19,6 +19,7 @@ const ALLOWED_CHANNELS = new Set([
   'app:navigateHome',
   'app:enterWorkDir',
   'app:switchWorkDir',
+  'app:openFileDialog',
   // log
   'log:write', 'log:getBuffer', 'log:query', 'log:setLevel', 'log:clear',
   'log:getAvailableDates', 'log:getLogDir',

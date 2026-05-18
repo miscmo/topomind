@@ -11,6 +11,7 @@ import type { KnowledgeNode } from '../../../types'
 import { useStorage } from '../../../core/storage'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
 import { useCardContentStore } from '../../../stores/cardContentStore'
+import { useDraftStore } from '../../../stores/draftStore'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
 import { useGraphStoreApi } from '../../../stores/graphStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
@@ -271,6 +272,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     if (nextContent === savedContent) return
     await storage.writeCardMarkdown(cardPath, nextContent)
     useCardContentStore.getState().setCardMarkdown(cardPath, nextContent)
+    // 同步给 DetailPanel
+    useCardContentStore.getState().setDetailMarkdown(`${cardPath}/_card.md`, nextContent)
+    useDraftStore.getState().setDetailDraft(`${cardPath}/_card.md`, nextContent)
   }, [cardPath, storage])
 
   const saveMarkdownEdit = useCallback(async () => {

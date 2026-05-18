@@ -34,6 +34,7 @@ export interface DetailDocumentItem {
   path: string
   name: string
   isDefault: boolean
+  isCard?: boolean
 }
 
 export interface StorageBackend {
@@ -61,6 +62,11 @@ export interface StorageBackend {
   deleteDetailDocument: (cardPath: string, documentPath: string) => Promise<void>
   readCardMarkdown: (cardPath: string) => Promise<string>
   writeCardMarkdown: (cardPath: string, content: string) => Promise<void>
+  
+  listAttachments: (cardPath: string) => Promise<AttachmentItem[]>
+  importAttachment: (cardPath: string, sourceFilePath: string) => Promise<string>
+  deleteAttachment: (cardPath: string, attachmentName: string) => Promise<void>
+  
   writeAttachmentBase64: (cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
   downloadAttachment: (cardPath: string, url: string) => Promise<string>
   readAttachmentDataUrl: (cardPath: string, attachmentRef: string) => Promise<string>
@@ -252,6 +258,15 @@ export function createStore(backend: StorageBackend) {
     async deleteDetailDocument(cardPath: string, documentPath: string) {
       try { await backend.deleteDetailDocument(cardPath, documentPath) } catch (e) { logger.catch('Store.deleteDetailDocument', `删除详情文档失败: ${cardPath}/${documentPath}`, e); throw e }
     },
+    async listAttachments(cardPath: string) {
+      try { return await backend.listAttachments(cardPath) } catch (e) { logger.catch('Store.listAttachments', `获取附件列表失败: ${cardPath}`, e); throw e }
+    },
+    async importAttachment(cardPath: string, sourceFilePath: string) {
+      try { return await backend.importAttachment(cardPath, sourceFilePath) } catch (e) { logger.catch('Store.importAttachment', `导入附件失败: ${cardPath}`, e); throw e }
+    },
+    async deleteAttachment(cardPath: string, attachmentName: string) {
+      try { await backend.deleteAttachment(cardPath, attachmentName) } catch (e) { logger.catch('Store.deleteAttachment', `删除附件失败: ${cardPath}/${attachmentName}`, e); throw e }
+    },
     async readCardMarkdown(cardPath: string) {
       try { return await backend.readCardMarkdown(cardPath) } catch (e) { logger.catch('Store.readCardMarkdown', `读取卡片内容失败: ${cardPath}`, e); throw e }
     },
@@ -335,6 +350,14 @@ export function createStore(backend: StorageBackend) {
     },
   }
   return store
+}
+
+export interface AttachmentItem {
+  name: string
+  path: string
+  isImage: boolean
+  size: number
+  mtime: number
 }
 
 export type Store = ReturnType<typeof createStore>

@@ -51,17 +51,20 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
     ])
   }, [saveCommand])
 
-  const domEventHandlers = useMemo(() => {
+  const eventHandlers = useMemo(() => {
     return EditorView.domEventHandlers({
       paste(event, view) {
         if (!attachmentCardPath) return false
-        const selection = view.state.selection.main
+        
+        // This must be synchronous to stop default paste behavior if we are handling it
+        const clipboardData = 'clipboardData' in event ? (event as ClipboardEvent).clipboardData : null
+        const hasFiles = clipboardData && clipboardData.files && clipboardData.files.length > 0
         
         handleMarkdownPaste({
           event,
           value: view.state.doc.toString(),
-          selectionStart: selection.from,
-          selectionEnd: selection.to,
+          selectionStart: view.state.selection.main.from,
+          selectionEnd: view.state.selection.main.to,
           attachmentCardPath,
           storage
         }).then(({ handled, nextValue, nextCursor }) => {
@@ -70,9 +73,16 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
               changes: { from: 0, to: view.state.doc.length, insert: nextValue },
               selection: nextCursor !== undefined ? { anchor: nextCursor } : undefined
             })
+            // Force React re-render by calling onChange explicitly
+            if (onChange) {
+              onChange(nextValue)
+            }
+            window.dispatchEvent(new Event('markdown-attachment-uploaded'))
+            view.focus()
           }
         })
-        return false // Let CM handle default paste if pipeline doesn't block it (prevent default is inside pipeline)
+        
+        return !!hasFiles
       },
       drop(event, view) {
         if (!attachmentCardPath) return false
@@ -80,6 +90,9 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
         // Find drop position
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
         if (pos === null) return false
+        
+        const dataTransfer = 'dataTransfer' in event ? (event as DragEvent).dataTransfer : null
+        const hasFiles = dataTransfer && dataTransfer.files && dataTransfer.files.length > 0
         
         handleMarkdownDrop({
           event,
@@ -94,12 +107,20 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
               changes: { from: 0, to: view.state.doc.length, insert: nextValue },
               selection: nextCursor !== undefined ? { anchor: nextCursor } : undefined
             })
+            // Force React re-render by calling onChange explicitly
+            // (otherwise external components might not catch this change)
+            if (onChange) {
+              onChange(nextValue)
+            }
+            window.dispatchEvent(new Event('markdown-attachment-uploaded'))
+            view.focus()
           }
         })
-        return false
+        
+        return !!hasFiles
       }
     })
-  }, [attachmentCardPath, storage])
+  }, [attachmentCardPath, storage, onChange])
 
   const extensions = useMemo(() => [
     history(),
@@ -109,9 +130,9 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     customKeymap,
-    domEventHandlers,
+    eventHandlers,
     EditorView.lineWrapping
-  ], [customKeymap, domEventHandlers])
+  ], [customKeymap, eventHandlers])
 
   return (
     <div className={styles.editorSurface}>

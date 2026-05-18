@@ -140,6 +140,15 @@ function registerIPC() {
   ipcMain.handle('fs:deleteDetailDocument', function(e, rootDir, cardPath, documentPath) {
     return fileService.deleteDetailDocument(rootDir, cardPath, documentPath);
   });
+  ipcMain.handle('fs:listAttachments', function(e, rootDir, cardPath) {
+    return fileService.listAttachments(rootDir, cardPath);
+  });
+  ipcMain.handle('fs:importAttachment', function(e, rootDir, cardPath, sourceFilePath) {
+    return fileService.importAttachment(rootDir, cardPath, sourceFilePath);
+  });
+  ipcMain.handle('fs:deleteAttachment', function(e, rootDir, cardPath, attachmentName) {
+    return fileService.deleteAttachment(rootDir, cardPath, attachmentName);
+  });
   ipcMain.handle('fs:writeAttachmentBase64', function(e, rootDir, cardPath, fileName, mimeType, base64) {
     return fileService.writeAttachmentBase64(rootDir, cardPath, fileName, mimeType, base64);
   });
@@ -312,6 +321,11 @@ function registerIPC() {
     LogService.clear();
     resetMainWindowToSetup();
     return { ok: true };
+  });
+  ipcMain.handle('app:openFileDialog', async function(e, options) {
+    if (!win || win.isDestroyed()) return undefined;
+    const result = await dialog.showOpenDialog(win, options);
+    return result.canceled ? undefined : result.filePaths;
   });
   ipcMain.handle('app:openExternal', function(e, url) {
     if (typeof url !== 'string') return false;
