@@ -358,6 +358,7 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
 }: InteractiveImageBlockProps) {
   const [isSelected, setIsSelected] = useState(false)
   const containerRef = useRef<HTMLSpanElement>(null)
+  const dragCleanupRef = useRef<(() => void) | null>(null)
   
   useEffect(() => {
     if (!isSelected) return
@@ -373,10 +374,17 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
   const [isDragging, setIsDragging] = useState(false)
   const [tempWidth, setTempWidth] = useState<number | null>(null)
 
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.()
+    }
+  }, [])
+
   const handleDragStart = (e: React.PointerEvent, corner: 'tl' | 'tr' | 'bl' | 'br') => {
     e.preventDefault()
     e.stopPropagation()
     if (!canEdit) return
+    dragCleanupRef.current?.()
     setIsDragging(true)
     
     // Add global class to lock cursor and prevent text selection during drag
@@ -387,7 +395,7 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
     const startWidthPct = width
     const containerWidth = containerRef.current?.parentElement?.clientWidth || 800
     
-    const handleDragMove = (moveEvent: PointerEvent) => {
+    function handleDragMove(moveEvent: PointerEvent) {
       const deltaX = moveEvent.clientX - startX
       const isLeftCorner = corner === 'tl' || corner === 'bl'
       const effectiveDeltaX = isLeftCorner ? -deltaX : deltaX
@@ -397,13 +405,23 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
       newWidth = Math.max(10, Math.min(100, newWidth))
       setTempWidth(newWidth)
     }
-    
-    const handleDragEnd = (endEvent: PointerEvent) => {
+
+    function cleanupDrag() {
       setIsDragging(false)
       document.body.classList.remove(cursorClass)
       document.removeEventListener('pointermove', handleDragMove)
       document.removeEventListener('pointerup', handleDragEnd)
-      
+      document.removeEventListener('pointercancel', handleDragCancel)
+      window.removeEventListener('blur', handleDragCancel)
+      dragCleanupRef.current = null
+    }
+
+    function handleDragCancel() {
+      setTempWidth(null)
+      cleanupDrag()
+    }
+
+    function handleDragEnd(endEvent: PointerEvent) {
       const deltaX = endEvent.clientX - startX
       const isLeftCorner = corner === 'tl' || corner === 'bl'
       const effectiveDeltaX = isLeftCorner ? -deltaX : deltaX
@@ -412,11 +430,15 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
       let newWidth = startWidthPct + deltaPct
       newWidth = Math.max(10, Math.min(100, newWidth))
       setTempWidth(null)
+      cleanupDrag()
       onWidthChange(newWidth)
     }
     
+    dragCleanupRef.current = cleanupDrag
     document.addEventListener('pointermove', handleDragMove)
     document.addEventListener('pointerup', handleDragEnd)
+    document.addEventListener('pointercancel', handleDragCancel)
+    window.addEventListener('blur', handleDragCancel)
   }
 
   const currentWidth = tempWidth !== null ? tempWidth : width
