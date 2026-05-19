@@ -4,8 +4,21 @@ import electron from 'vite-plugin-electron/simple'
 
 import { resolve } from 'path'
 
+const DEV_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' local-file: data: blob:; font-src 'self' data:; connect-src 'self' http://localhost:5173 ws://localhost:5173; worker-src 'self' blob:;"
+const PROD_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' local-file: data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:;"
+
+function cspPlugin() {
+  return {
+    name: 'topomind-csp',
+    transformIndexHtml(html, context) {
+      return html.replace('__TOPOMIND_CSP__', context.server ? DEV_CSP : PROD_CSP)
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
+    cspPlugin(),
     react(),
     electron({
       main: {

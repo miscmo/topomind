@@ -1,5 +1,6 @@
 import { memo, useEffect, useId, useMemo, useState } from 'react'
 import mermaid from 'mermaid'
+import DOMPurify from 'dompurify'
 
 mermaid.initialize({
   startOnLoad: false,
@@ -27,7 +28,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code }: MermaidBlockPro
         setSvgContent(null)
         const { svg } = await mermaid.render(renderId, code)
         if (!isCancelled) {
-          setSvgContent(svg)
+          setSvgContent(DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } }))
         }
       } catch (err: any) {
         if (!isCancelled) {

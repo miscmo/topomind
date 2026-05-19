@@ -82,6 +82,17 @@ function isPathWithinDir(parentDir, targetPath) {
   return relativePath === '' || (!relativePath.startsWith('..') && !nodePath.isAbsolute(relativePath));
 }
 
+function isTrustedAppUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    const devOrigin = process.env.VITE_DEV_SERVER_URL ? new URL(process.env.VITE_DEV_SERVER_URL).origin : '';
+    if (IS_DEV && devOrigin && parsed.origin === devOrigin) return true;
+    return parsed.protocol === 'file:' && isPathWithinDir(DIST_RENDERER_DIR, fileURLToPath(rawUrl));
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================
 // IPC HANDLERS
 // ============================================================
@@ -456,7 +467,8 @@ function createWindow() {
     title: 'TopoMind',
     webPreferences: {
       preload: preloadPath,
-      nodeIntegration: false, contextIsolation: true,
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   });
   if (IS_DEV) {
@@ -473,6 +485,19 @@ function createWindow() {
   win.webContents.on('did-finish-load', function() {
     const currentUrl = win && !win.isDestroyed() ? win.webContents.getURL() : '';
     if (IS_DEV) console.log('[window:did-finish-load]', currentUrl);
+  });
+  win.webContents.setWindowOpenHandler(function(details) {
+    if (/^https?:\/\//i.test(details.url)) {
+      shell.openExternal(details.url);
+    }
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', function(event, targetUrl) {
+    if (isTrustedAppUrl(targetUrl)) return;
+    event.preventDefault();
+    if (/^https?:\/\//i.test(targetUrl)) {
+      shell.openExternal(targetUrl);
+    }
   });
   win.once('ready-to-show', function() {
     if (win && !win.isDestroyed()) {
@@ -573,7 +598,7 @@ function buildMenu(isSetupView) {
 
 // App ready
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local-file', privileges: { standard: true, bypassCSP: true, supportFetchAPI: true, secure: true, stream: true } }
+  { scheme: 'local-file', privileges: { standard: true, supportFetchAPI: true, secure: true, stream: true } }
 ]);
 
 app.whenReady().then(function() {

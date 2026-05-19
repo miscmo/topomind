@@ -845,6 +845,8 @@ export const MarkdownPreview = memo(function MarkdownPreview({
           role="dialog"
           aria-modal="true"
           aria-label={previewImage.alt ? `图片预览：${previewImage.alt}` : '图片预览'}
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
           onClick={handleCloseImagePreview}
         >
           <button
@@ -863,7 +865,12 @@ export const MarkdownPreview = memo(function MarkdownPreview({
           >
             重置
           </button>
-          <div className={styles.imagePreviewStage} onClick={(event) => event.stopPropagation()}>
+          <div
+            className={styles.imagePreviewStage}
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
             <div
               className={`${styles.imagePreviewCanvas} ${previewImage.scale > 1 ? styles.imagePreviewCanvasDraggable : ''}`}
               onWheel={handlePreviewImageWheel}

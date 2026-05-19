@@ -79,7 +79,7 @@
   cursor: col-resize;
   flex-shrink: 0;
   background: transparent;
-  z-index: 999;
+  z-index: var(--z-panel, 20);
   position: relative;
   user-select: none;
   transition: background 0.15s ease;

@@ -444,7 +444,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                                 onClick={() => onSelectDetailDocument?.(item.path)}
                                 onContextMenu={(event) => {
                                   event.stopPropagation()
-                                  openDocumentContextMenu(event, item.path, item.isDefault || item.isCard)
+                                  openDocumentContextMenu(event, item.path, Boolean(item.isDefault || item.isCard))
                                 }}
                                 title={item.name}
                               >
