@@ -17,7 +17,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     storeApi,
   } = deps
 
-  const applyNodePositionChanges = async (changes: Array<{ id: string; position: { x: number; y: number }; dragging?: boolean }>) => {
+  const applyNodePositionChanges = async (changes: Array<{ id: string; position?: { x: number; y: number }; dragging?: boolean }>) => {
     let changed = false
     const store = storeApi.getState()
     const changesById = new Map(changes.map((change) => [change.id, change]))
@@ -33,10 +33,13 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     
     if (changed) {
       store.setNodes(nextNodes)
-      const graphSession = getActiveGraphSession()
-      const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-      const shouldSaveNow = changes.some((change) => change.dragging !== true)
-      if (currentRoomPath && shouldSaveNow) await saveNow(currentRoomPath)
+    }
+
+    const graphSession = getActiveGraphSession()
+    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
+    const shouldSaveNow = changes.some((change) => change.dragging === false)
+    if (currentRoomPath && shouldSaveNow) {
+      await saveNow(currentRoomPath)
     }
   }
 

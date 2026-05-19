@@ -33,12 +33,17 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const graph = useGraphContext()
   const confirm = useConfirmStore((s) => s.open)
 
-  const selectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId) : null)
   const resolveNodePath = useCallback((nodeId: string) => {
     const graphSession = tabStore.getState().getGraphSession(tabId)
     return resolveRoomChildRef(graphSession.roomPath || graphSession.kbPath, nodeId)
   }, [tabId])
   const nodePath = selectedNodeId ? resolveNodePath(selectedNodeId) : null
+
+  // Use granular selectors to prevent re-renders on position changes (e.g. during dragging)
+  const childCount = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.childCount ?? 0 : 0)
+  const nodeLabel = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.label ?? '' : '')
+  const hasSelectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.has(selectedNodeId) : false)
+
   const [activeDocumentPath, setActiveDocumentPath] = useState(DEFAULT_DETAIL_DOCUMENT_PATH)
   const currentDocumentKey = nodePath ? joinRefs(nodePath, activeDocumentPath) : ''
 
@@ -61,9 +66,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const renameInputRef = useRef<HTMLInputElement>(null)
   const markdownRequestSeqRef = useRef(0)
 
-  const childCount = selectedNode?.data.childCount ?? 0
   const isDefaultDocument = activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH
-  const nodeLabel = selectedNode?.data.label ?? ''
   const displayDocuments = useMemo<DetailDocumentItem[]>(() => (
     documents.map((item) => {
       if (item.isDefault) {
@@ -213,7 +216,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       return
     }
     const node = storeApi.getState().nodesMap.get(selectedNodeId)
-    const oldLabel = node?.data.label ?? selectedNode?.data.label
+    const oldLabel = node?.data.label ?? nodeLabel
     const path = resolveNodePath(selectedNodeId)
     logAction('节点:重命名', 'DetailPanel', {
       nodeId: selectedNodeId,
@@ -331,15 +334,13 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   }, [tabId, flushMarkdownSave])
 
   // ===== Empty state =====
-  if (!selectedNodeId || !selectedNode) {
+  if (!selectedNodeId || !hasSelectedNode) {
     return (
       <div id="detail-panel" className={styles.detailPanel}>
         <div className={styles.emptyState}>选择一个节点查看详情</div>
       </div>
     )
   }
-
-  const { data } = selectedNode
 
   return (
     <div id="detail-panel" className={styles.detailPanel}>
@@ -396,7 +397,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
                           title={currentDocumentDisplayPath || undefined}
                           onDoubleClick={() => {
                             if (!canRenameNodeFromTitle) return
-                            setNewName(data.label)
+                            setNewName(nodeLabel)
                             setRenameMode(true)
                           }}
                           style={{ cursor: canRenameNodeFromTitle ? 'pointer' : 'default' }}

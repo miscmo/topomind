@@ -55,6 +55,7 @@ export const ImageBlock = memo(function ImageBlock({
     <img
       src={resolvedSrc}
       alt={alt}
+      draggable={false}
       style={{ maxWidth: '100%', cursor: onPreview ? 'zoom-in' : undefined, ...style }}
       onDoubleClick={(event) => {
         onDoubleClick?.(event)

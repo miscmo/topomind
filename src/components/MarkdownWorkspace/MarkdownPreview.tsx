@@ -373,18 +373,26 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
   const [isDragging, setIsDragging] = useState(false)
   const [tempWidth, setTempWidth] = useState<number | null>(null)
 
-  const handleDragStart = (e: React.PointerEvent) => {
+  const handleDragStart = (e: React.PointerEvent, corner: 'tl' | 'tr' | 'bl' | 'br') => {
     e.preventDefault()
     e.stopPropagation()
     if (!canEdit) return
     setIsDragging(true)
+    
+    // Add global class to lock cursor and prevent text selection during drag
+    const cursorClass = (corner === 'tl' || corner === 'br') ? 'is-resizing-nwse' : 'is-resizing-nesw'
+    document.body.classList.add(cursorClass)
+
     const startX = e.clientX
     const startWidthPct = width
     const containerWidth = containerRef.current?.parentElement?.clientWidth || 800
     
     const handleDragMove = (moveEvent: PointerEvent) => {
       const deltaX = moveEvent.clientX - startX
-      const deltaPct = (deltaX / containerWidth) * 100
+      const isLeftCorner = corner === 'tl' || corner === 'bl'
+      const effectiveDeltaX = isLeftCorner ? -deltaX : deltaX
+      
+      const deltaPct = (effectiveDeltaX / containerWidth) * 100
       let newWidth = startWidthPct + deltaPct
       newWidth = Math.max(10, Math.min(100, newWidth))
       setTempWidth(newWidth)
@@ -392,11 +400,15 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
     
     const handleDragEnd = (endEvent: PointerEvent) => {
       setIsDragging(false)
+      document.body.classList.remove(cursorClass)
       document.removeEventListener('pointermove', handleDragMove)
       document.removeEventListener('pointerup', handleDragEnd)
       
       const deltaX = endEvent.clientX - startX
-      const deltaPct = (deltaX / containerWidth) * 100
+      const isLeftCorner = corner === 'tl' || corner === 'bl'
+      const effectiveDeltaX = isLeftCorner ? -deltaX : deltaX
+      
+      const deltaPct = (effectiveDeltaX / containerWidth) * 100
       let newWidth = startWidthPct + deltaPct
       newWidth = Math.max(10, Math.min(100, newWidth))
       setTempWidth(null)
@@ -459,13 +471,27 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
             attachmentCardPath={attachmentCardPath}
             onPreview={(payload) => onPreview({ ...payload, scale: 1, offsetX: 0, offsetY: 0 })}
             className={styles.interactiveImage}
-            style={{ width: '100%', height: 'auto', display: 'block' }}
+            style={{ width: '100%', height: 'auto', display: 'block', cursor: 'default' }}
           />
           {isSelected && canEdit && (
-            <div 
-              className={styles.imageResizeHandle}
-              onPointerDown={handleDragStart}
-            />
+            <>
+              <div 
+                className={`${styles.imageResizeHandle} ${styles.imageResizeHandleTL}`}
+                onPointerDown={(e) => handleDragStart(e, 'tl')}
+              />
+              <div 
+                className={`${styles.imageResizeHandle} ${styles.imageResizeHandleTR}`}
+                onPointerDown={(e) => handleDragStart(e, 'tr')}
+              />
+              <div 
+                className={`${styles.imageResizeHandle} ${styles.imageResizeHandleBL}`}
+                onPointerDown={(e) => handleDragStart(e, 'bl')}
+              />
+              <div 
+                className={`${styles.imageResizeHandle} ${styles.imageResizeHandleBR}`}
+                onPointerDown={(e) => handleDragStart(e, 'br')}
+              />
+            </>
           )}
         </span>
       </span>
@@ -850,6 +876,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
                 className={styles.imagePreviewImage}
                 src={previewImage.src}
                 alt={previewImage.alt}
+                draggable={false}
                 style={{
                   transform: `translate(${previewImage.offsetX}px, ${previewImage.offsetY}px) scale(${previewImage.scale})`,
                 }}

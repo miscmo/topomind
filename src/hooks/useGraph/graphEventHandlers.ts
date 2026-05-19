@@ -40,14 +40,19 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const positionChanges: Array<{ id: string; position: { x: number; y: number }; dragging?: boolean }> = []
+      const positionChanges: Array<{ id: string; position?: { x: number; y: number }; dragging?: boolean }> = []
       const removeIds: string[] = []
       const dimensionChanges: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean }> = []
       const selectionChanges: Array<{ id: string; selected: boolean }> = []
 
       for (const change of changes) {
-        if (change.type === 'position' && change.position) {
-          positionChanges.push({ id: change.id, position: change.position, dragging: change.dragging })
+        if (change.type === 'position') {
+          // React Flow emits { dragging: false } without position when drag ends
+          positionChanges.push({ 
+            id: change.id, 
+            position: change.position, 
+            dragging: change.dragging 
+          })
         } else if (change.type === 'remove') {
           removeIds.push(change.id)
         } else if (change.type === 'dimensions') {

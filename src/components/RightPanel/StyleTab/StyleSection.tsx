@@ -209,8 +209,7 @@ export default memo(function StyleSection() {
   const graph = useGraphContext()
 
   const selectedEdge = useGraphStore((s) => selectedEdgeId ? s.edgesMap.get(selectedEdgeId) : null)
-  const nodes = useGraphStore((s) => s.nodes)
-  const selectedNodes = useMemo(() => nodes.filter((node) => node.selected), [nodes])
+  const selectedNodes = useGraphStore((s) => s.nodes.filter(n => n.selected), (a, b) => a.length === b.length && a.every((n, i) => n.id === b[i].id && n.data === b[i].data && n.width === b[i].width && n.height === b[i].height && n.initialWidth === b[i].initialWidth && n.initialHeight === b[i].initialHeight && n.measured === b[i].measured))
   const selectedNode = selectedNodes.length > 0 ? selectedNodes[0] : null
   const isMultiSelection = selectedNodes.length > 1
   const currentEdgeStyle = selectedEdge?.data

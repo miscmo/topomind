@@ -853,15 +853,46 @@
 
 .imageResizeHandle {
   position: absolute;
-  right: -5px;
-  bottom: -5px;
   width: 12px;
   height: 12px;
   background-color: #0969da;
   border: 2px solid #ffffff;
   border-radius: 50%;
-  cursor: nwse-resize;
   z-index: 5;
+}
+
+.imageResizeHandleTL {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+
+.imageResizeHandleTR {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+
+.imageResizeHandleBL {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+
+.imageResizeHandleBR {
+  bottom: -5px;
+  right: -5px;
+  cursor: nwse-resize;
+}
+
+/* 全局拖拽时锁定鼠标指针样式 */
+:global(body.is-resizing-nwse) {
+  cursor: nwse-resize !important;
+  user-select: none !important;
+}
+:global(body.is-resizing-nesw) {
+  cursor: nesw-resize !important;
+  user-select: none !important;
 }
 
 .interactiveImageToolbarGroup {
