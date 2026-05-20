@@ -84,8 +84,6 @@
 }
 
 .menuButton,
-.navButton,
-.commandCenter,
 .toolButton,
 .windowButton,
 .menuItem {
@@ -152,69 +150,6 @@
 .shortcut {
   color: var(--color-text-muted);
   font-size: 11px;
-}
-
-.navButton {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--titlebar-muted);
-  font-size: 18px;
-  line-height: 1;
-}
-
-.navButton:not(:disabled):hover {
-  background: var(--titlebar-hover);
-}
-
-.navButton:disabled {
-  opacity: 0.35;
-}
-
-.commandCenter {
-  min-width: 180px;
-  max-width: 420px;
-  width: min(38vw, 420px);
-  height: 27px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--titlebar-command-border);
-  background: var(--titlebar-command-bg);
-  color: var(--titlebar-text);
-  box-shadow: var(--shadow-sm);
-  cursor: default;
-}
-
-.commandCenter:hover {
-  border-color: var(--color-border-strong);
-  background: var(--titlebar-command-bg-hover);
-}
-
-.commandIcon {
-  width: 16px;
-  color: var(--color-primary);
-  font-size: 13px;
-  flex: 0 0 auto;
-}
-
-.commandText {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.commandHint {
-  margin-left: auto;
-  color: var(--color-text-muted);
-  font-size: 11px;
-  white-space: nowrap;
 }
 
 .contextActions {

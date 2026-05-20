@@ -95,7 +95,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     ...(nodeStyle.headerColor ? { color: nodeStyle.headerColor } : {}),
   }
   const titleFieldStyle: CSSProperties = {
-    flex: '1 1 auto',
+    flex: shouldShowMarkdown ? '1 1 auto' : '0 1 auto',
     minWidth: 0,
     justifyContent: shouldShowMarkdown ? 'flex-start' : 'center',
     textAlign: shouldShowMarkdown ? 'left' : 'center',
@@ -438,7 +438,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         {/* Header 层 */}
         <div className={styles.header} style={headerStyle}>
           {/* 左侧占位符，用来平衡右侧控件宽度，保证标题居中 */}
-          <div className={styles.headerSpacer} style={{ flex: '0 0 0', width: 0, pointerEvents: 'none' }}></div>
+          <div className={styles.headerSpacer} style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0', width: shouldShowMarkdown ? 0 : undefined, pointerEvents: 'none' }}></div>
 
           <div
             className={`${styles.titleField} ${titleEditing ? styles.titleFieldEditing : ''}`}
@@ -470,7 +470,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
           </div>
 
-          <div className={styles.controls} style={{ flex: '0 0 auto', justifyContent: 'flex-end' }}>
+          <div className={styles.controls} style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0', justifyContent: 'flex-end' }}>
             {hasDetail && (
               <div className={styles.docIcon} title="包含详情" style={docIconStyle}>
                 <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={docIconSvgStyle}>

@@ -33,13 +33,6 @@ function isWindowControlsState(value: unknown): value is WindowControlsState {
   return !!value && typeof value === 'object' && 'isMaximized' in value && 'isFocused' in value
 }
 
-function tabIcon(tab?: Tab) {
-  if (!tab) return '⌘'
-  if (tab.type === 'home') return '⌂'
-  if (tab.type === 'monitor') return '◌'
-  return '◇'
-}
-
 export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null)
@@ -125,12 +118,6 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     ],
   }), [activeTab, invokeWindowCommand, openHomeTab, openMonitorTab])
 
-  const contextLabel = mode === 'setup'
-    ? '选择工作目录'
-    : activeTab?.type === 'kb'
-      ? `${activeTab.label} / ${activeTab.currentRoomName}`
-      : activeTab?.label ?? '首页'
-
   return (
     <div ref={rootRef} className={`${styles.titleBar} ${!windowState.isFocused ? styles.unfocused : ''}`}>
       <div className={styles.leftCluster}>
@@ -177,13 +164,6 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
       </div>
 
       <div className={styles.centerCluster}>
-        <button type="button" className={styles.navButton} disabled title="后退">‹</button>
-        <button type="button" className={styles.navButton} disabled title="前进">›</button>
-        <button type="button" className={styles.commandCenter} title="命令中心">
-          <span className={styles.commandIcon}>{tabIcon(activeTab)}</span>
-          <span className={styles.commandText}>{contextLabel}</span>
-          <span className={styles.commandHint}>搜索或运行命令</span>
-        </button>
       </div>
 
       <div className={styles.rightCluster}>
