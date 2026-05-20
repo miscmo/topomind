@@ -219,10 +219,19 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   }, [])
 
   const handleDrillDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
     // 触发图谱内的向下钻取导航
     graph.navigateToChildRoom?.(id, data.label)
   }, [id, data.label, graph])
+
+  const stopControlPointerDown = useCallback((event: React.PointerEvent) => {
+    event.stopPropagation()
+  }, [])
+
+  const stopControlMouseDown = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation()
+  }, [])
 
   const confirmTitleEdit = useCallback(async () => {
     if (titleSavingRef.current) return
@@ -476,8 +485,10 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
             {hasChildBadge && (
               <div
-                className={styles.childBadgeBtn}
+                className={`${styles.childBadgeBtn} nodrag nowheel`}
                 onClick={handleDrillDown}
+                onPointerDown={stopControlPointerDown}
+                onMouseDown={stopControlMouseDown}
                 title={`点击进入包含 ${data.childCount} 个子节点的画布`}
                 style={badgeStyle}
               >
