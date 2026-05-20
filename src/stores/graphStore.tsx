@@ -70,9 +70,11 @@ export const createGraphStore = () => createStore<GraphState>((set) => ({
     if (!node) return state
     const nextNode = updater(node)
     const nextNodes = state.nodes.map(n => n.id === nodeId ? nextNode : n)
+    const nextNodesMap = new Map(state.nodesMap)
+    nextNodesMap.set(nodeId, nextNode)
     return {
       nodes: nextNodes,
-      nodesMap: buildNodesMap(nextNodes)
+      nodesMap: nextNodesMap
     }
   }),
 

@@ -54,13 +54,12 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   const resizeLabel = `${Math.round(resizeDisplaySize.width)} × ${Math.round(resizeDisplaySize.height)}`
   const shouldShowMarkdown = nodeWidth >= MARKDOWN_MIN_WIDTH && nodeHeight >= MARKDOWN_MIN_HEIGHT
   const visuallySelected = selected || isPressed
-  const connectingSourceId = useGraphUiStore((state) => state.connectingSourceId)
-  const connectingTargetId = useGraphUiStore((state) => state.connectingTargetId)
+  const isConnectTarget = useGraphUiStore((state) => !!state.connectingSourceId && state.connectingTargetId === id)
+  const isConnectSource = useGraphUiStore((state) => state.connectingSourceId === id)
   const nodeSizeLimits = useGraphUiStore((state) => state.nodeSizeLimits)
   const nodeBadgeSize = useGraphUiStore((state) => state.nodeBadgeSize)
-  const isConnectTarget = !!connectingSourceId && connectingTargetId === id
   const visuallyHovered = isHovered || data.hovered === true
-  const showHoverControls = visuallyHovered || visuallySelected || isConnectTarget
+  const showHoverControls = visuallyHovered || visuallySelected || isConnectTarget || isConnectSource
   const contentInteractionsEnabled = selected
   const nodeStyle = { ...defaultNodeStyle, ...(data.nodeStyle ?? {}) }
   const borderRadius = `${nodeStyle.borderRadius}px`
