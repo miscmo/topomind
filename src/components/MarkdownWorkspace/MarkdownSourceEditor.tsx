@@ -11,6 +11,7 @@ import { githubDark, githubLight } from '@uiw/codemirror-theme-github'
 import { useStorage } from '../../core/storage'
 import { useThemeStore } from '../../stores/themeStore'
 import { handleMarkdownPaste, handleMarkdownDrop } from './AttachmentPipeline'
+import { inlineImagePlugin } from './inlineImagePlugin'
 import styles from './MarkdownWorkspace.module.css'
 
 interface MarkdownSourceEditorProps {
@@ -133,8 +134,9 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     customKeymap,
     eventHandlers,
+    inlineImagePlugin(attachmentCardPath, storage),
     EditorView.lineWrapping
-  ], [customKeymap, eventHandlers])
+  ], [customKeymap, eventHandlers, attachmentCardPath, storage])
 
   return (
     <div className={styles.editorSurface}>

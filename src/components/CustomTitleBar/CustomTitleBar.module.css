@@ -1,10 +1,8 @@
 .titleBar {
   height: 36px;
   flex: 0 0 36px;
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(240px, 480px) minmax(220px, 1fr);
+  display: flex;
   align-items: center;
-  gap: 10px;
   background: linear-gradient(180deg, var(--titlebar-bg-top) 0%, var(--titlebar-bg) 100%);
   border-bottom: 1px solid var(--titlebar-border);
   color: var(--titlebar-text);
@@ -20,26 +18,29 @@
   --titlebar-muted: var(--titlebar-muted-unfocused);
 }
 
-.leftCluster,
-.centerCluster,
-.rightCluster {
-  min-width: 0;
+.leftCluster {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-}
-
-.leftCluster {
-  justify-content: flex-start;
   padding-left: 10px;
   gap: 10px;
 }
 
 .centerCluster {
-  justify-content: center;
-  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
+  margin: 0 10px;
+  -webkit-app-region: drag;
 }
 
 .rightCluster {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
   height: 100%;
 }
@@ -63,12 +64,6 @@
   justify-content: center;
   font-size: 15px;
   line-height: 1;
-}
-
-.brandName {
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
 }
 
 .menuBar {
@@ -95,7 +90,7 @@
 
 .menuButton {
   height: 26px;
-  padding: 0 8px;
+  padding: 0 10px;
   border-radius: 6px;
   background: transparent;
   color: var(--titlebar-text);
@@ -152,27 +147,6 @@
   font-size: 11px;
 }
 
-.contextActions {
-  height: 100%;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding-right: 8px;
-  -webkit-app-region: no-drag;
-}
-
-.savePill {
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--color-success-soft);
-  color: var(--color-success);
-  font-size: 11px;
-  font-weight: 600;
-}
-
 .toolButton {
   height: 26px;
   padding: 0 9px;
@@ -204,7 +178,6 @@
   height: 100%;
   display: inline-flex;
   align-items: stretch;
-  -webkit-app-region: no-drag;
 }
 
 .windowButton {
@@ -231,13 +204,6 @@
 }
 
 @media (max-width: 980px) {
-  .titleBar {
-    grid-template-columns: auto minmax(160px, 1fr) auto;
-    gap: 6px;
-  }
-
-  .brandName,
-  .contextActions,
   .commandHint {
     display: none;
   }

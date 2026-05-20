@@ -1,12 +1,13 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTabStore, type Tab } from '../../stores/tabStore'
+import { useTabStore } from '../../stores/tabStore'
 import { useThemeStore } from '../../stores/themeStore'
+import TabBar from '../TabBar/TabBar'
 import type { WindowControlsState } from '../../types/electron-api'
 import styles from './CustomTitleBar.module.css'
 
 type TitleBarMode = 'setup' | 'workspace'
 
-type MenuKey = 'file' | 'view' | 'graph' | 'knowledge' | 'help'
+type MenuKey = 'file' | 'view' | 'help'
 
 type WindowCommandChannel = 'app:window:minimize' | 'app:window:toggleMaximize' | 'app:window:close'
 
@@ -24,8 +25,6 @@ interface MenuItem {
 const MENU_LABELS: Array<{ key: MenuKey; label: string }> = [
   { key: 'file', label: '文件' },
   { key: 'view', label: '视图' },
-  { key: 'graph', label: '图谱' },
-  { key: 'knowledge', label: '知识库' },
   { key: 'help', label: '帮助' },
 ]
 
@@ -37,13 +36,9 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null)
   const [windowState, setWindowState] = useState<WindowControlsState>({ isMaximized: false, isFocused: true })
-  const tabs = useTabStore((s) => s.tabs)
-  const activeTabId = useTabStore((s) => s.activeTabId)
-  const openHomeTab = useTabStore((s) => s.openHomeTab)
   const openMonitorTab = useTabStore((s) => s.openMonitorTab)
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
-  const activeTab = tabs.find((tab) => tab.id === activeTabId)
 
   useEffect(() => {
     const api = window.electronAPI
@@ -93,7 +88,6 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
 
   const menuItems = useMemo<Record<MenuKey, MenuItem[]>>(() => ({
     file: [
-      { label: '打开首页', action: () => openHomeTab() },
       { label: '切换工作目录', action: () => { void window.electronAPI?.invoke('app:switchWorkDir') } },
       { label: '退出 TopoMind', shortcut: 'Alt+F4', action: () => invokeWindowCommand('app:window:close') },
     ],
@@ -102,31 +96,30 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
       { label: '命令中心', shortcut: 'Ctrl+Shift+P', disabled: true },
       { label: '重置布局', disabled: true },
     ],
-    graph: [
-      { label: '适应视图', disabled: true },
-      { label: '聚焦当前节点', disabled: true },
-      { label: activeTab?.type === 'kb' ? `当前房间：${activeTab.currentRoomName}` : '当前没有打开图谱', disabled: true },
-    ],
-    knowledge: [
-      { label: activeTab?.type === 'kb' ? `知识库：${activeTab.label}` : '打开知识库后可用', disabled: true },
-      { label: '知识库设置', disabled: true },
-      { label: '打开所在文件夹', disabled: true },
-    ],
     help: [
       { label: '快捷键', disabled: true },
       { label: '关于 TopoMind', disabled: true },
     ],
-  }), [activeTab, invokeWindowCommand, openHomeTab, openMonitorTab])
+  }), [invokeWindowCommand, openMonitorTab])
 
   return (
-    <div ref={rootRef} className={`${styles.titleBar} ${!windowState.isFocused ? styles.unfocused : ''}`}>
+    <div 
+      ref={rootRef} 
+      className={`${styles.titleBar} ${!windowState.isFocused ? styles.unfocused : ''}`}
+      onDoubleClick={(e) => {
+        // Prevent double click on specific children from maximizing
+        if (e.target instanceof Element && e.target.closest(`button, [role="tab"], .${styles.tabLabel}`)) {
+          return
+        }
+        invokeWindowCommand('app:window:toggleMaximize')
+      }}
+    >
       <div className={styles.leftCluster}>
-        <div className={styles.brand} title="TopoMind">
+        <div className={styles.brand} title="TopoMind" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <span className={styles.brandMark}>🧠</span>
-          <span className={styles.brandName}>TopoMind</span>
         </div>
         {mode === 'workspace' && (
-          <nav className={styles.menuBar} aria-label="应用菜单">
+          <nav className={styles.menuBar} aria-label="应用菜单" style={{ WebkitAppRegion: 'no-drag' } as any}>
             {MENU_LABELS.map((menu) => (
               <div key={menu.key} className={styles.menuWrap}>
                 <button
@@ -134,6 +127,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                   className={`${styles.menuButton} ${activeMenu === menu.key ? styles.menuButtonActive : ''}`}
                   onClick={() => setActiveMenu((current) => current === menu.key ? null : menu.key)}
                   onMouseEnter={() => { if (activeMenu) setActiveMenu(menu.key) }}
+                  style={{ WebkitAppRegion: 'no-drag' } as any}
                 >
                   {menu.label}
                 </button>
@@ -163,17 +157,11 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
         )}
       </div>
 
-      <div className={styles.centerCluster}>
+      <div className={styles.centerCluster} style={{ WebkitAppRegion: 'drag' } as any}>
+        {mode === 'workspace' && <TabBar />}
       </div>
 
       <div className={styles.rightCluster}>
-        {mode === 'workspace' && (
-          <div className={styles.contextActions}>
-            <span className={styles.savePill}>已保存</span>
-            <button type="button" className={styles.toolButton} title="布局控制">布局</button>
-            <button type="button" className={styles.toolButton} title="设置">设置</button>
-          </div>
-        )}
         <button
           type="button"
           className={`${styles.toolButton} ${styles.themeButton}`}
@@ -181,15 +169,33 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
           title={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
           aria-label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
           aria-pressed={theme === 'dark'}
+          style={{ WebkitAppRegion: 'no-drag' } as any}
         >
           {theme === 'dark' ? '☀' : '☾'}
         </button>
         <div className={styles.windowControls}>
-          <button type="button" className={styles.windowButton} onClick={() => invokeWindowCommand('app:window:minimize')} aria-label="最小化窗口">—</button>
-          <button type="button" className={styles.windowButton} onClick={() => invokeWindowCommand('app:window:toggleMaximize')} aria-label={windowState.isMaximized ? '还原窗口' : '最大化窗口'}>
-            {windowState.isMaximized ? '❐' : '□'}
+          <button type="button" className={styles.windowButton} onClick={() => invokeWindowCommand('app:window:minimize')} aria-label="最小化窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M0 5H10" stroke="currentColor" strokeWidth="1"/>
+            </svg>
           </button>
-          <button type="button" className={`${styles.windowButton} ${styles.closeButton}`} onClick={() => invokeWindowCommand('app:window:close')} aria-label="关闭窗口">×</button>
+          <button type="button" className={styles.windowButton} onClick={() => invokeWindowCommand('app:window:toggleMaximize')} aria-label={windowState.isMaximized ? '还原窗口' : '最大化窗口'} style={{ WebkitAppRegion: 'no-drag' } as any}>
+            {windowState.isMaximized ? (
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2.5" y="0.5" width="7" height="7" stroke="currentColor" strokeWidth="1"/>
+                <path d="M0.5 2.5V9.5H7.5" stroke="currentColor" strokeWidth="1"/>
+              </svg>
+            ) : (
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" strokeWidth="1"/>
+              </svg>
+            )}
+          </button>
+          <button type="button" className={`${styles.windowButton} ${styles.closeButton}`} onClick={() => invokeWindowCommand('app:window:close')} aria-label="关闭窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>

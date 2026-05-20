@@ -9,7 +9,6 @@ import SetupPage from './components/SetupPage'
 import PromptModal from './components/PromptModal/PromptModal'
 import ConfirmModal from './components/ConfirmModal/ConfirmModal'
 import CustomTitleBar from './components/CustomTitleBar/CustomTitleBar'
-import TabBar from './components/TabBar/TabBar'
 import { useTabStore } from './stores/tabStore'
 import { useWorkspaceStore } from './stores/workspaceStore'
 import { useConfirmStore } from './stores/confirmStore'
@@ -52,13 +51,6 @@ export default memo(function App() {
     }
   }, [])
 
-  async function handleCloseTab(tabId: string) {
-    const tab = useTabStore.getState().closeTab(tabId)
-    if (!tab) return
-
-    logAction('Tab:关闭', 'App', { tab })
-  }
-
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const isSetup = view === 'setup'
   return (
@@ -75,7 +67,6 @@ export default memo(function App() {
       ) : (
         <div className={styles.workspaceShell}>
           <CustomTitleBar mode="workspace" />
-          <TabBar onCloseTab={handleCloseTab} />
           <div className={styles.workspaceContent}>
             <div
               className={styles.tabSurface}

@@ -11,6 +11,13 @@ import 'github-markdown-css/github-markdown-light.css'
 import 'highlight.js/styles/github.css'
 import styles from './MarkdownWorkspace.module.css'
 
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import { unified } from 'unified'
+import remarkParse from 'remark-parse'
+import { visit } from 'unist-util-visit'
+import 'katex/dist/katex.min.css'
+
 interface MarkdownPreviewProps {
   content: string
   attachmentCardPath?: string | null
@@ -30,8 +37,8 @@ interface PreviewImageState {
   offsetY: number
 }
 
-const remarkPlugins = [remarkBreaks, remarkGfm]
-const rehypePlugins = [rehypeSanitize, [rehypeHighlight, { ignoreMissing: true }]]
+const remarkPlugins = [remarkBreaks, remarkGfm, remarkMath]
+const rehypePlugins = [rehypeSanitize, [rehypeHighlight, { ignoreMissing: true }], rehypeKatex]
 const COMMON_CODE_LANGUAGES = [
   '',
   'plaintext',
@@ -140,54 +147,62 @@ function parseInteractiveMarkdown(markdown: string) {
   const taskItems: TaskItemMeta[] = []
   const codeBlocks: CodeBlockMeta[] = []
   const imageItems: ImageMeta[] = []
-  let activeFence: { marker: string; char: string; markerEndOffset: number; rawInfo: string } | null = null
 
-  iterateMarkdownLines(markdown, (line, lineStart) => {
-    if (!activeFence) {
-      const openMatch = /^(\s{0,3})(`{3,}|~{3,})([^\r\n]*)$/.exec(line)
-      if (openMatch) {
-        activeFence = {
-          marker: openMatch[2],
-          char: openMatch[2][0],
-          markerEndOffset: lineStart + openMatch[1].length + openMatch[2].length,
-          rawInfo: openMatch[3],
+  const tree = unified().use(remarkParse).parse(markdown)
+
+  visit(tree, (node: any) => {
+    if (node.type === 'listItem') {
+      if (node.checked !== null && node.checked !== undefined && node.position) {
+        // Find the actual checkbox offset in the source text
+        // Remark AST gives us the block position, we need to find the [ ] or [x] inside it
+        const startOffset = node.position.start.offset
+        const textToSearch = markdown.slice(startOffset, startOffset + 20)
+        const match = /^(\s*(?:[-+*]|\d+\.)\s+\[)( |x|X)(\]\s+)/i.exec(textToSearch)
+        if (match) {
+          taskItems.push({
+            checkedOffset: startOffset + match[1].length,
+            checked: node.checked,
+          })
         }
-        const info = openMatch[3].trim()
-        const [language = ''] = info ? info.split(/\s+/) : []
-        codeBlocks.push({
-          infoStartOffset: activeFence.markerEndOffset,
-          infoEndOffset: lineStart + line.length,
-          language,
-          rawInfo: openMatch[3],
-        })
-        return
       }
-
-      const taskMatch = /^(\s*(?:[-+*]|\d+\.)\s+\[)( |x|X)(\]\s+)/.exec(line)
-      if (taskMatch) {
-        taskItems.push({
-          checkedOffset: lineStart + taskMatch[1].length,
-          checked: /x/i.test(taskMatch[2]),
-        })
+    } else if (node.type === 'code') {
+      if (node.position) {
+        // Find where the info string (language) starts and ends
+        const startOffset = node.position.start.offset
+        const blockText = markdown.slice(startOffset, startOffset + 100)
+        const match = /^(\s{0,3})(`{3,}|~{3,})([^\r\n]*)$/m.exec(blockText)
+        if (match) {
+          const markerEndOffset = startOffset + match.index + match[1].length + match[2].length
+          const lineEndOffset = markerEndOffset + match[3].length
+          codeBlocks.push({
+            infoStartOffset: markerEndOffset,
+            infoEndOffset: lineEndOffset,
+            language: node.lang || '',
+            rawInfo: match[3],
+          })
+        }
       }
-
-      const imageRegex = /!\[([^\]]*)\]\((\S+?)(?:\s+"([^"\r\n]*)")?\)/g
-      let imageMatch: RegExpExecArray | null
-      while ((imageMatch = imageRegex.exec(line)) !== null) {
-        const fullMatch = imageMatch[0]
-        const title = imageMatch[3]
-        const absoluteMatchStart = lineStart + imageMatch.index
-        const insertOffset = absoluteMatchStart + fullMatch.length - 1
+    } else if (node.type === 'image') {
+      if (node.position) {
+        const startOffset = node.position.start.offset
+        const endOffset = node.position.end.offset
+        const fullMatchText = markdown.slice(startOffset, endOffset)
+        
+        const insertOffset = endOffset - 1 // right before the closing parenthesis
+        
         let titleStartOffset: number | null = null
         let titleEndOffset: number | null = null
-        if (title !== undefined) {
+        const title = node.title
+        
+        if (title !== undefined && title !== null) {
           const quotedTitle = `"${title}"`
-          const quotedTitleIndex = fullMatch.lastIndexOf(quotedTitle)
+          const quotedTitleIndex = fullMatchText.lastIndexOf(quotedTitle)
           if (quotedTitleIndex >= 0) {
-            titleStartOffset = absoluteMatchStart + quotedTitleIndex + 1
+            titleStartOffset = startOffset + quotedTitleIndex + 1
             titleEndOffset = titleStartOffset + title.length
           }
         }
+        
         const meta = parseImageTitleMeta(title)
         imageItems.push({
           insertOffset,
@@ -196,12 +211,6 @@ function parseInteractiveMarkdown(markdown: string) {
           ...meta,
         })
       }
-      return
-    }
-
-    const closePattern = new RegExp(`^\\s{0,3}${activeFence.char}{${activeFence.marker.length},}\\s*$`)
-    if (closePattern.test(line)) {
-      activeFence = null
     }
   })
 
@@ -211,6 +220,8 @@ function parseInteractiveMarkdown(markdown: string) {
 function updateTaskItem(markdown: string, taskItems: TaskItemMeta[], index: number, checked: boolean) {
   const item = taskItems[index]
   if (!item) return markdown
+  
+  // Replace only the checkbox character [ ] or [x] with the new state
   return `${markdown.slice(0, item.checkedOffset)}${checked ? 'x' : ' '}${markdown.slice(item.checkedOffset + 1)}`
 }
 
