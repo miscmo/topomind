@@ -10,7 +10,6 @@
   border: 1px solid var(--color-border); /* 更轻量、更浅的默认边框 */
   background: color-mix(in srgb, var(--color-surface) 98%, transparent);
   box-shadow: var(--shadow-sm); /* 更轻的阴影 */
-  backdrop-filter: blur(8px);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
   width: 100%;

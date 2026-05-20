@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Background, ReactFlow, useReactFlow, type BackgroundVariant, type ConnectionLineComponentProps, type Edge, type Node, type NodeTypes, type Viewport, type NodeChange } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
@@ -151,6 +151,7 @@ export default memo(function GraphCanvas({
   const setStoredViewport = useGraphStore((s) => s.setViewport)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const [zoomLevel, setZoomLevel] = useState(1)
+  const zoomLevelRef = useRef(1)
   const reactFlow = useReactFlow()
   const graph = useGraphContext()
   
@@ -166,13 +167,28 @@ export default memo(function GraphCanvas({
     graph.onPaneClick()
   }
 
-  const handleViewportChange = useCallback((viewport: Viewport) => {
-    setZoomLevel(viewport.zoom)
+  const updateZoomLevel = useCallback((nextZoom: number) => {
+    if (Math.abs(zoomLevelRef.current - nextZoom) <= 0.001) return
+    zoomLevelRef.current = nextZoom
+    setZoomLevel(nextZoom)
   }, [])
 
+  const handleMove = useCallback((_: unknown, viewport: Viewport) => {
+    updateZoomLevel(viewport.zoom)
+  }, [updateZoomLevel])
+
+  const handleMoveEnd = useCallback((_: unknown, viewport: Viewport) => {
+    updateZoomLevel(viewport.zoom)
+    const viewportChanged =
+      Math.abs(viewport.x - storedViewport.x) > 0.5 ||
+      Math.abs(viewport.y - storedViewport.y) > 0.5 ||
+      Math.abs(viewport.zoom - storedViewport.zoom) > 0.001
+    if (viewportChanged) setStoredViewport(viewport)
+  }, [setStoredViewport, storedViewport, updateZoomLevel])
+
   useEffect(() => {
-    setZoomLevel(storedViewport.zoom)
-  }, [storedViewport.zoom])
+    updateZoomLevel(storedViewport.zoom)
+  }, [storedViewport.zoom, updateZoomLevel])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -278,8 +294,8 @@ export default memo(function GraphCanvas({
   return (
     <div
       style={{ width: '100%', height: '100%', position: 'relative' }}
-      onMouseMove={handleConnectionMouseMove}
-      onMouseLeave={handleConnectionMouseLeave}
+      onMouseMove={connectingSourceId ? handleConnectionMouseMove : undefined}
+      onMouseLeave={connectingSourceId ? handleConnectionMouseLeave : undefined}
     >
       <ReactFlow
         nodes={nodes as Node[]}
@@ -317,8 +333,8 @@ export default memo(function GraphCanvas({
         onEdgeContextMenu={handleEdgeContextMenu}
 
         // 视图变化时触发，包括平移和缩放
-        onMove={(_, viewport) => handleViewportChange(viewport)}
-        onMoveEnd={(_, viewport) => setStoredViewport(viewport)}
+        onMove={handleMove}
+        onMoveEnd={handleMoveEnd}
         // 最小缩放倍数
         minZoom={0.15}
         defaultViewport={storedViewport}
