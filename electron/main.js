@@ -397,6 +397,27 @@ function registerIPC() {
     shell.openExternal(target);
     return true;
   });
+  ipcMain.handle('app:window:getState', function() {
+    return getWindowControlsState();
+  });
+  ipcMain.handle('app:window:minimize', function() {
+    if (win && !win.isDestroyed()) win.minimize();
+    return getWindowControlsState();
+  });
+  ipcMain.handle('app:window:toggleMaximize', function() {
+    if (win && !win.isDestroyed()) {
+      if (win.isMaximized()) {
+        win.unmaximize();
+      } else {
+        win.maximize();
+      }
+    }
+    return getWindowControlsState();
+  });
+  ipcMain.handle('app:window:close', function() {
+    app.quit();
+    return getWindowControlsState();
+  });
 
   // ----- Log handlers -----
   ipcMain.handle('log:write', function(e, entry) { return LogService.write(entry); });
@@ -418,6 +439,21 @@ function registerIPC() {
 // ============================================================
 var win = null;
 var windowStateSaveTimeout = null;
+
+function getWindowControlsState() {
+  if (!win || win.isDestroyed()) {
+    return { isMaximized: false, isFocused: false };
+  }
+  return {
+    isMaximized: win.isMaximized(),
+    isFocused: win.isFocused(),
+  };
+}
+
+function sendWindowControlsState() {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('app:window-state-change', getWindowControlsState());
+}
 
 function saveWindowStateDebounced() {
   if (!win || win.isDestroyed()) return;
@@ -461,6 +497,7 @@ function createWindow() {
     minWidth: SETUP_WINDOW_WIDTH, minHeight: SETUP_WINDOW_HEIGHT,
     maxWidth: SETUP_WINDOW_WIDTH, maxHeight: SETUP_WINDOW_HEIGHT,
     useContentSize: true,
+    frame: false,
     center: true,
     show: false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
@@ -515,6 +552,11 @@ function createWindow() {
   win.on('move', saveWindowStateDebounced);
   win.on('maximize', saveWindowStateDebounced);
   win.on('unmaximize', saveWindowStateDebounced);
+  win.on('maximize', sendWindowControlsState);
+  win.on('unmaximize', sendWindowControlsState);
+  win.on('restore', sendWindowControlsState);
+  win.on('focus', sendWindowControlsState);
+  win.on('blur', sendWindowControlsState);
 
   win.on('close', function() {
     if (!win || win.isDestroyed()) return;

@@ -351,11 +351,11 @@ export default memo(function GraphCanvas({
         // 选中节点时提升层级，避免被别的元素挡住
         elevateNodesOnSelect
         // 设置ReactFlow 容器尺寸，确保撑满父容器。
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: '100%', height: '100%', background: 'var(--color-canvas-bg)' }}
       >
         <SmartGuidesRenderer guideLines={guideLines} />
         {showGrid && (
-          <Background variant={'dots' as BackgroundVariant} gap={20} size={1} color="#c8cdd6" />
+          <Background variant={'dots' as BackgroundVariant} gap={20} size={1} color="var(--color-canvas-grid)" />
         )}
       </ReactFlow>
       <Toolbar zoomLevel={zoomLevel} />

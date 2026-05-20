@@ -10,7 +10,6 @@ import { CreateKBDialog } from './CreateKBDialog'
 import { ImportKBDialog } from './ImportKBDialog'
 import { KBSettingsDialog } from './KBSettingsDialog'
 import { KnowledgeBaseGrid } from './KnowledgeBaseGrid'
-import { logAction } from '../../core/log-backend'
 import styles from './HomePage.module.css'
 
 export default function HomePage() {
@@ -52,48 +51,8 @@ export default function HomePage() {
 
   const [settingsKB, setSettingsKB] = useState<KBItem | null>(null)
 
-  async function switchWorkDir() {
-    setMessage('')
-    setMessageError(false)
-    const resetResult = await window.electronAPI?.invoke('app:switchWorkDir') as { ok?: boolean; cancelled?: boolean } | undefined
-    if (!resetResult?.ok) {
-      if (!resetResult?.cancelled) {
-        logAction('HomePage:切换工作目录失败', 'HomePage', { error: '用户取消或执行失败' })
-      }
-      return
-    }
-    setMessage('工作目录已切换')
-    setMessageError(false)
-    logAction('HomePage:切换工作目录成功', 'HomePage', {})
-  }
-
-  function truncatedWorkDir() {
-    if (!currentWorkDir) return ''
-    return currentWorkDir.length <= 48 ? currentWorkDir : currentWorkDir.slice(0, 12) + '...' + currentWorkDir.slice(-32)
-  }
-
   return (
     <div id="home-modal" className={styles.page}>
-      {/* 头部 */}
-      <div className={styles.header}>
-        <div className={styles.logo}>
-          <span className={styles.logoIcon}>🧠</span>
-          <div>
-            <h1>TopoMind</h1>
-            <span>可漫游拓扑知识大脑</span>
-          </div>
-        </div>
-        {currentWorkDir && (
-          <div className={styles.workdirBar}>
-            <span className={styles.workdirPath} title={currentWorkDir}>📂 {truncatedWorkDir()}</span>
-            <button className={styles.workdirSwitch} onClick={switchWorkDir} title="切换工作目录">切换</button>
-          </div>
-        )}
-        {message && (
-          <div className={`${styles.workdirMsg} ${messageError ? styles.error : ''}`}>{message}</div>
-        )}
-      </div>
-
       {/* 知识库列表 */}
       <div className={styles.content}>
         {loading && (
@@ -104,6 +63,9 @@ export default function HomePage() {
         )}
 
         <div className={styles.sectionTitle}>我的知识库</div>
+        {message && (
+          <div className={`${styles.contentMessage} ${messageError ? styles.error : ''}`}>{message}</div>
+        )}
         <KnowledgeBaseGrid
           kbs={kbs}
           onOpenKB={openKB}

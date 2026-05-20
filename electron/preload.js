@@ -20,6 +20,10 @@ const ALLOWED_CHANNELS = new Set([
   'app:enterWorkDir',
   'app:switchWorkDir',
   'app:openFileDialog',
+  'app:window:getState',
+  'app:window:minimize',
+  'app:window:toggleMaximize',
+  'app:window:close',
   // log
   'log:write', 'log:getBuffer', 'log:query', 'log:setLevel', 'log:clear',
   'log:getAvailableDates', 'log:getLogDir',
@@ -33,6 +37,7 @@ const ALLOWED_SEND_CHANNELS = new Set([
 const ALLOWED_RECEIVE_CHANNELS = new Set([
   'app:menu-action',
   'app:reset-session',
+  'app:window-state-change',
   'log:entry',
 ]);
 

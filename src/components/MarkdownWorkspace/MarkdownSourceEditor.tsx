@@ -7,8 +7,9 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
 import { syntaxHighlighting, defaultHighlightStyle, foldGutter } from '@codemirror/language'
-import { githubLight } from '@uiw/codemirror-theme-github'
+import { githubDark, githubLight } from '@uiw/codemirror-theme-github'
 import { useStorage } from '../../core/storage'
+import { useThemeStore } from '../../stores/themeStore'
 import { handleMarkdownPaste, handleMarkdownDrop } from './AttachmentPipeline'
 import styles from './MarkdownWorkspace.module.css'
 
@@ -30,6 +31,7 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
   placeholder
 }: MarkdownSourceEditorProps) {
   const storage = useStorage()
+  const theme = useThemeStore((s) => s.theme)
 
   const handleCreate = useCallback((view: EditorView) => {
     if (onEditorCreate) onEditorCreate(view)
@@ -139,7 +141,7 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
       <ReactCodeMirror
         value={value}
         onChange={onChange}
-        theme={githubLight}
+        theme={theme === 'dark' ? githubDark : githubLight}
         height="100%"
         extensions={extensions}
         onCreateEditor={handleCreate}

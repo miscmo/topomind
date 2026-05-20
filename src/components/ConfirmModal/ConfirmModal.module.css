@@ -62,13 +62,13 @@
 }
 
 .cancelBtn:hover {
-  background: #f5f5f5;
+  background: var(--color-hover-bg);
 }
 
 .confirmBtn {
   background: var(--color-primary, #1a3a5c);
   border-color: var(--color-primary, #1a3a5c);
-  color: #fff;
+  color: var(--color-text-inverse, #fff);
 }
 
 .confirmBtn:hover {

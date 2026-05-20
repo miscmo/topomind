@@ -1,0 +1,319 @@
+.titleBar {
+  height: 36px;
+  flex: 0 0 36px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(240px, 480px) minmax(220px, 1fr);
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(180deg, var(--titlebar-bg-top) 0%, var(--titlebar-bg) 100%);
+  border-bottom: 1px solid var(--titlebar-border);
+  color: var(--titlebar-text);
+  user-select: none;
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 3000;
+}
+
+.unfocused {
+  --titlebar-bg: var(--titlebar-bg-unfocused);
+  --titlebar-text: var(--titlebar-text-unfocused);
+  --titlebar-muted: var(--titlebar-muted-unfocused);
+}
+
+.leftCluster,
+.centerCluster,
+.rightCluster {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.leftCluster {
+  justify-content: flex-start;
+  padding-left: 10px;
+  gap: 10px;
+}
+
+.centerCluster {
+  justify-content: center;
+  gap: 6px;
+}
+
+.rightCluster {
+  justify-content: flex-end;
+  height: 100%;
+}
+
+.brand {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px;
+  border-radius: 7px;
+  color: var(--titlebar-text);
+  -webkit-app-region: no-drag;
+}
+
+.brandMark {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.brandName {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.menuBar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.menuWrap {
+  position: relative;
+}
+
+.menuButton,
+.navButton,
+.commandCenter,
+.toolButton,
+.windowButton,
+.menuItem {
+  font: inherit;
+  border: 0;
+  outline: 0;
+  -webkit-app-region: no-drag;
+}
+
+.menuButton {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--titlebar-text);
+  font-size: 12px;
+  cursor: default;
+}
+
+.menuButton:hover,
+.menuButtonActive {
+  background: var(--titlebar-hover);
+}
+
+.menuPanel {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  min-width: 188px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--titlebar-menu-bg);
+  box-shadow: var(--shadow-popover);
+  backdrop-filter: blur(14px);
+  z-index: 3001;
+}
+
+.menuItem {
+  width: 100%;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: default;
+}
+
+.menuItem:hover:not(:disabled) {
+  background: var(--color-selected-bg);
+  color: var(--color-primary);
+}
+
+.menuItem:disabled {
+  color: var(--color-text-muted);
+}
+
+.shortcut {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.navButton {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--titlebar-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.navButton:not(:disabled):hover {
+  background: var(--titlebar-hover);
+}
+
+.navButton:disabled {
+  opacity: 0.35;
+}
+
+.commandCenter {
+  min-width: 180px;
+  max-width: 420px;
+  width: min(38vw, 420px);
+  height: 27px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--titlebar-command-border);
+  background: var(--titlebar-command-bg);
+  color: var(--titlebar-text);
+  box-shadow: var(--shadow-sm);
+  cursor: default;
+}
+
+.commandCenter:hover {
+  border-color: var(--color-border-strong);
+  background: var(--titlebar-command-bg-hover);
+}
+
+.commandIcon {
+  width: 16px;
+  color: var(--color-primary);
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+
+.commandText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.commandHint {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.contextActions {
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.savePill {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.toolButton {
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--titlebar-muted);
+  font-size: 12px;
+  cursor: default;
+}
+
+.toolButton:hover {
+  background: var(--titlebar-hover);
+  color: var(--titlebar-text);
+}
+
+.themeButton {
+  width: 28px;
+  padding: 0;
+  margin-right: 6px;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.themeButton[aria-pressed="true"] {
+  color: var(--color-accent);
+}
+
+.windowControls {
+  height: 100%;
+  display: inline-flex;
+  align-items: stretch;
+  -webkit-app-region: no-drag;
+}
+
+.windowButton {
+  width: 46px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--titlebar-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: default;
+}
+
+.windowButton:hover {
+  background: var(--titlebar-hover);
+  color: var(--titlebar-text);
+}
+
+.closeButton:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+@media (max-width: 980px) {
+  .titleBar {
+    grid-template-columns: auto minmax(160px, 1fr) auto;
+    gap: 6px;
+  }
+
+  .brandName,
+  .contextActions,
+  .commandHint {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .menuBar {
+    display: none;
+  }
+
+  .commandCenter {
+    width: min(44vw, 280px);
+  }
+}

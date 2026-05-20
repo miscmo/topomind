@@ -4,22 +4,22 @@
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  background:#f0f2f5;color:#2d3436}
+  background:var(--color-bg-app);color:var(--color-text-primary)}
 body{display:flex;flex-direction:column}
 #root{width:100%;height:100%;display:flex;flex-direction:column}
 .react-flow__pane{cursor:default!important}
 .react-flow__pane.dragging{cursor:grabbing!important}
 
 /* ===== 通用按钮 ===== */
-.btn{height:32px;padding:0 16px;border-radius:7px;font-size:12px;cursor:pointer;border:1px solid #ddd;background:#fff;color:#555;transition:all .12s;display:inline-flex;align-items:center}
-.btn:hover{background:#f5f5f5}
-.btn-primary{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
-.btn-primary:hover{background:#254d73}
-.btn-danger{background:#e74c3c;color:#fff;border-color:#e74c3c}
-.btn-danger:hover{background:#c0392b}
+.btn{height:32px;padding:0 16px;border-radius:7px;font-size:12px;cursor:pointer;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text-secondary);transition:all .12s;display:inline-flex;align-items:center}
+.btn:hover{background:var(--color-hover-bg)}
+.btn-primary{background:var(--color-primary);color:var(--color-text-inverse);border-color:var(--color-primary)}
+.btn-primary:hover{background:var(--color-primary-hover)}
+.btn-danger{background:var(--color-danger);color:#fff;border-color:var(--color-danger)}
+.btn-danger:hover{background:var(--color-danger-hover)}
 
 /* ===== 通用表单 ===== */
 .form-group{margin-bottom:12px}
-.form-group label{display:block;font-size:12px;font-weight:500;color:#555;margin-bottom:4px}
-.form-group input,.form-group select{width:100%;height:34px;border:1px solid #ddd;border-radius:7px;padding:0 10px;font-size:12px;outline:none}
-.form-group input:focus,.form-group select:focus{border-color:#3498db}
+.form-group label{display:block;font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:4px}
+.form-group input,.form-group select{width:100%;height:34px;border:1px solid var(--color-border);border-radius:7px;padding:0 10px;font-size:12px;outline:none;background:var(--color-surface);color:var(--color-text-primary)}
+.form-group input:focus,.form-group select:focus{border-color:var(--color-accent)}

@@ -4,11 +4,12 @@
   display: flex;
   align-items: center;
   height: 38px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #e0e4ea;
-  padding: 0 8px;
+  background: linear-gradient(180deg, var(--color-bg-muted) 0%, var(--color-bg-app) 100%);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 10px;
   gap: 2px;
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
 
 .tab {
@@ -17,10 +18,10 @@
   gap: 6px;
   height: 30px;
   padding: 0 12px;
-  border-radius: 6px 6px 0 0;
+  border-radius: 8px 8px 0 0;
   cursor: pointer;
   font-size: 12.5px;
-  color: #5a6478;
+  color: var(--color-text-secondary);
   background: transparent;
   border: 1px solid transparent;
   border-bottom: none;
@@ -31,16 +32,16 @@
 }
 
 .tab:hover {
-  background: rgba(255, 255, 255, 0.6);
-  color: #1a3a5c;
+  background: var(--color-hover-bg);
+  color: var(--color-primary);
 }
 
 .tab.active {
-  background: #fff;
-  color: #1a3a5c;
+  background: var(--color-active-bg);
+  color: var(--color-primary);
   font-weight: 600;
-  border-color: #e0e4ea;
-  box-shadow: 0 -1px 4px rgba(16, 24, 40, 0.04);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
 }
 
 .tabLabel {
@@ -50,7 +51,7 @@
 }
 
 .tabDirty {
-  color: #3498db;
+  color: var(--color-accent);
 }
 
 .closeBtn {
@@ -64,7 +65,7 @@
   align-items: center;
   justify-content: center;
   font-size: 11px;
-  color: #8a95a5;
+  color: var(--color-text-muted);
   padding: 0;
   line-height: 1;
   flex-shrink: 0;
@@ -77,8 +78,8 @@
 }
 
 .closeBtn:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: #c0392b;
+  background: var(--color-danger-soft);
+  color: var(--color-danger-hover);
 }
 
 .tab.active .closeBtn {

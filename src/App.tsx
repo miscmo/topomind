@@ -8,17 +8,19 @@ import { ReactFlowProvider } from '@xyflow/react'
 import SetupPage from './components/SetupPage'
 import PromptModal from './components/PromptModal/PromptModal'
 import ConfirmModal from './components/ConfirmModal/ConfirmModal'
+import CustomTitleBar from './components/CustomTitleBar/CustomTitleBar'
+import TabBar from './components/TabBar/TabBar'
 import { useTabStore } from './stores/tabStore'
 import { useWorkspaceStore } from './stores/workspaceStore'
 import { useConfirmStore } from './stores/confirmStore'
 import { GraphStoreProvider } from './stores/graphStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
+import styles from './App.module.css'
 
 const HomePage = lazy(() => import('./components/HomePage'))
 const GraphPage = lazy(() => import('./components/GraphPage'))
 const MonitorPage = lazy(() => import('./components/MonitorPage/MonitorPage'))
-const TabBar = lazy(() => import('./components/TabBar/TabBar'))
 
 export default memo(function App() {
   const initHomeTab = useTabStore((s) => s.initHomeTab)
@@ -60,77 +62,74 @@ export default memo(function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const isSetup = view === 'setup'
   return (
-    <>
+    <div className={styles.appShell}>
       <ConfirmModal />
       <PromptModal />
       {isSetup ? (
-        <SetupPage />
+        <>
+          <CustomTitleBar mode="setup" />
+          <div className={styles.setupContent}>
+            <SetupPage />
+          </div>
+        </>
       ) : (
-        <Suspense fallback={<div style={{ width: '100%', height: '100vh', background: '#ffffff' }} />}>
-          <>
-            <TabBar onCloseTab={handleCloseTab} />
+        <div className={styles.workspaceShell}>
+          <CustomTitleBar mode="workspace" />
+          <TabBar onCloseTab={handleCloseTab} />
+          <div className={styles.workspaceContent}>
             <div
+              className={styles.tabSurface}
+              inert={activeTab?.type === 'home' ? undefined : ""}
               style={{
-                position: 'relative',
-                width: '100%',
-                height: 'calc(100vh - 40px)',
-                overflow: 'hidden',
+                visibility: activeTab?.type === 'home' ? 'visible' : 'hidden',
+                opacity: activeTab?.type === 'home' ? 1 : 0,
+                pointerEvents: activeTab?.type === 'home' ? 'auto' : 'none',
+                zIndex: activeTab?.type === 'home' ? 5 : -1,
               }}
             >
-              <div
-                inert={activeTab?.type === 'home' ? undefined : ""}
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  visibility: activeTab?.type === 'home' ? 'visible' : 'hidden',
-                  opacity: activeTab?.type === 'home' ? 1 : 0,
-                  pointerEvents: activeTab?.type === 'home' ? 'auto' : 'none',
-                  zIndex: activeTab?.type === 'home' ? 5 : -1,
-                  transition: 'opacity 120ms ease',
-                }}
-              >
+              <Suspense fallback={<div className={styles.contentFallback}>加载首页中...</div>}>
                 <HomePage />
-              </div>
+              </Suspense>
+            </div>
+            <div
+              className={styles.tabSurface}
+              inert={activeTab?.type === 'monitor' ? undefined : ""}
+              style={{
+                visibility: activeTab?.type === 'monitor' ? 'visible' : 'hidden',
+                opacity: activeTab?.type === 'monitor' ? 1 : 0,
+                pointerEvents: activeTab?.type === 'monitor' ? 'auto' : 'none',
+                background: 'var(--color-surface)',
+                zIndex: activeTab?.type === 'monitor' ? 10 : -1,
+              }}
+            >
+              <Suspense fallback={<div className={styles.contentFallback}>加载监控中...</div>}>
+                {tabs.some(t => t.type === 'monitor') && <MonitorPage />}
+              </Suspense>
+            </div>
+            {tabs.filter(t => t.type === 'kb').map(tab => (
               <div
-                inert={activeTab?.type === 'monitor' ? undefined : ""}
+                key={tab.id}
+                className={styles.tabSurface}
+                inert={activeTabId === tab.id ? undefined : ""}
                 style={{
-                  position: 'absolute',
-                  inset: 0,
-                  visibility: activeTab?.type === 'monitor' ? 'visible' : 'hidden',
-                  opacity: activeTab?.type === 'monitor' ? 1 : 0,
-                  pointerEvents: activeTab?.type === 'monitor' ? 'auto' : 'none',
-                  transition: 'opacity 120ms ease',
-                  background: '#fff',
-                  zIndex: activeTab?.type === 'monitor' ? 10 : -1,
+                  visibility: activeTabId === tab.id ? 'visible' : 'hidden',
+                  opacity: activeTabId === tab.id ? 1 : 0,
+                  pointerEvents: activeTabId === tab.id ? 'auto' : 'none',
+                  zIndex: activeTabId === tab.id ? 5 : -1,
                 }}
               >
-                {tabs.some(t => t.type === 'monitor') && <MonitorPage />}
-              </div>
-              {tabs.filter(t => t.type === 'kb').map(tab => (
-                <div
-                  key={tab.id}
-                  inert={activeTabId === tab.id ? undefined : ""}
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    visibility: activeTabId === tab.id ? 'visible' : 'hidden',
-                    opacity: activeTabId === tab.id ? 1 : 0,
-                    pointerEvents: activeTabId === tab.id ? 'auto' : 'none',
-                    zIndex: activeTabId === tab.id ? 5 : -1,
-                    transition: 'opacity 120ms ease',
-                  }}
-                >
+                <Suspense fallback={<div className={styles.contentFallback}>加载知识库中...</div>}>
                   <ReactFlowProvider>
                     <GraphStoreProvider>
                       <GraphPage tabId={tab.id} />
                     </GraphStoreProvider>
                   </ReactFlowProvider>
-                </div>
-              ))}
-            </div>
-          </>
-        </Suspense>
+                </Suspense>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
-    </>
+    </div>
   )
 })

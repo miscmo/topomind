@@ -1,9 +1,9 @@
 .rightPanel {
   height: 100%;
-  background: #fff;
+  background: var(--color-surface);
   flex-shrink: 0;
   overflow: hidden;
-  border-left: 1px solid #e6ebf1;
+  border-left: 1px solid var(--color-border-light);
   display: flex;
   flex-direction: column;
 }
@@ -14,8 +14,8 @@
   justify-content: space-between;
   padding: 10px 12px 0;
   gap: 8px;
-  border-bottom: 1px solid #e8ecf0;
-  background: #fbfcfd;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg);
 }
 
 .rightPanelTabGroup {
@@ -29,14 +29,14 @@
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
-  color: #73808c;
+  color: var(--color-text-muted);
   font-size: 13px;
   cursor: pointer;
 }
 
 .rightPanelTabBtnActive {
-  color: #1a3a5c;
-  border-bottom-color: #1a3a5c;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -48,10 +48,10 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid #e0e4ea;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #73808c;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  color: var(--color-text-muted);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -60,9 +60,9 @@
 
 .panelToggleBtn:hover,
 .panelExpandBtn:hover {
-  background: #f0f2f5;
-  border-color: #cfd6df;
-  color: #1a3a5c;
+  background: var(--color-hover-bg);
+  border-color: var(--color-border-strong);
+  color: var(--color-primary);
 }
 
 .panelExpandBtn {
@@ -70,7 +70,7 @@
   top: 12px;
   right: 12px;
   z-index: 30;
-  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
+  box-shadow: var(--shadow-md);
 }
 
 .resizeHandle {
@@ -93,7 +93,7 @@
   left: 50%;
   transform: translateX(-50%);
   width: 1px;
-  background: #e6ebf1;
+  background: var(--color-border-light);
 }
 
 .resizeHandle:hover,
@@ -105,5 +105,5 @@
 .resizeHandle:hover::before,
 .resizeHandle:active::before,
 .resizing::before {
-  background: #3b82f6;
+  background: var(--color-accent);
 }

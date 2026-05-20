@@ -5,7 +5,7 @@
   position: fixed;
   z-index: var(--z-contextmenu, 50);
   min-width: 148px;
-  background: rgba(255, 255, 255, 0.96);
+  background: color-mix(in srgb, var(--color-surface-elevated) 96%, transparent);
   border: 1px solid var(--color-border, #e0e4ea);
   border-radius: var(--radius-md, 7px);
   box-shadow: var(--shadow-lg, 0 4px 16px rgba(0, 0, 0, 0.12));
@@ -31,7 +31,7 @@
 }
 
 .item:hover {
-  background: #f0f2f5;
+  background: var(--color-hover-bg);
 }
 
 .item:disabled {
@@ -40,7 +40,7 @@
 }
 
 .item.focused {
-  background: #eef2f7;
+  background: var(--color-selected-bg);
   outline: none;
 }
 
@@ -49,7 +49,7 @@
 }
 
 .danger:hover {
-  background: #fef0ef;
+  background: var(--color-danger-soft);
   color: var(--color-danger-hover, #c0392b);
 }
 

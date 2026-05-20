@@ -10,20 +10,20 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #e0e4ea;
+  background: color-mix(in srgb, var(--color-surface) 95%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 6px 14px;
   font-size: 12px;
-  color: #555;
+  color: var(--color-text-secondary);
   max-width: calc(100vw - 240px);
   overflow: hidden;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
+  box-shadow: var(--shadow-md);
 }
 
 .link {
-  color: #3498db;
+  color: var(--color-accent);
   cursor: pointer;
   font-weight: 500;
   background: none;
@@ -41,17 +41,17 @@
 }
 
 .link:disabled {
-  color: #1a3a5c;
+  color: var(--color-primary);
   font-weight: 600;
   cursor: default;
 }
 
 .sep {
-  color: #ccc;
+  color: var(--color-text-muted);
 }
 
 .current {
-  color: #1a3a5c;
+  color: var(--color-primary);
   font-weight: 600;
   max-width: 120px;
   overflow: hidden;

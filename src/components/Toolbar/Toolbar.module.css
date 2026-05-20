@@ -9,44 +9,44 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #e0e4ea;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 4px 8px;
   backdrop-filter: blur(6px);
-  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
+  box-shadow: var(--shadow-md);
 }
 
 .toolbar button {
   height: 28px;
-  border: 1px solid #e0e4ea;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-surface);
   cursor: pointer;
   font-size: 11px;
-  color: #555;
+  color: var(--color-text-secondary);
   padding: 0 10px;
   transition: background-color 0.12s, color 0.12s, border-color 0.12s;
   white-space: nowrap;
 }
 
 .toolbar button:hover {
-  background: #eef2f7;
-  color: #1a3a5c;
+  background: var(--color-hover-bg);
+  color: var(--color-primary);
 }
 
 .toolbar button.active {
-  background: #1a3a5c;
-  color: #fff;
-  border-color: #1a3a5c;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
 }
 
 .searchWrapper {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid #d8dce6;
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 2px 6px;
   min-width: 140px;
@@ -55,8 +55,8 @@
 }
 
 .searchWrapper:focus-within {
-  border-color: #1a3a5c;
-  box-shadow: 0 0 0 2px rgba(26, 58, 92, 0.08);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-accent-soft);
 }
 
 .searchInput {
@@ -64,14 +64,14 @@
   outline: none;
   background: transparent;
   font-size: 12px;
-  color: #1a1a2e;
+  color: var(--color-text-primary);
   width: 100%;
   min-width: 0;
   padding: 2px 0;
 }
 
 .searchInput::placeholder {
-  color: #8c96a3;
+  color: var(--color-text-muted);
 }
 
 .searchInput::-webkit-search-cancel-button {
@@ -84,7 +84,7 @@
   background: transparent;
   cursor: pointer;
   font-size: 10px;
-  color: #8c96a3;
+  color: var(--color-text-muted);
   padding: 2px 4px;
   border-radius: 3px;
   line-height: 1;
@@ -93,8 +93,8 @@
 }
 
 .searchClear:hover {
-  color: #e74c3c;
-  background: rgba(231, 76, 60, 0.08);
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
 }
 
 .zoomText {
@@ -104,10 +104,10 @@
   align-items: center;
   justify-content: center;
   padding: 0 10px;
-  border: 1px solid #e0e4ea;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #fff;
-  color: #4e5968;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 600;
 }

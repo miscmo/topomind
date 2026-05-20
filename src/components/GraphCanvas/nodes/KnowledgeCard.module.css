@@ -7,9 +7,9 @@
   align-items: stretch;
   justify-content: stretch;
   border-radius: 8px; /* 稍微减小圆角，更显干练 */
-  border: 1px solid #e2e8f0; /* 更轻量、更浅的默认边框 */
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* 更轻的阴影 */
+  border: 1px solid var(--color-border); /* 更轻量、更浅的默认边框 */
+  background: color-mix(in srgb, var(--color-surface) 98%, transparent);
+  box-shadow: var(--shadow-sm); /* 更轻的阴影 */
   backdrop-filter: blur(8px);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
@@ -39,22 +39,22 @@
 
 /* 选中状态 - Figma 风格高亮边框 */
 .selected {
-  border-color: #3b82f6 !important;
+  border-color: var(--color-accent) !important;
   border-width: 2px !important;
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2) !important;
+  box-shadow: 0 0 0 1px var(--color-accent-soft) !important;
 }
 
 .connectTarget {
-  border-color: #27ae60 !important;
-  box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.15) !important;
+  border-color: var(--color-success) !important;
+  box-shadow: 0 0 0 3px var(--color-success-soft) !important;
 }
 
 
 /* 悬停状态 - 提供轻微上浮和高亮反馈 */
 .node:hover:not(.selected):not(.connectTarget),
 .hovered {
-  border-color: #94a3b8;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1) !important;
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-lg) !important;
   transform: translateY(-1px);
 }
 
@@ -85,8 +85,8 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  background: rgba(248, 250, 252, 0.8);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  background: color-mix(in srgb, var(--color-bg) 80%, transparent);
+  border-bottom: 1px solid var(--color-border-subtle);
   padding: 0 1px;
   min-height: 18px;
   flex: 1;
@@ -113,15 +113,15 @@
 }
 
 .titleFieldEditing {
-  background: rgba(255, 255, 255, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.16);
+  background: color-mix(in srgb, var(--color-surface) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--color-border-light);
 }
 
 .titleFieldEditing:focus-within {
-  background: rgba(255, 255, 255, 0.44);
+  background: color-mix(in srgb, var(--color-surface) 44%, transparent);
   box-shadow:
-    inset 0 0 0 1px rgba(148, 163, 184, 0.24),
-    0 0 0 2px rgba(59, 130, 246, 0.1);
+    inset 0 0 0 1px var(--color-border),
+    0 0 0 2px var(--color-accent-soft);
 }
 
 .label {
@@ -160,7 +160,7 @@
 
 /* 确保如果没有继承到颜色，有一个合适的默认值 */
 .header .titleInput {
-  color: var(--fallback-header-color, #475569);
+  color: var(--fallback-header-color, var(--color-text-secondary));
 }
 
 .titleInput:focus {
@@ -186,7 +186,7 @@
 
 /* 文档图标 */
 .docIcon {
-  color: #94a3b8;
+  color: var(--color-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -203,8 +203,8 @@
   min-width: 14px;
   height: 14px;
   border-radius: 7px;
-  background: #3498db;
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
   font-size: 9px;
   font-weight: 600;
   display: flex;
@@ -220,7 +220,7 @@
 }
 
 .childBadgeBtn:hover {
-  background: #2980b9;
+  background: var(--color-accent-hover);
   transform: scale(1.05);
 }
 
@@ -234,7 +234,7 @@
   height: 14px;
   border-radius: 4px;
   background: transparent;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 500;
   display: flex;
@@ -249,15 +249,15 @@
 }
 
 .collapseBtn:hover {
-  background: rgba(148, 163, 184, 0.15);
-  color: #334155;
+  background: var(--color-hover-bg);
+  color: var(--color-text-primary);
 }
 
 .markdown {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  color: #334155;
+  color: var(--color-text-secondary);
   text-align: left;
   pointer-events: auto;
   padding: 1px 3px 3px 4px; /* 进一步压缩内边距 */
@@ -343,8 +343,8 @@
   min-width: min(480px, 90vw);
   overflow: hidden;
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
 }
 
 .previewHeader {
@@ -354,8 +354,8 @@
   gap: 12px;
   flex-shrink: 0;
   padding: 10px 12px;
-  border-bottom: 1px solid #e2e8f0;
-  color: #334155;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -366,15 +366,15 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
 }
 
 .previewHeader button:hover {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: var(--color-hover-bg);
+  color: var(--color-text-primary);
 }
 
 .previewBody {
@@ -382,7 +382,7 @@
   min-height: 0;
   overflow: auto;
   padding: 12px;
-  background: #f8fafc;
+  background: var(--color-bg);
   text-align: center;
 }
 
@@ -399,7 +399,7 @@
   min-width: 100%;
   padding: 16px;
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-surface);
   box-sizing: border-box;
 }
 
@@ -431,7 +431,7 @@
 }
 
 .muted {
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-size: 11px;
   text-align: center;
 }
@@ -443,13 +443,13 @@
   position: absolute !important;
   width: 14px !important;
   height: 14px !important;
-  background: rgba(255, 255, 255, 0.95) !important;
-  border: 1.5px solid #3b82f6 !important;
+  background: color-mix(in srgb, var(--color-surface) 95%, transparent) !important;
+  border: 1.5px solid var(--color-accent) !important;
   border-radius: 50% !important;
   z-index: 30;
   opacity: 0;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .handle::after {
@@ -458,7 +458,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: #3b82f6;
+  color: var(--color-accent);
   font-size: 12px;
   font-weight: bold;
   line-height: 1;
@@ -484,7 +484,7 @@
 }
 
 .handle:hover {
-  background: #3b82f6 !important;
+  background: var(--color-accent) !important;
 }
 
 .handle:global(.react-flow__handle-left):hover {
@@ -511,10 +511,10 @@
 .resizeHandle {
   width: 8px !important;
   height: 8px !important;
-  background: #fff !important;
-  border: 1.5px solid #3b82f6 !important;
+  background: var(--color-surface) !important;
+  border: 1.5px solid var(--color-accent) !important;
   border-radius: 2px !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: var(--shadow-sm) !important;
   z-index: 30;
   overflow: visible !important;
 }

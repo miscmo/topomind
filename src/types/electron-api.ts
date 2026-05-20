@@ -11,6 +11,11 @@ export interface ElectronAPI {
   isElectron?: boolean
 }
 
+export interface WindowControlsState {
+  isMaximized: boolean
+  isFocused: boolean
+}
+
 declare global {
   interface Window {
     electronAPI?: ElectronAPI

@@ -1,5 +1,5 @@
 .viewer {
-  color: #1f2937;
+  color: var(--color-text-primary);
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
@@ -42,7 +42,7 @@
 }
 
 .viewer a {
-  color: #2563eb;
+  color: var(--color-accent);
 }
 
 .viewer img {
@@ -55,7 +55,7 @@
   max-width: 100%;
   overflow: auto;
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-surface);
   padding: 8px;
 }
 
@@ -65,10 +65,10 @@
   justify-content: center;
   gap: 8px;
   padding: 32px 16px;
-  background: #f8fafc;
+  background: var(--color-bg);
   border-radius: 6px;
-  border: 1px dashed #e2e8f0;
-  color: #64748b;
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-muted);
   font-size: 13px;
   margin: 10px 0;
 }
@@ -76,8 +76,8 @@
 .mermaidLoadingSpinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #cbd5e1;
-  border-top-color: #3b82f6;
+  border: 2px solid var(--color-border-strong);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: mermaid-spin 0.8s linear infinite;
 }
@@ -94,15 +94,15 @@
 }
 
 .mermaidError {
-  border: 1px solid #fecaca;
-  background: #fff1f2 !important;
-  color: #b91c1c !important;
+  border: 1px solid var(--color-danger);
+  background: var(--color-danger-soft) !important;
+  color: var(--color-danger) !important;
   white-space: pre-wrap;
 }
 
 .viewer code {
   border-radius: 4px;
-  background: rgba(15, 23, 42, 0.08);
+  background: var(--color-bg-muted);
   padding: 1px 4px;
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
   font-size: 0.92em;
@@ -123,8 +123,8 @@
 }
 
 .viewer blockquote {
-  border-left: 3px solid #cbd5e1;
-  color: #475569;
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
   padding-left: 10px;
 }
 
@@ -137,7 +137,7 @@
 
 .viewer th,
 .viewer td {
-  border: 1px solid #d8dee9;
+  border: 1px solid var(--color-border);
   padding: 4px 8px;
 }
 
