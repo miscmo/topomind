@@ -16,7 +16,6 @@ import type { MarkdownViewMode } from './markdownTypes'
 import { useStorage } from '../../core/storage'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
-import styles from './MarkdownWorkspace.module.css'
 
 interface MarkdownToolbarProps {
   view: EditorView | null
@@ -77,35 +76,35 @@ export const MarkdownToolbar = memo(function MarkdownToolbar({
   }, [attachmentCardPath, view, storage])
 
   return (
-    <div className={styles.toolbar}>
-      <div className={styles.toolbarGroup}>
-        <button type="button" className={styles.iconButton} title="粗体" onClick={() => handleCommand(toggleBold)}><b>B</b></button>
-        <button type="button" className={styles.iconButton} title="斜体" onClick={() => handleCommand(toggleItalic)}><i>I</i></button>
-        <div className={styles.divider} />
-        <button type="button" className={styles.iconButton} title="标题" onClick={() => handleCommand(v => insertHeading(v, 2))}>H</button>
-        <button type="button" className={styles.iconButton} title="任务" onClick={() => handleCommand(insertTaskList)}>☑</button>
-        <div className={styles.divider} />
-        <button type="button" className={styles.iconButton} title="附件" onClick={handleUploadAttachment} disabled={!attachmentCardPath}>📎</button>
-        <button type="button" className={styles.iconButton} title="链接" onClick={() => handleCommand(insertLink)}>🔗</button>
-        <button type="button" className={styles.iconButton} title="图片" onClick={() => handleCommand(insertImage)}>🖼</button>
-        <button type="button" className={styles.iconButton} title="表格" onClick={() => handleCommand(insertTable)}>⊞</button>
-        <div className={styles.divider} />
-        <button type="button" className={styles.iconButton} title="代码块" onClick={() => handleCommand(v => insertCodeBlock(v))}>{'<>'}</button>
-        <button type="button" className={styles.iconButton} title="Mermaid 图表" onClick={() => handleCommand(insertMermaidBlock)}>M</button>
+    <div className="flex items-center p-2 px-3 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] backdrop-blur-[10px] gap-2 flex-wrap">
+      <div className="flex gap-[2px] mr-auto items-center">
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="粗体" onClick={() => handleCommand(toggleBold)}><b>B</b></button>
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="斜体" onClick={() => handleCommand(toggleItalic)}><i>I</i></button>
+        <div className="w-px h-4 bg-[var(--color-border-strong)] mx-[6px]" />
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="标题" onClick={() => handleCommand(v => insertHeading(v, 2))}>H</button>
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="任务" onClick={() => handleCommand(insertTaskList)}>☑</button>
+        <div className="w-px h-4 bg-[var(--color-border-strong)] mx-[6px]" />
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="附件" onClick={handleUploadAttachment} disabled={!attachmentCardPath}>📎</button>
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="链接" onClick={() => handleCommand(insertLink)}>🔗</button>
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="图片" onClick={() => handleCommand(insertImage)}>🖼</button>
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="表格" onClick={() => handleCommand(insertTable)}>⊞</button>
+        <div className="w-px h-4 bg-[var(--color-border-strong)] mx-[6px]" />
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="代码块" onClick={() => handleCommand(v => insertCodeBlock(v))}>{'<>'}</button>
+        <button type="button" className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded-lg text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-muted)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="Mermaid 图表" onClick={() => handleCommand(insertMermaidBlock)}>M</button>
       </div>
 
-      <div className={styles.rightGroup}>
-        <div className={styles.segmentControl}>
+      <div className="flex gap-3 items-center">
+        <div className="flex bg-[var(--color-bg-muted)] p-[2px] border border-[var(--color-border)] rounded-[9px]">
           <button 
             type="button"
-            className={`${styles.segmentButton} ${viewMode === 'edit' ? styles.active : ''}`}
+            className={`border-none bg-transparent py-[5px] px-[14px] rounded-[7px] text-[12px] font-semibold text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 ${viewMode === 'edit' ? 'bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] text-[var(--color-text-primary)] shadow-[var(--shadow-sm)]' : ''}`}
             onClick={() => onViewModeChange('edit')}
           >
             编辑
           </button>
           <button 
             type="button"
-            className={`${styles.segmentButton} ${viewMode === 'preview' ? styles.active : ''}`}
+            className={`border-none bg-transparent py-[5px] px-[14px] rounded-[7px] text-[12px] font-semibold text-[var(--color-text-secondary)] cursor-pointer transition-all duration-150 ${viewMode === 'preview' ? 'bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] text-[var(--color-text-primary)] shadow-[var(--shadow-sm)]' : ''}`}
             onClick={() => onViewModeChange('preview')}
           >
             预览

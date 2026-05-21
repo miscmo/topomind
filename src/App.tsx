@@ -15,7 +15,6 @@ import { useConfirmStore } from './stores/confirmStore'
 import { GraphStoreProvider } from './stores/graphStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
-import styles from './App.module.css'
 
 const HomePage = lazy(() => import('./components/HomePage'))
 const GraphPage = lazy(() => import('./components/GraphPage'))
@@ -54,22 +53,22 @@ export default memo(function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const isSetup = view === 'setup'
   return (
-    <div className={styles.appShell}>
+    <div className="w-full h-full min-h-0 flex flex-col bg-[var(--color-bg-app)] overflow-hidden">
       <ConfirmModal />
       <PromptModal />
       {isSetup ? (
         <>
           <CustomTitleBar mode="setup" />
-          <div className={styles.setupContent}>
+          <div className="relative flex-1 min-h-0 overflow-hidden">
             <SetupPage />
           </div>
         </>
       ) : (
-        <div className={styles.workspaceShell}>
+        <div className="w-full h-full min-h-0 flex flex-col bg-[var(--color-bg-muted)] overflow-hidden">
           <CustomTitleBar mode="workspace" />
-          <div className={styles.workspaceContent}>
+          <div className="relative w-full flex-1 min-h-0 overflow-hidden bg-[var(--color-surface)]">
             <div
-              className={styles.tabSurface}
+              className="absolute inset-0 transition-opacity duration-[120ms] ease-in-out"
               inert={activeTab?.type === 'home' ? undefined : ""}
               style={{
                 visibility: activeTab?.type === 'home' ? 'visible' : 'hidden',
@@ -78,12 +77,12 @@ export default memo(function App() {
                 zIndex: activeTab?.type === 'home' ? 5 : -1,
               }}
             >
-              <Suspense fallback={<div className={styles.contentFallback}>加载首页中...</div>}>
+              <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)] text-[var(--color-text-muted)] text-[13px]">加载首页中...</div>}>
                 <HomePage />
               </Suspense>
             </div>
             <div
-              className={styles.tabSurface}
+              className="absolute inset-0 transition-opacity duration-[120ms] ease-in-out"
               inert={activeTab?.type === 'monitor' ? undefined : ""}
               style={{
                 visibility: activeTab?.type === 'monitor' ? 'visible' : 'hidden',
@@ -93,14 +92,14 @@ export default memo(function App() {
                 zIndex: activeTab?.type === 'monitor' ? 10 : -1,
               }}
             >
-              <Suspense fallback={<div className={styles.contentFallback}>加载监控中...</div>}>
+              <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)] text-[var(--color-text-muted)] text-[13px]">加载监控中...</div>}>
                 {tabs.some(t => t.type === 'monitor') && <MonitorPage />}
               </Suspense>
             </div>
             {tabs.filter(t => t.type === 'kb').map(tab => (
               <div
                 key={tab.id}
-                className={styles.tabSurface}
+                className="absolute inset-0 transition-opacity duration-[120ms] ease-in-out"
                 inert={activeTabId === tab.id ? undefined : ""}
                 style={{
                   visibility: activeTabId === tab.id ? 'visible' : 'hidden',
@@ -109,7 +108,7 @@ export default memo(function App() {
                   zIndex: activeTabId === tab.id ? 5 : -1,
                 }}
               >
-                <Suspense fallback={<div className={styles.contentFallback}>加载知识库中...</div>}>
+                <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)] text-[var(--color-text-muted)] text-[13px]">加载知识库中...</div>}>
                   <ReactFlowProvider>
                     <GraphStoreProvider>
                       <GraphPage tabId={tab.id} />

@@ -6,7 +6,6 @@ import { logger } from '../../core/logger'
 import { insertAttachmentLink } from './markdownCommands'
 import type { AttachmentItem } from '../../core/storage'
 import { logAction } from '../../core/log-backend'
-import styles from './MarkdownWorkspace.module.css'
 
 interface AttachmentsTabProps {
   attachmentCardPath: string
@@ -106,40 +105,40 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
   }, [loadAttachments])
 
   if (loading && attachments.length === 0) {
-    return <div className={styles.sidebarEmpty}>加载中...</div>
+    return <div className="py-8 px-4 text-center text-[#94a3b8] !text-[var(--color-text-muted)] text-[13px] leading-[1.6]">加载中...</div>
   }
 
   return (
-    <div className={styles.attachmentsContainer}>
-      <div className={styles.attachmentsHeader}>
-        <button className={styles.uploadButton} onClick={handleUpload} disabled={loading}>
-          <span className={styles.uploadIcon}>+</span> 上传附件
+    <div className="flex flex-col h-full">
+      <div className="p-3 border-b border-[#f1f5f9] !border-[var(--color-border-subtle)]">
+        <button className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 border border-dashed border-[#cbd5e1] !border-[var(--color-border-strong)] bg-[#f8fafc] !bg-[var(--color-bg)] text-[#475569] !text-[var(--color-text-muted)] rounded-md text-[13px] cursor-pointer transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed hover:not(:disabled):bg-[#f1f5f9] hover:not(:disabled):border-[#94a3b8] hover:not(:disabled):!border-[var(--color-border-strong)] hover:not(:disabled):text-[#334155] hover:not(:disabled):!text-[var(--color-text-primary)]" onClick={handleUpload} disabled={loading}>
+          <span className="text-[16px] font-bold">+</span> 上传附件
         </button>
       </div>
       
       {attachments.length === 0 ? (
-        <div className={styles.sidebarEmpty}>暂无附件<br/><span style={{ fontSize: '11px', marginTop: 4, display: 'inline-block' }}>点击上方按钮或拖拽文件到编辑器</span></div>
+        <div className="py-8 px-4 text-center text-[#94a3b8] !text-[var(--color-text-muted)] text-[13px] leading-[1.6]">暂无附件<br/><span style={{ fontSize: '11px', marginTop: 4, display: 'inline-block' }}>点击上方按钮或拖拽文件到编辑器</span></div>
       ) : (
-        <div className={styles.attachmentList}>
+        <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
           {attachments.map(item => (
             <div 
               key={item.name} 
-              className={styles.attachmentItem}
+              className="flex items-center gap-2 p-2 rounded-md cursor-pointer select-none transition-colors duration-150 hover:bg-[#f1f5f9] hover:!bg-[var(--color-hover-bg)] group"
               onDoubleClick={() => handleInsert(item)}
               title={view ? "双击插入到编辑器" : "切换到编辑模式后双击插入"}
               style={{ opacity: view ? 1 : 0.6 }}
             >
-              <div className={styles.attachmentIcon}>
+              <div className="text-[18px] flex items-center justify-center w-6 shrink-0 text-[#64748b] !text-[var(--color-text-muted)]">
                 {item.isImage ? '🖼️' : '📄'}
               </div>
-              <div className={styles.attachmentInfo}>
-                <div className={styles.attachmentName}>{item.name}</div>
-                <div className={styles.attachmentMeta}>
+              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <div className="text-[13px] text-[#334155] !text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</div>
+                <div className="text-[11px] text-[#94a3b8] !text-[var(--color-text-muted)]">
                   {(item.size / 1024).toFixed(1)} KB
                 </div>
               </div>
               <button 
-                className={styles.attachmentDeleteBtn} 
+                className="opacity-0 w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-150 text-[14px] group-hover:opacity-100 hover:!bg-[#fee2e2] hover:!text-[#ef4444] hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]" 
                 onClick={(e) => handleDelete(item, e)}
                 title="删除附件"
               >

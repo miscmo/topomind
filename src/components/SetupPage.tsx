@@ -7,7 +7,6 @@ import { useStorage } from '../core/storage'
 import { usePlatform } from '../hooks/usePlatform'
 import { logAction } from '../core/log-backend'
 import { enterHome } from '../core/app-flow'
-import styles from './SetupPage.module.css'
 
 export default memo(function SetupPage() {
   const storage = useStorage()
@@ -86,24 +85,24 @@ export default memo(function SetupPage() {
   }
 
   return (
-    <div id="setup-page" className={styles.page}>
-      <div className={styles.card}>
-        <div className={styles.brand}>
-          <div className={styles.logo}>🧠</div>
+    <div id="setup-page" className="absolute inset-0 w-full h-full min-h-0 bg-[var(--color-bg-app)] flex items-center justify-center overflow-hidden">
+      <div className="relative bg-[var(--color-surface)] border-none rounded-none px-10 pt-7 pb-6 w-full h-full shadow-none flex flex-col justify-center gap-5">
+        <div className="flex items-center gap-[14px]">
+          <div className="text-[36px] leading-none">🧠</div>
           <div>
-            <h1>TopoMind</h1>
-            <p>先选择一个工作目录，再进入你的笔记本主页</p>
+            <h1 className="text-[var(--color-primary)] text-[22px] font-bold m-0 mb-1 tracking-[-0.5px]">TopoMind</h1>
+            <p className="text-[var(--color-text-muted)] text-[13px] m-0 leading-relaxed">先选择一个工作目录，再进入你的笔记本主页</p>
           </div>
         </div>
-        <div className={styles.actions}>
-          <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={pickExisting}>
+        <div className="flex flex-col gap-2.5">
+          <button className="h-10 px-5 border border-[var(--color-primary)] rounded-lg bg-[var(--color-primary)] cursor-pointer text-[13px] text-[var(--color-text-inverse)] transition-all duration-150 font-medium hover:bg-[var(--color-primary-hover)] hover:border-[var(--color-primary-hover)]" onClick={pickExisting}>
             打开已有工作目录
           </button>
-          <button className={styles.btn} onClick={createNew}>
+          <button className="h-10 px-5 border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] cursor-pointer text-[13px] text-[var(--color-text-secondary)] transition-all duration-150 font-medium hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] hover:border-[var(--color-border-strong)]" onClick={createNew}>
             创建新的工作目录
           </button>
         </div>
-        {message && <div className={`${styles.message} ${isError ? styles.error : ''}`}>{message}</div>}
+        {message && <div className={`absolute left-10 right-10 bottom-3 text-[12px] text-center leading-[1.4] overflow-hidden text-ellipsis whitespace-nowrap ${isError ? 'text-[var(--color-danger)]' : 'text-[var(--color-success)]'}`}>{message}</div>}
       </div>
     </div>
   )

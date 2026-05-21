@@ -17,7 +17,7 @@ import { useGraphStoreApi } from '../../../stores/graphStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { MarkdownPreview } from '../../MarkdownWorkspace/MarkdownPreview'
 import { MarkdownWorkspace } from '../../MarkdownWorkspace/MarkdownWorkspace'
-import styles from './KnowledgeCard.module.css'
+import { cn } from '@/lib/utils'
 
 const MARKDOWN_MIN_WIDTH = 160
 const MARKDOWN_MIN_HEIGHT = 96
@@ -395,18 +395,17 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         setIsPressed(false)
       }}
       onPointerCancel={() => setIsPressed(false)}
-      className={[
-        styles.node,
-        shouldShowMarkdown ? styles.hasMarkdown : '',
-        shouldShowMarkdown ? 'nowheel' : '',
-        visuallySelected ? styles.selected : '',
-        visuallyHovered ? styles.hovered : '',
-        isConnectTarget ? styles.connectTarget : '',
-        dragging ? styles.dragging : '',
-      ].filter(Boolean).join(' ')}
+      className={cn(
+        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-surface shadow-sm transition-all duration-150 w-full h-full box-border",
+        shouldShowMarkdown && "nowheel",
+        visuallySelected && "border-2 border-accent shadow-[0_0_0_1px_var(--color-accent-soft)] !border-accent z-10",
+        isConnectTarget && "border-2 border-success shadow-[0_0_0_3px_var(--color-success-soft)] !border-success z-10",
+        visuallyHovered && !visuallySelected && !isConnectTarget && "border-border-strong shadow-lg -translate-y-[1px]",
+        dragging && "opacity-90"
+      )}
       style={{
         borderColor: visuallySelected ? undefined : data.domainColor ?? nodeStyle.borderColor,
-        borderWidth: nodeStyle.borderWidth,
+        borderWidth: visuallySelected || isConnectTarget ? 2 : nodeStyle.borderWidth,
         borderRadius,
         width: width ?? defaultNodeSize.width,
         height: height ?? defaultNodeSize.height,
@@ -418,36 +417,36 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         minHeight={nodeSizeLimits.minHeight}
         maxWidth={nodeSizeLimits.maxWidth}
         maxHeight={nodeSizeLimits.maxHeight}
-        handleClassName={styles.resizeHandle}
-        lineClassName={styles.resizeLine}
+        handleClassName="w-3 h-3 bg-surface border border-border rounded-sm shadow-sm opacity-0 hover:opacity-100 transition-opacity duration-200"
+        lineClassName="border-accent"
         onResizeStart={(_, params) => updateResizePreview(params)}
         onResize={(_, params) => updateResizePreview(params)}
         onResizeEnd={(_, params) => hideResizePreviewSoon(params)}
       />
 
       {showResizeLabel && (
-        <div className={styles.resizeLabel}>
+        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-2 py-0.5 text-xs text-muted-foreground shadow-sm pointer-events-none whitespace-nowrap z-50">
           {resizeLabel}
         </div>
       )}
 
-      <Handle type="target" position={Position.Left} className={styles.hiddenTargetHandle} isConnectable={false} />
-      <Handle type="source" position={Position.Right} className={styles.handle} />
+      <Handle type="target" position={Position.Left} className="w-0 h-0 border-none opacity-0" isConnectable={false} />
+      <Handle type="source" position={Position.Right} className="w-2.5 h-4 rounded-[2px] bg-accent/80 border-none -right-1.5 opacity-0 hover:opacity-100 hover:bg-accent transition-opacity duration-200" />
 
-      <div className={styles.content} style={{ pointerEvents: 'none', borderRadius }}>
+      <div className="flex flex-1 flex-col items-stretch justify-start overflow-hidden pointer-events-none min-w-0 min-h-0" style={{ borderRadius }}>
         {/* Header 层 */}
-        <div className={styles.header} style={headerStyle}>
+        <div className={cn("flex flex-1 items-center justify-start border-b border-border-subtle bg-bg/80 min-h-[18px] w-full pointer-events-none", shouldShowMarkdown && "flex-none")} style={headerStyle}>
           {/* 左侧占位符，用来平衡右侧控件宽度，保证标题居中 */}
-          <div className={styles.headerSpacer} style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0', width: shouldShowMarkdown ? 0 : undefined, pointerEvents: 'none' }}></div>
+          <div style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0', width: shouldShowMarkdown ? 0 : undefined, pointerEvents: 'none' }}></div>
 
           <div
-            className={`${styles.titleField} ${titleEditing ? styles.titleFieldEditing : ''}`}
+            className={cn("flex items-center min-w-0 min-h-[calc(1.3em+4px)] py-[1px] rounded-md transition-colors duration-200", titleEditing && "bg-surface/20 shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-surface/40 focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
             style={titleFieldStyle}
           >
             {titleEditing ? (
               <input
                 ref={titleInputRef}
-                className={`${styles.titleInput} nodrag nowheel`}
+                className="w-full min-w-0 min-h-[calc(1.3em+4px)] px-[3px] py-[1px] border-none rounded-none bg-transparent text-inherit font-inherit text-inherit leading-inherit outline-none box-border pointer-events-auto shadow-none caret-current transition-colors duration-200 nodrag nowheel"
                 value={titleDraft}
                 onChange={(event) => setTitleDraft(event.target.value)}
                 onBlur={confirmTitleEdit}
@@ -461,7 +460,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
               />
             ) : (
               <div
-                className={styles.label}
+                className="block w-full font-inherit text-inherit leading-inherit break-normal whitespace-nowrap overflow-hidden text-ellipsis pointer-events-auto select-none"
                 onDoubleClick={contentInteractionsEnabled ? startTitleEdit : undefined}
                 title={contentInteractionsEnabled ? '双击编辑标题' : undefined}
               >
@@ -470,9 +469,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
           </div>
 
-          <div className={styles.controls} style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0', justifyContent: 'flex-end' }}>
+          <div className="relative z-50 flex items-center justify-end gap-[2px] shrink-0 ml-0 pr-[6px] pointer-events-auto" style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0' }}>
             {hasDetail && (
-              <div className={styles.docIcon} title="包含详情" style={docIconStyle}>
+              <div className="flex items-center justify-center shrink-0 text-muted-foreground leading-none" title="包含详情" style={docIconStyle}>
                 <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={docIconSvgStyle}>
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
@@ -484,7 +483,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
             {hasChildBadge && (
               <div
-                className={`${styles.childBadgeBtn} nodrag nowheel`}
+                className="flex items-center justify-center bg-accent text-accent-foreground cursor-pointer transition-colors duration-150 hover:bg-accent-hover font-bold select-none nodrag nowheel"
                 onClick={handleDrillDown}
                 onPointerDown={stopControlPointerDown}
                 onMouseDown={stopControlMouseDown}
@@ -496,7 +495,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
             {hasCardContent && (
               <div
-                className={styles.collapseBtn}
+                className="flex items-center justify-center bg-border-light text-text-secondary cursor-pointer transition-colors duration-150 hover:bg-border-strong hover:text-text-primary font-bold select-none"
                 onClick={handleToggleCollapse}
                 title={shouldShowMarkdown ? '收起卡片' : '展开卡片'}
                 style={collapseButtonStyle}
@@ -510,22 +509,21 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         {/* Body 层 */}
         {shouldShowMarkdown && (
           <div
-            className={[
-              styles.markdown,
-              contentInteractionsEnabled ? styles.interactiveMarkdown : '',
-              contentInteractionsEnabled ? 'nodrag' : '',
-              contentInteractionsEnabled ? 'nowheel' : '',
-            ].filter(Boolean).join(' ')}
+            className={cn(
+              "flex-1 min-w-0 min-h-0 bg-surface overflow-hidden transition-colors duration-200 border-t border-border-subtle",
+              contentInteractionsEnabled && "cursor-text pointer-events-auto nodrag nowheel",
+              !contentInteractionsEnabled && "pointer-events-none"
+            )}
             onClick={contentInteractionsEnabled ? handleMarkdownClick : undefined}
             onDoubleClick={contentInteractionsEnabled ? startMarkdownEdit : undefined}
             onPointerDown={contentInteractionsEnabled ? (event) => event.stopPropagation() : undefined}
             style={markdownStyle}
           >
             {entry?.loading ? (
-              <div className={styles.muted}>加载中...</div>
+              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground bg-bg-muted/50">加载中...</div>
             ) : markdownEditing && contentInteractionsEnabled ? (
               <div 
-                className={styles.markdownEditorWorkspace} 
+                className="h-full w-full bg-surface" 
                 onPointerDown={(event) => event.stopPropagation()}
                 onDoubleClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => {
@@ -539,7 +537,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                     cancelMarkdownEdit()
                   }
                 }}
-                style={{ height: '100%', width: '100%' }}
               >
                 <MarkdownWorkspace
                   value={markdownDraft}
@@ -552,23 +549,23 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                 />
               </div>
             ) : entry?.content ? (
-              <MarkdownPreview content={entry.content} compact className="markdownBody" attachmentCardPath={cardPath} />
+              <MarkdownPreview content={entry.content} compact className="markdownBody h-full w-full overflow-y-auto overflow-x-hidden p-2 bg-surface text-foreground" attachmentCardPath={cardPath} />
             ) : null}
           </div>
         )}
       </div>
       {preview && createPortal(
-        <div className={styles.previewOverlay} onClick={() => setPreview(null)}>
-          <div className={styles.previewPanel} onClick={(event) => event.stopPropagation()}>
-            <div className={styles.previewHeader}>
-              <span>{preview.title}</span>
-              <button type="button" onClick={() => setPreview(null)}>×</button>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setPreview(null)}>
+          <div className="flex flex-col max-w-[90vw] max-h-[90vh] bg-surface rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-bg-muted/50">
+              <span className="font-medium text-foreground truncate mr-4">{preview.title}</span>
+              <button type="button" className="flex items-center justify-center w-6 h-6 rounded-md hover:bg-surface-hover text-muted-foreground hover:text-foreground transition-colors" onClick={() => setPreview(null)}>×</button>
             </div>
-            <div className={styles.previewBody}>
+            <div className="flex-1 overflow-auto p-4 bg-bg-app flex items-center justify-center min-h-[200px]">
               {preview.type === 'image' ? (
-                <img src={preview.src} alt={preview.title} />
+                <img src={preview.src} alt={preview.title} className="max-w-full max-h-full object-contain rounded-md" />
               ) : (
-                <div className={styles.previewSvg} dangerouslySetInnerHTML={{ __html: preview.html }} />
+                <div className="w-full h-full flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:h-auto" dangerouslySetInnerHTML={{ __html: preview.html }} />
               )}
             </div>
           </div>

@@ -10,7 +10,6 @@ import { CreateKBDialog } from './CreateKBDialog'
 import { ImportKBDialog } from './ImportKBDialog'
 import { KBSettingsDialog } from './KBSettingsDialog'
 import { KnowledgeBaseGrid } from './KnowledgeBaseGrid'
-import styles from './HomePage.module.css'
 
 export default function HomePage() {
   const currentWorkDir = useWorkspaceStore((s) => s.currentWorkDir)
@@ -52,20 +51,27 @@ export default function HomePage() {
   const [settingsKB, setSettingsKB] = useState<KBItem | null>(null)
 
   return (
-    <div id="home-modal" className={styles.page}>
+    <div id="home-modal" className="flex h-full w-full flex-col overflow-hidden bg-background">
       {/* 知识库列表 */}
-      <div className={styles.content}>
+      <div className="flex-1 overflow-y-auto bg-background p-8 md:p-12 relative">
         {loading && (
-          <div className={styles.loadingOverlay}>
-            <div className={styles.loadingSpinner}></div>
-            <span className={styles.loadingText}>加载中...</span>
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+            <span className="ml-3 text-sm font-medium text-muted-foreground">加载中...</span>
           </div>
         )}
 
-        <div className={styles.sectionTitle}>我的知识库</div>
+        <div className="mb-6 flex items-center gap-3">
+          <div className="h-5 w-1.5 rounded-full bg-accent"></div>
+          <h2 className="text-lg font-semibold text-foreground">我的知识库</h2>
+        </div>
+        
         {message && (
-          <div className={`${styles.contentMessage} ${messageError ? styles.error : ''}`}>{message}</div>
+          <div className={`mb-6 rounded-lg px-4 py-3 text-sm ${messageError ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
+            {message}
+          </div>
         )}
+        
         <KnowledgeBaseGrid
           kbs={kbs}
           onOpenKB={openKB}

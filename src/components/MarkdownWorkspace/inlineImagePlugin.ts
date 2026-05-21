@@ -1,13 +1,14 @@
 import { Decoration, type DecorationSet, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view'
 import { RangeSetBuilder } from '@codemirror/state'
-import type { StorageService } from '../../../core/storage'
+import type { Store } from '../../core/storage'
 
 class ImageWidget extends WidgetType {
   constructor(
     readonly url: string,
+    readonly alt: string,
     readonly title: string,
     readonly attachmentCardPath: string | null | undefined,
-    readonly storage: StorageService
+    readonly storage: Store
   ) {
     super()
   }
@@ -32,11 +33,11 @@ class ImageWidget extends WidgetType {
     img.title = this.title
     
     if (this.url.startsWith('_attach/') && this.attachmentCardPath) {
-      this.storage.resolveAttachmentUrl(this.attachmentCardPath, this.url).then(resolvedUrl => {
+      this.storage.getAttachmentAbsoluteUrl(this.attachmentCardPath, this.url).then((resolvedUrl: string | null) => {
         if (resolvedUrl) {
           img.src = resolvedUrl
         }
-      }).catch(err => {
+      }).catch((err: any) => {
         console.error('Failed to resolve attachment URL for inline preview', err)
       })
     } else {
@@ -48,7 +49,7 @@ class ImageWidget extends WidgetType {
   }
 }
 
-export function inlineImagePlugin(attachmentCardPath: string | null | undefined, storage: StorageService) {
+export function inlineImagePlugin(attachmentCardPath: string | null | undefined, storage: Store) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
@@ -74,12 +75,13 @@ export function inlineImagePlugin(attachmentCardPath: string | null | undefined,
           const to = from + match[0].length
           const title = match[1]
           const url = match[2]
+          const alt = match[1]
           
           builder.add(
             to,
             to,
             Decoration.widget({
-              widget: new ImageWidget(url, title, attachmentCardPath, storage),
+              widget: new ImageWidget(url, alt, title, attachmentCardPath, storage),
               side: 1,
               block: true
             })

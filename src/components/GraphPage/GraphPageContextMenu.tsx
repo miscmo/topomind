@@ -1,5 +1,4 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import styles from './GraphPageContextMenu.module.css'
 
 interface MenuItem {
   label: string
@@ -184,12 +183,12 @@ export default memo(function GraphPageContextMenu({
   return (
     <div
       ref={menuRef}
-      className={styles.menu}
+      className="fixed z-[50] min-w-[148px] bg-[color-mix(in_srgb,var(--color-surface-elevated)_96%,transparent)] border border-[var(--color-border)] rounded-[var(--radius-md,7px)] shadow-[var(--shadow-lg)] p-1 overflow-hidden backdrop-blur-md"
       style={{ left: adjustedX, top: adjustedY }}
     >
       {items.map((item, i) => {
         if ('separator' in item) {
-          return <div key={i} className={styles.sep} />
+          return <div key={i} className="h-px bg-[var(--color-border-light)] mx-1 my-1" />
         }
 
         navigableIndex += 1
@@ -198,7 +197,7 @@ export default memo(function GraphPageContextMenu({
         return (
           <button
             key={i}
-            className={`${styles.item} ${item.danger ? styles.danger : ''} ${isFocused ? styles.focused : ''}`}
+            className={`flex items-center w-full min-h-[30px] px-2.5 border-none rounded-[5px] bg-transparent cursor-pointer text-left text-[var(--font-size-base,12px)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--color-hover-bg)] ${isFocused ? 'bg-[var(--color-selected-bg)] outline-none' : ''} ${item.danger ? 'text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger-hover)]' : 'text-[var(--color-text-primary)]'}`}
             onClick={async () => { await item.action() }}
             disabled={item.disabled}
           >

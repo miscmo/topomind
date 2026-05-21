@@ -10,7 +10,6 @@ import GraphCanvas from '../GraphCanvas'
 import GraphPageContextMenu from './GraphPageContextMenu'
 import { useGraphPageController } from './useGraphPageController'
 import { useGraphPageActions } from './useGraphPageActions'
-import styles from './GraphPage.module.css'
 
 interface GraphPageProps {
   tabId: string
@@ -22,9 +21,9 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
 
   return (
     <GraphContextProvider graph={graph}>
-      <div id="graph-page" className={styles.page}>
-        <div id="app-layout" className={styles.layout}>
-          <div id="graph-panel" className={styles.graphPanel}>
+      <div id="graph-page" className="w-full h-full overflow-hidden bg-[var(--color-canvas-bg)] pt-0">
+        <div id="app-layout" className="flex w-full h-full relative">
+          <div id="graph-panel" className="flex-1 h-full relative overflow-hidden bg-[var(--color-canvas-bg)]">
             <Breadcrumb tabId={tabId} />
 
             <GraphCanvas tabId={tabId} {...canvasProps} />

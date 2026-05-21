@@ -7,9 +7,8 @@ import rehypeHighlight from 'rehype-highlight'
 import { useStorage } from '../../core/storage'
 import { MermaidBlock } from './MermaidBlock'
 import { ImageBlock } from './ImageBlock'
-import 'github-markdown-css/github-markdown-light.css'
-import 'highlight.js/styles/github.css'
-import styles from './MarkdownWorkspace.module.css'
+import '../../styles/github-markdown-themed.css'
+import '../../styles/highlight-themed.css'
 
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -301,15 +300,15 @@ const InteractiveCodeBlock = memo(function InteractiveCodeBlock({
   const codeElement = language === 'mermaid'
     ? <MermaidBlock code={code} />
     : (
-      <pre className={`${styles.interactiveCodePre} ${isWrapped ? styles.codeBlockPreWrapped : ''}`}>
+      <pre className={`!mb-0 overflow-x-auto ${isWrapped ? '!whitespace-pre-wrap !break-words [overflow-wrap:anywhere] [&_code]:!whitespace-pre-wrap [&_code]:!break-words [&_code]:[overflow-wrap:anywhere]' : ''}`}>
         <code className={className}>{code}</code>
       </pre>
     )
 
   return (
-    <div className={styles.interactiveCodeBlock} data-code-block-index={blockIndex}>
-      <div className={styles.interactiveCodeToolbar}>
-        <label className={styles.interactiveCodeLanguage} aria-label="代码语言">
+    <div className="mb-4 relative group/code" data-code-block-index={blockIndex}>
+      <div className="absolute top-2 right-2 z-[2] flex items-center justify-end gap-1.5 p-1 border border-[#d0d7de]/90 !border-[var(--color-border)] rounded-[10px] bg-white/96 !bg-[color-mix(in_srgb,var(--color-surface-elevated)_96%,transparent)] shadow-[0_6px_24px_rgba(31,35,40,0.12)] !shadow-[var(--shadow-popover)] opacity-0 -translate-y-1 pointer-events-none transition-all duration-150 backdrop-blur-md group-hover/code:opacity-100 group-hover/code:translate-y-0 group-hover/code:pointer-events-auto focus-within:opacity-100 focus-within:translate-y-0 focus-within:pointer-events-auto">
+        <label className="inline-flex items-center min-w-0 [&_select]:min-w-[88px] [&_select]:max-w-[120px] [&_select]:h-6 [&_select]:pl-2 [&_select]:pr-[22px] [&_select]:border [&_select]:border-[#d0d7de] [&_select]:!border-[var(--color-border)] [&_select]:rounded-[7px] [&_select]:bg-white/96 [&_select]:!bg-[var(--color-bg)] [&_select]:text-[#1f2328] [&_select]:text-[11px] [&_select]:leading-6 hover:[&_select:not(:disabled)]:bg-[#f3f4f6] hover:[&_select:not(:disabled)]:!bg-[var(--color-hover-bg)] hover:[&_select:not(:disabled)]:border-[#afb8c1] disabled:[&_select]:cursor-not-allowed disabled:[&_select]:opacity-60" aria-label="代码语言">
           <select
             value={language}
             onChange={(event) => onLanguageChange(event.target.value)}
@@ -325,17 +324,17 @@ const InteractiveCodeBlock = memo(function InteractiveCodeBlock({
         </label>
         <button
           type="button"
-          className={`${styles.interactiveCodeButton} ${isWrapped ? styles.interactiveCodeButtonActive : ''}`}
+          className={`h-6 px-2 border border-[#d0d7de] !border-[var(--color-border)] rounded-[7px] bg-[#f6f8fa]/96 !bg-[var(--color-bg)] text-[#24292f] text-[11px] font-medium cursor-pointer leading-6 hover:not(:disabled):bg-[#f3f4f6] hover:not(:disabled):!bg-[var(--color-hover-bg)] hover:not(:disabled):border-[#afb8c1] disabled:cursor-not-allowed disabled:opacity-60 ${isWrapped ? '!bg-[#ddeefe] !bg-[var(--color-selected-bg)] !border-[#54aeff] !border-[var(--color-accent)] !text-[#0969da] !text-[var(--color-accent)]' : ''}`}
           onClick={onToggleWrap}
           title={isWrapped ? '关闭自动换行' : '开启自动换行'}
         >
           换行
         </button>
-        <button type="button" className={styles.interactiveCodeButton} onClick={onCopy} title="复制代码">
+        <button type="button" className="h-6 px-2 border border-[#d0d7de] !border-[var(--color-border)] rounded-[7px] bg-[#f6f8fa]/96 !bg-[var(--color-bg)] text-[#24292f] text-[11px] font-medium cursor-pointer leading-6 hover:not(:disabled):bg-[#f3f4f6] hover:not(:disabled):!bg-[var(--color-hover-bg)] hover:not(:disabled):border-[#afb8c1] disabled:cursor-not-allowed disabled:opacity-60" onClick={onCopy} title="复制代码">
           {copied ? '已复制' : '复制'}
         </button>
       </div>
-      <div className={`${styles.interactiveCodeContent} ${compact ? styles.compact : ''}`}>
+      <div className={`min-w-0 ${compact ? 'text-[13px] leading-relaxed [&_h1]:text-[1.5em] [&_h2]:text-[1.3em] [&_h3]:text-[1.1em] [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_pre]:p-2' : ''}`}>
         {codeElement}
       </div>
     </div>
@@ -458,32 +457,32 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
     <span
       ref={containerRef}
       className={[
-        styles.interactiveImageBlock,
-        align === 'center' ? styles.interactiveImageCenter : '',
-        align === 'right' ? styles.interactiveImageRight : '',
+        'flex flex-col gap-2 my-4 relative group/img',
+        align === 'center' ? '[&>.interactiveImageFrame]:justify-center' : '',
+        align === 'right' ? '[&>.interactiveImageFrame]:justify-end' : '',
       ].filter(Boolean).join(' ')}
       style={{ position: 'relative' }}
     >
       {isSelected && canEdit && (
-        <span className={styles.interactiveImageToolbar}>
-          <span className={styles.interactiveImageToolbarGroup}>
+        <span className="absolute -top-10 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center gap-2 py-1 px-2 border border-[#d0d7de]/90 !border-[var(--color-border)] rounded-lg bg-white/96 !bg-[color-mix(in_srgb,var(--color-surface-elevated)_96%,transparent)] shadow-[0_4px_12px_rgba(31,35,40,0.15)] !shadow-[var(--shadow-popover)] backdrop-blur-md">
+          <span className="inline-flex gap-1.5">
             <button
               type="button"
-              className={`${styles.interactiveImageButton} ${align === 'left' ? styles.interactiveImageButtonActive : ''}`}
+              className={`h-7 px-2.5 border border-[#d0d7de] !border-[var(--color-border)] rounded-md bg-[#f6f8fa] !bg-[var(--color-bg)] text-[#24292f] text-[12px] font-medium cursor-pointer hover:bg-[#f3f4f6] hover:!bg-[var(--color-hover-bg)] hover:border-[#afb8c1] ${align === 'left' ? '!bg-[#ddeefe] !bg-[var(--color-selected-bg)] !border-[#54aeff] !border-[var(--color-accent)] !text-[#0969da] !text-[var(--color-accent)]' : ''}`}
               onClick={(e) => { e.stopPropagation(); onAlignChange('left') }}
             >
               左对齐
             </button>
             <button
               type="button"
-              className={`${styles.interactiveImageButton} ${align === 'center' ? styles.interactiveImageButtonActive : ''}`}
+              className={`h-7 px-2.5 border border-[#d0d7de] !border-[var(--color-border)] rounded-md bg-[#f6f8fa] !bg-[var(--color-bg)] text-[#24292f] text-[12px] font-medium cursor-pointer hover:bg-[#f3f4f6] hover:!bg-[var(--color-hover-bg)] hover:border-[#afb8c1] ${align === 'center' ? '!bg-[#ddeefe] !bg-[var(--color-selected-bg)] !border-[#54aeff] !border-[var(--color-accent)] !text-[#0969da] !text-[var(--color-accent)]' : ''}`}
               onClick={(e) => { e.stopPropagation(); onAlignChange('center') }}
             >
               居中
             </button>
             <button
               type="button"
-              className={`${styles.interactiveImageButton} ${align === 'right' ? styles.interactiveImageButtonActive : ''}`}
+              className={`h-7 px-2.5 border border-[#d0d7de] !border-[var(--color-border)] rounded-md bg-[#f6f8fa] !bg-[var(--color-bg)] text-[#24292f] text-[12px] font-medium cursor-pointer hover:bg-[#f3f4f6] hover:!bg-[var(--color-hover-bg)] hover:border-[#afb8c1] ${align === 'right' ? '!bg-[#ddeefe] !bg-[var(--color-selected-bg)] !border-[#54aeff] !border-[var(--color-accent)] !text-[#0969da] !text-[var(--color-accent)]' : ''}`}
               onClick={(e) => { e.stopPropagation(); onAlignChange('right') }}
             >
               居右
@@ -491,9 +490,9 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
           </span>
         </span>
       )}
-      <span className={styles.interactiveImageFrame}>
+      <span className="flex justify-start w-full interactiveImageFrame">
         <span 
-          className={`${isSelected ? styles.interactiveImageFrameSelected : ''}`}
+          className={`${isSelected ? 'outline outline-2 outline-[#0969da] !outline-[var(--color-accent)] outline-offset-2' : ''}`}
           style={{ width: `${currentWidth}%`, position: 'relative', display: 'flex', lineHeight: 0 }}
           onClick={(e) => { e.stopPropagation(); canEdit && setIsSelected(true) }}
         >
@@ -503,25 +502,25 @@ const InteractiveImageBlock = memo(function InteractiveImageBlock({
             title={title}
             attachmentCardPath={attachmentCardPath}
             onPreview={(payload) => onPreview({ ...payload, scale: 1, offsetX: 0, offsetY: 0 })}
-            className={styles.interactiveImage}
+            className="block h-auto"
             style={{ width: '100%', height: 'auto', display: 'block', cursor: 'default' }}
           />
           {isSelected && canEdit && (
             <>
               <div 
-                className={`${styles.imageResizeHandle} ${styles.imageResizeHandleTL}`}
+                className={`absolute w-3 h-3 bg-[#0969da] !bg-[var(--color-accent)] border-2 border-white !border-[var(--color-surface)] rounded-full z-[5] -top-[5px] -left-[5px] cursor-nwse-resize`}
                 onPointerDown={(e) => handleDragStart(e, 'tl')}
               />
               <div 
-                className={`${styles.imageResizeHandle} ${styles.imageResizeHandleTR}`}
+                className={`absolute w-3 h-3 bg-[#0969da] !bg-[var(--color-accent)] border-2 border-white !border-[var(--color-surface)] rounded-full z-[5] -top-[5px] -right-[5px] cursor-nesw-resize`}
                 onPointerDown={(e) => handleDragStart(e, 'tr')}
               />
               <div 
-                className={`${styles.imageResizeHandle} ${styles.imageResizeHandleBL}`}
+                className={`absolute w-3 h-3 bg-[#0969da] !bg-[var(--color-accent)] border-2 border-white !border-[var(--color-surface)] rounded-full z-[5] -bottom-[5px] -left-[5px] cursor-nesw-resize`}
                 onPointerDown={(e) => handleDragStart(e, 'bl')}
               />
               <div 
-                className={`${styles.imageResizeHandle} ${styles.imageResizeHandleBR}`}
+                className={`absolute w-3 h-3 bg-[#0969da] !bg-[var(--color-accent)] border-2 border-white !border-[var(--color-surface)] rounded-full z-[5] -bottom-[5px] -right-[5px] cursor-nwse-resize`}
                 onPointerDown={(e) => handleDragStart(e, 'br')}
               />
             </>
@@ -693,13 +692,13 @@ export const MarkdownPreview = memo(function MarkdownPreview({
         const text = extractPlainText(children)
         return createElement(
           tagName,
-          id ? { ...props, id, className: [props.className, styles.previewHeading].filter(Boolean).join(' ') } : { ...props, className: [props.className, styles.previewHeading].filter(Boolean).join(' ') },
+          id ? { ...props, id, className: [props.className, 'relative flex items-center gap-2 group/heading'].filter(Boolean).join(' ') } : { ...props, className: [props.className, 'relative flex items-center gap-2 group/heading'].filter(Boolean).join(' ') },
           <>
             <span>{children}</span>
             {id && (
               <button
                 type="button"
-                className={styles.headingAnchorButton}
+                className="shrink-0 min-w-[32px] h-6 px-2 border border-[#d0d7de] !border-[var(--color-border)] rounded-md bg-[#f6f8fa] !bg-[var(--color-bg)] text-[#57606a] text-[12px] leading-none cursor-pointer opacity-0 transition-all duration-150 group-hover/heading:opacity-100 focus-visible:opacity-100 hover:bg-[#f3f4f6] hover:!bg-[var(--color-hover-bg)] hover:border-[#afb8c1] focus-visible:bg-[#f3f4f6] focus-visible:!bg-[var(--color-hover-bg)] focus-visible:border-[#afb8c1]"
                 onClick={() => handleCopyHeadingLink(id)}
                 aria-label={`复制标题锚点：${text || id}`}
                 title={copiedHeadingId === id ? '已复制锚点' : '复制锚点链接'}
@@ -730,7 +729,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
             {...props}
             type="checkbox"
             checked={!!checked}
-            className={styles.interactiveCheckbox}
+            className="cursor-pointer"
             disabled={!onChange}
             onChange={(event) => handleTaskToggle(currentTaskIndex, event.target.checked)}
           />
@@ -856,7 +855,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
     <div
       ref={surfaceRef}
       className={[
-        styles.previewSurface,
+        'h-full overflow-y-auto bg-transparent [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-transparent [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-clip-content [&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(148,163,184,0.34)] hover:[&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(100,116,139,0.5)] [&::-webkit-scrollbar-corner]:bg-transparent',
         'markdown-preview',
         'markdown-body',
         compact ? 'compact' : '',
@@ -874,7 +873,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
       </ReactMarkdown>
       {previewImage && (
         <div
-          className={styles.imagePreviewOverlay}
+          className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-900/72 pointer-events-auto"
           role="dialog"
           aria-modal="true"
           aria-label={previewImage.alt ? `图片预览：${previewImage.alt}` : '图片预览'}
@@ -884,7 +883,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
         >
           <button
             type="button"
-            className={styles.imagePreviewClose}
+            className="absolute top-6 right-6 h-8 px-3 border border-white/24 rounded-full bg-slate-900/72 text-white text-[13px] cursor-pointer hover:bg-slate-900/90"
             onClick={handleCloseImagePreview}
             aria-label="关闭图片预览"
           >
@@ -892,20 +891,20 @@ export const MarkdownPreview = memo(function MarkdownPreview({
           </button>
           <button
             type="button"
-            className={styles.imagePreviewReset}
+            className="absolute top-6 right-24 h-8 px-3 border border-white/24 rounded-full bg-slate-900/72 text-white text-[13px] cursor-pointer hover:bg-slate-900/90"
             onClick={handlePreviewImageReset}
             aria-label="重置图片缩放和位置"
           >
             重置
           </button>
           <div
-            className={styles.imagePreviewStage}
+            className="relative max-w-[min(92vw,1200px)] max-h-[calc(100vh-96px)] flex flex-col items-center gap-2.5"
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
             <div
-              className={`${styles.imagePreviewCanvas} ${previewImage.scale > 1 ? styles.imagePreviewCanvasDraggable : ''}`}
+              className={`w-[min(92vw,1200px)] max-w-[min(92vw,1200px)] max-h-[calc(100vh-150px)] overflow-hidden flex items-center justify-center rounded-[10px] cursor-zoom-in ${previewImage.scale > 1 ? 'cursor-grab touch-none active:cursor-grabbing' : ''}`}
               onWheel={handlePreviewImageWheel}
               onPointerDown={handlePreviewImagePointerDown}
               onPointerMove={handlePreviewImagePointerMove}
@@ -913,7 +912,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
               onPointerCancel={handlePreviewImagePointerEnd}
             >
               <img
-                className={styles.imagePreviewImage}
+                className="block max-w-full max-h-[calc(100vh-150px)] object-contain rounded-[10px] shadow-[0_24px_64px_rgba(15,23,42,0.35)] bg-white !bg-[var(--color-surface)]"
                 src={previewImage.src}
                 alt={previewImage.alt}
                 draggable={false}
@@ -923,7 +922,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
               />
             </div>
             {previewImage.alt && (
-              <div className={styles.imagePreviewCaption}>{previewImage.alt}</div>
+              <div className="max-w-[min(92vw,960px)] py-2 px-3 rounded-lg bg-slate-900/82 text-slate-50 text-[13px] text-center">{previewImage.alt}</div>
             )}
           </div>
         </div>

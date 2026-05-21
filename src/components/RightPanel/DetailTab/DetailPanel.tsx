@@ -12,7 +12,6 @@ import { useDraftStore } from '../../../stores/draftStore'
 import { useCardContentStore } from '../../../stores/cardContentStore'
 import { MarkdownWorkspace } from '../../MarkdownWorkspace/MarkdownWorkspace'
 import type { MarkdownViewMode } from '../../MarkdownWorkspace/markdownTypes'
-import styles from './DetailTab.module.css'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
 import { registerTabSaver } from '../../../core/close-guard'
@@ -336,15 +335,15 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   // ===== Empty state =====
   if (!selectedNodeId || !hasSelectedNode) {
     return (
-      <div id="detail-panel" className={styles.detailPanel}>
-        <div className={styles.emptyState}>选择一个节点查看详情</div>
+      <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shrink-0 overflow-hidden transition-opacity">
+        <div className="p-4 text-xs text-[var(--color-text-muted)] text-center mt-[40%]">选择一个节点查看详情</div>
       </div>
     )
   }
 
   return (
-    <div id="detail-panel" className={styles.detailPanel}>
-      <div className={styles.body}>
+    <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shrink-0 overflow-hidden transition-opacity">
+      <div className="flex-1 flex min-h-0 overflow-hidden p-0 leading-relaxed text-[13.5px] [&>*]:flex-1 [&>*]:min-h-0 [&>*]:min-w-0">
         <MarkdownWorkspace
           value={draftMarkdown}
           savedValue={savedMarkdown}
@@ -352,37 +351,37 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           onSave={handleSave}
           attachmentCardPath={nodePath}
           documentType="detail"
-          previewClassName={styles.markdownBody}
+          previewClassName="text-[15px] leading-relaxed text-[var(--color-text-primary)] [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_p]:mt-0 [&_p]:mb-2.5 [&_blockquote]:mt-0 [&_blockquote]:mb-4 [&_ul]:mt-0 [&_ul]:mb-4 [&_ol]:mt-0 [&_ol]:mb-4 [&_dl]:mt-0 [&_dl]:mb-4 [&_table]:mt-0 [&_table]:mb-4 [&_pre]:mt-0 [&_pre]:mb-4 [&_details]:mt-0 [&_details]:mb-4 [&_img]:rounded-md"
           detailHeader={(
-            <div className={styles.title}>
-              <div className={styles.titleMain}>
-                <div className={styles.titleTextGroup}>
+            <div className="min-h-[58px] px-4 pt-2.5 pb-2 border-b border-[var(--color-border-light)] shrink-0 flex flex-col justify-center gap-1 bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)] box-border">
+              <div className="flex items-center justify-between gap-3 w-full">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <button
                     type="button"
-                    className={styles.sidebarToggleBtn}
+                    className="w-6 h-6 inline-flex items-center justify-center shrink-0 p-0 border border-[var(--color-border)] rounded-[7px] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] text-[var(--color-text-muted)] cursor-pointer shadow-[var(--shadow-sm)] transition-all hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-primary)] hover:shadow-[var(--shadow-md)] active:shadow-[var(--shadow-sm)]"
                     onClick={() => setDetailSidebarCollapsed((collapsed) => !collapsed)}
                     title={detailSidebarCollapsed ? '展开左侧栏' : '收起左侧栏'}
                     aria-label={detailSidebarCollapsed ? '展开左侧栏' : '收起左侧栏'}
                   >
-                    <span className={styles.sidebarToggleIcon} aria-hidden="true">
-                      <span className={styles.sidebarToggleLine} />
-                      <span className={styles.sidebarToggleLine} />
-                      <span className={styles.sidebarToggleLine} />
+                    <span className="relative w-3 h-3 inline-block" aria-hidden="true">
+                      <span className="absolute left-0 w-3 h-[1.5px] rounded-full bg-current opacity-90 top-[1px]" />
+                      <span className="absolute left-0 w-3 h-[1.5px] rounded-full bg-current opacity-90 top-[5px]" />
+                      <span className="absolute left-0 w-3 h-[1.5px] rounded-full bg-current opacity-90 top-[9px]" />
                       <span
-                        className={`${styles.sidebarToggleArrow} ${
+                        className={`absolute top-1 right-[-1px] w-0 h-0 border-y-[3px] border-y-transparent ${
                           detailSidebarCollapsed
-                            ? styles.sidebarToggleArrowExpand
-                            : styles.sidebarToggleArrowCollapse
+                            ? 'border-l-[4px] border-l-current'
+                            : 'border-r-[4px] border-r-current'
                         }`}
                       />
                     </span>
                   </button>
-                  <div className={styles.titleInfo}>
-                    <div className={styles.titlePrimary}>
+                  <div className="flex flex-col gap-[3px] min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       {renameMode ? (
                         <input
                           ref={renameInputRef}
-                          className={styles.renameInput}
+                          className="min-h-[calc(1em*1.3+10px)] py-1 px-2.5 border border-transparent rounded-lg font-inherit leading-tight text-inherit outline-none w-full box-border bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] shadow-none transition-all focus:bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[var(--color-border)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]"
                           value={newName}
                           onChange={(e) => setNewName(e.target.value)}
                           onBlur={handleRenameConfirm}
@@ -393,7 +392,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
                         />
                       ) : (
                         <span
-                          className={styles.titleText}
+                          className="text-base font-bold text-[var(--color-primary)] leading-tight whitespace-nowrap overflow-hidden text-ellipsis"
                           title={currentDocumentDisplayPath || undefined}
                           onDoubleClick={() => {
                             if (!canRenameNodeFromTitle) return
@@ -406,25 +405,25 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
                         </span>
                       )}
                       {childCount > 0 && (
-                        <span className={styles.badge} title="含有子概念">
+                        <span className="py-0.5 px-[7px] rounded-[10px] bg-[var(--color-hover-bg)] text-[10px] text-[var(--color-text-muted)] shrink-0" title="含有子概念">
                           {childCount} 子
                         </span>
                       )}
                     </div>
-                    <div className={styles.titleSub}>{currentDocumentDisplayPath}</div>
+                    <div className="text-[11px] font-medium text-[var(--color-text-muted)] leading-tight whitespace-nowrap overflow-hidden text-ellipsis">{currentDocumentDisplayPath}</div>
                   </div>
                 </div>
-                <div className={styles.viewSwitch}>
+                <div className="flex items-center p-0.5 border border-[var(--color-border)] rounded-[9px] bg-[var(--color-bg-muted)] shrink-0">
                   <button
                     type="button"
-                    className={`${styles.viewSwitchButton} ${viewMode === 'edit' ? styles.viewSwitchButtonActive : ''}`}
+                    className={`h-7 px-3 border-none rounded-[7px] bg-transparent text-[12px] font-semibold cursor-pointer transition-all hover:text-[var(--color-primary)] ${viewMode === 'edit' ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-[var(--shadow-sm)]' : 'text-[var(--color-text-muted)]'}`}
                     onClick={() => setViewMode('edit')}
                   >
                     编辑
                   </button>
                   <button
                     type="button"
-                    className={`${styles.viewSwitchButton} ${viewMode === 'preview' ? styles.viewSwitchButtonActive : ''}`}
+                    className={`h-7 px-3 border-none rounded-[7px] bg-transparent text-[12px] font-semibold cursor-pointer transition-all hover:text-[var(--color-primary)] ${viewMode === 'preview' ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-[var(--shadow-sm)]' : 'text-[var(--color-text-muted)]'}`}
                     onClick={() => setViewMode('preview')}
                   >
                     预览
@@ -432,7 +431,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
                 </div>
               </div>
               {documentLinkNotice && (
-                <div className={styles.inlineNotice} role="status">
+                <div className="mt-0.5 py-1.5 px-2.5 border border-[var(--color-warning-border)] rounded-lg bg-[var(--color-warning-soft)] text-[var(--color-warning)] text-xs leading-snug" role="status">
                   {documentLinkNotice}
                 </div>
               )}

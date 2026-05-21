@@ -3,7 +3,6 @@ import { useStorage } from '../../core/storage'
 import { usePromptStore } from '../../stores/promptStore'
 import { logAction } from '../../core/log-backend'
 import type { KBItem } from './useHomeKnowledgeBases'
-import styles from './HomePage.module.css'
 
 interface KBSettingsDialogProps {
   visible: boolean
@@ -175,16 +174,16 @@ export function KBSettingsDialog({ visible, kb, onClose, refreshKBList }: KBSett
   }
 
   return (
-    <div inert={!visible ? "" : undefined} className={`${styles.formOverlay} ${visible ? styles.active : ''}`} onClick={onClose}>
-      <div className={styles.form} onClick={e => e.stopPropagation()}>
-        <div className={styles.formHeader}>
+    <div inert={!visible ? "" : undefined} className={`fixed inset-0 bg-black/40 z-[10000] flex items-center justify-center opacity-0 invisible transition-all duration-250 backdrop-blur-[2px] ${visible ? '!opacity-100 !visible [&>div]:!scale-100 [&>div]:!translate-y-0 [&>div]:!opacity-100' : ''}`} onClick={onClose}>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-[440px] max-w-[90%] overflow-hidden scale-95 translate-y-2.5 opacity-0 transition-all duration-300 shadow-[var(--shadow-lg)]" onClick={e => e.stopPropagation()}>
+        <div className="p-[18px_24px] bg-[var(--color-bg)] border-b border-[var(--color-border-light)] flex justify-between items-center [&>h3]:text-[var(--color-primary)] [&>h3]:text-[16px] [&>h3]:m-0 [&>h3]:font-bold">
           <h3>知识库设置 - {kb.name}</h3>
-          <button className={styles.formClose} onClick={onClose}>×</button>
+          <button className="w-7 h-7 rounded-md border-none bg-[var(--color-hover-bg)] text-[var(--color-text-muted)] cursor-pointer text-[14px] transition-all duration-150 hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)]" onClick={onClose}>×</button>
         </div>
-        <div className={styles.formBody}>
-          {error && <div className={styles.errorText} style={{ color: '#e74c3c', fontSize: '13px', marginBottom: '12px' }}>{error}</div>}
+        <div className="p-[20px_24px]">
+          {error && <div className="text-[#e74c3c] text-[13px] mb-3">{error}</div>}
 
-          <div className={styles.formGroup}>
+          <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-200 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[0_0_0_2px_var(--color-accent-soft)] [&>input::placeholder]:text-[var(--color-text-muted)]">
             <label>知识库名称</label>
             <input
               type="text"
@@ -195,43 +194,43 @@ export function KBSettingsDialog({ visible, kb, onClose, refreshKBList }: KBSett
             />
           </div>
 
-          <div className={styles.formGroup}>
+          <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-200 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[0_0_0_2px_var(--color-accent-soft)] [&>input::placeholder]:text-[var(--color-text-muted)]">
             <label>封面设置</label>
-            <label className={styles.settingsCoverUpload}>
+            <label className="w-full h-[140px] bg-[var(--color-bg-muted)] rounded-xl overflow-hidden relative cursor-pointer flex items-center justify-center border border-[var(--color-border)] transition-all duration-200 hover:border-[var(--color-accent)] group">
               <input
                 type="file"
                 accept="image/*"
-                style={{ display: 'none' }}
+                className="hidden"
                 onChange={handleCoverUpload}
                 disabled={loading}
               />
               {coverUrl ? (
-                <img src={coverUrl} alt="Cover" className={styles.settingsCoverImg} />
+                <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
               ) : (
-                <div style={{ color: '#aaa', fontSize: '13px' }}>尚未设置封面</div>
+                <div className="text-[#aaa] text-[13px]">尚未设置封面</div>
               )}
-              <div className={styles.settingsCoverOverlay}>
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 transition-opacity duration-200 text-white text-[14px] font-medium backdrop-blur-[2px] group-hover:opacity-100">
                 点击替换封面图
               </div>
             </label>
           </div>
 
-          <div className={styles.formGroup}>
+          <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-200 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[0_0_0_2px_var(--color-accent-soft)] [&>input::placeholder]:text-[var(--color-text-muted)]">
             <label>基础信息</label>
-            <div style={{ color: '#666', fontSize: '13px', padding: '10px 14px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #eee' }}>
-              节点数量：<span style={{ fontWeight: 600, color: '#333' }}>{kb.nodeCount ?? '未知'}</span>
+            <div className="text-[#666] text-[13px] py-2.5 px-3.5 bg-[#f8f9fa] rounded-lg border border-[#eee]">
+              节点数量：<span className="font-semibold text-[#333]">{kb.nodeCount ?? '未知'}</span>
             </div>
           </div>
 
-          <div className={styles.settingsFooter}>
-            <button className={styles.settingsBtnDelete} onClick={handleDelete} disabled={loading}>
+          <div className="mt-6 pt-5 border-t border-[var(--color-border-light)] flex justify-between items-center">
+            <button className="bg-transparent text-[var(--color-danger)] border border-transparent p-[8px_16px] rounded-lg text-[13px] font-medium cursor-pointer transition-all duration-200 hover:bg-[var(--color-danger-soft)] hover:border-[var(--color-danger)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleDelete} disabled={loading}>
               删除知识库
             </button>
-            <div className={styles.settingsFooterActions}>
-              <button className={styles.settingsBtnCancel} onClick={onClose} disabled={loading}>
+            <div className="flex gap-3">
+              <button className="bg-[var(--color-hover-bg)] text-[var(--color-text-secondary)] border-none p-[8px_20px] rounded-lg text-[14px] font-medium cursor-pointer transition-all duration-200 hover:bg-[var(--color-bg-muted)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onClose} disabled={loading}>
                 取消
               </button>
-              <button className={styles.settingsBtnSave} onClick={handleSave} disabled={loading || !name.trim()}>
+              <button className="bg-[var(--color-accent)] text-white border-none p-[8px_24px] rounded-lg text-[14px] font-semibold cursor-pointer transition-all duration-200 hover:bg-[var(--color-accent-hover)] disabled:opacity-60 disabled:cursor-not-allowed" onClick={handleSave} disabled={loading || !name.trim()}>
                 保存设置
               </button>
             </div>

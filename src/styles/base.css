@@ -1,3 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: var(--color-bg-app);
+    --foreground: var(--color-text-primary);
+
+    --card: var(--color-surface);
+    --card-foreground: var(--color-text-primary);
+
+    --popover: var(--color-surface);
+    --popover-foreground: var(--color-text-primary);
+
+    --primary: var(--color-primary);
+    --primary-foreground: var(--color-text-inverse);
+
+    --secondary: var(--color-bg-muted);
+    --secondary-foreground: var(--color-text-secondary);
+
+    --muted: var(--color-bg-muted);
+    --muted-foreground: var(--color-text-muted);
+
+    --accent: var(--color-accent);
+    --accent-foreground: var(--color-text-inverse);
+
+    --destructive: var(--color-danger);
+    --destructive-foreground: var(--color-text-inverse);
+
+    --border: var(--color-border);
+    --input: var(--color-border);
+    --ring: var(--color-accent-soft);
+
+    --radius: var(--radius-md);
+  }
+
+  .dark {
+    --background: var(--color-bg-app);
+    --foreground: var(--color-text-primary);
+
+    --card: var(--color-surface);
+    --card-foreground: var(--color-text-primary);
+
+    --popover: var(--color-surface);
+    --popover-foreground: var(--color-text-primary);
+
+    --primary: var(--color-primary);
+    --primary-foreground: var(--color-text-inverse);
+
+    --secondary: var(--color-bg-muted);
+    --secondary-foreground: var(--color-text-secondary);
+
+    --muted: var(--color-bg-muted);
+    --muted-foreground: var(--color-text-muted);
+
+    --accent: var(--color-accent);
+    --accent-foreground: var(--color-text-inverse);
+
+    --destructive: var(--color-danger);
+    --destructive-foreground: var(--color-text-inverse);
+
+    --border: var(--color-border);
+    --input: var(--color-border);
+    --ring: var(--color-accent-soft);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
 /* ===== TopoMind 基础样式 ===== */
 /* 注意：Tab 栏、页面容器等旧布局样式已移除（React 组件各自管理） */
 
@@ -9,17 +86,3 @@ body{display:flex;flex-direction:column}
 #root{width:100%;height:100%;display:flex;flex-direction:column}
 .react-flow__pane{cursor:default!important}
 .react-flow__pane.dragging{cursor:grabbing!important}
-
-/* ===== 通用按钮 ===== */
-.btn{height:32px;padding:0 16px;border-radius:7px;font-size:12px;cursor:pointer;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text-secondary);transition:all .12s;display:inline-flex;align-items:center}
-.btn:hover{background:var(--color-hover-bg)}
-.btn-primary{background:var(--color-primary);color:var(--color-text-inverse);border-color:var(--color-primary)}
-.btn-primary:hover{background:var(--color-primary-hover)}
-.btn-danger{background:var(--color-danger);color:#fff;border-color:var(--color-danger)}
-.btn-danger:hover{background:var(--color-danger-hover)}
-
-/* ===== 通用表单 ===== */
-.form-group{margin-bottom:12px}
-.form-group label{display:block;font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:4px}
-.form-group input,.form-group select{width:100%;height:34px;border:1px solid var(--color-border);border-radius:7px;padding:0 10px;font-size:12px;outline:none;background:var(--color-surface);color:var(--color-text-primary)}
-.form-group input:focus,.form-group select:focus{border-color:var(--color-accent)}

@@ -13,7 +13,6 @@ import {
   logUnsubscribe,
   logAction,
 } from '../../core/log-backend'
-import styles from './MonitorPage.module.css'
 
 // ============================================================
 // 常量
@@ -62,7 +61,7 @@ function highlightText(text: string, keyword: string): React.ReactNode {
   return (
     <>
       {text.slice(0, idx)}
-      <mark className={styles.highlight}>{text.slice(idx, idx + keyword.length)}</mark>
+      <mark className="bg-[#fef08a] text-[#854d0e] rounded-[2px] px-[1px]">{text.slice(idx, idx + keyword.length)}</mark>
       {text.slice(idx + keyword.length)}
     </>
   )
@@ -96,56 +95,56 @@ function Sidebar() {
   }
 
   return (
-    <aside className={styles.sidebar}>
-      <div className={styles.sidebarLogo}>
-        <span className={styles.logoIcon}>&#9673;</span>
+    <aside className="w-[220px] min-w-[220px] bg-[var(--color-surface)] border-r border-[var(--color-border-subtle)] flex flex-col text-[var(--color-text-secondary)]">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-3 text-[14px] font-semibold text-[var(--color-text-primary)] border-b border-[var(--color-border-subtle)] tracking-[0.3px]">
+        <span className="text-[10px] text-[#3498db]">&#9673;</span>
         <span>TopoMind</span>
       </div>
-      <nav className={styles.sidebarNav}>
+      <nav className="flex flex-col py-2 gap-0.5">
         <button
-          className={`${styles.navItem} ${activeTab === 'log' ? styles.navItemActive : ''}`}
+          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-150 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'log' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
           onClick={() => handleTabClick('log')}
         >
-          <span className={styles.navIcon}>&#9776;</span>
+          <span className="text-[14px] w-5 text-center shrink-0">&#9776;</span>
           <span>日志监控</span>
           {stats.error > 0 && (
-            <span className={styles.badge} style={{ background: '#e74c3c' }}>
+            <span className="ml-auto bg-[#e74c3c] text-white text-[10px] font-semibold py-[1px] px-[5px] rounded-lg min-w-[18px] text-center" style={{ background: '#e74c3c' }}>
               {stats.error}
             </span>
           )}
         </button>
         <button
-          className={`${styles.navItem} ${activeTab === 'performance' ? styles.navItemActive : ''}`}
+          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-150 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'performance' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
           onClick={() => handleTabClick('performance')}
         >
-          <span className={styles.navIcon}>&#9651;</span>
+          <span className="text-[14px] w-5 text-center shrink-0">&#9651;</span>
           <span>性能监控</span>
-          <span className={styles.badgePlaceholder} />
+          <span className="ml-auto w-[18px]" />
         </button>
       </nav>
-      <div className={styles.sidebarStats}>
-        <div className={styles.statTitle}>统计</div>
-        <div className={styles.statRow}>
-          <span className={styles.statDot} style={{ background: '#888' }} />
-          <span className={styles.statLabel}>DEBUG</span>
-          <span className={styles.statValue}>{stats.debug}</span>
+      <div className="mt-auto py-3 px-4 border-t border-white/10 bg-black/15">
+        <div className="text-[10px] uppercase tracking-[0.8px] text-[#6b7280] mb-2 font-medium">统计</div>
+        <div className="flex items-center gap-1.5 mb-1 text-[11px]">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#888' }} />
+          <span className="text-[#9aa5b1] flex-1">DEBUG</span>
+          <span className="text-[#c8d0d8] font-mono text-[11px]">{stats.debug}</span>
         </div>
-        <div className={styles.statRow}>
-          <span className={styles.statDot} style={{ background: '#3498db' }} />
-          <span className={styles.statLabel}>INFO</span>
-          <span className={styles.statValue}>{stats.info}</span>
+        <div className="flex items-center gap-1.5 mb-1 text-[11px]">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#3498db' }} />
+          <span className="text-[#9aa5b1] flex-1">INFO</span>
+          <span className="text-[#c8d0d8] font-mono text-[11px]">{stats.info}</span>
         </div>
-        <div className={styles.statRow}>
-          <span className={styles.statDot} style={{ background: '#f39c12' }} />
-          <span className={styles.statLabel}>WARN</span>
-          <span className={styles.statValue}>{stats.warn}</span>
+        <div className="flex items-center gap-1.5 mb-1 text-[11px]">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#f39c12' }} />
+          <span className="text-[#9aa5b1] flex-1">WARN</span>
+          <span className="text-[#c8d0d8] font-mono text-[11px]">{stats.warn}</span>
         </div>
-        <div className={styles.statRow}>
-          <span className={styles.statDot} style={{ background: '#e74c3c' }} />
-          <span className={styles.statLabel}>ERROR</span>
-          <span className={styles.statValue}>{stats.error}</span>
+        <div className="flex items-center gap-1.5 mb-1 text-[11px]">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#e74c3c' }} />
+          <span className="text-[#9aa5b1] flex-1">ERROR</span>
+          <span className="text-[#c8d0d8] font-mono text-[11px]">{stats.error}</span>
         </div>
-        <div className={styles.statTotal}>共 {stats.total} 条</div>
+        <div className="mt-2 pt-1.5 border-t border-white/5 text-[11px] text-[#6b7280] text-center">共 {stats.total} 条</div>
       </div>
     </aside>
   )
@@ -193,13 +192,13 @@ function FilterBar() {
   }, [setEntries, entries])
 
   return (
-    <div className={styles.filterBar}>
-      <div className={styles.filterLeft}>
+    <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-[#e0e4ea] gap-3 shrink-0 flex-wrap">
+      <div className="flex items-center gap-2.5 flex-wrap flex-1">
         {/* 关键词搜索 */}
-        <div className={styles.searchWrap}>
-          <span className={styles.searchIcon}>&#9906;</span>
+        <div className="relative flex items-center">
+          <span className="absolute left-2 text-[#999] text-[11px] pointer-events-none">&#9906;</span>
           <input
-            className={styles.searchInput}
+            className="h-7 pl-[26px] pr-[28px] border border-[#e0e4ea] rounded-md text-[12px] outline-none w-[220px] bg-[#f8f9fb] transition-all duration-150 focus:border-[#3498db] focus:bg-white focus:shadow-[0_0_0_2px_rgba(52,152,219,0.1)]"
             type="text"
             placeholder="搜索关键词..."
             value={keyword}
@@ -210,7 +209,7 @@ function FilterBar() {
             }}
           />
           {keyword && (
-            <button className={styles.searchClear} onClick={() => {
+            <button className="absolute right-1.5 bg-transparent border-none text-[#aaa] cursor-pointer text-[10px] p-0.5 flex items-center justify-center hover:text-[#e74c3c]" onClick={() => {
               logAction('监控:清除关键词', 'MonitorPage', { previousKeyword: keyword })
               setKeyword('')
             }}>
@@ -221,7 +220,7 @@ function FilterBar() {
 
         {/* 日期选择 */}
         <select
-          className={styles.dateSelect}
+          className="h-7 px-2 border border-[#e0e4ea] rounded-md text-[12px] outline-none bg-[#f8f9fb] cursor-pointer text-[#2d3436] focus:border-[#3498db]"
           value={selectedDate}
           onChange={(e) => {
             logAction('监控:日期选择', 'MonitorPage', { previousDate: selectedDate || '全部', newDate: e.target.value || '全部' })
@@ -237,13 +236,13 @@ function FilterBar() {
         </select>
 
         {/* 等级过滤 */}
-        <div className={styles.levelFilters}>
+        <div className="flex gap-1">
           {LEVELS.map((l) => (
             <button
               key={l}
-              className={`${styles.levelBtn} ${
+              className={`h-6 px-2 rounded font-semibold cursor-pointer border border-[#e0e4ea] bg-[#f8f9fb] text-[#888] transition-all duration-120 tracking-[0.3px] text-[10px] hover:bg-[#eee] ${
                 selectedLevels.length === 0 || selectedLevels.includes(l)
-                  ? styles.levelBtnActive
+                  ? 'bg-[color-mix(in_srgb,var(--level-color)_12%,transparent)] border-[var(--level-color)] text-[var(--level-color)]'
                   : ''
               }`}
               style={
@@ -259,9 +258,9 @@ function FilterBar() {
         </div>
       </div>
 
-      <div className={styles.filterRight}>
+      <div className="flex items-center gap-2 shrink-0">
         {/* 实时流开关 */}
-        <label className={styles.streamToggle}>
+        <label className="flex items-center gap-1 cursor-pointer text-[12px] text-[#555] select-none [&>input]:accent-[#3498db]">
           <input
             type="checkbox"
             checked={streaming}
@@ -274,10 +273,10 @@ function FilterBar() {
           <span>实时</span>
         </label>
 
-        <button className={styles.actionBtn} onClick={handleRefresh} title="刷新">
+        <button className="w-7 h-7 flex items-center justify-center border border-[#e0e4ea] rounded-md bg-[#f8f9fb] text-[#555] cursor-pointer text-[13px] transition-all duration-120 hover:bg-[#eee] hover:border-[#ccc]" onClick={handleRefresh} title="刷新">
           &#8635;
         </button>
-        <button className={`${styles.actionBtn} ${styles.actionBtnDanger}`} onClick={handleClear} title="清空">
+        <button className={`w-7 h-7 flex items-center justify-center border border-[#e0e4ea] rounded-md bg-[#f8f9fb] text-[#555] cursor-pointer text-[13px] transition-all duration-120 hover:bg-[#eee] hover:border-[#ccc] hover:!bg-[#fee2e2] hover:!border-[#e74c3c] hover:!text-[#e74c3c]`} onClick={handleClear} title="清空">
           &#10005;
         </button>
       </div>
@@ -299,18 +298,18 @@ function LogRow({ entry, selected, onClick, keyword }: LogRowProps) {
 
   return (
     <div
-      className={`${styles.logRow} ${selected ? styles.logRowSelected : ''} ${
-        level === 'ERROR' ? styles.logRowError : level === 'WARN' ? styles.logRowWarn : ''
+      className={`flex items-center px-3 py-1 border-b border-[#f0f2f5] cursor-pointer transition-colors duration-[80ms] min-w-0 gap-0 hover:bg-[#f8f9fb] ${selected ? '!bg-[#e8f4fd] border-l-2 border-l-[#3498db] !pl-[10px]' : ''} ${
+        level === 'ERROR' ? 'bg-[#fef5f5] hover:!bg-[#fee2e2]' : level === 'WARN' ? 'bg-[#fffbf0] hover:!bg-[#fef3e2]' : ''
       }`}
       onClick={onClick}
     >
-      <span className={styles.logTime}>{formatTimestamp(entry.timestamp)}</span>
-      <span className={styles.logLevel} style={{ color: levelColor }}>
+      <span className="w-[90px] min-w-[90px] shrink-0 font-mono text-[11px] text-[#6b7280]">{formatTimestamp(entry.timestamp)}</span>
+      <span className="w-[52px] min-w-[52px] shrink-0 text-[10px] font-bold tracking-[0.3px]" style={{ color: levelColor }}>
         {level.padEnd(5)}
       </span>
-      <span className={styles.logModule}>{highlightText(entry.module || 'Unknown', keyword)}</span>
-      <span className={styles.logAction}>{highlightText(entry.action || '—', keyword)}</span>
-      <span className={styles.logMessage}>{highlightText(entry.message || '', keyword)}</span>
+      <span className="w-[100px] min-w-[80px] shrink-0 text-[11px] font-medium text-[#1a3a5c] overflow-hidden text-ellipsis whitespace-nowrap">{highlightText(entry.module || 'Unknown', keyword)}</span>
+      <span className="w-[140px] min-w-[100px] shrink-0 text-[11px] text-[#8b5cf6] overflow-hidden text-ellipsis whitespace-nowrap">{highlightText(entry.action || '—', keyword)}</span>
+      <span className="flex-1 min-w-0 text-[12px] text-[#374151] overflow-hidden text-ellipsis whitespace-nowrap">{highlightText(entry.message || '', keyword)}</span>
     </div>
   )
 }
@@ -353,28 +352,28 @@ function LogList() {
   })
 
   return (
-    <div className={styles.logList}>
-      <div className={styles.logHeader}>
-        <span className={styles.colTime}>时间</span>
-        <span className={styles.colLevel}>等级</span>
-        <span className={styles.colModule}>模块</span>
-        <span className={styles.colAction}>动作</span>
-        <span className={styles.colMessage}>消息</span>
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
+      <div className="flex items-center px-3 py-1.5 bg-[#f8f9fb] border-b border-[#e0e4ea] text-[11px] font-semibold text-[#6b7280] tracking-[0.3px] shrink-0 select-none">
+        <span className="w-[90px] min-w-[90px] shrink-0">时间</span>
+        <span className="w-[52px] min-w-[52px] shrink-0 text-[10px] font-bold tracking-[0.3px]">等级</span>
+        <span className="w-[100px] min-w-[80px] shrink-0">模块</span>
+        <span className="w-[140px] min-w-[100px] shrink-0">动作</span>
+        <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">消息</span>
       </div>
-      <div className={styles.logBody}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-[#f0f2f5] [&::-webkit-scrollbar-thumb]:bg-[#d0d4da] [&::-webkit-scrollbar-thumb]:rounded-[3px] hover:[&::-webkit-scrollbar-thumb]:bg-[#aaa]">
         {sorted.length === 0 ? (
-          <div className={styles.emptyState}>
+          <div className="flex flex-col items-center justify-center py-[60px] px-5 text-[#aaa] text-[14px] text-center">
             {entries.length === 0 ? (
               <>
-                <span className={styles.emptyIcon}>&#128269;</span>
+                <span className="text-[40px] mb-3 block opacity-40">&#128269;</span>
                 <p>暂无日志</p>
-                <p className={styles.emptyHint}>在主应用中操作，知识将实时显示在这里</p>
+                <p className="text-[12px] text-[#bbb] mt-1">在主应用中操作，知识将实时显示在这里</p>
               </>
             ) : (
               <>
-                <span className={styles.emptyIcon}>&#8987;</span>
+                <span className="text-[40px] mb-3 block opacity-40">&#8987;</span>
                 <p>没有匹配的日志</p>
-                <p className={styles.emptyHint}>尝试调整筛选条件</p>
+                <p className="text-[12px] text-[#bbb] mt-1">尝试调整筛选条件</p>
               </>
             )}
           </div>
@@ -404,8 +403,8 @@ function DetailPanel() {
 
   if (!selectedEntry) {
     return (
-      <div className={styles.detailPanel}>
-        <div className={styles.detailEmpty}>选中一条日志查看详情</div>
+      <div className="border-t border-[#e0e4ea] bg-white max-h-[280px] overflow-y-auto shrink-0 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-[#f0f2f5] [&::-webkit-scrollbar-thumb]:bg-[#d0d4da] [&::-webkit-scrollbar-thumb]:rounded-[3px]">
+        <div className="p-6 text-[#aaa] text-[12px] text-center">选中一条日志查看详情</div>
       </div>
     )
   }
@@ -419,22 +418,22 @@ function DetailPanel() {
   }
 
   return (
-    <div className={styles.detailPanel}>
-      <div className={styles.detailHeader}>
+    <div className="border-t border-[#e0e4ea] bg-white max-h-[280px] overflow-y-auto shrink-0 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-[#f0f2f5] [&::-webkit-scrollbar-thumb]:bg-[#d0d4da] [&::-webkit-scrollbar-thumb]:rounded-[3px]">
+      <div className="flex items-center px-4 py-2 bg-[#f8f9fb] border-b border-[#e0e4ea] gap-2 sticky top-0">
         <span
-          className={styles.detailLevel}
+          className="text-[11px] font-bold tracking-[0.5px]"
           style={{ color: LEVEL_COLORS[selectedEntry.level || 'INFO'] }}
         >
           {selectedEntry.level || 'INFO'}
         </span>
-        <span className={styles.detailTitle}>
+        <span className="flex-1 text-[12px] font-semibold text-[#2d3436] overflow-hidden text-ellipsis whitespace-nowrap">
           {selectedEntry.action || selectedEntry.module || '日志条目'}
         </span>
-        <div className={styles.detailActions}>
-          <button className={styles.detailBtn} onClick={handleCopy}>
+        <div className="flex gap-1 shrink-0">
+          <button className="h-6 px-2 border border-[#e0e4ea] rounded bg-white text-[11px] cursor-pointer text-[#555] transition-all duration-120 hover:bg-[#f0f2f5]" onClick={handleCopy}>
             {copied ? '已复制!' : '复制'}
           </button>
-          <button className={styles.detailBtn} onClick={() => {
+          <button className="h-6 px-2 border border-[#e0e4ea] rounded bg-white text-[11px] cursor-pointer text-[#555] transition-all duration-120 hover:bg-[#f0f2f5]" onClick={() => {
             logAction('监控:关闭详情', 'MonitorPage', { closedEntryId: selectedEntry.id })
             setSelectedEntry(null)
           }}>
@@ -442,41 +441,41 @@ function DetailPanel() {
           </button>
         </div>
       </div>
-      <div className={styles.detailBody}>
-        <div className={styles.detailRow}>
-          <span className={styles.detailLabel}>时间</span>
-          <span className={styles.detailValue}>{formatDate(selectedEntry.timestamp || '')}</span>
+      <div className="p-3 px-4 flex flex-col gap-1.5">
+        <div className="flex items-start gap-3">
+          <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px] pt-[1px] shrink-0">时间</span>
+          <span className="text-[12px] text-[#374151] break-all">{formatDate(selectedEntry.timestamp || '')}</span>
         </div>
-        <div className={styles.detailRow}>
-          <span className={styles.detailLabel}>ID</span>
-          <span className={styles.detailValue} style={{ fontFamily: 'monospace', fontSize: 11 }}>
+        <div className="flex items-start gap-3">
+          <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px] pt-[1px] shrink-0">ID</span>
+          <span className="text-[12px] text-[#374151] break-all" style={{ fontFamily: 'monospace', fontSize: 11 }}>
             {selectedEntry.id || '—'}
           </span>
         </div>
-        <div className={styles.detailRow}>
-          <span className={styles.detailLabel}>模块</span>
-          <span className={styles.detailValue}>{selectedEntry.module || '—'}</span>
+        <div className="flex items-start gap-3">
+          <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px] pt-[1px] shrink-0">模块</span>
+          <span className="text-[12px] text-[#374151] break-all">{selectedEntry.module || '—'}</span>
         </div>
-        <div className={styles.detailRow}>
-          <span className={styles.detailLabel}>动作</span>
-          <span className={styles.detailValue}>{selectedEntry.action || '—'}</span>
+        <div className="flex items-start gap-3">
+          <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px] pt-[1px] shrink-0">动作</span>
+          <span className="text-[12px] text-[#374151] break-all">{selectedEntry.action || '—'}</span>
         </div>
         {selectedEntry.func && (
-          <div className={styles.detailRow}>
-            <span className={styles.detailLabel}>函数</span>
-            <span className={styles.detailValue} style={{ fontFamily: 'monospace' }}>
+          <div className="flex items-start gap-3">
+            <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px] pt-[1px] shrink-0">函数</span>
+            <span className="text-[12px] text-[#374151] break-all" style={{ fontFamily: 'monospace' }}>
               {selectedEntry.file}:{selectedEntry.line} {selectedEntry.func}
             </span>
           </div>
         )}
-        <div className={styles.detailRow}>
-          <span className={styles.detailLabel}>消息</span>
-          <span className={styles.detailValue}>{selectedEntry.message || '—'}</span>
+        <div className="flex items-start gap-3">
+          <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px] pt-[1px] shrink-0">消息</span>
+          <span className="text-[12px] text-[#374151] break-all">{selectedEntry.message || '—'}</span>
         </div>
         {selectedEntry.params && (
-          <div className={styles.detailRow} style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-            <span className={styles.detailLabel}>参数</span>
-            <pre className={styles.detailParams}>
+          <div className="flex items-start gap-3" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+            <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px] pt-[1px] shrink-0">参数</span>
+            <pre className="mt-1 p-2 bg-[#f8f9fb] rounded-md font-mono text-[11px] text-[#374151] leading-[1.6] overflow-x-auto whitespace-pre w-full border border-[#e8ecf0]">
               {typeof selectedEntry.params === 'string'
                 ? selectedEntry.params
                 : JSON.stringify(selectedEntry.params, null, 2)}
@@ -484,9 +483,9 @@ function DetailPanel() {
           </div>
         )}
         {(selectedEntry.traceId || selectedEntry.spanId || selectedEntry.parentId) && (
-          <div className={styles.detailRow}>
-            <span className={styles.detailLabel}>链路</span>
-            <span className={styles.detailValue} style={{ fontFamily: 'monospace', fontSize: 11 }}>
+          <div className="flex items-start gap-3">
+            <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px] pt-[1px] shrink-0">链路</span>
+            <span className="text-[12px] text-[#374151] break-all" style={{ fontFamily: 'monospace', fontSize: 11 }}>
               {selectedEntry.traceId && `trace=${selectedEntry.traceId}`}
               {selectedEntry.spanId && ` span=${selectedEntry.spanId}`}
               {selectedEntry.parentId && ` parent=${selectedEntry.parentId}`}
@@ -494,9 +493,9 @@ function DetailPanel() {
           </div>
         )}
         {selectedEntry.meta && (
-          <div className={styles.detailRow} style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-            <span className={styles.detailLabel}>元数据</span>
-            <pre className={styles.detailParams}>
+          <div className="flex items-start gap-3" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+            <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px] pt-[1px] shrink-0">元数据</span>
+            <pre className="mt-1 p-2 bg-[#f8f9fb] rounded-md font-mono text-[11px] text-[#374151] leading-[1.6] overflow-x-auto whitespace-pre w-full border border-[#e8ecf0]">
               {JSON.stringify(selectedEntry.meta, null, 2)}
             </pre>
           </div>
@@ -509,11 +508,11 @@ function DetailPanel() {
 /** 性能监控页面（预留） */
 function PerformanceTab() {
   return (
-    <div className={styles.perfContainer}>
-      <div className={styles.perfPlaceholder}>
-        <span className={styles.emptyIcon}>&#9651;</span>
+    <div className="flex-1 flex items-center justify-center">
+      <div className="flex flex-col items-center py-[60px] px-5 text-[#aaa] text-[14px] text-center">
+        <span className="text-[40px] mb-3 block opacity-40">&#9651;</span>
         <p>性能监控</p>
-        <p className={styles.emptyHint}>预留功能，后续版本将集成性能指标可视化</p>
+        <p className="text-[12px] text-[#bbb] mt-1">预留功能，后续版本将集成性能指标可视化</p>
       </div>
     </div>
   )
@@ -565,13 +564,13 @@ export default function MonitorPage() {
   }, [appendEntries, streaming])
 
   return (
-    <div className={styles.monitorRoot}>
+    <div className="flex w-full h-full bg-[var(--color-bg-app)] font-sans text-[13px] text-[var(--color-text-primary)]">
       <Sidebar />
-      <div className={styles.mainArea}>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {activeTab === 'log' ? (
           <>
             <FilterBar />
-            <div className={styles.contentArea}>
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               <LogList />
               <DetailPanel />
             </div>

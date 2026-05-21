@@ -2,7 +2,6 @@ import { memo, useEffect, useMemo, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useStorage } from '../../core/storage'
-import styles from './MarkdownViewer.module.css'
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -87,11 +86,11 @@ function applyMermaidMap(html: string, mermaidMap?: Record<string, string>): str
 
     const container = doc.createElement('div')
     if (rendered) {
-      container.className = styles.mermaid
+      container.className = "max-w-full overflow-auto rounded-md bg-[var(--color-surface)] p-2"
       container.innerHTML = rendered
     } else {
-      container.className = styles.mermaidLoading
-      container.innerHTML = '<div class="' + styles.mermaidLoadingSpinner + '"></div><span>图表渲染中...</span>'
+      container.className = "flex items-center justify-center gap-2 py-8 px-4 bg-[var(--color-bg)] rounded-md border border-dashed border-[var(--color-border)] text-[var(--color-text-muted)] text-[13px] my-2.5"
+      container.innerHTML = '<div class="' + "w-4 h-4 border-2 border-[var(--color-border-strong)] border-t-[var(--color-accent)] rounded-full animate-[spin_0.8s_linear_infinite]" + '"></div><span>图表渲染中...</span>'
     }
     code.parentElement?.replaceWith(container)
   })
@@ -184,7 +183,7 @@ export default memo(function MarkdownViewer({ content, compact = false, classNam
             const { svg } = await mermaid.render(id, source)
             return [source, DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })] as const
           } catch (error) {
-            return [source, `<pre class="${styles.mermaidError}">${escapeHtml(error instanceof Error ? error.message : 'Mermaid 渲染失败')}</pre>`] as const
+            return [source, `<pre class="border border-[var(--color-danger)] !bg-[var(--color-danger-soft)] !text-[var(--color-danger)] whitespace-pre-wrap p-2 rounded-md">${escapeHtml(error instanceof Error ? error.message : 'Mermaid 渲染失败')}</pre>`] as const
           }
         })
       ).then((entries) => {
@@ -204,7 +203,7 @@ export default memo(function MarkdownViewer({ content, compact = false, classNam
 
   return (
     <div
-      className={[styles.viewer, compact ? styles.compact : '', className ?? ''].filter(Boolean).join(' ')}
+      className={["prose prose-sm max-w-none break-words text-[var(--color-text-primary)] leading-[1.55] prose-p:my-2.5 prose-headings:mt-3 prose-headings:mb-2 prose-a:text-[var(--color-accent)] prose-a:no-underline hover:prose-a:underline prose-img:rounded-md prose-img:m-0 prose-code:bg-[var(--color-bg-muted)] prose-code:px-1 prose-code:py-[1px] prose-code:rounded prose-code:font-mono prose-code:text-[0.92em] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[#0f172a] prose-pre:text-[#e5e7eb] prose-pre:p-2.5 prose-pre:rounded-md prose-blockquote:border-l-[3px] prose-blockquote:border-[var(--color-border-strong)] prose-blockquote:text-[var(--color-text-secondary)] prose-blockquote:pl-2.5 prose-blockquote:font-normal prose-blockquote:not-italic prose-table:block prose-table:overflow-x-auto prose-th:border prose-th:border-[var(--color-border)] prose-th:px-2 prose-th:py-1 prose-td:border prose-td:border-[var(--color-border)] prose-td:px-2 prose-td:py-1 prose-strong:text-[var(--color-text-primary)] prose-strong:font-semibold first:*:mt-0 last:*:mb-0", compact ? "!text-[11px] !leading-[1.42] prose-headings:!text-[1em] prose-headings:!mt-2 prose-headings:!mb-1 prose-p:!mb-1.5 prose-pre:!p-1.5 prose-ul:!mb-1.5 prose-ol:!mb-1.5 prose-blockquote:!mb-1.5 prose-table:!mb-1.5 [&_.max-w-full.overflow-auto.rounded-md.bg-\\[var\\(--color-surface\\)\\].p-2]:!p-1" : '', className ?? ''].filter(Boolean).join(' ')}
       dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
     />
   )

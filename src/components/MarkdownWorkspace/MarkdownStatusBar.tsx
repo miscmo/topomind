@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import styles from './MarkdownWorkspace.module.css'
 
 interface MarkdownStatusBarProps {
   value: string
@@ -34,17 +33,17 @@ export const MarkdownStatusBar = memo(function MarkdownStatusBar({
   const charCount = value.length
 
   return (
-    <div className={styles.statusbar}>
-      <div className={styles.statusLeft}>
+    <div className="flex justify-between items-center py-1.5 px-3 text-[11px] text-[#64748b] !text-[var(--color-text-muted)] border-t border-[#e2e8f0] !border-[var(--color-border)] bg-white/92 !bg-[color-mix(in_srgb,var(--color-bg)_92%,transparent)]">
+      <div className="flex gap-4 items-center">
         <span>
           <span 
-            className={styles.statusIndicator}
+            className="inline-block w-2 h-2 rounded-full mr-1.5"
             style={{ backgroundColor: getStatusColor() }} 
           />
           {getStatusText()}
         </span>
       </div>
-      <div className={styles.statusRight}>
+      <div className="flex gap-4 items-center">
         <span>{charCount} 字符</span>
         <span>{wordCount} 词</span>
       </div>

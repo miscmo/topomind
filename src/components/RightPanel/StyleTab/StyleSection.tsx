@@ -7,7 +7,7 @@ import { useStorage } from '../../../core/storage'
 import type { KnowledgeNodeStyle } from '../../../types'
 import type { NodeDimensionChange } from '@xyflow/react'
 import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits } from '../../../stores/uiStoreTypes'
-import styles from './StyleTab.module.css'
+
 
 const COLOR_PRESETS = ['#7f8c8d', '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6']
 
@@ -68,16 +68,16 @@ function CollapsibleBlock({
   const isExpanded = expandedState[expandedKey] ?? defaultExpanded
 
   return (
-    <div className={styles.styleSubBlock}>
+    <div className="border-b border-[var(--color-border-subtle)] last-of-type:border-none">
       <div 
-        className={`${styles.styleTitle} ${!isExpanded ? styles.collapsed : ''}`}
+        className={`text-[13px] font-semibold text-[var(--color-text-primary)] m-0 flex items-center justify-between cursor-pointer select-none px-4 py-3 bg-transparent transition-colors duration-200 hover:bg-[var(--color-hover-bg)]`}
         onClick={() => onToggle(expandedKey)}
       >
         <span>{title}</span>
-        <span className={styles.collapseIcon}>▼</span>
+        <span className={`text-[10px] leading-none text-[var(--color-text-muted)] transition-all duration-200 inline-flex items-center justify-center self-center w-6 h-6 rounded-md hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-secondary)] ${!isExpanded ? '-rotate-90' : ''}` }>▼</span>
       </div>
-      <div className={`${styles.styleContent} ${!isExpanded ? styles.collapsed : ''}`}>
-        {hint && <div className={styles.styleHint}>{hint}</div>}
+      <div className={`px-4 pb-4 min-h-0 ${!isExpanded ? 'hidden' : ''}` }>
+        {hint && <div className="text-[12px] text-[var(--color-text-muted)] m-0 mb-4 leading-[1.4] bg-[var(--color-bg)] py-2 px-3 rounded-md border-l-[3px] border-[var(--color-accent)]">{hint}</div>}
         {children}
       </div>
     </div>
@@ -98,25 +98,24 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
   }
 
   return (
-    <div className={styles.colorPickerContainer}>
-      <div className={styles.colorPickerWrapper}>
-        <div className={styles.colorPreview} style={{ backgroundColor: value || '#ffffff' }}>
-          <input
-            type="color"
+    <div className="flex flex-col gap-[6px] w-full">
+      <div className="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border-strong)] rounded-md p-[2px] h-8 box-border w-full">
+        <div className="w-[26px] h-[26px] rounded border border-black/10 overflow-hidden relative" style={{ backgroundColor: value || '#ffffff' }}>
+          <input className="absolute -top-2.5 -left-2.5 w-[50px] h-[50px] p-0 border-none cursor-pointer opacity-0" type="color"
             value={value || '#ffffff'}
             onChange={(e) => onChange(e.target.value)}
             onBlur={handleBlur}
           />
         </div>
-        <div className={styles.colorValue}>{value || '无'}</div>
+        <div className="font-mono text-[11px] text-[var(--color-text-secondary)] flex-1 uppercase select-all">{value || '无'}</div>
       </div>
       
-      <div className={styles.quickColorsRow}>
-        <div className={styles.quickColorsGroup}>
+      <div className="flex items-center flex-wrap gap-[6px]">
+        <div className="flex items-center flex-wrap gap-1">
           {COLOR_PRESETS.slice(0, 6).map(c => (
             <button 
                key={c} 
-               className={styles.quickColorSwatch} 
+               className="w-4 h-4 rounded border border-black/10 cursor-pointer p-0 transition-all duration-100 hover:scale-[1.15] hover:shadow-[0_2px_4px_rgba(0,0,0,0.1)]" 
                style={{ backgroundColor: c }}
                onClick={() => handleChange(c)}
                title={c}
@@ -125,12 +124,12 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
         </div>
         {recentColors.length > 0 && (
           <>
-            <div className={styles.quickColorsDivider} />
-            <div className={styles.quickColorsGroup}>
+            <div className="w-px h-3 bg-[var(--color-border-strong)] mx-[2px]" />
+            <div className="flex items-center flex-wrap gap-1">
               {recentColors.slice(0, 6).map(c => (
                 <button 
                   key={c} 
-                  className={styles.quickColorSwatch} 
+                  className="w-4 h-4 rounded border border-black/10 cursor-pointer p-0 transition-all duration-100 hover:scale-[1.15] hover:shadow-[0_2px_4px_rgba(0,0,0,0.1)]" 
                   style={{ backgroundColor: c }}
                   onClick={() => handleChange(c)}
                   title={`最近使用: ${c}`}
@@ -154,11 +153,11 @@ function SegmentedControl({
   onChange: (v: any) => void;
 }) {
   return (
-    <div className={styles.segmentedControl}>
+    <div className="flex bg-[var(--color-bg-muted)] rounded-md p-[2px] w-full box-border">
       {options.map((opt, i) => (
         <button
           key={i}
-          className={`${styles.segmentBtn} ${value === opt.value ? styles.active : ''}`}
+          className={`flex-1 border-none py-1 text-[12px] font-medium rounded cursor-pointer transition-all duration-200 text-center ${value === opt.value ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]' : 'bg-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}` }
           onClick={() => onChange(opt.value)}
         >
           {opt.label}
@@ -178,11 +177,11 @@ function ToggleGroup({
   onChange: (v: any) => void;
 }) {
   return (
-    <div className={styles.toggleGroup}>
+    <div className="flex gap-2 w-full">
       {options.map((opt, i) => (
         <button
           key={i}
-          className={`${styles.toggleBtn} ${value === opt.value ? styles.active : ''}`}
+          className={`flex-1 flex items-center justify-center gap-[6px] h-8 border rounded-md text-[12px] font-medium cursor-pointer transition-all duration-200 ${value === opt.value ? 'bg-[var(--color-selected-bg)] border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]'}` }
           onClick={() => onChange(opt.value)}
         >
           {opt.label}
@@ -366,10 +365,10 @@ export default memo(function StyleSection() {
   }
 
   return (
-    <div className={styles.styleSection}>
-      <div className={styles.styleWrapper}>
-        <div className={styles.styleBlock}>
-          <div className={styles.styleCategoryTitle}>节点卡片样式</div>
+    <div className="flex-1 overflow-y-auto p-4 bg-[var(--color-bg)] min-h-0">
+      <div className="flex flex-col gap-4 max-w-[380px] mx-auto w-full mb-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-0 shadow-[var(--shadow-sm)] overflow-hidden">
+          <div className="text-[13px] font-bold text-[var(--color-primary)] px-4 py-3 m-0 bg-[var(--color-bg)] border-b border-[var(--color-border-light)] uppercase tracking-[0.5px]">节点卡片样式</div>
         
           <CollapsibleBlock
             title="全局设置"
@@ -378,47 +377,42 @@ export default memo(function StyleSection() {
           expandedState={expandedBlocks}
           onToggle={toggleBlock}
         >
-          <div className={styles.styleGrid}>
-            <div className={styles.styleRow}>
-              <label>最小宽度</label>
-              <input
-                type="number"
+          <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">最小宽度</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={1}
                 value={nodeSizeLimits.minWidth}
                 onChange={(e) => updateNodeSizeLimits('minWidth', e.target.value)}
               />
             </div>
-            <div className={styles.styleRow}>
-              <label>最小高度</label>
-              <input
-                type="number"
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">最小高度</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={1}
                 value={nodeSizeLimits.minHeight}
                 onChange={(e) => updateNodeSizeLimits('minHeight', e.target.value)}
               />
             </div>
-            <div className={styles.styleRow}>
-              <label>最大宽度</label>
-              <input
-                type="number"
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">最大宽度</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={nodeSizeLimits.minWidth}
                 value={nodeSizeLimits.maxWidth}
                 onChange={(e) => updateNodeSizeLimits('maxWidth', e.target.value)}
               />
             </div>
-            <div className={styles.styleRow}>
-              <label>最大高度</label>
-              <input
-                type="number"
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">最大高度</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={nodeSizeLimits.minHeight}
                 value={nodeSizeLimits.maxHeight}
                 onChange={(e) => updateNodeSizeLimits('maxHeight', e.target.value)}
               />
             </div>
-            <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-              <label>徽章大小</label>
-              <input
-                type="number"
+            <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">徽章大小</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={8}
                 max={28}
                 value={nodeBadgeSize}
@@ -435,21 +429,19 @@ export default memo(function StyleSection() {
           expandedState={expandedBlocks}
           onToggle={toggleBlock}
         >
-          <div className={styles.styleGrid}>
-            <div className={styles.styleRow}>
-              <label>默认宽度</label>
-              <input
-                type="number"
+          <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">默认宽度</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={nodeSizeLimits.minWidth}
                 max={nodeSizeLimits.maxWidth}
                 value={defaultNodeSize.width}
                 onChange={(e) => updateDefaultNodeSize({ width: Number(e.target.value) })}
               />
             </div>
-            <div className={styles.styleRow}>
-              <label>默认高度</label>
-              <input
-                type="number"
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">默认高度</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={nodeSizeLimits.minHeight}
                 max={nodeSizeLimits.maxHeight}
                 value={defaultNodeSize.height}
@@ -457,8 +449,8 @@ export default memo(function StyleSection() {
               />
             </div>
             
-            <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-              <label>排版样式</label>
+            <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">排版样式</label>
               <ToggleGroup
                 options={[
                   { label: 'B', value: 'bold' },
@@ -475,62 +467,58 @@ export default memo(function StyleSection() {
               />
             </div>
 
-            <div className={styles.styleRow}>
-              <label>Header字体</label>
-              <input
-                type="number"
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">Header字体</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={8}
                 max={28}
                 value={defaultNodeStyle.headerFontSize}
                 onChange={(e) => applyNumberToDefaultNode('headerFontSize', e.target.value)}
               />
             </div>
-            <div className={styles.styleRow}>
-              <label>Body字体</label>
-              <input
-                type="number"
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">Body字体</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={8}
                 max={24}
                 value={defaultNodeStyle.bodyFontSize}
                 onChange={(e) => applyNumberToDefaultNode('bodyFontSize', e.target.value)}
               />
             </div>
-            <div className={styles.styleRow}>
-              <label>文字颜色</label>
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">文字颜色</label>
               <ColorPicker
                 value={defaultNodeStyle.headerColor || ''}
                 onChange={(v) => updateDefaultNodeStyle({ headerColor: v })}
               />
             </div>
-            <div className={styles.styleRow}>
-              <label>背景颜色</label>
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">背景颜色</label>
               <ColorPicker
                 value={defaultNodeStyle.headerBackgroundColor || ''}
                 onChange={(v) => updateDefaultNodeStyle({ headerBackgroundColor: v })}
               />
             </div>
-            <div className={styles.styleRow}>
-              <label>边框粗细</label>
-              <input
-                type="number"
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">边框粗细</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={0}
                 max={8}
                 value={defaultNodeStyle.borderWidth}
                 onChange={(e) => applyNumberToDefaultNode('borderWidth', e.target.value)}
               />
             </div>
-            <div className={styles.styleRow}>
-              <label>卡片圆角</label>
-              <input
-                type="number"
+            <div className="flex flex-col gap-[6px] mb-0">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">卡片圆角</label>
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={0}
                 max={32}
                 value={defaultNodeStyle.borderRadius}
                 onChange={(e) => applyNumberToDefaultNode('borderRadius', e.target.value)}
               />
             </div>
-            <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-              <label>边框颜色</label>
+            <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">边框颜色</label>
               <ColorPicker
                 value={defaultNodeStyle.borderColor || ''}
                 onChange={(v) => updateDefaultNodeStyle({ borderColor: v })}
@@ -548,11 +536,10 @@ export default memo(function StyleSection() {
             expandedState={expandedBlocks}
             onToggle={toggleBlock}
           >
-            <div className={styles.styleGrid}>
-              <div className={styles.styleRow}>
-                <label>宽度</label>
-                <input
-                  type="number"
+            <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+              <div className="flex flex-col gap-[6px] mb-0">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">宽度</label>
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={nodeSizeLimits.minWidth}
                   max={nodeSizeLimits.maxWidth}
                   value={currentNodeWidth}
@@ -560,10 +547,9 @@ export default memo(function StyleSection() {
                   placeholder={isMultiSelection ? "多选..." : ""}
                 />
               </div>
-              <div className={styles.styleRow}>
-                <label>高度</label>
-                <input
-                  type="number"
+              <div className="flex flex-col gap-[6px] mb-0">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">高度</label>
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={nodeSizeLimits.minHeight}
                   max={nodeSizeLimits.maxHeight}
                   value={currentNodeHeight}
@@ -572,8 +558,8 @@ export default memo(function StyleSection() {
                 />
               </div>
               
-              <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-                <label>排版样式</label>
+              <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">排版样式</label>
                 <ToggleGroup
                   options={[
                     { label: 'B', value: 'bold' },
@@ -590,10 +576,9 @@ export default memo(function StyleSection() {
                 />
               </div>
 
-              <div className={styles.styleRow}>
-                <label>Header字体</label>
-                <input
-                  type="number"
+              <div className="flex flex-col gap-[6px] mb-0">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">Header字体</label>
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={8}
                   max={28}
                   value={currentNodeStyle.headerFontSize || ''}
@@ -601,10 +586,9 @@ export default memo(function StyleSection() {
                   placeholder={isMultiSelection ? "多选..." : ""}
                 />
               </div>
-              <div className={styles.styleRow}>
-                <label>Body字体</label>
-                <input
-                  type="number"
+              <div className="flex flex-col gap-[6px] mb-0">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">Body字体</label>
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={8}
                   max={24}
                   value={currentNodeStyle.bodyFontSize || ''}
@@ -612,24 +596,23 @@ export default memo(function StyleSection() {
                   placeholder={isMultiSelection ? "多选..." : ""}
                 />
               </div>
-              <div className={styles.styleRow}>
-                <label>文字颜色</label>
+              <div className="flex flex-col gap-[6px] mb-0">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">文字颜色</label>
                 <ColorPicker
                   value={currentNodeStyle.headerColor || ''}
                   onChange={(v) => applyToSelectedNode({ headerColor: v })}
                 />
               </div>
-              <div className={styles.styleRow}>
-                <label>背景颜色</label>
+              <div className="flex flex-col gap-[6px] mb-0">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">背景颜色</label>
                 <ColorPicker
                   value={currentNodeStyle.headerBackgroundColor || ''}
                   onChange={(v) => applyToSelectedNode({ headerBackgroundColor: v })}
                 />
               </div>
-              <div className={styles.styleRow}>
-                <label>边框粗细</label>
-                <input
-                  type="number"
+              <div className="flex flex-col gap-[6px] mb-0">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">边框粗细</label>
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={0}
                   max={8}
                   value={currentNodeStyle.borderWidth !== undefined ? currentNodeStyle.borderWidth : ''}
@@ -637,10 +620,9 @@ export default memo(function StyleSection() {
                   placeholder={isMultiSelection ? "多选..." : ""}
                 />
               </div>
-              <div className={styles.styleRow}>
-                <label>卡片圆角</label>
-                <input
-                  type="number"
+              <div className="flex flex-col gap-[6px] mb-0">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">卡片圆角</label>
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={0}
                   max={32}
                   value={currentNodeStyle.borderRadius !== undefined ? currentNodeStyle.borderRadius : ''}
@@ -648,8 +630,8 @@ export default memo(function StyleSection() {
                   placeholder={isMultiSelection ? "多选..." : ""}
                 />
               </div>
-              <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-                <label>边框颜色</label>
+              <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">边框颜色</label>
                 <ColorPicker
                   value={currentNodeStyle.borderColor || ''}
                   onChange={(v) => applyToSelectedNode({ borderColor: v })}
@@ -660,9 +642,9 @@ export default memo(function StyleSection() {
         )}
       </div>
 
-      <div className={styles.styleWrapper}>
-        <div className={styles.styleBlock}>
-          <div className={styles.styleCategoryTitle}>连线样式</div>
+      <div className="flex flex-col gap-4 max-w-[380px] mx-auto w-full mb-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-0 shadow-[var(--shadow-sm)] overflow-hidden">
+          <div className="text-[13px] font-bold text-[var(--color-primary)] px-4 py-3 m-0 bg-[var(--color-bg)] border-b border-[var(--color-border-light)] uppercase tracking-[0.5px]">连线样式</div>
           
           <CollapsibleBlock
             title="默认连线样式"
@@ -671,9 +653,9 @@ export default memo(function StyleSection() {
             expandedState={expandedBlocks}
             onToggle={toggleBlock}
           >
-            <div className={styles.styleGrid}>
-              <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-                <label>线型</label>
+            <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+              <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">线型</label>
                 <SegmentedControl
                   options={[
                     { label: '弯折', value: 'smoothstep' },
@@ -683,8 +665,8 @@ export default memo(function StyleSection() {
                   onChange={(v) => updateDefaultStyle({ lineMode: v as 'smoothstep' | 'straight' })}
                 />
               </div>
-              <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-                <label>线条</label>
+              <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">线条</label>
                 <SegmentedControl
                   options={[
                     { label: '实线', value: 'solid' },
@@ -694,8 +676,8 @@ export default memo(function StyleSection() {
                   onChange={(v) => updateDefaultStyle({ lineStyle: v as 'solid' | 'dashed' })}
                 />
               </div>
-              <div className={`${styles.styleRow} ${styles.horizontal} ${styles.fullWidth}`}>
-                <label>显示箭头</label>
+              <div className="flex flex-row items-center justify-between gap-[6px] mb-0 col-span-full">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">显示箭头</label>
                 <ToggleGroup
                   options={[
                     { label: '有', value: true },
@@ -705,8 +687,8 @@ export default memo(function StyleSection() {
                   onChange={(v) => updateDefaultStyle({ arrow: v as boolean })}
                 />
               </div>
-              <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-                <label>连线颜色</label>
+              <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">连线颜色</label>
                 <ColorPicker
                   value={defaultEdgeStyle.color || ''}
                   onChange={(v) => updateDefaultStyle({ color: v })}
@@ -724,10 +706,10 @@ export default memo(function StyleSection() {
           >
           {selectedEdge ? (
             <>
-              <div className={styles.styleHint}>{selectedEdge.source} → {selectedEdge.target}</div>
-              <div className={styles.styleGrid}>
-                <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-                  <label>线型</label>
+              <div className="text-[12px] text-[var(--color-text-muted)] m-0 mb-4 leading-[1.4] bg-[var(--color-bg)] py-2 px-3 rounded-md border-l-[3px] border-[var(--color-accent)]">{selectedEdge.source} → {selectedEdge.target}</div>
+              <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                  <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">线型</label>
                   <SegmentedControl
                     options={[
                       { label: '弯折', value: 'smoothstep' },
@@ -737,8 +719,8 @@ export default memo(function StyleSection() {
                     onChange={(v) => applyToSelectedEdge({ lineMode: v as 'smoothstep' | 'straight' })}
                   />
                 </div>
-                <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-                  <label>线条</label>
+                <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                  <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">线条</label>
                   <SegmentedControl
                     options={[
                       { label: '实线', value: 'solid' },
@@ -748,8 +730,8 @@ export default memo(function StyleSection() {
                     onChange={(v) => applyToSelectedEdge({ lineStyle: v as 'solid' | 'dashed' })}
                   />
                 </div>
-                <div className={`${styles.styleRow} ${styles.horizontal} ${styles.fullWidth}`}>
-                  <label>显示箭头</label>
+                <div className="flex flex-row items-center justify-between gap-[6px] mb-0 col-span-full">
+                  <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">显示箭头</label>
                   <ToggleGroup
                     options={[
                       { label: '有', value: true },
@@ -759,8 +741,8 @@ export default memo(function StyleSection() {
                     onChange={(v) => applyToSelectedEdge({ arrow: v as boolean })}
                   />
                 </div>
-                <div className={`${styles.styleRow} ${styles.fullWidth}`}>
-                  <label>连线颜色</label>
+                <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                  <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">连线颜色</label>
                   <ColorPicker
                     value={currentEdgeStyle.color || ''}
                     onChange={(v) => applyToSelectedEdge({ color: v })}
@@ -769,7 +751,7 @@ export default memo(function StyleSection() {
               </div>
             </>
           ) : (
-            <div className={styles.emptyStyleState}>选中一条连线后，可在这里编辑它的样式。</div>
+            <div className="text-[13px] text-[var(--color-text-muted)] text-center py-8 px-4 bg-[var(--color-bg)] rounded-lg border border-dashed border-[var(--color-border-strong)]">选中一条连线后，可在这里编辑它的样式。</div>
           )}
           </CollapsibleBlock>
         </div>

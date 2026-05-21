@@ -4,7 +4,6 @@
 import { memo, useEffect, useRef, useCallback } from 'react'
 import { useStorage } from '../../../core/storage'
 import { logAction } from '../../../core/log-backend'
-import styles from './DetailTab.module.css'
 
 interface MarkdownEditorProps {
   value: string
@@ -96,7 +95,7 @@ export default memo(function MarkdownEditor({ value, onChange, onSave, placehold
     <textarea
       id="node-description"
       ref={textareaRef}
-      className={styles.mdEditorTextarea}
+      className="w-full h-full border-none outline-none resize-none bg-[var(--color-bg)] px-5 pt-3 pb-10 font-mono text-[12px] leading-[1.6] text-[var(--color-text-primary)] box-border focus:outline-none"
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onPaste={handlePaste}
