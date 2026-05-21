@@ -414,6 +414,11 @@ function registerIPC() {
     }
     return getWindowControlsState();
   });
+  ipcMain.handle('app:window:toggleDevTools', function() {
+    if (win && !win.isDestroyed()) {
+      win.webContents.toggleDevTools();
+    }
+  });
   ipcMain.handle('app:window:close', function() {
     app.quit();
     return getWindowControlsState();
@@ -502,6 +507,7 @@ function createWindow() {
     show: false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
     title: 'TopoMind',
+    icon: nodePath.join(APP_PATH, 'build', 'icon.png'),
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,

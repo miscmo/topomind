@@ -24,15 +24,7 @@ export default memo(function RightPanelContainer({ tabId }: RightPanelContainerP
   })
 
   if (collapsed) {
-    return (
-      <button
-        className="absolute top-3 right-3 z-30 w-7 h-7 inline-flex items-center justify-center p-0 border border-[var(--color-border)] rounded-md bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] text-[var(--color-text-muted)] text-lg leading-none cursor-pointer transition-colors shadow-[var(--shadow-md)] hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-primary)]"
-        onClick={expand}
-        title="展开右侧面板"
-      >
-        ‹
-      </button>
-    )
+    return null
   }
 
   return (

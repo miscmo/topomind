@@ -23,6 +23,7 @@ const ALLOWED_CHANNELS = new Set([
   'app:window:getState',
   'app:window:minimize',
   'app:window:toggleMaximize',
+  'app:window:toggleDevTools',
   'app:window:close',
   // log
   'log:write', 'log:getBuffer', 'log:query', 'log:setLevel', 'log:clear',

@@ -439,7 +439,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                               <button
                                 key={item.path}
                                 type="button"
-                                className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-[180ms] hover:bg-[#f5f8fb] ${isActive ? '!bg-[#edf4fb] !bg-[var(--color-selected-bg)]' : ''} ${(item.isDefault || item.isCard) ? 'text-[#1e293b] !text-[var(--color-text-primary)]' : ''}`}
+                                className={`group w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-[180ms] hover:bg-[#f5f8fb] ${isActive ? '!bg-[#edf4fb] !bg-[var(--color-selected-bg)]' : ''} ${(item.isDefault || item.isCard) ? 'text-[#1e293b] !text-[var(--color-text-primary)]' : ''}`}
                                 onClick={() => onSelectDetailDocument?.(item.path)}
                                 onContextMenu={(event) => {
                                   event.stopPropagation()

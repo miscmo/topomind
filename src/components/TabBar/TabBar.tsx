@@ -14,10 +14,10 @@ const TabItem = memo(function TabItem({ tab, isActive, onClick, onClose }: {
 }) {
   return (
     <div
-      className={`group flex items-center gap-1.5 h-7 px-3 rounded-lg cursor-default text-[13px] font-medium bg-transparent border border-transparent transition-all relative select-none max-w-[180px] shrink-0 mt-auto mb-[5px] ${
+      className={`group flex items-center justify-between gap-0 h-[28px] px-1.5 cursor-default text-[12px] transition-all relative select-none w-[86px] shrink-0 mt-auto ${
         isActive 
-          ? 'bg-[var(--color-surface)] text-[var(--color-primary)] font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.04)] border-[var(--color-border-subtle)]' 
-          : 'text-[var(--titlebar-muted)] hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]'
+          ? 'bg-[var(--color-surface)] text-[var(--color-primary)] font-medium rounded-t-lg border-t border-x border-[var(--color-border-subtle)] z-10 translate-y-[1px]' 
+          : 'text-[var(--titlebar-muted)] bg-transparent border-t border-x border-transparent hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)] rounded-t-lg'
       }`}
       onClick={onClick}
       onDoubleClick={(e) => e.stopPropagation()}
@@ -26,20 +26,30 @@ const TabItem = memo(function TabItem({ tab, isActive, onClick, onClose }: {
       aria-selected={isActive}
       title={tab.label}
     >
-      <span className="truncate">
-        {tab.label}
-      </span>
-      {tab.id !== 'home' && (
+      {/* 底部遮盖线，用于掩盖父级的底边框，实现无缝融合 */}
+      {isActive && (
+        <div className="absolute -bottom-[2px] left-0 right-0 h-[3px] bg-[var(--color-surface)]" />
+      )}
+      <div className="flex-1 min-w-0 flex items-center justify-center relative z-10 h-full">
+        <span className="truncate tracking-wide text-center">
+          {tab.label}
+        </span>
+      </div>
+      {tab.id !== 'home' ? (
         <button
-          className={`w-4 h-4 rounded-[3px] border-none bg-transparent cursor-pointer flex items-center justify-center text-[11px] text-[var(--color-text-muted)] p-0 leading-none shrink-0 transition-all hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger-hover)] ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+          className={`relative z-10 w-[16px] h-[16px] rounded-[4px] border-none bg-transparent cursor-pointer flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none shrink-0 transition-all hover:bg-[#e81123] hover:text-white ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
           onClick={(e) => {
             e.stopPropagation()
             onClose()
           }}
           aria-label={`关闭 ${tab.label}`}
         >
-          ×
+          <svg width="7" height="7" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.2"/>
+          </svg>
         </button>
+      ) : (
+        <div className="w-[16px] shrink-0" />
       )}
     </div>
   )
@@ -68,9 +78,9 @@ export default memo(function TabBar() {
 
   return (
     <div 
-      className="flex items-end h-full px-1 gap-[2px] shrink-0 w-full overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" 
+      className="flex items-end h-full px-1 gap-1 shrink-0 w-full overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden bg-[var(--titlebar-bg-unfocused)] relative -bottom-[1px] z-10 border-x border-[var(--color-border-subtle)] shadow-[inset_0_0_2px_rgba(0,0,0,0.02)]" 
       role="tablist"
-      style={{ WebkitAppRegion: 'drag' } as any}
+      style={{ WebkitAppRegion: 'no-drag' } as any}
       onWheel={(e) => {
         // Convert vertical scroll to horizontal scroll
         if (e.deltaY !== 0) {

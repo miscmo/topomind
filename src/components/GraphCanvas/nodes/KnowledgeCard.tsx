@@ -417,8 +417,8 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         minHeight={nodeSizeLimits.minHeight}
         maxWidth={nodeSizeLimits.maxWidth}
         maxHeight={nodeSizeLimits.maxHeight}
-        handleClassName="w-3 h-3 bg-surface border border-border rounded-sm shadow-sm opacity-0 hover:opacity-100 transition-opacity duration-200"
-        lineClassName="border-accent"
+        handleClassName="w-2 h-2 bg-surface border-[1.5px] border-accent rounded-[2px] shadow-sm z-30"
+        lineClassName="border-transparent z-20"
         onResizeStart={(_, params) => updateResizePreview(params)}
         onResize={(_, params) => updateResizePreview(params)}
         onResizeEnd={(_, params) => hideResizePreviewSoon(params)}
@@ -431,7 +431,16 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       )}
 
       <Handle type="target" position={Position.Left} className="w-0 h-0 border-none opacity-0" isConnectable={false} />
-      <Handle type="source" position={Position.Right} className="w-2.5 h-4 rounded-[2px] bg-accent/80 border-none -right-1.5 opacity-0 hover:opacity-100 hover:bg-accent transition-opacity duration-200" />
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        className={cn(
+          "w-3.5 h-3.5 bg-surface border-[1.5px] border-accent rounded-full shadow-sm !-right-5 z-30 flex items-center justify-center transition-all duration-200 hover:bg-accent text-accent hover:text-white",
+          showHoverControls ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+      >
+        <span className="text-[12px] font-bold leading-none select-none pointer-events-none relative -top-[0.5px]">+</span>
+      </Handle>
 
       <div className="flex flex-1 flex-col items-stretch justify-start overflow-hidden pointer-events-none min-w-0 min-h-0" style={{ borderRadius }}>
         {/* Header 层 */}

@@ -88,7 +88,7 @@ export default memo(function SetupPage() {
     <div id="setup-page" className="absolute inset-0 w-full h-full min-h-0 bg-[var(--color-bg-app)] flex items-center justify-center overflow-hidden">
       <div className="relative bg-[var(--color-surface)] border-none rounded-none px-10 pt-7 pb-6 w-full h-full shadow-none flex flex-col justify-center gap-5">
         <div className="flex items-center gap-[14px]">
-          <div className="text-[36px] leading-none">🧠</div>
+          <img src="./icon.svg" alt="Logo" className="w-10 h-10 drop-shadow-sm" />
           <div>
             <h1 className="text-[var(--color-primary)] text-[22px] font-bold m-0 mb-1 tracking-[-0.5px]">TopoMind</h1>
             <p className="text-[var(--color-text-muted)] text-[13px] m-0 leading-relaxed">先选择一个工作目录，再进入你的笔记本主页</p>
