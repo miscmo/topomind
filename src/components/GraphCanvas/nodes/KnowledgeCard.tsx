@@ -400,10 +400,11 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         shouldShowMarkdown && "nowheel",
         visuallySelected && "border-2 border-accent shadow-[0_0_0_1px_var(--color-accent-soft)] !border-accent z-10",
         isConnectTarget && "border-2 border-success shadow-[0_0_0_3px_var(--color-success-soft)] !border-success z-10",
-        visuallyHovered && !visuallySelected && !isConnectTarget && "border-border-strong shadow-lg -translate-y-[1px]",
+        visuallyHovered && !visuallySelected && !isConnectTarget && "border-border-strong",
         dragging && "opacity-90"
       )}
       style={{
+        cursor: dragging ? 'grabbing' : 'default',
         borderColor: visuallySelected ? undefined : data.domainColor ?? nodeStyle.borderColor,
         borderWidth: visuallySelected || isConnectTarget ? 2 : nodeStyle.borderWidth,
         borderRadius,

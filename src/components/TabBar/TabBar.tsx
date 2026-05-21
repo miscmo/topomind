@@ -14,7 +14,7 @@ const TabItem = memo(function TabItem({ tab, isActive, onClick, onClose }: {
 }) {
   return (
     <div
-      className={`group flex items-center justify-between gap-0 h-[28px] px-1.5 cursor-default text-[12px] transition-all relative select-none w-[86px] shrink-0 mt-auto ${
+      className={`group flex items-center justify-center gap-0 h-[28px] px-1.5 cursor-pointer text-[12px] transition-all relative select-none w-[110px] shrink-0 mt-auto ${
         isActive 
           ? 'bg-[var(--color-surface)] text-[var(--color-primary)] font-medium rounded-t-lg border-t border-x border-[var(--color-border-subtle)] z-10 translate-y-[1px]' 
           : 'text-[var(--titlebar-muted)] bg-transparent border-t border-x border-transparent hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)] rounded-t-lg'
@@ -28,29 +28,30 @@ const TabItem = memo(function TabItem({ tab, isActive, onClick, onClose }: {
     >
       {/* 底部遮盖线，用于掩盖父级的底边框，实现无缝融合 */}
       {isActive && (
-        <div className="absolute -bottom-[2px] left-0 right-0 h-[3px] bg-[var(--color-surface)]" />
+        <div className="absolute -bottom-[2px] left-0 right-0 h-[3px] bg-[var(--color-surface)] pointer-events-none" />
       )}
-      <div className="flex-1 min-w-0 flex items-center justify-center relative z-10 h-full">
-        <span className="truncate tracking-wide text-center">
+      <div className={`flex-1 min-w-0 flex items-center justify-center relative z-10 h-full pl-[4px] ${tab.id !== 'home' ? 'pr-[20px]' : 'pr-[4px]'} transition-opacity duration-150 pointer-events-none`}>
+        <span className="truncate tracking-wide text-center max-w-full">
           {tab.label}
         </span>
       </div>
       {tab.id !== 'home' ? (
-        <button
-          className={`relative z-10 w-[16px] h-[16px] rounded-[4px] border-none bg-transparent cursor-pointer flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none shrink-0 transition-all hover:bg-[#e81123] hover:text-white ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onClose()
-          }}
-          aria-label={`关闭 ${tab.label}`}
-        >
-          <svg width="7" height="7" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.2"/>
-          </svg>
-        </button>
-      ) : (
-        <div className="w-[16px] shrink-0" />
-      )}
+        <div className="absolute right-[4px] top-1/2 -translate-y-1/2 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <button
+            className="w-[18px] h-[18px] rounded-[4px] border-none bg-transparent cursor-pointer flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none shrink-0 pointer-events-auto hover:bg-[#e81123] hover:text-white transition-colors"
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
+            onDoubleClick={(e) => e.stopPropagation()}
+            aria-label={`关闭 ${tab.label}`}
+          >
+            <svg width="8" height="8" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 })
