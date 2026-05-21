@@ -12,6 +12,8 @@ import { useStorage } from '../../core/storage'
 import { useThemeStore } from '../../stores/themeStore'
 import { handleMarkdownPaste, handleMarkdownDrop } from './AttachmentPipeline'
 import { inlineImagePlugin } from './inlineImagePlugin'
+import { slashCommandCompletion } from './slashCommandPlugin'
+import { markdownKeymap } from './markdownShortcuts'
 
 interface MarkdownSourceEditorProps {
   value: string
@@ -44,6 +46,7 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
 
   const customKeymap = useMemo(() => {
     return keymap.of([
+      ...markdownKeymap,
       ...defaultKeymap,
       ...historyKeymap,
       ...searchKeymap,
@@ -128,13 +131,48 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
     history(),
     highlightSelectionMatches(),
     foldGutter(),
-    autocompletion(),
+    autocompletion({ override: [slashCommandCompletion] }),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     customKeymap,
     eventHandlers,
     inlineImagePlugin(attachmentCardPath, storage),
-    EditorView.lineWrapping
+    EditorView.lineWrapping,
+    EditorView.theme({
+      ".cm-tooltip.cm-tooltip-autocomplete": {
+        backgroundColor: "var(--titlebar-menu-bg, var(--color-surface))",
+        border: "1px solid var(--color-border)",
+        boxShadow: "var(--shadow-popover, 0 4px 12px rgba(0,0,0,0.1))",
+        borderRadius: "8px",
+        padding: "4px",
+      },
+      ".cm-tooltip-autocomplete > ul": {
+        fontFamily: "inherit",
+        maxHeight: "250px",
+      },
+      ".cm-tooltip-autocomplete > ul > li": {
+        padding: "6px 8px",
+        borderRadius: "6px",
+        fontSize: "13px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "12px",
+        cursor: "pointer",
+      },
+      ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+        backgroundColor: "var(--color-hover-bg, rgba(0,0,0,0.05))",
+        color: "var(--color-primary)",
+      },
+      ".cm-completionLabel": {
+        fontWeight: "500",
+      },
+      ".cm-completionDetail": {
+        color: "var(--color-text-muted, #888)",
+        fontSize: "12px",
+        fontStyle: "normal",
+      }
+    })
   ], [customKeymap, eventHandlers, attachmentCardPath, storage])
 
   return (
