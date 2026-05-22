@@ -63,6 +63,7 @@ const COMMON_CODE_LANGUAGES = [
 interface TaskItemMeta {
   checkedOffset: number
   checked: boolean
+  position?: any
 }
 
 interface CodeBlockMeta {
@@ -70,6 +71,7 @@ interface CodeBlockMeta {
   infoEndOffset: number
   language: string
   rawInfo: string
+  position?: any
 }
 
 type ImageAlign = 'left' | 'center' | 'right'
@@ -81,6 +83,7 @@ interface ImageMeta {
   align: ImageAlign
   width: number
   titleText: string
+  position?: any
 }
 
 const DEFAULT_IMAGE_ALIGN: ImageAlign = 'left'
@@ -144,18 +147,21 @@ function buildImageTitleMeta(meta: Pick<ImageMeta, 'align' | 'width' | 'titleTex
 }
 
 function parseInteractiveMarkdown(markdown: string) {
+  const headingPositions: any[] = []
   const taskItems: TaskItemMeta[] = []
   const codeBlocks: CodeBlockMeta[] = []
   const imageItems: ImageMeta[] = []
 
   if (typeof markdown !== 'string') {
-    return { taskItems, codeBlocks, imageItems }
+    return { headingPositions, taskItems, codeBlocks, imageItems }
   }
 
   const tree = unified().use(remarkParse).parse(markdown)
 
   visit(tree, (node: any) => {
-    if (node.type === 'listItem') {
+    if (node.type === 'heading') {
+      headingPositions.push(node.position)
+    } else if (node.type === 'listItem') {
       if (node.checked !== null && node.checked !== undefined && node.position) {
         // Find the actual checkbox offset in the source text
         // Remark AST gives us the block position, we need to find the [ ] or [x] inside it
@@ -166,6 +172,7 @@ function parseInteractiveMarkdown(markdown: string) {
           taskItems.push({
             checkedOffset: startOffset + match[1].length,
             checked: node.checked,
+            position: node.position,
           })
         }
       }
@@ -183,6 +190,7 @@ function parseInteractiveMarkdown(markdown: string) {
             infoEndOffset: lineEndOffset,
             language: node.lang || '',
             rawInfo: match[3],
+            position: node.position,
           })
         }
       }
@@ -213,12 +221,13 @@ function parseInteractiveMarkdown(markdown: string) {
           titleStartOffset,
           titleEndOffset,
           ...meta,
+          position: node.position,
         })
       }
     }
   })
 
-  return { taskItems, codeBlocks, imageItems }
+  return { headingPositions, taskItems, codeBlocks, imageItems }
 }
 
 function updateTaskItem(markdown: string, taskItems: TaskItemMeta[], index: number, checked: boolean) {
@@ -572,7 +581,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
   const [copiedHeadingId, setCopiedHeadingId] = useState<string | null>(null)
   const [previewImage, setPreviewImage] = useState<PreviewImageState | null>(null)
   const imageDragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null)
-  const { taskItems, codeBlocks, imageItems } = useMemo(() => parseInteractiveMarkdown(content), [content])
+  const { headingPositions, taskItems, codeBlocks, imageItems } = useMemo(() => parseInteractiveMarkdown(content), [content])
 
   useEffect(() => {
     if (copiedCodeBlockIndex === null) return
@@ -688,15 +697,13 @@ export const MarkdownPreview = memo(function MarkdownPreview({
   }, [])
 
   const components = useMemo(() => {
-    let headingIndex = 0
-    let taskIndex = 0
-    let codeBlockIndex = 0
-    let imageIndex = 0
-
     const createHeading = (tagName: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') => {
-      return function HeadingRenderer({ children, ...props }: any) {
-        const id = headingIds?.[headingIndex]
-        headingIndex += 1
+      return function HeadingRenderer({ node, children, ...props }: any) {
+        let currentHeadingIndex = -1
+        if (node?.position) {
+          currentHeadingIndex = headingPositions.findIndex(pos => pos?.start?.offset === node.position.start.offset)
+        }
+        const id = currentHeadingIndex >= 0 ? headingIds?.[currentHeadingIndex] : undefined
         const text = extractPlainText(children)
         return createElement(
           tagName,
@@ -726,30 +733,37 @@ export const MarkdownPreview = memo(function MarkdownPreview({
       h4: createHeading('h4'),
       h5: createHeading('h5'),
       h6: createHeading('h6'),
-      input({ type, checked, disabled, ...props }: any) {
+      input({ node, type, checked, disabled, ...props }: any) {
         if (type !== 'checkbox') {
           return <input type={type} checked={checked} disabled={disabled} {...props} />
         }
-        const currentTaskIndex = taskIndex
-        taskIndex += 1
+        let currentTaskIndex = -1
+        if (node?.position) {
+          currentTaskIndex = taskItems.findIndex(item => {
+            if (!item.position) return false
+            return node.position.start.offset >= item.position.start.offset && node.position.end.offset <= item.position.end.offset
+          })
+        }
         return (
           <input
             {...props}
             type="checkbox"
             checked={!!checked}
             className="cursor-pointer"
-            disabled={!onChange}
-            onChange={(event) => handleTaskToggle(currentTaskIndex, event.target.checked)}
+            disabled={!onChange || currentTaskIndex < 0}
+            onChange={(event) => currentTaskIndex >= 0 && handleTaskToggle(currentTaskIndex, event.target.checked)}
           />
         )
       },
       code({ node, inline, className, children, ...props }: any) {
         const match = /language-(\w+)/.exec(className || '')
         if (!inline) {
-          const currentBlockIndex = codeBlockIndex
-          codeBlockIndex += 1
+          let currentBlockIndex = -1
+          if (node?.position) {
+            currentBlockIndex = codeBlocks.findIndex(block => block.position?.start?.offset === node.position.start.offset)
+          }
           const code = String(children).replace(/\n$/, '')
-          const blockMeta = codeBlocks[currentBlockIndex]
+          const blockMeta = currentBlockIndex >= 0 ? codeBlocks[currentBlockIndex] : undefined
           const language = (match?.[1] || blockMeta?.language || '').trim()
           return (
             <InteractiveCodeBlock
@@ -757,13 +771,13 @@ export const MarkdownPreview = memo(function MarkdownPreview({
               language={language}
               className={className}
               compact={compact}
-              blockIndex={currentBlockIndex}
-              canEdit={!!onChange}
-              isWrapped={wrappedCodeBlocks[currentBlockIndex] !== false}
-              copied={copiedCodeBlockIndex === currentBlockIndex}
-              onToggleWrap={() => handleToggleWrap(currentBlockIndex)}
-              onCopy={() => handleCopyCode(currentBlockIndex, code)}
-              onLanguageChange={(nextLanguage) => handleCodeLanguageChange(currentBlockIndex, nextLanguage)}
+              blockIndex={currentBlockIndex >= 0 ? currentBlockIndex : -1}
+              canEdit={!!onChange && currentBlockIndex >= 0}
+              isWrapped={currentBlockIndex >= 0 ? wrappedCodeBlocks[currentBlockIndex] !== false : true}
+              copied={currentBlockIndex >= 0 && copiedCodeBlockIndex === currentBlockIndex}
+              onToggleWrap={() => currentBlockIndex >= 0 && handleToggleWrap(currentBlockIndex)}
+              onCopy={() => currentBlockIndex >= 0 && handleCopyCode(currentBlockIndex, code)}
+              onLanguageChange={(nextLanguage) => currentBlockIndex >= 0 && handleCodeLanguageChange(currentBlockIndex, nextLanguage)}
             />
           )
         }
@@ -773,10 +787,12 @@ export const MarkdownPreview = memo(function MarkdownPreview({
           </code>
         )
       },
-      img({ src, alt, ...props }: any) {
-        const currentImageIndex = imageIndex
-        imageIndex += 1
-        const imageMeta = imageItems[currentImageIndex] ?? {
+      img({ node, src, alt, ...props }: any) {
+        let currentImageIndex = -1
+        if (node?.position) {
+          currentImageIndex = imageItems.findIndex(item => item.position?.start?.offset === node.position.start.offset)
+        }
+        const imageMeta = currentImageIndex >= 0 ? imageItems[currentImageIndex] : {
           align: DEFAULT_IMAGE_ALIGN,
           width: DEFAULT_IMAGE_WIDTH,
           titleText: '',
@@ -787,11 +803,11 @@ export const MarkdownPreview = memo(function MarkdownPreview({
             alt={alt}
             title={imageMeta.titleText || props.title}
             attachmentCardPath={attachmentCardPath}
-            canEdit={!!onChange}
+            canEdit={!!onChange && currentImageIndex >= 0}
             align={imageMeta.align}
             width={imageMeta.width}
-            onAlignChange={(align) => handleImageAlignChange(currentImageIndex, align)}
-            onWidthChange={(width) => handleImageWidthChange(currentImageIndex, width)}
+            onAlignChange={(align) => currentImageIndex >= 0 && handleImageAlignChange(currentImageIndex, align)}
+            onWidthChange={(width) => currentImageIndex >= 0 && handleImageWidthChange(currentImageIndex, width)}
             onPreview={handleImagePreview}
           />
         )
@@ -851,13 +867,26 @@ export const MarkdownPreview = memo(function MarkdownPreview({
     handleTaskToggle,
     handleToggleWrap,
     headingIds,
+    headingPositions,
     imageItems,
     onChange,
     onOpenDetailDocumentLink,
     copiedHeadingId,
     wrappedCodeBlocks,
     storage,
+    taskItems,
   ])
+
+  const renderedMarkdown = useMemo(() => (
+    <ReactMarkdown
+      remarkPlugins={remarkPlugins as any}
+      rehypePlugins={rehypePlugins as any}
+      components={components}
+      urlTransform={(url) => url}
+    >
+      {content || ''}
+    </ReactMarkdown>
+  ), [content, components])
 
   return (
     <div
@@ -871,17 +900,10 @@ export const MarkdownPreview = memo(function MarkdownPreview({
       ].filter(Boolean).join(' ')}
       style={{ padding: compact ? '10px 12px' : '24px 28px' }}
     >
-      <ReactMarkdown
-        remarkPlugins={remarkPlugins as any}
-        rehypePlugins={rehypePlugins as any}
-        components={components}
-        urlTransform={(url) => url}
-      >
-        {content || ''}
-      </ReactMarkdown>
+      {renderedMarkdown}
       {previewImage && (
         <div
-          className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-900/72 pointer-events-auto"
+          className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto animate-in fade-in duration-200"
           role="dialog"
           aria-modal="true"
           aria-label={previewImage.alt ? `图片预览：${previewImage.alt}` : '图片预览'}
@@ -889,48 +911,67 @@ export const MarkdownPreview = memo(function MarkdownPreview({
           onMouseDown={(event) => event.stopPropagation()}
           onClick={handleCloseImagePreview}
         >
-          <button
-            type="button"
-            className="absolute top-6 right-6 h-8 px-3 border border-white/24 rounded-full bg-slate-900/72 text-white text-[13px] cursor-pointer hover:bg-slate-900/90"
-            onClick={handleCloseImagePreview}
-            aria-label="关闭图片预览"
-          >
-            关闭
-          </button>
-          <button
-            type="button"
-            className="absolute top-6 right-24 h-8 px-3 border border-white/24 rounded-full bg-slate-900/72 text-white text-[13px] cursor-pointer hover:bg-slate-900/90"
-            onClick={handlePreviewImageReset}
-            aria-label="重置图片缩放和位置"
-          >
-            重置
-          </button>
+          {/* Top-right toolbar */}
+          <div className="absolute top-12 right-6 flex items-center gap-3 z-[2010]" onClick={(e) => e.stopPropagation()}>
+            {previewImage.scale > 1 && (
+              <button
+                type="button"
+                className="flex items-center justify-center h-10 px-4 gap-2 rounded-full bg-white/10 text-white/90 text-[13px] font-medium backdrop-blur-md border border-white/10 transition-all hover:bg-white/20 hover:text-white hover:scale-105 active:scale-95 animate-in fade-in zoom-in"
+                onClick={handlePreviewImageReset}
+                aria-label="重置缩放"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                重置
+              </button>
+            )}
+            <button
+              type="button"
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white/90 backdrop-blur-md border border-white/10 transition-all hover:bg-white/20 hover:text-white hover:scale-105 active:scale-95"
+              onClick={handleCloseImagePreview}
+              aria-label="关闭预览"
+              title="关闭 (Esc)"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+
           <div
-            className="relative max-w-[min(92vw,1200px)] max-h-[calc(100vh-96px)] flex flex-col items-center gap-2.5"
+            className="relative w-full h-full p-4 sm:p-10 flex flex-col items-center justify-center"
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
             <div
-              className={`w-[min(92vw,1200px)] max-w-[min(92vw,1200px)] max-h-[calc(100vh-150px)] overflow-hidden flex items-center justify-center rounded-[10px] cursor-zoom-in ${previewImage.scale > 1 ? 'cursor-grab touch-none active:cursor-grabbing' : ''}`}
+              className={`relative flex items-center justify-center w-full h-full overflow-hidden rounded-xl ${previewImage.scale > 1 ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-zoom-in'}`}
               onWheel={handlePreviewImageWheel}
               onPointerDown={handlePreviewImagePointerDown}
               onPointerMove={handlePreviewImagePointerMove}
               onPointerUp={handlePreviewImagePointerEnd}
               onPointerCancel={handlePreviewImagePointerEnd}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                if (previewImage.scale > 1) {
+                  handlePreviewImageReset()
+                } else {
+                  setPreviewImage(prev => prev ? { ...prev, scale: 2 } : null)
+                }
+              }}
             >
               <img
-                className="block max-w-full max-h-[calc(100vh-150px)] object-contain rounded-[10px] shadow-[0_24px_64px_rgba(15,23,42,0.35)] bg-white !bg-[var(--color-surface)]"
+                className="block max-w-full max-h-full object-contain rounded-lg shadow-2xl"
                 src={previewImage.src}
                 alt={previewImage.alt}
                 draggable={false}
                 style={{
                   transform: `translate(${previewImage.offsetX}px, ${previewImage.offsetY}px) scale(${previewImage.scale})`,
+                  willChange: 'transform'
                 }}
               />
             </div>
             {previewImage.alt && (
-              <div className="max-w-[min(92vw,960px)] py-2 px-3 rounded-lg bg-slate-900/82 text-slate-50 text-[13px] text-center">{previewImage.alt}</div>
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 max-w-[90vw] py-2.5 px-5 rounded-full bg-black/50 backdrop-blur-md text-white/95 text-[14px] text-center border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] animate-in slide-in-from-bottom-4 fade-in">
+                {previewImage.alt}
+              </div>
             )}
           </div>
         </div>

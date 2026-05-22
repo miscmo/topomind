@@ -11,7 +11,6 @@ import { githubDark, githubLight } from '@uiw/codemirror-theme-github'
 import { useStorage } from '../../core/storage'
 import { useThemeStore } from '../../stores/themeStore'
 import { handleMarkdownPaste, handleMarkdownDrop } from './AttachmentPipeline'
-import { inlineImagePlugin } from './inlineImagePlugin'
 import { slashCommandCompletion } from './slashCommandPlugin'
 import { markdownKeymap } from './markdownShortcuts'
 
@@ -136,7 +135,6 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     customKeymap,
     eventHandlers,
-    inlineImagePlugin(attachmentCardPath, storage),
     EditorView.lineWrapping,
     EditorView.theme({
       ".cm-tooltip.cm-tooltip-autocomplete": {

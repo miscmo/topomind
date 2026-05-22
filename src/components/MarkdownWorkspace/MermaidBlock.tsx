@@ -26,6 +26,11 @@ export const MermaidBlock = memo(function MermaidBlock({ code }: MermaidBlockPro
       try {
         setError(null)
         setSvgContent(null)
+        
+        // Use parse to validate syntax before rendering. This prevents mermaid.render from
+        // appending an error SVG to the body during syntax errors.
+        await mermaid.parse(code)
+
         const { svg } = await mermaid.render(renderId, code)
         if (!isCancelled) {
           setSvgContent(DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } }))
@@ -33,6 +38,11 @@ export const MermaidBlock = memo(function MermaidBlock({ code }: MermaidBlockPro
       } catch (err: any) {
         if (!isCancelled) {
           setError(err?.message || String(err))
+        }
+        // Mermaid may append an error SVG to the DOM when it fails, remove it to prevent UI issues
+        const errorElement = document.getElementById(renderId)
+        if (errorElement) {
+          errorElement.remove()
         }
       }
     }
@@ -55,11 +65,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code }: MermaidBlockPro
         </div>
       ) : svgContent ? (
         <div className="mermaid-svg" dangerouslySetInnerHTML={{ __html: svgContent }} style={{ display: 'flex', justifyContent: 'center' }} />
-      ) : (
-        <div className="mermaid-loading" style={{ color: '#888', fontStyle: 'italic', textAlign: 'center' }}>
-          图表渲染中...
-        </div>
-      )}
+      ) : null}
     </div>
   )
 })
