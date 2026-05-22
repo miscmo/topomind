@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react'
 import type { Store } from '../../core/storage'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
+import { logPerformanceMetric, PERFORMANCE_METRICS } from '../../core/performance-log'
 import { loadRoomGraph } from './roomLoader'
 import type { GraphSession } from '../../stores/tabStore'
 import type { GraphState } from '../../stores/graphStore'
@@ -24,6 +25,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
 
   const loadRoom = useCallback(
     async (dirPath: string, preserveCurrentNodeLayout = false) => {
+      const startedAt = performance.now()
       const requestSeq = ++loadRequestSeqRef.current
       const store = storeApi.getState()
       const currentNodeLayout = preserveCurrentNodeLayout
@@ -43,6 +45,14 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
 
         if (requestSeq < loadRequestSeqRef.current) {
           logAction('房间:加载丢弃', 'useGraph', { roomPath: dirPath, kbPath, requestSeq })
+          void logPerformanceMetric(PERFORMANCE_METRICS.roomLoad, performance.now() - startedAt, {
+            success: false,
+            roomPath: dirPath,
+            kbPath,
+            requestSeq,
+            preserveCurrentNodeLayout,
+            discarded: true,
+          }, 'useGraph')
           return
         }
 
@@ -73,8 +83,24 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
           edgeCount: loaded.edges.length,
           requestSeq,
         })
+        void logPerformanceMetric(PERFORMANCE_METRICS.roomLoad, performance.now() - startedAt, {
+          success: true,
+          roomPath: dirPath,
+          kbPath,
+          nodeCount: loaded.nodes.length,
+          edgeCount: loaded.edges.length,
+          requestSeq,
+          preserveCurrentNodeLayout,
+        }, 'useGraph')
       } catch (e) {
         logger.catch('useGraph', 'loadRoom', e)
+        void logPerformanceMetric(PERFORMANCE_METRICS.roomLoad, performance.now() - startedAt, {
+          success: false,
+          roomPath: dirPath,
+          preserveCurrentNodeLayout,
+          requestSeq,
+          error: e instanceof Error ? e.message : String(e),
+        }, 'useGraph')
         if (requestSeq === loadRequestSeqRef.current && requestSeq >= latestAppliedLoadSeqRef.current) {
           storeApi.getState().setLoading(false)
         }

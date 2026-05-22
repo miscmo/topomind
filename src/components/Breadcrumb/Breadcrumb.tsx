@@ -89,7 +89,10 @@ export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
   if (items.length === 0) return null
 
   return (
-    <div id="breadcrumb" className="absolute top-3 left-1/2 -translate-x-1/2 z-[12] flex items-center gap-[5px] bg-[color-mix(in_srgb,var(--color-surface)_95%,transparent)] border border-[var(--color-border)] rounded-lg py-1.5 px-3.5 text-xs text-[var(--color-text-secondary)] max-w-[calc(100vw-240px)] overflow-hidden whitespace-nowrap shadow-[var(--shadow-md)]">
+    <div
+      id="breadcrumb"
+      className="absolute top-3 left-3 z-[12] flex items-center gap-[5px] max-w-[min(560px,calc(100%-24px))] overflow-hidden whitespace-nowrap rounded-full border border-[color-mix(in_srgb,var(--color-border)_88%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_90%,transparent)] py-1.5 pl-3 pr-3.5 text-xs text-[var(--color-text-secondary)] shadow-[0_6px_18px_rgba(15,23,42,0.08)] backdrop-blur-[6px]"
+    >
       {items.map((item, index) => {
         const isLast = index === items.length - 1
 
@@ -97,7 +100,7 @@ export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
           return (
             <button
               key={item.id}
-              className="text-[var(--color-accent)] cursor-pointer font-medium bg-none border-none text-xs p-0 transition-all max-w-[120px] truncate hover:not(:disabled):underline disabled:text-[var(--color-primary)] disabled:font-semibold disabled:cursor-default"
+              className="max-w-[112px] truncate border-none bg-none p-0 text-xs font-medium text-[var(--color-accent)] transition-all hover:not(:disabled):underline disabled:cursor-default disabled:font-semibold disabled:text-[var(--color-primary)]"
               onClick={navigateToRoot}
               disabled={isLast}
               aria-current={isLast ? 'page' : undefined}
@@ -109,12 +112,12 @@ export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
 
         return (
           <span key={item.id} className="inline-flex items-center gap-[5px]">
-            <span className="text-[var(--color-text-muted)]">&gt;</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] opacity-70">&gt;</span>
             {isLast ? (
-              <span className="text-[var(--color-primary)] font-semibold max-w-[120px] truncate">{item.label}</span>
+              <span className="max-w-[180px] truncate font-semibold text-[var(--color-primary)]">{item.label}</span>
             ) : (
               <button
-                className="text-[var(--color-accent)] cursor-pointer font-medium bg-none border-none text-xs p-0 transition-all max-w-[120px] truncate hover:not(:disabled):underline disabled:text-[var(--color-primary)] disabled:font-semibold disabled:cursor-default"
+                className="max-w-[112px] truncate border-none bg-none p-0 text-xs font-medium text-[var(--color-accent)] transition-all hover:not(:disabled):underline disabled:cursor-default disabled:font-semibold disabled:text-[var(--color-primary)]"
                 onClick={() => navigateToHistory(item)}
               >
                 {item.label}

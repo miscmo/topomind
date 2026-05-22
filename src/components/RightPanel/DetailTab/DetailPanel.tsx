@@ -13,6 +13,7 @@ import { useCardContentStore } from '../../../stores/cardContentStore'
 import { MarkdownWorkspace } from '../../MarkdownWorkspace/MarkdownWorkspace'
 import type { MarkdownViewMode } from '../../MarkdownWorkspace/markdownTypes'
 import { logAction } from '../../../core/log-backend'
+import { logPerformanceMetric, PERFORMANCE_METRICS, takePerformanceMetricStart } from '../../../core/performance-log'
 import { logger } from '../../../core/logger'
 import { registerTabSaver } from '../../../core/close-guard'
 import { tabStore } from '../../../stores/tabStore'
@@ -81,13 +82,25 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     if (hovered) {
       setIsSidebarHovered(true)
     } else {
-      hoverTimeoutRef.current = window.setTimeout(() => setIsSidebarHovered(false), 150)
+      hoverTimeoutRef.current = window.setTimeout(() => {
+        setIsSidebarHovered(false)
+        setIsButtonHovered(false)
+      }, 150)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        window.clearTimeout(hoverTimeoutRef.current)
+      }
     }
   }, [])
 
   const [viewMode, setViewMode] = useState<MarkdownViewMode>('preview')
   const renameInputRef = useRef<HTMLInputElement>(null)
   const markdownRequestSeqRef = useRef(0)
+  const selectionPerfRef = useRef<{ nodeId: string; startedAt: number; logged: boolean } | null>(null)
 
   const isDefaultDocument = activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH
   const displayDocuments = useMemo<DetailDocumentItem[]>(() => (
@@ -133,8 +146,22 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   }, [selectedNodeId, nodePath, loadDocuments])
 
   useEffect(() => {
+    if (!selectedNodeId) {
+      selectionPerfRef.current = null
+      return
+    }
+    const startedAt = takePerformanceMetricStart(PERFORMANCE_METRICS.nodeSelect, selectedNodeId) ?? performance.now()
+    selectionPerfRef.current = {
+      nodeId: selectedNodeId,
+      startedAt,
+      logged: false,
+    }
+  }, [selectedNodeId])
+
+  useEffect(() => {
     const requestSeq = ++markdownRequestSeqRef.current
     if (!selectedNodeId || !nodePath || !currentDocumentKey) return
+    const readStartedAt = performance.now()
 
     const cachedContent = useCardContentStore.getState().detailEntries[currentDocumentKey]?.content
     if (cachedContent !== undefined) {
@@ -142,10 +169,28 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
         setDraftMarkdown(currentDocumentKey, cachedContent)
       }
+      const selectionPerf = selectionPerfRef.current
+      if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
+        selectionPerf.logged = true
+        void logPerformanceMetric(PERFORMANCE_METRICS.nodeSelect, performance.now() - selectionPerf.startedAt, {
+          success: true,
+          nodeId: selectedNodeId,
+          nodePath,
+          documentPath: activeDocumentPath,
+          cacheHit: true,
+        }, 'DetailPanel')
+      }
     }
 
     storage.readDetailDocument(nodePath, activeDocumentPath).then((content: string) => {
       if (markdownRequestSeqRef.current !== requestSeq) return
+      void logPerformanceMetric(PERFORMANCE_METRICS.detailRead, performance.now() - readStartedAt, {
+        success: true,
+        nodeId: selectedNodeId,
+        nodePath,
+        documentPath: activeDocumentPath,
+        contentLength: content.length,
+      }, 'DetailPanel')
       setDetailMarkdown(currentDocumentKey, content)
       setSavedMarkdown(content)
       
@@ -159,8 +204,26 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
         setDraftMarkdown(currentDocumentKey, content)
       }
+      const selectionPerf = selectionPerfRef.current
+      if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
+        selectionPerf.logged = true
+        void logPerformanceMetric(PERFORMANCE_METRICS.nodeSelect, performance.now() - selectionPerf.startedAt, {
+          success: true,
+          nodeId: selectedNodeId,
+          nodePath,
+          documentPath: activeDocumentPath,
+          cacheHit: false,
+          contentLength: content.length,
+        }, 'DetailPanel')
+      }
     }).catch(() => {
       if (markdownRequestSeqRef.current !== requestSeq) return
+      void logPerformanceMetric(PERFORMANCE_METRICS.detailRead, performance.now() - readStartedAt, {
+        success: false,
+        nodeId: selectedNodeId,
+        nodePath,
+        documentPath: activeDocumentPath,
+      }, 'DetailPanel')
       setDetailMarkdown(currentDocumentKey, '')
       setSavedMarkdown('')
       
@@ -172,6 +235,16 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
         setDraftMarkdown(currentDocumentKey, '')
+      }
+      const selectionPerf = selectionPerfRef.current
+      if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
+        selectionPerf.logged = true
+        void logPerformanceMetric(PERFORMANCE_METRICS.nodeSelect, performance.now() - selectionPerf.startedAt, {
+          success: false,
+          nodeId: selectedNodeId,
+          nodePath,
+          documentPath: activeDocumentPath,
+        }, 'DetailPanel')
       }
     })
   }, [selectedNodeId, nodePath, activeDocumentPath, currentDocumentKey, storage, setDraftMarkdown, setDetailMarkdown, setCardMarkdown])
@@ -212,6 +285,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     if (!selectedNodeId || !nodePath || !currentDocumentKey) return
     const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label
+    const saveStartedAt = performance.now()
     try {
       await storage.writeDetailDocument(nodePath, activeDocumentPath, draftMarkdown)
       setDetailMarkdown(currentDocumentKey, draftMarkdown)
@@ -225,7 +299,22 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       }
       
       logAction('内容:保存', 'DetailPanel', { nodePath, documentPath: activeDocumentPath, label })
+      void logPerformanceMetric(PERFORMANCE_METRICS.detailSave, performance.now() - saveStartedAt, {
+        success: true,
+        nodeId: selectedNodeId,
+        nodePath,
+        documentPath: activeDocumentPath,
+        contentLength: draftMarkdown.length,
+      }, 'DetailPanel')
     } catch (e) {
+      void logPerformanceMetric(PERFORMANCE_METRICS.detailSave, performance.now() - saveStartedAt, {
+        success: false,
+        nodeId: selectedNodeId,
+        nodePath,
+        documentPath: activeDocumentPath,
+        contentLength: draftMarkdown.length,
+        error: e instanceof Error ? e.message : String(e),
+      }, 'DetailPanel')
       logger.catch('DetailPanel', 'handleSave', e)
     }
   }, [selectedNodeId, nodePath, currentDocumentKey, storeApi, storage, draftMarkdown, setDetailMarkdown, setCardMarkdown, activeDocumentPath])

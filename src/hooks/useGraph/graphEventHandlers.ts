@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import { tabStore } from '../../stores/tabStore'
 import { logAction } from '../../core/log-backend'
+import { markPerformanceMetricStart, PERFORMANCE_METRICS } from '../../core/performance-log'
 import type { KnowledgeNodeData } from '../../types'
 import type { RightPanelTab } from '../../stores/uiStoreTypes'
 import { generateId } from './graphBuilder'
@@ -141,8 +142,12 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   )
 
   const onNodeClick = useCallback(
-    (_event: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
+    (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
       logAction('节点:点击', 'useGraph', { nodeId: node.id, label: node.data.label })
+      if (!event.shiftKey) {
+        markPerformanceMetricStart(PERFORMANCE_METRICS.nodeSelect, node.id)
+      }
+      ops.selectNode(node.id, event.shiftKey)
       setSelectedEdgeId(null)
       ops.setSelectedEdgeInGraph(null)
     },
@@ -188,6 +193,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     (_: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
       setSelectedEdgeId(null)
       ops.setSelectedEdgeInGraph(null)
+      markPerformanceMetricStart(PERFORMANCE_METRICS.nodeSelect, node.id)
       ops.selectNode(node.id)
     },
     [ops, setSelectedEdgeId]

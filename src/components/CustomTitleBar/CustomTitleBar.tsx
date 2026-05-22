@@ -138,7 +138,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
         invokeWindowCommand('app:window:toggleMaximize')
       }}
     >
-      <div className="shrink-0 flex items-center pl-2 gap-2 h-full relative after:content-[''] after:absolute after:right-0 after:top-[20%] after:bottom-[20%] after:w-[1px] after:bg-[var(--color-border-subtle)] pr-2">
+      <div className="shrink-0 flex items-center pl-2 gap-2 h-full relative after:content-[''] after:absolute after:right-0 after:top-[18%] after:bottom-[18%] after:w-px after:bg-[color-mix(in_srgb,var(--titlebar-text)_18%,var(--color-border-subtle))] after:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] pr-2">
         <div className="inline-flex items-center h-6 gap-[6px] px-1.5 rounded-[6px] text-[var(--titlebar-text)]" title="TopoMind" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <img src="./icon.svg" alt="Logo" className="w-4 h-4 drop-shadow-sm" />
         </div>
@@ -265,7 +265,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                 样式
               </button>
             </div>
-            <div className="w-[1px] h-[16px] bg-[var(--color-border-subtle)] mx-1" />
+            <div className="mx-1 h-[18px] w-px bg-[color-mix(in_srgb,var(--titlebar-text)_22%,var(--color-border-subtle))] shadow-[0_0_0_1px_rgba(255,255,255,0.03)]" />
           </>
         )}
         <div className="h-full inline-flex items-stretch">

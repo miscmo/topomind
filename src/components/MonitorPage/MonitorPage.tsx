@@ -4,6 +4,7 @@
  */
 import { useEffect, useCallback, useState } from 'react'
 import { useMonitorStore, type LogEntry } from '../../stores/monitorStore'
+import PerformanceTab from './PerformanceTab'
 import {
   logGetBuffer,
   logQuery,
@@ -500,19 +501,6 @@ function DetailPanel() {
             </pre>
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-/** 性能监控页面（预留） */
-function PerformanceTab() {
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="flex flex-col items-center py-[60px] px-5 text-[#aaa] text-[14px] text-center">
-        <span className="text-[40px] mb-3 block opacity-40">&#9651;</span>
-        <p>性能监控</p>
-        <p className="text-[12px] text-[#bbb] mt-1">预留功能，后续版本将集成性能指标可视化</p>
       </div>
     </div>
   )

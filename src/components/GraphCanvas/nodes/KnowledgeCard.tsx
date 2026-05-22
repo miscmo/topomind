@@ -33,7 +33,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
   const [isHovered, setIsHovered] = useState(false)
-  const [isPressed, setIsPressed] = useState(false)
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState(data.label)
   const [markdownEditing, setMarkdownEditing] = useState(false)
@@ -53,7 +52,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   const showResizeLabel = resizing === true || resizePreviewSize !== null
   const resizeLabel = `${Math.round(resizeDisplaySize.width)} × ${Math.round(resizeDisplaySize.height)}`
   const shouldShowMarkdown = nodeWidth >= MARKDOWN_MIN_WIDTH && nodeHeight >= MARKDOWN_MIN_HEIGHT
-  const visuallySelected = selected || isPressed
+  const visuallySelected = selected
   const isConnectTarget = useGraphUiStore((state) => !!state.connectingSourceId && state.connectingTargetId === id)
   const isConnectSource = useGraphUiStore((state) => state.connectingSourceId === id)
   const nodeSizeLimits = useGraphUiStore((state) => state.nodeSizeLimits)
@@ -388,17 +387,16 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   return (
     <div
       onPointerEnter={() => setIsHovered(true)}
-      onPointerDown={() => setIsPressed(true)}
-      onPointerUp={() => setIsPressed(false)}
+      onPointerDown={undefined}
+      onPointerUp={undefined}
       onPointerLeave={() => {
         setIsHovered(false)
-        setIsPressed(false)
       }}
-      onPointerCancel={() => setIsPressed(false)}
+      onPointerCancel={undefined}
       className={cn(
-        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-surface shadow-sm transition-all duration-150 w-full h-full box-border",
+        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-surface shadow-sm transition-[border-color,box-shadow,opacity] duration-75 active:border-accent active:shadow-[0_0_0_1px_var(--color-accent-soft)] w-full h-full box-border",
         shouldShowMarkdown && "nowheel",
-        visuallySelected && "border-2 border-accent shadow-[0_0_0_1px_var(--color-accent-soft)] !border-accent z-10",
+        selected && "border-accent shadow-[0_0_0_1px_var(--color-accent),0_0_0_4px_var(--color-accent-soft)] z-10",
         isConnectTarget && "border-2 border-success shadow-[0_0_0_3px_var(--color-success-soft)] !border-success z-10",
         visuallyHovered && !visuallySelected && !isConnectTarget && "border-border-strong",
         dragging && "opacity-90"
@@ -406,7 +404,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       style={{
         cursor: dragging ? 'grabbing' : 'default',
         borderColor: visuallySelected ? undefined : data.domainColor ?? nodeStyle.borderColor,
-        borderWidth: visuallySelected || isConnectTarget ? 2 : nodeStyle.borderWidth,
+        borderWidth: isConnectTarget ? 2 : nodeStyle.borderWidth,
         borderRadius,
         width: width ?? defaultNodeSize.width,
         height: height ?? defaultNodeSize.height,

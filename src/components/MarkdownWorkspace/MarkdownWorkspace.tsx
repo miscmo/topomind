@@ -369,24 +369,8 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
           >
             <div className="flex items-center justify-start gap-2 min-h-[58px] p-2.5 px-3 pb-2 border-b border-[var(--color-border-subtle)] bg-gradient-to-b from-[color-mix(in_srgb,var(--color-surface)_98%,transparent)] to-[var(--color-bg)] box-border">
               {showSidebarContent ? (
-                <div className="w-full flex items-center gap-2.5 min-w-0">
-                  {effectiveFloating && (
-                    <button
-                      type="button"
-                      className="w-6 h-6 inline-flex items-center justify-center shrink-0 p-0 border border-[var(--color-border)] rounded-[7px] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] text-[var(--color-text-muted)] cursor-pointer shadow-[var(--shadow-sm)] transition-all hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-primary)] hover:shadow-[var(--shadow-md)] active:shadow-[var(--shadow-sm)]"
-                      onClick={() => onDetailSidebarCollapsedChange?.(false)}
-                      title="固定左侧栏"
-                      aria-label="固定左侧栏"
-                    >
-                      <span className="relative w-3 h-3 inline-block" aria-hidden="true">
-                        <span className="absolute left-0 w-3 h-[1.5px] rounded-full bg-current opacity-90 top-[1px]" />
-                        <span className="absolute left-0 w-3 h-[1.5px] rounded-full bg-current opacity-90 top-[5px]" />
-                        <span className="absolute left-0 w-3 h-[1.5px] rounded-full bg-current opacity-90 top-[9px]" />
-                        <span className="absolute top-1 right-[-1px] w-0 h-0 border-y-[3px] border-y-transparent border-r-[4px] border-r-current" />
-                      </span>
-                    </button>
-                  )}
-                  <div className="flex gap-[2px] min-w-0 flex-1 p-[2px] border border-[#e2e8f0] rounded-[10px] bg-[color-mix(in_srgb,var(--color-bg-muted)_88%,transparent)] shadow-[inset_0_1px_1px_rgba(148,163,184,0.08)]">
+                <div className="w-full min-w-0">
+                  <div className="flex gap-[2px] min-w-0 p-[2px] border border-[#e2e8f0] rounded-[10px] bg-[color-mix(in_srgb,var(--color-bg-muted)_88%,transparent)] shadow-[inset_0_1px_1px_rgba(148,163,184,0.08)]">
                     <button
                       type="button"
                       className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-180 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'documents' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
