@@ -79,16 +79,43 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
 
   useEffect(() => {
     if (!activeMenu) return
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setActiveMenu(null)
+    
+    // 创建一个全屏的透明遮罩层来拦截所有的点击事件
+    // 因为 Electron 的 -webkit-app-region: drag 区域会吞噬掉原生的鼠标事件
+    const overlay = document.createElement('div')
+    overlay.style.position = 'fixed'
+    overlay.style.inset = '0'
+    overlay.style.zIndex = '3001' // 覆盖标题栏的其他区域，但在菜单（z-[3002]）之下
+    // 强制此区域不可拖拽，以保证能接收到点击事件
+    overlay.style.setProperty('-webkit-app-region', 'no-drag')
+    
+    const handleClose = () => setActiveMenu(null)
+    
+    overlay.addEventListener('pointerdown', handleClose)
+    if (rootRef.current) {
+      rootRef.current.appendChild(overlay)
+    } else {
+      document.body.appendChild(overlay)
     }
+
+    const handleWindowPointerDown = (e: PointerEvent) => {
+      if (e.target instanceof Element && e.target.closest('nav[aria-label="应用菜单"]')) {
+        return
+      }
+      handleClose()
+    }
+    window.addEventListener('pointerdown', handleWindowPointerDown, { capture: true })
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setActiveMenu(null)
     }
-    window.addEventListener('pointerdown', handlePointerDown)
     window.addEventListener('keydown', handleKeyDown)
     return () => {
-      window.removeEventListener('pointerdown', handlePointerDown)
+      overlay.removeEventListener('pointerdown', handleClose)
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay)
+      }
+      window.removeEventListener('pointerdown', handleWindowPointerDown, { capture: true })
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [activeMenu])
@@ -143,12 +170,13 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
           <img src="./icon.svg" alt="Logo" className="w-4 h-4 drop-shadow-sm" />
         </div>
         {mode === 'workspace' && (
-          <nav className="hidden md:flex items-center gap-[1px] min-w-0" aria-label="应用菜单" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <nav className="hidden md:flex items-stretch h-[24px] gap-[1px] min-w-0 relative z-[3002] ml-1" aria-label="应用菜单" style={{ WebkitAppRegion: 'no-drag' } as any}>
             {MENU_LABELS.map((menu) => (
-              <div key={menu.key} className="relative">
+              <div key={menu.key} className="relative flex items-center h-full">
                 <button
                   type="button"
-                  className={`h-[24px] px-2 rounded-md bg-transparent text-[12px] font-medium cursor-default transition-colors hover:bg-[var(--titlebar-hover)] ${activeMenu === menu.key ? 'bg-[var(--titlebar-hover)] text-[var(--color-primary)]' : 'text-[var(--titlebar-text)]'}`}
+                  aria-haspopup="true"
+                  className={`h-full px-2.5 rounded-[6px] bg-transparent text-[12px] font-medium cursor-default transition-colors ${activeMenu === menu.key ? 'bg-[var(--titlebar-hover)] text-[var(--titlebar-text)]' : 'text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]'}`}
                   onClick={() => setActiveMenu((current) => current === menu.key ? null : menu.key)}
                   onMouseEnter={() => { if (activeMenu) setActiveMenu(menu.key) }}
                   style={{ WebkitAppRegion: 'no-drag' } as any}
@@ -156,7 +184,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                   {menu.label}
                 </button>
                 {activeMenu === menu.key && (
-                  <div className="absolute top-[30px] left-0 min-w-[188px] p-1.5 rounded-[10px] border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-[14px] z-[3001]" role="menu">
+                  <div className="absolute top-[calc(100%+6px)] left-0 min-w-[188px] p-1.5 rounded-[10px] border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-[14px] z-[3001]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
                     {menuItems[menu.key].map((item) => (
                       item.submenu ? (
                         <div key={item.label} className="relative group">
@@ -167,13 +195,13 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                             <span>{item.label}</span>
                             <span className="text-[var(--color-text-muted)] text-[10px]">▶</span>
                           </button>
-                          <div className="absolute top-0 left-[calc(100%+4px)] min-w-[140px] p-1.5 rounded-[10px] border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-[14px] opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-75 z-[3002]" role="menu">
+                          <div className="absolute top-0 left-[calc(100%+4px)] min-w-[140px] p-1.5 rounded-[10px] border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-[14px] opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-75 z-[3002]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
                             {item.submenu.map(subItem => (
                               <button
                                 key={subItem.label}
                                 type="button"
-                                className="w-full h-[30px] flex items-center justify-between gap-2 px-[9px] rounded-[7px] bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-default hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] disabled:opacity-50"
-                                 disabled={subItem.disabled}
+                                className="w-full h-[30px] flex items-center justify-between gap-2 px-[9px] rounded-[7px] bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-default hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] disabled:hover:bg-transparent disabled:hover:text-[var(--color-text-muted)] disabled:text-[var(--color-text-muted)]"
+                                disabled={subItem.disabled}
                                  onClick={() => {
                                   if (subItem.disabled) return
                                   setActiveMenu(null)
@@ -190,7 +218,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                         <button
                           key={item.label}
                           type="button"
-                          className="w-full h-[30px] flex items-center justify-between gap-4 px-[9px] rounded-[7px] bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-default hover:not(:disabled):bg-[var(--color-hover-bg)] hover:not(:disabled):text-[var(--color-primary)] disabled:text-[var(--color-text-muted)]"
+                          className="w-full h-[30px] flex items-center justify-between gap-4 px-[9px] rounded-[7px] bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-default hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] disabled:hover:bg-transparent disabled:hover:text-[var(--color-text-muted)] disabled:text-[var(--color-text-muted)]"
                           disabled={item.disabled}
                           onClick={() => {
                             if (item.disabled) return
@@ -211,9 +239,9 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
         )}
       </div>
 
-      <div className="flex-1 min-w-0 flex items-end justify-start h-full mx-2.5 relative" style={{ WebkitAppRegion: 'drag' } as any}>
+      <div className="flex-1 min-w-0 flex items-center justify-start h-full mx-2.5 relative" style={{ WebkitAppRegion: 'drag' } as any}>
         {mode === 'workspace' && (
-          <div className="h-full w-full max-w-[50%] flex items-end" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div className="h-full w-full max-w-[50%] flex items-center" style={{ WebkitAppRegion: 'no-drag' } as any}>
             <TabBar />
           </div>
         )}
@@ -243,27 +271,29 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                 </svg>
               )}
             </button>
-            <div className="flex items-center h-[22px] bg-[var(--titlebar-bg-unfocused)] border border-[var(--color-border-subtle)] rounded-[6px] p-[2px] mx-1 mr-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
-              <button
-                type="button"
-                className={`px-2.5 h-full rounded-[4px] text-[11px] font-medium transition-colors ${rightPanelTab === 'detail' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.05)]' : 'text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)]'}`}
-                onClick={() => {
-                  setRightPanelTab('detail')
-                  if (rightPanelCollapsed) expandRightPanel()
-                }}
-              >
-                详情
-              </button>
-              <button
-                type="button"
-                className={`px-2.5 h-full rounded-[4px] text-[11px] font-medium transition-colors ${rightPanelTab === 'style' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.05)]' : 'text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)]'}`}
-                onClick={() => {
-                  setRightPanelTab('style')
-                  if (rightPanelCollapsed) expandRightPanel()
-                }}
-              >
-                样式
-              </button>
+            <div className="flex items-center h-full mx-1 mr-2 relative z-[3002]" style={{ WebkitAppRegion: 'no-drag' } as any}>
+              <div className="flex items-center h-[24px] bg-[var(--titlebar-bg-unfocused)] border border-[var(--color-border-subtle)] rounded-[6px] p-[2px]">
+                <button
+                  type="button"
+                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-colors ${rightPanelTab === 'detail' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.05)]' : 'text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)]'}`}
+                  onClick={() => {
+                    setRightPanelTab('detail')
+                    if (rightPanelCollapsed) expandRightPanel()
+                  }}
+                >
+                  详情
+                </button>
+                <button
+                  type="button"
+                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-colors ${rightPanelTab === 'style' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.05)]' : 'text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)]'}`}
+                  onClick={() => {
+                    setRightPanelTab('style')
+                    if (rightPanelCollapsed) expandRightPanel()
+                  }}
+                >
+                  样式
+                </button>
+              </div>
             </div>
             <div className="mx-1 h-[18px] w-px bg-[color-mix(in_srgb,var(--titlebar-text)_22%,var(--color-border-subtle))] shadow-[0_0_0_1px_rgba(255,255,255,0.03)]" />
           </>

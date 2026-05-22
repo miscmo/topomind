@@ -181,7 +181,7 @@ html[data-theme='dark'] {
   --titlebar-text-unfocused: #9aa8ba;
   --titlebar-muted: #91a0b4;
   --titlebar-muted-unfocused: #6f7f93;
-  --titlebar-hover: rgba(148, 163, 184, 0.14);
+  --titlebar-hover: rgba(255, 255, 255, 0.1);
   --titlebar-active: rgba(74, 168, 255, 0.16);
   --titlebar-command-bg: rgba(22, 30, 43, 0.86);
   --titlebar-command-bg-hover: #1b2534;
