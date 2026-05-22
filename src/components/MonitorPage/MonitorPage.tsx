@@ -298,7 +298,7 @@ function LogRow({ entry, selected, onClick, keyword }: LogRowProps) {
 
   return (
     <div
-      className={`flex items-center px-3 py-1 border-b border-[#f0f2f5] cursor-pointer transition-colors duration-[80ms] min-w-0 gap-0 hover:bg-[#f8f9fb] ${selected ? '!bg-[#e8f4fd] border-l-2 border-l-[#3498db] !pl-[10px]' : ''} ${
+      className={`flex items-center px-3 py-1 border-b border-[#f0f2f5] cursor-pointer transition-colors duration-80 min-w-0 gap-0 hover:bg-[#f8f9fb] ${selected ? '!bg-[#e8f4fd] border-l-2 border-l-[#3498db] !pl-[10px]' : ''} ${
         level === 'ERROR' ? 'bg-[#fef5f5] hover:!bg-[#fee2e2]' : level === 'WARN' ? 'bg-[#fffbf0] hover:!bg-[#fef3e2]' : ''
       }`}
       onClick={onClick}

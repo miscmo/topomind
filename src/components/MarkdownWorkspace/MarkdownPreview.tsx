@@ -87,6 +87,7 @@ const DEFAULT_IMAGE_ALIGN: ImageAlign = 'left'
 const DEFAULT_IMAGE_WIDTH = 100
 
 function iterateMarkdownLines(markdown: string, visitor: (line: string, lineStart: number) => void) {
+  if (typeof markdown !== 'string') return
   const matches = markdown.match(/.*(?:\r?\n|$)/g) ?? []
   let offset = 0
   for (const segment of matches) {
@@ -146,6 +147,10 @@ function parseInteractiveMarkdown(markdown: string) {
   const taskItems: TaskItemMeta[] = []
   const codeBlocks: CodeBlockMeta[] = []
   const imageItems: ImageMeta[] = []
+
+  if (typeof markdown !== 'string') {
+    return { taskItems, codeBlocks, imageItems }
+  }
 
   const tree = unified().use(remarkParse).parse(markdown)
 
@@ -603,7 +608,10 @@ export const MarkdownPreview = memo(function MarkdownPreview({
   }, [codeBlocks, content, onChange])
 
   const handleToggleWrap = useCallback((blockIndex: number) => {
-    setWrappedCodeBlocks((current) => ({ ...current, [blockIndex]: !current[blockIndex] }))
+    setWrappedCodeBlocks((current) => {
+      const isWrapped = current[blockIndex] !== false
+      return { ...current, [blockIndex]: !isWrapped }
+    })
   }, [])
 
   const handleCopyCode = useCallback(async (blockIndex: number, code: string) => {
@@ -751,7 +759,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
               compact={compact}
               blockIndex={currentBlockIndex}
               canEdit={!!onChange}
-              isWrapped={!!wrappedCodeBlocks[currentBlockIndex]}
+              isWrapped={wrappedCodeBlocks[currentBlockIndex] !== false}
               copied={copiedCodeBlockIndex === currentBlockIndex}
               onToggleWrap={() => handleToggleWrap(currentBlockIndex)}
               onCopy={() => handleCopyCode(currentBlockIndex, code)}
@@ -869,7 +877,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
         components={components}
         urlTransform={(url) => url}
       >
-        {content}
+        {content || ''}
       </ReactMarkdown>
       {previewImage && (
         <div

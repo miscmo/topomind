@@ -29,8 +29,9 @@ export const MarkdownStatusBar = memo(function MarkdownStatusBar({
     return '#10b981' // green
   }
 
-  const wordCount = value.trim().split(/\s+/).filter(Boolean).length
-  const charCount = value.length
+  const safeValue = value || ''
+  const wordCount = safeValue.trim().split(/\s+/).filter(Boolean).length
+  const charCount = safeValue.length
 
   return (
     <div className="flex justify-between items-center py-1.5 px-3 text-[11px] text-[#64748b] !text-[var(--color-text-muted)] border-t border-[#e2e8f0] !border-[var(--color-border)] bg-white/92 !bg-[color-mix(in_srgb,var(--color-bg)_92%,transparent)]">

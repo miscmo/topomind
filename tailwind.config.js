@@ -47,6 +47,12 @@ module.exports = {
         md: "var(--radius-md)",
         sm: "var(--radius-sm)",
       },
+      transitionDuration: {
+        '80': '80ms',
+        '120': '120ms',
+        '160': '160ms',
+        '180': '180ms',
+      },
     },
   },
   plugins: [

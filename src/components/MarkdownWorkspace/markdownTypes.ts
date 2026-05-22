@@ -21,7 +21,9 @@ export interface MarkdownWorkspaceProps {
   detailDocuments?: DetailDocumentItem[]
   activeDetailDocumentPath?: string
   detailSidebarCollapsed?: boolean
+  detailSidebarFloating?: boolean
   onDetailSidebarCollapsedChange?: (collapsed: boolean) => void
+  onSidebarHoverChange?: (hovered: boolean) => void
   viewMode?: MarkdownViewMode
   onViewModeChange?: (mode: MarkdownViewMode) => void
   showToolbar?: boolean

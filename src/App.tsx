@@ -68,7 +68,7 @@ export default memo(function App() {
           <CustomTitleBar mode="workspace" />
           <div className="relative w-full flex-1 min-h-0 overflow-hidden bg-[var(--color-surface)]">
             <div
-              className="absolute inset-0 transition-opacity duration-[120ms] ease-in-out"
+              className="absolute inset-0 transition-opacity duration-120 ease-in-out"
               inert={activeTab?.type === 'home' ? undefined : ""}
               style={{
                 visibility: activeTab?.type === 'home' ? 'visible' : 'hidden',
@@ -82,7 +82,7 @@ export default memo(function App() {
               </Suspense>
             </div>
             <div
-              className="absolute inset-0 transition-opacity duration-[120ms] ease-in-out"
+              className="absolute inset-0 transition-opacity duration-120 ease-in-out"
               inert={activeTab?.type === 'monitor' ? undefined : ""}
               style={{
                 visibility: activeTab?.type === 'monitor' ? 'visible' : 'hidden',
@@ -99,7 +99,7 @@ export default memo(function App() {
             {tabs.filter(t => t.type === 'kb').map(tab => (
               <div
                 key={tab.id}
-                className="absolute inset-0 transition-opacity duration-[120ms] ease-in-out"
+                className="absolute inset-0 transition-opacity duration-120 ease-in-out"
                 inert={activeTabId === tab.id ? undefined : ""}
                 style={{
                   visibility: activeTabId === tab.id ? 'visible' : 'hidden',

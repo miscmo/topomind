@@ -60,7 +60,31 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const [documents, setDocuments] = useState<DetailDocumentItem[]>([])
   const [isDocumentBusy, setIsDocumentBusy] = useState(false)
   const [documentLinkNotice, setDocumentLinkNotice] = useState('')
-  const [detailSidebarCollapsed, setDetailSidebarCollapsed] = useState(false)
+  const [detailSidebarCollapsed, setDetailSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('topomind_detail_sidebar_collapsed')
+    return saved ? saved === 'true' : true
+  })
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false)
+  const [isButtonHovered, setIsButtonHovered] = useState(false)
+  
+  const hoverTimeoutRef = useRef<number | null>(null)
+  const handleButtonHover = useCallback((hovered: boolean) => {
+    if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current)
+    if (hovered) {
+      setIsButtonHovered(true)
+    } else {
+      hoverTimeoutRef.current = window.setTimeout(() => setIsButtonHovered(false), 150)
+    }
+  }, [])
+  const handleSidebarHover = useCallback((hovered: boolean) => {
+    if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current)
+    if (hovered) {
+      setIsSidebarHovered(true)
+    } else {
+      hoverTimeoutRef.current = window.setTimeout(() => setIsSidebarHovered(false), 150)
+    }
+  }, [])
+
   const [viewMode, setViewMode] = useState<MarkdownViewMode>('preview')
   const renameInputRef = useRef<HTMLInputElement>(null)
   const markdownRequestSeqRef = useRef(0)
@@ -332,6 +356,14 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     return registerTabSaver(tabId, flushMarkdownSave)
   }, [tabId, flushMarkdownSave])
 
+  const handleToggleSidebar = useCallback(() => {
+    setDetailSidebarCollapsed((collapsed) => {
+      const next = !collapsed
+      localStorage.setItem('topomind_detail_sidebar_collapsed', String(next))
+      return next
+    })
+  }, [])
+
   // ===== Empty state =====
   if (!selectedNodeId || !hasSelectedNode) {
     return (
@@ -352,6 +384,10 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           attachmentCardPath={nodePath}
           documentType="detail"
           previewClassName="text-[15px] leading-relaxed text-[var(--color-text-primary)] [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_p]:mt-0 [&_p]:mb-2.5 [&_blockquote]:mt-0 [&_blockquote]:mb-4 [&_ul]:mt-0 [&_ul]:mb-4 [&_ol]:mt-0 [&_ol]:mb-4 [&_dl]:mt-0 [&_dl]:mb-4 [&_table]:mt-0 [&_table]:mb-4 [&_pre]:mt-0 [&_pre]:mb-4 [&_details]:mt-0 [&_details]:mb-4 [&_img]:rounded-md"
+          detailSidebarCollapsed={detailSidebarCollapsed}
+          detailSidebarFloating={detailSidebarCollapsed && (isSidebarHovered || isButtonHovered)}
+          onDetailSidebarCollapsedChange={handleToggleSidebar}
+          onSidebarHoverChange={handleSidebarHover}
           detailHeader={(
             <div className="min-h-[58px] px-4 pt-2.5 pb-2 border-b border-[var(--color-border-light)] shrink-0 flex flex-col justify-center gap-1 bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)] box-border">
               <div className="flex items-center justify-between gap-3 w-full">
@@ -359,7 +395,9 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
                   <button
                     type="button"
                     className="w-6 h-6 inline-flex items-center justify-center shrink-0 p-0 border border-[var(--color-border)] rounded-[7px] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] text-[var(--color-text-muted)] cursor-pointer shadow-[var(--shadow-sm)] transition-all hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-primary)] hover:shadow-[var(--shadow-md)] active:shadow-[var(--shadow-sm)]"
-                    onClick={() => setDetailSidebarCollapsed((collapsed) => !collapsed)}
+                    onClick={handleToggleSidebar}
+                    onMouseEnter={() => handleButtonHover(true)}
+                    onMouseLeave={() => handleButtonHover(false)}
                     title={detailSidebarCollapsed ? '展开左侧栏' : '收起左侧栏'}
                     aria-label={detailSidebarCollapsed ? '展开左侧栏' : '收起左侧栏'}
                   >
@@ -439,8 +477,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           )}
           detailDocuments={displayDocuments}
           activeDetailDocumentPath={activeDocumentPath}
-          detailSidebarCollapsed={detailSidebarCollapsed}
-          onDetailSidebarCollapsedChange={setDetailSidebarCollapsed}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           showToolbar={false}
