@@ -34,8 +34,8 @@ const DIST_RENDERER_DIR = [
   nodePath.join(CURRENT_SCRIPT_DIR, '..', 'dist'),
 ].find((dir) => nodeFs.existsSync(nodePath.join(dir, 'index.html')))
   || nodePath.join(APP_PATH, 'dist');
-const SETUP_WINDOW_WIDTH = 380;
-const SETUP_WINDOW_HEIGHT = 252;
+const SETUP_WINDOW_WIDTH = 680;
+const SETUP_WINDOW_HEIGHT = 420;
 const HOME_WINDOW_WIDTH = 1400;
 const HOME_WINDOW_HEIGHT = 900;
 const WINDOW_BACKGROUND_COLOR = '#ffffff';

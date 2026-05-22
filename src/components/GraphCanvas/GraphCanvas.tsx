@@ -101,6 +101,8 @@ function CardSnappedConnectionLine({
   toY,
   connectionLineStyle,
 }: ConnectionLineComponentProps) {
+  const activeTabId = useTabStore((s) => s.activeTabId)
+  const markerId = `${CONNECTION_ARROW_MARKER_ID}-${activeTabId}`
   const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
   const connectingTargetId = useGraphUiStore((s) => s.connectingTargetId)
   const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
@@ -139,8 +141,8 @@ function CardSnappedConnectionLine({
   return (
     <>
       <defs>
-        <marker id={CONNECTION_ARROW_MARKER_ID} viewBox="0 0 12 12" markerWidth="16" markerHeight="16" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-          <path d="M 2 2 L 10 6 L 2 10" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <marker id={markerId} viewBox="0 0 20 20" markerWidth="20" markerHeight="20" refX="16" refY="10" orient="auto" markerUnits="strokeWidth">
+          <path d="M 0 0 L 20 10 L 0 20 Z" fill={color} stroke="none" />
         </marker>
       </defs>
       <path 
@@ -150,7 +152,7 @@ function CardSnappedConnectionLine({
         strokeWidth={2} 
         stroke={color} 
         strokeDasharray="6 4"
-        markerEnd={defaultEdgeStyle.arrow !== false ? `url(#${CONNECTION_ARROW_MARKER_ID})` : undefined} 
+        markerEnd={defaultEdgeStyle.arrow !== false ? `url(#${markerId})` : undefined} 
       />
     </>
   )
@@ -327,6 +329,7 @@ export default memo(function GraphCanvas({
       onMouseLeave={connectingSourceId ? handleConnectionMouseLeave : undefined}
     >
       <ReactFlow
+        id={tabId}
         nodes={nodes as Node[]}
         edges={edges}
         // 注册自定义节点的组件类型
@@ -400,7 +403,7 @@ export default memo(function GraphCanvas({
       >
         <SmartGuidesRenderer guideLines={guideLines} />
         {showGrid && (
-          <Background variant={'dots' as BackgroundVariant} gap={20} size={1} color="var(--color-canvas-grid)" />
+          <Background id={tabId} variant={'dots' as BackgroundVariant} gap={20} size={1} color="var(--color-canvas-grid)" />
         )}
       </ReactFlow>
       <Toolbar zoomLevel={zoomLevel} />

@@ -12,6 +12,7 @@ import { useStorage } from '../../core/storage'
 import { useThemeStore } from '../../stores/themeStore'
 import { handleMarkdownPaste, handleMarkdownDrop } from './AttachmentPipeline'
 import { slashCommandCompletion } from './slashCommandPlugin'
+import { createMentionCompletion } from './mentionPlugin'
 import { markdownKeymap } from './markdownShortcuts'
 
 interface MarkdownSourceEditorProps {
@@ -130,7 +131,7 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
     history(),
     highlightSelectionMatches(),
     foldGutter(),
-    autocompletion({ override: [slashCommandCompletion] }),
+    autocompletion({ override: [slashCommandCompletion, createMentionCompletion(storage, attachmentCardPath)] }),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     customKeymap,
