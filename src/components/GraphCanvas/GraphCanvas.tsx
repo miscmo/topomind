@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { Background, ReactFlow, useReactFlow, type BackgroundVariant, type ConnectionLineComponentProps, type Edge, type Node, type NodeTypes, type Viewport, type NodeChange } from '@xyflow/react'
+import { Background, ReactFlow, useReactFlow, getSmoothStepPath, getStraightPath, type BackgroundVariant, type ConnectionLineComponentProps, type Edge, type Node, type NodeTypes, type Viewport, type NodeChange } from '@xyflow/react'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import { useGraphContext } from '../../contexts/GraphContext'
 import { useGraphStore } from '../../stores/graphStore'
@@ -103,6 +103,9 @@ function CardSnappedConnectionLine({
 }: ConnectionLineComponentProps) {
   const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
   const connectingTargetId = useGraphUiStore((s) => s.connectingTargetId)
+  const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
+  const color = defaultEdgeStyle.color || '#7f8c8d'
+  
   const sourceNode = useGraphStore((s) => connectingSourceId ? s.nodesMap.get(connectingSourceId) : null)
   const targetNode = useGraphStore((s) => connectingTargetId ? s.nodesMap.get(connectingTargetId) : null)
   const sourceRect = sourceNode ? getNodeRect(sourceNode as Node) : null
@@ -113,16 +116,42 @@ function CardSnappedConnectionLine({
   const sourcePoint = sourceRect
     ? getRectIntersectionPoint(targetPoint, getRectCenter(sourceRect), sourceRect)
     : { x: fromX, y: fromY }
-  const path = `M ${sourcePoint.x},${sourcePoint.y} L ${targetPoint.x},${targetPoint.y}`
+  
+  // Use smoothstep or straight path based on defaultEdgeStyle
+  const isStraight = defaultEdgeStyle.lineMode === 'straight'
+  const [edgePath] = isStraight
+    ? getStraightPath({
+        sourceX: sourcePoint.x,
+        sourceY: sourcePoint.y,
+        targetX: targetPoint.x,
+        targetY: targetPoint.y,
+      })
+    : getSmoothStepPath({
+        sourceX: sourcePoint.x,
+        sourceY: sourcePoint.y,
+        sourcePosition: (targetPoint.x > sourcePoint.x ? 'right' : 'left') as any,
+        targetPosition: (targetPoint.x > sourcePoint.x ? 'left' : 'right') as any,
+        targetX: targetPoint.x,
+        targetY: targetPoint.y,
+        borderRadius: 16,
+      })
 
   return (
     <>
       <defs>
-        <marker id={CONNECTION_ARROW_MARKER_ID} viewBox="0 0 12 12" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-          <path d="M 2 2 L 10 6 L 2 10 z" fill="#3b82f6" />
+        <marker id={CONNECTION_ARROW_MARKER_ID} viewBox="0 0 12 12" markerWidth="16" markerHeight="16" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+          <path d="M 2 2 L 10 6 L 2 10" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </marker>
       </defs>
-      <path fill="none" d={path} style={connectionLineStyle} strokeWidth={2} stroke="#3b82f6" markerEnd={`url(#${CONNECTION_ARROW_MARKER_ID})`} />
+      <path 
+        fill="none" 
+        d={edgePath} 
+        style={connectionLineStyle} 
+        strokeWidth={2} 
+        stroke={color} 
+        strokeDasharray="6 4"
+        markerEnd={defaultEdgeStyle.arrow !== false ? `url(#${CONNECTION_ARROW_MARKER_ID})` : undefined} 
+      />
     </>
   )
 }

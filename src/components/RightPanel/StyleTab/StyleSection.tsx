@@ -70,11 +70,11 @@ function CollapsibleBlock({
   return (
     <div className="border-b border-[var(--color-border-subtle)] last-of-type:border-none">
       <div 
-        className={`text-[13px] font-semibold text-[var(--color-text-primary)] m-0 flex items-center justify-between cursor-pointer select-none px-4 py-3 bg-transparent transition-colors duration-200 hover:bg-[var(--color-hover-bg)]`}
+        className={`text-[13px] font-semibold text-[var(--color-text-primary)] m-0 flex items-center justify-between cursor-pointer select-none px-4 py-3 bg-transparent transition-colors duration-75 hover:bg-[var(--color-hover-bg)]`}
         onClick={() => onToggle(expandedKey)}
       >
         <span>{title}</span>
-        <span className={`text-[10px] leading-none text-[var(--color-text-muted)] transition-all duration-200 inline-flex items-center justify-center self-center w-6 h-6 rounded-md hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-secondary)] ${!isExpanded ? '-rotate-90' : ''}` }>▼</span>
+        <span className={`text-[10px] leading-none text-[var(--color-text-muted)] transition-all duration-75 inline-flex items-center justify-center self-center w-6 h-6 rounded-md hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-secondary)] ${!isExpanded ? '-rotate-90' : ''}` }>▼</span>
       </div>
       <div className={`px-4 pb-4 min-h-0 ${!isExpanded ? 'hidden' : ''}` }>
         {hint && <div className="text-[12px] text-[var(--color-text-muted)] m-0 mb-4 leading-[1.4] bg-[var(--color-bg)] py-2 px-3 rounded-md border-l-[3px] border-[var(--color-accent)]">{hint}</div>}
@@ -157,7 +157,7 @@ function SegmentedControl({
       {options.map((opt, i) => (
         <button
           key={i}
-          className={`flex-1 border-none py-1 text-[12px] font-medium rounded cursor-pointer transition-all duration-200 text-center ${value === opt.value ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]' : 'bg-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}` }
+          className={`flex-1 border-none py-1 text-[12px] font-medium rounded cursor-pointer transition-all duration-75 text-center ${value === opt.value ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]' : 'bg-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}` }
           onClick={() => onChange(opt.value)}
         >
           {opt.label}
@@ -181,7 +181,7 @@ function ToggleGroup({
       {options.map((opt, i) => (
         <button
           key={i}
-          className={`flex-1 flex items-center justify-center gap-[6px] h-8 border rounded-md text-[12px] font-medium cursor-pointer transition-all duration-200 ${value === opt.value ? 'bg-[var(--color-selected-bg)] border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]'}` }
+          className={`flex-1 flex items-center justify-center gap-[6px] h-8 border rounded-md text-[12px] font-medium cursor-pointer transition-all duration-75 ${value === opt.value ? 'bg-[var(--color-selected-bg)] border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]'}` }
           onClick={() => onChange(opt.value)}
         >
           {opt.label}
@@ -380,7 +380,7 @@ export default memo(function StyleSection() {
           <div className="grid grid-cols-2 gap-y-3 gap-x-4">
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">最小宽度</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={1}
                 value={nodeSizeLimits.minWidth}
                 onChange={(e) => updateNodeSizeLimits('minWidth', e.target.value)}
@@ -388,7 +388,7 @@ export default memo(function StyleSection() {
             </div>
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">最小高度</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={1}
                 value={nodeSizeLimits.minHeight}
                 onChange={(e) => updateNodeSizeLimits('minHeight', e.target.value)}
@@ -396,7 +396,7 @@ export default memo(function StyleSection() {
             </div>
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">最大宽度</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={nodeSizeLimits.minWidth}
                 value={nodeSizeLimits.maxWidth}
                 onChange={(e) => updateNodeSizeLimits('maxWidth', e.target.value)}
@@ -404,7 +404,7 @@ export default memo(function StyleSection() {
             </div>
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">最大高度</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={nodeSizeLimits.minHeight}
                 value={nodeSizeLimits.maxHeight}
                 onChange={(e) => updateNodeSizeLimits('maxHeight', e.target.value)}
@@ -412,7 +412,7 @@ export default memo(function StyleSection() {
             </div>
             <div className="flex flex-col gap-[6px] mb-0 col-span-full">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">徽章大小</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={8}
                 max={28}
                 value={nodeBadgeSize}
@@ -432,7 +432,7 @@ export default memo(function StyleSection() {
           <div className="grid grid-cols-2 gap-y-3 gap-x-4">
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">默认宽度</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={nodeSizeLimits.minWidth}
                 max={nodeSizeLimits.maxWidth}
                 value={defaultNodeSize.width}
@@ -441,7 +441,7 @@ export default memo(function StyleSection() {
             </div>
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">默认高度</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={nodeSizeLimits.minHeight}
                 max={nodeSizeLimits.maxHeight}
                 value={defaultNodeSize.height}
@@ -469,7 +469,7 @@ export default memo(function StyleSection() {
 
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">Header字体</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={8}
                 max={28}
                 value={defaultNodeStyle.headerFontSize}
@@ -478,7 +478,7 @@ export default memo(function StyleSection() {
             </div>
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">Body字体</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={8}
                 max={24}
                 value={defaultNodeStyle.bodyFontSize}
@@ -501,7 +501,7 @@ export default memo(function StyleSection() {
             </div>
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">边框粗细</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={0}
                 max={8}
                 value={defaultNodeStyle.borderWidth}
@@ -510,7 +510,7 @@ export default memo(function StyleSection() {
             </div>
             <div className="flex flex-col gap-[6px] mb-0">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">卡片圆角</label>
-              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+              <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                 min={0}
                 max={32}
                 value={defaultNodeStyle.borderRadius}
@@ -539,7 +539,7 @@ export default memo(function StyleSection() {
             <div className="grid grid-cols-2 gap-y-3 gap-x-4">
               <div className="flex flex-col gap-[6px] mb-0">
                 <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">宽度</label>
-                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={nodeSizeLimits.minWidth}
                   max={nodeSizeLimits.maxWidth}
                   value={currentNodeWidth}
@@ -549,7 +549,7 @@ export default memo(function StyleSection() {
               </div>
               <div className="flex flex-col gap-[6px] mb-0">
                 <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">高度</label>
-                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={nodeSizeLimits.minHeight}
                   max={nodeSizeLimits.maxHeight}
                   value={currentNodeHeight}
@@ -578,7 +578,7 @@ export default memo(function StyleSection() {
 
               <div className="flex flex-col gap-[6px] mb-0">
                 <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">Header字体</label>
-                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={8}
                   max={28}
                   value={currentNodeStyle.headerFontSize || ''}
@@ -588,7 +588,7 @@ export default memo(function StyleSection() {
               </div>
               <div className="flex flex-col gap-[6px] mb-0">
                 <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">Body字体</label>
-                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={8}
                   max={24}
                   value={currentNodeStyle.bodyFontSize || ''}
@@ -612,7 +612,7 @@ export default memo(function StyleSection() {
               </div>
               <div className="flex flex-col gap-[6px] mb-0">
                 <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">边框粗细</label>
-                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={0}
                   max={8}
                   value={currentNodeStyle.borderWidth !== undefined ? currentNodeStyle.borderWidth : ''}
@@ -622,7 +622,7 @@ export default memo(function StyleSection() {
               </div>
               <div className="flex flex-col gap-[6px] mb-0">
                 <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">卡片圆角</label>
-                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-200 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+                <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
                   min={0}
                   max={32}
                   value={currentNodeStyle.borderRadius !== undefined ? currentNodeStyle.borderRadius : ''}

@@ -30,8 +30,11 @@ export function buildEdgeView(options: EdgeViewOptions = {}): Pick<KnowledgeEdge
     },
     markerEnd: arrow
       ? {
-          type: 'arrowclosed',
+          type: 'arrow',
+          width: 20,
+          height: 20,
           color,
+          strokeWidth: 1.5,
         }
       : undefined,
   }

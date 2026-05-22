@@ -67,7 +67,7 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
           onDragOver={(e) => handleDragOver(e, kb.name)}
           onDrop={(e) => handleDrop(e, kb.name)}
           onDragEnd={handleDragEnd}
-          className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-card transition-all duration-200 hover:-translate-y-1 hover:border-accent hover:shadow-lg
+          className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-card transition-all duration-75 hover:-translate-y-1 hover:border-accent hover:shadow-lg
             ${draggedItem === kb.name ? 'opacity-50' : ''}
             ${dragOverItem === kb.name ? 'border-primary ring-2 ring-primary/20' : ''}
           `}
@@ -78,7 +78,7 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
         >
           <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
             {kb.coverUrl ? (
-              <img src={kb.coverUrl} alt={kb.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <img src={kb.coverUrl} alt={kb.name} className="h-full w-full object-cover transition-transform duration-75 group-hover:scale-105" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-muted-foreground/30">
                 <Book className="h-12 w-12" strokeWidth={1.5} />
@@ -113,7 +113,7 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
 
       {/* 新建知识库卡片 */}
       <div 
-        className="group flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-transparent transition-all duration-200 hover:border-accent hover:bg-accent/5 aspect-[4/3]"
+        className="group flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-transparent transition-all duration-75 hover:border-accent hover:bg-accent/5 aspect-[4/3]"
         onClick={onCreateKB}
       >
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
@@ -124,7 +124,7 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
 
       {/* 导入知识库卡片 */}
       <div 
-        className="group flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-transparent transition-all duration-200 hover:border-accent hover:bg-accent/5 aspect-[4/3]"
+        className="group flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-transparent transition-all duration-75 hover:border-accent hover:bg-accent/5 aspect-[4/3]"
         onClick={onImportKB}
       >
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-accent-foreground">

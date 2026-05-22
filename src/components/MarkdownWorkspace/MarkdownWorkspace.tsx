@@ -373,21 +373,21 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                   <div className="flex gap-[2px] min-w-0 p-[2px] border border-[#e2e8f0] rounded-[10px] bg-[color-mix(in_srgb,var(--color-bg-muted)_88%,transparent)] shadow-[inset_0_1px_1px_rgba(148,163,184,0.08)]">
                     <button
                       type="button"
-                      className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-180 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'documents' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
+                      className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-75 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'documents' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
                       onClick={() => setDetailSidebarTab('documents')}
                     >
                       文档
                     </button>
                     <button
                       type="button"
-                      className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-180 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'toc' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
+                      className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-75 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'toc' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
                       onClick={() => setDetailSidebarTab('toc')}
                     >
                       目录
                     </button>
                     <button
                       type="button"
-                      className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-180 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'attachments' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
+                      className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-75 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'attachments' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
                       onClick={() => setDetailSidebarTab('attachments')}
                       disabled={!attachmentCardPath}
                       title={!attachmentCardPath ? '当前环境暂不支持附件' : '附件'}
@@ -410,10 +410,10 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                     {detailDocuments && detailDocuments.length > 0 ? (
                       <div className="flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
                         {documentInlineEdit?.mode === 'create' && (
-                          <div className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-180 hover:bg-[#f5f8fb] py-1 px-2 bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] cursor-default border border-[#94a3b829] !border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]`}>
+                          <div className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[#f5f8fb] py-1 px-2 bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] cursor-default border border-[#94a3b829] !border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]`}>
                             <input
                               ref={documentInlineInputRef}
-                              className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] text-[#1e293b] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-180 focus:bg-white/44 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[#94a3b847] focus:!border-[var(--color-border)] focus:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] focus:!shadow-[0_0_0_2px_var(--color-accent-soft)] disabled:bg-[#f8fafc] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:text-[#94a3b8] placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
+                              className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] text-[#1e293b] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-75 focus:bg-white/44 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[#94a3b847] focus:!border-[var(--color-border)] focus:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] focus:!shadow-[0_0_0_2px_var(--color-accent-soft)] disabled:bg-[#f8fafc] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:text-[#94a3b8] placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
                               value={documentInlineEdit.value}
                               placeholder="输入文档名称"
                               onChange={(event) => setDocumentInlineEdit((current) => (
@@ -433,11 +433,11 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                             isEditing ? (
                               <div
                                 key={item.path}
-                                className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-180 hover:bg-[#f5f8fb] py-1 px-2 bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] cursor-default border border-[#94a3b829] !border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]`}
+                                className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[#f5f8fb] py-1 px-2 bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] cursor-default border border-[#94a3b829] !border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]`}
                               >
                                 <input
                                   ref={documentInlineInputRef}
-                                  className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] text-[#1e293b] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-180 focus:bg-white/44 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[#94a3b847] focus:!border-[var(--color-border)] focus:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] focus:!shadow-[0_0_0_2px_var(--color-accent-soft)] disabled:bg-[#f8fafc] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:text-[#94a3b8] placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
+                                  className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] text-[#1e293b] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-75 focus:bg-white/44 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[#94a3b847] focus:!border-[var(--color-border)] focus:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] focus:!shadow-[0_0_0_2px_var(--color-accent-soft)] disabled:bg-[#f8fafc] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:text-[#94a3b8] placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
                                   value={documentInlineEdit.value}
                                   placeholder="输入文档名称"
                                   onChange={(event) => setDocumentInlineEdit((current) => (
@@ -453,7 +453,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                               <button
                                 key={item.path}
                                 type="button"
-                                className={`group w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-180 hover:bg-[#f5f8fb] ${isActive ? '!bg-[#edf4fb] !bg-[var(--color-selected-bg)]' : ''} ${(item.isDefault || item.isCard) ? 'text-[#1e293b] !text-[var(--color-text-primary)]' : ''}`}
+                                className={`group w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[#f5f8fb] ${isActive ? '!bg-[#edf4fb] !bg-[var(--color-selected-bg)]' : ''} ${(item.isDefault || item.isCard) ? 'text-[#1e293b] !text-[var(--color-text-primary)]' : ''}`}
                                 onClick={() => onSelectDetailDocument?.(item.path)}
                                 onContextMenu={(event) => {
                                   event.stopPropagation()
@@ -478,10 +478,10 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                     ) : (
                       documentInlineEdit?.mode === 'create' ? (
                         <div className="flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
-                          <div className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-180 hover:bg-[#f5f8fb] py-1 px-2 bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] cursor-default border border-[#94a3b829] !border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]`}>
+                          <div className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[#f5f8fb] py-1 px-2 bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] cursor-default border border-[#94a3b829] !border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]`}>
                             <input
                               ref={documentInlineInputRef}
-                              className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] text-[#1e293b] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-180 focus:bg-white/44 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[#94a3b847] focus:!border-[var(--color-border)] focus:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] focus:!shadow-[0_0_0_2px_var(--color-accent-soft)] disabled:bg-[#f8fafc] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:text-[#94a3b8] placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
+                              className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] text-[#1e293b] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-75 focus:bg-white/44 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[#94a3b847] focus:!border-[var(--color-border)] focus:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] focus:!shadow-[0_0_0_2px_var(--color-accent-soft)] disabled:bg-[#f8fafc] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:text-[#94a3b8] placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
                               value={documentInlineEdit.value}
                               placeholder="输入文档名称"
                               onChange={(event) => setDocumentInlineEdit((current) => (
@@ -506,7 +506,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                         <button
                           key={item.id}
                           type="button"
-                          className="w-full min-h-[30px] block mb-1 py-1.5 pr-2.5 border-none rounded-lg bg-transparent text-[#475569] !text-[var(--color-text-muted)] text-left text-[12px] leading-[1.45] cursor-pointer transition-colors duration-180 whitespace-nowrap overflow-hidden text-ellipsis hover:bg-[#edf4fb] hover:!bg-[var(--color-selected-bg)] hover:text-[#0f172a] hover:!text-[var(--color-primary)]"
+                          className="w-full min-h-[30px] block mb-1 py-1.5 pr-2.5 border-none rounded-lg bg-transparent text-[#475569] !text-[var(--color-text-muted)] text-left text-[12px] leading-[1.45] cursor-pointer transition-colors duration-75 whitespace-nowrap overflow-hidden text-ellipsis hover:bg-[#edf4fb] hover:!bg-[var(--color-selected-bg)] hover:text-[#0f172a] hover:!text-[var(--color-primary)]"
                           style={{ paddingLeft: `${12 + (item.level - 1) * 14}px` }}
                           onClick={() => handleTocJump(item)}
                           title={item.text}
@@ -540,7 +540,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                 {!documentContextMenu.targetPath && (
                   <button
                     type="button"
-                    className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#334155] !text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-160 hover:not(:disabled):bg-[#f5f8fb] hover:not(:disabled):!bg-[var(--color-hover-bg)] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed"
+                    className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#334155] !text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[#f5f8fb] hover:not(:disabled):!bg-[var(--color-hover-bg)] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed"
                     onClick={() => handleContextMenuAction('create')}
                     disabled={isDetailDocumentBusy}
                   >
@@ -550,7 +550,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                 {documentContextMenu.targetPath && (
                   <button
                     type="button"
-                    className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#334155] !text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-160 hover:not(:disabled):bg-[#f5f8fb] hover:not(:disabled):!bg-[var(--color-hover-bg)] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed"
+                    className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#334155] !text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[#f5f8fb] hover:not(:disabled):!bg-[var(--color-hover-bg)] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed"
                     onClick={() => handleContextMenuAction('rename')}
                     disabled={documentContextMenu.isDefault || isDetailDocumentBusy}
                   >
@@ -560,7 +560,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                 {documentContextMenu.targetPath && (
                   <button
                     type="button"
-                    className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#334155] !text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-160 hover:not(:disabled):bg-[#f5f8fb] hover:not(:disabled):!bg-[var(--color-hover-bg)] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed"
+                    className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#334155] !text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[#f5f8fb] hover:not(:disabled):!bg-[var(--color-hover-bg)] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed"
                     onClick={() => handleContextMenuAction('delete')}
                     disabled={documentContextMenu.isDefault || isDetailDocumentBusy}
                   >
@@ -573,7 +573,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
         )}
         {documentType === 'detail' && showSidebarContent && !effectiveFloating && (
           <div
-            className={`w-[6px] h-full cursor-col-resize shrink-0 bg-transparent relative select-none transition-colors duration-180 before:content-[""] before:absolute before:top-0 before:bottom-0 before:left-1/2 before:-translate-x-1/2 before:w-px before:bg-[#e6ebf1] before:transition-all before:duration-180 hover:before:bg-[#7aa2cc] hover:before:shadow-[0_0_0_1px_rgba(122,162,204,0.12)] ${isSidebarResizing ? 'before:!bg-[#7aa2cc] before:!shadow-[0_0_0_1px_rgba(122,162,204,0.12)]' : ''}`}
+            className={`w-[6px] h-full cursor-col-resize shrink-0 bg-transparent relative select-none transition-colors duration-75 before:content-[""] before:absolute before:top-0 before:bottom-0 before:left-1/2 before:-translate-x-1/2 before:w-px before:bg-[#e6ebf1] before:transition-all before:duration-75 hover:before:bg-[#7aa2cc] hover:before:shadow-[0_0_0_1px_rgba(122,162,204,0.12)] ${isSidebarResizing ? 'before:!bg-[#7aa2cc] before:!shadow-[0_0_0_1px_rgba(122,162,204,0.12)]' : ''}`}
             onMouseDown={handleSidebarResizeMouseDown}
             title="拖拽调整侧栏宽度"
           />

@@ -387,14 +387,16 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   return (
     <div
       onPointerEnter={() => setIsHovered(true)}
-      onPointerDown={undefined}
-      onPointerUp={undefined}
+      onPointerDownCapture={(e) => {
+        if (!selected) {
+          graph.selectNode(id, e.shiftKey)
+        }
+      }}
       onPointerLeave={() => {
         setIsHovered(false)
       }}
-      onPointerCancel={undefined}
       className={cn(
-        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-surface shadow-sm transition-[border-color,box-shadow,opacity] duration-75 active:border-accent active:shadow-[0_0_0_1px_var(--color-accent-soft)] w-full h-full box-border",
+        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-surface shadow-sm transition-opacity duration-75 active:border-accent active:shadow-[0_0_0_1px_var(--color-accent-soft)] w-full h-full box-border",
         shouldShowMarkdown && "nowheel",
         selected && "border-accent shadow-[0_0_0_1px_var(--color-accent),0_0_0_4px_var(--color-accent-soft)] z-10",
         isConnectTarget && "border-2 border-success shadow-[0_0_0_3px_var(--color-success-soft)] !border-success z-10",
@@ -434,11 +436,17 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         type="source" 
         position={Position.Right} 
         className={cn(
-          "w-3.5 h-3.5 bg-surface border-[1.5px] border-accent rounded-full shadow-sm !-right-5 z-30 flex items-center justify-center transition-all duration-200 hover:bg-accent text-accent hover:text-white",
-          showHoverControls ? "opacity-100" : "opacity-0 pointer-events-none"
+          "w-5 h-5 border-[1.5px] border-accent rounded-full shadow-[0_2px_4px_var(--color-accent-soft)] !-right-[18px] z-30 flex items-center justify-center transition-all duration-75 cursor-crosshair",
+          showHoverControls ? "opacity-100" : "opacity-0 pointer-events-none",
+          isConnectSource
+            ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)] dark:text-white ring-2 ring-[var(--color-accent-soft)]"
+            : "bg-[var(--color-surface)] text-black dark:bg-[var(--color-surface)] dark:text-white hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)] dark:hover:text-white"
         )}
       >
-        <span className="text-[12px] font-bold leading-none select-none pointer-events-none relative -top-[0.5px]">+</span>
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
       </Handle>
 
       <div className="flex flex-1 flex-col items-stretch justify-start overflow-hidden pointer-events-none min-w-0 min-h-0" style={{ borderRadius }}>
@@ -448,13 +456,13 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
           <div style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0', width: shouldShowMarkdown ? 0 : undefined, pointerEvents: 'none' }}></div>
 
           <div
-            className={cn("flex items-center min-w-0 min-h-[calc(1.3em+4px)] py-[1px] rounded-md transition-colors duration-200", titleEditing && "bg-surface/20 shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-surface/40 focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
+            className={cn("flex items-center min-w-0 min-h-[calc(1.3em+4px)] py-[1px] rounded-md transition-colors duration-75", titleEditing && "bg-surface/20 shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-surface/40 focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
             style={titleFieldStyle}
           >
             {titleEditing ? (
               <input
                 ref={titleInputRef}
-                className="w-full min-w-0 min-h-[calc(1.3em+4px)] px-[3px] py-[1px] border-none rounded-none bg-transparent text-inherit font-inherit text-inherit leading-inherit outline-none box-border pointer-events-auto shadow-none caret-current transition-colors duration-200 nodrag nowheel"
+                className="w-full min-w-0 min-h-[calc(1.3em+4px)] px-[3px] py-[1px] border-none rounded-none bg-transparent text-inherit font-inherit text-inherit leading-inherit outline-none box-border pointer-events-auto shadow-none caret-current transition-colors duration-75 nodrag nowheel"
                 value={titleDraft}
                 onChange={(event) => setTitleDraft(event.target.value)}
                 onBlur={confirmTitleEdit}
@@ -491,7 +499,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
             {hasChildBadge && (
               <div
-                className="flex items-center justify-center bg-accent text-accent-foreground cursor-pointer transition-colors duration-150 hover:bg-accent-hover font-bold select-none nodrag nowheel"
+                className="flex items-center justify-center bg-accent text-accent-foreground cursor-pointer transition-colors duration-75 hover:bg-accent-hover font-bold select-none nodrag nowheel"
                 onClick={handleDrillDown}
                 onPointerDown={stopControlPointerDown}
                 onMouseDown={stopControlMouseDown}
@@ -503,7 +511,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
             {hasCardContent && (
               <div
-                className="flex items-center justify-center bg-border-light text-text-secondary cursor-pointer transition-colors duration-150 hover:bg-border-strong hover:text-text-primary font-bold select-none"
+                className="flex items-center justify-center bg-border-light text-text-secondary cursor-pointer transition-colors duration-75 hover:bg-border-strong hover:text-text-primary font-bold select-none"
                 onClick={handleToggleCollapse}
                 title={shouldShowMarkdown ? '收起卡片' : '展开卡片'}
                 style={collapseButtonStyle}
@@ -518,7 +526,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         {shouldShowMarkdown && (
           <div
             className={cn(
-              "flex-1 min-w-0 min-h-0 bg-surface overflow-hidden transition-colors duration-200 border-t border-border-subtle",
+              "flex-1 min-w-0 min-h-0 bg-surface overflow-hidden transition-colors duration-75 border-t border-border-subtle",
               contentInteractionsEnabled && "cursor-text pointer-events-auto nodrag nowheel",
               !contentInteractionsEnabled && "pointer-events-none"
             )}
@@ -564,7 +572,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       </div>
       {preview && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setPreview(null)}>
-          <div className="flex flex-col max-w-[90vw] max-h-[90vh] bg-surface rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200" onClick={(event) => event.stopPropagation()}>
+          <div className="flex flex-col max-w-[90vw] max-h-[90vh] bg-surface rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-75" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-bg-muted/50">
               <span className="font-medium text-foreground truncate mr-4">{preview.title}</span>
               <button type="button" className="flex items-center justify-center w-6 h-6 rounded-md hover:bg-surface-hover text-muted-foreground hover:text-foreground transition-colors" onClick={() => setPreview(null)}>×</button>

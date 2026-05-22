@@ -57,7 +57,7 @@ function MetricCard({ summary, active, onClick }: { summary: MetricSummary; acti
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border px-4 py-3 text-left transition-all duration-150 bg-white shadow-sm hover:border-[var(--metric-color)] hover:shadow-md ${active ? 'ring-2 ring-[var(--metric-color)]/20 border-[var(--metric-color)]' : 'border-[var(--color-border-subtle)]'}`}
+      className={`rounded-xl border px-4 py-3 text-left transition-all duration-75 bg-white shadow-sm hover:border-[var(--metric-color)] hover:shadow-md ${active ? 'ring-2 ring-[var(--metric-color)]/20 border-[var(--metric-color)]' : 'border-[var(--color-border-subtle)]'}`}
       style={{ ['--metric-color' as string]: summary.color }}
     >
       <div className="flex items-center justify-between gap-3">

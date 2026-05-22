@@ -111,7 +111,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
   return (
     <div className="flex flex-col h-full">
       <div className="p-3 border-b border-[#f1f5f9] !border-[var(--color-border-subtle)]">
-        <button className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 border border-dashed border-[#cbd5e1] !border-[var(--color-border-strong)] bg-[#f8fafc] !bg-[var(--color-bg)] text-[#475569] !text-[var(--color-text-muted)] rounded-md text-[13px] cursor-pointer transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed hover:not(:disabled):bg-[#f1f5f9] hover:not(:disabled):border-[#94a3b8] hover:not(:disabled):!border-[var(--color-border-strong)] hover:not(:disabled):text-[#334155] hover:not(:disabled):!text-[var(--color-text-primary)]" onClick={handleUpload} disabled={loading}>
+        <button className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 border border-dashed border-[#cbd5e1] !border-[var(--color-border-strong)] bg-[#f8fafc] !bg-[var(--color-bg)] text-[#475569] !text-[var(--color-text-muted)] rounded-md text-[13px] cursor-pointer transition-all duration-75 disabled:opacity-60 disabled:cursor-not-allowed hover:not(:disabled):bg-[#f1f5f9] hover:not(:disabled):border-[#94a3b8] hover:not(:disabled):!border-[var(--color-border-strong)] hover:not(:disabled):text-[#334155] hover:not(:disabled):!text-[var(--color-text-primary)]" onClick={handleUpload} disabled={loading}>
           <span className="text-[16px] font-bold">+</span> 上传附件
         </button>
       </div>
@@ -123,7 +123,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
           {attachments.map(item => (
             <div 
               key={item.name} 
-              className="flex items-center gap-2 p-2 rounded-md cursor-pointer select-none transition-colors duration-150 hover:bg-[#f1f5f9] hover:!bg-[var(--color-hover-bg)] group"
+              className="flex items-center gap-2 p-2 rounded-md cursor-pointer select-none transition-colors duration-75 hover:bg-[#f1f5f9] hover:!bg-[var(--color-hover-bg)] group"
               onDoubleClick={() => handleInsert(item)}
               title={view ? "双击插入到编辑器" : "切换到编辑模式后双击插入"}
               style={{ opacity: view ? 1 : 0.6 }}
@@ -138,7 +138,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
                 </div>
               </div>
               <button 
-                className="opacity-0 w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-150 text-[14px] group-hover:opacity-100 hover:!bg-[#fee2e2] hover:!text-[#ef4444] hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]" 
+                className="opacity-0 w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] group-hover:opacity-100 hover:!bg-[#fee2e2] hover:!text-[#ef4444] hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]" 
                 onClick={(e) => handleDelete(item, e)}
                 title="删除附件"
               >

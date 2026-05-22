@@ -312,7 +312,7 @@ const InteractiveCodeBlock = memo(function InteractiveCodeBlock({
 
   return (
     <div className="mb-4 relative group/code" data-code-block-index={blockIndex}>
-      <div className="absolute top-2 right-2 z-[2] flex items-center justify-end gap-1.5 p-1 border border-[#d0d7de]/90 !border-[var(--color-border)] rounded-[10px] bg-white/96 !bg-[color-mix(in_srgb,var(--color-surface-elevated)_96%,transparent)] shadow-[0_6px_24px_rgba(31,35,40,0.12)] !shadow-[var(--shadow-popover)] opacity-0 -translate-y-1 pointer-events-none transition-all duration-150 backdrop-blur-md group-hover/code:opacity-100 group-hover/code:translate-y-0 group-hover/code:pointer-events-auto focus-within:opacity-100 focus-within:translate-y-0 focus-within:pointer-events-auto">
+      <div className="absolute top-2 right-2 z-[2] flex items-center justify-end gap-1.5 p-1 border border-[#d0d7de]/90 !border-[var(--color-border)] rounded-[10px] bg-white/96 !bg-[color-mix(in_srgb,var(--color-surface-elevated)_96%,transparent)] shadow-[0_6px_24px_rgba(31,35,40,0.12)] !shadow-[var(--shadow-popover)] opacity-0 -translate-y-1 pointer-events-none transition-all duration-75 backdrop-blur-md group-hover/code:opacity-100 group-hover/code:translate-y-0 group-hover/code:pointer-events-auto focus-within:opacity-100 focus-within:translate-y-0 focus-within:pointer-events-auto">
         <label className="inline-flex items-center min-w-0 [&_select]:min-w-[88px] [&_select]:max-w-[120px] [&_select]:h-6 [&_select]:pl-2 [&_select]:pr-[22px] [&_select]:border [&_select]:border-[#d0d7de] [&_select]:!border-[var(--color-border)] [&_select]:rounded-[7px] [&_select]:bg-white/96 [&_select]:!bg-[var(--color-bg)] [&_select]:text-[#1f2328] [&_select]:text-[11px] [&_select]:leading-6 hover:[&_select:not(:disabled)]:bg-[#f3f4f6] hover:[&_select:not(:disabled)]:!bg-[var(--color-hover-bg)] hover:[&_select:not(:disabled)]:border-[#afb8c1] disabled:[&_select]:cursor-not-allowed disabled:[&_select]:opacity-60" aria-label="代码语言">
           <select
             value={language}
@@ -706,7 +706,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
             {id && (
               <button
                 type="button"
-                className="shrink-0 min-w-[32px] h-6 px-2 border border-[#d0d7de] !border-[var(--color-border)] rounded-md bg-[#f6f8fa] !bg-[var(--color-bg)] text-[#57606a] text-[12px] leading-none cursor-pointer opacity-0 transition-all duration-150 group-hover/heading:opacity-100 focus-visible:opacity-100 hover:bg-[#f3f4f6] hover:!bg-[var(--color-hover-bg)] hover:border-[#afb8c1] focus-visible:bg-[#f3f4f6] focus-visible:!bg-[var(--color-hover-bg)] focus-visible:border-[#afb8c1]"
+                className="shrink-0 min-w-[32px] h-6 px-2 border border-[#d0d7de] !border-[var(--color-border)] rounded-md bg-[#f6f8fa] !bg-[var(--color-bg)] text-[#57606a] text-[12px] leading-none cursor-pointer opacity-0 transition-all duration-75 group-hover/heading:opacity-100 focus-visible:opacity-100 hover:bg-[#f3f4f6] hover:!bg-[var(--color-hover-bg)] hover:border-[#afb8c1] focus-visible:bg-[#f3f4f6] focus-visible:!bg-[var(--color-hover-bg)] focus-visible:border-[#afb8c1]"
                 onClick={() => handleCopyHeadingLink(id)}
                 aria-label={`复制标题锚点：${text || id}`}
                 title={copiedHeadingId === id ? '已复制锚点' : '复制锚点链接'}

@@ -103,7 +103,7 @@ function Sidebar() {
       </div>
       <nav className="flex flex-col py-2 gap-0.5">
         <button
-          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-150 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'log' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
+          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-75 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'log' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
           onClick={() => handleTabClick('log')}
         >
           <span className="text-[14px] w-5 text-center shrink-0">&#9776;</span>
@@ -115,7 +115,7 @@ function Sidebar() {
           )}
         </button>
         <button
-          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-150 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'performance' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
+          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-75 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'performance' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
           onClick={() => handleTabClick('performance')}
         >
           <span className="text-[14px] w-5 text-center shrink-0">&#9651;</span>
@@ -199,7 +199,7 @@ function FilterBar() {
         <div className="relative flex items-center">
           <span className="absolute left-2 text-[#999] text-[11px] pointer-events-none">&#9906;</span>
           <input
-            className="h-7 pl-[26px] pr-[28px] border border-[#e0e4ea] rounded-md text-[12px] outline-none w-[220px] bg-[#f8f9fb] transition-all duration-150 focus:border-[#3498db] focus:bg-white focus:shadow-[0_0_0_2px_rgba(52,152,219,0.1)]"
+            className="h-7 pl-[26px] pr-[28px] border border-[#e0e4ea] rounded-md text-[12px] outline-none w-[220px] bg-[#f8f9fb] transition-all duration-75 focus:border-[#3498db] focus:bg-white focus:shadow-[0_0_0_2px_rgba(52,152,219,0.1)]"
             type="text"
             placeholder="搜索关键词..."
             value={keyword}

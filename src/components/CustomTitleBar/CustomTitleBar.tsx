@@ -167,7 +167,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                             <span>{item.label}</span>
                             <span className="text-[var(--color-text-muted)] text-[10px]">▶</span>
                           </button>
-                          <div className="absolute top-0 left-[calc(100%+4px)] min-w-[140px] p-1.5 rounded-[10px] border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-[14px] opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-150 z-[3002]" role="menu">
+                          <div className="absolute top-0 left-[calc(100%+4px)] min-w-[140px] p-1.5 rounded-[10px] border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-[14px] opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-75 z-[3002]" role="menu">
                             {item.submenu.map(subItem => (
                               <button
                                 key={subItem.label}

@@ -30,7 +30,7 @@ const TabItem = memo(function TabItem({ tab, isActive, onClick, onClose }: {
       {isActive && (
         <div className="absolute -bottom-[2px] left-0 right-0 h-[3px] bg-[var(--color-surface)] pointer-events-none" />
       )}
-      <div className={`flex-1 min-w-0 flex items-center justify-center relative z-10 h-full pl-[4px] ${tab.id !== 'home' ? 'pr-[20px]' : 'pr-[4px]'} transition-opacity duration-150 pointer-events-none`}>
+      <div className={`flex-1 min-w-0 flex items-center justify-center relative z-10 h-full pl-[4px] ${tab.id !== 'home' ? 'pr-[20px]' : 'pr-[4px]'} transition-opacity duration-75 pointer-events-none`}>
         <span className="truncate tracking-wide text-center max-w-full">
           {tab.label}
         </span>
