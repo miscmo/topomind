@@ -18,7 +18,7 @@ const edgeTypes = {
   straight: FloatingEdge,
 }
 
-const CARD_CONNECT_SNAP_DISTANCE = 56
+const CARD_CONNECT_SNAP_DISTANCE = 12
 const CONNECTION_ARROW_MARKER_ID = 'topomind-connection-arrow'
 const KEYBOARD_NEW_NODE_VERTICAL_GAP = 48
 const KEYBOARD_NEW_NODE_HORIZONTAL_GAP = 56
@@ -106,7 +106,10 @@ function CardSnappedConnectionLine({
   const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
   const connectingTargetId = useGraphUiStore((s) => s.connectingTargetId)
   const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
-  const color = defaultEdgeStyle.color || '#7f8c8d'
+  
+  // Use a different color (accent color) for the connection line while drawing
+  const connectionColor = 'var(--color-accent)'
+  const strokeWidth = 1.2
   
   const sourceNode = useGraphStore((s) => connectingSourceId ? s.nodesMap.get(connectingSourceId) : null)
   const targetNode = useGraphStore((s) => connectingTargetId ? s.nodesMap.get(connectingTargetId) : null)
@@ -141,16 +144,16 @@ function CardSnappedConnectionLine({
   return (
     <>
       <defs>
-        <marker id={markerId} viewBox="0 0 20 20" markerWidth="20" markerHeight="20" refX="16" refY="10" orient="auto" markerUnits="strokeWidth">
-          <path d="M 0 0 L 20 10 L 0 20 Z" fill={color} stroke="none" />
+        <marker id={markerId} viewBox="0 0 20 20" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+          <path d="M 0 0 L 12 6 L 0 12" fill="none" stroke={connectionColor} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
         </marker>
       </defs>
       <path 
         fill="none" 
         d={edgePath} 
         style={connectionLineStyle} 
-        strokeWidth={2} 
-        stroke={color} 
+        strokeWidth={strokeWidth} 
+        stroke={connectionColor} 
         strokeDasharray="6 4"
         markerEnd={defaultEdgeStyle.arrow !== false ? `url(#${markerId})` : undefined} 
       />
@@ -348,7 +351,7 @@ export default memo(function GraphCanvas({
         // 结束拖拽连线时触发，不管最终有没有连上
         onConnectEnd={graph.onConnectEnd}
         // 连线吸附半径。离目标 handle 足够近时更容易连上，值越大越容易吸附
-        connectionRadius={48}
+        connectionRadius={12}
         connectionLineComponent={CardSnappedConnectionLine}
 
         // 点击节点时触发

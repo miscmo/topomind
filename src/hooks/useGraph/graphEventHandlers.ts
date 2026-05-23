@@ -18,7 +18,6 @@ export interface GraphEventHandlerDeps {
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
   setSelectedEdgeId: (edgeId: string | null) => void
-  setRightPanelTab: (tab: RightPanelTab) => void
   storeApi: StoreApi<GraphState>
 }
 
@@ -29,7 +28,6 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     getActiveGraphSession,
     defaultEdgeStyle,
     setSelectedEdgeId,
-    setRightPanelTab,
     storeApi,
   } = deps
 
@@ -136,9 +134,8 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
         ops.setSelectedEdgeInGraph(edgeId)
       })
       setSelectedEdgeId(edgeId)
-      setRightPanelTab('style')
     },
-    [ops, defaultEdgeStyle, setSelectedEdgeId, setRightPanelTab]
+    [ops, defaultEdgeStyle, setSelectedEdgeId]
   )
 
   const onNodeClick = useCallback(
@@ -159,9 +156,8 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       ops.deselectNode()
       ops.setSelectedEdgeInGraph(edge.id)
       setSelectedEdgeId(edge.id)
-      setRightPanelTab('style')
     },
-    [setSelectedEdgeId, setRightPanelTab, ops]
+    [setSelectedEdgeId, ops]
   )
 
   const onPaneClick = useCallback(() => {

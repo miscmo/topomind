@@ -19,12 +19,14 @@ export function buildEdgeView(options: EdgeViewOptions = {}): Pick<KnowledgeEdge
   const weight = options.weight ?? 'minor'
   const selected = options.selected ?? false
 
+  const finalColor = selected ? 'var(--color-accent)' : color
+
   return {
     type: lineMode,
     animated: weight === 'main',
     style: {
-      stroke: color,
-      strokeWidth: selected ? (weight === 'main' ? 2.5 : 2) : (weight === 'main' ? 1.5 : 1.2),
+      stroke: finalColor,
+      strokeWidth: weight === 'main' ? 1.5 : 1.2,
       strokeDasharray: lineStyle === 'dashed' ? '6 4' : undefined,
       opacity: selected ? 1 : 0.6,
     },
@@ -33,7 +35,7 @@ export function buildEdgeView(options: EdgeViewOptions = {}): Pick<KnowledgeEdge
           type: 'arrowclosed',
           width: 20,
           height: 20,
-          color,
+          color: finalColor,
         }
       : undefined,
   }

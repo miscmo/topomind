@@ -80,6 +80,7 @@ export interface TabLifecycleActions {
   openKnowledgeBase: (kb: OpenKnowledgeBaseInput) => boolean
   openMonitorTab: () => void
   closeTab: (tabId: string) => ClosableTabInfo | null
+  renameKBTab: (oldKbPath: string, newKbPath: string) => void
   reset: () => void
 }
 

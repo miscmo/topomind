@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStorage } from '../../core/storage'
 import { usePromptStore } from '../../stores/promptStore'
+import { useTabStore } from '../../stores/tabStore'
 import { logAction } from '../../core/log-backend'
 import type { KBItem } from './useHomeKnowledgeBases'
 import { modalOverlayBaseClassName, modalOverlayEnterClassName, modalPanelEnterClassName } from '../ui/modal'
@@ -89,6 +90,7 @@ export function KBSettingsDialog({ visible, kb, onClose, refreshKBList }: KBSett
 
       if (isRenamed) {
         await storage.renameKB(currentKb.name, name.trim())
+        useTabStore.getState().renameKBTab(currentKb.name, name.trim())
         newName = name.trim()
       }
       

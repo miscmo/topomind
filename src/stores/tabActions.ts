@@ -95,6 +95,44 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
       get().removeTab(tabId)
       return tabInfo
     },
+    renameKBTab: (oldKbPath, newKbPath) => {
+      const oldTabId = `kb:${oldKbPath}`
+      const newTabId = `kb:${newKbPath}`
+      const { tabs, activeTabId } = get()
+      
+      const tabExists = findTabById(tabs, oldTabId)
+      if (!tabExists || tabExists.type !== 'kb') return
+
+      const replacePath = (path: string) => path === oldKbPath ? newKbPath : (path.startsWith(`${oldKbPath}/`) ? `${newKbPath}${path.slice(oldKbPath.length)}` : path)
+
+      const nextTabs = tabs.map((tab) => {
+        if (tab.id === oldTabId && tab.type === 'kb') {
+          return {
+            ...tab,
+            id: newTabId,
+            label: newKbPath, // Usually label is the KB name
+            kbPath: newKbPath,
+            currentRoomPath: replacePath(tab.currentRoomPath),
+            currentRoomName: tab.currentRoomName === oldKbPath ? newKbPath : tab.currentRoomName,
+            roomHistory: tab.roomHistory.map(item => ({
+              ...item,
+              room: {
+                ...item.room,
+                kbPath: newKbPath,
+                path: replacePath(item.room.path),
+                name: item.room.name === oldKbPath ? newKbPath : item.room.name
+              }
+            }))
+          }
+        }
+        return tab
+      })
+
+      set({ 
+        tabs: nextTabs, 
+        activeTabId: activeTabId === oldTabId ? newTabId : activeTabId 
+      })
+    },
     reset: () => set({ ...TAB_INITIAL_STATE }),
   }
 }

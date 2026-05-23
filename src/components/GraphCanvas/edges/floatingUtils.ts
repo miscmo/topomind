@@ -54,18 +54,37 @@ function getEdgePosition(node: InternalNode, intersectionPoint: { x: number; y: 
   return Position.Top
 }
 
-export function getEdgeParams(source: InternalNode, target: InternalNode) {
+export function getEdgeParams(source: InternalNode, target: InternalNode, offset: number = 6) {
   const sourceIntersectionPoint = getNodeIntersection(source, target)
   const targetIntersectionPoint = getNodeIntersection(target, source)
 
   const sourcePos = getEdgePosition(source, sourceIntersectionPoint)
   const targetPos = getEdgePosition(target, targetIntersectionPoint)
 
+  const dx = targetIntersectionPoint.x - sourceIntersectionPoint.x
+  const dy = targetIntersectionPoint.y - sourceIntersectionPoint.y
+  const length = Math.sqrt(dx * dx + dy * dy)
+  
+  let sx = sourceIntersectionPoint.x
+  let sy = sourceIntersectionPoint.y
+  let tx = targetIntersectionPoint.x
+  let ty = targetIntersectionPoint.y
+
+  if (length > offset * 2) {
+    const ux = dx / length
+    const uy = dy / length
+    sx = sx + ux * offset
+    tx = tx - ux * offset
+    ty = ty - uy * offset
+    // sy also? Yes, but maybe source offset is also needed? The user only mentioned the arrow (target side) embedding into the node. Let's do both source and target by offset.
+    sy = sy + uy * offset
+  }
+
   return {
-    sx: sourceIntersectionPoint.x,
-    sy: sourceIntersectionPoint.y,
-    tx: targetIntersectionPoint.x,
-    ty: targetIntersectionPoint.y,
+    sx,
+    sy,
+    tx,
+    ty,
     sourcePos,
     targetPos,
   }

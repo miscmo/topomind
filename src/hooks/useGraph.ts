@@ -13,7 +13,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
 import { useGraphUiStore } from '../stores/graphUiStore'
-import { useRightPanelStore } from '../stores/rightPanelStore'
 import { tabStore } from '../stores/tabStore'
 import { useStorage, type Store } from '../core/storage'
 import { buildGraphOperations } from './useGraph/graphOperations'
@@ -37,7 +36,6 @@ export function useGraph(tabId: string) {
   const setNodeSizeLimits = useGraphUiStore((s) => s.setNodeSizeLimits)
   const setNodeBadgeSize = useGraphUiStore((s) => s.setNodeBadgeSize)
   const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
-  const setRightPanelTab = useRightPanelStore((s) => s.setRightPanelTab)
 
   const isCreatingRef = useRef(false)
 
@@ -88,7 +86,6 @@ export function useGraph(tabId: string) {
     getActiveGraphSession,
     defaultEdgeStyle,
     setSelectedEdgeId,
-    setRightPanelTab,
     storeApi,
   })
 

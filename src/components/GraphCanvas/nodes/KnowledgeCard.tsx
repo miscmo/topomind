@@ -398,8 +398,8 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       className={cn(
         "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-surface shadow-sm transition-opacity duration-75 active:border-accent active:shadow-[0_0_0_1px_var(--color-accent-soft)] w-full h-full box-border",
         shouldShowMarkdown && "nowheel",
-        selected && "border-accent shadow-[0_0_0_1px_var(--color-accent),0_0_0_4px_var(--color-accent-soft)] z-10",
-        isConnectTarget && "border-2 border-success shadow-[0_0_0_3px_var(--color-success-soft)] !border-success z-10",
+        selected && "border-accent shadow-[0_0_0_1px_var(--color-accent)] z-10",
+        isConnectTarget && "border-2 border-success shadow-[0_0_0_1px_var(--color-success)] !border-success z-10",
         visuallyHovered && !visuallySelected && !isConnectTarget && "border-border-strong",
         dragging && "opacity-90"
       )}

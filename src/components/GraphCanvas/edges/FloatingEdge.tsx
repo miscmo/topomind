@@ -12,10 +12,8 @@ function FloatingEdge({
   id,
   source,
   target,
-  markerEnd,
   style,
   data,
-  selected,
 }: EdgeProps) {
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
@@ -30,6 +28,10 @@ function FloatingEdge({
   )
 
   const isStraight = data?.lineMode === 'straight' || data?.type === 'straight'
+  const arrowEnabled = data?.arrow !== false
+  const markerId = `topomind-hollow-arrow-${id}`
+  const markerColor = typeof style?.stroke === 'string' ? style.stroke : '#7f8c8d'
+  const markerOpacity = style?.opacity
 
   const [edgePath] = isStraight
     ? getStraightPath({
@@ -49,12 +51,29 @@ function FloatingEdge({
       })
 
   return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      markerEnd={markerEnd}
-      style={style}
-    />
+    <>
+      {arrowEnabled && (
+        <defs>
+          <marker id={markerId} viewBox="0 0 20 20" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path
+              d="M 0 0 L 12 6 L 0 12"
+              fill="none"
+              stroke={markerColor}
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              opacity={markerOpacity}
+            />
+          </marker>
+        </defs>
+      )}
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={arrowEnabled ? `url(#${markerId})` : undefined}
+        style={style}
+      />
+    </>
   )
 }
 
