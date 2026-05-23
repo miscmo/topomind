@@ -56,8 +56,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const setCardMarkdown = useCardContentStore((s) => s.setCardMarkdown)
 
   const [savedMarkdown, setSavedMarkdown] = useState('')
-  const [renameMode, setRenameMode] = useState(false)
-  const [newName, setNewName] = useState('')
   const [documents, setDocuments] = useState<DetailDocumentItem[]>([])
   const [isDocumentBusy, setIsDocumentBusy] = useState(false)
   const [documentLinkNotice, setDocumentLinkNotice] = useState('')
@@ -98,7 +96,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   }, [])
 
   const [viewMode, setViewMode] = useState<MarkdownViewMode>('preview')
-  const renameInputRef = useRef<HTMLInputElement>(null)
   const markdownRequestSeqRef = useRef(0)
   const selectionPerfRef = useRef<{ nodeId: string; startedAt: number; logged: boolean } | null>(null)
 
@@ -106,20 +103,19 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const displayDocuments = useMemo<DetailDocumentItem[]>(() => (
     documents.map((item) => {
       if (item.isDefault) {
-        return { ...item, name: '详情' }
+        return { ...item, name: nodeLabel }
       }
       if (item.isCard) {
         return { ...item, name: '卡片' }
       }
       return item
     })
-  ), [documents])
+  ), [documents, nodeLabel])
   const activeDocument = displayDocuments.find((item) => item.path === activeDocumentPath)
   const activeDocumentDisplayName = activeDocument?.name ?? nodeLabel
   const currentDocumentDisplayPath = nodePath
     ? (isDefaultDocument ? nodePath : joinRefs(nodePath, activeDocumentDisplayName))
     : ''
-  const canRenameNodeFromTitle = isDefaultDocument
 
   const loadDocuments = useCallback(async (cardPath: string) => {
     const nextDocuments = await storage.listDetailDocuments(cardPath)
@@ -134,8 +130,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
 
   // Load markdown when node changes
   useEffect(() => {
-    setRenameMode(false)
-    setNewName('')
     setActiveDocumentPath(DEFAULT_DETAIL_DOCUMENT_PATH)
     setDocuments([])
     setSavedMarkdown('')
@@ -263,21 +257,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     return () => window.clearTimeout(timeoutId)
   }, [documentLinkNotice])
 
-  // Focus rename input when entering rename mode
-  useEffect(() => {
-    if (renameMode && renameInputRef.current) {
-      renameInputRef.current.focus()
-      renameInputRef.current.select()
-    }
-  }, [renameMode])
-
-  useEffect(() => {
-    if (!canRenameNodeFromTitle && renameMode) {
-      setRenameMode(false)
-      setNewName('')
-    }
-  }, [canRenameNodeFromTitle, renameMode])
-
   // ===== Save markdown =====
   // Use nodesMapRef for stale-closure-safe access. selectedNode from render-time
   // closure can be stale when the selected node changes without re-rendering DetailPanel.
@@ -318,27 +297,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       logger.catch('DetailPanel', 'handleSave', e)
     }
   }, [selectedNodeId, nodePath, currentDocumentKey, storeApi, storage, draftMarkdown, setDetailMarkdown, setCardMarkdown, activeDocumentPath])
-
-  // ===== Rename node =====
-  // Use nodesMapRef for stale-closure-safe access. selectedNode from render-time
-  // closure can be stale when the selected node changes without re-rendering DetailPanel.
-  const handleRenameConfirm = () => {
-    if (!renameMode || !newName.trim() || !selectedNodeId) {
-      setRenameMode(false)
-      return
-    }
-    const node = storeApi.getState().nodesMap.get(selectedNodeId)
-    const oldLabel = node?.data.label ?? nodeLabel
-    const path = resolveNodePath(selectedNodeId)
-    logAction('节点:重命名', 'DetailPanel', {
-      nodeId: selectedNodeId,
-      oldName: oldLabel,
-      newName: newName.trim(),
-      path,
-    })
-    graph.renameNode(selectedNodeId, newName.trim())
-    setRenameMode(false)
-  }
 
   // ===== Delete detail =====
   // Use nodesMapRef for stale-closure-safe node data access.
@@ -505,32 +463,12 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
                   </button>
                   <div className="flex flex-col gap-[3px] min-w-0 flex-1">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      {renameMode ? (
-                        <input
-                          ref={renameInputRef}
-                          className="min-h-[calc(1em*1.3+10px)] py-1 px-2.5 border border-transparent rounded-lg font-inherit leading-tight text-inherit outline-none w-full box-border bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] shadow-none transition-all focus:bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[var(--color-border)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]"
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                          onBlur={handleRenameConfirm}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleRenameConfirm()
-                            if (e.key === 'Escape') setRenameMode(false)
-                          }}
-                        />
-                      ) : (
-                        <span
-                          className="text-base font-bold text-[var(--color-primary)] leading-tight whitespace-nowrap overflow-hidden text-ellipsis"
-                          title={currentDocumentDisplayPath || undefined}
-                          onDoubleClick={() => {
-                            if (!canRenameNodeFromTitle) return
-                            setNewName(nodeLabel)
-                            setRenameMode(true)
-                          }}
-                          style={{ cursor: canRenameNodeFromTitle ? 'pointer' : 'default' }}
-                        >
-                          {activeDocumentDisplayName}
-                        </span>
-                      )}
+                      <span
+                        className="text-base font-bold text-[var(--color-primary)] leading-tight whitespace-nowrap overflow-hidden text-ellipsis"
+                        title={currentDocumentDisplayPath || undefined}
+                      >
+                        {activeDocumentDisplayName}
+                      </span>
                       {childCount > 0 && (
                         <span className="py-0.5 px-[7px] rounded-[10px] bg-[var(--color-hover-bg)] text-[10px] text-[var(--color-text-muted)] shrink-0" title="含有子概念">
                           {childCount} 子

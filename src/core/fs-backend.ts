@@ -82,12 +82,12 @@ export interface FSB {
   renameDetailDocument: (rootDir: string, cardPath: string, documentPath: string, nextName: string) => Promise<DetailDocumentItem>
   deleteDetailDocument: (rootDir: string, cardPath: string, documentPath: string) => Promise<void>
   listAttachments: (rootDir: string, cardPath: string) => Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>
-  importAttachment: (rootDir: string, cardPath: string, sourceFilePath: string) => Promise<string>
+  importAttachment: (rootDir: string, cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
   deleteAttachment: (rootDir: string, cardPath: string, attachmentName: string) => Promise<void>
   openAttachment: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<boolean>
   getAttachmentAbsoluteUrl: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<string | null>
   writeAttachmentBase64: (rootDir: string, cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
-  downloadAttachment: (rootDir: string, cardPath: string, url: string) => Promise<string>
+  downloadAttachment: (rootDir: string, cardPath: string, url: string, targetFileName?: string) => Promise<string>
   readAttachmentDataUrl: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<string>
   readAppConfig: (rootDir: string) => Promise<unknown>
   writeAppConfig: (rootDir: string, content: unknown) => Promise<unknown>
@@ -121,8 +121,8 @@ const FSBImpl: FSB = {
     _call('fs:deleteDetailDocument', rootDir, cardPath, documentPath) as Promise<void>,
   listAttachments: (rootDir, cardPath) =>
     _call('fs:listAttachments', rootDir, cardPath) as Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>,
-  importAttachment: (rootDir, cardPath, sourceFilePath) =>
-    _call('fs:importAttachment', rootDir, cardPath, sourceFilePath) as Promise<string>,
+  importAttachment: (rootDir, cardPath, sourceFilePath, targetFileName) =>
+    _call('fs:importAttachment', rootDir, cardPath, sourceFilePath, targetFileName) as Promise<string>,
   deleteAttachment: (rootDir, cardPath, attachmentName) =>
     _call('fs:deleteAttachment', rootDir, cardPath, attachmentName) as Promise<void>,
   openAttachment: (rootDir, cardPath, attachmentRef) =>
@@ -131,8 +131,8 @@ const FSBImpl: FSB = {
     _call('fs:getAttachmentAbsoluteUrl', rootDir, cardPath, attachmentRef) as Promise<string | null>,
   writeAttachmentBase64: (rootDir, cardPath, fileName, mimeType, base64) =>
     _call('fs:writeAttachmentBase64', rootDir, cardPath, fileName, mimeType, base64) as Promise<string>,
-  downloadAttachment: (rootDir, cardPath, url) =>
-    _call('fs:downloadAttachment', rootDir, cardPath, url) as Promise<string>,
+  downloadAttachment: (rootDir, cardPath, url, targetFileName) =>
+    _call('fs:downloadAttachment', rootDir, cardPath, url, targetFileName) as Promise<string>,
   readAttachmentDataUrl: (rootDir, cardPath, attachmentRef) =>
     _call('fs:readAttachmentDataUrl', rootDir, cardPath, attachmentRef) as Promise<string>,
   readAppConfig: (rootDir) => _call('fs:readAppConfig', rootDir),

@@ -14,6 +14,17 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
+export function generateUniqueFileName(originalName: string): string {
+  const uuid = crypto.randomUUID().split('-')[0]
+  const lastDot = originalName.lastIndexOf('.')
+  if (lastDot !== -1 && lastDot !== 0) {
+    const name = originalName.substring(0, lastDot)
+    const ext = originalName.substring(lastDot)
+    return `${name}_${uuid}${ext}`
+  }
+  return `${originalName}_${uuid}`
+}
+
 export async function handleMarkdownPaste(options: {
   event: ClipboardEvent | React.ClipboardEvent
   value: string
@@ -37,15 +48,15 @@ export async function handleMarkdownPaste(options: {
     for (const file of files) {
       if (file.type.startsWith('image/')) {
         const base64 = await fileToBase64(file)
-        const fileName = file.name || 'attachment'
+        const fileName = generateUniqueFileName(file.name || 'attachment')
         const relPath = await storage.writeAttachmentBase64(attachmentCardPath, fileName, file.type, base64)
         snippets.push(`![${fileName}](${relPath})`)
       } else {
         // 如果是系统文件，通过路径导入（需要是 electron 环境）
         if ('path' in file && typeof (file as any).path === 'string' && window.electronAPI) {
           try {
-            const relPath = await storage.importAttachment(attachmentCardPath, (file as any).path)
-            const fileName = file.name || 'attachment'
+            const fileName = generateUniqueFileName(file.name || 'attachment')
+            const relPath = await storage.importAttachment(attachmentCardPath, (file as any).path, fileName)
             snippets.push(`[${fileName}](${relPath})`)
           } catch (e) {
             console.error('Failed to import file attachment:', e)
@@ -67,7 +78,9 @@ export async function handleMarkdownPaste(options: {
   if (imageUrlPattern.test(text)) {
     event.preventDefault()
     try {
-      const relPath = await storage.downloadAttachment(attachmentCardPath, text)
+      const originalName = text.split(/[/\\]/).pop() || 'image'
+      const targetFileName = generateUniqueFileName(originalName)
+      const relPath = await storage.downloadAttachment(attachmentCardPath, text, targetFileName)
       const fileName = relPath.split('/').pop() || 'image'
       const textToInsert = `![${fileName}](${relPath})`
       const nextValue = `${value.slice(0, selectionStart)}${textToInsert}${value.slice(selectionEnd)}`
@@ -104,15 +117,15 @@ export async function handleMarkdownDrop(options: {
     for (const file of files) {
       if (file.type.startsWith('image/')) {
         const base64 = await fileToBase64(file)
-        const fileName = file.name || 'attachment'
+        const fileName = generateUniqueFileName(file.name || 'attachment')
         const relPath = await storage.writeAttachmentBase64(attachmentCardPath, fileName, file.type, base64)
         snippets.push(`![${fileName}](${relPath})`)
       } else {
         // 如果是系统文件，通过路径导入（需要是 electron 环境）
         if ('path' in file && typeof (file as any).path === 'string' && window.electronAPI) {
           try {
-            const relPath = await storage.importAttachment(attachmentCardPath, (file as any).path)
-            const fileName = file.name || 'attachment'
+            const fileName = generateUniqueFileName(file.name || 'attachment')
+            const relPath = await storage.importAttachment(attachmentCardPath, (file as any).path, fileName)
             snippets.push(`[${fileName}](${relPath})`)
           } catch (e) {
             console.error('Failed to import file attachment:', e)
@@ -134,7 +147,9 @@ export async function handleMarkdownDrop(options: {
   if (imageUrlPattern.test(text)) {
     event.preventDefault()
     try {
-      const relPath = await storage.downloadAttachment(attachmentCardPath, text)
+      const originalName = text.split(/[/\\]/).pop() || 'image'
+      const targetFileName = generateUniqueFileName(originalName)
+      const relPath = await storage.downloadAttachment(attachmentCardPath, text, targetFileName)
       const fileName = relPath.split('/').pop() || 'image'
       const textToInsert = `![${fileName}](${relPath})`
       const nextValue = `${value.slice(0, selectionStart)}${textToInsert}${value.slice(selectionEnd)}`

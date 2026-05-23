@@ -65,13 +65,13 @@ export interface StorageBackend {
   writeCardMarkdown: (cardPath: string, content: string) => Promise<void>
   
   listAttachments: (cardPath: string) => Promise<AttachmentItem[]>
-  importAttachment: (cardPath: string, sourceFilePath: string) => Promise<string>
+  importAttachment: (cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
   deleteAttachment: (cardPath: string, attachmentName: string) => Promise<void>
   openAttachment: (cardPath: string, attachmentRef: string) => Promise<boolean>
   getAttachmentAbsoluteUrl: (cardPath: string, attachmentRef: string) => Promise<string | null>
   
   writeAttachmentBase64: (cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
-  downloadAttachment: (cardPath: string, url: string) => Promise<string>
+  downloadAttachment: (cardPath: string, url: string, targetFileName?: string) => Promise<string>
   readAttachmentDataUrl: (cardPath: string, attachmentRef: string) => Promise<string>
 
   readLayout: (roomPath: string) => Promise<GraphMeta>
@@ -271,8 +271,8 @@ export function createStore(backend: StorageBackend) {
     async listAttachments(cardPath: string) {
       try { return await backend.listAttachments(cardPath) } catch (e) { logger.catch('Store.listAttachments', `获取附件列表失败: ${cardPath}`, e); throw e }
     },
-    async importAttachment(cardPath: string, sourceFilePath: string) {
-      try { return await backend.importAttachment(cardPath, sourceFilePath) } catch (e) { logger.catch('Store.importAttachment', `导入附件失败: ${cardPath}`, e); throw e }
+    async importAttachment(cardPath: string, sourceFilePath: string, targetFileName?: string) {
+      try { return await backend.importAttachment(cardPath, sourceFilePath, targetFileName) } catch (e) { logger.catch('Store.importAttachment', `导入附件失败: ${cardPath}`, e); throw e }
     },
     async deleteAttachment(cardPath: string, attachmentName: string) {
       try { await backend.deleteAttachment(cardPath, attachmentName) } catch (e) { logger.catch('Store.deleteAttachment', `删除附件失败: ${cardPath}/${attachmentName}`, e); throw e }
@@ -292,8 +292,8 @@ export function createStore(backend: StorageBackend) {
     async writeAttachmentBase64(cardPath: string, fileName: string, mimeType: string, base64: string) {
       try { return await backend.writeAttachmentBase64(cardPath, fileName, mimeType, base64) } catch (e) { logger.catch('Store.writeAttachmentBase64', `写入附件失败: ${cardPath}/${fileName}`, e); throw e }
     },
-    async downloadAttachment(cardPath: string, url: string) {
-      try { return await backend.downloadAttachment(cardPath, url) } catch (e) { logger.catch('Store.downloadAttachment', `下载附件失败: ${cardPath}`, e); throw e }
+    async downloadAttachment(cardPath: string, url: string, targetFileName?: string) {
+      try { return await backend.downloadAttachment(cardPath, url, targetFileName) } catch (e) { logger.catch('Store.downloadAttachment', `下载附件失败: ${cardPath}`, e); throw e }
     },
     async readAttachmentDataUrl(cardPath: string, attachmentRef: string) {
       try { return await backend.readAttachmentDataUrl(cardPath, attachmentRef) } catch (e) { logger.catch('Store.readAttachmentDataUrl', `读取附件失败: ${cardPath}/${attachmentRef}`, e); throw e }

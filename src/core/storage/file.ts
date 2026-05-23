@@ -290,8 +290,8 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.listAttachments(requireRootDir(), cardPath)
     },
 
-    importAttachment: async (cardPath: string, sourceFilePath: string) => {
-      return FSB.importAttachment(requireRootDir(), cardPath, sourceFilePath)
+    importAttachment: async (cardPath: string, sourceFilePath: string, targetFileName?: string) => {
+      return FSB.importAttachment(requireRootDir(), cardPath, sourceFilePath, targetFileName)
     },
 
     deleteAttachment: async (cardPath: string, attachmentName: string) => {
@@ -318,8 +318,8 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.writeAttachmentBase64(requireRootDir(), cardPath, fileName, mimeType, base64)
     },
 
-    downloadAttachment: async (cardPath: string, url: string) => {
-      return FSB.downloadAttachment(requireRootDir(), cardPath, url)
+    downloadAttachment: async (cardPath: string, url: string, targetFileName?: string) => {
+      return FSB.downloadAttachment(requireRootDir(), cardPath, url, targetFileName)
     },
 
     readAttachmentDataUrl: async (cardPath: string, attachmentRef: string) => {

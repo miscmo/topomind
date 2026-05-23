@@ -195,8 +195,8 @@ function registerIPC() {
   ipcMain.handle('fs:listAttachments', function(e, rootDir, cardPath) {
     return fileService.listAttachments(rootDir, cardPath);
   });
-  ipcMain.handle('fs:importAttachment', function(e, rootDir, cardPath, sourceFilePath) {
-    return fileService.importAttachment(rootDir, cardPath, sourceFilePath);
+  ipcMain.handle('fs:importAttachment', function(e, rootDir, cardPath, sourceFilePath, targetFileName) {
+    return fileService.importAttachment(rootDir, cardPath, sourceFilePath, targetFileName);
   });
   ipcMain.handle('fs:deleteAttachment', function(e, rootDir, cardPath, attachmentName) {
     return fileService.deleteAttachment(rootDir, cardPath, attachmentName);
@@ -215,8 +215,8 @@ function registerIPC() {
   ipcMain.handle('fs:writeAttachmentBase64', function(e, rootDir, cardPath, fileName, mimeType, base64) {
     return fileService.writeAttachmentBase64(rootDir, cardPath, fileName, mimeType, base64);
   });
-  ipcMain.handle('fs:downloadAttachment', function(e, rootDir, cardPath, url) {
-    return fileService.downloadAttachment(rootDir, cardPath, url);
+  ipcMain.handle('fs:downloadAttachment', function(e, rootDir, cardPath, url, targetFileName) {
+    return fileService.downloadAttachment(rootDir, cardPath, url, targetFileName);
   });
   ipcMain.handle('fs:readAttachmentDataUrl', function(e, rootDir, cardPath, attachmentRef) {
     return fileService.readAttachmentDataUrl(rootDir, cardPath, attachmentRef);

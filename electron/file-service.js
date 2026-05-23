@@ -347,7 +347,7 @@ function _fs_listAttachments(rootDir, cardPath) {
     .sort(function(a, b) { return b.mtime - a.mtime; }); // 按修改时间降序
 }
 
-function _fs_importAttachment(rootDir, cardPath, sourceFilePath) {
+function _fs_importAttachment(rootDir, cardPath, sourceFilePath, targetFileName) {
   rootDir = _fs_requireValidWorkDir(rootDir);
   if (!nodeFs.existsSync(sourceFilePath)) {
     throw new Error('源文件不存在: ' + sourceFilePath);
@@ -357,7 +357,7 @@ function _fs_importAttachment(rootDir, cardPath, sourceFilePath) {
     throw new Error('只能导入文件');
   }
   
-  var fileName = nodePath.basename(sourceFilePath);
+  var fileName = targetFileName || nodePath.basename(sourceFilePath);
   var cardDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, cardPath);
   var attachDir = nodePath.join(cardDir, '_attach');
   _fs_ensureDir(attachDir);
@@ -734,8 +734,8 @@ const fileService = {
       return _fs_listAttachments(rootDir, cardPath);
     },
 
-    importAttachment: function(rootDir, cardPath, sourceFilePath) {
-      return _fs_importAttachment(rootDir, cardPath, sourceFilePath);
+    importAttachment: function(rootDir, cardPath, sourceFilePath, targetFileName) {
+      return _fs_importAttachment(rootDir, cardPath, sourceFilePath, targetFileName);
     },
 
     deleteAttachment: function(rootDir, cardPath, attachmentName) {
@@ -756,7 +756,7 @@ const fileService = {
       return _fs_writeAttachmentBuffer(rootDir, cardPath, safeName, Buffer.from(String(base64 || ''), 'base64'));
     },
 
-    downloadAttachment: async function(rootDir, cardPath, url) {
+    downloadAttachment: async function(rootDir, cardPath, url, targetFileName) {
       var targetUrl = String(url || '').trim();
       if (!/^https?:\/\//i.test(targetUrl)) {
         throw new Error('只支持 http/https 图片链接');
@@ -770,7 +770,7 @@ const fileService = {
         throw new Error('链接不是图片: ' + mimeType);
       }
       var urlPath = new URL(targetUrl).pathname;
-      var fileName = nodePath.basename(urlPath) || ('image.' + _fs_extFromMime(mimeType));
+      var fileName = targetFileName || nodePath.basename(urlPath) || ('image.' + _fs_extFromMime(mimeType));
       if (fileName.indexOf('.') < 0) fileName += '.' + _fs_extFromMime(mimeType);
       var arrayBuffer = await response.arrayBuffer();
       return _fs_writeAttachmentBuffer(rootDir, cardPath, fileName, Buffer.from(arrayBuffer));

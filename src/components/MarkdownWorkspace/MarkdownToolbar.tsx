@@ -16,6 +16,7 @@ import type { MarkdownViewMode } from './markdownTypes'
 import { useStorage } from '../../core/storage'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
+import { generateUniqueFileName } from './AttachmentPipeline'
 
 interface MarkdownToolbarProps {
   view: EditorView | null
@@ -56,7 +57,9 @@ export const MarkdownToolbar = memo(function MarkdownToolbar({
       if (filePaths && filePaths.length > 0) {
         let count = 0
         for (const filePath of filePaths) {
-          const relPath = await storage.importAttachment(attachmentCardPath, filePath)
+          const originalName = filePath.split(/[/\\]/).pop() || 'attachment'
+          const targetFileName = generateUniqueFileName(originalName)
+          const relPath = await storage.importAttachment(attachmentCardPath, filePath, targetFileName)
           const fileName = relPath.split('/').pop() || 'attachment'
           const ext = fileName.split('.').pop()?.toLowerCase() || ''
           const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)

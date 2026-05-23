@@ -6,6 +6,7 @@ import { logger } from '../../core/logger'
 import { insertAttachmentLink } from './markdownCommands'
 import type { AttachmentItem } from '../../core/storage'
 import { logAction } from '../../core/log-backend'
+import { generateUniqueFileName } from './AttachmentPipeline'
 
 interface AttachmentsTabProps {
   attachmentCardPath: string
@@ -80,7 +81,9 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
         setLoading(true)
         let importedCount = 0
         for (const filePath of filePaths) {
-          await storage.importAttachment(attachmentCardPath, filePath)
+          const originalName = filePath.split(/[/\\]/).pop() || 'attachment'
+          const targetFileName = generateUniqueFileName(originalName)
+          await storage.importAttachment(attachmentCardPath, filePath, targetFileName)
           importedCount++
         }
         await loadAttachments()
