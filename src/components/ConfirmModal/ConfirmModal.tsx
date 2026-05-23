@@ -5,6 +5,7 @@
 import { memo } from 'react'
 import { useConfirmStore } from '../../stores/confirmStore'
 import { Button } from '../ui/button'
+import { modalOverlayBaseClassName, modalOverlayEnterClassName, modalPanelEnterClassName } from '../ui/modal'
 
 export const ConfirmModal = memo(function ConfirmModal() {
   const visible = useConfirmStore((s) => s.visible)
@@ -16,9 +17,9 @@ export const ConfirmModal = memo(function ConfirmModal() {
   if (!visible) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-150" onClick={cancel}>
+    <div className={`${modalOverlayBaseClassName} ${modalOverlayEnterClassName} z-[9999]`} onClick={cancel}>
       <div
-        className="flex w-full max-w-[480px] flex-col gap-4 rounded-xl border bg-surface p-6 shadow-popover animate-in zoom-in-95 duration-200"
+        className={`flex w-full max-w-[480px] flex-col gap-4 rounded-xl border bg-surface p-6 shadow-popover ${modalPanelEnterClassName}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

@@ -8,6 +8,7 @@ export interface KBItem {
   name: string
   nodeCount: number | null
   coverUrl: string | null
+  coverOffset?: number
 }
 
 const HOME_KB_IO_CONCURRENCY = 6
@@ -80,6 +81,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
           name: kb.name,
           nodeCount: null,
           coverUrl,
+          coverOffset: config.kbCoverOffsets?.[kb.name] ?? 50,
         }
       })
       setKbs(initial)

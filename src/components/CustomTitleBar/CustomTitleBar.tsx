@@ -241,7 +241,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
 
       <div className="flex-1 min-w-0 flex items-center justify-start h-full mx-2.5 relative" style={{ WebkitAppRegion: 'drag' } as any}>
         {mode === 'workspace' && (
-          <div className="h-full w-full max-w-[50%] flex items-center" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div className="h-full max-w-[50%] min-w-0 flex items-center">
             <TabBar />
           </div>
         )}

@@ -1,4 +1,6 @@
 
+import { modalOverlayBaseClassName, modalOverlayEnterClassName, modalPanelEnterClassName } from '../ui/modal'
+
 interface CreateKBDialogProps {
   visible: boolean
   name: string
@@ -13,13 +15,14 @@ interface CreateKBDialogProps {
 export function CreateKBDialog(props: CreateKBDialogProps) {
   const { visible, name, loading, error, onNameChange, onErrorClear, onClose, onSubmit } = props
 
+  if (!visible) return null
+
   return (
     <div
-      inert={!visible ? "" : undefined}
-      className={`fixed inset-0 bg-black/40 z-[10000] flex items-center justify-center opacity-0 invisible transition-all duration-250 backdrop-blur-[2px] ${visible ? '!opacity-100 !visible [&>div]:!scale-100 [&>div]:!translate-y-0 [&>div]:!opacity-100' : ''}`}
+      className={`${modalOverlayBaseClassName} ${modalOverlayEnterClassName} z-[10000]`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-[440px] max-w-[90%] overflow-hidden scale-95 translate-y-2.5 opacity-0 transition-all duration-75 shadow-[var(--shadow-lg)]">
+      <div className={`w-[440px] max-w-[90%] overflow-hidden rounded-2xl border border-[var(--color-border)] bg-surface shadow-[var(--shadow-lg)] ${modalPanelEnterClassName}`}>
         <div className="p-[18px_24px] bg-[var(--color-bg)] border-b border-[var(--color-border-light)] flex justify-between items-center [&>h3]:text-[var(--color-primary)] [&>h3]:text-[16px] [&>h3]:m-0 [&>h3]:font-bold">
           <h3>新建知识库</h3>
           <button className="w-7 h-7 rounded-md border-none bg-[var(--color-hover-bg)] text-[var(--color-text-muted)] cursor-pointer text-[14px] transition-all duration-75 hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)]" onClick={onClose}>✕</button>

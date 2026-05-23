@@ -1,19 +1,17 @@
 import { useState } from 'react'
-import { Book, Settings, Plus, Download, GripVertical, FileText } from 'lucide-react'
+import { Book, Settings, GripVertical, FileText } from 'lucide-react'
 import { logAction } from '../../core/log-backend'
 import type { KBItem } from './useHomeKnowledgeBases'
 
 interface KnowledgeBaseGridProps {
   kbs: KBItem[]
   onOpenKB: (kb: KBItem) => void
-  onCreateKB: () => void
-  onImportKB: () => void
   onOpenSettings: (kb: KBItem) => void
   onReorder?: (newOrder: string[]) => void
 }
 
 export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
-  const { kbs, onOpenKB, onCreateKB, onImportKB, onOpenSettings, onReorder } = props
+  const { kbs, onOpenKB, onOpenSettings, onReorder } = props
   const [draggedItem, setDraggedItem] = useState<string | null>(null)
   const [dragOverItem, setDragOverItem] = useState<string | null>(null)
 
@@ -58,7 +56,7 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+    <div className="grid grid-cols-3 gap-5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
       {kbs.map((kb) => (
         <div
           key={kb.name}
@@ -67,7 +65,7 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
           onDragOver={(e) => handleDragOver(e, kb.name)}
           onDrop={(e) => handleDrop(e, kb.name)}
           onDragEnd={handleDragEnd}
-          className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-card transition-all duration-75 hover:-translate-y-1 hover:border-accent hover:shadow-lg
+          className={`group relative flex cursor-pointer flex-col rounded-lg border border-border/60 bg-card transition-all duration-200 hover:-translate-y-1 hover:border-border hover:shadow-md overflow-hidden [transform:translateZ(0)]
             ${draggedItem === kb.name ? 'opacity-50' : ''}
             ${dragOverItem === kb.name ? 'border-primary ring-2 ring-primary/20' : ''}
           `}
@@ -76,12 +74,17 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
             onOpenKB(kb)
           }}
         >
-          <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-            {kb.coverUrl ? (
-              <img src={kb.coverUrl} alt={kb.name} className="h-full w-full object-cover transition-transform duration-75 group-hover:scale-105" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground/30">
-                <Book className="h-12 w-12" strokeWidth={1.5} />
+          <div className="relative aspect-[1/1] w-full overflow-hidden rounded-t-lg bg-muted">
+              {kb.coverUrl ? (
+                  <img
+                    src={kb.coverUrl}
+                    alt={kb.name}
+                    className="h-full w-full object-cover transition-transform duration-300 transform-gpu will-change-transform [backface-visibility:hidden] group-hover:scale-105"
+                    style={{ objectPosition: `50% ${kb.coverOffset ?? 50}%` }}
+                  />
+                ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/50 text-muted-foreground/40">
+                <Book className="h-7 w-7" strokeWidth={1.5} />
               </div>
             )}
             <button
@@ -99,39 +102,17 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
             </div>
           </div>
           
-          <div className="flex flex-col p-3">
-            <h3 className="truncate font-medium text-card-foreground" title={kb.name}>
+          <div className="flex flex-col p-2.5">
+            <h3 className="truncate text-[13px] font-medium text-card-foreground" title={kb.name}>
               {kb.name}
             </h3>
-            <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <FileText className="h-3.5 w-3.5" />
+            <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground/80">
+              <FileText className="h-3 w-3" />
               <span>{kb.nodeCount !== null ? `${kb.nodeCount} 个节点` : '··· 个节点'}</span>
             </div>
           </div>
         </div>
       ))}
-
-      {/* 新建知识库卡片 */}
-      <div 
-        className="group flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-transparent transition-all duration-75 hover:border-accent hover:bg-accent/5 aspect-[4/3]"
-        onClick={onCreateKB}
-      >
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
-          <Plus className="h-5 w-5" />
-        </div>
-        <span className="mt-3 text-sm font-medium text-muted-foreground group-hover:text-accent">新建知识库</span>
-      </div>
-
-      {/* 导入知识库卡片 */}
-      <div 
-        className="group flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-transparent transition-all duration-75 hover:border-accent hover:bg-accent/5 aspect-[4/3]"
-        onClick={onImportKB}
-      >
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
-          <Download className="h-5 w-5" />
-        </div>
-        <span className="mt-3 text-sm font-medium text-muted-foreground group-hover:text-accent">导入知识库</span>
-      </div>
     </div>
   )
 }

@@ -37,6 +37,7 @@ module.exports = {
           DEFAULT: "var(--color-surface)",
           foreground: "var(--color-text-primary)",
         },
+        surface: "var(--color-surface)",
         card: {
           DEFAULT: "var(--color-surface)",
           foreground: "var(--color-text-primary)",

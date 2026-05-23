@@ -26,6 +26,7 @@ interface VaultConfig {
   nodeSizeLimits?: { minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number }
   nodeBadgeSize?: number
   kbCovers?: Record<string, string>
+  kbCoverOffsets?: Record<string, number>
   kbOrder?: string[]
   [key: string]: unknown
 }
@@ -101,6 +102,12 @@ function normalizeConfig(configRaw: unknown): VaultConfig {
     if (typeof v === 'string') kbCovers[k] = v
   }
 
+  const offsets = (c.kbCoverOffsets && typeof c.kbCoverOffsets === 'object' && !Array.isArray(c.kbCoverOffsets)) ? c.kbCoverOffsets as Record<string, unknown> : {}
+  const kbCoverOffsets: Record<string, number> = {}
+  for (const [k, v] of Object.entries(offsets)) {
+    if (typeof v === 'number') kbCoverOffsets[k] = v
+  }
+
   const kbOrder = Array.isArray(c.kbOrder) ? c.kbOrder.filter(item => typeof item === 'string') : undefined
   const minWidth = Math.max(1, finiteNumber(limits.minWidth, 120))
   const minHeight = Math.max(1, finiteNumber(limits.minHeight, 52))
@@ -138,6 +145,7 @@ function normalizeConfig(configRaw: unknown): VaultConfig {
     },
     nodeBadgeSize: clampNumber(finiteNumber(c.nodeBadgeSize, 14), 8, 28),
     kbCovers,
+    kbCoverOffsets,
     kbOrder,
   }
 }
@@ -350,6 +358,9 @@ export function createStore(backend: StorageBackend) {
         }
         if (config.kbCovers !== undefined) {
           nextConfig.kbCovers = config.kbCovers
+        }
+        if (config.kbCoverOffsets !== undefined) {
+          nextConfig.kbCoverOffsets = config.kbCoverOffsets
         }
         const next = normalizeConfig(nextConfig)
         cachedConfig = next

@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback, memo } from 'react'
 import { usePromptStore } from '../../stores/promptStore'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { modalOverlayBaseClassName, modalOverlayEnterClassName, modalPanelEnterClassName } from '../ui/modal'
 
 export const PromptModal = memo(function PromptModal() {
   const visible = usePromptStore((s) => s.visible)
@@ -45,8 +46,8 @@ export const PromptModal = memo(function PromptModal() {
   if (!visible) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-150" onClick={handleCancel}>
-      <div className="flex w-full max-w-[480px] flex-col gap-4 rounded-xl border bg-surface p-6 shadow-popover animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+    <div className={`${modalOverlayBaseClassName} ${modalOverlayEnterClassName} z-[9999]`} onClick={handleCancel}>
+      <div className={`flex w-full max-w-[480px] flex-col gap-4 rounded-xl border bg-surface p-6 shadow-popover ${modalPanelEnterClassName}`} onClick={(e) => e.stopPropagation()}>
         <div className="text-base font-semibold text-foreground">{title}</div>
         <Input
           value={value}
