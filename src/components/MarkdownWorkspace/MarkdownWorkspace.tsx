@@ -358,7 +358,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
           <aside
             className={`w-[180px] shrink-0 flex flex-col border-r border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] ${
               effectiveFloating 
-                ? 'absolute left-0 top-0 bottom-0 z-20 shadow-[0_8px_32px_rgba(15,23,42,0.12)] border-r border-[var(--color-border-strong)]'
+                ? 'absolute left-[12px] top-[42px] bottom-[16px] z-30 shadow-[0_12px_40px_rgba(15,23,42,0.16)] border border-[var(--color-border-strong)] rounded-[12px] overflow-hidden'
                 : detailSidebarCollapsed 
                   ? '!w-0 !border-r-0 !bg-transparent overflow-hidden' 
                   : ''
