@@ -538,9 +538,11 @@ function createWindow() {
   } else {
     win.loadFile(rendererIndexPath);
   }
-  win.webContents.on('console-message', function(e, level, msg, line, src) {
-    if (IS_DEV) console.log('[renderer]', msg, src || '', line || '');
+  win.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Browser Console] ${level} ${message} (${sourceId}:${line})`);
   });
+  // Open the DevTools.
+  // win.webContents.openDevTools()
   win.webContents.on('did-fail-load', function(e, errorCode, errorDescription, validatedURL, isMainFrame) {
     console.error('[window:did-fail-load]', errorCode, errorDescription, validatedURL, isMainFrame);
   });

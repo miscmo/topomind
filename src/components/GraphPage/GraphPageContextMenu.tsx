@@ -1,8 +1,11 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, Palette, Trash2, Maximize2 } from 'lucide-react'
 
 interface MenuItem {
   label: string
   action: () => void | Promise<void>
+  icon?: React.ReactNode
+  shortcut?: string
   danger?: boolean
   disabled?: boolean
   separator?: never
@@ -12,6 +15,8 @@ interface MenuSeparator {
   separator: true
   label?: never
   action?: never
+  icon?: never
+  shortcut?: never
   danger?: never
   disabled?: never
 }
@@ -46,7 +51,7 @@ export default memo(function GraphPageContextMenu({
   onClose,
 }: GraphPageContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
-  const [menuSize, setMenuSize] = useState({ width: 160, height: 0 })
+  const [menuSize, setMenuSize] = useState({ width: 200, height: 0 })
   const [focusedIndex, setFocusedIndex] = useState(-1)
 
   const isEdge = type === 'edge'
@@ -56,6 +61,8 @@ export default memo(function GraphPageContextMenu({
     ? [
         {
           label: '新建节点',
+          icon: <Plus className="w-4 h-4" />,
+          shortcut: 'Double Click',
           action: async () => {
             await onNewChild({ x, y })
             onClose()
@@ -66,6 +73,7 @@ export default memo(function GraphPageContextMenu({
       ? [
           {
             label: '连线样式',
+            icon: <Palette className="w-4 h-4" />,
             action: async () => {
               if (targetId) await onEdgeStyle(targetId)
               onClose()
@@ -74,6 +82,8 @@ export default memo(function GraphPageContextMenu({
           { separator: true },
           {
             label: '删除连线',
+            icon: <Trash2 className="w-4 h-4" />,
+            shortcut: 'Backspace',
             action: async () => {
               if (targetId) await onEdgeDelete(targetId)
               onClose()
@@ -84,6 +94,8 @@ export default memo(function GraphPageContextMenu({
       : [
           {
             label: '进入节点',
+            icon: <Maximize2 className="w-4 h-4" />,
+            shortcut: 'Enter',
             action: async () => {
               if (targetId) await onEnterNode(targetId)
               onClose()
@@ -92,6 +104,8 @@ export default memo(function GraphPageContextMenu({
           { separator: true },
           {
             label: '删除节点',
+            icon: <Trash2 className="w-4 h-4" />,
+            shortcut: 'Backspace',
             action: async () => {
               if (targetId) await onDelete(targetId)
               onClose()
@@ -107,7 +121,7 @@ export default memo(function GraphPageContextMenu({
 
   useEffect(() => {
     if (!visible) return
-    setFocusedIndex(navigableItems.length > 0 ? 0 : -1)
+    setFocusedIndex(-1)
   }, [visible, navigableItems.length])
 
   useEffect(() => {
@@ -123,11 +137,18 @@ export default memo(function GraphPageContextMenu({
         onClose()
       }
     }
+    const blockMenu = (e: MouseEvent) => {
+      if (menuRef.current?.contains(e.target as Node)) {
+        e.preventDefault()
+      } else {
+        onClose()
+      }
+    }
     document.addEventListener('mousedown', handler)
-    document.addEventListener('contextmenu', handler)
+    document.addEventListener('contextmenu', blockMenu)
     return () => {
       document.removeEventListener('mousedown', handler)
-      document.removeEventListener('contextmenu', handler)
+      document.removeEventListener('contextmenu', blockMenu)
     }
   }, [visible, onClose])
 
@@ -183,25 +204,48 @@ export default memo(function GraphPageContextMenu({
   return (
     <div
       ref={menuRef}
-      className="fixed z-[50] min-w-[148px] bg-[color-mix(in_srgb,var(--color-surface-elevated)_96%,transparent)] border border-[var(--color-border)] rounded-[var(--radius-md,7px)] shadow-[var(--shadow-lg)] p-1 overflow-hidden backdrop-blur-md"
-      style={{ left: adjustedX, top: adjustedY }}
+      className="fixed z-[50] min-w-[200px] bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] p-1.5 overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
+      style={{ left: adjustedX, top: adjustedY, transformOrigin: 'top left' }}
+      onMouseLeave={() => setFocusedIndex(-1)}
     >
       {items.map((item, i) => {
         if ('separator' in item) {
-          return <div key={i} className="h-px bg-[var(--color-border-light)] mx-1 my-1" />
+          return <div key={i} className="h-px bg-[var(--color-border-subtle)] mx-1 my-1" />
         }
 
         navigableIndex += 1
-        const isFocused = focusedIndex === navigableIndex
+        const currentIndex = navigableIndex
+        const isFocused = focusedIndex === currentIndex
+
+        let textColor = 'text-[var(--color-text-primary)]'
+        let iconColor = 'text-[var(--color-text-muted)]'
+        let bgColor = isFocused ? 'bg-[var(--color-hover-bg)]' : 'bg-transparent'
+
+        if (item.danger) {
+          textColor = isFocused ? 'text-[var(--color-danger-hover)]' : 'text-[var(--color-danger)]'
+          iconColor = isFocused ? 'text-[var(--color-danger-hover)]' : 'text-[var(--color-danger)]'
+          bgColor = isFocused ? 'bg-[var(--color-danger-soft)]' : 'bg-transparent'
+        }
 
         return (
           <button
             key={i}
-            className={`flex items-center w-full min-h-[30px] px-2.5 border-none rounded-[5px] bg-transparent cursor-pointer text-left text-[var(--font-size-base,12px)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--color-hover-bg)] ${isFocused ? 'bg-[var(--color-selected-bg)] outline-none' : ''} ${item.danger ? 'text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger-hover)]' : 'text-[var(--color-text-primary)]'}`}
+            className={`flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none disabled:opacity-40 disabled:cursor-not-allowed ${bgColor} ${textColor}`}
             onClick={async () => { await item.action() }}
+            onMouseEnter={() => setFocusedIndex(currentIndex)}
             disabled={item.disabled}
           >
-            {item.label}
+            {item.icon && (
+              <span className={`flex items-center justify-center ${iconColor}`}>
+                {item.icon}
+              </span>
+            )}
+            <span className="flex-1">{item.label}</span>
+            {item.shortcut && (
+              <span className="ml-auto text-[11px] tracking-widest text-[var(--color-text-muted)] opacity-70 font-sans">
+                {item.shortcut}
+              </span>
+            )}
           </button>
         )
       })}

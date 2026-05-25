@@ -52,6 +52,21 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
 
   const [savedMarkdown, setSavedMarkdown] = useState('')
   const [topoDocuments, setTopoDocuments] = useState<TopoDocumentManifestItem[]>([])
+  const [loadedDocumentKey, setLoadedDocumentKey] = useState('')
+  
+  useEffect(() => {
+    if (selectedNodeId) {
+      const hasDetail = topoDocuments.length > 0
+      const node = storeApi.getState().nodesMap.get(selectedNodeId)
+      if (node && node.data.hasDetail !== hasDetail) {
+        storeApi.getState().updateNode(selectedNodeId, n => ({
+          ...n,
+          data: { ...n.data, hasDetail }
+        }))
+      }
+    }
+  }, [topoDocuments, selectedNodeId, storeApi])
+
   const [isDocumentBusy, setIsDocumentBusy] = useState(false)
   const [documentLinkNotice, setDocumentLinkNotice] = useState('')
   const [detailSidebarCollapsed, setDetailSidebarCollapsed] = useState(() => {
@@ -152,9 +167,11 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
 
   useEffect(() => {
     const requestSeq = ++markdownRequestSeqRef.current
+    setLoadedDocumentKey('')
     if (!selectedNodeId || !nodePath || !currentDocumentKey) return
     if (isActiveTopoPlaceholderDocument) {
       setSavedMarkdown('')
+      setLoadedDocumentKey(currentDocumentKey)
       return
     }
     const readStartedAt = performance.now()
@@ -162,6 +179,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     const cachedContent = useCardContentStore.getState().detailEntries[currentDocumentKey]?.content
     if (cachedContent !== undefined) {
       setSavedMarkdown(cachedContent)
+      setLoadedDocumentKey(currentDocumentKey)
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
         setDraftMarkdown(currentDocumentKey, cachedContent)
       }
@@ -193,6 +211,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       }, 'DetailPanel')
       setDetailMarkdown(currentDocumentKey, content)
       setSavedMarkdown(content)
+      setLoadedDocumentKey(currentDocumentKey)
       
       if (!isActiveEditableTopoDocument) {
         if (activeDocumentPath && activeDocumentPath.startsWith('__topo__/')) {
@@ -225,6 +244,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       }, 'DetailPanel')
       setDetailMarkdown(currentDocumentKey, '')
       setSavedMarkdown('')
+      setLoadedDocumentKey(currentDocumentKey)
       
       if (!isActiveEditableTopoDocument) {
         if (activeDocumentPath && activeDocumentPath.startsWith('__topo__/')) {
@@ -302,6 +322,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         error: e instanceof Error ? e.message : String(e),
       }, 'DetailPanel')
       logger.catch('DetailPanel', 'handleSave', e)
+      throw e
     }
   }, [isActiveTopoPlaceholderDocument, isActiveEditableTopoDocument, activeEditableTopoDocumentId, activeStructuredTopoDocumentId, selectedNodeId, nodePath, currentDocumentKey, storeApi, storage, draftMarkdown, setDetailMarkdown, activeDocumentPath])
 
@@ -316,8 +337,13 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
 
   const handleSelectDocument = useCallback(async (documentPath: string) => {
     if (documentPath === activeDocumentPath) return
-    await flushMarkdownSave()
-    setActiveDocumentPath(documentPath)
+    try {
+      await flushMarkdownSave()
+      setActiveDocumentPath(documentPath)
+    } catch (e) {
+      setDocumentLinkNotice('保存当前文档失败，已取消切换。')
+      logger.catch('DetailPanel', 'handleSelectDocument', e)
+    }
   }, [activeDocumentPath, flushMarkdownSave])
 
   const handleOpenDetailDocumentLink = useCallback(async (documentPath: string) => {
@@ -338,7 +364,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     setIsDocumentBusy(true)
     try {
       await flushMarkdownSave()
-      const created = await storage.createTopoDocument(nodePath, { type: 'markdown', title: nextName, parentId })
+      const created = await storage.createTopoDocument(nodePath, { type: 'markdown', title: nextName, parentId: parentId || null })
       const createdDocumentPath = topoDocumentPath(created.id)
       const createdDocumentKey = joinRefs(nodePath, createdDocumentPath)
       clearDetailDraft(createdDocumentKey)
@@ -361,7 +387,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     setIsDocumentBusy(true)
     try {
       await flushMarkdownSave()
-      const created = await storage.createTopoDocument(nodePath, { type: 'smart', title: nextName, parentId })
+      const created = await storage.createTopoDocument(nodePath, { type: 'smart', title: nextName, parentId: parentId || null })
       const createdDocumentPath = topoDocumentPath(created.id)
       const createdDocumentKey = joinRefs(nodePath, createdDocumentPath)
       clearDetailDraft(createdDocumentKey)
@@ -384,7 +410,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     setIsDocumentBusy(true)
     try {
       await flushMarkdownSave()
-      const created = await storage.createTopoDocument(nodePath, { type: 'mindmap', title: nextName, parentId })
+      const created = await storage.createTopoDocument(nodePath, { type: 'mindmap', title: nextName, parentId: parentId || null })
       const createdDocumentPath = topoDocumentPath(created.id)
       const createdDocumentKey = joinRefs(nodePath, createdDocumentPath)
       clearDetailDraft(createdDocumentKey)
@@ -407,7 +433,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     setIsDocumentBusy(true)
     try {
       await flushMarkdownSave()
-      const created = await storage.createTopoDocument(nodePath, { type: 'flowchart', title: nextName, parentId })
+      const created = await storage.createTopoDocument(nodePath, { type: 'flowchart', title: nextName, parentId: parentId || null })
       const createdDocumentPath = topoDocumentPath(created.id)
       const createdDocumentKey = joinRefs(nodePath, createdDocumentPath)
       clearDetailDraft(createdDocumentKey)
@@ -561,6 +587,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         <DocumentWorkspace
           value={draftMarkdown}
           savedValue={savedMarkdown}
+          isContentLoaded={loadedDocumentKey === currentDocumentKey}
           onChange={(val: string) => currentDocumentKey && setDraftMarkdown(currentDocumentKey, val)}
           onSave={handleSave}
           attachmentCardPath={nodePath}
@@ -644,10 +671,10 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           onViewModeChange={setViewMode}
           onSelectDocument={(documentPath: string) => { void handleSelectDocument(documentPath) }}
           onOpenDetailDocumentLink={(documentPath: string) => { void handleOpenDetailDocumentLink(documentPath) }}
-          onCreateTopoMarkdownDocument={(name: string) => { void handleCreateTopoMarkdownDocument(name) }}
-          onCreateTopoSmartDocument={(name: string) => { void handleCreateTopoSmartDocument(name) }}
-          onCreateTopoMindMapDocument={(name: string) => { void handleCreateTopoMindMapDocument(name) }}
-          onCreateTopoFlowchartDocument={(name: string) => { void handleCreateTopoFlowchartDocument(name) }}
+          onCreateTopoMarkdownDocument={(name: string, parentId?: string | null) => { void handleCreateTopoMarkdownDocument(name, parentId) }}
+          onCreateTopoSmartDocument={(name: string, parentId?: string | null) => { void handleCreateTopoSmartDocument(name, parentId) }}
+          onCreateTopoMindMapDocument={(name: string, parentId?: string | null) => { void handleCreateTopoMindMapDocument(name, parentId) }}
+          onCreateTopoFlowchartDocument={(name: string, parentId?: string | null) => { void handleCreateTopoFlowchartDocument(name, parentId) }}
           onExportTopoDocument={(documentPath: string) => { void handleExportTopoDocument(documentPath) }}
           onRenameDocument={(documentPath: string, name: string) => { void handleRenameDocument(documentPath, name) }}
           onDeleteDocument={(documentPath: string) => { void handleDeleteDocument(documentPath) }}

@@ -13,7 +13,7 @@ interface RightPanelShellProps {
 
 export default memo(function RightPanelShell({ tabId, rightPanelTab, width, onTabChange, onCollapse }: RightPanelShellProps) {
   return (
-    <div className="h-full bg-[var(--color-surface)] shrink-0 overflow-hidden border-none shadow-[-1px_0_10px_rgba(0,0,0,0.03)] flex flex-col" style={{ width }}>
+    <div className="h-full bg-white/90 dark:bg-[#1b2330]/90 backdrop-blur-xl shrink-0 overflow-hidden border-l border-[var(--color-border)] shadow-[-4px_0_24px_rgba(0,0,0,0.06)] flex flex-col" style={{ width }}>
       {rightPanelTab === 'detail' ? (
         <DetailPanel tabId={tabId} />
       ) : (

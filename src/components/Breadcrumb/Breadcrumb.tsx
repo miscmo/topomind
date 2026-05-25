@@ -91,7 +91,7 @@ export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
   return (
     <div
       id="breadcrumb"
-      className="absolute top-3 left-3 z-[12] flex items-center gap-[5px] max-w-[min(560px,calc(100%-24px))] overflow-hidden whitespace-nowrap rounded-full border border-[color-mix(in_srgb,var(--color-border)_88%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_90%,transparent)] py-1.5 pl-3 pr-3.5 text-xs text-[var(--color-text-secondary)] shadow-[0_6px_18px_rgba(15,23,42,0.08)] backdrop-blur-[6px]"
+      className="absolute top-3 left-3 z-[12] flex items-center gap-[5px] max-w-[min(560px,calc(100%-24px))] overflow-hidden whitespace-nowrap rounded-full border border-[var(--color-border)] bg-white/90 dark:bg-[#1b2330]/90 py-1.5 pl-3 pr-3.5 text-xs text-[var(--color-text-secondary)] shadow-[var(--shadow-md)] backdrop-blur-xl"
     >
       {items.map((item, index) => {
         const isLast = index === items.length - 1

@@ -48,7 +48,7 @@ function legacyBlockToBlockNote(block: LegacySmartDocumentBlock): BlockNoteBlock
   if (block.type === 'heading') {
     return {
       type: 'heading',
-      props: { level: 1 },
+      props: { level: 2 }, // 改为二级标题，不再使用默认的极大的一级标题
       content: text,
     }
   }
@@ -85,22 +85,27 @@ function legacyBlockToBlockNote(block: LegacySmartDocumentBlock): BlockNoteBlock
 }
 
 export function createDefaultBlockNoteBlocks(blocks: unknown): BlockNoteBlock[] {
-  if (!Array.isArray(blocks)) return [createParagraphBlock()]
+  if (!Array.isArray(blocks)) return []
   const normalizedBlocks = blocks
     .map(normalizeBlockNoteBlock)
     .filter((item): item is BlockNoteBlock => Boolean(item))
-  return normalizedBlocks.length ? normalizedBlocks : [createParagraphBlock()]
+  return normalizedBlocks.length ? normalizedBlocks : []
 }
 
 export function normalizeSmartDocumentContent(value: unknown, fallbackTitle: string): SmartDocumentContent {
   const now = Date.now()
   const input = isRecord(value) ? value : {}
   const metadata = isRecord(input.metadata) ? input.metadata : {}
+  
+  // 对于新的空文档，我们不传入任何初始的 block，让 BlockNote 自动初始化一个空段落
+  // 这样就不会有那个强制转换出来的“Heading 1”默认块了
+  const parsedBlocks = createDefaultBlockNoteBlocks(input.blocks)
+  
   return {
     schema: 'topomind.smart-document',
     version: 1,
-    title: typeof input.title === 'string' && input.title.trim() ? input.title : fallbackTitle,
-    blocks: createDefaultBlockNoteBlocks(input.blocks),
+    title: typeof input.title === 'string' ? input.title : fallbackTitle,
+    blocks: parsedBlocks.length > 0 ? parsedBlocks : [],
     metadata: {
       createdAt: typeof metadata.createdAt === 'number' ? metadata.createdAt : now,
       updatedAt: typeof metadata.updatedAt === 'number' ? metadata.updatedAt : now,

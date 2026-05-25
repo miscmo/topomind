@@ -22,6 +22,7 @@ function parseJsonValue(value: string) {
 interface DocumentEditorHostProps {
   value: string
   savedValue: string
+  isContentLoaded?: boolean
   onChange: (value: string) => void
   onSave: () => Promise<void> | void
   attachmentCardPath: string | null
@@ -100,6 +101,7 @@ const FlowchartDocumentWrapper = ({ value, title, onChange }: { value: string, t
 export function DocumentEditorHost({
   value,
   savedValue,
+  isContentLoaded = true,
   onChange,
   onSave,
   attachmentCardPath,
@@ -124,6 +126,7 @@ export function DocumentEditorHost({
   const shouldRenderSmartEditor = activeTopoDocument?.type === 'smart'
   const shouldRenderMindMapEditor = activeTopoDocument?.type === 'mindmap'
   const shouldRenderFlowchartEditor = activeTopoDocument?.type === 'flowchart'
+  const shouldRenderStructuredEditor = shouldRenderSmartEditor || shouldRenderMindMapEditor || shouldRenderFlowchartEditor
   const shouldRenderPlaceholder = activeTopoDocument && activeTopoDocument.type !== 'markdown' && activeTopoDocument.type !== 'smart' && activeTopoDocument.type !== 'mindmap' && activeTopoDocument.type !== 'flowchart'
   const shouldRenderNoDocument = !activeTopoDocument
 
@@ -158,7 +161,13 @@ export function DocumentEditorHost({
     )
   }
 
-  const editorContent = shouldRenderSmartEditor ? (
+  const loadingContent = (
+    <div className="h-full min-h-0 flex items-center justify-center bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] p-6">
+      <div className="text-[13px] text-[var(--color-text-muted)]">正在加载文档内容...</div>
+    </div>
+  )
+
+  const editorContent = shouldRenderStructuredEditor && !isContentLoaded ? loadingContent : shouldRenderSmartEditor ? (
     <SmartDocumentWrapper
       key={activeTopoDocument.id}
       value={value}

@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { FilePlus, FileText, Sparkles, Network, Workflow, Download, PenLine, Trash2, ChevronRight } from 'lucide-react'
 import type { TopoDocumentManifestItem } from '../../core/storage'
 import { topoDocumentPath, topoDocumentTypeIcon, buildDocumentTree } from './documentTypes'
 
@@ -46,12 +48,14 @@ export function DocumentSidebar({
 }: DocumentSidebarProps) {
   const { rootItems, childrenMap } = buildDocumentTree(topoDocuments)
   const [contextMenu, setContextMenu] = useState<DocumentContextMenuState | null>(null)
+  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
   const [inlineEdit, setInlineEdit] = useState<DocumentInlineEditState | null>(null)
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<{ id: string, position: 'before' | 'inside' | 'after' } | null>(null)
   const inlineInputRef = useRef<HTMLInputElement>(null)
   const cancelInlineEditOnBlurRef = useRef(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   // Focus input when inline edit starts
   useEffect(() => {
@@ -61,14 +65,33 @@ export function DocumentSidebar({
         inlineInputRef.current?.select()
       }, 0)
     }
-  }, [inlineEdit])
+  }, [inlineEdit?.mode, inlineEdit?.targetId, inlineEdit?.parentId])
 
   // Close context menu on click outside
   useEffect(() => {
     if (!contextMenu) return
-    const handleClick = () => setContextMenu(null)
-    document.addEventListener('pointerdown', handleClick)
-    return () => document.removeEventListener('pointerdown', handleClick)
+    const handleClick = (e: MouseEvent | TouchEvent) => {
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) {
+        return
+      }
+      setContextMenu(null)
+    }
+    const blockMenu = (e: MouseEvent) => {
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) {
+        e.preventDefault()
+      } else {
+        setContextMenu(null)
+      }
+    }
+    // 使用 mousedown 和 touchstart 替代 pointerdown 解决系统右键事件冒泡冲突
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('touchstart', handleClick)
+    document.addEventListener('contextmenu', blockMenu)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('touchstart', handleClick)
+      document.removeEventListener('contextmenu', blockMenu)
+    }
   }, [contextMenu])
 
   const toggleExpand = (e: React.MouseEvent, id: string) => {
@@ -82,6 +105,10 @@ export function DocumentSidebar({
   const openContextMenu = (e: React.MouseEvent, targetId: string | null) => {
     e.preventDefault()
     e.stopPropagation()
+    if (targetId) {
+      onSelectDocument(topoDocumentPath(targetId))
+    }
+    setActiveSubmenu(null)
     setContextMenu({ x: e.clientX, y: e.clientY, targetId })
   }
 
@@ -93,7 +120,7 @@ export function DocumentSidebar({
     if (action === 'rename' && targetId) {
       const doc = topoDocuments.find(d => d.id === targetId)
       if (doc) {
-        setInlineEdit({ mode: 'rename', targetId, parentId: doc.parentId, value: doc.title })
+        setInlineEdit({ mode: 'rename', targetId, parentId: doc.parentId || null, value: doc.title })
       }
     } else if (action === 'delete' && targetId) {
       onDeleteDocument(topoDocumentPath(targetId))
@@ -101,7 +128,8 @@ export function DocumentSidebar({
       onExportTopoDocument(topoDocumentPath(targetId))
     } else if (action.startsWith('create')) {
       const mode = action as DocumentInlineEditState['mode']
-      setInlineEdit({ mode, targetId: null, parentId: targetId, value: '' })
+      // Force pass the right context menu target as parent ID when creating new documents from context menu
+      setInlineEdit({ mode, targetId: null, parentId: targetId || null, value: '' })
       if (targetId) {
         setExpandedNodes(prev => new Set(prev).add(targetId))
       }
@@ -312,6 +340,9 @@ export function DocumentSidebar({
     )
   }
 
+  const adjustedX = contextMenu ? Math.max(0, Math.min(contextMenu.x, window.innerWidth - 180)) : 0
+  const adjustedY = contextMenu ? Math.max(0, Math.min(contextMenu.y, window.innerHeight - 200)) : 0
+
   return (
     <div 
       className="flex-1 min-h-0 flex flex-col relative"
@@ -327,83 +358,107 @@ export function DocumentSidebar({
         )}
       </div>
 
-      {contextMenu && (
+      {contextMenu && createPortal(
         <div
-          className="fixed min-w-[128px] p-1.5 border border-[var(--color-border)] rounded-[10px] bg-[color-mix(in_srgb,var(--color-surface-elevated)_96%,transparent)] shadow-[var(--shadow-popover)] z-[1200]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onPointerDown={(e) => e.stopPropagation()}
+          ref={menuRef}
+          id="document-context-menu"
+          className="fixed min-w-[180px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[1200] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
+          style={{ left: adjustedX, top: adjustedY, transformOrigin: 'top left' }}
         >
-          {(!contextMenu.targetId || contextMenu.targetId) && (
+          <div 
+            className="relative"
+            onMouseEnter={() => setActiveSubmenu('create')}
+            onMouseLeave={() => setActiveSubmenu(null)}
+          >
             <button
               type="button"
-              className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[var(--color-hover-bg)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed"
-              onClick={() => handleContextMenuAction('createTopoMarkdown')}
-              disabled={isBusy}
+              className={`flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none text-[var(--color-text-primary)] ${activeSubmenu === 'create' ? 'bg-[var(--color-hover-bg)]' : 'bg-transparent'}`}
             >
-              新建 Markdown 文档
+              <span className="flex items-center justify-center text-[var(--color-text-muted)]">
+                <FilePlus className="w-4 h-4" />
+              </span>
+              <span className="flex-1">新建文档</span>
+              <span className="flex items-center justify-center text-[var(--color-text-muted)]">
+                <ChevronRight className="w-4 h-4" />
+              </span>
             </button>
-          )}
-          {(!contextMenu.targetId || contextMenu.targetId) && (
-            <button
-              type="button"
-              className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[var(--color-hover-bg)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed"
-              onClick={() => handleContextMenuAction('createTopoSmart')}
-              disabled={isBusy}
-            >
-              新建智能文档
-            </button>
-          )}
-          {(!contextMenu.targetId || contextMenu.targetId) && (
-            <button
-              type="button"
-              className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[var(--color-hover-bg)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed"
-              onClick={() => handleContextMenuAction('createTopoMindMap')}
-              disabled={isBusy}
-            >
-              新建思维导图
-            </button>
-          )}
-          {(!contextMenu.targetId || contextMenu.targetId) && (
-            <button
-              type="button"
-              className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[var(--color-hover-bg)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed"
-              onClick={() => handleContextMenuAction('createTopoFlowchart')}
-              disabled={isBusy}
-            >
-              新建流程图
-            </button>
-          )}
+            {activeSubmenu === 'create' && (
+              <div className="absolute left-[calc(100%-4px)] top-[-6px] min-w-[160px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[1200] backdrop-blur-xl animate-in fade-in slide-in-from-left-1 duration-100">
+                <button
+                  type="button"
+                  className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => handleContextMenuAction('createTopoMarkdown')}
+                  disabled={isBusy}
+                >
+                  <span className="flex items-center justify-center text-[var(--color-text-muted)]"><FileText className="w-4 h-4" /></span>
+                  Markdown 文档
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => handleContextMenuAction('createTopoSmart')}
+                  disabled={isBusy}
+                >
+                  <span className="flex items-center justify-center text-[var(--color-text-muted)]"><Sparkles className="w-4 h-4" /></span>
+                  智能文档
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => handleContextMenuAction('createTopoMindMap')}
+                  disabled={isBusy}
+                >
+                  <span className="flex items-center justify-center text-[var(--color-text-muted)]"><Network className="w-4 h-4" /></span>
+                  思维导图
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => handleContextMenuAction('createTopoFlowchart')}
+                  disabled={isBusy}
+                >
+                  <span className="flex items-center justify-center text-[var(--color-text-muted)]"><Workflow className="w-4 h-4" /></span>
+                  流程图
+                </button>
+              </div>
+            )}
+          </div>
+          {contextMenu.targetId && <div className="h-px bg-[var(--color-border-subtle)] mx-1 my-1" />}
           {contextMenu.targetId && (
             <button
               type="button"
-              className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[var(--color-hover-bg)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed"
+              className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
               onClick={() => handleContextMenuAction('export')}
               disabled={isBusy}
             >
+              <span className="flex items-center justify-center text-[var(--color-text-muted)]"><Download className="w-4 h-4" /></span>
               导出
             </button>
           )}
           {contextMenu.targetId && (
             <button
               type="button"
-              className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[var(--color-hover-bg)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed"
+              className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
               onClick={() => handleContextMenuAction('rename')}
               disabled={isBusy}
             >
+              <span className="flex items-center justify-center text-[var(--color-text-muted)]"><PenLine className="w-4 h-4" /></span>
               重命名
             </button>
           )}
           {contextMenu.targetId && (
             <button
               type="button"
-              className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[var(--color-hover-bg)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed"
+              className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-danger-soft)] text-[var(--color-danger)] hover:text-[var(--color-danger-hover)] disabled:opacity-40 disabled:cursor-not-allowed group"
               onClick={() => handleContextMenuAction('delete')}
               disabled={isBusy}
             >
+              <span className="flex items-center justify-center text-[var(--color-danger)] group-hover:text-[var(--color-danger-hover)]"><Trash2 className="w-4 h-4" /></span>
               删除
             </button>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

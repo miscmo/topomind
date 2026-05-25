@@ -34,15 +34,30 @@ export function topoDocumentTypeIcon(type: TopoDocumentType) {
 export function buildDocumentTree(topoDocuments: TopoDocumentManifestItem[]) {
   // Sort by sortOrder first
   const sorted = [...topoDocuments].sort((a, b) => a.sortOrder - b.sortOrder)
+  const documentIds = new Set(sorted.map((doc) => doc.id))
+  const documentById = new Map(sorted.map((doc) => [doc.id, doc]))
+  const hasValidParent = (doc: TopoDocumentManifestItem) => {
+    if (!doc.parentId) return false
+    if (!documentIds.has(doc.parentId) || doc.parentId === doc.id) return false
+    const visited = new Set<string>([doc.id])
+    let parentId: string | null | undefined = doc.parentId
+    while (parentId) {
+      if (visited.has(parentId)) return false
+      visited.add(parentId)
+      parentId = documentById.get(parentId)?.parentId
+    }
+    return true
+  }
   
   // Build tree
   const rootItems: TopoDocumentManifestItem[] = []
   const childrenMap: Record<string, TopoDocumentManifestItem[]> = {}
   
   for (const doc of sorted) {
-    if (doc.parentId) {
-      if (!childrenMap[doc.parentId]) childrenMap[doc.parentId] = []
-      childrenMap[doc.parentId].push(doc)
+    const parentId = doc.parentId
+    if (parentId && hasValidParent(doc)) {
+      if (!childrenMap[parentId]) childrenMap[parentId] = []
+      childrenMap[parentId].push(doc)
     } else {
       rootItems.push(doc)
     }

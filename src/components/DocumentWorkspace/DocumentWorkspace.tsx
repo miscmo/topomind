@@ -8,6 +8,7 @@ import { DocumentEditorHost } from './DocumentEditorHost'
 interface DocumentWorkspaceProps {
   value: string
   savedValue: string
+  isContentLoaded?: boolean
   onChange: (value: string) => void
   onSave: () => Promise<void> | void
   attachmentCardPath: string | null
@@ -37,6 +38,7 @@ interface DocumentWorkspaceProps {
 export function DocumentWorkspace({
   value,
   savedValue,
+  isContentLoaded,
   onChange,
   onSave,
   attachmentCardPath,
@@ -83,6 +85,7 @@ export function DocumentWorkspace({
     <DocumentEditorHost
       value={value}
       savedValue={savedValue}
+      isContentLoaded={isContentLoaded}
       onChange={onChange}
       onSave={onSave}
       attachmentCardPath={attachmentCardPath}

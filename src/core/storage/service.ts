@@ -284,7 +284,7 @@ export function createStore(backend: StorageBackend) {
     async createTopoDocument(cardPath: string, input: TopoDocumentCreateInput) {
       const safeTitle = ensureValidName(input?.title, '文档名称')
       const type = ensureValidTopoDocumentType(input?.type)
-      try { return await backend.createTopoDocument(cardPath, { type, title: safeTitle }) } catch (e) { logger.catch('Store.createTopoDocument', `创建多类型文档失败: ${cardPath}/${safeTitle}`, e); throw e }
+      try { return await backend.createTopoDocument(cardPath, { type, title: safeTitle, parentId: input?.parentId || null }) } catch (e) { logger.catch('Store.createTopoDocument', `创建多类型文档失败: ${cardPath}/${safeTitle}`, e); throw e }
     },
     async readTopoDocument(cardPath: string, documentId: string) {
       try { return await backend.readTopoDocument(cardPath, documentId) } catch (e) { logger.catch('Store.readTopoDocument', `读取多类型文档失败: ${cardPath}/${documentId}`, e); throw e }

@@ -87,18 +87,18 @@ export default memo(function TabBar() {
 
       {/* 下拉菜单 */}
       {isOpen && (
-        <div className="absolute top-[calc(100%+6px)] left-0 min-w-[220px] max-w-[320px] max-h-[60vh] overflow-y-auto overflow-x-hidden p-1.5 rounded-[10px] border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-[14px] z-10" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="absolute top-[calc(100%+6px)] left-0 min-w-[220px] max-w-[320px] max-h-[60vh] overflow-y-auto overflow-x-hidden p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-10" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
           {tabs.map((tab) => (
             <div
               key={tab.id}
-              className={`group w-full h-[30px] flex items-center justify-between gap-2 px-[9px] rounded-[7px] bg-transparent text-xs text-left cursor-default hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] transition-colors ${tab.id === activeTabId ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-primary)]'}`}
+              className={`group flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] ${tab.id === activeTabId ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-primary)]'}`}
               onClick={() => handleTabClick(tab)}
               role="menuitem"
             >
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="shrink-0 w-[12px] flex items-center justify-center">
+                <span className="shrink-0 w-[16px] flex items-center justify-center">
                   {tab.id === activeTabId && (
-                    <span className="text-[var(--color-primary)] text-[10px] font-bold">✓</span>
+                    <span className="text-[var(--color-primary)] font-bold">✓</span>
                   )}
                 </span>
                 <span className="truncate" title={tab.label}>{tab.label}</span>
@@ -106,7 +106,7 @@ export default memo(function TabBar() {
               
               {tab.id !== 'home' && (
                 <button
-                  className="shrink-0 w-[18px] h-[18px] rounded-[4px] border-none bg-transparent flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none opacity-0 group-hover:opacity-100 hover:bg-[#e81123] hover:text-white transition-all"
+                  className="shrink-0 w-[20px] h-[20px] rounded-md border-none bg-transparent flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none opacity-0 group-hover:opacity-100 hover:!bg-[#e81123] hover:!text-white transition-all"
                   onClick={(e) => handleCloseTab(e, tab.id)}
                   title={`关闭 ${tab.label}`}
                 >

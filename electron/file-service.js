@@ -414,19 +414,12 @@ function _fs_topoDocumentManifestPath(rootDir, cardPath) {
 function _fs_normalizeTopoDocumentPath(type, documentPath) {
   var normalizedType = _fs_normalizeTopoDocumentType(type);
   var raw = String(documentPath || '').trim().replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+|\/+$/g, '');
-  var prefix = normalizedType + '/';
-  if (!raw.startsWith(prefix)) {
-    throw new Error('文档路径不合法: ' + raw);
-  }
-  var fileName = raw.slice(prefix.length);
-  if (!fileName || fileName.includes('/')) {
-    throw new Error('仅支持 _docs 类型目录下的一级文档');
-  }
+  var fileName = nodePath.basename(raw);
   var extension = TOPO_DOCUMENT_EXTENSIONS[normalizedType];
   if (!fileName.endsWith(extension)) {
     throw new Error('文档扩展名不合法: ' + fileName);
   }
-  return prefix + fileName;
+  return fileName;
 }
 
 function _fs_topoDocumentAbsolutePath(rootDir, cardPath, item) {
@@ -524,32 +517,37 @@ function _fs_scanTopoDocumentFiles(rootDir, cardPath, previousManifest) {
     }
   });
 
-  Object.keys(TOPO_DOCUMENT_EXTENSIONS).forEach(function(type) {
-    var typeDir = nodePath.join(docsDir, type);
-    var extension = TOPO_DOCUMENT_EXTENSIONS[type];
-    if (!nodeFs.existsSync(typeDir)) return;
-    nodeFs.readdirSync(typeDir, { withFileTypes: true })
-      .filter(function(entry) { return entry.isFile() && entry.name.endsWith(extension); })
-      .sort(function(a, b) { return a.name.localeCompare(b.name, 'zh-CN'); })
-      .forEach(function(entry) {
-        var relPath = type + '/' + entry.name;
-        var filePath = nodePath.join(typeDir, entry.name);
-        var stat = nodeFs.statSync(filePath);
-        var previous = previousByPath.get(type + ':' + relPath);
-        var id = previous ? previous.id : 'doc_' + randomUUID().replace(/-/g, '');
-        documents[id] = {
-          id: id,
-          type: type,
-          title: previous ? previous.title : _fs_topoDocumentTitleFromFile(type, filePath, entry.name),
-          path: relPath,
-          parentId: previous ? previous.parentId : null,
-          sortOrder: previous ? previous.sortOrder : (++maxSortOrder),
-          createdAt: previous ? previous.createdAt : stat.birthtimeMs,
-          updatedAt: previous ? Math.max(previous.updatedAt, stat.mtimeMs) : stat.mtimeMs,
-          version: previous ? previous.version : 1
-        };
+  nodeFs.readdirSync(docsDir, { withFileTypes: true })
+    .filter(function(entry) { return entry.isFile(); })
+    .sort(function(a, b) { return a.name.localeCompare(b.name, 'zh-CN'); })
+    .forEach(function(entry) {
+      var fileName = entry.name;
+      if (fileName === TOPO_DOCUMENT_MANIFEST || fileName === 'manifest.json' || fileName.startsWith('tree.json')) return;
+
+      var type = null;
+      Object.keys(TOPO_DOCUMENT_EXTENSIONS).forEach(function(extType) {
+        if (fileName.endsWith(TOPO_DOCUMENT_EXTENSIONS[extType])) {
+          type = extType;
+        }
       });
-  });
+      if (!type) return;
+
+      var filePath = nodePath.join(docsDir, fileName);
+      var stat = nodeFs.statSync(filePath);
+      var previous = previousByPath.get(type + ':' + fileName);
+      var id = previous ? previous.id : 'doc_' + randomUUID().replace(/-/g, '');
+      documents[id] = {
+        id: id,
+        type: type,
+        title: previous ? previous.title : _fs_topoDocumentTitleFromFile(type, filePath, fileName),
+        path: fileName,
+        parentId: previous ? previous.parentId : null,
+        sortOrder: previous ? previous.sortOrder : (++maxSortOrder),
+        createdAt: previous ? previous.createdAt : stat.birthtimeMs,
+        updatedAt: previous ? Math.max(previous.updatedAt, stat.mtimeMs) : stat.mtimeMs,
+        version: previous ? previous.version : 1
+      };
+    });
   return documents;
 }
 
@@ -597,7 +595,6 @@ function _fs_reconcileTopoDocumentManifest(rootDir, cardPath, manifest) {
 function _fs_migrateOldContentToTree(rootDir, cardPath, manifest) {
   var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
   var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
-  var markdownDir = nodePath.join(docsDir, 'markdown');
   var changed = false;
   var maxSortOrder = 0;
   Object.keys(manifest.documents).forEach(function(id) {
@@ -611,15 +608,15 @@ function _fs_migrateOldContentToTree(rootDir, cardPath, manifest) {
     var stat = nodeFs.statSync(oldPath);
     var id = 'doc_' + randomUUID().replace(/-/g, '');
     var newFileName = id + '.md';
-    var newPath = nodePath.join(markdownDir, newFileName);
-    _fs_ensureDir(markdownDir);
+    var newPath = nodePath.join(docsDir, newFileName);
+    _fs_ensureDir(docsDir);
     try {
       nodeFs.renameSync(oldPath, newPath);
       manifest.documents[id] = {
         id: id,
         type: 'markdown',
         title: defaultTitle,
-        path: 'markdown/' + newFileName,
+        path: newFileName,
         parentId: null,
         sortOrder: ++maxSortOrder,
         createdAt: stat.birthtimeMs,
@@ -644,6 +641,34 @@ function _fs_migrateOldContentToTree(rootDir, cardPath, manifest) {
       nodeFs.rmdirSync(contentDir);
     } catch (e) {}
   }
+
+  Object.keys(TOPO_DOCUMENT_EXTENSIONS).forEach(function(type) {
+    var typeDir = nodePath.join(docsDir, type);
+    if (nodeFs.existsSync(typeDir)) {
+      nodeFs.readdirSync(typeDir, { withFileTypes: true })
+        .filter(function(entry) { return entry.isFile() && entry.name.endsWith(TOPO_DOCUMENT_EXTENSIONS[type]); })
+        .forEach(function(entry) {
+          var oldPath = nodePath.join(typeDir, entry.name);
+          var newPath = nodePath.join(docsDir, entry.name);
+          try {
+            nodeFs.renameSync(oldPath, newPath);
+            changed = true;
+          } catch(e) {}
+        });
+      try {
+        nodeFs.rmdirSync(typeDir);
+      } catch (e) {}
+    }
+  });
+
+  Object.keys(manifest.documents).forEach(function(id) {
+    var item = manifest.documents[id];
+    if (item.path && item.path.includes('/')) {
+      item.path = nodePath.basename(item.path);
+      changed = true;
+    }
+  });
+
   return changed;
 }
 
@@ -835,15 +860,17 @@ function _fs_createTopoDocument(rootDir, cardPath, input) {
   if (!title) throw new Error('文档名称不能为空');
   var now = Date.now();
   var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
-  var typeDir = nodePath.join(docsDir, type);
-  _fs_ensureDir(typeDir);
+  _fs_ensureDir(docsDir);
   var manifest = _fs_readTopoDocumentManifest(rootDir, cardPath);
   var id = 'doc_' + randomUUID().replace(/-/g, '');
   var fileName = id + TOPO_DOCUMENT_EXTENSIONS[type];
-  var filePath = nodePath.join(typeDir, fileName);
+  var filePath = nodePath.join(docsDir, fileName);
   
   var maxSortOrder = 0;
-  var parentId = input.parentId ? String(input.parentId) : null;
+  var parentId = (input && input.parentId) ? String(input.parentId) : null;
+  if (parentId && !manifest.documents[parentId]) {
+    throw new Error('父文档不存在');
+  }
   Object.keys(manifest.documents).forEach(function(did) {
     if (manifest.documents[did].parentId === parentId && manifest.documents[did].sortOrder > maxSortOrder) {
       maxSortOrder = manifest.documents[did].sortOrder;
@@ -854,7 +881,7 @@ function _fs_createTopoDocument(rootDir, cardPath, input) {
     id: id,
     type: type,
     title: title,
-    path: type + '/' + fileName,
+    path: fileName,
     parentId: parentId,
     sortOrder: ++maxSortOrder,
     createdAt: now,
@@ -930,6 +957,10 @@ function _fs_deleteTopoDocument(rootDir, cardPath, documentId) {
 
 function _fs_moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder) {
   var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  var nextParentId = newParentId ? String(newParentId) : null;
+  if (nextParentId && !found.manifest.documents[nextParentId]) {
+    throw new Error('父文档不存在');
+  }
   // Optional: check cycle
   var checkCycle = function(parentId) {
     var current = parentId;
@@ -938,9 +969,9 @@ function _fs_moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSor
       current = found.manifest.documents[current] ? found.manifest.documents[current].parentId : null;
     }
   };
-  checkCycle(newParentId);
+  checkCycle(nextParentId);
   
-  found.item.parentId = newParentId || null;
+  found.item.parentId = nextParentId;
   found.item.sortOrder = newSortOrder || 0;
   found.item.updatedAt = Date.now();
   found.manifest.documents[found.item.id] = found.item;
