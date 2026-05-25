@@ -7,6 +7,7 @@ import { MarkdownToolbar } from './MarkdownToolbar'
 import { MarkdownStatusBar } from './MarkdownStatusBar'
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../hooks/useResizePanel'
+import { useShortcut } from '../../hooks/useShortcut'
 import { logAction } from '../../core/log-backend'
 
 interface TocItem {
@@ -14,19 +15,6 @@ interface TocItem {
   level: number
   text: string
   line: number
-}
-
-interface DocumentContextMenuState {
-  x: number
-  y: number
-  targetPath: string | null
-  isDefault: boolean
-}
-
-interface DocumentInlineEditState {
-  mode: 'create' | 'rename'
-  targetPath: string | null
-  value: string
 }
 
 function normalizeHeadingText(raw: string) {
@@ -94,52 +82,42 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   placeholder,
   previewClassName,
   detailHeader,
-  detailDocuments,
+  documentsTabContent,
   activeDetailDocumentPath,
   detailSidebarCollapsed: controlledDetailSidebarCollapsed,
   detailSidebarFloating,
   onDetailSidebarCollapsedChange,
   onSidebarHoverChange,
+  onOpenDetailDocumentLink,
   viewMode: controlledViewMode,
   onViewModeChange,
-  showToolbar = documentType !== 'card',
-  onSelectDetailDocument,
-  onOpenDetailDocumentLink,
-  onCreateDetailDocument,
-  onRenameDetailDocument,
-  onDeleteDetailDocument,
-  isDetailDocumentBusy
+  showToolbar = true,
+  editorContent
 }: MarkdownWorkspaceProps) {
-  // Default to preview mode for details, edit mode for cards
-  const [internalViewMode, setInternalViewMode] = useState<MarkdownViewMode>(documentType === 'detail' ? 'preview' : 'edit')
+  // Default to preview mode
+  const [internalViewMode, setInternalViewMode] = useState<MarkdownViewMode>('preview')
   const [editorView, setEditorView] = useState<EditorView | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [internalDetailSidebarCollapsed, setInternalDetailSidebarCollapsed] = useState(false)
   const [detailSidebarWidth, setDetailSidebarWidth] = useState(180)
   const [detailSidebarTab, setDetailSidebarTab] = useState<DetailSidebarTab>('documents')
-  const [documentContextMenu, setDocumentContextMenu] = useState<DocumentContextMenuState | null>(null)
-  const [documentInlineEdit, setDocumentInlineEdit] = useState<DocumentInlineEditState | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
-  const documentInlineInputRef = useRef<HTMLInputElement>(null)
-  const cancelInlineEditOnBlurRef = useRef(false)
-  const lastDocumentInlineEditKeyRef = useRef<string | null>(null)
-  const tocItems = useMemo(() => documentType === 'detail' ? extractTocItems(value) : [], [documentType, value])
-  const currentDetailDocumentPath = activeDetailDocumentPath ?? '_content.md'
+  const tocItems = useMemo(() => extractTocItems(value), [value])
+  const currentDetailDocumentPath = activeDetailDocumentPath ?? ''
   const detailSidebarCollapsed = controlledDetailSidebarCollapsed ?? internalDetailSidebarCollapsed
-  const isSidebarBusy = !!documentContextMenu || !!documentInlineEdit
-  const effectiveFloating = detailSidebarFloating || (detailSidebarCollapsed && isSidebarBusy)
+  const effectiveFloating = detailSidebarFloating
   const showSidebarContent = !detailSidebarCollapsed || effectiveFloating
   const currentViewMode = controlledViewMode ?? internalViewMode
-  const statusBar = documentType !== 'card' ? (
+  const statusBar = (
     <MarkdownStatusBar
       value={value}
       savedValue={savedValue}
       isSaving={isSaving}
       saveError={saveError}
     />
-  ) : null
+  )
   const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
     initialWidth: detailSidebarWidth,
     onWidthChange: setDetailSidebarWidth,
@@ -162,40 +140,8 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
     onDetailSidebarCollapsedChange?.(collapsed)
   }, [controlledDetailSidebarCollapsed, onDetailSidebarCollapsedChange])
 
-  useEffect(() => {
-    if (!documentContextMenu) return
-    const handleClose = () => setDocumentContextMenu(null)
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClose()
-    }
-    window.addEventListener('pointerdown', handleClose)
-    window.addEventListener('blur', handleClose)
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('pointerdown', handleClose)
-      window.removeEventListener('blur', handleClose)
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [documentContextMenu])
-
-  useEffect(() => {
-    setDocumentContextMenu(null)
-  }, [detailSidebarCollapsed, detailSidebarTab, currentDetailDocumentPath])
-
-  useEffect(() => {
-    if (!documentInlineEdit) {
-      lastDocumentInlineEditKeyRef.current = null
-      return
-    }
-    const editKey = `${documentInlineEdit.mode}:${documentInlineEdit.targetPath ?? '__new__'}`
-    if (lastDocumentInlineEditKeyRef.current === editKey) return
-    lastDocumentInlineEditKeyRef.current = editKey
-    documentInlineInputRef.current?.focus()
-    documentInlineInputRef.current?.select()
-  }, [documentInlineEdit])
-
   // Auto-save logic
-  const saveTimeoutRef = useRef<number>()
+  const saveTimeoutRef = useRef<number | undefined>(undefined)
   useEffect(() => {
     if (value !== savedValue) {
       clearTimeout(saveTimeoutRef.current)
@@ -246,97 +192,6 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
       heading.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }, [currentViewMode, editorView])
-
-  const openDocumentContextMenu = useCallback((
-    event: React.MouseEvent,
-    targetPath: string | null,
-    isDefault: boolean,
-  ) => {
-    event.preventDefault()
-    setDocumentContextMenu({
-      x: event.clientX,
-      y: event.clientY,
-      targetPath,
-      isDefault,
-    })
-  }, [])
-
-  const handleContextMenuAction = useCallback((action: 'create' | 'rename' | 'delete') => {
-    if (action === 'create') {
-      setDocumentInlineEdit({
-        mode: 'create',
-        targetPath: null,
-        value: '',
-      })
-    } else if (action === 'rename' && documentContextMenu?.targetPath) {
-      const targetDocument = detailDocuments?.find((item) => item.path === documentContextMenu.targetPath)
-      if (targetDocument) {
-        setDocumentInlineEdit({
-          mode: 'rename',
-          targetPath: documentContextMenu.targetPath,
-          value: targetDocument.name,
-        })
-      }
-    } else if (action === 'delete' && documentContextMenu?.targetPath) {
-      onDeleteDetailDocument?.(documentContextMenu.targetPath)
-    }
-    setDocumentContextMenu(null)
-  }, [detailDocuments, documentContextMenu, onDeleteDetailDocument])
-
-  const cancelDocumentInlineEdit = useCallback(() => {
-    setDocumentInlineEdit(null)
-  }, [])
-
-  const submitDocumentInlineEdit = useCallback(() => {
-    if (!documentInlineEdit || isDetailDocumentBusy) return
-    const nextName = documentInlineEdit.value.trim()
-
-    if (!nextName) {
-      setDocumentInlineEdit(null)
-      return
-    }
-
-    if (documentInlineEdit.mode === 'create') {
-      onCreateDetailDocument?.(nextName)
-      setDocumentInlineEdit(null)
-      return
-    }
-
-    if (!documentInlineEdit.targetPath) {
-      setDocumentInlineEdit(null)
-      return
-    }
-
-    const targetDocument = detailDocuments?.find((item) => item.path === documentInlineEdit.targetPath)
-    if (targetDocument && targetDocument.name === nextName) {
-      setDocumentInlineEdit(null)
-      return
-    }
-
-    onRenameDetailDocument?.(documentInlineEdit.targetPath, nextName)
-    setDocumentInlineEdit(null)
-  }, [detailDocuments, documentInlineEdit, isDetailDocumentBusy, onCreateDetailDocument, onRenameDetailDocument])
-
-  const handleDocumentInlineInputBlur = useCallback(() => {
-    if (cancelInlineEditOnBlurRef.current) {
-      cancelInlineEditOnBlurRef.current = false
-      return
-    }
-    submitDocumentInlineEdit()
-  }, [submitDocumentInlineEdit])
-
-  const handleDocumentInlineInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      submitDocumentInlineEdit()
-      return
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      cancelInlineEditOnBlurRef.current = true
-      cancelDocumentInlineEdit()
-    }
-  }, [cancelDocumentInlineEdit, submitDocumentInlineEdit])
 
   return (
     <div 
@@ -403,102 +258,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
             {showSidebarContent && (
               <>
                 {detailSidebarTab === 'documents' ? (
-                  <div
-                    className="flex-1 min-h-0 flex flex-col"
-                    onContextMenu={(event) => openDocumentContextMenu(event, null, false)}
-                  >
-                    {detailDocuments && detailDocuments.length > 0 ? (
-                      <div className="flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
-                        {documentInlineEdit?.mode === 'create' && (
-                          <div className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[#f5f8fb] py-1 px-2 bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] cursor-default border border-[#94a3b829] !border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]`}>
-                            <input
-                              ref={documentInlineInputRef}
-                              className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] text-[#1e293b] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-75 focus:bg-white/44 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[#94a3b847] focus:!border-[var(--color-border)] focus:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] focus:!shadow-[0_0_0_2px_var(--color-accent-soft)] disabled:bg-[#f8fafc] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:text-[#94a3b8] placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
-                              value={documentInlineEdit.value}
-                              placeholder="输入文档名称"
-                              onChange={(event) => setDocumentInlineEdit((current) => (
-                                current ? { ...current, value: event.target.value } : current
-                              ))}
-                              onBlur={handleDocumentInlineInputBlur}
-                              onKeyDown={handleDocumentInlineInputKeyDown}
-                              onPointerDown={(event) => event.stopPropagation()}
-                              disabled={isDetailDocumentBusy}
-                            />
-                          </div>
-                        )}
-                        {detailDocuments.map((item) => {
-                          const isActive = item.path === currentDetailDocumentPath
-                          const isEditing = documentInlineEdit?.mode === 'rename' && documentInlineEdit.targetPath === item.path
-                          return (
-                            isEditing ? (
-                              <div
-                                key={item.path}
-                                className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[#f5f8fb] py-1 px-2 bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] cursor-default border border-[#94a3b829] !border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]`}
-                              >
-                                <input
-                                  ref={documentInlineInputRef}
-                                  className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] text-[#1e293b] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-75 focus:bg-white/44 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[#94a3b847] focus:!border-[var(--color-border)] focus:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] focus:!shadow-[0_0_0_2px_var(--color-accent-soft)] disabled:bg-[#f8fafc] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:text-[#94a3b8] placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
-                                  value={documentInlineEdit.value}
-                                  placeholder="输入文档名称"
-                                  onChange={(event) => setDocumentInlineEdit((current) => (
-                                    current ? { ...current, value: event.target.value } : current
-                                  ))}
-                                  onBlur={handleDocumentInlineInputBlur}
-                                  onKeyDown={handleDocumentInlineInputKeyDown}
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  disabled={isDetailDocumentBusy}
-                                />
-                              </div>
-                            ) : (
-                              <button
-                                key={item.path}
-                                type="button"
-                                className={`group w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[#f5f8fb] ${isActive ? '!bg-[#edf4fb] !bg-[var(--color-selected-bg)]' : ''} ${(item.isDefault || item.isCard) ? 'text-[#1e293b] !text-[var(--color-text-primary)]' : ''}`}
-                                onClick={() => onSelectDetailDocument?.(item.path)}
-                                onContextMenu={(event) => {
-                                  event.stopPropagation()
-                                  openDocumentContextMenu(event, item.path, Boolean(item.isDefault || item.isCard))
-                                }}
-                                title={item.name}
-                              >
-                                <span className="block text-[12px] font-semibold text-[#334155] !text-[var(--color-text-primary)] leading-[1.4] whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</span>
-                                {(item.isDefault || item.isCard) && (
-                                  <span className="inline-flex items-center justify-center ml-1 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100" title="固定文档，不可重命名或删除">
-                                    <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none">
-                                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                    </svg>
-                                  </span>
-                                )}
-                              </button>
-                            )
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      documentInlineEdit?.mode === 'create' ? (
-                        <div className="flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
-                          <div className={`w-full flex items-center justify-between mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[#f5f8fb] py-1 px-2 bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] cursor-default border border-[#94a3b829] !border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]`}>
-                            <input
-                              ref={documentInlineInputRef}
-                              className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg bg-white/22 !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] text-[#1e293b] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-75 focus:bg-white/44 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:border-[#94a3b847] focus:!border-[var(--color-border)] focus:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] focus:!shadow-[0_0_0_2px_var(--color-accent-soft)] disabled:bg-[#f8fafc] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:text-[#94a3b8] placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
-                              value={documentInlineEdit.value}
-                              placeholder="输入文档名称"
-                              onChange={(event) => setDocumentInlineEdit((current) => (
-                                current ? { ...current, value: event.target.value } : current
-                              ))}
-                              onBlur={handleDocumentInlineInputBlur}
-                              onKeyDown={handleDocumentInlineInputKeyDown}
-                              onPointerDown={(event) => event.stopPropagation()}
-                              disabled={isDetailDocumentBusy}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="py-8 px-4 text-center text-[#94a3b8] !text-[var(--color-text-muted)] text-[13px] leading-[1.6]">暂无文档</div>
-                      )
-                    )}
-                  </div>
+                  documentsTabContent
                 ) : detailSidebarTab === 'toc' ? (
                   tocItems.length > 0 ? (
                     <div className="flex-1 overflow-y-auto p-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
@@ -530,45 +290,6 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                 ) : null}
               </>
             )}
-
-            {documentContextMenu && detailSidebarTab === 'documents' && showSidebarContent && (
-              <div
-                className="fixed min-w-[128px] p-1.5 border border-[#dbe4ee] !border-[var(--color-border)] rounded-[10px] bg-white !bg-[color-mix(in_srgb,var(--color-surface-elevated)_96%,transparent)] shadow-[0_8px_24px_rgba(15,23,42,0.12)] !shadow-[var(--shadow-popover)] z-[1200]"
-                style={{ left: documentContextMenu.x, top: documentContextMenu.y }}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                {!documentContextMenu.targetPath && (
-                  <button
-                    type="button"
-                    className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#334155] !text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[#f5f8fb] hover:not(:disabled):!bg-[var(--color-hover-bg)] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed"
-                    onClick={() => handleContextMenuAction('create')}
-                    disabled={isDetailDocumentBusy}
-                  >
-                    新建文档
-                  </button>
-                )}
-                {documentContextMenu.targetPath && (
-                  <button
-                    type="button"
-                    className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#334155] !text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[#f5f8fb] hover:not(:disabled):!bg-[var(--color-hover-bg)] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed"
-                    onClick={() => handleContextMenuAction('rename')}
-                    disabled={documentContextMenu.isDefault || isDetailDocumentBusy}
-                  >
-                    重命名
-                  </button>
-                )}
-                {documentContextMenu.targetPath && (
-                  <button
-                    type="button"
-                    className="w-full h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#334155] !text-[var(--color-text-primary)] text-[12px] text-left cursor-pointer transition-colors duration-75 hover:not(:disabled):bg-[#f5f8fb] hover:not(:disabled):!bg-[var(--color-hover-bg)] disabled:text-[#94a3b8] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed"
-                    onClick={() => handleContextMenuAction('delete')}
-                    disabled={documentContextMenu.isDefault || isDetailDocumentBusy}
-                  >
-                    删除
-                  </button>
-                )}
-              </div>
-            )}
           </aside>
         )}
         {documentType === 'detail' && showSidebarContent && !effectiveFloating && (
@@ -587,7 +308,11 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
           )}
 
           <div className="flex flex-1 min-w-0 min-h-0">
-            {currentViewMode === 'edit' && (
+            {editorContent ? (
+              <div className="flex-1 min-w-0 min-h-0">
+                {editorContent}
+              </div>
+            ) : currentViewMode === 'edit' && (
               <div className="flex-1 min-w-0 min-h-0">
                 <MarkdownSourceEditor
                   value={value}
@@ -600,7 +325,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
               </div>
             )}
             
-            {currentViewMode === 'preview' && documentType === 'detail' && (
+            {!editorContent && currentViewMode === 'preview' && documentType === 'detail' && (
               <div className={`flex-1 min-w-0 min-h-0 bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]`}>
                 <MarkdownPreview
                   content={value}
@@ -608,19 +333,17 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                   compact={false}
                   className={previewClassName}
                   onChange={onChange}
+                  onOpenDetailDocumentLink={onOpenDetailDocumentLink}
                   surfaceRef={previewRef}
                   headingIds={tocItems.map(item => item.id)}
-                  onOpenDetailDocumentLink={onOpenDetailDocumentLink}
                 />
               </div>
             )}
           </div>
 
-          {documentType === 'detail' && statusBar}
+          {statusBar}
         </div>
       </div>
-
-      {documentType !== 'detail' && statusBar}
     </div>
   )
 })

@@ -45,7 +45,7 @@ export default memo(function MarkdownEditor({ value, onChange, onSave, placehold
 
   // Ctrl+S / Cmd+S 保存
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
         onSave?.()
@@ -53,13 +53,6 @@ export default memo(function MarkdownEditor({ value, onChange, onSave, placehold
     },
     [onSave]
   )
-
-  useEffect(() => {
-    const ta = textareaRef.current
-    if (!ta) return
-    ta.addEventListener('keydown', handleKeyDown)
-    return () => ta.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
 
   const handlePaste = useCallback(async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (!attachmentCardPath) return
@@ -99,6 +92,7 @@ export default memo(function MarkdownEditor({ value, onChange, onSave, placehold
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onPaste={handlePaste}
+      onKeyDown={handleKeyDown}
       placeholder={placeholder || '在此输入 Markdown 内容...'}
       spellCheck={false}
     />

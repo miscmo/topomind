@@ -17,12 +17,13 @@ import { useGraphStoreApi } from '../../../stores/graphStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { MarkdownPreview } from '../../MarkdownWorkspace/MarkdownPreview'
 import { MarkdownWorkspace } from '../../MarkdownWorkspace/MarkdownWorkspace'
+import { useShortcut } from '../../../hooks/useShortcut'
 import { cn } from '@/lib/utils'
 
-const MARKDOWN_MIN_WIDTH = 160
-const MARKDOWN_MIN_HEIGHT = 96
+const MARKDOWN_MIN_WIDTH = 180
+const MARKDOWN_MIN_HEIGHT = 100
 const COLLAPSED_NODE_WIDTH = 120
-const COLLAPSED_NODE_HEIGHT = 36
+const COLLAPSED_NODE_HEIGHT = 52
 
 interface KnowledgeCardProps extends NodeProps<KnowledgeNode> {
   resizing?: boolean
@@ -32,7 +33,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   const storage = useStorage()
   const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
-  const [isHovered, setIsHovered] = useState(false)
+  const [isHovered, setIsHovered] = useState<boolean>(false)
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState(data.label)
   const [markdownEditing, setMarkdownEditing] = useState(false)
@@ -113,14 +114,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     const parent = typeof data.parent === 'string' ? data.parent : ''
     return resolveRoomChildRef(parent, id)
   }, [data.parent, id])
-  const entry = useCardContentStore((state) => state.entries[cardPath])
   const detailEntry = useCardContentStore((state) => state.detailEntries[cardPath])
-  const loadCardMarkdown = useCardContentStore((state) => state.loadCardMarkdown)
-
-  useEffect(() => {
-    if (!shouldShowMarkdown) return
-    loadCardMarkdown(cardPath, storage)
-  }, [cardPath, loadCardMarkdown, shouldShowMarkdown, storage])
 
   useEffect(() => {
     if (!titleEditing) setTitleDraft(data.label)
@@ -150,14 +144,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     markdownTextareaRef.current?.focus()
   }, [markdownEditing])
 
-  useEffect(() => {
-    if (!preview) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPreview(null)
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [preview])
+  useShortcut(['Escape'], () => {
+    if (preview) setPreview(null)
+  }, { scope: 'global', preventDefault: false })
 
   useEffect(() => {
     setMarkdownEditing(false)
@@ -259,129 +248,18 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     setTitleEditing(true)
   }, [contentInteractionsEnabled, data.label])
 
-  const startMarkdownEdit = useCallback((event: React.MouseEvent) => {
-    if (!contentInteractionsEnabled) return
-    const target = event.target instanceof Element ? event.target : null
-    if (target?.closest('img, svg, a, button, textarea')) return
-    event.preventDefault()
-    event.stopPropagation()
-    setMarkdownDraft(entry?.content ?? '')
-    setMarkdownEditing(true)
-  }, [contentInteractionsEnabled, entry?.content])
-
-  const cancelMarkdownEdit = useCallback(() => {
-    setMarkdownDraft(entry?.content ?? '')
-    setMarkdownEditing(false)
-  }, [entry?.content])
-
-  const persistMarkdownDraft = useCallback(async (nextContent: string) => {
-    const savedContent = useCardContentStore.getState().entries[cardPath]?.content ?? ''
-    if (nextContent === savedContent) return
-    await storage.writeCardMarkdown(cardPath, nextContent)
-    useCardContentStore.getState().setCardMarkdown(cardPath, nextContent)
-    // 同步给 DetailPanel
-    useCardContentStore.getState().setDetailMarkdown(`${cardPath}/_card.md`, nextContent)
-    useDraftStore.getState().setDetailDraft(`${cardPath}/_card.md`, nextContent)
-  }, [cardPath, storage])
-
-  const saveMarkdownEdit = useCallback(async () => {
-    if (markdownAutosaveTimerRef.current !== null) {
-      window.clearTimeout(markdownAutosaveTimerRef.current)
-      markdownAutosaveTimerRef.current = null
-    }
-    await persistMarkdownDraft(markdownDraft)
-    setMarkdownEditing(false)
-  }, [markdownDraft, persistMarkdownDraft])
-
   useEffect(() => {
     if (contentInteractionsEnabled) return
     setTitleEditing(false)
-    setPreview(null)
-    if (!markdownEditing) return
-    if (markdownAutosaveTimerRef.current !== null) {
-      window.clearTimeout(markdownAutosaveTimerRef.current)
-      markdownAutosaveTimerRef.current = null
-    }
-    if (markdownDraft !== (entry?.content ?? '')) {
-      void persistMarkdownDraft(markdownDraft)
-    }
-    setMarkdownEditing(false)
-  }, [contentInteractionsEnabled, entry?.content, markdownDraft, markdownEditing, persistMarkdownDraft])
-
-  useEffect(() => {
-    if (!markdownEditing) return
-    if (markdownDraft === (entry?.content ?? '')) return
-
-    if (markdownAutosaveTimerRef.current !== null) {
-      window.clearTimeout(markdownAutosaveTimerRef.current)
-    }
-
-    markdownAutosaveTimerRef.current = window.setTimeout(() => {
-      markdownAutosaveTimerRef.current = null
-      void persistMarkdownDraft(markdownDraft)
-    }, 800)
-
-    return () => {
-      if (markdownAutosaveTimerRef.current !== null) {
-        window.clearTimeout(markdownAutosaveTimerRef.current)
-        markdownAutosaveTimerRef.current = null
-      }
-    }
-  }, [entry?.content, markdownDraft, markdownEditing, persistMarkdownDraft])
-
-  const handleMarkdownClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!contentInteractionsEnabled) return
-    const target = event.target instanceof Element ? event.target : null
-    const image = target?.closest('img') as HTMLImageElement | null
-    if (image?.src) {
-      event.preventDefault()
-      event.stopPropagation()
-      setPreview({ type: 'image', src: image.src, title: image.alt || '图片预览' })
-      return
-    }
-
-    const svg = target?.closest('svg') as SVGSVGElement | null
-    if (svg) {
-      event.preventDefault()
-      event.stopPropagation()
-      setPreview({ type: 'html', html: svg.outerHTML, title: '图表预览' })
-    }
   }, [contentInteractionsEnabled])
-
-
 
   const handleToggleCollapse = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
 
-    // React Flow 的 onNodesChange 触发 dimensions 变化需要带上 updateStyle
-    if (shouldShowMarkdown) {
-      // 缩小 (Collapse)
-      graph.onNodesChange([{
-        id,
-        type: 'dimensions',
-        dimensions: {
-          width: Math.min(nodeSizeLimits.maxWidth, Math.max(nodeSizeLimits.minWidth, data.collapsedWidth || COLLAPSED_NODE_WIDTH)),
-          height: Math.min(nodeSizeLimits.maxHeight, Math.max(nodeSizeLimits.minHeight, data.collapsedHeight || COLLAPSED_NODE_HEIGHT)),
-        },
-        updateStyle: true,
-        resizing: false
-      } as NodeDimensionChange])
-    } else {
-      // 展开 (Expand): 使用记录的展开尺寸，如果没有则使用默认最小展开尺寸
-      const targetWidth = Math.min(nodeSizeLimits.maxWidth, Math.max(data.expandedWidth || MARKDOWN_MIN_WIDTH, MARKDOWN_MIN_WIDTH, nodeSizeLimits.minWidth))
-      const targetHeight = Math.min(nodeSizeLimits.maxHeight, Math.max(data.expandedHeight || MARKDOWN_MIN_HEIGHT, MARKDOWN_MIN_HEIGHT, nodeSizeLimits.minHeight))
-      graph.onNodesChange([{
-        id,
-        type: 'dimensions',
-        dimensions: { width: targetWidth, height: targetHeight },
-        updateStyle: true,
-        resizing: false
-      } as NodeDimensionChange])
-    }
-  }, [id, data.expandedWidth, data.expandedHeight, data.collapsedWidth, data.collapsedHeight, shouldShowMarkdown, graph, nodeSizeLimits.maxHeight, nodeSizeLimits.maxWidth, nodeSizeLimits.minHeight, nodeSizeLimits.minWidth])
+    // 展开 (Expand) 和 缩小 (Collapse) 逻辑可以完全移除，或者保留尺寸调整。
+    // 但是这里因为不再有 markdown 展开/收起的需求，所以直接不需要 collapse 功能了。
+  }, [])
 
-  const hasCardContent = entry ? entry.content.trim().length > 0 : data.hasContent === true
-  const hasDetail = detailEntry ? detailEntry.content.trim().length > 0 : data.hasDetail === true
   const hasChildBadge = data.childCount !== undefined && data.childCount > 0
 
   return (
@@ -451,7 +329,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
 
       <div className="flex flex-1 flex-col items-stretch justify-start overflow-hidden pointer-events-none min-w-0 min-h-0" style={{ borderRadius }}>
         {/* Header 层 */}
-        <div className={cn("flex flex-1 items-center justify-start border-b border-border-subtle bg-bg/80 min-h-[18px] w-full pointer-events-none", shouldShowMarkdown && "flex-none")} style={headerStyle}>
+        <div className="flex w-full items-center justify-between shrink-0" style={headerStyle}>
           {/* 左侧占位符，用来平衡右侧控件宽度，保证标题居中 */}
           <div style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0', width: shouldShowMarkdown ? 0 : undefined, pointerEvents: 'none' }}></div>
 
@@ -509,85 +387,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                 {data.childCount}
               </div>
             )}
-            {hasCardContent && (
-              <div
-                className="flex items-center justify-center bg-border-light text-text-secondary cursor-pointer transition-colors duration-75 hover:bg-border-strong hover:text-text-primary font-bold select-none"
-                onClick={handleToggleCollapse}
-                title={shouldShowMarkdown ? '收起卡片' : '展开卡片'}
-                style={collapseButtonStyle}
-              >
-                {shouldShowMarkdown ? '−' : '+'}
-              </div>
-            )}
           </div>
         </div>
-
-        {/* Body 层 */}
-        {shouldShowMarkdown && (
-          <div
-            className={cn(
-              "flex-1 min-w-0 min-h-0 bg-surface overflow-hidden transition-colors duration-75 border-t border-border-subtle",
-              contentInteractionsEnabled && "cursor-text pointer-events-auto nodrag nowheel",
-              !contentInteractionsEnabled && "pointer-events-none"
-            )}
-            onClick={contentInteractionsEnabled ? handleMarkdownClick : undefined}
-            onDoubleClick={contentInteractionsEnabled ? startMarkdownEdit : undefined}
-            onPointerDown={contentInteractionsEnabled ? (event) => event.stopPropagation() : undefined}
-            style={markdownStyle}
-          >
-            {entry?.loading ? (
-              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground bg-bg-muted/50">加载中...</div>
-            ) : markdownEditing && contentInteractionsEnabled ? (
-              <div 
-                className="h-full w-full bg-surface" 
-                onPointerDown={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => {
-                  event.stopPropagation()
-                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                    event.preventDefault()
-                    void saveMarkdownEdit()
-                  }
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    cancelMarkdownEdit()
-                  }
-                }}
-              >
-                <MarkdownWorkspace
-                  value={markdownDraft}
-                  savedValue={entry?.content ?? ''}
-                  onChange={setMarkdownDraft}
-                  onSave={saveMarkdownEdit}
-                  documentType="card"
-                  attachmentCardPath={cardPath}
-                  placeholder="输入卡片 Markdown..."
-                />
-              </div>
-            ) : entry?.content ? (
-              <MarkdownPreview content={entry.content} compact className="markdownBody h-full w-full overflow-y-auto overflow-x-hidden p-2 bg-surface text-foreground" attachmentCardPath={cardPath} />
-            ) : null}
-          </div>
-        )}
       </div>
-      {preview && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setPreview(null)}>
-          <div className="flex flex-col max-w-[90vw] max-h-[90vh] bg-surface rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-75" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-bg-muted/50">
-              <span className="font-medium text-foreground truncate mr-4">{preview.title}</span>
-              <button type="button" className="flex items-center justify-center w-6 h-6 rounded-md hover:bg-surface-hover text-muted-foreground hover:text-foreground transition-colors" onClick={() => setPreview(null)}>×</button>
-            </div>
-            <div className="flex-1 overflow-auto p-4 bg-bg-app flex items-center justify-center min-h-[200px]">
-              {preview.type === 'image' ? (
-                <img src={preview.src} alt={preview.title} className="max-w-full max-h-full object-contain rounded-md" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:h-auto" dangerouslySetInnerHTML={{ __html: preview.html }} />
-              )}
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   )
 }

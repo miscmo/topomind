@@ -184,13 +184,32 @@ function registerIPC() {
   ipcMain.handle('fs:writeGraphMeta', function(e, rootDir, p, m) { fileService.writeGraphMeta(rootDir, p, m); });
   ipcMain.handle('fs:readFile', function(e, rootDir, p) { return fileService.readFile(rootDir, p); });
   ipcMain.handle('fs:writeFile', function(e, rootDir, p, c) { fileService.writeFile(rootDir, p, c); });
-  ipcMain.handle('fs:listDetailDocuments', function(e, rootDir, cardPath) { return fileService.listDetailDocuments(rootDir, cardPath); });
-  ipcMain.handle('fs:createDetailDocument', function(e, rootDir, cardPath, name) { return fileService.createDetailDocument(rootDir, cardPath, name); });
-  ipcMain.handle('fs:renameDetailDocument', function(e, rootDir, cardPath, documentPath, nextName) {
-    return fileService.renameDetailDocument(rootDir, cardPath, documentPath, nextName);
+  ipcMain.handle('fs:listTopoDocuments', function(e, rootDir, cardPath) {
+    return fileService.listTopoDocuments(rootDir, cardPath);
   });
-  ipcMain.handle('fs:deleteDetailDocument', function(e, rootDir, cardPath, documentPath) {
-    return fileService.deleteDetailDocument(rootDir, cardPath, documentPath);
+  ipcMain.handle('fs:createTopoDocument', function(e, rootDir, cardPath, input) {
+    return fileService.createTopoDocument(rootDir, cardPath, input);
+  });
+  ipcMain.handle('fs:moveTopoDocument', function(e, rootDir, cardPath, documentId, newParentId, newSortOrder) {
+    return fileService.moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder);
+  });
+  ipcMain.handle('fs:readTopoDocument', function(e, rootDir, cardPath, documentId) {
+    return fileService.readTopoDocument(rootDir, cardPath, documentId);
+  });
+  ipcMain.handle('fs:writeTopoDocument', function(e, rootDir, cardPath, documentId, content) {
+    return fileService.writeTopoDocument(rootDir, cardPath, documentId, content);
+  });
+  ipcMain.handle('fs:renameTopoDocument', function(e, rootDir, cardPath, documentId, title) {
+    return fileService.renameTopoDocument(rootDir, cardPath, documentId, title);
+  });
+  ipcMain.handle('fs:deleteTopoDocument', function(e, rootDir, cardPath, documentId) {
+    return fileService.deleteTopoDocument(rootDir, cardPath, documentId);
+  });
+  ipcMain.handle('fs:repairTopoDocuments', function(e, rootDir, cardPath) {
+    return fileService.repairTopoDocuments(rootDir, cardPath);
+  });
+  ipcMain.handle('fs:exportTopoDocument', function(e, rootDir, cardPath, documentId) {
+    return fileService.exportTopoDocument(rootDir, cardPath, documentId);
   });
   ipcMain.handle('fs:listAttachments', function(e, rootDir, cardPath) {
     return fileService.listAttachments(rootDir, cardPath);

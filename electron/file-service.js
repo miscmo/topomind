@@ -5,6 +5,7 @@
 import nodePath from 'path';
 import nodeFs from 'fs';
 import { shell } from 'electron';
+import { randomUUID } from 'crypto';
 
 /**
  * @description 返回工作目录下的知识库根目录路径
@@ -374,124 +375,577 @@ function _fs_deleteAttachment(rootDir, cardPath, attachmentName) {
   }
 }
 
-const DEFAULT_DETAIL_DOCUMENT = '_content.md';
-const DETAIL_DOCUMENT_DIR = '_content';
+const TOPO_DOCUMENT_DIR = '_docs';
+const TOPO_DOCUMENT_MANIFEST = 'tree.json';
+const TOPO_DOCUMENT_EXTENSIONS = {
+  markdown: '.md',
+  smart: '.tdoc.json',
+  mindmap: '.tmind.json',
+  flowchart: '.tflow.json',
+};
+const TOPO_DOCUMENT_SCHEMAS = {
+  smart: 'topomind.smart-document',
+  mindmap: 'topomind.mindmap-document',
+  flowchart: 'topomind.flowchart-document',
+};
 
-function _fs_normalizeDetailDocumentPath(documentPath) {
+function _fs_isPlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function _fs_normalizeTopoDocumentType(type) {
+  var normalized = String(type || '').trim();
+  if (!Object.prototype.hasOwnProperty.call(TOPO_DOCUMENT_EXTENSIONS, normalized)) {
+    throw new Error('不支持的文档类型: ' + normalized);
+  }
+  return normalized;
+}
+
+function _fs_topoDocumentsDir(rootDir, cardPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
+  return nodePath.join(cardDir, TOPO_DOCUMENT_DIR);
+}
+
+function _fs_topoDocumentManifestPath(rootDir, cardPath) {
+  return nodePath.join(_fs_topoDocumentsDir(rootDir, cardPath), TOPO_DOCUMENT_MANIFEST);
+}
+
+function _fs_normalizeTopoDocumentPath(type, documentPath) {
+  var normalizedType = _fs_normalizeTopoDocumentType(type);
   var raw = String(documentPath || '').trim().replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+|\/+$/g, '');
-  if (!raw) return DEFAULT_DETAIL_DOCUMENT;
-  if (raw === DEFAULT_DETAIL_DOCUMENT) return DEFAULT_DETAIL_DOCUMENT;
-  if (raw === '_card.md') return '_card.md';
-  if (!raw.startsWith(DETAIL_DOCUMENT_DIR + '/')) {
+  var prefix = normalizedType + '/';
+  if (!raw.startsWith(prefix)) {
     throw new Error('文档路径不合法: ' + raw);
   }
-  var relativeName = raw.slice((DETAIL_DOCUMENT_DIR + '/').length);
-  if (!relativeName || relativeName.includes('/')) {
-    throw new Error('仅支持 _content 目录下的一级 Markdown 文档');
+  var fileName = raw.slice(prefix.length);
+  if (!fileName || fileName.includes('/')) {
+    throw new Error('仅支持 _docs 类型目录下的一级文档');
   }
-  if (!/\.md$/i.test(relativeName)) {
-    throw new Error('仅支持 Markdown 文档');
+  var extension = TOPO_DOCUMENT_EXTENSIONS[normalizedType];
+  if (!fileName.endsWith(extension)) {
+    throw new Error('文档扩展名不合法: ' + fileName);
   }
-  return DETAIL_DOCUMENT_DIR + '/' + relativeName;
+  return prefix + fileName;
 }
 
-function _fs_detailDocumentAbsolutePath(rootDir, cardPath, documentPath) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
-  var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
-  var normalizedDocumentPath = _fs_normalizeDetailDocumentPath(documentPath);
-  return nodePath.join(cardDir, normalizedDocumentPath);
-}
-
-function _fs_normalizeDetailDocumentName(name) {
-  var raw = String(name || '').trim();
-  if (!raw) throw new Error('文档名称不能为空');
-  if (raw.includes('/') || raw.includes('\\')) throw new Error('文档名称不能包含路径');
-  var dot = raw.toLowerCase().endsWith('.md') ? raw.lastIndexOf('.') : -1;
-  var base = dot > 0 ? raw.slice(0, dot) : raw;
-  var safeBase = _fs_safeSegment(base);
-  if (!safeBase || safeBase === 'untitled' && base !== 'untitled') {
-    throw new Error('文档名称包含非法字符');
+function _fs_topoDocumentAbsolutePath(rootDir, cardPath, item) {
+  var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
+  var normalizedPath = _fs_normalizeTopoDocumentPath(item.type, item.path);
+  var resolvedPath = nodePath.resolve(docsDir, normalizedPath);
+  var rel = nodePath.relative(docsDir, resolvedPath);
+  if (rel.startsWith('..') || nodePath.isAbsolute(rel)) {
+    throw new Error('文档路径越界: ' + item.path);
   }
-  return safeBase + '.md';
+  return resolvedPath;
 }
 
-function _fs_detailDocumentItem(documentPath) {
-  var normalizedPath = _fs_normalizeDetailDocumentPath(documentPath);
-  var baseName = nodePath.basename(normalizedPath, '.md');
-  var isDefault = normalizedPath === DEFAULT_DETAIL_DOCUMENT;
-  var isCard = normalizedPath === '_card.md';
-  return {
-    path: normalizedPath,
-    name: isDefault ? '卡片详情' : (isCard ? '卡片' : baseName),
-    isDefault: isDefault,
-    isCard: isCard,
-  };
+function _fs_topoDocumentPathKey(item) {
+  return item.type + ':' + item.path;
 }
 
-function _fs_listDetailDocuments(rootDir, cardPath) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
-  var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
-  var contentDir = nodePath.join(cardDir, DETAIL_DOCUMENT_DIR);
-  var documents = [
-    _fs_detailDocumentItem(DEFAULT_DETAIL_DOCUMENT),
-    _fs_detailDocumentItem('_card.md')
-  ];
-  if (nodeFs.existsSync(contentDir)) {
-    nodeFs.readdirSync(contentDir, { withFileTypes: true })
-      .filter(function(entry) { return entry.isFile() && /\.md$/i.test(entry.name); })
+function _fs_topoDocumentTitleFromFile(type, filePath, fileName) {
+  var extension = TOPO_DOCUMENT_EXTENSIONS[type];
+  var fallback = fileName.endsWith(extension) ? fileName.slice(0, -extension.length) : fileName;
+  if (type === 'markdown') return fallback || '未命名文档';
+  try {
+    var content = _fs_readJsonFile(filePath);
+    if (_fs_isPlainObject(content) && typeof content.title === 'string' && content.title.trim()) {
+      return content.title.trim();
+    }
+  } catch {
+  }
+  return fallback || '未命名文档';
+}
+
+function _fs_normalizeTopoDocumentManifest(raw) {
+  var documents = {};
+  if (_fs_isPlainObject(raw)) {
+    if (raw.version === 2 && _fs_isPlainObject(raw.documents)) {
+      Object.keys(raw.documents).forEach(function(id) {
+        var item = raw.documents[id];
+        if (!_fs_isPlainObject(item)) return;
+        try {
+          var type = _fs_normalizeTopoDocumentType(item.type);
+          var path = _fs_normalizeTopoDocumentPath(type, item.path);
+          documents[id] = {
+            id: id,
+            type: type,
+            title: String(item.title || '').trim() || '未命名文档',
+            path: path,
+            parentId: item.parentId ? String(item.parentId) : null,
+            sortOrder: Number.isFinite(item.sortOrder) ? item.sortOrder : 0,
+            createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+            updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : Date.now(),
+            version: Number.isFinite(item.version) ? item.version : 1
+          };
+        } catch (e) {}
+      });
+    } else if (Array.isArray(raw.documents)) {
+      // v1 array migration
+      raw.documents.forEach(function(item, index) {
+        if (!_fs_isPlainObject(item)) return;
+        try {
+          var type = _fs_normalizeTopoDocumentType(item.type);
+          var id = String(item.id || '').trim();
+          var path = _fs_normalizeTopoDocumentPath(type, item.path);
+          if (!id || documents[id]) return;
+          documents[id] = {
+            id: id,
+            type: type,
+            title: String(item.title || '').trim() || '未命名文档',
+            path: path,
+            parentId: null,
+            sortOrder: index,
+            createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+            updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : Date.now(),
+            version: Number.isFinite(item.version) ? item.version : 1
+          };
+        } catch (e) {}
+      });
+    }
+  }
+  return { version: 2, documents: documents };
+}
+
+function _fs_scanTopoDocumentFiles(rootDir, cardPath, previousManifest) {
+  var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
+  if (!nodeFs.existsSync(docsDir)) return {};
+  var previousByPath = new Map();
+  Object.keys(previousManifest.documents).forEach(function(id) {
+    var item = previousManifest.documents[id];
+    previousByPath.set(_fs_topoDocumentPathKey(item), item);
+  });
+  var documents = {};
+  var maxSortOrder = 0;
+  Object.keys(previousManifest.documents).forEach(function(id) {
+    if (previousManifest.documents[id].sortOrder > maxSortOrder) {
+      maxSortOrder = previousManifest.documents[id].sortOrder;
+    }
+  });
+
+  Object.keys(TOPO_DOCUMENT_EXTENSIONS).forEach(function(type) {
+    var typeDir = nodePath.join(docsDir, type);
+    var extension = TOPO_DOCUMENT_EXTENSIONS[type];
+    if (!nodeFs.existsSync(typeDir)) return;
+    nodeFs.readdirSync(typeDir, { withFileTypes: true })
+      .filter(function(entry) { return entry.isFile() && entry.name.endsWith(extension); })
       .sort(function(a, b) { return a.name.localeCompare(b.name, 'zh-CN'); })
       .forEach(function(entry) {
-        documents.push(_fs_detailDocumentItem(DETAIL_DOCUMENT_DIR + '/' + entry.name));
+        var relPath = type + '/' + entry.name;
+        var filePath = nodePath.join(typeDir, entry.name);
+        var stat = nodeFs.statSync(filePath);
+        var previous = previousByPath.get(type + ':' + relPath);
+        var id = previous ? previous.id : 'doc_' + randomUUID().replace(/-/g, '');
+        documents[id] = {
+          id: id,
+          type: type,
+          title: previous ? previous.title : _fs_topoDocumentTitleFromFile(type, filePath, entry.name),
+          path: relPath,
+          parentId: previous ? previous.parentId : null,
+          sortOrder: previous ? previous.sortOrder : (++maxSortOrder),
+          createdAt: previous ? previous.createdAt : stat.birthtimeMs,
+          updatedAt: previous ? Math.max(previous.updatedAt, stat.mtimeMs) : stat.mtimeMs,
+          version: previous ? previous.version : 1
+        };
       });
-  }
+  });
   return documents;
 }
 
-function _fs_createDetailDocument(rootDir, cardPath, name) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
+function _fs_reconcileTopoDocumentManifest(rootDir, cardPath, manifest) {
+  var normalized = _fs_normalizeTopoDocumentManifest(manifest);
+  var scanned = _fs_scanTopoDocumentFiles(rootDir, cardPath, normalized);
+  var scannedByPath = new Map();
+  Object.keys(scanned).forEach(function(id) {
+    var item = scanned[id];
+    scannedByPath.set(_fs_topoDocumentPathKey(item), item);
+  });
+  var usedPaths = new Set();
+  var documents = {};
+  var removed = 0;
+  Object.keys(normalized.documents).forEach(function(id) {
+    var item = normalized.documents[id];
+    var key = _fs_topoDocumentPathKey(item);
+    var scannedItem = scannedByPath.get(key);
+    if (!scannedItem) {
+      removed += 1;
+      return;
+    }
+    usedPaths.add(key);
+    documents[id] = Object.assign({}, scannedItem, item, {
+      updatedAt: Math.max(item.updatedAt, scannedItem.updatedAt),
+    });
+  });
+  var added = 0;
+  Object.keys(scanned).forEach(function(id) {
+    var item = scanned[id];
+    var key = _fs_topoDocumentPathKey(item);
+    if (usedPaths.has(key)) return;
+    added += 1;
+    documents[id] = item;
+  });
+  var repaired = { version: 2, documents: documents };
+  return {
+    manifest: repaired,
+    added: added,
+    removed: removed,
+    changed: added > 0 || removed > 0 || JSON.stringify(repaired) !== JSON.stringify(normalized),
+  };
+}
+
+function _fs_migrateOldContentToTree(rootDir, cardPath, manifest) {
   var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
-  var contentDir = nodePath.join(cardDir, DETAIL_DOCUMENT_DIR);
-  _fs_ensureDir(contentDir);
-  var fileName = _fs_normalizeDetailDocumentName(name);
-  var targetPath = nodePath.join(contentDir, fileName);
-  if (nodeFs.existsSync(targetPath)) {
-    throw new Error('文档已存在: ' + fileName);
+  var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
+  var markdownDir = nodePath.join(docsDir, 'markdown');
+  var changed = false;
+  var maxSortOrder = 0;
+  Object.keys(manifest.documents).forEach(function(id) {
+    if (manifest.documents[id].sortOrder > maxSortOrder) {
+      maxSortOrder = manifest.documents[id].sortOrder;
+    }
+  });
+
+  var moveToMarkdown = function(oldPath, defaultTitle) {
+    if (!nodeFs.existsSync(oldPath)) return;
+    var stat = nodeFs.statSync(oldPath);
+    var id = 'doc_' + randomUUID().replace(/-/g, '');
+    var newFileName = id + '.md';
+    var newPath = nodePath.join(markdownDir, newFileName);
+    _fs_ensureDir(markdownDir);
+    try {
+      nodeFs.renameSync(oldPath, newPath);
+      manifest.documents[id] = {
+        id: id,
+        type: 'markdown',
+        title: defaultTitle,
+        path: 'markdown/' + newFileName,
+        parentId: null,
+        sortOrder: ++maxSortOrder,
+        createdAt: stat.birthtimeMs,
+        updatedAt: stat.mtimeMs,
+        version: 1
+      };
+      changed = true;
+    } catch(e) {}
+  };
+
+  moveToMarkdown(nodePath.join(cardDir, '_card.md'), '卡片');
+  moveToMarkdown(nodePath.join(cardDir, '_content.md'), '卡片详情');
+
+  var contentDir = nodePath.join(cardDir, '_content');
+  if (nodeFs.existsSync(contentDir)) {
+    nodeFs.readdirSync(contentDir, { withFileTypes: true })
+      .filter(function(entry) { return entry.isFile() && entry.name.endsWith('.md'); })
+      .forEach(function(entry) {
+        moveToMarkdown(nodePath.join(contentDir, entry.name), entry.name.slice(0, -3));
+      });
+    try {
+      nodeFs.rmdirSync(contentDir);
+    } catch (e) {}
   }
-  nodeFs.writeFileSync(targetPath, '', 'utf-8');
-  return _fs_detailDocumentItem(DETAIL_DOCUMENT_DIR + '/' + fileName);
+  return changed;
 }
 
-function _fs_renameDetailDocument(rootDir, cardPath, documentPath, nextName) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
-  var normalizedDocumentPath = _fs_normalizeDetailDocumentPath(documentPath);
-  if (normalizedDocumentPath === DEFAULT_DETAIL_DOCUMENT || normalizedDocumentPath === '_card.md') {
-    throw new Error('固定文档不允许重命名');
+function _fs_loadTopoDocumentManifest(rootDir, cardPath) {
+  var treePath = _fs_topoDocumentManifestPath(rootDir, cardPath);
+  var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
+  var oldManifestPath = nodePath.join(docsDir, 'manifest.json');
+  
+  if (!nodeFs.existsSync(treePath) && nodeFs.existsSync(oldManifestPath)) {
+    try {
+      nodeFs.renameSync(oldManifestPath, treePath);
+    } catch(e) {}
   }
-  var currentPath = _fs_detailDocumentAbsolutePath(rootDir, cardPath, normalizedDocumentPath);
-  if (!nodeFs.existsSync(currentPath)) {
-    throw new Error('文档不存在: ' + normalizedDocumentPath);
+  
+  if (!nodeFs.existsSync(treePath)) return { manifest: { version: 2, documents: {} }, corrupted: false, normalized: false };
+  try {
+    var raw = _fs_readJsonFile(treePath);
+    var manifest = _fs_normalizeTopoDocumentManifest(raw);
+    return { manifest: manifest, corrupted: false, normalized: JSON.stringify(raw) !== JSON.stringify(manifest) };
+  } catch {
+    var backupPath = treePath + '.broken-' + Date.now();
+    try {
+      nodeFs.copyFileSync(treePath, backupPath);
+    } catch {
+    }
+    return { manifest: { version: 2, documents: {} }, corrupted: true, normalized: true };
   }
-  var fileName = _fs_normalizeDetailDocumentName(nextName);
-  var nextPath = _fs_detailDocumentAbsolutePath(rootDir, cardPath, DETAIL_DOCUMENT_DIR + '/' + fileName);
-  if (currentPath !== nextPath && nodeFs.existsSync(nextPath)) {
-    throw new Error('文档已存在: ' + fileName);
-  }
-  if (currentPath !== nextPath) {
-    nodeFs.renameSync(currentPath, nextPath);
-  }
-  return _fs_detailDocumentItem(DETAIL_DOCUMENT_DIR + '/' + fileName);
 }
 
-function _fs_deleteDetailDocument(rootDir, cardPath, documentPath) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
-  var normalizedDocumentPath = _fs_normalizeDetailDocumentPath(documentPath);
-  if (normalizedDocumentPath === DEFAULT_DETAIL_DOCUMENT || normalizedDocumentPath === '_card.md') {
-    throw new Error('固定文档不允许删除');
+function _fs_readTopoDocumentManifest(rootDir, cardPath) {
+  var treePath = _fs_topoDocumentManifestPath(rootDir, cardPath);
+  var loaded = _fs_loadTopoDocumentManifest(rootDir, cardPath);
+  var migrated = _fs_migrateOldContentToTree(rootDir, cardPath, loaded.manifest);
+  var reconciled = _fs_reconcileTopoDocumentManifest(rootDir, cardPath, loaded.manifest);
+  if (loaded.corrupted || loaded.normalized || migrated || reconciled.changed) {
+    if (nodeFs.existsSync(_fs_topoDocumentsDir(rootDir, cardPath)) || nodeFs.existsSync(treePath) || migrated) {
+      _fs_writeTopoDocumentManifest(rootDir, cardPath, reconciled.manifest);
+    }
   }
-  var filePath = _fs_detailDocumentAbsolutePath(rootDir, cardPath, normalizedDocumentPath);
-  if (nodeFs.existsSync(filePath)) {
-    nodeFs.rmSync(filePath, { force: true });
+  return reconciled.manifest;
+}
+
+function _fs_writeTopoDocumentManifest(rootDir, cardPath, manifest) {
+  var manifestPath = _fs_topoDocumentManifestPath(rootDir, cardPath);
+  _fs_ensureDir(nodePath.dirname(manifestPath));
+  _fs_writeJsonFile(manifestPath, _fs_normalizeTopoDocumentManifest(manifest));
+}
+
+function _fs_findTopoDocument(rootDir, cardPath, documentId) {
+  var manifest = _fs_readTopoDocumentManifest(rootDir, cardPath);
+  var id = String(documentId || '').trim();
+  var item = manifest.documents[id];
+  if (!item) {
+    throw new Error('文档不存在: ' + id);
   }
+  return { manifest: manifest, item: item };
+}
+
+function _fs_createTopoDocumentInitialContent(type, title, timestamp) {
+  if (type === 'markdown') return '';
+  if (type === 'smart') {
+    return {
+      schema: TOPO_DOCUMENT_SCHEMAS.smart,
+      version: 1,
+      title: title,
+      blocks: [],
+      metadata: { createdAt: timestamp, updatedAt: timestamp },
+    };
+  }
+  if (type === 'mindmap') {
+    return {
+      schema: TOPO_DOCUMENT_SCHEMAS.mindmap,
+      version: 2,
+      title: title,
+      root: {
+        data: { text: title || '中心主题', expandState: 'expand' },
+        children: []
+      },
+      theme: 'default',
+      layout: 'logicalStructure',
+      metadata: { createdAt: timestamp, updatedAt: timestamp, editor: 'simple-mind-map' }
+    };
+  }
+  if (type === 'flowchart') {
+    return {
+      schema: TOPO_DOCUMENT_SCHEMAS.flowchart,
+      version: 2,
+      title: title,
+      cells: [
+        {
+          id: 'start-node',
+          shape: 'rect',
+          x: 240,
+          y: 100,
+          width: 120,
+          height: 50,
+          attrs: { 
+            body: {
+              fill: '#dcfce7',
+              stroke: '#16a34a',
+              strokeWidth: 2,
+              rx: 25,
+              ry: 25,
+            },
+            label: { 
+              text: '开始',
+              fill: '#1e293b',
+              fontSize: 14,
+              fontWeight: 'bold',
+            } 
+          },
+          data: { kind: 'start' }
+        }
+      ],
+      viewport: { zoom: 1, pan: { x: 0, y: 0 } },
+      metadata: { createdAt: timestamp, updatedAt: timestamp, editor: 'x6' },
+    };
+  }
+  throw new Error('不支持的文档类型: ' + type);
+}
+
+function _fs_writeTopoDocumentContent(filePath, type, content) {
+  _fs_ensureDir(nodePath.dirname(filePath));
+  if (type === 'markdown') {
+    if (typeof content !== 'string') throw new Error('Markdown 文档内容必须是字符串');
+    nodeFs.writeFileSync(filePath, content, 'utf-8');
+    return;
+  }
+  if (!_fs_isPlainObject(content)) {
+    throw new Error('结构化文档内容必须是对象');
+  }
+  var expectedSchema = TOPO_DOCUMENT_SCHEMAS[type];
+  if (expectedSchema && content.schema && content.schema !== expectedSchema) {
+    throw new Error('文档 schema 与类型不匹配');
+  }
+  var normalizedContent = Object.assign({}, content);
+  if (expectedSchema && !normalizedContent.schema) {
+    normalizedContent.schema = expectedSchema;
+  }
+  if (!Number.isFinite(normalizedContent.version)) {
+    normalizedContent.version = 1;
+  }
+  _fs_writeJsonFile(filePath, normalizedContent);
+}
+
+function _fs_listTopoDocuments(rootDir, cardPath) {
+  var manifest = _fs_readTopoDocumentManifest(rootDir, cardPath);
+  return Object.keys(manifest.documents).map(function(id) {
+    return manifest.documents[id];
+  });
+}
+
+function _fs_repairTopoDocuments(rootDir, cardPath) {
+  var loaded = _fs_loadTopoDocumentManifest(rootDir, cardPath);
+  var reconciled = _fs_reconcileTopoDocumentManifest(rootDir, cardPath, loaded.manifest);
+  _fs_writeTopoDocumentManifest(rootDir, cardPath, reconciled.manifest);
+  return {
+    repaired: loaded.corrupted || loaded.normalized || reconciled.changed,
+    corrupted: loaded.corrupted,
+    added: reconciled.added,
+    removed: reconciled.removed,
+    documents: Object.keys(reconciled.manifest.documents).map(function(id) { return reconciled.manifest.documents[id]; }),
+  };
+}
+
+function _fs_exportTopoDocument(rootDir, cardPath, documentId) {
+  var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, found.item);
+  var fileName = nodePath.basename(found.item.path);
+  if (found.item.type === 'markdown') {
+    return {
+      fileName: fileName,
+      type: found.item.type,
+      mimeType: 'text/markdown;charset=utf-8',
+      content: nodeFs.existsSync(filePath) ? nodeFs.readFileSync(filePath, 'utf-8') : '',
+    };
+  }
+  return {
+    fileName: fileName,
+    type: found.item.type,
+    mimeType: 'application/json;charset=utf-8',
+    content: JSON.stringify(nodeFs.existsSync(filePath) ? _fs_readJsonFile(filePath) : _fs_createTopoDocumentInitialContent(found.item.type, found.item.title, Date.now()), null, 2),
+  };
+}
+
+function _fs_createTopoDocument(rootDir, cardPath, input) {
+  var type = _fs_normalizeTopoDocumentType(input && input.type);
+  var title = String(input && input.title || '').trim();
+  if (!title) throw new Error('文档名称不能为空');
+  var now = Date.now();
+  var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
+  var typeDir = nodePath.join(docsDir, type);
+  _fs_ensureDir(typeDir);
+  var manifest = _fs_readTopoDocumentManifest(rootDir, cardPath);
+  var id = 'doc_' + randomUUID().replace(/-/g, '');
+  var fileName = id + TOPO_DOCUMENT_EXTENSIONS[type];
+  var filePath = nodePath.join(typeDir, fileName);
+  
+  var maxSortOrder = 0;
+  var parentId = input.parentId ? String(input.parentId) : null;
+  Object.keys(manifest.documents).forEach(function(did) {
+    if (manifest.documents[did].parentId === parentId && manifest.documents[did].sortOrder > maxSortOrder) {
+      maxSortOrder = manifest.documents[did].sortOrder;
+    }
+  });
+
+  var item = {
+    id: id,
+    type: type,
+    title: title,
+    path: type + '/' + fileName,
+    parentId: parentId,
+    sortOrder: ++maxSortOrder,
+    createdAt: now,
+    updatedAt: now,
+    version: 1
+  };
+  var initialContent = _fs_createTopoDocumentInitialContent(type, title, now);
+  _fs_writeTopoDocumentContent(filePath, type, initialContent);
+  manifest.documents[id] = item;
+  _fs_writeTopoDocumentManifest(rootDir, cardPath, manifest);
+  return item;
+}
+
+function _fs_readTopoDocument(rootDir, cardPath, documentId) {
+  var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, found.item);
+  if (!nodeFs.existsSync(filePath)) {
+    return _fs_createTopoDocumentInitialContent(found.item.type, found.item.title, Date.now());
+  }
+  if (found.item.type === 'markdown') {
+    return nodeFs.readFileSync(filePath, 'utf-8');
+  }
+  return _fs_readJsonFile(filePath);
+}
+
+function _fs_writeTopoDocument(rootDir, cardPath, documentId, content) {
+  var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, found.item);
+  _fs_writeTopoDocumentContent(filePath, found.item.type, content);
+  var now = Date.now();
+  found.item.updatedAt = now;
+  found.manifest.documents[found.item.id] = found.item;
+  _fs_writeTopoDocumentManifest(rootDir, cardPath, found.manifest);
+}
+
+function _fs_renameTopoDocument(rootDir, cardPath, documentId, title) {
+  var nextTitle = String(title || '').trim();
+  if (!nextTitle) throw new Error('文档名称不能为空');
+  var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  var now = Date.now();
+  found.item.title = nextTitle;
+  found.item.updatedAt = now;
+  found.manifest.documents[found.item.id] = found.item;
+  _fs_writeTopoDocumentManifest(rootDir, cardPath, found.manifest);
+  return found.item;
+}
+
+function _fs_deleteTopoDocument(rootDir, cardPath, documentId) {
+  var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  
+  var toDelete = [found.item.id];
+  var collectChildren = function(parentId) {
+    Object.keys(found.manifest.documents).forEach(function(id) {
+      if (found.manifest.documents[id].parentId === parentId) {
+        toDelete.push(id);
+        collectChildren(id);
+      }
+    });
+  };
+  collectChildren(found.item.id);
+  
+  toDelete.forEach(function(id) {
+    var item = found.manifest.documents[id];
+    var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, item);
+    if (nodeFs.existsSync(filePath)) {
+      nodeFs.rmSync(filePath, { force: true });
+    }
+    delete found.manifest.documents[id];
+  });
+  
+  _fs_writeTopoDocumentManifest(rootDir, cardPath, found.manifest);
+}
+
+function _fs_moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder) {
+  var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  // Optional: check cycle
+  var checkCycle = function(parentId) {
+    var current = parentId;
+    while (current) {
+      if (current === found.item.id) throw new Error('不能将文档移动到其子文档中');
+      current = found.manifest.documents[current] ? found.manifest.documents[current].parentId : null;
+    }
+  };
+  checkCycle(newParentId);
+  
+  found.item.parentId = newParentId || null;
+  found.item.sortOrder = newSortOrder || 0;
+  found.item.updatedAt = Date.now();
+  found.manifest.documents[found.item.id] = found.item;
+  _fs_writeTopoDocumentManifest(rootDir, cardPath, found.manifest);
+  return found.item;
 }
 
 const fileService = {
@@ -714,20 +1168,40 @@ const fileService = {
       nodeFs.writeFileSync(f, content, 'utf-8');
     },
 
-    listDetailDocuments: function(rootDir, cardPath) {
-      return _fs_listDetailDocuments(rootDir, cardPath);
+    listTopoDocuments: function(rootDir, cardPath) {
+      return _fs_listTopoDocuments(rootDir, cardPath);
     },
 
-    createDetailDocument: function(rootDir, cardPath, name) {
-      return _fs_createDetailDocument(rootDir, cardPath, name);
+    createTopoDocument: function(rootDir, cardPath, input) {
+      return _fs_createTopoDocument(rootDir, cardPath, input);
     },
 
-    renameDetailDocument: function(rootDir, cardPath, documentPath, nextName) {
-      return _fs_renameDetailDocument(rootDir, cardPath, documentPath, nextName);
+    readTopoDocument: function(rootDir, cardPath, documentId) {
+      return _fs_readTopoDocument(rootDir, cardPath, documentId);
     },
 
-    deleteDetailDocument: function(rootDir, cardPath, documentPath) {
-      return _fs_deleteDetailDocument(rootDir, cardPath, documentPath);
+    writeTopoDocument: function(rootDir, cardPath, documentId, content) {
+      return _fs_writeTopoDocument(rootDir, cardPath, documentId, content);
+    },
+
+    renameTopoDocument: function(rootDir, cardPath, documentId, title) {
+      return _fs_renameTopoDocument(rootDir, cardPath, documentId, title);
+    },
+
+    deleteTopoDocument: function(rootDir, cardPath, documentId) {
+      return _fs_deleteTopoDocument(rootDir, cardPath, documentId);
+    },
+
+    moveTopoDocument: function(rootDir, cardPath, documentId, newParentId, newSortOrder) {
+      return _fs_moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder);
+    },
+
+    repairTopoDocuments: function(rootDir, cardPath) {
+      return _fs_repairTopoDocuments(rootDir, cardPath);
+    },
+
+    exportTopoDocument: function(rootDir, cardPath, documentId) {
+      return _fs_exportTopoDocument(rootDir, cardPath, documentId);
     },
 
     listAttachments: function(rootDir, cardPath) {

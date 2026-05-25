@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTabStore } from '../../stores/tabStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { useRightPanelStore } from '../../stores/rightPanelStore'
+import { useShortcut } from '../../hooks/useShortcut'
 import TabBar from '../TabBar/TabBar'
 import type { WindowControlsState } from '../../types/electron-api'
 
@@ -77,6 +78,10 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     }
   }, [])
 
+  useShortcut(['Escape'], () => {
+    if (activeMenu) setActiveMenu(null)
+  }, { scope: 'global', preventDefault: false })
+
   useEffect(() => {
     if (!activeMenu) return
     
@@ -106,17 +111,12 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     }
     window.addEventListener('pointerdown', handleWindowPointerDown, { capture: true })
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActiveMenu(null)
-    }
-    window.addEventListener('keydown', handleKeyDown)
     return () => {
       overlay.removeEventListener('pointerdown', handleClose)
       if (overlay.parentNode) {
         overlay.parentNode.removeChild(overlay)
       }
       window.removeEventListener('pointerdown', handleWindowPointerDown, { capture: true })
-      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [activeMenu])
 

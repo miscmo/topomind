@@ -7,6 +7,7 @@ import rehypeHighlight from 'rehype-highlight'
 import { useStorage } from '../../core/storage'
 import { MermaidBlock } from './MermaidBlock'
 import { ImageBlock } from './ImageBlock'
+import { useShortcut } from '../../hooks/useShortcut'
 import '../../styles/github-markdown-themed.css'
 import '../../styles/highlight-themed.css'
 
@@ -23,7 +24,7 @@ interface MarkdownPreviewProps {
   compact?: boolean
   className?: string
   onChange?: (value: string) => void
-  surfaceRef?: RefObject<HTMLDivElement>
+  surfaceRef?: RefObject<HTMLDivElement | null>
   headingIds?: string[]
   onOpenDetailDocumentLink?: (documentPath: string) => void
 }
@@ -560,6 +561,7 @@ function normalizeLinkedDetailDocumentPath(href: string | null | undefined) {
   })()
   const cleanPath = decodedPath.replace(/^\.\//, '').replace(/^\/+/, '')
   if (!cleanPath) return null
+  if (cleanPath.startsWith('__topo__/')) return cleanPath
   if (cleanPath === '_content.md') return '_content.md'
   if (/^_content\/[^/]+\.md$/i.test(cleanPath)) return cleanPath
   return null
@@ -595,16 +597,11 @@ export const MarkdownPreview = memo(function MarkdownPreview({
     return () => window.clearTimeout(timeout)
   }, [copiedHeadingId])
 
-  useEffect(() => {
-    if (!previewImage) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setPreviewImage(null)
-      }
+  useShortcut(['Escape'], () => {
+    if (previewImage) {
+      setPreviewImage(null)
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [previewImage])
+  }, { scope: 'global', preventDefault: false })
 
   const handleTaskToggle = useCallback((taskIndex: number, checked: boolean) => {
     if (!onChange) return

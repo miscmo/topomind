@@ -1,5 +1,5 @@
 import { FSB } from '../fs-backend'
-import type { DetailDocumentItem, StorageBackend } from './service'
+import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import type { EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
@@ -40,13 +40,6 @@ interface FSBGraphLike {
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
 )
-
-const DEFAULT_DETAIL_DOCUMENT_PATH = '_content.md'
-
-function normalizeDetailDocumentPath(documentPath: string | null | undefined) {
-  const normalized = String(documentPath ?? '').trim().replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+|\/+$/g, '')
-  return normalized || DEFAULT_DETAIL_DOCUMENT_PATH
-}
 
 const toCardInfo = (parentCardPath: string, key: string, rawChild: unknown): CardInfo => {
   const child = isRecord(rawChild) ? rawChild : {}
@@ -254,36 +247,40 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       await FSB.writeGraphMeta(requireRootDir(), roomPath, convertGraphToFSB(meta, roomPath) as Parameters<typeof FSB.writeGraphMeta>[2])
     },
 
-    readMarkdown: async (cardPath: string) => {
-      return FSB.readFile(requireRootDir(), `${cardPath}/_content.md`)
+    listTopoDocuments: async (cardPath: string): Promise<TopoDocumentManifestItem[]> => {
+      return FSB.listTopoDocuments(requireRootDir(), cardPath)
     },
 
-    writeMarkdown: async (cardPath: string, content: string) => {
-      await FSB.writeFile(requireRootDir(), `${cardPath}/_content.md`, content)
+    createTopoDocument: async (cardPath: string, input: TopoDocumentCreateInput): Promise<TopoDocumentManifestItem> => {
+      return FSB.createTopoDocument(requireRootDir(), cardPath, input)
     },
 
-    listDetailDocuments: async (cardPath: string): Promise<DetailDocumentItem[]> => {
-      return FSB.listDetailDocuments(requireRootDir(), cardPath)
+    readTopoDocument: async (cardPath: string, documentId: string): Promise<unknown> => {
+      return FSB.readTopoDocument(requireRootDir(), cardPath, documentId)
     },
 
-    readDetailDocument: async (cardPath: string, documentPath: string) => {
-      return FSB.readFile(requireRootDir(), `${cardPath}/${normalizeDetailDocumentPath(documentPath)}`)
+    writeTopoDocument: async (cardPath: string, documentId: string, content: unknown): Promise<void> => {
+      await FSB.writeTopoDocument(requireRootDir(), cardPath, documentId, content)
     },
 
-    writeDetailDocument: async (cardPath: string, documentPath: string, content: string) => {
-      await FSB.writeFile(requireRootDir(), `${cardPath}/${normalizeDetailDocumentPath(documentPath)}`, content)
+    renameTopoDocument: async (cardPath: string, documentId: string, title: string): Promise<TopoDocumentManifestItem> => {
+      return FSB.renameTopoDocument(requireRootDir(), cardPath, documentId, title)
     },
 
-    createDetailDocument: async (cardPath: string, name: string): Promise<DetailDocumentItem> => {
-      return FSB.createDetailDocument(requireRootDir(), cardPath, name)
+    deleteTopoDocument: async (cardPath: string, documentId: string): Promise<void> => {
+      await FSB.deleteTopoDocument(requireRootDir(), cardPath, documentId)
     },
 
-    renameDetailDocument: async (cardPath: string, documentPath: string, nextName: string): Promise<DetailDocumentItem> => {
-      return FSB.renameDetailDocument(requireRootDir(), cardPath, normalizeDetailDocumentPath(documentPath), nextName)
+    moveTopoDocument: async (cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number): Promise<TopoDocumentManifestItem> => {
+      return FSB.moveTopoDocument(requireRootDir(), cardPath, documentId, newParentId, newSortOrder)
     },
 
-    deleteDetailDocument: async (cardPath: string, documentPath: string): Promise<void> => {
-      await FSB.deleteDetailDocument(requireRootDir(), cardPath, normalizeDetailDocumentPath(documentPath))
+    repairTopoDocuments: async (cardPath: string) => {
+      return FSB.repairTopoDocuments(requireRootDir(), cardPath)
+    },
+
+    exportTopoDocument: async (cardPath: string, documentId: string) => {
+      return FSB.exportTopoDocument(requireRootDir(), cardPath, documentId)
     },
 
     listAttachments: async (cardPath: string) => {
@@ -304,14 +301,6 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
 
     getAttachmentAbsoluteUrl: async (cardPath: string, attachmentRef: string) => {
       return FSB.getAttachmentAbsoluteUrl(requireRootDir(), cardPath, attachmentRef)
-    },
-
-    readCardMarkdown: async (cardPath: string) => {
-      return FSB.readFile(requireRootDir(), `${cardPath}/_card.md`)
-    },
-
-    writeCardMarkdown: async (cardPath: string, content: string) => {
-      await FSB.writeFile(requireRootDir(), `${cardPath}/_card.md`, content)
     },
 
     writeAttachmentBase64: async (cardPath: string, fileName: string, mimeType: string, base64: string) => {

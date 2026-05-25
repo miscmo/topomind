@@ -9,6 +9,7 @@ import KnowledgeCard from './nodes/KnowledgeCard'
 import FloatingEdge from './edges/FloatingEdge'
 import Toolbar from '../Toolbar/Toolbar'
 import { logAction } from '../../core/log-backend'
+import { useShortcut } from '../../hooks/useShortcut'
 import { useSmartGuides } from './useSmartGuides'
 import { SmartGuidesRenderer } from './SmartGuidesRenderer'
 
@@ -224,47 +225,40 @@ export default memo(function GraphCanvas({
     updateZoomLevel(storedViewport.zoom)
   }, [storedViewport.zoom, updateZoomLevel])
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (activeTabId !== tabId) return
-      if (event.defaultPrevented || event.repeat || event.isComposing) return
-      const isEnter = event.key === 'Enter' || event.key === 'NumpadEnter'
-      const isTab = event.key === 'Tab'
-      if (!isEnter && !isTab) return
-      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
-      if (isEditableTarget(event.target)) return
+  useShortcut(['Enter', 'NumpadEnter', 'Tab'], (event) => {
+    if (activeTabId !== tabId) return
+    // Note: useShortcut already checks defaultPrevented, repeat, isComposing, and isEditableTarget
+    // And it checks event.target against scope, so no need to check right-panel-container
+    const isEnter = event.key === 'Enter' || event.key === 'NumpadEnter'
+    const isTab = event.key === 'Tab'
 
-      const selectedNode = nodes.find((node) => node.selected)
-      if (!selectedNode) return
+    const selectedNode = nodes.find((node) => node.selected)
+    if (!selectedNode) return
 
-      const rect = getNodeRect(selectedNode as Node)
-      const position = isTab
-        ? {
-            x: rect.x + rect.width + KEYBOARD_NEW_NODE_HORIZONTAL_GAP,
-            y: rect.y,
-          }
-        : {
-            x: rect.x,
-            y: rect.y + rect.height + KEYBOARD_NEW_NODE_VERTICAL_GAP,
-          }
-
-      event.preventDefault()
-      void (async () => {
-        logAction('节点:快捷键创建', 'GraphCanvas', {
-          source: isTab ? 'tab-create-right-sibling' : 'enter-below-selected-node',
-          selectedNodeId: selectedNode.id,
-          position,
-        })
-        const newNodeId = await graph.createChildNode('新节点', undefined, position, { editTitle: true })
-        if (isTab && newNodeId) {
-          await graph.createEdge(selectedNode.id, newNodeId)
+    const rect = getNodeRect(selectedNode as Node)
+    const position = isTab
+      ? {
+          x: rect.x + rect.width + KEYBOARD_NEW_NODE_HORIZONTAL_GAP,
+          y: rect.y,
         }
-      })()
-    }
+      : {
+          x: rect.x,
+          y: rect.y + rect.height + KEYBOARD_NEW_NODE_VERTICAL_GAP,
+        }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTabId, graph, nodes, tabId])
+    event.preventDefault()
+    void (async () => {
+      logAction('节点:快捷键创建', 'GraphCanvas', {
+        source: isTab ? 'tab-create-right-sibling' : 'enter-below-selected-node',
+        selectedNodeId: selectedNode.id,
+        position,
+      })
+      const newNodeId = await graph.createChildNode('新节点', undefined, position, { editTitle: true })
+      if (isTab && newNodeId) {
+        await graph.createEdge(selectedNode.id, newNodeId)
+      }
+    })()
+  }, { scope: 'canvas', preventDefault: false })
 
   useEffect(() => {
     const currentViewport = reactFlow.getViewport()
@@ -330,6 +324,8 @@ export default memo(function GraphCanvas({
       style={{ width: '100%', height: '100%', position: 'relative' }}
       onMouseMove={connectingSourceId ? handleConnectionMouseMove : undefined}
       onMouseLeave={connectingSourceId ? handleConnectionMouseLeave : undefined}
+      data-shortcut-scope="canvas"
+      tabIndex={-1}
     >
       <ReactFlow
         id={tabId}

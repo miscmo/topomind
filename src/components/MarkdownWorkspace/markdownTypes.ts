@@ -1,9 +1,29 @@
 import type { ReactNode } from 'react'
-import type { DetailDocumentItem } from '../../core/storage'
+import type { TopoDocumentManifestItem } from '../../core/storage'
 
-export type MarkdownDocumentType = 'detail' | 'card'
-export type MarkdownViewMode = 'edit' | 'preview'
+export type MarkdownDocumentType = 'detail' | 'card' | 'canvas'
+export type MarkdownViewMode = 'edit' | 'preview' | 'split'
 export type DetailSidebarTab = 'documents' | 'toc' | 'attachments'
+
+export interface TocItem {
+  id: string
+  level: number
+  text: string
+  line: number
+}
+
+export interface DocumentContextMenuState {
+  x: number
+  y: number
+  targetId: string | null
+}
+
+export interface DocumentInlineEditState {
+  mode: 'create' | 'createTopoMarkdown' | 'createTopoSmart' | 'createTopoMindMap' | 'createTopoFlowchart' | 'rename'
+  targetId: string | null
+  parentId: string | null
+  value: string
+}
 
 export interface MarkdownWorkspaceProps {
   value: string
@@ -17,20 +37,16 @@ export interface MarkdownWorkspaceProps {
   previewClassName?: string
   title?: string
   pathLabel?: string
-  detailHeader?: ReactNode
-  detailDocuments?: DetailDocumentItem[]
-  activeDetailDocumentPath?: string
   detailSidebarCollapsed?: boolean
   detailSidebarFloating?: boolean
   onDetailSidebarCollapsedChange?: (collapsed: boolean) => void
   onSidebarHoverChange?: (hovered: boolean) => void
+  detailHeader?: ReactNode
+  documentsTabContent?: ReactNode
+  activeDetailDocumentPath?: string
   viewMode?: MarkdownViewMode
   onViewModeChange?: (mode: MarkdownViewMode) => void
-  showToolbar?: boolean
-  onSelectDetailDocument?: (documentPath: string) => void
   onOpenDetailDocumentLink?: (documentPath: string) => void
-  onCreateDetailDocument?: (name: string) => void
-  onRenameDetailDocument?: (documentPath: string, name: string) => void
-  onDeleteDetailDocument?: (documentPath: string) => void
-  isDetailDocumentBusy?: boolean
+  showToolbar?: boolean
+  editorContent?: ReactNode
 }

@@ -1,5 +1,6 @@
 import { CompletionContext, CompletionResult } from '@codemirror/autocomplete'
 import type { Store } from '../../core/storage/service'
+import { topoDocumentPath } from '../DocumentWorkspace/documentTypes'
 
 export function createMentionCompletion(storage: Store, attachmentCardPath?: string | null) {
   return async function mentionCompletion(context: CompletionContext): Promise<CompletionResult | null> {
@@ -16,19 +17,19 @@ export function createMentionCompletion(storage: Store, attachmentCardPath?: str
 
     try {
       const [documents, attachments] = await Promise.all([
-        storage.listDetailDocuments(attachmentCardPath),
+        storage.listTopoDocuments(attachmentCardPath),
         storage.listAttachments(attachmentCardPath)
       ])
 
-      const docOptions = documents.map(doc => ({
-        label: doc.name,
-        displayLabel: doc.name,
+      const docOptions = documents.map((doc: any) => ({
+        label: doc.title,
+        displayLabel: doc.title,
         type: 'text',
         info: '文档',
-        apply: `[${doc.name}](${doc.path})`
+        apply: `[${doc.title}](${topoDocumentPath(doc.id)})`
       }))
 
-      const attachmentOptions = attachments.map(att => {
+      const attachmentOptions = attachments.map((att: any) => {
         const applyText = att.isImage ? `![${att.name}](${att.path})` : `[${att.name}](${att.path})`
         
         return {

@@ -31,11 +31,44 @@ interface VaultConfig {
   [key: string]: unknown
 }
 
-export interface DetailDocumentItem {
+export type TopoDocumentType = 'markdown' | 'smart' | 'mindmap' | 'flowchart'
+
+export interface TopoDocumentManifestItem {
+  id: string
+  type: TopoDocumentType
+  title: string
   path: string
-  name: string
-  isDefault: boolean
-  isCard?: boolean
+  parentId: string | null
+  sortOrder: number
+  createdAt: number
+  updatedAt: number
+  version: number
+}
+
+export interface TopoDocumentManifest {
+  version: 2
+  documents: Record<string, TopoDocumentManifestItem>
+}
+
+export interface TopoDocumentCreateInput {
+  type: TopoDocumentType
+  title: string
+  parentId?: string | null
+}
+
+export interface TopoDocumentRepairResult {
+  repaired: boolean
+  corrupted: boolean
+  added: number
+  removed: number
+  documents: TopoDocumentManifestItem[]
+}
+
+export interface TopoDocumentExportPayload {
+  fileName: string
+  type: TopoDocumentType
+  mimeType: string
+  content: string
 }
 
 export interface StorageBackend {
@@ -53,16 +86,15 @@ export interface StorageBackend {
   deleteCard: (cardPath: string) => Promise<void>
   renameCard: (cardPath: string, newName: string) => Promise<void>
 
-  readMarkdown: (cardPath: string) => Promise<string>
-  writeMarkdown: (cardPath: string, content: string) => Promise<void>
-  listDetailDocuments: (cardPath: string) => Promise<DetailDocumentItem[]>
-  readDetailDocument: (cardPath: string, documentPath: string) => Promise<string>
-  writeDetailDocument: (cardPath: string, documentPath: string, content: string) => Promise<void>
-  createDetailDocument: (cardPath: string, name: string) => Promise<DetailDocumentItem>
-  renameDetailDocument: (cardPath: string, documentPath: string, nextName: string) => Promise<DetailDocumentItem>
-  deleteDetailDocument: (cardPath: string, documentPath: string) => Promise<void>
-  readCardMarkdown: (cardPath: string) => Promise<string>
-  writeCardMarkdown: (cardPath: string, content: string) => Promise<void>
+  listTopoDocuments: (cardPath: string) => Promise<TopoDocumentManifestItem[]>
+  createTopoDocument: (cardPath: string, input: TopoDocumentCreateInput) => Promise<TopoDocumentManifestItem>
+  readTopoDocument: (cardPath: string, documentId: string) => Promise<unknown>
+  writeTopoDocument: (cardPath: string, documentId: string, content: unknown) => Promise<void>
+  renameTopoDocument: (cardPath: string, documentId: string, title: string) => Promise<TopoDocumentManifestItem>
+  deleteTopoDocument: (cardPath: string, documentId: string) => Promise<void>
+  moveTopoDocument: (cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
+  repairTopoDocuments: (cardPath: string) => Promise<TopoDocumentRepairResult>
+  exportTopoDocument: (cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
   
   listAttachments: (cardPath: string) => Promise<AttachmentItem[]>
   importAttachment: (cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
@@ -155,6 +187,10 @@ function ensureValidName(name: unknown, label = '名称'): string {
   if (n === '.' || n === '..') throw new Error(`${label}不合法`)
   return n
 }
+function ensureValidTopoDocumentType(type: unknown): TopoDocumentType {
+  if (type === 'markdown' || type === 'smart' || type === 'mindmap' || type === 'flowchart') return type
+  throw new Error(`不支持的文档类型: ${String(type || '')}`)
+}
 
 
 export function createStore(backend: StorageBackend) {
@@ -242,31 +278,35 @@ export function createStore(backend: StorageBackend) {
         return cardPath
       } catch (e) { logger.catch('Store.renameCard', `重命名卡片失败: ${cardPath} -> ${newName}`, e); throw e }
     },
-    async readMarkdown(cardPath: string) {
-      try { return await backend.readMarkdown(cardPath) } catch (e) { logger.catch('Store.readMarkdown', `读取文档失败: ${cardPath}`, e); throw e }
+    async listTopoDocuments(cardPath: string) {
+      try { return await backend.listTopoDocuments(cardPath) } catch (e) { logger.catch('Store.listTopoDocuments', `列出多类型文档失败: ${cardPath}`, e); throw e }
     },
-    async writeMarkdown(cardPath: string, content: string) {
-      try { await backend.writeMarkdown(cardPath, content) } catch (e) { logger.catch('Store.writeMarkdown', `写入文档失败: ${cardPath}`, e); throw e }
+    async createTopoDocument(cardPath: string, input: TopoDocumentCreateInput) {
+      const safeTitle = ensureValidName(input?.title, '文档名称')
+      const type = ensureValidTopoDocumentType(input?.type)
+      try { return await backend.createTopoDocument(cardPath, { type, title: safeTitle }) } catch (e) { logger.catch('Store.createTopoDocument', `创建多类型文档失败: ${cardPath}/${safeTitle}`, e); throw e }
     },
-    async listDetailDocuments(cardPath: string) {
-      try { return await backend.listDetailDocuments(cardPath) } catch (e) { logger.catch('Store.listDetailDocuments', `列出详情文档失败: ${cardPath}`, e); throw e }
+    async readTopoDocument(cardPath: string, documentId: string) {
+      try { return await backend.readTopoDocument(cardPath, documentId) } catch (e) { logger.catch('Store.readTopoDocument', `读取多类型文档失败: ${cardPath}/${documentId}`, e); throw e }
     },
-    async readDetailDocument(cardPath: string, documentPath: string) {
-      try { return await backend.readDetailDocument(cardPath, documentPath) } catch (e) { logger.catch('Store.readDetailDocument', `读取详情文档失败: ${cardPath}/${documentPath}`, e); throw e }
+    async writeTopoDocument(cardPath: string, documentId: string, content: unknown) {
+      try { await backend.writeTopoDocument(cardPath, documentId, content) } catch (e) { logger.catch('Store.writeTopoDocument', `写入多类型文档失败: ${cardPath}/${documentId}`, e); throw e }
     },
-    async writeDetailDocument(cardPath: string, documentPath: string, content: string) {
-      try { await backend.writeDetailDocument(cardPath, documentPath, content) } catch (e) { logger.catch('Store.writeDetailDocument', `写入详情文档失败: ${cardPath}/${documentPath}`, e); throw e }
+    async renameTopoDocument(cardPath: string, documentId: string, title: unknown) {
+      const safeTitle = ensureValidName(title, '文档名称')
+      try { return await backend.renameTopoDocument(cardPath, documentId, safeTitle) } catch (e) { logger.catch('Store.renameTopoDocument', `重命名多类型文档失败: ${cardPath}/${documentId} -> ${safeTitle}`, e); throw e }
     },
-    async createDetailDocument(cardPath: string, name: unknown) {
-      const safeName = ensureValidName(name, '文档名称')
-      try { return await backend.createDetailDocument(cardPath, safeName) } catch (e) { logger.catch('Store.createDetailDocument', `创建详情文档失败: ${cardPath}/${name}`, e); throw e }
+    async deleteTopoDocument(cardPath: string, documentId: string) {
+      try { await backend.deleteTopoDocument(cardPath, documentId) } catch (e) { logger.catch('Store.deleteTopoDocument', `删除多类型文档失败: ${cardPath}/${documentId}`, e); throw e }
     },
-    async renameDetailDocument(cardPath: string, documentPath: string, nextName: unknown) {
-      const safeName = ensureValidName(nextName, '文档名称')
-      try { return await backend.renameDetailDocument(cardPath, documentPath, safeName) } catch (e) { logger.catch('Store.renameDetailDocument', `重命名详情文档失败: ${cardPath}/${documentPath} -> ${nextName}`, e); throw e }
+    async moveTopoDocument(cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) {
+      try { return await backend.moveTopoDocument(cardPath, documentId, newParentId, newSortOrder) } catch (e) { logger.catch('Store.moveTopoDocument', `移动多类型文档失败: ${cardPath}/${documentId}`, e); throw e }
     },
-    async deleteDetailDocument(cardPath: string, documentPath: string) {
-      try { await backend.deleteDetailDocument(cardPath, documentPath) } catch (e) { logger.catch('Store.deleteDetailDocument', `删除详情文档失败: ${cardPath}/${documentPath}`, e); throw e }
+    async repairTopoDocuments(cardPath: string) {
+      try { return await backend.repairTopoDocuments(cardPath) } catch (e) { logger.catch('Store.repairTopoDocuments', `修复多类型文档失败: ${cardPath}`, e); throw e }
+    },
+    async exportTopoDocument(cardPath: string, documentId: string) {
+      try { return await backend.exportTopoDocument(cardPath, documentId) } catch (e) { logger.catch('Store.exportTopoDocument', `导出多类型文档失败: ${cardPath}/${documentId}`, e); throw e }
     },
     async listAttachments(cardPath: string) {
       try { return await backend.listAttachments(cardPath) } catch (e) { logger.catch('Store.listAttachments', `获取附件列表失败: ${cardPath}`, e); throw e }
@@ -282,12 +322,6 @@ export function createStore(backend: StorageBackend) {
     },
     async getAttachmentAbsoluteUrl(cardPath: string, attachmentRef: string) {
       try { return await backend.getAttachmentAbsoluteUrl(cardPath, attachmentRef) } catch (e) { logger.catch('Store.getAttachmentAbsoluteUrl', `获取附件URL失败: ${cardPath}/${attachmentRef}`, e); return null }
-    },
-    async readCardMarkdown(cardPath: string) {
-      try { return await backend.readCardMarkdown(cardPath) } catch (e) { logger.catch('Store.readCardMarkdown', `读取卡片内容失败: ${cardPath}`, e); throw e }
-    },
-    async writeCardMarkdown(cardPath: string, content: string) {
-      try { await backend.writeCardMarkdown(cardPath, content) } catch (e) { logger.catch('Store.writeCardMarkdown', `写入卡片内容失败: ${cardPath}`, e); throw e }
     },
     async writeAttachmentBase64(cardPath: string, fileName: string, mimeType: string, base64: string) {
       try { return await backend.writeAttachmentBase64(cardPath, fileName, mimeType, base64) } catch (e) { logger.catch('Store.writeAttachmentBase64', `写入附件失败: ${cardPath}/${fileName}`, e); throw e }

@@ -1,5 +1,6 @@
 import { memo, useState, useRef, useEffect } from 'react'
 import { useTabStore, type Tab } from '../../stores/tabStore'
+import { useShortcut } from '../../hooks/useShortcut'
 import { logAction } from '../../core/log-backend'
 
 export default memo(function TabBar() {
@@ -10,6 +11,10 @@ export default memo(function TabBar() {
   const rootRef = useRef<HTMLDivElement>(null)
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0]
+
+  useShortcut(['Escape'], () => {
+    if (isOpen) setIsOpen(false)
+  }, { scope: 'global', preventDefault: false })
 
   useEffect(() => {
     if (!isOpen) return
@@ -38,17 +43,12 @@ export default memo(function TabBar() {
     }
     window.addEventListener('pointerdown', handleWindowPointerDown, { capture: true })
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false)
-    }
-    window.addEventListener('keydown', handleKeyDown)
     return () => {
       overlay.removeEventListener('pointerdown', handleClose)
       if (overlay.parentNode) {
         overlay.parentNode.removeChild(overlay)
       }
       window.removeEventListener('pointerdown', handleWindowPointerDown, { capture: true })
-      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [isOpen])
 
