@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits } from './uiStoreTypes'
+import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, DefaultEditorStyle } from './uiStoreTypes'
 
 interface GraphUiStore {
   showGrid: boolean
@@ -9,6 +9,7 @@ interface GraphUiStore {
   defaultEdgeStyle: DefaultEdgeStyle
   defaultNodeStyle: DefaultNodeStyle
   defaultNodeSize: DefaultNodeSize
+  defaultEditorStyle: DefaultEditorStyle
   nodeSizeLimits: NodeSizeLimits
   nodeBadgeSize: number
   setSelectedEdgeId: (edgeId: string | null) => void
@@ -20,13 +21,15 @@ interface GraphUiStore {
   replaceDefaultNodeStyle: (style: DefaultNodeStyle) => void
   setDefaultNodeSize: (size: Partial<DefaultNodeSize>) => void
   replaceDefaultNodeSize: (size: DefaultNodeSize) => void
+  setDefaultEditorStyle: (style: Partial<DefaultEditorStyle>) => void
+  replaceDefaultEditorStyle: (style: DefaultEditorStyle) => void
   setNodeSizeLimits: (limits: Partial<NodeSizeLimits>) => void
   replaceNodeSizeLimits: (limits: NodeSizeLimits) => void
   setNodeBadgeSize: (size: number) => void
   resetGraphUi: () => void
 }
 
-export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'nodeSizeLimits' | 'nodeBadgeSize'> = {
+export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize'> = {
   showGrid: true,
   selectedEdgeId: null,
   connectingSourceId: null,
@@ -51,6 +54,13 @@ export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEd
   defaultNodeSize: {
     width: 120,
     height: 52,
+  },
+  defaultEditorStyle: {
+    fontSize: 16,
+    fontFamily: 'inherit',
+    backgroundColor: '#ffffff',
+    textColor: '#333333',
+    lineHeight: 1.5,
   },
   nodeSizeLimits: {
     minWidth: 120,
@@ -78,6 +88,10 @@ export const useGraphUiStore = create<GraphUiStore>((set) => ({
     defaultNodeSize: { ...state.defaultNodeSize, ...size },
   })),
   replaceDefaultNodeSize: (defaultNodeSize) => set({ defaultNodeSize }),
+  setDefaultEditorStyle: (style) => set((state) => ({
+    defaultEditorStyle: { ...state.defaultEditorStyle, ...style },
+  })),
+  replaceDefaultEditorStyle: (defaultEditorStyle) => set({ defaultEditorStyle }),
   setNodeSizeLimits: (limits) => set((state) => ({
     nodeSizeLimits: { ...state.nodeSizeLimits, ...limits },
   })),

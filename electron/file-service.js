@@ -854,6 +854,15 @@ function _fs_exportTopoDocument(rootDir, cardPath, documentId) {
   };
 }
 
+async function _fs_openTopoDocumentFolder(rootDir, cardPath, documentId) {
+  var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, found.item);
+  var folderPath = nodePath.dirname(filePath);
+  if (!nodeFs.existsSync(folderPath)) return false;
+  var err = await shell.openPath(folderPath);
+  return err === '';
+}
+
 function _fs_createTopoDocument(rootDir, cardPath, input) {
   var type = _fs_normalizeTopoDocumentType(input && input.type);
   var title = String(input && input.title || '').trim();
@@ -1233,6 +1242,10 @@ const fileService = {
 
     exportTopoDocument: function(rootDir, cardPath, documentId) {
       return _fs_exportTopoDocument(rootDir, cardPath, documentId);
+    },
+
+    openTopoDocumentFolder: async function(rootDir, cardPath, documentId) {
+      return _fs_openTopoDocumentFolder(rootDir, cardPath, documentId);
     },
 
     listAttachments: function(rootDir, cardPath) {

@@ -283,6 +283,10 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.exportTopoDocument(requireRootDir(), cardPath, documentId)
     },
 
+    openTopoDocumentFolder: async (cardPath: string, documentId: string) => {
+      return FSB.openTopoDocumentFolder(requireRootDir(), cardPath, documentId)
+    },
+
     listAttachments: async (cardPath: string) => {
       return FSB.listAttachments(requireRootDir(), cardPath)
     },

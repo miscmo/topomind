@@ -1,6 +1,6 @@
 import { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { EditorView } from '@codemirror/view'
-import type { DetailSidebarTab, MarkdownWorkspaceProps, MarkdownViewMode } from './markdownTypes'
+import type { DetailSidebarTab, MarkdownWorkspaceProps, MarkdownViewMode, TocItem } from './markdownTypes'
 import { MarkdownSourceEditor } from './MarkdownSourceEditor'
 import { MarkdownPreview } from './MarkdownPreview'
 import { MarkdownToolbar } from './MarkdownToolbar'
@@ -9,13 +9,6 @@ import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../hooks/useResizePanel'
 import { useShortcut } from '../../hooks/useShortcut'
 import { logAction } from '../../core/log-backend'
-
-interface TocItem {
-  id: string
-  level: number
-  text: string
-  line: number
-}
 
 function normalizeHeadingText(raw: string) {
   return raw
@@ -89,6 +82,8 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   onDetailSidebarCollapsedChange,
   onSidebarHoverChange,
   onOpenDetailDocumentLink,
+  tocItems: providedTocItems,
+  onTocItemClick,
   viewMode: controlledViewMode,
   onViewModeChange,
   showToolbar = true,
@@ -104,7 +99,8 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   const [detailSidebarTab, setDetailSidebarTab] = useState<DetailSidebarTab>('documents')
   const containerRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
-  const tocItems = useMemo(() => extractTocItems(value), [value])
+  const markdownTocItems = useMemo(() => extractTocItems(value), [value])
+  const tocItems = providedTocItems ?? markdownTocItems
   const currentDetailDocumentPath = activeDetailDocumentPath ?? ''
   const detailSidebarCollapsed = controlledDetailSidebarCollapsed ?? internalDetailSidebarCollapsed
   const effectiveFloating = detailSidebarFloating
@@ -173,6 +169,10 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   }, [])
 
   const handleTocJump = useCallback((item: TocItem) => {
+    if (onTocItemClick) {
+      onTocItemClick(item)
+      return
+    }
     if (currentViewMode === 'edit') {
       if (!editorView) return
       const line = editorView.state.doc.line(Math.min(item.line, editorView.state.doc.lines))
@@ -191,7 +191,7 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
     if (heading) {
       heading.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }, [currentViewMode, editorView])
+  }, [currentViewMode, editorView, onTocItemClick])
 
   return (
     <div 

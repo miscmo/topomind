@@ -1,6 +1,6 @@
 import React from 'react'
 import { MarkdownWorkspace } from '../MarkdownWorkspace/MarkdownWorkspace'
-import type { MarkdownViewMode } from '../MarkdownWorkspace/markdownTypes'
+import type { MarkdownViewMode, TocItem } from '../MarkdownWorkspace/markdownTypes'
 import type { TopoDocumentManifestItem } from '../../core/storage'
 import { topoDocumentIdFromPath, topoDocumentTypeLabel } from './documentTypes'
 import { SmartDocumentEditor } from '../SmartDocumentEditor/SmartDocumentEditor'
@@ -41,7 +41,19 @@ interface DocumentEditorHostProps {
   topoDocuments: TopoDocumentManifestItem[]
 }
 
-const SmartDocumentWrapper = ({ value, title, onChange }: { value: string, title: string, onChange: (v: string) => void }) => {
+const SmartDocumentWrapper = ({
+  value,
+  title,
+  onChange,
+  onTocChange,
+  onTocItemClickReady,
+}: {
+  value: string
+  title: string
+  onChange: (v: string) => void
+  onTocChange: (items: TocItem[]) => void
+  onTocItemClickReady: (handler: ((item: TocItem) => void) | null) => void
+}) => {
   const cacheRef = React.useRef<{ stringValue: string; objectValue: any } | null>(null)
   
   const objectValue = React.useMemo(() => {
@@ -57,7 +69,14 @@ const SmartDocumentWrapper = ({ value, title, onChange }: { value: string, title
     onChange(str)
   }, [onChange])
 
-  return <SmartDocumentEditor value={objectValue} onChange={handleChange} />
+  return (
+    <SmartDocumentEditor
+      value={objectValue}
+      onChange={handleChange}
+      onTocChange={onTocChange}
+      onTocItemClickReady={onTocItemClickReady}
+    />
+  )
 }
 
 const MindMapDocumentWrapper = ({ value, title, onChange }: { value: string, title: string, onChange: (v: string) => void }) => {
@@ -129,6 +148,12 @@ export function DocumentEditorHost({
   const shouldRenderStructuredEditor = shouldRenderSmartEditor || shouldRenderMindMapEditor || shouldRenderFlowchartEditor
   const shouldRenderPlaceholder = activeTopoDocument && activeTopoDocument.type !== 'markdown' && activeTopoDocument.type !== 'smart' && activeTopoDocument.type !== 'mindmap' && activeTopoDocument.type !== 'flowchart'
   const shouldRenderNoDocument = !activeTopoDocument
+  const [smartTocItems, setSmartTocItems] = React.useState<TocItem[]>([])
+  const [smartTocItemClick, setSmartTocItemClick] = React.useState<((item: TocItem) => void) | null>(null)
+
+  const handleSmartTocItemClickReady = React.useCallback((handler: ((item: TocItem) => void) | null) => {
+    setSmartTocItemClick(() => handler)
+  }, [])
 
   if (shouldRenderNoDocument) {
     return (
@@ -173,6 +198,8 @@ export function DocumentEditorHost({
       value={value}
       title={activeTopoDocument.title}
       onChange={onChange}
+      onTocChange={setSmartTocItems}
+      onTocItemClickReady={handleSmartTocItemClickReady}
     />
   ) : shouldRenderMindMapEditor ? (
     <MindMapDocumentWrapper
@@ -216,6 +243,8 @@ export function DocumentEditorHost({
       activeDetailDocumentPath={activeDetailDocumentPath}
       viewMode={viewMode}
       onViewModeChange={onViewModeChange}
+      tocItems={shouldRenderSmartEditor ? smartTocItems : undefined}
+      onTocItemClick={shouldRenderSmartEditor ? smartTocItemClick ?? undefined : undefined}
       showToolbar={false}
       editorContent={editorContent}
     />

@@ -86,6 +86,7 @@ export interface FSB {
   moveTopoDocument: (rootDir: string, cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   repairTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentRepairResult>
   exportTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
+  openTopoDocumentFolder: (rootDir: string, cardPath: string, documentId: string) => Promise<boolean>
   listAttachments: (rootDir: string, cardPath: string) => Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>
   importAttachment: (rootDir: string, cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
   deleteAttachment: (rootDir: string, cardPath: string, attachmentName: string) => Promise<void>
@@ -134,6 +135,8 @@ const FSBImpl: FSB = {
     _call('fs:repairTopoDocuments', rootDir, cardPath) as Promise<TopoDocumentRepairResult>,
   exportTopoDocument: (rootDir, cardPath, documentId) =>
     _call('fs:exportTopoDocument', rootDir, cardPath, documentId) as Promise<TopoDocumentExportPayload>,
+  openTopoDocumentFolder: (rootDir, cardPath, documentId) =>
+    _call('fs:openTopoDocumentFolder', rootDir, cardPath, documentId) as Promise<boolean>,
   listAttachments: (rootDir, cardPath) =>
     _call('fs:listAttachments', rootDir, cardPath) as Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>,
   importAttachment: (rootDir, cardPath, sourceFilePath, targetFileName) =>

@@ -8,6 +8,7 @@ import { useStorage } from '../../core/storage'
 import { MermaidBlock } from './MermaidBlock'
 import { ImageBlock } from './ImageBlock'
 import { useShortcut } from '../../hooks/useShortcut'
+import { useGraphUiStore } from '../../stores/graphUiStore'
 import '../../styles/github-markdown-themed.css'
 import '../../styles/highlight-themed.css'
 
@@ -571,13 +572,14 @@ export const MarkdownPreview = memo(function MarkdownPreview({
   content,
   attachmentCardPath,
   compact,
-  className,
+  className = '',
   onChange,
   surfaceRef,
   headingIds,
   onOpenDetailDocumentLink
 }: MarkdownPreviewProps) {
   const storage = useStorage()
+  const defaultEditorStyle = useGraphUiStore((s) => s.defaultEditorStyle)
   const [wrappedCodeBlocks, setWrappedCodeBlocks] = useState<Record<number, boolean>>({})
   const [copiedCodeBlockIndex, setCopiedCodeBlockIndex] = useState<number | null>(null)
   const [copiedHeadingId, setCopiedHeadingId] = useState<string | null>(null)
@@ -895,7 +897,14 @@ export const MarkdownPreview = memo(function MarkdownPreview({
         compact ? 'compact' : '',
         className ?? ''
       ].filter(Boolean).join(' ')}
-      style={{ padding: compact ? '10px 12px' : '24px 28px' }}
+      style={{
+        padding: compact ? '10px 12px' : '24px 28px',
+        fontSize: `${defaultEditorStyle.fontSize}px`,
+        fontFamily: defaultEditorStyle.fontFamily === 'inherit' ? 'inherit' : defaultEditorStyle.fontFamily,
+        color: defaultEditorStyle.textColor,
+        lineHeight: defaultEditorStyle.lineHeight,
+        backgroundColor: defaultEditorStyle.backgroundColor || 'var(--color-surface)',
+      }}
     >
       {renderedMarkdown}
       {previewImage && (

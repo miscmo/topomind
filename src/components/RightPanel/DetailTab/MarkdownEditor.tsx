@@ -3,6 +3,7 @@
  */
 import { memo, useEffect, useRef, useCallback } from 'react'
 import { useStorage } from '../../../core/storage'
+import { useGraphUiStore } from '../../../stores/graphUiStore'
 import { logAction } from '../../../core/log-backend'
 
 interface MarkdownEditorProps {
@@ -42,6 +43,7 @@ function insertText(textarea: HTMLTextAreaElement, value: string, text: string, 
 export default memo(function MarkdownEditor({ value, onChange, onSave, placeholder, attachmentCardPath }: MarkdownEditorProps) {
   const storage = useStorage()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const defaultEditorStyle = useGraphUiStore((s) => s.defaultEditorStyle)
 
   // Ctrl+S / Cmd+S 保存
   const handleKeyDown = useCallback(
@@ -88,7 +90,14 @@ export default memo(function MarkdownEditor({ value, onChange, onSave, placehold
     <textarea
       id="node-description"
       ref={textareaRef}
-      className="w-full h-full border-none outline-none resize-none bg-[var(--color-bg)] px-5 pt-3 pb-10 font-mono text-[12px] leading-[1.6] text-[var(--color-text-primary)] box-border focus:outline-none"
+      className="w-full h-full border-none outline-none resize-none px-5 pt-3 pb-10 box-border focus:outline-none"
+      style={{
+        fontSize: `${defaultEditorStyle.fontSize}px`,
+        fontFamily: defaultEditorStyle.fontFamily === 'inherit' ? '"SF Mono", "Fira Code", Consolas, monospace' : defaultEditorStyle.fontFamily,
+        color: defaultEditorStyle.textColor,
+        lineHeight: defaultEditorStyle.lineHeight,
+        backgroundColor: defaultEditorStyle.backgroundColor || 'var(--color-bg)',
+      }}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onPaste={handlePaste}

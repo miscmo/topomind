@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { FilePlus, FileText, Sparkles, Network, Workflow, Download, PenLine, Trash2, ChevronRight } from 'lucide-react'
+import { FilePlus, Sparkles, Network, Workflow, Download, PenLine, Trash2, ChevronRight } from 'lucide-react'
 import type { TopoDocumentManifestItem } from '../../core/storage'
 import { topoDocumentPath, topoDocumentTypeIcon, buildDocumentTree } from './documentTypes'
 
@@ -9,7 +9,6 @@ export interface DocumentSidebarProps {
   activeDocumentPath: string
   isBusy?: boolean
   onSelectDocument: (documentPath: string) => void
-  onCreateTopoMarkdownDocument: (name: string, parentId?: string | null) => void
   onCreateTopoSmartDocument: (name: string, parentId?: string | null) => void
   onCreateTopoMindMapDocument: (name: string, parentId?: string | null) => void
   onCreateTopoFlowchartDocument: (name: string, parentId?: string | null) => void
@@ -26,7 +25,7 @@ interface DocumentContextMenuState {
 }
 
 interface DocumentInlineEditState {
-  mode: 'createTopoMarkdown' | 'createTopoSmart' | 'createTopoMindMap' | 'createTopoFlowchart' | 'rename'
+  mode: 'createTopoSmart' | 'createTopoMindMap' | 'createTopoFlowchart' | 'rename'
   targetId: string | null
   parentId: string | null
   value: string
@@ -37,7 +36,6 @@ export function DocumentSidebar({
   activeDocumentPath,
   isBusy,
   onSelectDocument,
-  onCreateTopoMarkdownDocument,
   onCreateTopoSmartDocument,
   onCreateTopoMindMapDocument,
   onCreateTopoFlowchartDocument,
@@ -146,8 +144,6 @@ export function DocumentSidebar({
 
     if (inlineEdit.mode === 'rename' && inlineEdit.targetId) {
       onRenameDocument(topoDocumentPath(inlineEdit.targetId), nextName)
-    } else if (inlineEdit.mode === 'createTopoMarkdown') {
-      onCreateTopoMarkdownDocument(nextName, inlineEdit.parentId)
     } else if (inlineEdit.mode === 'createTopoSmart') {
       onCreateTopoSmartDocument(nextName, inlineEdit.parentId)
     } else if (inlineEdit.mode === 'createTopoMindMap') {
@@ -384,15 +380,6 @@ export function DocumentSidebar({
             </button>
             {activeSubmenu === 'create' && (
               <div className="absolute left-[calc(100%-4px)] top-[-6px] min-w-[160px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[1200] backdrop-blur-xl animate-in fade-in slide-in-from-left-1 duration-100">
-                <button
-                  type="button"
-                  className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => handleContextMenuAction('createTopoMarkdown')}
-                  disabled={isBusy}
-                >
-                  <span className="flex items-center justify-center text-[var(--color-text-muted)]"><FileText className="w-4 h-4" /></span>
-                  Markdown 文档
-                </button>
                 <button
                   type="button"
                   className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"

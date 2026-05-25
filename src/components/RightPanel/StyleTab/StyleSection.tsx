@@ -6,7 +6,7 @@ import { useGraphStore } from '../../../stores/graphStore'
 import { useStorage } from '../../../core/storage'
 import type { KnowledgeNodeStyle } from '../../../types'
 import type { NodeDimensionChange } from '@xyflow/react'
-import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits } from '../../../stores/uiStoreTypes'
+import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, DefaultEditorStyle } from '../../../stores/uiStoreTypes'
 
 
 const COLOR_PRESETS = ['#7f8c8d', '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6']
@@ -204,6 +204,8 @@ export default memo(function StyleSection() {
   const setDefaultNodeSize = useGraphUiStore((s) => s.setDefaultNodeSize)
   const setNodeSizeLimits = useGraphUiStore((s) => s.setNodeSizeLimits)
   const setNodeBadgeSize = useGraphUiStore((s) => s.setNodeBadgeSize)
+  const defaultEditorStyle = useGraphUiStore((s) => s.defaultEditorStyle)
+  const setDefaultEditorStyle = useGraphUiStore((s) => s.setDefaultEditorStyle)
 
   const graph = useGraphContext()
 
@@ -228,17 +230,20 @@ export default memo(function StyleSection() {
   const currentNodeWidth = selectedNode?.width ?? selectedNode?.initialWidth ?? selectedNode?.measured?.width ?? defaultNodeSize.width
   const currentNodeHeight = selectedNode?.height ?? selectedNode?.initialHeight ?? selectedNode?.measured?.height ?? defaultNodeSize.height
 
+  const [activeTab, setActiveTab] = useState<'nodes' | 'edges' | 'editor'>('nodes')
   const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>({})
 
   // Automatically expand "own" blocks when selection changes
   useEffect(() => {
     if (selectedNode) {
+      setActiveTab('nodes')
       setExpandedBlocks(prev => ({ ...prev, ownNode: true, globalNode: false, defaultNode: false }))
     }
   }, [selectedNode?.id])
 
   useEffect(() => {
     if (selectedEdgeId) {
+      setActiveTab('edges')
       setExpandedBlocks(prev => ({ ...prev, ownEdge: true, defaultEdge: false }))
     }
   }, [selectedEdgeId])
@@ -265,10 +270,11 @@ export default memo(function StyleSection() {
       if (config.defaultEdgeStyle) setDefaultEdgeStyle(config.defaultEdgeStyle)
       if (config.defaultNodeStyle) setDefaultNodeStyle(config.defaultNodeStyle)
       if (config.defaultNodeSize) setDefaultNodeSize(config.defaultNodeSize)
+      if (config.defaultEditorStyle) setDefaultEditorStyle(config.defaultEditorStyle)
       if (config.nodeSizeLimits) setNodeSizeLimits(config.nodeSizeLimits)
       if (typeof config.nodeBadgeSize === 'number') setNodeBadgeSize(config.nodeBadgeSize)
     })
-  }, [storage, setDefaultEdgeStyle, setDefaultNodeSize, setDefaultNodeStyle, setNodeBadgeSize, setNodeSizeLimits])
+  }, [storage, setDefaultEdgeStyle, setDefaultNodeSize, setDefaultNodeStyle, setDefaultEditorStyle, setNodeBadgeSize, setNodeSizeLimits])
 
   // Persist style changes via updateDefaultStyle (which already calls writeConfig).
   // Avoid a separate useEffect watching defaultEdgeStyle to prevent duplicate writes.
@@ -291,6 +297,12 @@ export default memo(function StyleSection() {
     }
     setDefaultNodeSize(next)
     void storage.writeConfig({ defaultNodeSize: next })
+  }
+
+  const updateDefaultEditorStyle = (patch: Partial<DefaultEditorStyle>) => {
+    const next = { ...defaultEditorStyle, ...patch }
+    setDefaultEditorStyle(patch)
+    void storage.writeConfig({ defaultEditorStyle: next })
   }
 
   const updateNodeSizeLimits = (key: NodeSizeLimitKey, value: string) => {
@@ -365,12 +377,26 @@ export default memo(function StyleSection() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 bg-[var(--color-bg)] min-h-0">
-      <div className="flex flex-col gap-4 max-w-[380px] mx-auto w-full mb-4">
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-0 shadow-[var(--shadow-sm)] overflow-hidden">
-          <div className="text-[13px] font-bold text-[var(--color-primary)] px-4 py-3 m-0 bg-[var(--color-bg)] border-b border-[var(--color-border-light)] uppercase tracking-[0.5px]">节点卡片样式</div>
-        
-          <CollapsibleBlock
+    <div className="flex flex-col h-full bg-[var(--color-bg)]">
+      <div className="px-4 py-3 bg-[var(--color-surface)] border-b border-[var(--color-border-light)] shrink-0">
+        <div className="flex bg-[var(--color-bg-muted)] rounded-lg p-1 w-full box-border shadow-inner">
+          {(['nodes', 'edges', 'editor'] as const).map(tab => (
+            <button
+              key={tab}
+              className={`flex-1 py-1.5 text-[12px] font-medium rounded-md cursor-pointer transition-all duration-200 text-center select-none border-none ${activeTab === tab ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-bg)]'}`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab === 'nodes' ? '节点卡片' : tab === 'edges' ? '连线样式' : '文档编辑器'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
+        {activeTab === 'nodes' && (
+          <div className="flex flex-col gap-4 max-w-[380px] mx-auto w-full mb-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-0 shadow-[var(--shadow-sm)] overflow-hidden">
+              <CollapsibleBlock
             title="全局设置"
           hint="所有节点共享，仅限制之后的 resize 操作。"
           expandedKey="globalNode"
@@ -640,13 +666,14 @@ export default memo(function StyleSection() {
             </div>
           </CollapsibleBlock>
         )}
-      </div>
+            </div>
+          </div>
+        )}
 
-      <div className="flex flex-col gap-4 max-w-[380px] mx-auto w-full mb-4">
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-0 shadow-[var(--shadow-sm)] overflow-hidden">
-          <div className="text-[13px] font-bold text-[var(--color-primary)] px-4 py-3 m-0 bg-[var(--color-bg)] border-b border-[var(--color-border-light)] uppercase tracking-[0.5px]">连线样式</div>
-          
-          <CollapsibleBlock
+        {activeTab === 'edges' && (
+          <div className="flex flex-col gap-4 max-w-[380px] mx-auto w-full mb-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-0 shadow-[var(--shadow-sm)] overflow-hidden">
+              <CollapsibleBlock
             title="默认连线样式"
             hint="新建连线会继承这里的默认样式。"
             expandedKey="defaultEdge"
@@ -754,9 +781,73 @@ export default memo(function StyleSection() {
             <div className="text-[13px] text-[var(--color-text-muted)] text-center py-8 px-4 bg-[var(--color-bg)] rounded-lg border border-dashed border-[var(--color-border-strong)]">选中一条连线后，可在这里编辑它的样式。</div>
           )}
           </CollapsibleBlock>
-        </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'editor' && (
+          <div className="flex flex-col gap-4 max-w-[380px] mx-auto w-full mb-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-0 shadow-[var(--shadow-sm)] overflow-hidden">
+              <CollapsibleBlock
+                title="编辑器全局设计"
+                hint="这些设置将应用到文档编辑器。"
+                defaultExpanded={true}
+                expandedKey="defaultEditor"
+                expandedState={expandedBlocks}
+                onToggle={toggleBlock}
+              >
+                <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                  <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                    <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">字体大小</label>
+                    <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+                      min={10}
+                      max={36}
+                      value={defaultEditorStyle.fontSize}
+                      onChange={(e) => updateDefaultEditorStyle({ fontSize: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                    <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">字体</label>
+                    <SegmentedControl
+                      options={[
+                        { label: '系统默认', value: 'inherit' },
+                        { label: '黑体', value: 'sans-serif' },
+                        { label: '宋体', value: 'serif' }
+                      ]}
+                      value={defaultEditorStyle.fontFamily || 'inherit'}
+                      onChange={(v) => updateDefaultEditorStyle({ fontFamily: v as string })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                    <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">行高</label>
+                    <input className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" type="number"
+                      step={0.1}
+                      min={1}
+                      max={3}
+                      value={defaultEditorStyle.lineHeight}
+                      onChange={(e) => updateDefaultEditorStyle({ lineHeight: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                    <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">文字颜色</label>
+                    <ColorPicker
+                      value={defaultEditorStyle.textColor || ''}
+                      onChange={(v) => updateDefaultEditorStyle({ textColor: v })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                    <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">背景颜色</label>
+                    <ColorPicker
+                      value={defaultEditorStyle.backgroundColor || ''}
+                      onChange={(v) => updateDefaultEditorStyle({ backgroundColor: v })}
+                    />
+                  </div>
+                </div>
+              </CollapsibleBlock>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
     </div>
   )
 })

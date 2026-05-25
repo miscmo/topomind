@@ -24,7 +24,6 @@ interface DocumentWorkspaceProps {
   onSidebarHoverChange: (hovered: boolean) => void
   onSelectDocument: (documentPath: string) => void
   onOpenDetailDocumentLink: (documentPath: string) => void
-  onCreateTopoMarkdownDocument: (name: string, parentId?: string | null) => void
   onCreateTopoSmartDocument: (name: string, parentId?: string | null) => void
   onCreateTopoMindMapDocument: (name: string, parentId?: string | null) => void
   onCreateTopoFlowchartDocument: (name: string, parentId?: string | null) => void
@@ -54,7 +53,6 @@ export function DocumentWorkspace({
   onSidebarHoverChange,
   onSelectDocument,
   onOpenDetailDocumentLink,
-  onCreateTopoMarkdownDocument,
   onCreateTopoSmartDocument,
   onCreateTopoMindMapDocument,
   onCreateTopoFlowchartDocument,
@@ -70,7 +68,6 @@ export function DocumentWorkspace({
       activeDocumentPath={activeDocumentPath}
       isBusy={isDocumentBusy}
       onSelectDocument={onSelectDocument}
-      onCreateTopoMarkdownDocument={onCreateTopoMarkdownDocument}
       onCreateTopoSmartDocument={onCreateTopoSmartDocument}
       onCreateTopoMindMapDocument={onCreateTopoMindMapDocument}
       onCreateTopoFlowchartDocument={onCreateTopoFlowchartDocument}

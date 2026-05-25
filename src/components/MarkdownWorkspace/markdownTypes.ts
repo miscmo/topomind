@@ -19,7 +19,7 @@ export interface DocumentContextMenuState {
 }
 
 export interface DocumentInlineEditState {
-  mode: 'create' | 'createTopoMarkdown' | 'createTopoSmart' | 'createTopoMindMap' | 'createTopoFlowchart' | 'rename'
+  mode: 'create' | 'createTopoSmart' | 'createTopoMindMap' | 'createTopoFlowchart' | 'rename'
   targetId: string | null
   parentId: string | null
   value: string
@@ -47,6 +47,8 @@ export interface MarkdownWorkspaceProps {
   viewMode?: MarkdownViewMode
   onViewModeChange?: (mode: MarkdownViewMode) => void
   onOpenDetailDocumentLink?: (documentPath: string) => void
+  tocItems?: TocItem[]
+  onTocItemClick?: (item: TocItem) => void
   showToolbar?: boolean
   editorContent?: ReactNode
 }

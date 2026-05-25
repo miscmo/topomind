@@ -33,6 +33,7 @@ export function useGraph(tabId: string) {
   const setDefaultEdgeStyle = useGraphUiStore((s) => s.setDefaultEdgeStyle)
   const setDefaultNodeStyle = useGraphUiStore((s) => s.setDefaultNodeStyle)
   const setDefaultNodeSize = useGraphUiStore((s) => s.setDefaultNodeSize)
+  const setDefaultEditorStyle = useGraphUiStore((s) => s.setDefaultEditorStyle)
   const setNodeSizeLimits = useGraphUiStore((s) => s.setNodeSizeLimits)
   const setNodeBadgeSize = useGraphUiStore((s) => s.setNodeBadgeSize)
   const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
@@ -48,13 +49,14 @@ export function useGraph(tabId: string) {
       if (config.defaultEdgeStyle) setDefaultEdgeStyle(config.defaultEdgeStyle)
       if (config.defaultNodeStyle) setDefaultNodeStyle(config.defaultNodeStyle)
       if (config.defaultNodeSize) setDefaultNodeSize(config.defaultNodeSize)
+      if (config.defaultEditorStyle) setDefaultEditorStyle(config.defaultEditorStyle)
       if (config.nodeSizeLimits) setNodeSizeLimits(config.nodeSizeLimits)
       if (typeof config.nodeBadgeSize === 'number') setNodeBadgeSize(config.nodeBadgeSize)
     })
     return () => {
       active = false
     }
-  }, [storage, setDefaultEdgeStyle, setDefaultNodeSize, setDefaultNodeStyle, setNodeBadgeSize, setNodeSizeLimits])
+  }, [storage, setDefaultEdgeStyle, setDefaultEditorStyle, setDefaultNodeSize, setDefaultNodeStyle, setNodeBadgeSize, setNodeSizeLimits])
 
   const { loadRoom } = useGraphRoomLoader({
     storage,

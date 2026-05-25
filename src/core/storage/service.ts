@@ -23,6 +23,13 @@ interface VaultConfig {
     borderRadius?: number
   }
   defaultNodeSize?: { width?: number; height?: number }
+  defaultEditorStyle?: {
+    fontSize?: number
+    fontFamily?: string
+    backgroundColor?: string
+    textColor?: string
+    lineHeight?: number
+  }
   nodeSizeLimits?: { minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number }
   nodeBadgeSize?: number
   kbCovers?: Record<string, string>
@@ -95,6 +102,7 @@ export interface StorageBackend {
   moveTopoDocument: (cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   repairTopoDocuments: (cardPath: string) => Promise<TopoDocumentRepairResult>
   exportTopoDocument: (cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
+  openTopoDocumentFolder: (cardPath: string, documentId: string) => Promise<boolean>
   
   listAttachments: (cardPath: string) => Promise<AttachmentItem[]>
   importAttachment: (cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
@@ -125,6 +133,7 @@ function normalizeConfig(configRaw: unknown): VaultConfig {
   const s = (c.defaultEdgeStyle && typeof c.defaultEdgeStyle === 'object' && !Array.isArray(c.defaultEdgeStyle)) ? c.defaultEdgeStyle as Record<string, unknown> : {}
   const ns = (c.defaultNodeStyle && typeof c.defaultNodeStyle === 'object' && !Array.isArray(c.defaultNodeStyle)) ? c.defaultNodeStyle as Record<string, unknown> : {}
   const defaultNodeSize = (c.defaultNodeSize && typeof c.defaultNodeSize === 'object' && !Array.isArray(c.defaultNodeSize)) ? c.defaultNodeSize as Record<string, unknown> : {}
+  const defaultEditorStyle = (c.defaultEditorStyle && typeof c.defaultEditorStyle === 'object' && !Array.isArray(c.defaultEditorStyle)) ? c.defaultEditorStyle as Record<string, unknown> : {}
   const limits = (c.nodeSizeLimits && typeof c.nodeSizeLimits === 'object' && !Array.isArray(c.nodeSizeLimits)) ? c.nodeSizeLimits as Record<string, unknown> : {}
   const edgeDefaultsVersion = c.edgeDefaultsVersion === 2 ? 2 : undefined
   
@@ -168,6 +177,13 @@ function normalizeConfig(configRaw: unknown): VaultConfig {
     defaultNodeSize: {
       width: clampNumber(finiteNumber(defaultNodeSize.width, 120), minWidth, maxWidth),
       height: clampNumber(finiteNumber(defaultNodeSize.height, 52), minHeight, maxHeight),
+    },
+    defaultEditorStyle: {
+      fontSize: clampNumber(finiteNumber(defaultEditorStyle.fontSize, 16), 10, 36),
+      fontFamily: typeof defaultEditorStyle.fontFamily === 'string' ? defaultEditorStyle.fontFamily : 'inherit',
+      backgroundColor: typeof defaultEditorStyle.backgroundColor === 'string' ? defaultEditorStyle.backgroundColor : '#ffffff',
+      textColor: typeof defaultEditorStyle.textColor === 'string' ? defaultEditorStyle.textColor : '#333333',
+      lineHeight: clampNumber(finiteNumber(defaultEditorStyle.lineHeight, 1.5), 1, 3),
     },
     nodeSizeLimits: {
       minWidth,
@@ -308,6 +324,9 @@ export function createStore(backend: StorageBackend) {
     async exportTopoDocument(cardPath: string, documentId: string) {
       try { return await backend.exportTopoDocument(cardPath, documentId) } catch (e) { logger.catch('Store.exportTopoDocument', `导出多类型文档失败: ${cardPath}/${documentId}`, e); throw e }
     },
+    async openTopoDocumentFolder(cardPath: string, documentId: string) {
+      try { return await backend.openTopoDocumentFolder(cardPath, documentId) } catch (e) { logger.catch('Store.openTopoDocumentFolder', `打开多类型文档目录失败: ${cardPath}/${documentId}`, e); throw e }
+    },
     async listAttachments(cardPath: string) {
       try { return await backend.listAttachments(cardPath) } catch (e) { logger.catch('Store.listAttachments', `获取附件列表失败: ${cardPath}`, e); throw e }
     },
@@ -383,6 +402,9 @@ export function createStore(backend: StorageBackend) {
         }
         if (config.defaultNodeSize) {
           nextConfig.defaultNodeSize = { ...cachedConfig.defaultNodeSize, ...config.defaultNodeSize }
+        }
+        if (config.defaultEditorStyle) {
+          nextConfig.defaultEditorStyle = { ...cachedConfig.defaultEditorStyle, ...config.defaultEditorStyle }
         }
         if (config.nodeSizeLimits) {
           nextConfig.nodeSizeLimits = { ...cachedConfig.nodeSizeLimits, ...config.nodeSizeLimits }

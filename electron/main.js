@@ -211,6 +211,9 @@ function registerIPC() {
   ipcMain.handle('fs:exportTopoDocument', function(e, rootDir, cardPath, documentId) {
     return fileService.exportTopoDocument(rootDir, cardPath, documentId);
   });
+  ipcMain.handle('fs:openTopoDocumentFolder', function(e, rootDir, cardPath, documentId) {
+    return fileService.openTopoDocumentFolder(rootDir, cardPath, documentId);
+  });
   ipcMain.handle('fs:listAttachments', function(e, rootDir, cardPath) {
     return fileService.listAttachments(rootDir, cardPath);
   });

@@ -10,6 +10,7 @@ import { syntaxHighlighting, defaultHighlightStyle, foldGutter } from '@codemirr
 import { githubDark, githubLight } from '@uiw/codemirror-theme-github'
 import { useStorage } from '../../core/storage'
 import { useThemeStore } from '../../stores/themeStore'
+import { useGraphUiStore } from '../../stores/graphUiStore'
 import { handleMarkdownPaste, handleMarkdownDrop } from './AttachmentPipeline'
 import { slashCommandCompletion } from './slashCommandPlugin'
 import { createMentionCompletion } from './mentionPlugin'
@@ -34,6 +35,7 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
 }: MarkdownSourceEditorProps) {
   const storage = useStorage()
   const theme = useThemeStore((s) => s.theme)
+  const defaultEditorStyle = useGraphUiStore((s) => s.defaultEditorStyle)
 
   const handleCreate = useCallback((view: EditorView) => {
     if (onEditorCreate) onEditorCreate(view)
@@ -138,6 +140,15 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
     eventHandlers,
     EditorView.lineWrapping,
     EditorView.theme({
+      "&": {
+        fontSize: `${defaultEditorStyle.fontSize}px`,
+        color: defaultEditorStyle.textColor,
+        backgroundColor: "transparent",
+      },
+      ".cm-content": {
+        fontFamily: defaultEditorStyle.fontFamily === 'inherit' ? '"SF Mono", "Fira Code", Consolas, monospace' : defaultEditorStyle.fontFamily,
+        lineHeight: defaultEditorStyle.lineHeight,
+      },
       ".cm-tooltip.cm-tooltip-autocomplete": {
         backgroundColor: "var(--titlebar-menu-bg, var(--color-surface))",
         border: "1px solid var(--color-border)",
@@ -175,7 +186,10 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
   ], [customKeymap, eventHandlers, attachmentCardPath, storage])
 
   return (
-    <div className="h-full overflow-hidden bg-white !bg-[var(--color-surface)] [&_.cm-editor]:h-full [&_.cm-editor]:bg-white [&_.cm-editor]:!bg-[var(--color-surface)] [&_.cm-scroller]:[&::-webkit-scrollbar]:w-2.5 [&_.cm-scroller]:[&::-webkit-scrollbar]:h-2.5 [&_.cm-scroller]:[&::-webkit-scrollbar-track]:bg-transparent [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:bg-transparent [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:border-[3px] [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:border-transparent [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:rounded-full [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:bg-clip-content [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(148,163,184,0.34)] hover:[&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(100,116,139,0.5)] [&_.cm-gutters]:[&::-webkit-scrollbar]:w-2.5 [&_.cm-gutters]:[&::-webkit-scrollbar]:h-2.5 [&_.cm-gutters]:[&::-webkit-scrollbar-track]:bg-transparent [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:bg-transparent [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:border-[3px] [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:border-transparent [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:rounded-full [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:bg-clip-content [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(148,163,184,0.34)] hover:[&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(100,116,139,0.5)] [&_.cm-activeLine]:bg-blue-500/5 [&_.cm-activeLineGutter]:bg-blue-500/5 [&_.cm-gutters]:border-r [&_.cm-gutters]:border-[#eef2f7] [&_.cm-gutters]:!border-[var(--color-border-subtle)] [&_.cm-gutters]:bg-[#fbfcfe] [&_.cm-gutters]:!bg-[var(--color-bg)] [&_.cm-content]:caret-[var(--color-accent)] [&_.cm-line]:caret-[var(--color-accent)]">
+    <div 
+      className="h-full overflow-hidden [&_.cm-editor]:h-full [&_.cm-editor]:bg-transparent [&_.cm-scroller]:[&::-webkit-scrollbar]:w-2.5 [&_.cm-scroller]:[&::-webkit-scrollbar]:h-2.5 [&_.cm-scroller]:[&::-webkit-scrollbar-track]:bg-transparent [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:bg-transparent [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:border-[3px] [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:border-transparent [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:rounded-full [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:bg-clip-content [&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(148,163,184,0.34)] hover:[&_.cm-scroller]:[&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(100,116,139,0.5)] [&_.cm-gutters]:[&::-webkit-scrollbar]:w-2.5 [&_.cm-gutters]:[&::-webkit-scrollbar]:h-2.5 [&_.cm-gutters]:[&::-webkit-scrollbar-track]:bg-transparent [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:bg-transparent [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:border-[3px] [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:border-transparent [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:rounded-full [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:bg-clip-content [&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(148,163,184,0.34)] hover:[&_.cm-gutters]:[&::-webkit-scrollbar-thumb]:shadow-[inset_0_0_0_10px_rgba(100,116,139,0.5)] [&_.cm-activeLine]:bg-blue-500/5 [&_.cm-activeLineGutter]:bg-blue-500/5 [&_.cm-gutters]:border-r [&_.cm-gutters]:border-[#eef2f7] [&_.cm-gutters]:!border-[var(--color-border-subtle)] [&_.cm-gutters]:!bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [&_.cm-content]:caret-[var(--color-accent)] [&_.cm-line]:caret-[var(--color-accent)]"
+      style={{ backgroundColor: defaultEditorStyle.backgroundColor || 'var(--color-surface)' }}
+    >
       <ReactCodeMirror
         value={value || ''}
         onChange={onChange}
@@ -189,7 +203,7 @@ export const MarkdownSourceEditor = memo(function MarkdownSourceEditor({
           highlightActiveLineGutter: true,
         }}
         placeholder={placeholder}
-        style={{ height: '100%', fontSize: '13px', fontFamily: '"SF Mono", "Fira Code", Consolas, monospace' }}
+        style={{ height: '100%' }}
       />
     </div>
   )
