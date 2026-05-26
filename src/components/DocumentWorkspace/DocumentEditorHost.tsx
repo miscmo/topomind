@@ -1,6 +1,6 @@
 import React from 'react'
-import { MarkdownWorkspace } from '../MarkdownWorkspace/MarkdownWorkspace'
-import type { MarkdownViewMode, TocItem } from '../MarkdownWorkspace/markdownTypes'
+import { DocumentWorkspaceLayout } from '../DocumentWorkspaceLayout/DocumentWorkspaceLayout'
+import type { TocItem } from '../DocumentWorkspaceLayout/workspaceTypes'
 import type { TopoDocumentManifestItem } from '../../core/storage'
 import { topoDocumentIdFromPath, topoDocumentTypeLabel } from './documentTypes'
 import { SmartDocumentEditor } from '../SmartDocumentEditor/SmartDocumentEditor'
@@ -26,12 +26,9 @@ interface DocumentEditorHostProps {
   onChange: (value: string) => void
   onSave: () => Promise<void> | void
   attachmentCardPath: string | null
-  previewClassName?: string
   detailHeader: React.ReactNode
   documentsTabContent?: React.ReactNode
   activeDetailDocumentPath: string
-  viewMode: MarkdownViewMode
-  onViewModeChange: (mode: MarkdownViewMode) => void
   detailSidebarCollapsed: boolean
   detailSidebarFloating?: boolean
   onDetailSidebarCollapsedChange: (collapsed: boolean) => void
@@ -124,12 +121,9 @@ export function DocumentEditorHost({
   onChange,
   onSave,
   attachmentCardPath,
-  previewClassName,
   detailHeader,
   documentsTabContent,
   activeDetailDocumentPath,
-  viewMode,
-  onViewModeChange,
   detailSidebarCollapsed,
   detailSidebarFloating,
   onDetailSidebarCollapsedChange,
@@ -146,7 +140,6 @@ export function DocumentEditorHost({
   const shouldRenderMindMapEditor = activeTopoDocument?.type === 'mindmap'
   const shouldRenderFlowchartEditor = activeTopoDocument?.type === 'flowchart'
   const shouldRenderStructuredEditor = shouldRenderSmartEditor || shouldRenderMindMapEditor || shouldRenderFlowchartEditor
-  const shouldRenderPlaceholder = activeTopoDocument && activeTopoDocument.type !== 'markdown' && activeTopoDocument.type !== 'smart' && activeTopoDocument.type !== 'mindmap' && activeTopoDocument.type !== 'flowchart'
   const shouldRenderNoDocument = !activeTopoDocument
   const [smartTocItems, setSmartTocItems] = React.useState<TocItem[]>([])
   const [smartTocItemClick, setSmartTocItemClick] = React.useState<((item: TocItem) => void) | null>(null)
@@ -157,14 +150,13 @@ export function DocumentEditorHost({
 
   if (shouldRenderNoDocument) {
     return (
-      <MarkdownWorkspace
+      <DocumentWorkspaceLayout
         value=""
         savedValue=""
         onChange={() => {}}
         onSave={() => {}}
         attachmentCardPath={attachmentCardPath}
         documentType="detail"
-        previewClassName={previewClassName}
         detailSidebarCollapsed={detailSidebarCollapsed}
         detailSidebarFloating={detailSidebarFloating}
         onDetailSidebarCollapsedChange={onDetailSidebarCollapsedChange}
@@ -172,9 +164,6 @@ export function DocumentEditorHost({
         detailHeader={detailHeader}
         documentsTabContent={documentsTabContent}
         activeDetailDocumentPath={activeDetailDocumentPath}
-        viewMode="preview"
-        onViewModeChange={onViewModeChange}
-        showToolbar={false}
         editorContent={(
           <div className="h-full min-h-0 flex items-center justify-center bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] p-6">
             <div className="max-w-[360px] rounded-2xl text-center">
@@ -215,25 +204,16 @@ export function DocumentEditorHost({
       title={activeTopoDocument.title}
       onChange={onChange}
     />
-  ) : shouldRenderPlaceholder ? (
-    <div className="h-full min-h-0 flex items-center justify-center bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] p-6">
-      <div className="max-w-[360px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-sm)] p-5 text-center">
-        <div className="text-[13px] font-semibold text-[var(--color-primary)] mb-2">{topoDocumentTypeLabel(activeTopoDocument.type)}</div>
-        <div className="text-base font-bold text-[var(--color-text-primary)] mb-2 truncate" title={activeTopoDocument.title}>{activeTopoDocument.title}</div>
-        <div className="text-xs leading-relaxed text-[var(--color-text-muted)]">该类型文档已进入统一文档列表，编辑器将在后续阶段接入。</div>
-      </div>
-    </div>
   ) : undefined
 
   return (
-    <MarkdownWorkspace
-      value={shouldRenderPlaceholder ? '' : value}
-      savedValue={shouldRenderPlaceholder ? '' : savedValue}
+    <DocumentWorkspaceLayout
+      value={value}
+      savedValue={savedValue}
       onChange={onChange}
       onSave={onSave}
       attachmentCardPath={attachmentCardPath}
       documentType="detail"
-      previewClassName={previewClassName}
       detailSidebarCollapsed={detailSidebarCollapsed}
       detailSidebarFloating={detailSidebarFloating}
       onDetailSidebarCollapsedChange={onDetailSidebarCollapsedChange}
@@ -241,11 +221,8 @@ export function DocumentEditorHost({
       detailHeader={detailHeader}
       documentsTabContent={documentsTabContent}
       activeDetailDocumentPath={activeDetailDocumentPath}
-      viewMode={viewMode}
-      onViewModeChange={onViewModeChange}
       tocItems={shouldRenderSmartEditor ? smartTocItems : undefined}
       onTocItemClick={shouldRenderSmartEditor ? smartTocItemClick ?? undefined : undefined}
-      showToolbar={false}
       editorContent={editorContent}
     />
   )

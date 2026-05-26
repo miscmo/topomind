@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import type { TopoDocumentManifestItem } from '../../core/storage'
-import type { MarkdownViewMode } from '../MarkdownWorkspace/markdownTypes'
 import { DocumentSidebar } from './DocumentSidebar'
 import { DocumentEditorHost } from './DocumentEditorHost'
 
@@ -12,12 +11,9 @@ interface DocumentWorkspaceProps {
   onChange: (value: string) => void
   onSave: () => Promise<void> | void
   attachmentCardPath: string | null
-  previewClassName?: string
   detailHeader: ReactNode
   topoDocuments: TopoDocumentManifestItem[]
   activeDocumentPath: string
-  viewMode: MarkdownViewMode
-  onViewModeChange: (mode: MarkdownViewMode) => void
   detailSidebarCollapsed: boolean
   detailSidebarFloating?: boolean
   onDetailSidebarCollapsedChange: (collapsed: boolean) => void
@@ -41,12 +37,9 @@ export function DocumentWorkspace({
   onChange,
   onSave,
   attachmentCardPath,
-  previewClassName,
   detailHeader,
   topoDocuments,
   activeDocumentPath,
-  viewMode,
-  onViewModeChange,
   detailSidebarCollapsed,
   detailSidebarFloating,
   onDetailSidebarCollapsedChange,
@@ -86,12 +79,9 @@ export function DocumentWorkspace({
       onChange={onChange}
       onSave={onSave}
       attachmentCardPath={attachmentCardPath}
-      previewClassName={previewClassName}
       detailHeader={detailHeader}
       documentsTabContent={sidebarContent}
       activeDetailDocumentPath={activeDocumentPath}
-      viewMode={viewMode}
-      onViewModeChange={onViewModeChange}
       detailSidebarCollapsed={detailSidebarCollapsed}
       detailSidebarFloating={detailSidebarFloating}
       onDetailSidebarCollapsedChange={onDetailSidebarCollapsedChange}

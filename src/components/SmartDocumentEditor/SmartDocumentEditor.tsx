@@ -8,7 +8,7 @@ import { useThemeStore } from '../../stores/themeStore'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import type { SmartDocumentContent } from './smartDocumentTypes'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from './smartDocumentTypes'
-import type { TocItem } from '../MarkdownWorkspace/markdownTypes'
+import type { TocItem } from '../DocumentWorkspaceLayout/workspaceTypes'
 import '@blocknote/mantine/style.css'
 
 interface SmartDocumentEditorProps {

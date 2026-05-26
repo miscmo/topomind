@@ -8,13 +8,13 @@ interface CardContentEntry {
 
 interface CardContentStore {
   detailEntries: Record<string, CardContentEntry>
-  setDetailMarkdown: (path: string, content: string) => void
-  clearDetailMarkdown: (path: string) => void
+  setDetailContent: (path: string, content: string) => void
+  clearDetailContent: (path: string) => void
 }
 
 export const useCardContentStore = create<CardContentStore>((set) => ({
   detailEntries: {},
-  setDetailMarkdown: (path, content) => {
+  setDetailContent: (path, content) => {
     if (!path) return
     set((state) => ({
       detailEntries: {
@@ -23,7 +23,7 @@ export const useCardContentStore = create<CardContentStore>((set) => ({
       },
     }))
   },
-  clearDetailMarkdown: (path) => {
+  clearDetailContent: (path) => {
     if (!path) return
     set((state) => {
       const { [path]: _, ...restEntries } = state.detailEntries

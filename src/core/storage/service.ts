@@ -38,7 +38,7 @@ interface VaultConfig {
   [key: string]: unknown
 }
 
-export type TopoDocumentType = 'markdown' | 'smart' | 'mindmap' | 'flowchart'
+export type TopoDocumentType = 'smart' | 'mindmap' | 'flowchart'
 
 export interface TopoDocumentManifestItem {
   id: string
@@ -204,7 +204,7 @@ function ensureValidName(name: unknown, label = '名称'): string {
   return n
 }
 function ensureValidTopoDocumentType(type: unknown): TopoDocumentType {
-  if (type === 'markdown' || type === 'smart' || type === 'mindmap' || type === 'flowchart') return type
+  if (type === 'smart' || type === 'mindmap' || type === 'flowchart') return type as TopoDocumentType
   throw new Error(`不支持的文档类型: ${String(type || '')}`)
 }
 

@@ -18,14 +18,12 @@ export function topoDocumentIdFromPath(documentPath: string | null | undefined) 
 }
 
 export function topoDocumentTypeLabel(type: TopoDocumentType) {
-  if (type === 'markdown') return 'Markdown'
   if (type === 'smart') return '智能文档'
   if (type === 'mindmap') return '思维导图'
   return '流程图'
 }
 
 export function topoDocumentTypeIcon(type: TopoDocumentType) {
-  if (type === 'markdown') return '📝'
   if (type === 'smart') return '✨'
   if (type === 'mindmap') return '🧠'
   return '🔀'

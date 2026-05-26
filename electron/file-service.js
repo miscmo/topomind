@@ -378,7 +378,6 @@ function _fs_deleteAttachment(rootDir, cardPath, attachmentName) {
 const TOPO_DOCUMENT_DIR = '_docs';
 const TOPO_DOCUMENT_MANIFEST = 'tree.json';
 const TOPO_DOCUMENT_EXTENSIONS = {
-  markdown: '.md',
   smart: '.tdoc.json',
   mindmap: '.tmind.json',
   flowchart: '.tflow.json',
@@ -440,7 +439,6 @@ function _fs_topoDocumentPathKey(item) {
 function _fs_topoDocumentTitleFromFile(type, filePath, fileName) {
   var extension = TOPO_DOCUMENT_EXTENSIONS[type];
   var fallback = fileName.endsWith(extension) ? fileName.slice(0, -extension.length) : fileName;
-  if (type === 'markdown') return fallback || '未命名文档';
   try {
     var content = _fs_readJsonFile(filePath);
     if (_fs_isPlainObject(content) && typeof content.title === 'string' && content.title.trim()) {
@@ -593,83 +591,7 @@ function _fs_reconcileTopoDocumentManifest(rootDir, cardPath, manifest) {
 }
 
 function _fs_migrateOldContentToTree(rootDir, cardPath, manifest) {
-  var cardDir = _fs_resolveKbsPath(rootDir, cardPath);
-  var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
-  var changed = false;
-  var maxSortOrder = 0;
-  Object.keys(manifest.documents).forEach(function(id) {
-    if (manifest.documents[id].sortOrder > maxSortOrder) {
-      maxSortOrder = manifest.documents[id].sortOrder;
-    }
-  });
-
-  var moveToMarkdown = function(oldPath, defaultTitle) {
-    if (!nodeFs.existsSync(oldPath)) return;
-    var stat = nodeFs.statSync(oldPath);
-    var id = 'doc_' + randomUUID().replace(/-/g, '');
-    var newFileName = id + '.md';
-    var newPath = nodePath.join(docsDir, newFileName);
-    _fs_ensureDir(docsDir);
-    try {
-      nodeFs.renameSync(oldPath, newPath);
-      manifest.documents[id] = {
-        id: id,
-        type: 'markdown',
-        title: defaultTitle,
-        path: newFileName,
-        parentId: null,
-        sortOrder: ++maxSortOrder,
-        createdAt: stat.birthtimeMs,
-        updatedAt: stat.mtimeMs,
-        version: 1
-      };
-      changed = true;
-    } catch(e) {}
-  };
-
-  moveToMarkdown(nodePath.join(cardDir, '_card.md'), '卡片');
-  moveToMarkdown(nodePath.join(cardDir, '_content.md'), '卡片详情');
-
-  var contentDir = nodePath.join(cardDir, '_content');
-  if (nodeFs.existsSync(contentDir)) {
-    nodeFs.readdirSync(contentDir, { withFileTypes: true })
-      .filter(function(entry) { return entry.isFile() && entry.name.endsWith('.md'); })
-      .forEach(function(entry) {
-        moveToMarkdown(nodePath.join(contentDir, entry.name), entry.name.slice(0, -3));
-      });
-    try {
-      nodeFs.rmdirSync(contentDir);
-    } catch (e) {}
-  }
-
-  Object.keys(TOPO_DOCUMENT_EXTENSIONS).forEach(function(type) {
-    var typeDir = nodePath.join(docsDir, type);
-    if (nodeFs.existsSync(typeDir)) {
-      nodeFs.readdirSync(typeDir, { withFileTypes: true })
-        .filter(function(entry) { return entry.isFile() && entry.name.endsWith(TOPO_DOCUMENT_EXTENSIONS[type]); })
-        .forEach(function(entry) {
-          var oldPath = nodePath.join(typeDir, entry.name);
-          var newPath = nodePath.join(docsDir, entry.name);
-          try {
-            nodeFs.renameSync(oldPath, newPath);
-            changed = true;
-          } catch(e) {}
-        });
-      try {
-        nodeFs.rmdirSync(typeDir);
-      } catch (e) {}
-    }
-  });
-
-  Object.keys(manifest.documents).forEach(function(id) {
-    var item = manifest.documents[id];
-    if (item.path && item.path.includes('/')) {
-      item.path = nodePath.basename(item.path);
-      changed = true;
-    }
-  });
-
-  return changed;
+  return false;
 }
 
 function _fs_loadTopoDocumentManifest(rootDir, cardPath) {
@@ -728,7 +650,6 @@ function _fs_findTopoDocument(rootDir, cardPath, documentId) {
 }
 
 function _fs_createTopoDocumentInitialContent(type, title, timestamp) {
-  if (type === 'markdown') return '';
   if (type === 'smart') {
     return {
       schema: TOPO_DOCUMENT_SCHEMAS.smart,
@@ -792,11 +713,6 @@ function _fs_createTopoDocumentInitialContent(type, title, timestamp) {
 
 function _fs_writeTopoDocumentContent(filePath, type, content) {
   _fs_ensureDir(nodePath.dirname(filePath));
-  if (type === 'markdown') {
-    if (typeof content !== 'string') throw new Error('Markdown 文档内容必须是字符串');
-    nodeFs.writeFileSync(filePath, content, 'utf-8');
-    return;
-  }
   if (!_fs_isPlainObject(content)) {
     throw new Error('结构化文档内容必须是对象');
   }
@@ -838,14 +754,6 @@ function _fs_exportTopoDocument(rootDir, cardPath, documentId) {
   var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
   var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, found.item);
   var fileName = nodePath.basename(found.item.path);
-  if (found.item.type === 'markdown') {
-    return {
-      fileName: fileName,
-      type: found.item.type,
-      mimeType: 'text/markdown;charset=utf-8',
-      content: nodeFs.existsSync(filePath) ? nodeFs.readFileSync(filePath, 'utf-8') : '',
-    };
-  }
   return {
     fileName: fileName,
     type: found.item.type,
@@ -909,9 +817,6 @@ function _fs_readTopoDocument(rootDir, cardPath, documentId) {
   var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, found.item);
   if (!nodeFs.existsSync(filePath)) {
     return _fs_createTopoDocumentInitialContent(found.item.type, found.item.title, Date.now());
-  }
-  if (found.item.type === 'markdown') {
-    return nodeFs.readFileSync(filePath, 'utf-8');
   }
   return _fs_readJsonFile(filePath);
 }

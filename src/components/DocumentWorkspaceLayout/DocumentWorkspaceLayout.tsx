@@ -1,79 +1,16 @@
 import { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { EditorView } from '@codemirror/view'
-import type { DetailSidebarTab, MarkdownWorkspaceProps, MarkdownViewMode, TocItem } from './markdownTypes'
-import { MarkdownSourceEditor } from './MarkdownSourceEditor'
-import { MarkdownPreview } from './MarkdownPreview'
-import { MarkdownToolbar } from './MarkdownToolbar'
-import { MarkdownStatusBar } from './MarkdownStatusBar'
+import type { DetailSidebarTab, DocumentWorkspaceLayoutProps, TocItem } from './workspaceTypes'
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../hooks/useResizePanel'
-import { useShortcut } from '../../hooks/useShortcut'
 import { logAction } from '../../core/log-backend'
 
-function normalizeHeadingText(raw: string) {
-  return raw
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/[*_~]+/g, '')
-    .replace(/<[^>]+>/g, '')
-    .trim()
-}
-
-function slugifyHeading(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\u4e00-\u9fa5\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-}
-
-function extractTocItems(markdown: string): TocItem[] {
-  if (typeof markdown !== 'string') return []
-  const lines = markdown.split(/\r?\n/)
-  const items: TocItem[] = []
-  const slugCount = new Map<string, number>()
-  let inCodeFence = false
-
-  lines.forEach((line, index) => {
-    const trimmed = line.trim()
-    if (/^```/.test(trimmed) || /^~~~/.test(trimmed)) {
-      inCodeFence = !inCodeFence
-      return
-    }
-    if (inCodeFence) return
-
-    const match = /^(#{1,6})\s+(.+?)\s*$/.exec(line)
-    if (!match) return
-
-    const text = normalizeHeadingText(match[2].replace(/\s+#+\s*$/, ''))
-    if (!text) return
-
-    const baseSlug = slugifyHeading(text) || 'section'
-    const seen = slugCount.get(baseSlug) ?? 0
-    slugCount.set(baseSlug, seen + 1)
-    const suffix = seen > 0 ? `-${seen + 1}` : ''
-
-    items.push({
-      id: `md-heading-${baseSlug}${suffix}`,
-      level: match[1].length,
-      text,
-      line: index + 1,
-    })
-  })
-
-  return items
-}
-
-export const MarkdownWorkspace = memo(function MarkdownWorkspace({
+export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   value,
   savedValue,
   onChange,
   onSave,
   attachmentCardPath,
   documentType,
-  placeholder,
-  previewClassName,
   detailHeader,
   documentsTabContent,
   activeDetailDocumentPath,
@@ -81,39 +18,22 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
   detailSidebarFloating,
   onDetailSidebarCollapsedChange,
   onSidebarHoverChange,
-  onOpenDetailDocumentLink,
   tocItems: providedTocItems,
   onTocItemClick,
-  viewMode: controlledViewMode,
-  onViewModeChange,
-  showToolbar = true,
   editorContent
-}: MarkdownWorkspaceProps) {
-  // Default to preview mode
-  const [internalViewMode, setInternalViewMode] = useState<MarkdownViewMode>('preview')
-  const [editorView, setEditorView] = useState<EditorView | null>(null)
+}: DocumentWorkspaceLayoutProps) {
   const [isSaving, setIsSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
   const [internalDetailSidebarCollapsed, setInternalDetailSidebarCollapsed] = useState(false)
   const [detailSidebarWidth, setDetailSidebarWidth] = useState(180)
   const [detailSidebarTab, setDetailSidebarTab] = useState<DetailSidebarTab>('documents')
   const containerRef = useRef<HTMLDivElement>(null)
-  const previewRef = useRef<HTMLDivElement>(null)
-  const markdownTocItems = useMemo(() => extractTocItems(value), [value])
-  const tocItems = providedTocItems ?? markdownTocItems
+  
+  const tocItems = providedTocItems ?? []
   const currentDetailDocumentPath = activeDetailDocumentPath ?? ''
   const detailSidebarCollapsed = controlledDetailSidebarCollapsed ?? internalDetailSidebarCollapsed
   const effectiveFloating = detailSidebarFloating
   const showSidebarContent = !detailSidebarCollapsed || effectiveFloating
-  const currentViewMode = controlledViewMode ?? internalViewMode
-  const statusBar = (
-    <MarkdownStatusBar
-      value={value}
-      savedValue={savedValue}
-      isSaving={isSaving}
-      saveError={saveError}
-    />
-  )
+
   const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
     initialWidth: detailSidebarWidth,
     onWidthChange: setDetailSidebarWidth,
@@ -121,13 +41,6 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
     maxWidth: 360,
     direction: 'left',
   })
-
-  const setViewMode = useCallback((mode: MarkdownViewMode) => {
-    if (controlledViewMode === undefined) {
-      setInternalViewMode(mode)
-    }
-    onViewModeChange?.(mode)
-  }, [controlledViewMode, onViewModeChange])
 
   const setDetailSidebarCollapsed = useCallback((collapsed: boolean) => {
     if (controlledDetailSidebarCollapsed === undefined) {
@@ -152,62 +65,27 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
     if (value === savedValue || isSaving) return
     
     setIsSaving(true)
-    setSaveError(null)
     try {
       await onSave()
-      logAction('Markdown:保存成功', 'MarkdownWorkspace', { documentType, path: currentDetailDocumentPath })
+      logAction('Document:保存成功', 'DocumentWorkspaceLayout', { documentType, path: currentDetailDocumentPath })
     } catch (err: any) {
-      setSaveError(err.message || '保存失败')
-      logAction('Markdown:保存失败', 'MarkdownWorkspace', { error: err.message, documentType })
+      logAction('Document:保存失败', 'DocumentWorkspaceLayout', { error: err.message, documentType })
     } finally {
       setIsSaving(false)
     }
   }, [value, savedValue, isSaving, onSave, documentType, currentDetailDocumentPath])
 
-  const handleEditorCreate = useCallback((view: EditorView) => {
-    setEditorView(view)
-  }, [])
-
   const handleTocJump = useCallback((item: TocItem) => {
     if (onTocItemClick) {
       onTocItemClick(item)
-      return
     }
-    if (currentViewMode === 'edit') {
-      if (!editorView) return
-      const line = editorView.state.doc.line(Math.min(item.line, editorView.state.doc.lines))
-      editorView.dispatch({
-        selection: { anchor: line.from },
-        effects: EditorView.scrollIntoView(line.from, { y: 'start' })
-      })
-      editorView.focus()
-      return
-    }
-
-    const targetId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-      ? CSS.escape(item.id)
-      : item.id
-    const heading = previewRef.current?.querySelector(`#${targetId}`) as HTMLElement | null
-    if (heading) {
-      heading.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [currentViewMode, editorView, onTocItemClick])
+  }, [onTocItemClick])
 
   return (
     <div 
       ref={containerRef}
       className={`flex flex-col h-full border border-[var(--color-border)] rounded-[10px] overflow-hidden bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shadow-[var(--shadow-sm)] ${documentType}`} 
     >
-      {showToolbar && (
-        <MarkdownToolbar 
-          view={editorView}
-          viewMode={currentViewMode}
-          onViewModeChange={setViewMode}
-          onSave={handleSave}
-          isSaving={isSaving}
-        />
-      )}
-      
       <div className="flex flex-1 overflow-hidden relative">
         {documentType === 'detail' && (
           <aside
@@ -283,7 +161,6 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
                     {attachmentCardPath && (
                       <AttachmentsTab 
                         attachmentCardPath={attachmentCardPath} 
-                        view={currentViewMode === 'edit' ? editorView : null}
                       />
                     )}
                   </div>
@@ -308,40 +185,12 @@ export const MarkdownWorkspace = memo(function MarkdownWorkspace({
           )}
 
           <div className="flex flex-1 min-w-0 min-h-0">
-            {editorContent ? (
+            {editorContent && (
               <div className="flex-1 min-w-0 min-h-0">
                 {editorContent}
               </div>
-            ) : currentViewMode === 'edit' && (
-              <div className="flex-1 min-w-0 min-h-0">
-                <MarkdownSourceEditor
-                  value={value}
-                  onChange={onChange}
-                  onSave={handleSave}
-                  onEditorCreate={handleEditorCreate}
-                  attachmentCardPath={attachmentCardPath}
-                  placeholder={placeholder}
-                />
-              </div>
-            )}
-            
-            {!editorContent && currentViewMode === 'preview' && documentType === 'detail' && (
-              <div className={`flex-1 min-w-0 min-h-0 bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]`}>
-                <MarkdownPreview
-                  content={value}
-                  attachmentCardPath={attachmentCardPath}
-                  compact={false}
-                  className={previewClassName}
-                  onChange={onChange}
-                  onOpenDetailDocumentLink={onOpenDetailDocumentLink}
-                  surfaceRef={previewRef}
-                  headingIds={tocItems.map(item => item.id)}
-                />
-              </div>
             )}
           </div>
-
-          {statusBar}
         </div>
       </div>
     </div>

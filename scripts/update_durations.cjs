@@ -18,8 +18,7 @@ function walk(dir) {
 
 const dirs = [
   'src/components/GraphCanvas',
-  'src/components/RightPanel',
-  'src/components/MarkdownWorkspace'
+  'src/components/RightPanel'
 ];
 
 let replacedFiles = 0;
