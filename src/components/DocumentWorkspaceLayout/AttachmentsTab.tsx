@@ -18,9 +18,10 @@ export function generateUniqueFileName(originalName: string): string {
 
 interface AttachmentsTabProps {
   attachmentCardPath: string
+  insertTargetKey?: string
 }
 
-export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath }: AttachmentsTabProps) {
+export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath, insertTargetKey }: AttachmentsTabProps) {
   const storage = useStorage()
   const confirm = useConfirmStore(s => s.open)
   const [attachments, setAttachments] = useState<AttachmentItem[]>([])
@@ -97,6 +98,23 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath 
     }
   }, [loadAttachments])
 
+  const handleInsert = useCallback(async (item: AttachmentItem, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      const url = await storage.getAttachmentAbsoluteUrl(attachmentCardPath, item.name)
+      window.dispatchEvent(new CustomEvent('insert-attachment', {
+        detail: {
+          name: item.name,
+          url,
+          isImage: item.isImage,
+          targetKey: insertTargetKey
+        }
+      }))
+    } catch (err) {
+      logger.catch('AttachmentsTab', 'handleInsert', err)
+    }
+  }, [attachmentCardPath, insertTargetKey, storage])
+
   if (loading && attachments.length === 0) {
     return <div className="py-8 px-4 text-center text-[#94a3b8] !text-[var(--color-text-muted)] text-[13px] leading-[1.6]">加载中...</div>
   }
@@ -122,18 +140,27 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath 
                 {item.isImage ? '🖼️' : '📄'}
               </div>
               <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                <div className="text-[13px] text-[#334155] !text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</div>
+                <div className="text-[13px] text-[#334155] !text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis" title={item.name}>{item.name}</div>
                 <div className="text-[11px] text-[#94a3b8] !text-[var(--color-text-muted)]">
                   {(item.size / 1024).toFixed(1)} KB
                 </div>
               </div>
-              <button 
-                className="opacity-0 w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] group-hover:opacity-100 hover:!bg-[#fee2e2] hover:!text-[#ef4444] hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]" 
-                onClick={(e) => handleDelete(item, e)}
-                title="删除附件"
-              >
-                ✕
-              </button>
+              <div className="opacity-0 flex items-center gap-1 group-hover:opacity-100 transition-all duration-75">
+                <button
+                  className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#e2e8f0] hover:!text-[#0f172a] hover:!bg-[var(--color-hover-bg)] hover:!text-[var(--color-text-primary)]"
+                  onClick={(e) => handleInsert(item, e)}
+                  title="插入到文档"
+                >
+                  ↵
+                </button>
+                <button
+                  className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#fee2e2] hover:!text-[#ef4444] hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]"
+                  onClick={(e) => handleDelete(item, e)}
+                  title="删除附件"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
           ))}
         </div>

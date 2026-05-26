@@ -1,14 +1,14 @@
 import { create } from 'zustand'
 
 interface CardContentEntry {
-  content: string
+  content: unknown
   loading: boolean
   error: string | null
 }
 
 interface CardContentStore {
   detailEntries: Record<string, CardContentEntry>
-  setDetailContent: (path: string, content: string) => void
+  setDetailContent: (path: string, content: unknown) => void
   clearDetailContent: (path: string) => void
 }
 

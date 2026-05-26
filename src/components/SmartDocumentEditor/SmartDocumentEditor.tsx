@@ -1,15 +1,22 @@
-import { memo, useCallback, useEffect, useMemo, type CSSProperties, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { BlockNoteView } from '@blocknote/mantine'
-import { DragHandleButton, SideMenu, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtension, useExtensionState } from '@blocknote/react'
+import { DragHandleButton, SideMenu, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtension, useExtensionState, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
+import { filterSuggestionItems } from '@blocknote/core'
 import { SideMenuExtension } from '@blocknote/core/extensions'
+import { insertMermaid } from 'blocknote-mermaid'
 import { lightDefaultTheme, darkDefaultTheme } from '@blocknote/mantine'
 import { AiOutlinePlus } from 'react-icons/ai'
 import { useThemeStore } from '../../stores/themeStore'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import type { SmartDocumentContent } from './smartDocumentTypes'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from './smartDocumentTypes'
+import { calculateSmartDocumentStats, extractSmartDocumentToc, inlineContentToText } from './smartDocumentUtils'
+import { smartDocumentSchema } from './smartDocumentSchema'
+import { useSmartDocumentAttachmentInsert } from './useSmartDocumentAttachmentInsert'
 import type { TocItem } from '../DocumentWorkspaceLayout/workspaceTypes'
+import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
+import './SmartDocumentEditor.css'
 
 interface SmartDocumentEditorProps {
   value: SmartDocumentContent
@@ -17,6 +24,9 @@ interface SmartDocumentEditorProps {
   onTocChange?: (items: TocItem[]) => void
   onTocItemClickReady?: (handler: ((item: TocItem) => void) | null) => void
   readOnly?: boolean
+  uploadFile?: (file: File) => Promise<string>
+  onWordCountChange?: (stats: { characters: number; words: number; blocks: number }) => void
+  attachmentInsertTargetKey?: string
 }
 
 type SmartDocumentBlockMenuMode = 'edit' | 'insert'
@@ -47,9 +57,9 @@ const SMART_DOCUMENT_TEXT_ACTIONS: SmartDocumentBlockMenuAction[] = [
 ]
 
 const SMART_DOCUMENT_MEDIA_ACTIONS: SmartDocumentBlockMenuAction[] = [
-  { key: 'image', icon: '▧', label: '图片', type: 'image' },
-  { key: 'file', icon: '□', label: '文件', type: 'file' },
   { key: 'table', icon: '▦', label: '表格', type: 'table' },
+  { key: 'mermaid', icon: '⫸', label: '流程图 (Mermaid)', type: 'mermaid' },
+  { key: 'math', icon: '∑', label: '数学公式 (KaTeX)', type: 'math' },
 ]
 
 function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocumentBlockMenuMode, children?: ReactNode }) {
@@ -70,7 +80,7 @@ function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocumentBlockMe
       type: action.type,
       props: action.props ?? {},
     }
-    if (forInsert && action.type !== 'image' && action.type !== 'file') {
+    if (forInsert && action.type !== 'image' && action.type !== 'file' && action.type !== 'mermaid' && action.type !== 'math') {
       nextBlock.content = ''
     }
     return nextBlock
@@ -218,12 +228,6 @@ function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocumentBlockMe
         )}
       </div>
 
-      {mode === 'edit' ? (
-        <div className="tm-smart-block-menu__footer">
-          <div>最近修改：当前用户</div>
-          <div>块 ID：{String(block.id).slice(0, 8)}</div>
-        </div>
-      ) : null}
       {children}
     </Components.Generic.Menu.Dropdown>
   )
@@ -286,16 +290,6 @@ function SmartDocumentSideMenu() {
   )
 }
 
-function inlineContentToText(content: unknown): string {
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return ''
-  return content.map((item) => {
-    if (typeof item === 'string') return item
-    if (item && typeof item === 'object' && 'text' in item && typeof item.text === 'string') return item.text
-    return ''
-  }).join('').trim()
-}
-
 function createTableBlock() {
   return {
     type: 'table',
@@ -309,28 +303,7 @@ function createTableBlock() {
   }
 }
 
-function extractSmartDocumentToc(editor: ReturnType<typeof useCreateBlockNote>): TocItem[] {
-  const items: TocItem[] = []
-  editor.forEachBlock((block: any) => {
-    if (block?.type !== 'heading') return true
-    const text = inlineContentToText(block.content)
-    if (!text) return true
-    const rawLevel = block.props?.level
-    const level = typeof rawLevel === 'number' && Number.isFinite(rawLevel)
-      ? Math.min(Math.max(rawLevel, 1), 6)
-      : 1
-    items.push({
-      id: block.id,
-      level,
-      text,
-      line: items.length + 1,
-    })
-    return true
-  })
-  return items
-}
-
-export const SmartDocumentEditor = memo(function SmartDocumentEditor({ value, onChange, onTocChange, onTocItemClickReady, readOnly = false }: SmartDocumentEditorProps) {
+export const SmartDocumentEditor = memo(function SmartDocumentEditor({ value, onChange, onTocChange, onTocItemClickReady, readOnly = false, uploadFile, onWordCountChange, attachmentInsertTargetKey }: SmartDocumentEditorProps) {
   const theme = useThemeStore((state) => state.theme)
   const defaultEditorStyle = useGraphUiStore((state) => state.defaultEditorStyle)
 
@@ -341,8 +314,29 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor({ value, on
     return blocks.length > 0 ? blocks : undefined
   }, [])
   const editor = useCreateBlockNote({
+    schema: smartDocumentSchema,
     initialContent,
+    uploadFile,
   })
+
+  const updateStatsAndTocRef = useRef<number | null>(null)
+
+  const updateStatsAndToc = useCallback((isImmediate = false) => {
+    if (updateStatsAndTocRef.current !== null) {
+      window.clearTimeout(updateStatsAndTocRef.current)
+    }
+
+    const execute = () => {
+      onTocChange?.(extractSmartDocumentToc(editor))
+      onWordCountChange?.(calculateSmartDocumentStats(editor))
+    }
+
+    if (isImmediate) {
+      execute()
+    } else {
+      updateStatsAndTocRef.current = window.setTimeout(execute, 500)
+    }
+  }, [editor, onTocChange, onWordCountChange])
 
   const handleChange = useCallback(() => {
     const nextValue = withSmartDocumentUpdatedAt({
@@ -350,23 +344,31 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor({ value, on
       blocks: editor.document,
     })
     onChange(nextValue)
-    onTocChange?.(extractSmartDocumentToc(editor))
-  }, [editor, onChange, onTocChange, value])
+    updateStatsAndToc(false)
+  }, [editor, onChange, value, updateStatsAndToc])
 
   const handleTocItemClick = useCallback((item: TocItem) => {
-    editor.setTextCursorPosition(item.id, 'start')
-    editor.prosemirrorView.dispatch(editor.prosemirrorView.state.tr.scrollIntoView())
-    editor.focus()
-  }, [editor])
+    try {
+      editor.setTextCursorPosition(item.id, 'start')
+      editor.prosemirrorView.dispatch(editor.prosemirrorView.state.tr.scrollIntoView())
+      editor.focus()
+    } catch {
+      updateStatsAndToc(true)
+    }
+  }, [editor, updateStatsAndToc])
 
   useEffect(() => {
-    onTocChange?.(extractSmartDocumentToc(editor))
+    updateStatsAndToc(true)
     onTocItemClickReady?.(handleTocItemClick)
     return () => {
+      if (updateStatsAndTocRef.current !== null) {
+        window.clearTimeout(updateStatsAndTocRef.current)
+      }
       onTocChange?.([])
+      onWordCountChange?.({ characters: 0, words: 0, blocks: 0 })
       onTocItemClickReady?.(null)
     }
-  }, [editor, handleTocItemClick, onTocChange, onTocItemClickReady])
+  }, [editor, handleTocItemClick, onTocChange, onWordCountChange, onTocItemClickReady, updateStatsAndToc])
 
   const customTheme = useMemo(() => {
     const baseTheme = theme === 'dark' ? darkDefaultTheme : lightDefaultTheme
@@ -384,6 +386,8 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor({ value, on
     }
   }, [theme, defaultEditorStyle])
 
+  useSmartDocumentAttachmentInsert(editor as any, attachmentInsertTargetKey)
+
   const blockNoteViewStyle = useMemo(() => ({
     '--topomind-smart-body-font-size': `${defaultEditorStyle.fontSize}px`,
     '--topomind-smart-line-height': String(defaultEditorStyle.lineHeight),
@@ -391,184 +395,8 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor({ value, on
 
   return (
     <div className="h-full min-h-0 overflow-y-auto" spellCheck={false} style={{ backgroundColor: defaultEditorStyle.backgroundColor || 'var(--color-surface)' }}>
-      <style>{`
-        .smart-document-content .bn-default-styles {
-          font-size: var(--topomind-smart-body-font-size) !important;
-          line-height: var(--topomind-smart-line-height) !important;
-        }
-        .smart-document-content .bn-default-styles a[href] {
-          color: var(--color-primary) !important;
-          text-decoration-line: underline;
-          text-decoration-thickness: 1px;
-          text-underline-offset: 2px;
-        }
-        .smart-document-content .bn-default-styles a[href]:hover {
-          color: var(--color-accent) !important;
-        }
-        .smart-document-content [data-content-type="quote"] blockquote {
-          border-left-color: var(--color-border-strong);
-          color: var(--color-text-secondary);
-          background: color-mix(in srgb, var(--color-bg-muted) 58%, transparent);
-          border-radius: 0 8px 8px 0;
-          padding: 0.35em 0.75em 0.35em 1em;
-        }
-        .smart-document-content [data-content-type="divider"] hr,
-        .smart-document-content [data-content-type="pageBreak"] > div {
-          border-top-color: var(--color-border-strong);
-        }
-        .smart-document-content .bn-inline-content code {
-          color: var(--color-primary);
-          background: color-mix(in srgb, var(--color-bg-muted) 78%, transparent);
-          border: 1px solid var(--color-border-subtle);
-          border-radius: 5px;
-          padding: 0.08em 0.35em;
-          font-size: 0.92em;
-        }
-        .smart-document-content .bn-editor [data-content-type="table"] th,
-        .smart-document-content .bn-editor [data-content-type="table"] td {
-          border-color: var(--color-border);
-        }
-        .smart-document-content .bn-editor [data-content-type="table"] th {
-          background: color-mix(in srgb, var(--color-bg-muted) 72%, transparent);
-          color: var(--color-text-primary);
-        }
-        .smart-document-content .bn-block-content[data-content-type="checkListItem"] > div > input {
-          accent-color: var(--color-primary);
-        }
-        .tm-smart-block-menu {
-          width: 246px;
-          max-height: 420px;
-          padding: 0 !important;
-          border: 1px solid var(--color-border);
-          border-radius: 6px;
-          background: var(--color-surface);
-          box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
-          overflow-y: auto;
-          color: var(--color-text-primary);
-        }
-        .tm-smart-block-menu__label {
-          padding: 16px 18px 6px;
-          color: var(--color-text-secondary);
-          font-size: 14px;
-          line-height: 1.3;
-        }
-        .tm-smart-block-menu__label--section {
-          padding: 0 18px 8px;
-        }
-        .tm-smart-block-menu__quick {
-          display: grid;
-          grid-template-columns: repeat(5, 32px);
-          gap: 10px 12px;
-          padding: 14px 18px 12px;
-        }
-        .tm-smart-block-menu__tile {
-          width: 32px;
-          height: 28px;
-          min-height: 28px;
-          border: none;
-          border-radius: 4px;
-          background: transparent;
-          color: var(--color-text-primary);
-          font-size: 17px;
-          line-height: 1;
-          cursor: pointer;
-          display: inline-flex !important;
-          align-items: center;
-          justify-content: center;
-          padding: 0 !important;
-          white-space: nowrap;
-          text-align: center;
-          transition: background-color 80ms ease, color 80ms ease;
-        }
-        .tm-smart-block-menu__tile sub,
-        .tm-smart-block-menu__subitem sub {
-          color: var(--color-primary);
-          font-size: 0.6em;
-          line-height: 1;
-        }
-        .tm-smart-block-menu__tile:hover,
-        .tm-smart-block-menu__tile--more {
-          background: var(--color-hover-bg);
-        }
-        .tm-smart-block-menu__section {
-          padding: 8px 0;
-          border-top: 1px solid var(--color-border-subtle);
-        }
-        .tm-smart-block-menu__row {
-          width: 100%;
-          min-height: 32px;
-          border: none;
-          background: transparent;
-          color: var(--color-text-primary);
-          padding: 0 18px;
-          display: flex !important;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          font-size: 14px;
-          line-height: 1.35;
-          text-align: left;
-          cursor: pointer;
-          white-space: nowrap;
-        }
-        .tm-smart-block-menu__row > span {
-          min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .tm-smart-block-menu__row--icon {
-          display: grid !important;
-          grid-template-columns: 22px 1fr;
-          justify-content: initial;
-        }
-        .tm-smart-block-menu__row:hover {
-          background: var(--color-hover-bg);
-        }
-        .tm-smart-block-menu__row--muted {
-          color: var(--color-text-secondary);
-        }
-        .tm-smart-block-menu__row kbd {
-          color: var(--color-text-muted);
-          font-family: inherit;
-          font-size: 13px;
-          font-weight: 400;
-        }
-        .tm-smart-block-menu__sub {
-          min-width: 174px;
-          padding: 8px 0 !important;
-          border: 1px solid var(--color-border);
-          border-radius: 6px;
-          background: var(--color-surface);
-          box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
-        }
-        .tm-smart-block-menu__subitem {
-          width: 100%;
-          min-height: 32px;
-          border: none;
-          background: transparent;
-          color: var(--color-text-primary);
-          padding: 0 14px;
-          display: flex !important;
-          align-items: center;
-          gap: 12px;
-          font-size: 14px;
-          cursor: pointer;
-          text-align: left;
-        }
-        .tm-smart-block-menu__subitem:hover {
-          background: var(--color-hover-bg);
-        }
-        .tm-smart-block-menu__footer {
-          padding: 10px 18px 14px;
-          border-top: 1px solid var(--color-border-subtle);
-          color: var(--color-text-muted);
-          font-size: 13px;
-          line-height: 1.6;
-        }
-      `}</style>
       <div
-        className="smart-document-content h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-2 [&_.bn-container]:!py-0 [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-2 [&_.bn-editor]:!max-w-none [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"
+        className="smart-document-content h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-4 [&_.bn-container]:!py-0 [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-4 [&_.bn-editor]:!max-w-[760px] [&_.bn-editor]:!mx-auto [&_.bn-editor]:!w-full [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"
       >
         <BlockNoteView
           editor={editor}
@@ -577,7 +405,38 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor({ value, on
           style={blockNoteViewStyle}
           onChange={handleChange}
           sideMenu={false}
+          slashMenu={false}
         >
+          <SuggestionMenuController
+            triggerCharacter="/"
+            getItems={async (query) =>
+              filterSuggestionItems(
+                [
+                  ...getDefaultReactSlashMenuItems(editor),
+                  insertMermaid(),
+                  {
+                    title: '数学公式 (KaTeX)',
+                    onItemClick: () => {
+                      editor.insertBlocks(
+                        [
+                          {
+                            type: 'math',
+                          },
+                        ],
+                        editor.getTextCursorPosition().block,
+                        'after'
+                      )
+                    },
+                    aliases: ['math', 'equation', 'latex', 'katex'],
+                    group: 'Media',
+                    icon: <span>∑</span>,
+                    subtext: '插入 LaTeX 数学公式',
+                  } as any,
+                ],
+                query
+              )
+            }
+          />
           <SideMenuController sideMenu={SmartDocumentSideMenu} />
         </BlockNoteView>
       </div>

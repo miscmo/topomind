@@ -1,29 +1,17 @@
 import React from 'react'
 import { DocumentWorkspaceLayout } from '../DocumentWorkspaceLayout/DocumentWorkspaceLayout'
 import type { TocItem } from '../DocumentWorkspaceLayout/workspaceTypes'
-import type { TopoDocumentManifestItem } from '../../core/storage'
-import { topoDocumentIdFromPath, topoDocumentTypeLabel } from './documentTypes'
-import { SmartDocumentEditor } from '../SmartDocumentEditor/SmartDocumentEditor'
-import { normalizeSmartDocumentContent, serializeSmartDocumentContent } from '../SmartDocumentEditor/smartDocumentTypes'
-import { MindMapDocumentEditor } from '../MindMapDocumentEditor/MindMapDocumentEditor'
-import { normalizeMindMapDocumentContent, serializeMindMapDocumentContent } from '../MindMapDocumentEditor/mindMapDocumentTypes'
-import { FlowchartDocumentEditor } from '../FlowchartDocumentEditor/FlowchartDocumentEditor'
-import { normalizeFlowchartDocumentContent, serializeFlowchartDocumentContent } from '../FlowchartDocumentEditor/flowchartDocumentTypes'
-
-function parseJsonValue(value: string) {
-  if (!value) return null
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
-}
+import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
+import { topoDocumentIdFromPath } from './documentTypes'
+import { getTopoDocumentTypeDefinition, TOPO_DOCUMENT_TYPES } from './documentTypeRegistry'
+import { getDocumentEditorAdapter } from './documentEditorRegistry'
+import { DocumentStatusBar } from '../DocumentWorkspaceLayout/DocumentStatusBar'
 
 interface DocumentEditorHostProps {
-  value: string
-  savedValue: string
+  value: unknown
+  isDirty: boolean
   isContentLoaded?: boolean
-  onChange: (value: string) => void
+  onChange: (value: unknown) => void
   onSave: () => Promise<void> | void
   attachmentCardPath: string | null
   detailHeader: React.ReactNode
@@ -34,89 +22,14 @@ interface DocumentEditorHostProps {
   onDetailSidebarCollapsedChange: (collapsed: boolean) => void
   onSidebarHoverChange: (hovered: boolean) => void
   onOpenDetailDocumentLink: (documentPath: string) => void
+  onCreateTopoDocument: (type: TopoDocumentType, name: string, parentId?: string | null) => void
   isDetailDocumentBusy?: boolean
   topoDocuments: TopoDocumentManifestItem[]
 }
 
-const SmartDocumentWrapper = ({
-  value,
-  title,
-  onChange,
-  onTocChange,
-  onTocItemClickReady,
-}: {
-  value: string
-  title: string
-  onChange: (v: string) => void
-  onTocChange: (items: TocItem[]) => void
-  onTocItemClickReady: (handler: ((item: TocItem) => void) | null) => void
-}) => {
-  const cacheRef = React.useRef<{ stringValue: string; objectValue: any } | null>(null)
-  
-  const objectValue = React.useMemo(() => {
-    if (cacheRef.current && cacheRef.current.stringValue === value) {
-      return cacheRef.current.objectValue
-    }
-    return normalizeSmartDocumentContent(parseJsonValue(value), title)
-  }, [value, title])
-
-  const handleChange = React.useCallback((nextValue: any) => {
-    const str = serializeSmartDocumentContent(nextValue)
-    cacheRef.current = { stringValue: str, objectValue: nextValue }
-    onChange(str)
-  }, [onChange])
-
-  return (
-    <SmartDocumentEditor
-      value={objectValue}
-      onChange={handleChange}
-      onTocChange={onTocChange}
-      onTocItemClickReady={onTocItemClickReady}
-    />
-  )
-}
-
-const MindMapDocumentWrapper = ({ value, title, onChange }: { value: string, title: string, onChange: (v: string) => void }) => {
-  const cacheRef = React.useRef<{ stringValue: string; objectValue: any } | null>(null)
-  
-  const objectValue = React.useMemo(() => {
-    if (cacheRef.current && cacheRef.current.stringValue === value) {
-      return cacheRef.current.objectValue
-    }
-    return normalizeMindMapDocumentContent(parseJsonValue(value), title)
-  }, [value, title])
-
-  const handleChange = React.useCallback((nextValue: any) => {
-    const str = serializeMindMapDocumentContent(nextValue)
-    cacheRef.current = { stringValue: str, objectValue: nextValue }
-    onChange(str)
-  }, [onChange])
-
-  return <MindMapDocumentEditor value={objectValue} onChange={handleChange} />
-}
-
-const FlowchartDocumentWrapper = ({ value, title, onChange }: { value: string, title: string, onChange: (v: string) => void }) => {
-  const cacheRef = React.useRef<{ stringValue: string; objectValue: any } | null>(null)
-  
-  const objectValue = React.useMemo(() => {
-    if (cacheRef.current && cacheRef.current.stringValue === value) {
-      return cacheRef.current.objectValue
-    }
-    return normalizeFlowchartDocumentContent(parseJsonValue(value), title)
-  }, [value, title])
-
-  const handleChange = React.useCallback((nextValue: any) => {
-    const str = serializeFlowchartDocumentContent(nextValue)
-    cacheRef.current = { stringValue: str, objectValue: nextValue }
-    onChange(str)
-  }, [onChange])
-
-  return <FlowchartDocumentEditor value={objectValue} onChange={handleChange} />
-}
-
 export function DocumentEditorHost({
   value,
-  savedValue,
+  isDirty,
   isContentLoaded = true,
   onChange,
   onSave,
@@ -128,7 +41,7 @@ export function DocumentEditorHost({
   detailSidebarFloating,
   onDetailSidebarCollapsedChange,
   onSidebarHoverChange,
-  onOpenDetailDocumentLink,
+  onCreateTopoDocument,
   isDetailDocumentBusy,
   topoDocuments,
 }: DocumentEditorHostProps) {
@@ -136,13 +49,10 @@ export function DocumentEditorHost({
   const activeTopoDocument = activeTopoDocumentId
     ? topoDocuments.find((item) => item.id === activeTopoDocumentId)
     : undefined
-  const shouldRenderSmartEditor = activeTopoDocument?.type === 'smart'
-  const shouldRenderMindMapEditor = activeTopoDocument?.type === 'mindmap'
-  const shouldRenderFlowchartEditor = activeTopoDocument?.type === 'flowchart'
-  const shouldRenderStructuredEditor = shouldRenderSmartEditor || shouldRenderMindMapEditor || shouldRenderFlowchartEditor
   const shouldRenderNoDocument = !activeTopoDocument
   const [smartTocItems, setSmartTocItems] = React.useState<TocItem[]>([])
   const [smartTocItemClick, setSmartTocItemClick] = React.useState<((item: TocItem) => void) | null>(null)
+  const [documentStats, setDocumentStats] = React.useState<{ characters: number; words: number; blocks: number } | null>(null)
 
   const handleSmartTocItemClickReady = React.useCallback((handler: ((item: TocItem) => void) | null) => {
     setSmartTocItemClick(() => handler)
@@ -151,8 +61,7 @@ export function DocumentEditorHost({
   if (shouldRenderNoDocument) {
     return (
       <DocumentWorkspaceLayout
-        value=""
-        savedValue=""
+        isDirty={false}
         onChange={() => {}}
         onSave={() => {}}
         attachmentCardPath={attachmentCardPath}
@@ -166,8 +75,27 @@ export function DocumentEditorHost({
         activeDetailDocumentPath={activeDetailDocumentPath}
         editorContent={(
           <div className="h-full min-h-0 flex items-center justify-center bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] p-6">
-            <div className="max-w-[360px] rounded-2xl text-center">
-              <div className="text-[13px] text-[var(--color-text-muted)]">在左侧边栏右键或使用快捷菜单创建文档。</div>
+            <div className="max-w-[360px] rounded-2xl text-center flex flex-col items-center gap-3">
+              <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">当前节点还没有文档</div>
+              <div className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">创建一个智能文档开始记录，也可以新建思维导图或流程图。</div>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                {TOPO_DOCUMENT_TYPES.map((type, index) => {
+                  const definition = getTopoDocumentTypeDefinition(type)
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      className={index === 0
+                        ? 'h-8 px-3 rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)] text-white text-[12px] font-semibold cursor-pointer disabled:opacity-50'
+                        : 'h-8 px-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] font-semibold cursor-pointer disabled:opacity-50 hover:bg-[var(--color-hover-bg)]'}
+                      onClick={() => onCreateTopoDocument(type, definition.defaultTitle)}
+                      disabled={isDetailDocumentBusy}
+                    >
+                      {index === 0 ? `新建${definition.label}` : definition.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -175,41 +103,26 @@ export function DocumentEditorHost({
     )
   }
 
+  const adapter = getDocumentEditorAdapter(activeTopoDocument.type)
   const loadingContent = (
     <div className="h-full min-h-0 flex items-center justify-center bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] p-6">
       <div className="text-[13px] text-[var(--color-text-muted)]">正在加载文档内容...</div>
     </div>
   )
-
-  const editorContent = shouldRenderStructuredEditor && !isContentLoaded ? loadingContent : shouldRenderSmartEditor ? (
-    <SmartDocumentWrapper
-      key={activeTopoDocument.id}
-      value={value}
-      title={activeTopoDocument.title}
-      onChange={onChange}
-      onTocChange={setSmartTocItems}
-      onTocItemClickReady={handleSmartTocItemClickReady}
-    />
-  ) : shouldRenderMindMapEditor ? (
-    <MindMapDocumentWrapper
-      key={activeTopoDocument.id}
-      value={value}
-      title={activeTopoDocument.title}
-      onChange={onChange}
-    />
-  ) : shouldRenderFlowchartEditor ? (
-    <FlowchartDocumentWrapper
-      key={activeTopoDocument.id}
-      value={value}
-      title={activeTopoDocument.title}
-      onChange={onChange}
-    />
-  ) : undefined
+  const editorContent = !isContentLoaded ? loadingContent : adapter.render({
+    value,
+    title: activeTopoDocument.title,
+    onChange,
+    attachmentCardPath,
+    attachmentInsertTargetKey: activeDetailDocumentPath,
+    onTocChange: setSmartTocItems,
+    onTocItemClickReady: handleSmartTocItemClickReady,
+    onWordCountChange: setDocumentStats,
+  })
 
   return (
     <DocumentWorkspaceLayout
-      value={value}
-      savedValue={savedValue}
+      isDirty={isDirty}
       onChange={onChange}
       onSave={onSave}
       attachmentCardPath={attachmentCardPath}
@@ -221,9 +134,17 @@ export function DocumentEditorHost({
       detailHeader={detailHeader}
       documentsTabContent={documentsTabContent}
       activeDetailDocumentPath={activeDetailDocumentPath}
-      tocItems={shouldRenderSmartEditor ? smartTocItems : undefined}
-      onTocItemClick={shouldRenderSmartEditor ? smartTocItemClick ?? undefined : undefined}
+      tocItems={adapter.hasToc ? smartTocItems : undefined}
+      onTocItemClick={adapter.hasToc ? smartTocItemClick ?? undefined : undefined}
       editorContent={editorContent}
+      renderStatusBar={({ saveStatus, lastSavedAt, saveError }) => (
+        <DocumentStatusBar
+          stats={adapter.hasStats ? documentStats : null}
+          saveStatus={saveStatus}
+          saveError={saveError}
+          lastSavedAt={lastSavedAt}
+        />
+      )}
     />
   )
 }

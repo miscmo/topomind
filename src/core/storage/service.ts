@@ -7,6 +7,7 @@ import type { KBListItem } from '../../types'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import { SaveCoordinator } from '../../domain/persistence/saveCoordinator'
 import { normalizeGraphMeta } from '../../domain/graph/normalizeGraphMeta'
+import { isTopoDocumentType, type TopoDocumentType } from '../topoDocumentTypes'
 
 interface VaultConfig {
   edgeDefaultsVersion?: number
@@ -37,8 +38,6 @@ interface VaultConfig {
   kbOrder?: string[]
   [key: string]: unknown
 }
-
-export type TopoDocumentType = 'smart' | 'mindmap' | 'flowchart'
 
 export interface TopoDocumentManifestItem {
   id: string
@@ -204,7 +203,7 @@ function ensureValidName(name: unknown, label = '名称'): string {
   return n
 }
 function ensureValidTopoDocumentType(type: unknown): TopoDocumentType {
-  if (type === 'smart' || type === 'mindmap' || type === 'flowchart') return type as TopoDocumentType
+  if (isTopoDocumentType(type)) return type
   throw new Error(`不支持的文档类型: ${String(type || '')}`)
 }
 

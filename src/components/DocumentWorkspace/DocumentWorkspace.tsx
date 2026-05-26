@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
-import type { TopoDocumentManifestItem } from '../../core/storage'
+import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
 import { DocumentSidebar } from './DocumentSidebar'
 import { DocumentEditorHost } from './DocumentEditorHost'
 
 interface DocumentWorkspaceProps {
-  value: string
-  savedValue: string
+  value: unknown
+  isDirty: boolean
   isContentLoaded?: boolean
-  onChange: (value: string) => void
+  onChange: (value: unknown) => void
   onSave: () => Promise<void> | void
   attachmentCardPath: string | null
   detailHeader: ReactNode
@@ -20,9 +20,7 @@ interface DocumentWorkspaceProps {
   onSidebarHoverChange: (hovered: boolean) => void
   onSelectDocument: (documentPath: string) => void
   onOpenDetailDocumentLink: (documentPath: string) => void
-  onCreateTopoSmartDocument: (name: string, parentId?: string | null) => void
-  onCreateTopoMindMapDocument: (name: string, parentId?: string | null) => void
-  onCreateTopoFlowchartDocument: (name: string, parentId?: string | null) => void
+  onCreateTopoDocument: (type: TopoDocumentType, name: string, parentId?: string | null) => void
   onExportTopoDocument: (documentPath: string) => void
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
@@ -32,7 +30,7 @@ interface DocumentWorkspaceProps {
 
 export function DocumentWorkspace({
   value,
-  savedValue,
+  isDirty,
   isContentLoaded,
   onChange,
   onSave,
@@ -46,9 +44,7 @@ export function DocumentWorkspace({
   onSidebarHoverChange,
   onSelectDocument,
   onOpenDetailDocumentLink,
-  onCreateTopoSmartDocument,
-  onCreateTopoMindMapDocument,
-  onCreateTopoFlowchartDocument,
+  onCreateTopoDocument,
   onExportTopoDocument,
   onRenameDocument,
   onDeleteDocument,
@@ -61,9 +57,7 @@ export function DocumentWorkspace({
       activeDocumentPath={activeDocumentPath}
       isBusy={isDocumentBusy}
       onSelectDocument={onSelectDocument}
-      onCreateTopoSmartDocument={onCreateTopoSmartDocument}
-      onCreateTopoMindMapDocument={onCreateTopoMindMapDocument}
-      onCreateTopoFlowchartDocument={onCreateTopoFlowchartDocument}
+      onCreateTopoDocument={onCreateTopoDocument}
       onExportTopoDocument={onExportTopoDocument}
       onRenameDocument={onRenameDocument}
       onDeleteDocument={onDeleteDocument}
@@ -74,7 +68,7 @@ export function DocumentWorkspace({
   return (
     <DocumentEditorHost
       value={value}
-      savedValue={savedValue}
+      isDirty={isDirty}
       isContentLoaded={isContentLoaded}
       onChange={onChange}
       onSave={onSave}
@@ -87,6 +81,7 @@ export function DocumentWorkspace({
       onDetailSidebarCollapsedChange={onDetailSidebarCollapsedChange}
       onSidebarHoverChange={onSidebarHoverChange}
       onOpenDetailDocumentLink={onOpenDetailDocumentLink}
+      onCreateTopoDocument={onCreateTopoDocument}
       isDetailDocumentBusy={isDocumentBusy}
       topoDocuments={topoDocuments}
     />

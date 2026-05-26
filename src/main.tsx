@@ -14,6 +14,24 @@ import './styles/tokens.css'
 const container = document.getElementById('root')!
 const root = createRoot(container)
 useThemeStore.getState().initializeTheme()
+
+// Suppress harmless ResizeObserver loop limit exceeded error
+const suppressResizeObserverError = () => {
+  const originalError = console.error
+  console.error = (...args: any[]) => {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('ResizeObserver loop')) {
+      return
+    }
+    originalError.apply(console, args)
+  }
+  window.addEventListener('error', (e) => {
+    if (e.message === 'ResizeObserver loop completed with undelivered notifications.' || e.message === 'ResizeObserver loop limit exceeded') {
+      e.stopImmediatePropagation()
+    }
+  })
+}
+suppressResizeObserverError()
+
 root.render(
   <StrictMode>
     <PlatformProvider>

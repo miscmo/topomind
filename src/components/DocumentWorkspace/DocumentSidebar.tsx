@@ -1,17 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { FilePlus, Sparkles, Network, Workflow, Download, PenLine, Trash2, ChevronRight } from 'lucide-react'
-import type { TopoDocumentManifestItem } from '../../core/storage'
+import { FilePlus, Download, PenLine, Trash2, ChevronRight } from 'lucide-react'
+import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
 import { topoDocumentPath, topoDocumentTypeIcon, buildDocumentTree } from './documentTypes'
+import { getTopoDocumentTypeDefinition, TOPO_DOCUMENT_TYPES } from './documentTypeRegistry'
 
 export interface DocumentSidebarProps {
   topoDocuments: TopoDocumentManifestItem[]
   activeDocumentPath: string
   isBusy?: boolean
   onSelectDocument: (documentPath: string) => void
-  onCreateTopoSmartDocument: (name: string, parentId?: string | null) => void
-  onCreateTopoMindMapDocument: (name: string, parentId?: string | null) => void
-  onCreateTopoFlowchartDocument: (name: string, parentId?: string | null) => void
+  onCreateTopoDocument: (type: TopoDocumentType, name: string, parentId?: string | null) => void
   onExportTopoDocument: (documentPath: string) => void
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
@@ -25,7 +24,8 @@ interface DocumentContextMenuState {
 }
 
 interface DocumentInlineEditState {
-  mode: 'createTopoSmart' | 'createTopoMindMap' | 'createTopoFlowchart' | 'rename'
+  mode: 'createTopoDocument' | 'rename'
+  createType?: TopoDocumentType
   targetId: string | null
   parentId: string | null
   value: string
@@ -36,9 +36,7 @@ export function DocumentSidebar({
   activeDocumentPath,
   isBusy,
   onSelectDocument,
-  onCreateTopoSmartDocument,
-  onCreateTopoMindMapDocument,
-  onCreateTopoFlowchartDocument,
+  onCreateTopoDocument,
   onExportTopoDocument,
   onRenameDocument,
   onDeleteDocument,
@@ -124,10 +122,11 @@ export function DocumentSidebar({
       onDeleteDocument(topoDocumentPath(targetId))
     } else if (action === 'export' && targetId) {
       onExportTopoDocument(topoDocumentPath(targetId))
-    } else if (action.startsWith('create')) {
-      const mode = action as DocumentInlineEditState['mode']
+    } else if (action.startsWith('create:')) {
+      const createType = action.slice('create:'.length) as TopoDocumentType
+      if (!TOPO_DOCUMENT_TYPES.includes(createType)) return
       // Force pass the right context menu target as parent ID when creating new documents from context menu
-      setInlineEdit({ mode, targetId: null, parentId: targetId || null, value: '' })
+      setInlineEdit({ mode: 'createTopoDocument', createType, targetId: null, parentId: targetId || null, value: '' })
       if (targetId) {
         setExpandedNodes(prev => new Set(prev).add(targetId))
       }
@@ -144,12 +143,8 @@ export function DocumentSidebar({
 
     if (inlineEdit.mode === 'rename' && inlineEdit.targetId) {
       onRenameDocument(topoDocumentPath(inlineEdit.targetId), nextName)
-    } else if (inlineEdit.mode === 'createTopoSmart') {
-      onCreateTopoSmartDocument(nextName, inlineEdit.parentId)
-    } else if (inlineEdit.mode === 'createTopoMindMap') {
-      onCreateTopoMindMapDocument(nextName, inlineEdit.parentId)
-    } else if (inlineEdit.mode === 'createTopoFlowchart') {
-      onCreateTopoFlowchartDocument(nextName, inlineEdit.parentId)
+    } else if (inlineEdit.mode === 'createTopoDocument' && inlineEdit.createType) {
+      onCreateTopoDocument(inlineEdit.createType, nextName, inlineEdit.parentId)
     }
     
     setInlineEdit(null)
@@ -380,33 +375,21 @@ export function DocumentSidebar({
             </button>
             {activeSubmenu === 'create' && (
               <div className="absolute left-[calc(100%-4px)] top-[-6px] min-w-[160px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[1200] backdrop-blur-xl animate-in fade-in slide-in-from-left-1 duration-100">
-                <button
-                  type="button"
-                  className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => handleContextMenuAction('createTopoSmart')}
-                  disabled={isBusy}
-                >
-                  <span className="flex items-center justify-center text-[var(--color-text-muted)]"><Sparkles className="w-4 h-4" /></span>
-                  智能文档
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => handleContextMenuAction('createTopoMindMap')}
-                  disabled={isBusy}
-                >
-                  <span className="flex items-center justify-center text-[var(--color-text-muted)]"><Network className="w-4 h-4" /></span>
-                  思维导图
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => handleContextMenuAction('createTopoFlowchart')}
-                  disabled={isBusy}
-                >
-                  <span className="flex items-center justify-center text-[var(--color-text-muted)]"><Workflow className="w-4 h-4" /></span>
-                  流程图
-                </button>
+                {TOPO_DOCUMENT_TYPES.map((type) => {
+                  const definition = getTopoDocumentTypeDefinition(type)
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                      onClick={() => handleContextMenuAction(`create:${type}`)}
+                      disabled={isBusy}
+                    >
+                      <span className="flex items-center justify-center text-[var(--color-text-muted)]">{definition.icon}</span>
+                      {definition.label}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>

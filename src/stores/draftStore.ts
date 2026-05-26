@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 
 interface DraftState {
-  detailDrafts: Record<string, string>
+  detailDrafts: Record<string, unknown>
   detailEditModes: Record<string, boolean>
-  setDetailDraft: (path: string, draft: string) => void
+  setDetailDraft: (path: string, draft: unknown) => void
   setDetailEditMode: (path: string, editMode: boolean) => void
   clearDetailDraft: (path: string) => void
 

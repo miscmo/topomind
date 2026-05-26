@@ -1,12 +1,11 @@
-import { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import type { DetailSidebarTab, DocumentWorkspaceLayoutProps, TocItem } from './workspaceTypes'
+import { memo, useState, useCallback, useRef, useEffect } from 'react'
+import type { DetailSidebarTab, DocumentSaveStatus, DocumentWorkspaceLayoutProps, TocItem } from './workspaceTypes'
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../hooks/useResizePanel'
 import { logAction } from '../../core/log-backend'
 
 export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
-  value,
-  savedValue,
+  isDirty,
   onChange,
   onSave,
   attachmentCardPath,
@@ -20,9 +19,13 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   onSidebarHoverChange,
   tocItems: providedTocItems,
   onTocItemClick,
-  editorContent
+  editorContent,
+  statusBarContent,
+  renderStatusBar
 }: DocumentWorkspaceLayoutProps) {
-  const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<DocumentSaveStatus>('idle')
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
   const [internalDetailSidebarCollapsed, setInternalDetailSidebarCollapsed] = useState(false)
   const [detailSidebarWidth, setDetailSidebarWidth] = useState(180)
   const [detailSidebarTab, setDetailSidebarTab] = useState<DetailSidebarTab>('documents')
@@ -33,6 +36,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   const detailSidebarCollapsed = controlledDetailSidebarCollapsed ?? internalDetailSidebarCollapsed
   const effectiveFloating = detailSidebarFloating
   const showSidebarContent = !detailSidebarCollapsed || effectiveFloating
+  const isSaving = saveStatus === 'saving'
 
   const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
     initialWidth: detailSidebarWidth,
@@ -49,31 +53,37 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     onDetailSidebarCollapsedChange?.(collapsed)
   }, [controlledDetailSidebarCollapsed, onDetailSidebarCollapsedChange])
 
-  // Auto-save logic
-  const saveTimeoutRef = useRef<number | undefined>(undefined)
-  useEffect(() => {
-    if (value !== savedValue) {
-      clearTimeout(saveTimeoutRef.current)
-      saveTimeoutRef.current = window.setTimeout(() => {
-        handleSave()
-      }, 1500)
-    }
-    return () => clearTimeout(saveTimeoutRef.current)
-  }, [value, savedValue])
-
   const handleSave = useCallback(async () => {
-    if (value === savedValue || isSaving) return
-    
-    setIsSaving(true)
+    if (!isDirty || isSaving) return
+
+    setSaveStatus('saving')
+    setSaveError(null)
     try {
       await onSave()
+      setLastSavedAt(Date.now())
+      setSaveStatus('saved')
       logAction('Document:保存成功', 'DocumentWorkspaceLayout', { documentType, path: currentDetailDocumentPath })
     } catch (err: any) {
+      setSaveStatus('error')
+      setSaveError(err instanceof Error ? err.message : String(err))
       logAction('Document:保存失败', 'DocumentWorkspaceLayout', { error: err.message, documentType })
-    } finally {
-      setIsSaving(false)
     }
-  }, [value, savedValue, isSaving, onSave, documentType, currentDetailDocumentPath])
+  }, [isDirty, isSaving, onSave, documentType, currentDetailDocumentPath])
+
+  const saveTimeoutRef = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    if (isDirty && saveStatus !== 'saving') {
+      setSaveStatus((current) => current === 'error' ? current : 'dirty')
+      clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = window.setTimeout(() => {
+        void handleSave()
+      }, 1500)
+    } else if (!isDirty && (saveStatus === 'dirty' || saveStatus === 'error')) {
+      setSaveStatus(lastSavedAt ? 'saved' : 'idle')
+      setSaveError(null)
+    }
+    return () => clearTimeout(saveTimeoutRef.current)
+  }, [handleSave, isDirty, lastSavedAt, saveStatus])
 
   const handleTocJump = useCallback((item: TocItem) => {
     if (onTocItemClick) {
@@ -81,12 +91,49 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     }
   }, [onTocItemClick])
 
+  const openRailTab = useCallback((tab: DetailSidebarTab) => {
+    setDetailSidebarTab(tab)
+    setDetailSidebarCollapsed(false)
+  }, [setDetailSidebarCollapsed])
+
   return (
     <div 
       ref={containerRef}
       className={`flex flex-col h-full border border-[var(--color-border)] rounded-[10px] overflow-hidden bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shadow-[var(--shadow-sm)] ${documentType}`} 
     >
       <div className="flex flex-1 overflow-hidden relative">
+        {documentType === 'detail' && detailSidebarCollapsed && !effectiveFloating && (
+          <div className="w-9 shrink-0 border-r border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] flex flex-col items-center gap-1 py-2">
+            <button
+              type="button"
+              className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-[var(--color-text-muted)] text-[12px] font-semibold cursor-pointer hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]"
+              onClick={() => openRailTab('documents')}
+              title="展开节点文档"
+              aria-label="展开节点文档"
+            >
+              文
+            </button>
+            <button
+              type="button"
+              className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-[var(--color-text-muted)] text-[12px] font-semibold cursor-pointer hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]"
+              onClick={() => openRailTab('toc')}
+              title="展开本文目录"
+              aria-label="展开本文目录"
+            >
+              目
+            </button>
+            <button
+              type="button"
+              className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-[var(--color-text-muted)] text-[12px] font-semibold cursor-pointer hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={() => openRailTab('attachments')}
+              disabled={!attachmentCardPath}
+              title="展开节点附件"
+              aria-label="展开节点附件"
+            >
+              附
+            </button>
+          </div>
+        )}
         {documentType === 'detail' && (
           <aside
             className={`w-[180px] shrink-0 flex flex-col border-r border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] ${
@@ -159,8 +206,9 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                 ) : detailSidebarTab === 'attachments' ? (
                   <div className="flex-1 min-h-0 flex flex-col" style={{ padding: 0 }}>
                     {attachmentCardPath && (
-                      <AttachmentsTab 
-                        attachmentCardPath={attachmentCardPath} 
+                      <AttachmentsTab
+                        attachmentCardPath={attachmentCardPath}
+                        insertTargetKey={currentDetailDocumentPath}
                       />
                     )}
                   </div>
@@ -184,13 +232,20 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             </div>
           )}
 
-          <div className="flex flex-1 min-w-0 min-h-0">
+          <div className="flex flex-1 min-w-0 min-h-0 relative">
             {editorContent && (
-              <div className="flex-1 min-w-0 min-h-0">
+              <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
                 {editorContent}
               </div>
             )}
           </div>
+
+          {(statusBarContent || renderStatusBar) && (
+            <div className="shrink-0 relative z-20">
+              {statusBarContent}
+              {renderStatusBar?.({ saveStatus: isDirty && saveStatus === 'saved' ? 'dirty' : saveStatus, lastSavedAt, saveError })}
+            </div>
+          )}
         </div>
       </div>
     </div>

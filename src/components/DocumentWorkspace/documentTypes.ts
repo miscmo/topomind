@@ -1,4 +1,5 @@
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
+import { getTopoDocumentTypeDefinition } from './documentTypeRegistry'
 
 export const TOPO_DOCUMENT_PATH_PREFIX = '__topo__/'
 
@@ -18,15 +19,11 @@ export function topoDocumentIdFromPath(documentPath: string | null | undefined) 
 }
 
 export function topoDocumentTypeLabel(type: TopoDocumentType) {
-  if (type === 'smart') return '智能文档'
-  if (type === 'mindmap') return '思维导图'
-  return '流程图'
+  return getTopoDocumentTypeDefinition(type).label
 }
 
 export function topoDocumentTypeIcon(type: TopoDocumentType) {
-  if (type === 'smart') return '✨'
-  if (type === 'mindmap') return '🧠'
-  return '🔀'
+  return getTopoDocumentTypeDefinition(type).icon
 }
 
 export function buildDocumentTree(topoDocuments: TopoDocumentManifestItem[]) {
