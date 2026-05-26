@@ -1,36 +1,31 @@
 /**
  * 右侧详情面板
- * 显示节点 Markdown 内容，支持预览/编辑切换
+ * 显示节点 文档内容，支持预览/编辑切换
  */
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react'
-import { useStorage, type DetailDocumentItem } from '../../../core/storage'
-import { useRightPanelStore } from '../../../stores/rightPanelStore'
+import { useStorage } from '../../../core/storage'
 import { useConfirmStore } from '../../../stores/confirmStore'
-import { useGraphContext } from '../../../contexts/GraphContext'
 import { useGraphStore, useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
 import { useDraftStore } from '../../../stores/draftStore'
 import { useCardContentStore } from '../../../stores/cardContentStore'
-import { MarkdownWorkspace } from '../../MarkdownWorkspace/MarkdownWorkspace'
-import type { MarkdownViewMode } from '../../MarkdownWorkspace/markdownTypes'
+import { DocumentWorkspace } from '../../DocumentWorkspace/DocumentWorkspace'
+import type { TopoDocumentManifestItem } from '../../../core/storage'
 import { logAction } from '../../../core/log-backend'
 import { logPerformanceMetric, PERFORMANCE_METRICS, takePerformanceMetricStart } from '../../../core/performance-log'
 import { logger } from '../../../core/logger'
 import { registerTabSaver } from '../../../core/close-guard'
 import { tabStore } from '../../../stores/tabStore'
 import { joinRefs, resolveRoomChildRef } from '../../../domain/graph/path-utils'
+import { isTopoDocumentPath, topoDocumentIdFromPath, topoDocumentPath } from '../../DocumentWorkspace/documentTypes'
 
 interface DetailPanelProps {
   tabId: string
 }
 
-const DEFAULT_DETAIL_DOCUMENT_PATH = '_content.md'
-
 const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const selectedNodeId = useSelectedNodeId()
   const storeApi = useGraphStoreApi()
   const storage = useStorage()
-  const collapseRightPanel = useRightPanelStore((s) => s.collapseRightPanel)
-  const graph = useGraphContext()
   const confirm = useConfirmStore((s) => s.open)
 
   const resolveNodePath = useCallback((nodeId: string) => {
@@ -44,19 +39,34 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const nodeLabel = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.label ?? '' : '')
   const hasSelectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.has(selectedNodeId) : false)
 
-  const [activeDocumentPath, setActiveDocumentPath] = useState(DEFAULT_DETAIL_DOCUMENT_PATH)
+  const [activeDocumentPath, setActiveDocumentPath] = useState('')
   const currentDocumentKey = nodePath ? joinRefs(nodePath, activeDocumentPath) : ''
 
-  const draftMarkdown = useDraftStore((s) => currentDocumentKey ? (s.detailDrafts[currentDocumentKey] ?? '') : '')
-  const setDraftMarkdown = useDraftStore((s) => s.setDetailDraft)
+  const draftContent = useDraftStore((s) => currentDocumentKey ? (s.detailDrafts[currentDocumentKey] ?? '') : '')
+  const setDraftContent = useDraftStore((s) => s.setDetailDraft)
   const clearDetailDraft = useDraftStore((s) => s.clearDetailDraft)
   const detailEntry = useCardContentStore((s) => currentDocumentKey ? s.detailEntries[currentDocumentKey] : undefined)
-  const setDetailMarkdown = useCardContentStore((s) => s.setDetailMarkdown)
-  const clearDetailMarkdown = useCardContentStore((s) => s.clearDetailMarkdown)
-  const setCardMarkdown = useCardContentStore((s) => s.setCardMarkdown)
+  const setDetailContent = useCardContentStore((s) => s.setDetailContent)
+  const clearDetailContent = useCardContentStore((s) => s.clearDetailContent)
 
-  const [savedMarkdown, setSavedMarkdown] = useState('')
-  const [documents, setDocuments] = useState<DetailDocumentItem[]>([])
+  const [savedContent, setSavedContent] = useState('')
+  const [topoDocuments, setTopoDocuments] = useState<TopoDocumentManifestItem[]>([])
+  const [topoDocumentsCardPath, setTopoDocumentsCardPath] = useState('')
+  const [loadedDocumentKey, setLoadedDocumentKey] = useState('')
+  
+  useEffect(() => {
+    if (selectedNodeId) {
+      const hasDetail = topoDocuments.length > 0
+      const node = storeApi.getState().nodesMap.get(selectedNodeId)
+      if (node && node.data.hasDetail !== hasDetail) {
+        storeApi.getState().updateNode(selectedNodeId, n => ({
+          ...n,
+          data: { ...n.data, hasDetail }
+        }))
+      }
+    }
+  }, [topoDocuments, selectedNodeId, storeApi])
+
   const [isDocumentBusy, setIsDocumentBusy] = useState(false)
   const [documentLinkNotice, setDocumentLinkNotice] = useState('')
   const [detailSidebarCollapsed, setDetailSidebarCollapsed] = useState(() => {
@@ -85,48 +95,65 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     }
   }, [])
 
-  const [viewMode, setViewMode] = useState<MarkdownViewMode>('preview')
-  const markdownRequestSeqRef = useRef(0)
+  const contentRequestSeqRef = useRef(0)
+  const documentListRequestSeqRef = useRef(0)
   const selectionPerfRef = useRef<{ nodeId: string; startedAt: number; logged: boolean } | null>(null)
+  const currentTopoDocuments = nodePath && topoDocumentsCardPath === nodePath ? topoDocuments : []
+  const activeTopoDocumentId = topoDocumentIdFromPath(activeDocumentPath)
+  const activeTopoDocument = activeTopoDocumentId
+    ? currentTopoDocuments.find((item) => item.id === activeTopoDocumentId)
+    : undefined
+  const isActiveTopoDocument = isTopoDocumentPath(activeDocumentPath)
+  const activeStructuredTopoDocumentId = (activeTopoDocument?.type === 'smart' || activeTopoDocument?.type === 'mindmap' || activeTopoDocument?.type === 'flowchart') ? activeTopoDocument.id : null
+  const isActiveStructuredTopoDocument = activeStructuredTopoDocumentId != null
 
-  const isDefaultDocument = activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH
-  const displayDocuments = useMemo<DetailDocumentItem[]>(() => (
-    documents.map((item) => {
-      if (item.isDefault) {
-        return { ...item, name: nodeLabel }
-      }
-      if (item.isCard) {
-        return { ...item, name: '卡片' }
-      }
-      return item
-    })
-  ), [documents, nodeLabel])
-  const activeDocument = displayDocuments.find((item) => item.path === activeDocumentPath)
-  const activeDocumentDisplayName = activeDocument?.name ?? nodeLabel
+  const activeEditableTopoDocumentId = activeStructuredTopoDocumentId
+  const isActiveEditableTopoDocument = Boolean(activeEditableTopoDocumentId)
+
+  const activeDocumentDisplayName = activeTopoDocument?.title ?? ''
   const currentDocumentDisplayPath = nodePath
-    ? (isDefaultDocument ? nodePath : joinRefs(nodePath, activeDocumentDisplayName))
+    ? (activeTopoDocument ? joinRefs(nodePath, `_docs/${activeTopoDocument.path}`) : '')
     : ''
 
-  const loadDocuments = useCallback(async (cardPath: string) => {
-    const nextDocuments = await storage.listDetailDocuments(cardPath)
-    setDocuments(nextDocuments)
-    setActiveDocumentPath((currentPath) => (
-      nextDocuments.some((item) => item.path === currentPath)
-        ? currentPath
-        : DEFAULT_DETAIL_DOCUMENT_PATH
-    ))
-    return nextDocuments
+  const loadDocuments = useCallback(async (cardPath: string, requestSeq?: number) => {
+    const nextTopoDocuments = await storage.listTopoDocuments(cardPath).catch((e) => {
+      logger.catch('DetailPanel', `loadTopoDocuments: ${cardPath}`, e)
+      return [] as TopoDocumentManifestItem[]
+    })
+    if (requestSeq !== undefined && documentListRequestSeqRef.current !== requestSeq) {
+      return nextTopoDocuments
+    }
+    setTopoDocuments(nextTopoDocuments)
+    setTopoDocumentsCardPath(cardPath)
+    
+    // Default to the first available document if the active one doesn't exist anymore
+    setActiveDocumentPath((currentPath) => {
+      // Always favor existing topo documents, default to first available
+      if (nextTopoDocuments.some((item) => topoDocumentPath(item.id) === currentPath)) {
+        return currentPath
+      }
+      return nextTopoDocuments.length > 0 ? topoDocumentPath(nextTopoDocuments[0].id) : ''
+    })
+    return nextTopoDocuments
   }, [storage])
 
-  // Load markdown when node changes
   useEffect(() => {
-    setActiveDocumentPath(DEFAULT_DETAIL_DOCUMENT_PATH)
-    setDocuments([])
-    setSavedMarkdown('')
-    setViewMode('preview')
+    const requestSeq = ++documentListRequestSeqRef.current
+    // When node changes, reset state
+    setActiveDocumentPath('')
+    setTopoDocuments([])
+    setTopoDocumentsCardPath('')
+    setSavedContent('')
 
     if (!selectedNodeId || !nodePath) return
-    void loadDocuments(nodePath)
+    
+    // After loading, ensure active path is set to the first document if available
+    void loadDocuments(nodePath, requestSeq).then((docs) => {
+      if (documentListRequestSeqRef.current !== requestSeq) return
+      if (docs.length > 0) {
+        setActiveDocumentPath(topoDocumentPath(docs[0].id))
+      }
+    })
   }, [selectedNodeId, nodePath, loadDocuments])
 
   useEffect(() => {
@@ -143,15 +170,17 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   }, [selectedNodeId])
 
   useEffect(() => {
-    const requestSeq = ++markdownRequestSeqRef.current
+    const requestSeq = ++contentRequestSeqRef.current
+    setLoadedDocumentKey('')
     if (!selectedNodeId || !nodePath || !currentDocumentKey) return
     const readStartedAt = performance.now()
 
     const cachedContent = useCardContentStore.getState().detailEntries[currentDocumentKey]?.content
     if (cachedContent !== undefined) {
-      setSavedMarkdown(cachedContent)
+      setSavedContent(cachedContent)
+      setLoadedDocumentKey(currentDocumentKey)
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
-        setDraftMarkdown(currentDocumentKey, cachedContent)
+        setDraftContent(currentDocumentKey, cachedContent)
       }
       const selectionPerf = selectionPerfRef.current
       if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
@@ -166,8 +195,12 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       }
     }
 
-    storage.readDetailDocument(nodePath, activeDocumentPath).then((content: string) => {
-      if (markdownRequestSeqRef.current !== requestSeq) return
+    const readPromise = activeEditableTopoDocumentId
+      ? storage.readTopoDocument(nodePath, activeEditableTopoDocumentId).then((content) => typeof content === 'string' ? content : JSON.stringify(content ?? null, null, 2))
+      : Promise.resolve('')
+
+    readPromise.then((content: string) => {
+      if (contentRequestSeqRef.current !== requestSeq) return
       void logPerformanceMetric(PERFORMANCE_METRICS.detailRead, performance.now() - readStartedAt, {
         success: true,
         nodeId: selectedNodeId,
@@ -175,18 +208,12 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         documentPath: activeDocumentPath,
         contentLength: content.length,
       }, 'DetailPanel')
-      setDetailMarkdown(currentDocumentKey, content)
-      setSavedMarkdown(content)
-      
-      // 同步给 KnowledgeCard
-      if (activeDocumentPath === '_card.md') {
-        setCardMarkdown(nodePath, content)
-      } else if (activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH) {
-        setDetailMarkdown(nodePath, content)
-      }
+      setDetailContent(currentDocumentKey, content)
+      setSavedContent(content)
+      setLoadedDocumentKey(currentDocumentKey)
       
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
-        setDraftMarkdown(currentDocumentKey, content)
+        setDraftContent(currentDocumentKey, content)
       }
       const selectionPerf = selectionPerfRef.current
       if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
@@ -201,24 +228,19 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         }, 'DetailPanel')
       }
     }).catch(() => {
-      if (markdownRequestSeqRef.current !== requestSeq) return
+      if (contentRequestSeqRef.current !== requestSeq) return
       void logPerformanceMetric(PERFORMANCE_METRICS.detailRead, performance.now() - readStartedAt, {
         success: false,
         nodeId: selectedNodeId,
         nodePath,
         documentPath: activeDocumentPath,
       }, 'DetailPanel')
-      setDetailMarkdown(currentDocumentKey, '')
-      setSavedMarkdown('')
-      
-      if (activeDocumentPath === '_card.md') {
-        setCardMarkdown(nodePath, '')
-      } else if (activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH) {
-        setDetailMarkdown(nodePath, '')
-      }
+      setDetailContent(currentDocumentKey, '')
+      setSavedContent('')
+      setLoadedDocumentKey(currentDocumentKey)
       
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
-        setDraftMarkdown(currentDocumentKey, '')
+        setDraftContent(currentDocumentKey, '')
       }
       const selectionPerf = selectionPerfRef.current
       if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
@@ -231,13 +253,13 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         }, 'DetailPanel')
       }
     })
-  }, [selectedNodeId, nodePath, activeDocumentPath, currentDocumentKey, storage, setDraftMarkdown, setDetailMarkdown, setCardMarkdown])
+  }, [selectedNodeId, nodePath, activeDocumentPath, currentDocumentKey, activeEditableTopoDocumentId, isActiveEditableTopoDocument, storage, setDraftContent, setDetailContent])
 
   useEffect(() => {
-    if (detailEntry) {
-      setSavedMarkdown(detailEntry.content)
+    if (activeDocumentPath !== '' && detailEntry) {
+      setSavedContent(detailEntry.content)
     }
-  }, [detailEntry])
+  }, [detailEntry, activeDocumentPath])
 
   useEffect(() => {
     if (!documentLinkNotice) return
@@ -247,7 +269,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     return () => window.clearTimeout(timeoutId)
   }, [documentLinkNotice])
 
-  // ===== Save markdown =====
+  // ===== Save document =====
   // Use nodesMapRef for stale-closure-safe access. selectedNode from render-time
   // closure can be stale when the selected node changes without re-rendering DetailPanel.
   const handleSave = useCallback(async () => {
@@ -256,16 +278,11 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     const label = node?.data.label
     const saveStartedAt = performance.now()
     try {
-      await storage.writeDetailDocument(nodePath, activeDocumentPath, draftMarkdown)
-      setDetailMarkdown(currentDocumentKey, draftMarkdown)
-      setSavedMarkdown(draftMarkdown)
-      
-      // 同步更新给 KnowledgeCard 节点用
-      if (activeDocumentPath === '_card.md') {
-        setCardMarkdown(nodePath, draftMarkdown)
-      } else if (activeDocumentPath === DEFAULT_DETAIL_DOCUMENT_PATH) {
-        setDetailMarkdown(nodePath, draftMarkdown)
+      if (activeEditableTopoDocumentId) {
+        await storage.writeTopoDocument(nodePath, activeEditableTopoDocumentId, activeStructuredTopoDocumentId ? JSON.parse(draftContent || 'null') : draftContent)
       }
+      setDetailContent(currentDocumentKey, draftContent)
+      setSavedContent(draftContent)
       
       logAction('内容:保存', 'DetailPanel', { nodePath, documentPath: activeDocumentPath, label })
       void logPerformanceMetric(PERFORMANCE_METRICS.detailSave, performance.now() - saveStartedAt, {
@@ -273,7 +290,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         nodeId: selectedNodeId,
         nodePath,
         documentPath: activeDocumentPath,
-        contentLength: draftMarkdown.length,
+        contentLength: draftContent.length,
       }, 'DetailPanel')
     } catch (e) {
       void logPerformanceMetric(PERFORMANCE_METRICS.detailSave, performance.now() - saveStartedAt, {
@@ -281,117 +298,239 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         nodeId: selectedNodeId,
         nodePath,
         documentPath: activeDocumentPath,
-        contentLength: draftMarkdown.length,
+        contentLength: draftContent.length,
         error: e instanceof Error ? e.message : String(e),
       }, 'DetailPanel')
       logger.catch('DetailPanel', 'handleSave', e)
+      throw e
     }
-  }, [selectedNodeId, nodePath, currentDocumentKey, storeApi, storage, draftMarkdown, setDetailMarkdown, setCardMarkdown, activeDocumentPath])
+  }, [isActiveEditableTopoDocument, activeEditableTopoDocumentId, activeStructuredTopoDocumentId, selectedNodeId, nodePath, currentDocumentKey, storeApi, storage, draftContent, setDetailContent, activeDocumentPath])
 
   // ===== Delete detail =====
   // Use nodesMapRef for stale-closure-safe node data access.
-  const flushMarkdownSave = useCallback(async () => {
+  const flushDocumentSave = useCallback(async () => {
     if (!selectedNodeId || !nodePath || !currentDocumentKey) return
-    if (draftMarkdown === savedMarkdown) return
+    if (draftContent === savedContent) return
     await handleSave()
-  }, [selectedNodeId, nodePath, currentDocumentKey, draftMarkdown, savedMarkdown, handleSave])
+  }, [selectedNodeId, nodePath, currentDocumentKey, draftContent, savedContent, handleSave])
 
-  const handleSelectDetailDocument = useCallback(async (documentPath: string) => {
+  const handleSelectDocument = useCallback(async (documentPath: string) => {
     if (documentPath === activeDocumentPath) return
-    await flushMarkdownSave()
-    setActiveDocumentPath(documentPath)
-  }, [activeDocumentPath, flushMarkdownSave])
+    try {
+      await flushDocumentSave()
+      setActiveDocumentPath(documentPath)
+    } catch (e) {
+      setDocumentLinkNotice('保存当前文档失败，已取消切换。')
+      logger.catch('DetailPanel', 'handleSelectDocument', e)
+    }
+  }, [activeDocumentPath, flushDocumentSave])
 
   const handleOpenDetailDocumentLink = useCallback(async (documentPath: string) => {
     if (!nodePath) return
     const nextDocuments = await loadDocuments(nodePath)
-    if (!nextDocuments.some((item) => item.path === documentPath)) {
+    if (!nextDocuments.some((item) => topoDocumentPath(item.id) === documentPath)) {
       setDocumentLinkNotice(`未找到文档：${documentPath}`)
       return
     }
     setDocumentLinkNotice('')
-    await handleSelectDetailDocument(documentPath)
-  }, [handleSelectDetailDocument, loadDocuments, nodePath])
+    await handleSelectDocument(documentPath)
+  }, [handleSelectDocument, loadDocuments, nodePath])
 
-  const handleCreateDetailDocument = useCallback(async (name: string) => {
+  const handleCreateTopoSmartDocument = useCallback(async (name: string, parentId?: string | null) => {
     if (!nodePath) return
     const nextName = name.trim()
     if (!nextName) return
     setIsDocumentBusy(true)
     try {
-      await flushMarkdownSave()
-      const created = await storage.createDetailDocument(nodePath, nextName)
-      const createdDocumentKey = joinRefs(nodePath, created.path)
+      await flushDocumentSave()
+      const created = await storage.createTopoDocument(nodePath, { type: 'smart', title: nextName, parentId: parentId || null })
+      const createdDocumentPath = topoDocumentPath(created.id)
+      const createdDocumentKey = joinRefs(nodePath, createdDocumentPath)
       clearDetailDraft(createdDocumentKey)
-      clearDetailMarkdown(createdDocumentKey)
+      clearDetailContent(createdDocumentKey)
       await loadDocuments(nodePath)
-      setActiveDocumentPath(created.path)
-      logAction('详情文档:创建', 'DetailPanel', { nodePath, documentPath: created.path })
+      setActiveDocumentPath(createdDocumentPath)
+      logAction('多类型文档:创建智能文档', 'DetailPanel', { nodePath, documentId: created.id, documentPath: created.path })
     } catch (e) {
-      logger.catch('DetailPanel', 'handleCreateDetailDocument', e)
+      logger.catch('DetailPanel', 'handleCreateTopoSmartDocument', e)
     } finally {
       setIsDocumentBusy(false)
     }
-  }, [nodePath, flushMarkdownSave, storage, clearDetailDraft, clearDetailMarkdown, loadDocuments])
+  }, [nodePath, flushDocumentSave, storage, clearDetailDraft, clearDetailContent, loadDocuments])
 
-  const handleRenameDetailDocument = useCallback(async (documentPath: string, name: string) => {
-    if (!nodePath || documentPath === DEFAULT_DETAIL_DOCUMENT_PATH) return
+  const handleCreateTopoMindMapDocument = useCallback(async (name: string, parentId?: string | null) => {
+    if (!nodePath) return
     const nextName = name.trim()
     if (!nextName) return
-    const targetDocument = documents.find((item) => item.path === documentPath)
-    if (targetDocument?.name === nextName) return
+    setIsDocumentBusy(true)
+    try {
+      await flushDocumentSave()
+      const created = await storage.createTopoDocument(nodePath, { type: 'mindmap', title: nextName, parentId: parentId || null })
+      const createdDocumentPath = topoDocumentPath(created.id)
+      const createdDocumentKey = joinRefs(nodePath, createdDocumentPath)
+      clearDetailDraft(createdDocumentKey)
+      clearDetailContent(createdDocumentKey)
+      await loadDocuments(nodePath)
+      setActiveDocumentPath(createdDocumentPath)
+      logAction('多类型文档:创建思维导图', 'DetailPanel', { nodePath, documentId: created.id, documentPath: created.path })
+    } catch (e) {
+      logger.catch('DetailPanel', 'handleCreateTopoMindMapDocument', e)
+    } finally {
+      setIsDocumentBusy(false)
+    }
+  }, [nodePath, flushDocumentSave, storage, clearDetailDraft, clearDetailContent, loadDocuments])
+
+  const handleCreateTopoFlowchartDocument = useCallback(async (name: string, parentId?: string | null) => {
+    if (!nodePath) return
+    const nextName = name.trim()
+    if (!nextName) return
+    setIsDocumentBusy(true)
+    try {
+      await flushDocumentSave()
+      const created = await storage.createTopoDocument(nodePath, { type: 'flowchart', title: nextName, parentId: parentId || null })
+      const createdDocumentPath = topoDocumentPath(created.id)
+      const createdDocumentKey = joinRefs(nodePath, createdDocumentPath)
+      clearDetailDraft(createdDocumentKey)
+      clearDetailContent(createdDocumentKey)
+      await loadDocuments(nodePath)
+      setActiveDocumentPath(createdDocumentPath)
+      logAction('多类型文档:创建流程图', 'DetailPanel', { nodePath, documentId: created.id, documentPath: created.path })
+    } catch (e) {
+      logger.catch('DetailPanel', 'handleCreateTopoFlowchartDocument', e)
+    } finally {
+      setIsDocumentBusy(false)
+    }
+  }, [nodePath, flushDocumentSave, storage, clearDetailDraft, clearDetailContent, loadDocuments])
+
+  const handleRenameDocument = useCallback(async (documentPath: string, name: string) => {
+    if (!nodePath || documentPath === '') return
+    const nextName = name.trim()
+    if (!nextName) return
+    const targetDocument = topoDocuments.find((item) => topoDocumentPath(item.id) === documentPath)
+    if (targetDocument && 'title' in targetDocument && targetDocument.title === nextName) return
     setIsDocumentBusy(true)
     try {
       if (documentPath === activeDocumentPath) {
-        await flushMarkdownSave()
+        await flushDocumentSave()
       }
       const previousDocumentKey = joinRefs(nodePath, documentPath)
-      const renamed = await storage.renameDetailDocument(nodePath, documentPath, nextName.trim())
+      
+      const documentId = topoDocumentIdFromPath(documentPath)
+      if (!documentId) return
+      await storage.renameTopoDocument(nodePath, documentId, nextName)
+
       clearDetailDraft(previousDocumentKey)
-      clearDetailMarkdown(previousDocumentKey)
+      clearDetailContent(previousDocumentKey)
       await loadDocuments(nodePath)
-      if (activeDocumentPath === documentPath) {
-        setActiveDocumentPath(renamed.path)
-      }
-      logAction('详情文档:重命名', 'DetailPanel', { nodePath, documentPath, nextDocumentPath: renamed.path })
+      logAction('文档:重命名', 'DetailPanel', { nodePath, documentPath, nextName })
     } catch (e) {
-      logger.catch('DetailPanel', 'handleRenameDetailDocument', e)
+      logger.catch('DetailPanel', 'handleRenameDocument', e)
     } finally {
       setIsDocumentBusy(false)
     }
-  }, [nodePath, documents, activeDocumentPath, flushMarkdownSave, storage, clearDetailDraft, clearDetailMarkdown, loadDocuments])
+  }, [nodePath, topoDocuments, activeDocumentPath, flushDocumentSave, storage, clearDetailDraft, clearDetailContent, loadDocuments])
 
-  const handleDeleteDetail = useCallback(async (documentPath = activeDocumentPath) => {
-    if (!selectedNodeId || !nodePath || documentPath === DEFAULT_DETAIL_DOCUMENT_PATH) return
+  const handleDeleteDocument = useCallback(async (documentPath: string = activeDocumentPath) => {
+    if (!selectedNodeId || !nodePath || documentPath === '') return
     const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label ?? selectedNodeId
-    const targetDocument = documents.find((item) => item.path === documentPath)
+    const targetDocument = topoDocuments.find((item) => topoDocumentPath(item.id) === documentPath)
+    const documentName = targetDocument ? targetDocument.title : documentPath
     const confirmed = await confirm({
       title: '删除文档',
-      message: `将删除节点「${label}」的文档「${targetDocument?.name ?? documentPath}」。此操作不可撤销。`
+      message: `将删除节点「${label}」的文档「${documentName}」。此操作不可撤销。`
     })
     if (!confirmed) return
     setIsDocumentBusy(true)
     try {
       const documentKey = joinRefs(nodePath, documentPath)
       if (documentPath === activeDocumentPath) {
-        setActiveDocumentPath(DEFAULT_DETAIL_DOCUMENT_PATH)
+        // optimistically clear path if we are deleting the active document
+        setActiveDocumentPath('')
       }
-      await storage.deleteDetailDocument(nodePath, documentPath)
+      
+      const documentId = topoDocumentIdFromPath(documentPath)
+      if (!documentId) return
+      await storage.deleteTopoDocument(nodePath, documentId)
+      
       clearDetailDraft(documentKey)
-      clearDetailMarkdown(documentKey)
-      await loadDocuments(nodePath)
-      logAction('详情文档:删除', 'DetailPanel', { nodeId: selectedNodeId, label, path: nodePath, documentPath })
+      clearDetailContent(documentKey)
+      
+      const nextDocs = await loadDocuments(nodePath)
+      if (documentPath === activeDocumentPath || activeDocumentPath === '') {
+        setActiveDocumentPath(nextDocs.length > 0 ? topoDocumentPath(nextDocs[0].id) : '')
+      }
+      
+      logAction('文档:删除', 'DetailPanel', { nodeId: selectedNodeId, label, path: nodePath, documentPath })
     } catch (e) {
-      logger.catch('DetailPanel', 'handleDeleteDetail', e)
+      logger.catch('DetailPanel', 'handleDeleteDocument', e)
     } finally {
       setIsDocumentBusy(false)
     }
-  }, [activeDocumentPath, clearDetailDraft, clearDetailMarkdown, confirm, documents, loadDocuments, nodePath, selectedNodeId, storeApi])
+  }, [activeDocumentPath, clearDetailDraft, clearDetailContent, confirm, topoDocuments, loadDocuments, nodePath, selectedNodeId, storeApi, storage])
+
+  const handleMoveDocument = useCallback(async (documentId: string, newParentId: string | null, newSortOrder: number) => {
+    if (!nodePath) return
+    setIsDocumentBusy(true)
+    try {
+      await storage.moveTopoDocument(nodePath, documentId, newParentId, newSortOrder)
+      await loadDocuments(nodePath)
+      logAction('文档:移动', 'DetailPanel', { nodePath, documentId, newParentId, newSortOrder })
+    } catch (e) {
+      logger.catch('DetailPanel', 'handleMoveDocument', e)
+    } finally {
+      setIsDocumentBusy(false)
+    }
+  }, [nodePath, storage, loadDocuments])
+
+  const handleExportTopoDocument = useCallback(async (documentPath: string) => {
+    if (!nodePath) return
+    const documentId = topoDocumentIdFromPath(documentPath)
+    if (!documentId) return
+    setIsDocumentBusy(true)
+    try {
+      if (documentPath === activeDocumentPath) {
+        await flushDocumentSave()
+      }
+      const payload = await storage.exportTopoDocument(nodePath, documentId)
+      const blob = new Blob([payload.content], { type: payload.mimeType })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = payload.fileName
+      try {
+        document.body.appendChild(anchor)
+        anchor.click()
+      } finally {
+        anchor.remove()
+        window.setTimeout(() => URL.revokeObjectURL(url), 0)
+      }
+      logAction('多类型文档:导出', 'DetailPanel', { nodePath, documentId, fileName: payload.fileName, type: payload.type })
+    } catch (e) {
+      logger.catch('DetailPanel', 'handleExportTopoDocument', e)
+    } finally {
+      setIsDocumentBusy(false)
+    }
+  }, [activeDocumentPath, flushDocumentSave, nodePath, storage])
+
+  const handleOpenCurrentDocumentFolder = useCallback(async () => {
+    if (!nodePath || !activeTopoDocumentId) return
+    setDocumentLinkNotice('')
+    try {
+      await flushDocumentSave()
+      const opened = await storage.openTopoDocumentFolder(nodePath, activeTopoDocumentId)
+      if (!opened) {
+        setDocumentLinkNotice('无法打开当前文档所在目录')
+      }
+    } catch (e) {
+      setDocumentLinkNotice('打开当前文档所在目录失败')
+      logger.catch('DetailPanel', 'handleOpenCurrentDocumentFolder', e)
+    }
+  }, [activeTopoDocumentId, flushDocumentSave, nodePath, storage])
 
   useEffect(() => {
-    return registerTabSaver(tabId, flushMarkdownSave)
-  }, [tabId, flushMarkdownSave])
+    return registerTabSaver(tabId, flushDocumentSave, () => draftContent !== savedContent)
+  }, [tabId, flushDocumentSave, draftContent, savedContent])
 
   const handleToggleSidebar = useCallback(() => {
     setDetailSidebarCollapsed((collapsed) => {
@@ -413,18 +552,17 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   return (
     <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shrink-0 overflow-hidden transition-opacity">
       <div className="flex-1 flex min-h-0 overflow-hidden p-0 leading-relaxed text-[13.5px] [&>*]:flex-1 [&>*]:min-h-0 [&>*]:min-w-0">
-        <MarkdownWorkspace
-          value={draftMarkdown}
-          savedValue={savedMarkdown}
-          onChange={(val) => currentDocumentKey && setDraftMarkdown(currentDocumentKey, val)}
+        <DocumentWorkspace
+          value={draftContent}
+          savedValue={savedContent}
+          isContentLoaded={loadedDocumentKey === currentDocumentKey}
+          onChange={(val: string) => currentDocumentKey && setDraftContent(currentDocumentKey, val)}
           onSave={handleSave}
           attachmentCardPath={nodePath}
-          documentType="detail"
-          previewClassName="text-[15px] leading-relaxed text-[var(--color-text-primary)] [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_p]:mt-0 [&_p]:mb-2.5 [&_blockquote]:mt-0 [&_blockquote]:mb-4 [&_ul]:mt-0 [&_ul]:mb-4 [&_ol]:mt-0 [&_ol]:mb-4 [&_dl]:mt-0 [&_dl]:mb-4 [&_table]:mt-0 [&_table]:mb-4 [&_pre]:mt-0 [&_pre]:mb-4 [&_details]:mt-0 [&_details]:mb-4 [&_img]:rounded-md"
           detailSidebarCollapsed={detailSidebarCollapsed}
           detailSidebarFloating={detailSidebarCollapsed && isPanelHovered}
           onDetailSidebarCollapsedChange={handleToggleSidebar}
-          onSidebarHoverChange={(hovered) => hovered ? handleHoverEnter() : handleHoverLeave()}
+          onSidebarHoverChange={(hovered: boolean) => hovered ? handleHoverEnter() : handleHoverLeave()}
           detailHeader={(
             <div className="min-h-[58px] px-4 pt-2.5 pb-2 border-b border-[var(--color-border-light)] shrink-0 flex flex-col justify-center gap-1 bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)] box-border">
               <div className="flex items-center justify-between gap-3 w-full">
@@ -465,24 +603,19 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] font-medium text-[var(--color-text-muted)] leading-tight whitespace-nowrap overflow-hidden text-ellipsis">{currentDocumentDisplayPath}</div>
+                    {activeTopoDocumentId ? (
+                      <button
+                        type="button"
+                        className="block max-w-full p-0 border-none bg-transparent text-left text-[11px] font-medium text-[var(--color-text-muted)] leading-tight whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer hover:text-[var(--color-primary)] hover:underline"
+                        title={`在文件管理器中打开：${currentDocumentDisplayPath}`}
+                        onClick={() => { void handleOpenCurrentDocumentFolder() }}
+                      >
+                        {currentDocumentDisplayPath}
+                      </button>
+                    ) : (
+                      <div className="text-[11px] font-medium text-[var(--color-text-muted)] leading-tight whitespace-nowrap overflow-hidden text-ellipsis">{currentDocumentDisplayPath}</div>
+                    )}
                   </div>
-                </div>
-                <div className="flex items-center p-0.5 border border-[var(--color-border)] rounded-[9px] bg-[var(--color-bg-muted)] shrink-0">
-                  <button
-                    type="button"
-                    className={`h-7 px-3 border-none rounded-[7px] bg-transparent text-[12px] font-semibold cursor-pointer transition-all hover:text-[var(--color-primary)] ${viewMode === 'edit' ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-[var(--shadow-sm)]' : 'text-[var(--color-text-muted)]'}`}
-                    onClick={() => setViewMode('edit')}
-                  >
-                    编辑
-                  </button>
-                  <button
-                    type="button"
-                    className={`h-7 px-3 border-none rounded-[7px] bg-transparent text-[12px] font-semibold cursor-pointer transition-all hover:text-[var(--color-primary)] ${viewMode === 'preview' ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-[var(--shadow-sm)]' : 'text-[var(--color-text-muted)]'}`}
-                    onClick={() => setViewMode('preview')}
-                  >
-                    预览
-                  </button>
                 </div>
               </div>
               {documentLinkNotice && (
@@ -492,17 +625,18 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
               )}
             </div>
           )}
-          detailDocuments={displayDocuments}
-          activeDetailDocumentPath={activeDocumentPath}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          showToolbar={false}
-          onSelectDetailDocument={(documentPath) => { void handleSelectDetailDocument(documentPath) }}
-          onOpenDetailDocumentLink={(documentPath) => { void handleOpenDetailDocumentLink(documentPath) }}
-          onCreateDetailDocument={(name) => { void handleCreateDetailDocument(name) }}
-          onRenameDetailDocument={(documentPath, name) => { void handleRenameDetailDocument(documentPath, name) }}
-          onDeleteDetailDocument={(documentPath) => { void handleDeleteDetail(documentPath) }}
-          isDetailDocumentBusy={isDocumentBusy}
+          topoDocuments={topoDocuments}
+          activeDocumentPath={activeDocumentPath}
+          onSelectDocument={(documentPath: string) => { void handleSelectDocument(documentPath) }}
+          onOpenDetailDocumentLink={(documentPath: string) => { void handleOpenDetailDocumentLink(documentPath) }}
+          onCreateTopoSmartDocument={(name: string, parentId?: string | null) => { void handleCreateTopoSmartDocument(name, parentId) }}
+          onCreateTopoMindMapDocument={(name: string, parentId?: string | null) => { void handleCreateTopoMindMapDocument(name, parentId) }}
+          onCreateTopoFlowchartDocument={(name: string, parentId?: string | null) => { void handleCreateTopoFlowchartDocument(name, parentId) }}
+          onExportTopoDocument={(documentPath: string) => { void handleExportTopoDocument(documentPath) }}
+          onRenameDocument={(documentPath: string, name: string) => { void handleRenameDocument(documentPath, name) }}
+          onDeleteDocument={(documentPath: string) => { void handleDeleteDocument(documentPath) }}
+          onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
+          isDocumentBusy={isDocumentBusy}
         />
       </div>
     </div>

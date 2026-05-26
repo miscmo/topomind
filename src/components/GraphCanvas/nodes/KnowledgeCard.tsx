@@ -5,44 +5,27 @@
  * @file components/GraphCanvas/nodes/KnowledgeCard.tsx
  */
 import { memo, useEffect, useMemo, useRef, useState, useCallback, type CSSProperties } from 'react'
-import { createPortal } from 'react-dom'
-import { Handle, NodeResizer, Position, type NodeProps, type NodeDimensionChange } from '@xyflow/react'
+import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
 import type { KnowledgeNode } from '../../../types'
-import { useStorage } from '../../../core/storage'
 import { resolveRoomChildRef } from '../../../domain/graph/path-utils'
-import { useCardContentStore } from '../../../stores/cardContentStore'
-import { useDraftStore } from '../../../stores/draftStore'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
 import { useGraphStoreApi } from '../../../stores/graphStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
-import { MarkdownPreview } from '../../MarkdownWorkspace/MarkdownPreview'
-import { MarkdownWorkspace } from '../../MarkdownWorkspace/MarkdownWorkspace'
 import { cn } from '@/lib/utils'
-
-const MARKDOWN_MIN_WIDTH = 160
-const MARKDOWN_MIN_HEIGHT = 96
-const COLLAPSED_NODE_WIDTH = 120
-const COLLAPSED_NODE_HEIGHT = 36
 
 interface KnowledgeCardProps extends NodeProps<KnowledgeNode> {
   resizing?: boolean
 }
 
 function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }: KnowledgeCardProps) {
-  const storage = useStorage()
   const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
-  const [isHovered, setIsHovered] = useState(false)
+  const [isHovered, setIsHovered] = useState<boolean>(false)
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState(data.label)
-  const [markdownEditing, setMarkdownEditing] = useState(false)
-  const [markdownDraft, setMarkdownDraft] = useState('')
   const [resizePreviewSize, setResizePreviewSize] = useState<{ width: number; height: number } | null>(null)
-  const [preview, setPreview] = useState<{ type: 'image'; src: string; title: string } | { type: 'html'; html: string; title: string } | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
-  const markdownTextareaRef = useRef<HTMLTextAreaElement>(null)
   const titleSavingRef = useRef(false)
-  const markdownAutosaveTimerRef = useRef<number | null>(null)
   const resizeHideTimerRef = useRef<number | null>(null)
   const defaultNodeStyle = useGraphUiStore((state) => state.defaultNodeStyle)
   const defaultNodeSize = useGraphUiStore((state) => state.defaultNodeSize)
@@ -51,7 +34,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   const resizeDisplaySize = resizePreviewSize ?? { width: nodeWidth, height: nodeHeight }
   const showResizeLabel = resizing === true || resizePreviewSize !== null
   const resizeLabel = `${Math.round(resizeDisplaySize.width)} × ${Math.round(resizeDisplaySize.height)}`
-  const shouldShowMarkdown = nodeWidth >= MARKDOWN_MIN_WIDTH && nodeHeight >= MARKDOWN_MIN_HEIGHT
   const visuallySelected = selected
   const isConnectTarget = useGraphUiStore((state) => !!state.connectingSourceId && state.connectingTargetId === id)
   const isConnectSource = useGraphUiStore((state) => state.connectingSourceId === id)
@@ -63,6 +45,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   const nodeStyle = { ...defaultNodeStyle, ...(data.nodeStyle ?? {}) }
   const borderRadius = `${nodeStyle.borderRadius}px`
   const compactDocIconSize = Math.max(8, Math.round(nodeBadgeSize * 0.72))
+  
   const badgeStyle: CSSProperties = {
     minWidth: nodeBadgeSize,
     height: nodeBadgeSize,
@@ -70,12 +53,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     fontSize: Math.max(8, Math.round(nodeBadgeSize * 0.64)),
     lineHeight: 1,
   }
-  const collapseButtonStyle: CSSProperties = {
-    width: nodeBadgeSize,
-    height: nodeBadgeSize,
-    borderRadius: Math.max(2, Math.round(nodeBadgeSize * 0.28)),
-    fontSize: Math.max(10, Math.round(nodeBadgeSize * 0.86)),
-  }
+  
   const docIconStyle: CSSProperties = {
     width: compactDocIconSize,
     height: nodeBadgeSize,
@@ -86,41 +64,27 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   }
   const headerStyle: CSSProperties = {
     width: '100%',
-    borderTopLeftRadius: borderRadius,
-    borderTopRightRadius: borderRadius,
-    borderBottomLeftRadius: shouldShowMarkdown ? undefined : borderRadius,
-    borderBottomRightRadius: shouldShowMarkdown ? undefined : borderRadius,
+    height: '100%',
+    borderRadius,
     ...(nodeStyle.headerBackgroundColor ? { backgroundColor: nodeStyle.headerBackgroundColor } : {}),
     ...(nodeStyle.headerColor ? { color: nodeStyle.headerColor } : {}),
   }
   const titleFieldStyle: CSSProperties = {
-    flex: shouldShowMarkdown ? '1 1 auto' : '0 1 auto',
+    flex: '0 1 auto',
     minWidth: 0,
-    justifyContent: shouldShowMarkdown ? 'flex-start' : 'center',
-    textAlign: shouldShowMarkdown ? 'left' : 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
     lineHeight: 1.3,
     ...(nodeStyle.headerFontSize ? { fontSize: nodeStyle.headerFontSize } : {}),
     ...(nodeStyle.headerColor ? { color: nodeStyle.headerColor } : {}),
     ...(nodeStyle.headerFontWeight ? { fontWeight: nodeStyle.headerFontWeight } : {}),
     ...(nodeStyle.headerFontStyle ? { fontStyle: nodeStyle.headerFontStyle } : {}),
   }
-  const markdownStyle = {
-    ...(nodeStyle.bodyFontSize ? { '--node-body-font-size': `${nodeStyle.bodyFontSize}px` } : {}),
-    borderBottomLeftRadius: borderRadius,
-    borderBottomRightRadius: borderRadius,
-  } as CSSProperties
+  
   const cardPath = useMemo(() => {
     const parent = typeof data.parent === 'string' ? data.parent : ''
     return resolveRoomChildRef(parent, id)
   }, [data.parent, id])
-  const entry = useCardContentStore((state) => state.entries[cardPath])
-  const detailEntry = useCardContentStore((state) => state.detailEntries[cardPath])
-  const loadCardMarkdown = useCardContentStore((state) => state.loadCardMarkdown)
-
-  useEffect(() => {
-    if (!shouldShowMarkdown) return
-    loadCardMarkdown(cardPath, storage)
-  }, [cardPath, loadCardMarkdown, shouldShowMarkdown, storage])
 
   useEffect(() => {
     if (!titleEditing) setTitleDraft(data.label)
@@ -146,29 +110,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   }, [titleEditing])
 
   useEffect(() => {
-    if (!markdownEditing) return
-    markdownTextareaRef.current?.focus()
-  }, [markdownEditing])
-
-  useEffect(() => {
-    if (!preview) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPreview(null)
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [preview])
-
-  useEffect(() => {
-    setMarkdownEditing(false)
-    setPreview(null)
-  }, [cardPath])
-
-  useEffect(() => {
     return () => {
-      if (markdownAutosaveTimerRef.current !== null) {
-        window.clearTimeout(markdownAutosaveTimerRef.current)
-      }
       if (resizeHideTimerRef.current !== null) {
         window.clearTimeout(resizeHideTimerRef.current)
       }
@@ -194,8 +136,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     }, 500)
   }, [updateResizePreview])
 
-  // 修复：React Flow 在仅点击未拖拽时可能不触发 onResizeEnd
-  // 通过全局监听 pointerup 和 pointercancel，确保任何情况下松开鼠标都会触发尺寸预览的隐藏定时器
   useEffect(() => {
     const handlePointerUp = () => {
       setResizePreviewSize((current) => {
@@ -219,7 +159,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   const handleDrillDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // 触发图谱内的向下钻取导航
     graph.navigateToChildRoom?.(id, data.label)
   }, [id, data.label, graph])
 
@@ -259,130 +198,13 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     setTitleEditing(true)
   }, [contentInteractionsEnabled, data.label])
 
-  const startMarkdownEdit = useCallback((event: React.MouseEvent) => {
-    if (!contentInteractionsEnabled) return
-    const target = event.target instanceof Element ? event.target : null
-    if (target?.closest('img, svg, a, button, textarea')) return
-    event.preventDefault()
-    event.stopPropagation()
-    setMarkdownDraft(entry?.content ?? '')
-    setMarkdownEditing(true)
-  }, [contentInteractionsEnabled, entry?.content])
-
-  const cancelMarkdownEdit = useCallback(() => {
-    setMarkdownDraft(entry?.content ?? '')
-    setMarkdownEditing(false)
-  }, [entry?.content])
-
-  const persistMarkdownDraft = useCallback(async (nextContent: string) => {
-    const savedContent = useCardContentStore.getState().entries[cardPath]?.content ?? ''
-    if (nextContent === savedContent) return
-    await storage.writeCardMarkdown(cardPath, nextContent)
-    useCardContentStore.getState().setCardMarkdown(cardPath, nextContent)
-    // 同步给 DetailPanel
-    useCardContentStore.getState().setDetailMarkdown(`${cardPath}/_card.md`, nextContent)
-    useDraftStore.getState().setDetailDraft(`${cardPath}/_card.md`, nextContent)
-  }, [cardPath, storage])
-
-  const saveMarkdownEdit = useCallback(async () => {
-    if (markdownAutosaveTimerRef.current !== null) {
-      window.clearTimeout(markdownAutosaveTimerRef.current)
-      markdownAutosaveTimerRef.current = null
-    }
-    await persistMarkdownDraft(markdownDraft)
-    setMarkdownEditing(false)
-  }, [markdownDraft, persistMarkdownDraft])
-
   useEffect(() => {
     if (contentInteractionsEnabled) return
     setTitleEditing(false)
-    setPreview(null)
-    if (!markdownEditing) return
-    if (markdownAutosaveTimerRef.current !== null) {
-      window.clearTimeout(markdownAutosaveTimerRef.current)
-      markdownAutosaveTimerRef.current = null
-    }
-    if (markdownDraft !== (entry?.content ?? '')) {
-      void persistMarkdownDraft(markdownDraft)
-    }
-    setMarkdownEditing(false)
-  }, [contentInteractionsEnabled, entry?.content, markdownDraft, markdownEditing, persistMarkdownDraft])
-
-  useEffect(() => {
-    if (!markdownEditing) return
-    if (markdownDraft === (entry?.content ?? '')) return
-
-    if (markdownAutosaveTimerRef.current !== null) {
-      window.clearTimeout(markdownAutosaveTimerRef.current)
-    }
-
-    markdownAutosaveTimerRef.current = window.setTimeout(() => {
-      markdownAutosaveTimerRef.current = null
-      void persistMarkdownDraft(markdownDraft)
-    }, 800)
-
-    return () => {
-      if (markdownAutosaveTimerRef.current !== null) {
-        window.clearTimeout(markdownAutosaveTimerRef.current)
-        markdownAutosaveTimerRef.current = null
-      }
-    }
-  }, [entry?.content, markdownDraft, markdownEditing, persistMarkdownDraft])
-
-  const handleMarkdownClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!contentInteractionsEnabled) return
-    const target = event.target instanceof Element ? event.target : null
-    const image = target?.closest('img') as HTMLImageElement | null
-    if (image?.src) {
-      event.preventDefault()
-      event.stopPropagation()
-      setPreview({ type: 'image', src: image.src, title: image.alt || '图片预览' })
-      return
-    }
-
-    const svg = target?.closest('svg') as SVGSVGElement | null
-    if (svg) {
-      event.preventDefault()
-      event.stopPropagation()
-      setPreview({ type: 'html', html: svg.outerHTML, title: '图表预览' })
-    }
   }, [contentInteractionsEnabled])
 
-
-
-  const handleToggleCollapse = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-
-    // React Flow 的 onNodesChange 触发 dimensions 变化需要带上 updateStyle
-    if (shouldShowMarkdown) {
-      // 缩小 (Collapse)
-      graph.onNodesChange([{
-        id,
-        type: 'dimensions',
-        dimensions: {
-          width: Math.min(nodeSizeLimits.maxWidth, Math.max(nodeSizeLimits.minWidth, data.collapsedWidth || COLLAPSED_NODE_WIDTH)),
-          height: Math.min(nodeSizeLimits.maxHeight, Math.max(nodeSizeLimits.minHeight, data.collapsedHeight || COLLAPSED_NODE_HEIGHT)),
-        },
-        updateStyle: true,
-        resizing: false
-      } as NodeDimensionChange])
-    } else {
-      // 展开 (Expand): 使用记录的展开尺寸，如果没有则使用默认最小展开尺寸
-      const targetWidth = Math.min(nodeSizeLimits.maxWidth, Math.max(data.expandedWidth || MARKDOWN_MIN_WIDTH, MARKDOWN_MIN_WIDTH, nodeSizeLimits.minWidth))
-      const targetHeight = Math.min(nodeSizeLimits.maxHeight, Math.max(data.expandedHeight || MARKDOWN_MIN_HEIGHT, MARKDOWN_MIN_HEIGHT, nodeSizeLimits.minHeight))
-      graph.onNodesChange([{
-        id,
-        type: 'dimensions',
-        dimensions: { width: targetWidth, height: targetHeight },
-        updateStyle: true,
-        resizing: false
-      } as NodeDimensionChange])
-    }
-  }, [id, data.expandedWidth, data.expandedHeight, data.collapsedWidth, data.collapsedHeight, shouldShowMarkdown, graph, nodeSizeLimits.maxHeight, nodeSizeLimits.maxWidth, nodeSizeLimits.minHeight, nodeSizeLimits.minWidth])
-
-  const hasCardContent = entry ? entry.content.trim().length > 0 : data.hasContent === true
-  const hasDetail = detailEntry ? detailEntry.content.trim().length > 0 : data.hasDetail === true
   const hasChildBadge = data.childCount !== undefined && data.childCount > 0
+  const hasDetail = data.hasDetail === true
 
   return (
     <div
@@ -397,7 +219,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       }}
       className={cn(
         "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-surface shadow-sm transition-opacity duration-75 active:border-accent active:shadow-[0_0_0_1px_var(--color-accent-soft)] w-full h-full box-border",
-        shouldShowMarkdown && "nowheel",
         selected && "border-accent shadow-[0_0_0_1px_var(--color-accent)] z-10",
         isConnectTarget && "border-2 border-success shadow-[0_0_0_1px_var(--color-success)] !border-success z-10",
         visuallyHovered && !visuallySelected && !isConnectTarget && "border-border-strong",
@@ -451,9 +272,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
 
       <div className="flex flex-1 flex-col items-stretch justify-start overflow-hidden pointer-events-none min-w-0 min-h-0" style={{ borderRadius }}>
         {/* Header 层 */}
-        <div className={cn("flex flex-1 items-center justify-start border-b border-border-subtle bg-bg/80 min-h-[18px] w-full pointer-events-none", shouldShowMarkdown && "flex-none")} style={headerStyle}>
+        <div className="flex w-full items-center justify-between shrink-0" style={headerStyle}>
           {/* 左侧占位符，用来平衡右侧控件宽度，保证标题居中 */}
-          <div style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0', width: shouldShowMarkdown ? 0 : undefined, pointerEvents: 'none' }}></div>
+          <div style={{ flex: '1 1 0', pointerEvents: 'none' }}></div>
 
           <div
             className={cn("flex items-center min-w-0 min-h-[calc(1.3em+4px)] py-[1px] rounded-md transition-colors duration-75", titleEditing && "bg-surface/20 shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-surface/40 focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
@@ -485,7 +306,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
           </div>
 
-          <div className="relative z-50 flex items-center justify-end gap-[2px] shrink-0 ml-0 pr-[6px] pointer-events-auto" style={{ flex: shouldShowMarkdown ? 'none' : '1 1 0' }}>
+          <div className="relative z-50 flex items-center justify-end gap-[2px] shrink-0 ml-0 pr-[6px] pointer-events-auto" style={{ flex: '1 1 0' }}>
             {hasDetail && (
               <div className="flex items-center justify-center shrink-0 text-muted-foreground leading-none" title="包含详情" style={docIconStyle}>
                 <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={docIconSvgStyle}>
@@ -509,85 +330,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                 {data.childCount}
               </div>
             )}
-            {hasCardContent && (
-              <div
-                className="flex items-center justify-center bg-border-light text-text-secondary cursor-pointer transition-colors duration-75 hover:bg-border-strong hover:text-text-primary font-bold select-none"
-                onClick={handleToggleCollapse}
-                title={shouldShowMarkdown ? '收起卡片' : '展开卡片'}
-                style={collapseButtonStyle}
-              >
-                {shouldShowMarkdown ? '−' : '+'}
-              </div>
-            )}
           </div>
         </div>
-
-        {/* Body 层 */}
-        {shouldShowMarkdown && (
-          <div
-            className={cn(
-              "flex-1 min-w-0 min-h-0 bg-surface overflow-hidden transition-colors duration-75 border-t border-border-subtle",
-              contentInteractionsEnabled && "cursor-text pointer-events-auto nodrag nowheel",
-              !contentInteractionsEnabled && "pointer-events-none"
-            )}
-            onClick={contentInteractionsEnabled ? handleMarkdownClick : undefined}
-            onDoubleClick={contentInteractionsEnabled ? startMarkdownEdit : undefined}
-            onPointerDown={contentInteractionsEnabled ? (event) => event.stopPropagation() : undefined}
-            style={markdownStyle}
-          >
-            {entry?.loading ? (
-              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground bg-bg-muted/50">加载中...</div>
-            ) : markdownEditing && contentInteractionsEnabled ? (
-              <div 
-                className="h-full w-full bg-surface" 
-                onPointerDown={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => {
-                  event.stopPropagation()
-                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                    event.preventDefault()
-                    void saveMarkdownEdit()
-                  }
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    cancelMarkdownEdit()
-                  }
-                }}
-              >
-                <MarkdownWorkspace
-                  value={markdownDraft}
-                  savedValue={entry?.content ?? ''}
-                  onChange={setMarkdownDraft}
-                  onSave={saveMarkdownEdit}
-                  documentType="card"
-                  attachmentCardPath={cardPath}
-                  placeholder="输入卡片 Markdown..."
-                />
-              </div>
-            ) : entry?.content ? (
-              <MarkdownPreview content={entry.content} compact className="markdownBody h-full w-full overflow-y-auto overflow-x-hidden p-2 bg-surface text-foreground" attachmentCardPath={cardPath} />
-            ) : null}
-          </div>
-        )}
       </div>
-      {preview && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setPreview(null)}>
-          <div className="flex flex-col max-w-[90vw] max-h-[90vh] bg-surface rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-75" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-bg-muted/50">
-              <span className="font-medium text-foreground truncate mr-4">{preview.title}</span>
-              <button type="button" className="flex items-center justify-center w-6 h-6 rounded-md hover:bg-surface-hover text-muted-foreground hover:text-foreground transition-colors" onClick={() => setPreview(null)}>×</button>
-            </div>
-            <div className="flex-1 overflow-auto p-4 bg-bg-app flex items-center justify-center min-h-[200px]">
-              {preview.type === 'image' ? (
-                <img src={preview.src} alt={preview.title} className="max-w-full max-h-full object-contain rounded-md" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:h-auto" dangerouslySetInnerHTML={{ __html: preview.html }} />
-              )}
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   )
 }

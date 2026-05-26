@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTabStore } from '../../stores/tabStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { useRightPanelStore } from '../../stores/rightPanelStore'
+import { useShortcut } from '../../hooks/useShortcut'
 import TabBar from '../TabBar/TabBar'
 import type { WindowControlsState } from '../../types/electron-api'
 
@@ -77,6 +78,10 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     }
   }, [])
 
+  useShortcut(['Escape'], () => {
+    if (activeMenu) setActiveMenu(null)
+  }, { scope: 'global', preventDefault: false })
+
   useEffect(() => {
     if (!activeMenu) return
     
@@ -106,17 +111,12 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     }
     window.addEventListener('pointerdown', handleWindowPointerDown, { capture: true })
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActiveMenu(null)
-    }
-    window.addEventListener('keydown', handleKeyDown)
     return () => {
       overlay.removeEventListener('pointerdown', handleClose)
       if (overlay.parentNode) {
         overlay.parentNode.removeChild(overlay)
       }
       window.removeEventListener('pointerdown', handleWindowPointerDown, { capture: true })
-      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [activeMenu])
 
@@ -184,23 +184,23 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                   {menu.label}
                 </button>
                 {activeMenu === menu.key && (
-                  <div className="absolute top-[calc(100%+6px)] left-0 min-w-[188px] p-1.5 rounded-[10px] border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-[14px] z-[3001]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                  <div className="absolute top-[calc(100%+6px)] left-0 min-w-[188px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-[3001]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
                     {menuItems[menu.key].map((item) => (
                       item.submenu ? (
                         <div key={item.label} className="relative group">
                           <button
                             type="button"
-                            className="w-full h-[30px] flex items-center justify-between gap-4 px-[9px] rounded-[7px] bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-default hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] peer"
+                            className="flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] peer"
                           >
                             <span>{item.label}</span>
                             <span className="text-[var(--color-text-muted)] text-[10px]">▶</span>
                           </button>
-                          <div className="absolute top-0 left-[calc(100%+4px)] min-w-[140px] p-1.5 rounded-[10px] border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-[14px] opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-75 z-[3002]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                          <div className="absolute top-[-6px] left-[calc(100%-4px)] min-w-[140px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-100 animate-in fade-in slide-in-from-left-1 z-[3002]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
                             {item.submenu.map(subItem => (
                               <button
                                 key={subItem.label}
                                 type="button"
-                                className="w-full h-[30px] flex items-center justify-between gap-2 px-[9px] rounded-[7px] bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-default hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] disabled:hover:bg-transparent disabled:hover:text-[var(--color-text-muted)] disabled:text-[var(--color-text-muted)]"
+                                className="flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
                                 disabled={subItem.disabled}
                                  onClick={() => {
                                   if (subItem.disabled) return
@@ -218,7 +218,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                         <button
                           key={item.label}
                           type="button"
-                          className="w-full h-[30px] flex items-center justify-between gap-4 px-[9px] rounded-[7px] bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-default hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] disabled:hover:bg-transparent disabled:hover:text-[var(--color-text-muted)] disabled:text-[var(--color-text-muted)]"
+                          className="flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
                           disabled={item.disabled}
                           onClick={() => {
                             if (item.disabled) return
@@ -227,7 +227,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                           }}
                         >
                           <span>{item.label}</span>
-                          {item.shortcut && <span className="text-[var(--color-text-muted)] text-[11px]">{item.shortcut}</span>}
+                          {item.shortcut && <span className="text-[var(--color-text-muted)] text-[11px] font-sans tracking-widest">{item.shortcut}</span>}
                         </button>
                       )
                     ))}

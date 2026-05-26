@@ -55,7 +55,7 @@ export default memo(function RightPanelContainer({ tabId }: RightPanelContainerP
   }
 
   return (
-    <div className="relative flex h-full shrink-0">
+    <div className="relative flex h-full shrink-0 right-panel-container">
       {willAutoCollapse && isResizing && (
         <>
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 z-[22] w-[3px] bg-[var(--color-accent)] shadow-[-10px_0_20px_rgba(59,130,246,0.22)]" />

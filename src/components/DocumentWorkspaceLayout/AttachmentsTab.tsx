@@ -1,19 +1,26 @@
 import { memo, useEffect, useState, useCallback } from 'react'
-import { EditorView } from '@codemirror/view'
 import { useStorage } from '../../core/storage'
 import { useConfirmStore } from '../../stores/confirmStore'
 import { logger } from '../../core/logger'
-import { insertAttachmentLink } from './markdownCommands'
 import type { AttachmentItem } from '../../core/storage'
 import { logAction } from '../../core/log-backend'
-import { generateUniqueFileName } from './AttachmentPipeline'
+
+export function generateUniqueFileName(originalName: string): string {
+  const uuid = crypto.randomUUID().split('-')[0]
+  const lastDot = originalName.lastIndexOf('.')
+  if (lastDot !== -1 && lastDot !== 0) {
+    const name = originalName.substring(0, lastDot)
+    const ext = originalName.substring(lastDot)
+    return `${name}_${uuid}${ext}`
+  }
+  return `${originalName}_${uuid}`
+}
 
 interface AttachmentsTabProps {
   attachmentCardPath: string
-  view: EditorView | null
 }
 
-export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath, view }: AttachmentsTabProps) {
+export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath }: AttachmentsTabProps) {
   const storage = useStorage()
   const confirm = useConfirmStore(s => s.open)
   const [attachments, setAttachments] = useState<AttachmentItem[]>([])
@@ -35,23 +42,6 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
   useEffect(() => {
     void loadAttachments()
   }, [loadAttachments])
-
-  const handleInsert = useCallback((item: AttachmentItem) => {
-    if (!view) {
-      logger.info('AttachmentsTab', 'Editor not ready or in preview mode, cannot insert.')
-      return
-    }
-    
-    // 如果焦点不在编辑器中，尝试强制聚焦
-    if (!view.hasFocus) {
-      view.focus()
-    }
-    
-    // Slight delay to ensure focus is applied before inserting
-    setTimeout(() => {
-      insertAttachmentLink(view, item.path, item.isImage, item.name)
-    }, 10)
-  }, [view])
 
   const handleDelete = useCallback(async (item: AttachmentItem, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -101,9 +91,9 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
     const handleRefresh = () => {
       void loadAttachments()
     }
-    window.addEventListener('markdown-attachment-uploaded', handleRefresh)
+    window.addEventListener('document-attachment-uploaded', handleRefresh)
     return () => {
-      window.removeEventListener('markdown-attachment-uploaded', handleRefresh)
+      window.removeEventListener('document-attachment-uploaded', handleRefresh)
     }
   }, [loadAttachments])
 
@@ -126,10 +116,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
           {attachments.map(item => (
             <div 
               key={item.name} 
-              className="flex items-center gap-2 p-2 rounded-md cursor-pointer select-none transition-colors duration-75 hover:bg-[#f1f5f9] hover:!bg-[var(--color-hover-bg)] group"
-              onDoubleClick={() => handleInsert(item)}
-              title={view ? "双击插入到编辑器" : "切换到编辑模式后双击插入"}
-              style={{ opacity: view ? 1 : 0.6 }}
+              className="flex items-center gap-2 p-2 rounded-md select-none transition-colors duration-75 hover:bg-[#f1f5f9] hover:!bg-[var(--color-hover-bg)] group"
             >
               <div className="text-[18px] flex items-center justify-center w-6 shrink-0 text-[#64748b] !text-[var(--color-text-muted)]">
                 {item.isImage ? '🖼️' : '📄'}

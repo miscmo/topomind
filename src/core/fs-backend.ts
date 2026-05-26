@@ -5,7 +5,7 @@
 import { logger } from './logger'
 import type { ElectronAPI } from '../types/electron-api'
 import type { EdgeRelation, EdgeWeight } from '../types'
-import type { DetailDocumentItem } from './storage/service'
+import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentRepairResult } from './storage/service'
 
 const getApi = (): ElectronAPI | null => {
   const w = window as Window
@@ -77,10 +77,16 @@ export interface FSB {
   readGraphMeta: (rootDir: string, roomPath: string) => Promise<FSBGraphMeta>
   writeGraphMeta: (rootDir: string, roomPath: string, meta: FSBGraphMeta) => Promise<unknown>
   readFile: (rootDir: string, filePath: string) => Promise<string>
-  listDetailDocuments: (rootDir: string, cardPath: string) => Promise<DetailDocumentItem[]>
-  createDetailDocument: (rootDir: string, cardPath: string, name: string) => Promise<DetailDocumentItem>
-  renameDetailDocument: (rootDir: string, cardPath: string, documentPath: string, nextName: string) => Promise<DetailDocumentItem>
-  deleteDetailDocument: (rootDir: string, cardPath: string, documentPath: string) => Promise<void>
+  listTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentManifestItem[]>
+  createTopoDocument: (rootDir: string, cardPath: string, input: TopoDocumentCreateInput) => Promise<TopoDocumentManifestItem>
+  readTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<unknown>
+  writeTopoDocument: (rootDir: string, cardPath: string, documentId: string, content: unknown) => Promise<void>
+  renameTopoDocument: (rootDir: string, cardPath: string, documentId: string, title: string) => Promise<TopoDocumentManifestItem>
+  deleteTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<void>
+  moveTopoDocument: (rootDir: string, cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
+  repairTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentRepairResult>
+  exportTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
+  openTopoDocumentFolder: (rootDir: string, cardPath: string, documentId: string) => Promise<boolean>
   listAttachments: (rootDir: string, cardPath: string) => Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>
   importAttachment: (rootDir: string, cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
   deleteAttachment: (rootDir: string, cardPath: string, attachmentName: string) => Promise<void>
@@ -111,14 +117,26 @@ const FSBImpl: FSB = {
   writeGraphMeta: (rootDir, roomPath, meta) => _call('fs:writeGraphMeta', rootDir, roomPath, meta),
 
   readFile: (rootDir, filePath) => _call('fs:readFile', rootDir, filePath) as Promise<string>,
-  listDetailDocuments: (rootDir, cardPath) =>
-    _call('fs:listDetailDocuments', rootDir, cardPath) as Promise<DetailDocumentItem[]>,
-  createDetailDocument: (rootDir, cardPath, name) =>
-    _call('fs:createDetailDocument', rootDir, cardPath, name) as Promise<DetailDocumentItem>,
-  renameDetailDocument: (rootDir, cardPath, documentPath, nextName) =>
-    _call('fs:renameDetailDocument', rootDir, cardPath, documentPath, nextName) as Promise<DetailDocumentItem>,
-  deleteDetailDocument: (rootDir, cardPath, documentPath) =>
-    _call('fs:deleteDetailDocument', rootDir, cardPath, documentPath) as Promise<void>,
+  listTopoDocuments: (rootDir, cardPath) =>
+    _call('fs:listTopoDocuments', rootDir, cardPath) as Promise<TopoDocumentManifestItem[]>,
+  createTopoDocument: (rootDir, cardPath, input) =>
+    _call('fs:createTopoDocument', rootDir, cardPath, input) as Promise<TopoDocumentManifestItem>,
+  readTopoDocument: (rootDir, cardPath, documentId) =>
+    _call('fs:readTopoDocument', rootDir, cardPath, documentId),
+  writeTopoDocument: (rootDir, cardPath, documentId, content) =>
+    _call('fs:writeTopoDocument', rootDir, cardPath, documentId, content) as Promise<void>,
+  renameTopoDocument: (rootDir, cardPath, documentId, title) =>
+    _call('fs:renameTopoDocument', rootDir, cardPath, documentId, title) as Promise<TopoDocumentManifestItem>,
+  deleteTopoDocument: (rootDir, cardPath, documentId) =>
+    _call('fs:deleteTopoDocument', rootDir, cardPath, documentId) as Promise<void>,
+  moveTopoDocument: (rootDir, cardPath, documentId, newParentId, newSortOrder) =>
+    _call('fs:moveTopoDocument', rootDir, cardPath, documentId, newParentId, newSortOrder) as Promise<TopoDocumentManifestItem>,
+  repairTopoDocuments: (rootDir, cardPath) =>
+    _call('fs:repairTopoDocuments', rootDir, cardPath) as Promise<TopoDocumentRepairResult>,
+  exportTopoDocument: (rootDir, cardPath, documentId) =>
+    _call('fs:exportTopoDocument', rootDir, cardPath, documentId) as Promise<TopoDocumentExportPayload>,
+  openTopoDocumentFolder: (rootDir, cardPath, documentId) =>
+    _call('fs:openTopoDocumentFolder', rootDir, cardPath, documentId) as Promise<boolean>,
   listAttachments: (rootDir, cardPath) =>
     _call('fs:listAttachments', rootDir, cardPath) as Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>,
   importAttachment: (rootDir, cardPath, sourceFilePath, targetFileName) =>

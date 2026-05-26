@@ -69,7 +69,7 @@ export default memo(function App() {
           <div className="relative w-full flex-1 min-h-0 overflow-hidden bg-[var(--color-surface)]">
             <div
               className="absolute inset-0 transition-opacity duration-120 ease-in-out"
-              inert={activeTab?.type === 'home' ? undefined : ""}
+              inert={activeTab?.type === 'home' ? undefined : true}
               style={{
                 visibility: activeTab?.type === 'home' ? 'visible' : 'hidden',
                 opacity: activeTab?.type === 'home' ? 1 : 0,
@@ -83,7 +83,7 @@ export default memo(function App() {
             </div>
             <div
               className="absolute inset-0 transition-opacity duration-120 ease-in-out"
-              inert={activeTab?.type === 'monitor' ? undefined : ""}
+              inert={activeTab?.type === 'monitor' ? undefined : true}
               style={{
                 visibility: activeTab?.type === 'monitor' ? 'visible' : 'hidden',
                 opacity: activeTab?.type === 'monitor' ? 1 : 0,
@@ -100,7 +100,7 @@ export default memo(function App() {
               <div
                 key={tab.id}
                 className="absolute inset-0 transition-opacity duration-120 ease-in-out"
-                inert={activeTabId === tab.id ? undefined : ""}
+                inert={activeTabId === tab.id ? undefined : true}
                 style={{
                   visibility: activeTabId === tab.id ? 'visible' : 'hidden',
                   opacity: activeTabId === tab.id ? 1 : 0,

@@ -60,8 +60,7 @@ export interface SerializedEdge {
 
 export interface BuildNodesStorage {
   countChildren: (cardPath: string) => Promise<number>
-  readMarkdown: (cardPath: string) => Promise<string>
-  readCardMarkdown: (cardPath: string) => Promise<string>
+  listTopoDocuments?: (cardPath: string) => Promise<unknown[]>
 }
 
 /** Convert nodes+edges to adapter GraphMeta format */
@@ -140,12 +139,11 @@ export async function buildNodes(
     normalizedChildren,
     GRAPH_NODE_IO_CONCURRENCY,
     async ([, childPath]) => {
-      const [childCount, hasContent, hasDetail] = await Promise.all([
-        storage.countChildren(childPath).catch(() => 0),
-        storage.readCardMarkdown(childPath).then((content) => content.trim().length > 0).catch(() => false),
-        storage.readMarkdown(childPath).then((content) => content.trim().length > 0).catch(() => false),
-      ])
-      return { childCount, hasContent, hasDetail }
+      const childCount = await storage.countChildren(childPath).catch(() => 0)
+      const hasDetail = storage.listTopoDocuments 
+        ? await storage.listTopoDocuments(childPath).then(docs => docs.length > 0).catch(() => false)
+        : false
+      return { childCount, hasContent: false, hasDetail }
     }
   )
 

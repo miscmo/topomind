@@ -33,6 +33,14 @@ export interface DefaultNodeSize {
   height: number
 }
 
+export interface DefaultEditorStyle {
+  fontSize: number
+  fontFamily: string
+  backgroundColor: string
+  textColor: string
+  lineHeight: number
+}
+
 export interface NodeSizeLimits {
   minWidth: number
   minHeight: number
