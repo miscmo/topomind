@@ -590,10 +590,6 @@ function _fs_reconcileTopoDocumentManifest(rootDir, cardPath, manifest) {
   };
 }
 
-function _fs_migrateOldContentToTree(rootDir, cardPath, manifest) {
-  return false;
-}
-
 function _fs_loadTopoDocumentManifest(rootDir, cardPath) {
   var treePath = _fs_topoDocumentManifestPath(rootDir, cardPath);
   var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
@@ -623,10 +619,9 @@ function _fs_loadTopoDocumentManifest(rootDir, cardPath) {
 function _fs_readTopoDocumentManifest(rootDir, cardPath) {
   var treePath = _fs_topoDocumentManifestPath(rootDir, cardPath);
   var loaded = _fs_loadTopoDocumentManifest(rootDir, cardPath);
-  var migrated = _fs_migrateOldContentToTree(rootDir, cardPath, loaded.manifest);
   var reconciled = _fs_reconcileTopoDocumentManifest(rootDir, cardPath, loaded.manifest);
-  if (loaded.corrupted || loaded.normalized || migrated || reconciled.changed) {
-    if (nodeFs.existsSync(_fs_topoDocumentsDir(rootDir, cardPath)) || nodeFs.existsSync(treePath) || migrated) {
+  if (loaded.corrupted || loaded.normalized || reconciled.changed) {
+    if (nodeFs.existsSync(_fs_topoDocumentsDir(rootDir, cardPath)) || nodeFs.existsSync(treePath)) {
       _fs_writeTopoDocumentManifest(rootDir, cardPath, reconciled.manifest);
     }
   }
@@ -1280,7 +1275,7 @@ const fileService = {
             copyDirRecursive(srcEntry, destEntry);
           } else {
             _fs_ensureDir(nodePath.dirname(destEntry));
-            if (/\.(json|md|txt)$/i.test(entry.name)) {
+            if (/\.(json|txt)$/i.test(entry.name)) {
               var text = nodeFs.readFileSync(srcEntry, 'utf-8');
               nodeFs.writeFileSync(destEntry, text, 'utf-8');
             } else {
