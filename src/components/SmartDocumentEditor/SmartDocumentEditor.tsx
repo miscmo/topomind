@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { DragHandleButton, SideMenu, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtension, useExtensionState, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
 import { filterSuggestionItems } from '@blocknote/core'
@@ -290,6 +290,26 @@ function SmartDocumentSideMenu() {
   )
 }
 
+function SmartDocumentSideMenuBoundary({ editorRootRef }: { editorRootRef: RefObject<HTMLDivElement | null> }) {
+  const sideMenu = useExtension(SideMenuExtension)
+
+  useEffect(() => {
+    const ownerDocument = editorRootRef.current?.ownerDocument ?? document
+    const handleMouseMove = (event: MouseEvent) => {
+      const editorRoot = editorRootRef.current
+      const target = event.target
+      if (!editorRoot || !(target instanceof Node)) return
+      if (editorRoot.contains(target)) return
+      sideMenu.hideMenuIfNotFrozen()
+    }
+
+    ownerDocument.addEventListener('mousemove', handleMouseMove, true)
+    return () => ownerDocument.removeEventListener('mousemove', handleMouseMove, true)
+  }, [editorRootRef, sideMenu])
+
+  return null
+}
+
 function createTableBlock() {
   return {
     type: 'table',
@@ -392,11 +412,13 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor({ value, on
     '--topomind-smart-body-font-size': `${defaultEditorStyle.fontSize}px`,
     '--topomind-smart-line-height': String(defaultEditorStyle.lineHeight),
   }) as CSSProperties, [defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight])
+  const editorRootRef = useRef<HTMLDivElement>(null)
 
   return (
     <div className="h-full min-h-0 overflow-y-auto" spellCheck={false} style={{ backgroundColor: defaultEditorStyle.backgroundColor || 'var(--color-surface)' }}>
       <div
-        className="smart-document-content h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-4 [&_.bn-container]:!py-0 [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-4 [&_.bn-editor]:!max-w-[760px] [&_.bn-editor]:!mx-auto [&_.bn-editor]:!w-full [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"
+        ref={editorRootRef}
+        className="smart-document-content h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-4 [&_.bn-container]:!py-0 [&_.bn-container]:!max-w-[800px] [&_.bn-container]:!mx-auto [&_.bn-container]:!w-full [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-4 [&_.bn-editor]:!w-full [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"
       >
         <BlockNoteView
           editor={editor}
@@ -437,6 +459,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor({ value, on
               )
             }
           />
+          <SmartDocumentSideMenuBoundary editorRootRef={editorRootRef} />
           <SideMenuController sideMenu={SmartDocumentSideMenu} />
         </BlockNoteView>
       </div>
