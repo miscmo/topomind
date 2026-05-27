@@ -2,7 +2,7 @@
  * 右侧详情面板
  * 显示节点 文档内容，支持预览/编辑切换
  */
-import { useEffect, useState, useRef, memo, useCallback } from 'react'
+import { useEffect, useState, memo, useCallback } from 'react'
 import { useGraphStore, useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
 import { DocumentWorkspace } from '../../DocumentWorkspace/DocumentWorkspace'
 import { tabStore } from '../../../stores/tabStore'
@@ -92,27 +92,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     const saved = localStorage.getItem('topomind_detail_sidebar_collapsed')
     return saved ? saved === 'true' : true
   })
-  const [isPanelHovered, setIsPanelHovered] = useState(false)
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  const handleHoverEnter = useCallback(() => {
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-    setIsPanelHovered(true)
-  }, [])
-
-  const handleHoverLeave = useCallback(() => {
-    hoverTimeoutRef.current = setTimeout(() => {
-      setIsPanelHovered(false)
-    }, 150)
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) {
-        window.clearTimeout(hoverTimeoutRef.current)
-      }
-    }
-  }, [])
 
   const currentTopoDocuments = nodePath && topoDocumentsCardPath === nodePath ? topoDocuments : []
   const activeTopoDocument = activeTopoDocumentId
@@ -141,12 +120,9 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     })
   }, [selectedNodeId, nodePath, loadDocuments])
 
-  const handleToggleSidebar = useCallback(() => {
-    setDetailSidebarCollapsed((collapsed) => {
-      const next = !collapsed
-      localStorage.setItem('topomind_detail_sidebar_collapsed', String(next))
-      return next
-    })
+  const handleDetailSidebarCollapsedChange = useCallback((collapsed: boolean) => {
+    setDetailSidebarCollapsed(collapsed)
+    localStorage.setItem('topomind_detail_sidebar_collapsed', String(collapsed))
   }, [])
 
   // ===== Empty state =====
@@ -169,35 +145,13 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           onSave={handleSave}
           attachmentCardPath={nodePath}
           detailSidebarCollapsed={detailSidebarCollapsed}
-          detailSidebarFloating={detailSidebarCollapsed && isPanelHovered}
-          onDetailSidebarCollapsedChange={handleToggleSidebar}
-          onSidebarHoverChange={(hovered: boolean) => hovered ? handleHoverEnter() : handleHoverLeave()}
+          detailSidebarFloating={false}
+          onDetailSidebarCollapsedChange={handleDetailSidebarCollapsedChange}
+          onSidebarHoverChange={() => {}}
           detailHeader={(
             <div className="min-h-[58px] px-4 pt-2.5 pb-2 border-b border-[var(--color-border-light)] shrink-0 flex flex-col justify-center gap-1 bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)] box-border">
               <div className="flex items-center justify-between gap-3 w-full">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <button
-                    type="button"
-                    className="w-6 h-6 inline-flex items-center justify-center shrink-0 p-0 border border-[var(--color-border)] rounded-[7px] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] text-[var(--color-text-muted)] cursor-pointer shadow-[var(--shadow-sm)] transition-all hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-primary)] hover:shadow-[var(--shadow-md)] active:shadow-[var(--shadow-sm)]"
-                    onClick={handleToggleSidebar}
-                    onMouseEnter={handleHoverEnter}
-                    onMouseLeave={handleHoverLeave}
-                    title={detailSidebarCollapsed ? '展开左侧栏' : '收起左侧栏'}
-                    aria-label={detailSidebarCollapsed ? '展开左侧栏' : '收起左侧栏'}
-                  >
-                    <span className="relative w-3 h-3 inline-block" aria-hidden="true">
-                      <span className="absolute left-0 w-3 h-[1.5px] rounded-full bg-current opacity-90 top-[1px]" />
-                      <span className="absolute left-0 w-3 h-[1.5px] rounded-full bg-current opacity-90 top-[5px]" />
-                      <span className="absolute left-0 w-3 h-[1.5px] rounded-full bg-current opacity-90 top-[9px]" />
-                      <span
-                        className={`absolute top-1 right-[-1px] w-0 h-0 border-y-[3px] border-y-transparent ${
-                          detailSidebarCollapsed
-                            ? 'border-l-[4px] border-l-current'
-                            : 'border-r-[4px] border-r-current'
-                        }`}
-                      />
-                    </span>
-                  </button>
                   <div className="flex flex-col gap-[3px] min-w-0 flex-1">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span

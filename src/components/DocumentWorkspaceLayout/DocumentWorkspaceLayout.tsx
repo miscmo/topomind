@@ -91,10 +91,14 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     }
   }, [onTocItemClick])
 
-  const openRailTab = useCallback((tab: DetailSidebarTab) => {
-    setDetailSidebarTab(tab)
-    setDetailSidebarCollapsed(false)
-  }, [setDetailSidebarCollapsed])
+  const handleRailTabClick = useCallback((tab: DetailSidebarTab) => {
+    if (!detailSidebarCollapsed && detailSidebarTab === tab) {
+      setDetailSidebarCollapsed(true)
+    } else {
+      setDetailSidebarTab(tab)
+      setDetailSidebarCollapsed(false)
+    }
+  }, [detailSidebarCollapsed, detailSidebarTab, setDetailSidebarCollapsed])
 
   return (
     <div 
@@ -102,33 +106,33 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
       className={`flex flex-col h-full border border-[var(--color-border)] rounded-[10px] overflow-hidden bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shadow-[var(--shadow-sm)] ${documentType}`} 
     >
       <div className="flex flex-1 overflow-hidden relative">
-        {documentType === 'detail' && detailSidebarCollapsed && !effectiveFloating && (
-          <div className="w-9 shrink-0 border-r border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] flex flex-col items-center gap-1 py-2">
+        {documentType === 'detail' && !effectiveFloating && (
+          <div className="w-9 shrink-0 border-r border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] flex flex-col items-center gap-1 py-2 z-10">
             <button
               type="button"
-              className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-[var(--color-text-muted)] text-[12px] font-semibold cursor-pointer hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]"
-              onClick={() => openRailTab('documents')}
-              title="展开节点文档"
-              aria-label="展开节点文档"
+              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'documents' ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'}`}
+              onClick={() => handleRailTabClick('documents')}
+              title="文档"
+              aria-label="文档"
             >
               文
             </button>
             <button
               type="button"
-              className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-[var(--color-text-muted)] text-[12px] font-semibold cursor-pointer hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]"
-              onClick={() => openRailTab('toc')}
-              title="展开本文目录"
-              aria-label="展开本文目录"
+              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'toc' ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'}`}
+              onClick={() => handleRailTabClick('toc')}
+              title="目录"
+              aria-label="目录"
             >
               目
             </button>
             <button
               type="button"
-              className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-[var(--color-text-muted)] text-[12px] font-semibold cursor-pointer hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-              onClick={() => openRailTab('attachments')}
+              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${!detailSidebarCollapsed && detailSidebarTab === 'attachments' ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'}`}
+              onClick={() => handleRailTabClick('attachments')}
               disabled={!attachmentCardPath}
-              title="展开节点附件"
-              aria-label="展开节点附件"
+              title={!attachmentCardPath ? '当前环境暂不支持附件' : '附件'}
+              aria-label="附件"
             >
               附
             </button>
@@ -149,32 +153,10 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
           >
             <div className="flex items-center justify-start gap-2 min-h-[58px] p-2.5 px-3 pb-2 border-b border-[var(--color-border-subtle)] bg-gradient-to-b from-[color-mix(in_srgb,var(--color-surface)_98%,transparent)] to-[var(--color-bg)] box-border">
               {showSidebarContent ? (
-                <div className="w-full min-w-0">
-                  <div className="flex gap-[2px] min-w-0 p-[2px] border border-[#e2e8f0] rounded-[10px] bg-[color-mix(in_srgb,var(--color-bg-muted)_88%,transparent)] shadow-[inset_0_1px_1px_rgba(148,163,184,0.08)]">
-                    <button
-                      type="button"
-                      className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-75 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'documents' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
-                      onClick={() => setDetailSidebarTab('documents')}
-                    >
-                      文档
-                    </button>
-                    <button
-                      type="button"
-                      className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-75 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'toc' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
-                      onClick={() => setDetailSidebarTab('toc')}
-                    >
-                      目录
-                    </button>
-                    <button
-                      type="button"
-                      className={`flex-1 h-[30px] px-2.5 border-none rounded-lg bg-transparent text-[#73808c] text-[12px] font-semibold cursor-pointer transition-all duration-75 whitespace-nowrap hover:text-[#1a3a5c] hover:bg-white/70 disabled:opacity-50 disabled:cursor-not-allowed ${detailSidebarTab === 'attachments' ? 'bg-gradient-to-b from-white to-[#f8fbff] !text-[var(--color-primary)] shadow-[0_1px_2px_rgba(15,23,42,0.06)]' : ''}`}
-                      onClick={() => setDetailSidebarTab('attachments')}
-                      disabled={!attachmentCardPath}
-                      title={!attachmentCardPath ? '当前环境暂不支持附件' : '附件'}
-                    >
-                      附件
-                    </button>
-                  </div>
+                <div className="w-full min-w-0 flex items-center h-[30px]">
+                  <span className="text-[14px] font-bold text-[var(--color-text-primary)]">
+                    {detailSidebarTab === 'documents' ? '文档' : detailSidebarTab === 'toc' ? '目录' : '附件'}
+                  </span>
                 </div>
               ) : (
                 <div className="w-full h-full" aria-hidden="true" />
