@@ -772,6 +772,8 @@ function _fs_normalizeTopoDocumentManifest(raw) {
             updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : Date.now(),
             version: Number.isFinite(item.version) ? item.version : 1
           };
+          if (item.originalParentId) documents[id].originalParentId = String(item.originalParentId);
+          if (item.originalDocumentId) documents[id].originalDocumentId = String(item.originalDocumentId);
         } catch (e) {}
       });
     } else if (Array.isArray(raw.documents)) {
@@ -794,6 +796,8 @@ function _fs_normalizeTopoDocumentManifest(raw) {
             updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : Date.now(),
             version: Number.isFinite(item.version) ? item.version : 1
           };
+          if (item.originalParentId) documents[id].originalParentId = String(item.originalParentId);
+          if (item.originalDocumentId) documents[id].originalDocumentId = String(item.originalDocumentId);
         } catch (e) {}
       });
     }
@@ -1191,6 +1195,20 @@ function _fs_listTrashTopoDocuments(rootDir, cardPath) {
   });
 }
 
+function _fs_relinkRestoredTopoDocumentChildren(manifest, originalParentId, restoredParentId) {
+  if (!originalParentId || !restoredParentId) return;
+  Object.keys(manifest.documents).forEach(function(id) {
+    var item = manifest.documents[id];
+    if (!item || item.id === restoredParentId) return;
+    if (item.parentId !== null) return;
+    if (item.originalParentId !== String(originalParentId)) return;
+    item.parentId = String(restoredParentId);
+    item.updatedAt = Date.now();
+    delete item.originalParentId;
+    manifest.documents[id] = item;
+  });
+}
+
 function _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName) {
   rootDir = _fs_requireValidWorkDir(rootDir);
   var trashItems = _fs_listTrashItems(rootDir, 'topo-documents');
@@ -1219,19 +1237,39 @@ function _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName) {
   if (nodeFs.existsSync(target)) target = _fs_uniqueFilePath(docsDir, safePath);
   nodeFs.copyFileSync(source, target);
   var restoredPath = nodePath.basename(target);
+  var originalDocumentId = topoItem.id ? String(topoItem.id) : null;
+  var originalParentId = topoItem.parentId ? String(topoItem.parentId) : null;
+  var restoredParentId = null;
+  if (originalParentId) {
+    if (manifest.documents[originalParentId]) {
+      restoredParentId = originalParentId;
+    } else {
+      var restoredParentItem = Object.values(manifest.documents).find(function(existing) {
+        return existing && existing.originalDocumentId === originalParentId;
+      });
+      restoredParentId = restoredParentItem ? restoredParentItem.id : null;
+    }
+  }
   var restoredItem = {
     id: nextId,
     type: type,
     title: String(topoItem.title || item.originalName || '未命名文档'),
     path: restoredPath,
-    parentId: topoItem.parentId && manifest.documents[String(topoItem.parentId)] ? String(topoItem.parentId) : null,
+    parentId: restoredParentId,
     sortOrder: Object.keys(manifest.documents).length + 1,
     createdAt: Number.isFinite(topoItem.createdAt) ? topoItem.createdAt : Date.now(),
     updatedAt: Date.now(),
     version: Number.isFinite(topoItem.version) ? topoItem.version : 1,
   };
+  if (originalDocumentId && nextId !== originalDocumentId) {
+    restoredItem.originalDocumentId = originalDocumentId;
+  }
+  if (originalParentId && !restoredParentId) {
+    restoredItem.originalParentId = originalParentId;
+  }
   try {
     manifest.documents[nextId] = restoredItem;
+    _fs_relinkRestoredTopoDocumentChildren(manifest, topoItem.id, nextId);
     _fs_writeTopoDocumentManifest(rootDir, cardPath, manifest);
   } catch (e) {
     try {

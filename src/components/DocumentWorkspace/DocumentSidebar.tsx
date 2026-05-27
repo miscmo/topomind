@@ -16,7 +16,7 @@ export interface DocumentSidebarProps {
   onExportTopoDocument: (documentPath: string) => void
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
-  onRestoreDocument?: (trashName: string) => void
+  onRestoreDocument?: (trashName: string) => Promise<void> | void
   onClearTrashDocuments?: () => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
 }
@@ -342,6 +342,11 @@ export function DocumentSidebar({
   const adjustedX = contextMenu ? Math.max(0, Math.min(contextMenu.x, window.innerWidth - 180)) : 0
   const adjustedY = contextMenu ? Math.max(0, Math.min(contextMenu.y, window.innerHeight - 200)) : 0
   const shownTrash = viewMode === 'trash'
+  const handleRestoreTrashDocument = async (trashName: string) => {
+    if (!onRestoreDocument) return
+    await onRestoreDocument(trashName)
+    setViewMode('active')
+  }
 
   return (
     <div 
@@ -371,7 +376,7 @@ export function DocumentSidebar({
                   <div className="text-[12px] font-semibold leading-[1.4] whitespace-nowrap overflow-hidden text-ellipsis text-[var(--color-text-primary)]" title={item.title}>{item.title}</div>
                   <div className="text-[10px] text-[var(--color-text-muted)] whitespace-nowrap overflow-hidden text-ellipsis">{new Date(item.deletedAt).toLocaleString('zh-CN')}</div>
                 </div>
-                <button type="button" className="shrink-0 h-6 px-2 rounded-md border border-[var(--color-border)] bg-transparent text-[11px] text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed" onClick={() => onRestoreDocument?.(item.trashName)} disabled={isBusy || !onRestoreDocument}>恢复</button>
+                <button type="button" className="shrink-0 h-6 px-2 rounded-md border border-[var(--color-border)] bg-transparent text-[11px] text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed" onClick={() => { void handleRestoreTrashDocument(item.trashName) }} disabled={isBusy || !onRestoreDocument}>恢复</button>
               </div>
             ))
           )

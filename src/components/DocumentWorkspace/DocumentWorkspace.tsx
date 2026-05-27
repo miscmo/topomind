@@ -26,7 +26,7 @@ interface DocumentWorkspaceProps {
   onExportTopoDocument: (documentPath: string) => void
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
-  onRestoreDocument?: (trashName: string) => void
+  onRestoreDocument?: (trashName: string) => Promise<void> | void
   onClearTrashDocuments?: () => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
   isDocumentBusy?: boolean

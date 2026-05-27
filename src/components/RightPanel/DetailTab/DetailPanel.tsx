@@ -203,7 +203,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           onExportTopoDocument={(documentPath: string) => { void handleExportTopoDocument(documentPath) }}
           onRenameDocument={(documentPath: string, name: string) => { void handleRenameDocument(documentPath, name) }}
           onDeleteDocument={(documentPath: string) => { void handleDeleteDocument(documentPath) }}
-          onRestoreDocument={(trashName: string) => { void handleRestoreDocument(trashName) }}
+          onRestoreDocument={(trashName: string) => handleRestoreDocument(trashName)}
           onClearTrashDocuments={() => { void handleClearTrashDocuments() }}
           onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
           isDocumentBusy={isDocumentBusy}

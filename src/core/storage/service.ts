@@ -46,6 +46,8 @@ export interface TopoDocumentManifestItem {
   title: string
   path: string
   parentId: string | null
+  originalParentId?: string
+  originalDocumentId?: string
   sortOrder: number
   createdAt: number
   updatedAt: number

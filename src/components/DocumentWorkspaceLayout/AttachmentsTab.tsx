@@ -96,6 +96,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
       await storage.restoreTrashAttachment(attachmentCardPath, item.trashName)
       await loadAttachments()
       await loadTrashAttachments()
+      setViewMode('active')
       logAction('附件管理:恢复', 'AttachmentsTab', { attachmentCardPath, trashName: item.trashName, originalName: item.originalName })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
