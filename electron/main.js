@@ -45,6 +45,55 @@ function buildLocalFileUrl(absPath) {
   return pathToFileURL(absPath).href.replace(/^file:\/\//i, 'local-file://');
 }
 
+function sanitizeOpenFileDialogOptions(options) {
+  var input = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
+  var allowedProperties = new Set(['openFile', 'multiSelections']);
+  var properties = Array.isArray(input.properties)
+    ? input.properties.filter(function(item) { return allowedProperties.has(item); })
+    : ['openFile'];
+  if (properties.length === 0) properties = ['openFile'];
+  var filters = Array.isArray(input.filters) ? input.filters.slice(0, 12).map(function(filter) {
+    var safeFilter = filter && typeof filter === 'object' && !Array.isArray(filter) ? filter : {};
+    var extensions = Array.isArray(safeFilter.extensions)
+      ? safeFilter.extensions.map(function(ext) { return String(ext || '').replace(/[^a-z0-9*]/gi, '').slice(0, 16); }).filter(Boolean).slice(0, 20)
+      : ['*'];
+    if (extensions.length === 0) extensions = ['*'];
+    return {
+      name: typeof safeFilter.name === 'string' ? safeFilter.name.slice(0, 40) : 'Files',
+      extensions,
+    };
+  }) : undefined;
+  return {
+    title: typeof input.title === 'string' ? input.title.slice(0, 80) : undefined,
+    properties,
+    filters,
+  };
+}
+
+function sanitizeExternalUrl(rawUrl) {
+  if (typeof rawUrl !== 'string') return null;
+  var target = rawUrl.trim();
+  if (!target || target.length > 2048 || /[\x00-\x1F\x7F]/.test(target)) return null;
+  try {
+    var parsed = new URL(target);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (parsed.username || parsed.password) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function openExternalSafely(target) {
+  try {
+    await shell.openExternal(target);
+    return true;
+  } catch (e) {
+    console.error('[openExternal]', e && e.message ? e.message : e);
+    return false;
+  }
+}
+
 function parseLocalFileUrl(urlString) {
   const url = new URL(urlString);
   let pathname = url.pathname || '';
@@ -80,6 +129,38 @@ function isPathWithinDir(parentDir, targetPath) {
     nodePath.resolve(targetPath)
   );
   return relativePath === '' || (!relativePath.startsWith('..') && !nodePath.isAbsolute(relativePath));
+}
+
+function normalizedPathForCompare(absPath) {
+  var resolved = nodePath.resolve(absPath);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function requireActiveWorkDir(rootDir) {
+  var requested = _fs_requireValidWorkDir(rootDir);
+  var active = LogService.getCurrentWorkDir();
+  if (!active) throw new Error('尚未进入工作目录');
+  var activeRoot = _fs_requireValidWorkDir(active);
+  if (normalizedPathForCompare(requested) !== normalizedPathForCompare(activeRoot)) {
+    throw new Error('工作目录与当前会话不一致');
+  }
+  return activeRoot;
+}
+
+function isAllowedLocalFilePath(workDir, targetPath) {
+  const resolvedWorkDir = nodePath.resolve(workDir);
+  const resolvedTargetPath = nodePath.resolve(targetPath);
+  if (!isPathWithinDir(resolvedWorkDir, resolvedTargetPath)) return false;
+  const realWorkDir = nodeFs.realpathSync(resolvedWorkDir);
+  if (!nodeFs.existsSync(resolvedTargetPath)) return false;
+  const targetStat = nodeFs.lstatSync(resolvedTargetPath);
+  if (targetStat.isSymbolicLink() || !targetStat.isFile()) return false;
+  const realTargetPath = nodeFs.realpathSync(resolvedTargetPath);
+  if (!isPathWithinDir(realWorkDir, realTargetPath)) return false;
+  const relativePath = nodePath.relative(realWorkDir, realTargetPath);
+  const parts = relativePath.split(nodePath.sep).filter(Boolean);
+  const attachIndex = parts.indexOf('_attach');
+  return attachIndex >= 0 && attachIndex < parts.length - 1;
 }
 
 function isTrustedAppUrl(rawUrl) {
@@ -174,80 +255,99 @@ async function confirmAndFlushBeforeExit(reason) {
 
 function registerIPC() {
   // ----- File system handlers -----
-  ipcMain.handle('fs:listKBs', function(e, rootDir) { return fileService.listKBs(rootDir); });
-  ipcMain.handle('fs:readCardChildren', function(e, rootDir, p) { return fileService.readCardChildren(rootDir, p); });
-  ipcMain.handle('fs:createKbsDir', function(e, rootDir, p) { return fileService.createKbsDir(rootDir, p); });
-  ipcMain.handle('fs:createCardDir', function(e, rootDir, parentPath, cardName) { return fileService.createCardDir(rootDir, parentPath, cardName); });
-  ipcMain.handle('fs:deleteKbsDir', function(e, rootDir, p) { fileService.deleteKbsDir(rootDir, p); });
-  ipcMain.handle('fs:renameKB', function(e, rootDir, p, n) { return fileService.renameKB(rootDir, p, n); });
-  ipcMain.handle('fs:readGraphMeta', function(e, rootDir, p) { return fileService.readGraphMeta(rootDir, p); });
-  ipcMain.handle('fs:writeGraphMeta', function(e, rootDir, p, m) { fileService.writeGraphMeta(rootDir, p, m); });
-  ipcMain.handle('fs:readFile', function(e, rootDir, p) { return fileService.readFile(rootDir, p); });
-  ipcMain.handle('fs:writeFile', function(e, rootDir, p, c) { fileService.writeFile(rootDir, p, c); });
+  ipcMain.handle('fs:listKBs', function(e, rootDir) { return fileService.listKBs(requireActiveWorkDir(rootDir)); });
+  ipcMain.handle('fs:listTrashKBs', function(e, rootDir) { return fileService.listTrashKBs(requireActiveWorkDir(rootDir)); });
+  ipcMain.handle('fs:restoreTrashKB', function(e, rootDir, trashName) { return fileService.restoreTrashKB(requireActiveWorkDir(rootDir), trashName); });
+  ipcMain.handle('fs:clearTrashKBs', function(e, rootDir) { return fileService.clearTrashKBs(requireActiveWorkDir(rootDir)); });
+  ipcMain.handle('fs:readCardChildren', function(e, rootDir, p) { return fileService.readCardChildren(requireActiveWorkDir(rootDir), p); });
+  ipcMain.handle('fs:createKbsDir', function(e, rootDir, p) { return fileService.createKbsDir(requireActiveWorkDir(rootDir), p); });
+  ipcMain.handle('fs:createCardDir', function(e, rootDir, parentPath, cardName) { return fileService.createCardDir(requireActiveWorkDir(rootDir), parentPath, cardName); });
+  ipcMain.handle('fs:deleteKbsDir', function(e, rootDir, p) { fileService.deleteKbsDir(requireActiveWorkDir(rootDir), p); });
+  ipcMain.handle('fs:renameKB', function(e, rootDir, p, n) { return fileService.renameKB(requireActiveWorkDir(rootDir), p, n); });
+  ipcMain.handle('fs:readGraphMeta', function(e, rootDir, p) { return fileService.readGraphMeta(requireActiveWorkDir(rootDir), p); });
+  ipcMain.handle('fs:writeGraphMeta', function(e, rootDir, p, m) { fileService.writeGraphMeta(requireActiveWorkDir(rootDir), p, m); });
   ipcMain.handle('fs:listTopoDocuments', function(e, rootDir, cardPath) {
-    return fileService.listTopoDocuments(rootDir, cardPath);
+    return fileService.listTopoDocuments(requireActiveWorkDir(rootDir), cardPath);
   });
   ipcMain.handle('fs:createTopoDocument', function(e, rootDir, cardPath, input) {
-    return fileService.createTopoDocument(rootDir, cardPath, input);
+    return fileService.createTopoDocument(requireActiveWorkDir(rootDir), cardPath, input);
   });
   ipcMain.handle('fs:moveTopoDocument', function(e, rootDir, cardPath, documentId, newParentId, newSortOrder) {
-    return fileService.moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder);
+    return fileService.moveTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId, newParentId, newSortOrder);
   });
   ipcMain.handle('fs:readTopoDocument', function(e, rootDir, cardPath, documentId) {
-    return fileService.readTopoDocument(rootDir, cardPath, documentId);
+    return fileService.readTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId);
   });
   ipcMain.handle('fs:writeTopoDocument', function(e, rootDir, cardPath, documentId, content) {
-    return fileService.writeTopoDocument(rootDir, cardPath, documentId, content);
+    return fileService.writeTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId, content);
   });
   ipcMain.handle('fs:renameTopoDocument', function(e, rootDir, cardPath, documentId, title) {
-    return fileService.renameTopoDocument(rootDir, cardPath, documentId, title);
+    return fileService.renameTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId, title);
   });
   ipcMain.handle('fs:deleteTopoDocument', function(e, rootDir, cardPath, documentId) {
-    return fileService.deleteTopoDocument(rootDir, cardPath, documentId);
+    return fileService.deleteTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId);
+  });
+  ipcMain.handle('fs:listTrashTopoDocuments', function(e, rootDir, cardPath) {
+    return fileService.listTrashTopoDocuments(requireActiveWorkDir(rootDir), cardPath);
+  });
+  ipcMain.handle('fs:restoreTrashTopoDocument', function(e, rootDir, cardPath, trashName) {
+    return fileService.restoreTrashTopoDocument(requireActiveWorkDir(rootDir), cardPath, trashName);
+  });
+  ipcMain.handle('fs:clearTrashTopoDocuments', function(e, rootDir, cardPath) {
+    return fileService.clearTrashTopoDocuments(requireActiveWorkDir(rootDir), cardPath);
   });
   ipcMain.handle('fs:repairTopoDocuments', function(e, rootDir, cardPath) {
-    return fileService.repairTopoDocuments(rootDir, cardPath);
+    return fileService.repairTopoDocuments(requireActiveWorkDir(rootDir), cardPath);
   });
   ipcMain.handle('fs:exportTopoDocument', function(e, rootDir, cardPath, documentId) {
-    return fileService.exportTopoDocument(rootDir, cardPath, documentId);
+    return fileService.exportTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId);
   });
   ipcMain.handle('fs:openTopoDocumentFolder', function(e, rootDir, cardPath, documentId) {
-    return fileService.openTopoDocumentFolder(rootDir, cardPath, documentId);
+    return fileService.openTopoDocumentFolder(requireActiveWorkDir(rootDir), cardPath, documentId);
   });
   ipcMain.handle('fs:listAttachments', function(e, rootDir, cardPath) {
-    return fileService.listAttachments(rootDir, cardPath);
+    return fileService.listAttachments(requireActiveWorkDir(rootDir), cardPath);
   });
   ipcMain.handle('fs:importAttachment', function(e, rootDir, cardPath, sourceFilePath, targetFileName) {
-    return fileService.importAttachment(rootDir, cardPath, sourceFilePath, targetFileName);
+    return fileService.importAttachment(requireActiveWorkDir(rootDir), cardPath, sourceFilePath, targetFileName);
   });
   ipcMain.handle('fs:deleteAttachment', function(e, rootDir, cardPath, attachmentName) {
-    return fileService.deleteAttachment(rootDir, cardPath, attachmentName);
+    return fileService.deleteAttachment(requireActiveWorkDir(rootDir), cardPath, attachmentName);
+  });
+  ipcMain.handle('fs:listTrashAttachments', function(e, rootDir, cardPath) {
+    return fileService.listTrashAttachments(requireActiveWorkDir(rootDir), cardPath);
+  });
+  ipcMain.handle('fs:restoreTrashAttachment', function(e, rootDir, cardPath, trashName) {
+    return fileService.restoreTrashAttachment(requireActiveWorkDir(rootDir), cardPath, trashName);
+  });
+  ipcMain.handle('fs:clearTrashAttachments', function(e, rootDir, cardPath) {
+    return fileService.clearTrashAttachments(requireActiveWorkDir(rootDir), cardPath);
   });
   ipcMain.handle('fs:getAttachmentAbsoluteUrl', function(e, rootDir, cardPath, attachmentRef) {
     try {
-      const absPath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef);
+      const absPath = _fs_attachmentRefToPath(requireActiveWorkDir(rootDir), cardPath, attachmentRef);
       return buildLocalFileUrl(absPath);
     } catch (err) {
       return null;
     }
   });
   ipcMain.handle('fs:openAttachment', async function(e, rootDir, cardPath, attachmentRef) {
-    return fileService.openAttachment(rootDir, cardPath, attachmentRef);
+    return fileService.openAttachment(requireActiveWorkDir(rootDir), cardPath, attachmentRef);
   });
   ipcMain.handle('fs:writeAttachmentBase64', function(e, rootDir, cardPath, fileName, mimeType, base64) {
-    return fileService.writeAttachmentBase64(rootDir, cardPath, fileName, mimeType, base64);
+    return fileService.writeAttachmentBase64(requireActiveWorkDir(rootDir), cardPath, fileName, mimeType, base64);
   });
   ipcMain.handle('fs:downloadAttachment', function(e, rootDir, cardPath, url, targetFileName) {
-    return fileService.downloadAttachment(rootDir, cardPath, url, targetFileName);
+    return fileService.downloadAttachment(requireActiveWorkDir(rootDir), cardPath, url, targetFileName);
   });
   ipcMain.handle('fs:readAttachmentDataUrl', function(e, rootDir, cardPath, attachmentRef) {
-    return fileService.readAttachmentDataUrl(rootDir, cardPath, attachmentRef);
+    return fileService.readAttachmentDataUrl(requireActiveWorkDir(rootDir), cardPath, attachmentRef);
   });
   ipcMain.handle('fs:readAppConfig', function(e, rootDir) {
-    return fileService.readAppConfig(rootDir);
+    return fileService.readAppConfig(requireActiveWorkDir(rootDir));
   });
   ipcMain.handle('fs:writeAppConfig', function(e, rootDir, content) {
-    return fileService.writeAppConfig(rootDir, content);
+    return fileService.writeAppConfig(requireActiveWorkDir(rootDir), content);
   });
   ipcMain.handle('fs:isValidWorkDir', function(e, dirPath) {
     var result = fileService.isValidWorkDir(dirPath);
@@ -274,7 +374,7 @@ function registerIPC() {
     return result;
   });
   ipcMain.handle('fs:importKB', function(e, rootDir, sourcePath) {
-    var result = fileService.importKB(rootDir, sourcePath);
+    var result = fileService.importKB(requireActiveWorkDir(rootDir), sourcePath);
     LogService.write({
       level: 'INFO', module: 'Main', action: 'fs:importKB',
       message: '知识库导入成功', params: { sourcePath, importedPath: result },
@@ -337,7 +437,17 @@ function registerIPC() {
     }
   });
   ipcMain.handle('app:enterWorkDir', function(e, workDir) {
-    var ok = LogService.enterWorkDir(workDir);
+    var normalizedWorkDir;
+    try {
+      normalizedWorkDir = _fs_requireValidWorkDir(workDir);
+    } catch (err) {
+      LogService.write({
+        level: 'ERROR', module: 'Main', action: 'app:enterWorkDir',
+        message: '进入工作目录失败', params: { workDir, ok: false, error: err && err.message ? err.message : String(err) },
+      });
+      return { ok: false, error: err && err.message ? err.message : '工作目录无效' };
+    }
+    var ok = LogService.enterWorkDir(normalizedWorkDir);
     if (win && !win.isDestroyed()) {
       win.setResizable(true);
       win.setMinimumSize(900, 600);
@@ -346,7 +456,7 @@ function registerIPC() {
       // 尝试读取已保存的窗口状态
       let state = null;
       try {
-        state = fileService.readWindowState(workDir);
+        state = fileService.readWindowState(normalizedWorkDir);
       } catch (err) {
         console.error('[window-state] Failed to read window state:', err);
       }
@@ -391,7 +501,7 @@ function registerIPC() {
     }
     LogService.write({
       level: ok ? 'INFO' : 'ERROR', module: 'Main', action: 'app:enterWorkDir',
-      message: ok ? '进入工作目录' : '进入工作目录失败', params: { workDir, ok },
+      message: ok ? '进入工作目录' : '进入工作目录失败', params: { workDir: normalizedWorkDir, ok },
     });
     return { ok };
   });
@@ -403,21 +513,19 @@ function registerIPC() {
       return { ok: false, cancelled: !!guardResult.cancelled };
     }
 
-    LogService.clear();
+    LogService.leaveWorkDir();
     resetMainWindowToSetup();
     return { ok: true };
   });
   ipcMain.handle('app:openFileDialog', async function(e, options) {
     if (!win || win.isDestroyed()) return undefined;
-    const result = await dialog.showOpenDialog(win, options);
+    const result = await dialog.showOpenDialog(win, sanitizeOpenFileDialogOptions(options));
     return result.canceled ? undefined : result.filePaths;
   });
-  ipcMain.handle('app:openExternal', function(e, url) {
-    if (typeof url !== 'string') return false;
-    var target = url.trim();
-    if (!/^https?:\/\//i.test(target)) return false;
-    shell.openExternal(target);
-    return true;
+  ipcMain.handle('app:openExternal', async function(e, url) {
+    var target = sanitizeExternalUrl(url);
+    if (!target) return false;
+    return openExternalSafely(target);
   });
   ipcMain.handle('app:window:getState', function() {
     return getWindowControlsState();
@@ -441,8 +549,8 @@ function registerIPC() {
       win.webContents.toggleDevTools();
     }
   });
-  ipcMain.handle('app:window:close', function() {
-    app.quit();
+  ipcMain.handle('app:window:close', async function() {
+    await requestSafeQuit('quit-app');
     return getWindowControlsState();
   });
 
@@ -466,6 +574,26 @@ function registerIPC() {
 // ============================================================
 var win = null;
 var windowStateSaveTimeout = null;
+let _isQuittingAfterFlush = false;
+let _isSafeQuitInProgress = false;
+
+async function requestSafeQuit(reason) {
+  if (_isSafeQuitInProgress) {
+    return { ok: false, inProgress: true };
+  }
+  _isSafeQuitInProgress = true;
+  try {
+    const guardResult = await confirmAndFlushBeforeExit(reason || 'quit-app');
+    if (!guardResult.ok) {
+      return guardResult;
+    }
+    _isQuittingAfterFlush = true;
+    app.quit();
+    return { ok: true };
+  } finally {
+    _isSafeQuitInProgress = false;
+  }
+}
 
 function getWindowControlsState() {
   if (!win || win.isDestroyed()) {
@@ -554,16 +682,18 @@ function createWindow() {
     if (IS_DEV) console.log('[window:did-finish-load]', currentUrl);
   });
   win.webContents.setWindowOpenHandler(function(details) {
-    if (/^https?:\/\//i.test(details.url)) {
-      shell.openExternal(details.url);
+    var target = sanitizeExternalUrl(details.url);
+    if (target) {
+      void openExternalSafely(target);
     }
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', function(event, targetUrl) {
     if (isTrustedAppUrl(targetUrl)) return;
     event.preventDefault();
-    if (/^https?:\/\//i.test(targetUrl)) {
-      shell.openExternal(targetUrl);
+    var target = sanitizeExternalUrl(targetUrl);
+    if (target) {
+      void openExternalSafely(target);
     }
   });
   win.once('ready-to-show', function() {
@@ -588,7 +718,13 @@ function createWindow() {
   win.on('focus', sendWindowControlsState);
   win.on('blur', sendWindowControlsState);
 
-  win.on('close', function() {
+  win.on('close', function(event) {
+    if (!_isQuittingAfterFlush) {
+      event.preventDefault();
+      void requestSafeQuit('quit-app');
+      return;
+    }
+
     if (!win || win.isDestroyed()) return;
     const currentWorkDir = LogService.getCurrentWorkDir();
     if (currentWorkDir) {
@@ -679,7 +815,7 @@ app.whenReady().then(function() {
       const filePath = parseLocalFileUrl(request.url);
       // Validate that it's within current workspace
       const currentWorkDir = LogService.getCurrentWorkDir();
-      if (currentWorkDir && isPathWithinDir(currentWorkDir, filePath)) {
+      if (currentWorkDir && isAllowedLocalFilePath(currentWorkDir, filePath)) {
         try {
           const res = await net.fetch(pathToFileURL(filePath).href);
           return res;
@@ -704,20 +840,11 @@ app.whenReady().then(function() {
 // Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', function() { if (process.platform !== 'darwin') app.quit(); });
 
-// Guard against re-entering the quit flow after a successful flush.
-let _isQuittingAfterFlush = false;
-
 app.on('before-quit', async function(event) {
   if (_isQuittingAfterFlush) {
     return;
   }
 
   event.preventDefault();
-  const guardResult = await confirmAndFlushBeforeExit('quit-app');
-  if (!guardResult.ok) {
-    return;
-  }
-
-  _isQuittingAfterFlush = true;
-  app.quit();
+  await requestSafeQuit('quit-app');
 });

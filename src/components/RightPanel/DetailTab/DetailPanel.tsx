@@ -52,6 +52,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
 
   const {
     topoDocuments,
+    trashTopoDocuments,
     setTopoDocuments,
     topoDocumentsCardPath,
     setTopoDocumentsCardPath,
@@ -59,11 +60,14 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     documentLinkNotice,
     documentListRequestSeqRef,
     loadDocuments,
+    loadTrashDocuments,
     handleSelectDocument,
     handleOpenDetailDocumentLink,
     handleCreateTopoDocument,
     handleRenameDocument,
     handleDeleteDocument,
+    handleRestoreDocument,
+    handleClearTrashDocuments,
     handleMoveDocument,
     handleExportTopoDocument,
     handleOpenCurrentDocumentFolder,
@@ -107,6 +111,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     // When node changes, reset state
     setActiveDocumentPath('')
     setTopoDocuments([])
+    loadTrashDocuments('')
     setTopoDocumentsCardPath('')
 
     if (!selectedNodeId || !nodePath) return
@@ -118,7 +123,8 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         setActiveDocumentPath(topoDocumentPath(docs[0].id))
       }
     })
-  }, [selectedNodeId, nodePath, loadDocuments])
+    void loadTrashDocuments(nodePath)
+  }, [selectedNodeId, nodePath, loadDocuments, loadTrashDocuments])
 
   const handleDetailSidebarCollapsedChange = useCallback((collapsed: boolean) => {
     setDetailSidebarCollapsed(collapsed)
@@ -189,6 +195,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
             </div>
           )}
           topoDocuments={topoDocuments}
+          trashTopoDocuments={trashTopoDocuments}
           activeDocumentPath={activeDocumentPath}
           onSelectDocument={(documentPath: string) => { void handleSelectDocument(documentPath) }}
           onOpenDetailDocumentLink={(documentPath: string) => { void handleOpenDetailDocumentLink(documentPath) }}
@@ -196,6 +203,8 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           onExportTopoDocument={(documentPath: string) => { void handleExportTopoDocument(documentPath) }}
           onRenameDocument={(documentPath: string, name: string) => { void handleRenameDocument(documentPath, name) }}
           onDeleteDocument={(documentPath: string) => { void handleDeleteDocument(documentPath) }}
+          onRestoreDocument={(trashName: string) => { void handleRestoreDocument(trashName) }}
+          onClearTrashDocuments={() => { void handleClearTrashDocuments() }}
           onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
           isDocumentBusy={isDocumentBusy}
         />

@@ -2,11 +2,13 @@ import React, { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { FilePlus, Download, PenLine, Trash2, ChevronRight } from 'lucide-react'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
+import type { FSBTrashTopoDocumentItem } from '../../core/fs-backend'
 import { topoDocumentPath, topoDocumentTypeIcon, buildDocumentTree } from './documentTypes'
 import { getTopoDocumentTypeDefinition, TOPO_DOCUMENT_TYPES } from './documentTypeRegistry'
 
 export interface DocumentSidebarProps {
   topoDocuments: TopoDocumentManifestItem[]
+  trashTopoDocuments?: FSBTrashTopoDocumentItem[]
   activeDocumentPath: string
   isBusy?: boolean
   onSelectDocument: (documentPath: string) => void
@@ -14,6 +16,8 @@ export interface DocumentSidebarProps {
   onExportTopoDocument: (documentPath: string) => void
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
+  onRestoreDocument?: (trashName: string) => void
+  onClearTrashDocuments?: () => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
 }
 
@@ -33,6 +37,7 @@ interface DocumentInlineEditState {
 
 export function DocumentSidebar({
   topoDocuments,
+  trashTopoDocuments = [],
   activeDocumentPath,
   isBusy,
   onSelectDocument,
@@ -40,12 +45,15 @@ export function DocumentSidebar({
   onExportTopoDocument,
   onRenameDocument,
   onDeleteDocument,
+  onRestoreDocument,
+  onClearTrashDocuments,
   onMoveDocument,
 }: DocumentSidebarProps) {
   const { rootItems, childrenMap } = buildDocumentTree(topoDocuments)
   const [contextMenu, setContextMenu] = useState<DocumentContextMenuState | null>(null)
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
   const [inlineEdit, setInlineEdit] = useState<DocumentInlineEditState | null>(null)
+  const [viewMode, setViewMode] = useState<'active' | 'trash'>('active')
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<{ id: string, position: 'before' | 'inside' | 'after' } | null>(null)
@@ -333,6 +341,7 @@ export function DocumentSidebar({
 
   const adjustedX = contextMenu ? Math.max(0, Math.min(contextMenu.x, window.innerWidth - 180)) : 0
   const adjustedY = contextMenu ? Math.max(0, Math.min(contextMenu.y, window.innerHeight - 200)) : 0
+  const shownTrash = viewMode === 'trash'
 
   return (
     <div 
@@ -341,11 +350,39 @@ export function DocumentSidebar({
       onDragOver={(e) => handleDragOver(e, null)}
       onDrop={(e) => handleDrop(e, null)}
     >
-      <div className={`flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full ${dragState?.id === 'root' ? 'bg-[var(--color-hover-bg)] ring-[1.5px] ring-inset ring-[var(--color-primary)]' : ''}`}>
-        {inlineEdit?.mode !== 'rename' && !inlineEdit?.parentId && renderInlineEdit(0)}
-        {rootItems.map(node => renderNode(node, 0))}
-        {rootItems.length === 0 && !inlineEdit && (
-          <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">暂无文档</div>
+      <div className="px-1.5 pt-2 pb-1 border-b border-[var(--color-border-subtle)]">
+        <div className="flex gap-1">
+          <button type="button" className={`flex-1 h-7 rounded-lg border text-[12px] font-medium transition-colors ${!shownTrash ? 'border-[var(--color-primary-soft)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]' : 'border-[var(--color-border-light)] bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)]'}`} onClick={() => setViewMode('active')} disabled={isBusy}>文档</button>
+          <button type="button" className={`flex-1 h-7 rounded-lg border text-[12px] font-medium transition-colors ${shownTrash ? 'border-[var(--color-primary-soft)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]' : 'border-[var(--color-border-light)] bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)]'}`} onClick={() => setViewMode('trash')} disabled={isBusy}>回收站</button>
+        </div>
+        {shownTrash && trashTopoDocuments.length > 0 && (
+          <button type="button" className="mt-2 w-full h-7 rounded-lg border border-[var(--color-danger)] bg-transparent text-[12px] font-medium text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-soft)] disabled:opacity-40 disabled:cursor-not-allowed" onClick={() => onClearTrashDocuments?.()} disabled={isBusy || !onClearTrashDocuments}>清空文档回收站</button>
+        )}
+      </div>
+      <div className={`flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full ${!shownTrash && dragState?.id === 'root' ? 'bg-[var(--color-hover-bg)] ring-[1.5px] ring-inset ring-[var(--color-primary)]' : ''}`}>
+        {shownTrash ? (
+          trashTopoDocuments.length === 0 ? (
+            <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">文档回收站为空</div>
+          ) : (
+            trashTopoDocuments.map((item) => (
+              <div key={item.trashName} className="group w-full flex items-center gap-2 mb-[2px] py-[7px] px-2.5 border-none rounded-lg bg-transparent text-left transition-colors duration-75 hover:bg-[var(--color-hover-bg)]">
+                <span className="w-5 h-5 flex items-center justify-center shrink-0 text-sm">{topoDocumentTypeIcon(item.type)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-semibold leading-[1.4] whitespace-nowrap overflow-hidden text-ellipsis text-[var(--color-text-primary)]" title={item.title}>{item.title}</div>
+                  <div className="text-[10px] text-[var(--color-text-muted)] whitespace-nowrap overflow-hidden text-ellipsis">{new Date(item.deletedAt).toLocaleString('zh-CN')}</div>
+                </div>
+                <button type="button" className="shrink-0 h-6 px-2 rounded-md border border-[var(--color-border)] bg-transparent text-[11px] text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed" onClick={() => onRestoreDocument?.(item.trashName)} disabled={isBusy || !onRestoreDocument}>恢复</button>
+              </div>
+            ))
+          )
+        ) : (
+          <>
+            {inlineEdit?.mode !== 'rename' && !inlineEdit?.parentId && renderInlineEdit(0)}
+            {rootItems.map(node => renderNode(node, 0))}
+            {rootItems.length === 0 && !inlineEdit && (
+              <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">暂无文档</div>
+            )}
+          </>
         )}
       </div>
 

@@ -82,6 +82,15 @@ function enterWorkDir(workDir) {
   return init(workDir);
 }
 
+function leaveWorkDir() {
+  clear();
+  _currentWorkDir = null;
+  _logDir = null;
+  _currentLogFile = null;
+  _currentDate = null;
+  return true;
+}
+
 function getCurrentWorkDir() {
   return _currentWorkDir;
 }
@@ -357,4 +366,4 @@ function getAvailableDates() {
   }
 }
 
-export default { init, enterWorkDir, getCurrentWorkDir, write, getLogDir, getAvailableDates, getBuffer, query, setLevel, clear };
+export default { init, enterWorkDir, leaveWorkDir, getCurrentWorkDir, write, getLogDir, getAvailableDates, getBuffer, query, setLevel, clear };

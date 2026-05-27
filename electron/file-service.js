@@ -4,8 +4,36 @@
  */
 import nodePath from 'path';
 import nodeFs from 'fs';
+import nodeDns from 'dns/promises';
+import nodeNet from 'net';
 import { shell } from 'electron';
 import { randomUUID } from 'crypto';
+
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const MAX_TEXT_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_APP_CONFIG_BYTES = 256 * 1024;
+const ATTACHMENT_DOWNLOAD_TIMEOUT_MS = 15000;
+const BLOCKED_OPEN_ATTACHMENT_EXTENSIONS = new Set([
+  '.app',
+  '.bat',
+  '.cmd',
+  '.com',
+  '.cpl',
+  '.exe',
+  '.hta',
+  '.js',
+  '.jse',
+  '.lnk',
+  '.msi',
+  '.msp',
+  '.ps1',
+  '.scr',
+  '.sh',
+  '.url',
+  '.vbe',
+  '.vbs',
+  '.wsf',
+]);
 
 /**
  * @description 返回工作目录下的知识库根目录路径
@@ -125,6 +153,110 @@ function _fs_uniqueFolderName(parentDir, desiredName) {
   return candidate;
 }
 
+function _fs_moveToTrash(rootDir, sourcePath, category, extraMetadata) {
+  if (!nodeFs.existsSync(sourcePath)) return null;
+  var trashDir = nodePath.join(rootDir, '.trash', _fs_safeSegment(category || 'items'));
+  _fs_ensureDir(trashDir);
+  var parsed = nodePath.parse(sourcePath);
+  var baseName = _fs_safeSegment(parsed.name || parsed.base || 'item');
+  var ext = parsed.ext || '';
+  var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  var candidate = stamp + '-' + baseName + ext;
+  var target = nodePath.join(trashDir, candidate);
+  var i = 1;
+  while (nodeFs.existsSync(target)) {
+    target = nodePath.join(trashDir, stamp + '-' + baseName + '-' + i + ext);
+    i += 1;
+  }
+  nodeFs.renameSync(sourcePath, target);
+  try {
+    _fs_writeJsonFile(target + '.trash.json', {
+      category: category || 'items',
+      originalPath: nodePath.relative(rootDir, sourcePath).split(nodePath.sep).join('/'),
+      originalName: nodePath.basename(sourcePath),
+      deletedAt: Date.now(),
+      trashName: nodePath.basename(target),
+      ...(_fs_isPlainObject(extraMetadata) ? extraMetadata : {}),
+    });
+  } catch {}
+  return target;
+}
+
+function _fs_listTrashItems(rootDir, category) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var trashDir = nodePath.join(rootDir, '.trash', _fs_safeSegment(category));
+  if (!nodeFs.existsSync(trashDir)) return [];
+  return nodeFs.readdirSync(trashDir, { withFileTypes: true })
+    .filter(function(entry) { return !entry.name.endsWith('.trash.json'); })
+    .map(function(entry) {
+      var itemPath = nodePath.join(trashDir, entry.name);
+      var stat = nodeFs.statSync(itemPath);
+      var meta = {};
+      try {
+        meta = _fs_readJsonFile(itemPath + '.trash.json');
+      } catch {}
+      return {
+        trashName: entry.name,
+        originalName: String(meta.originalName || entry.name),
+        originalPath: String(meta.originalPath || ''),
+        deletedAt: Number.isFinite(meta.deletedAt) ? meta.deletedAt : stat.mtimeMs,
+        size: stat.size,
+        isDirectory: entry.isDirectory(),
+        meta: meta,
+      };
+    })
+    .sort(function(a, b) { return b.deletedAt - a.deletedAt; });
+}
+
+function _fs_restoreTrashItem(rootDir, category, trashName, destinationParentDir) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var safeTrashName = nodePath.basename(String(trashName || '').trim());
+  if (!safeTrashName || safeTrashName.endsWith('.trash.json')) throw new Error('回收站项目名称无效');
+  var trashDir = nodePath.join(rootDir, '.trash', _fs_safeSegment(category));
+  var source = nodePath.resolve(trashDir, safeTrashName);
+  if (!isPathWithinDirCompat(trashDir, source) || !nodeFs.existsSync(source)) {
+    throw new Error('回收站项目不存在');
+  }
+  var meta = {};
+  try {
+    meta = _fs_readJsonFile(source + '.trash.json');
+  } catch {}
+  var originalName = _fs_safeSegment(meta.originalName || safeTrashName.replace(/^\d{4}-\d{2}-\d{2}t?\d{2}-\d{2}-\d{2}-\d{3}z?-/i, ''));
+  var targetParent = destinationParentDir || rootDir;
+  _fs_ensureDir(targetParent);
+  var target = nodePath.join(targetParent, _fs_uniqueFolderName(targetParent, originalName));
+  nodeFs.renameSync(source, target);
+  try {
+    if (nodeFs.existsSync(source + '.trash.json')) nodeFs.rmSync(source + '.trash.json', { force: true });
+  } catch {}
+  return target;
+}
+
+function _fs_clearTrashItems(rootDir, category) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var trashDir = nodePath.join(rootDir, '.trash', _fs_safeSegment(category));
+  if (!nodeFs.existsSync(trashDir)) return;
+  nodeFs.readdirSync(trashDir).forEach(function(entryName) {
+    nodeFs.rmSync(nodePath.join(trashDir, entryName), { recursive: true, force: true });
+  });
+}
+
+function _fs_deleteTrashItem(rootDir, category, trashName) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var trashDir = nodePath.join(rootDir, '.trash', _fs_safeSegment(category));
+  var safeTrashName = nodePath.basename(String(trashName || '').trim());
+  if (!safeTrashName || safeTrashName.endsWith('.trash.json')) return;
+  var target = nodePath.resolve(trashDir, safeTrashName);
+  if (!isPathWithinDirCompat(trashDir, target)) return;
+  nodeFs.rmSync(target, { recursive: true, force: true });
+  nodeFs.rmSync(target + '.trash.json', { force: true });
+}
+
+function isPathWithinDirCompat(parentDir, targetPath) {
+  var relativePath = nodePath.relative(nodePath.resolve(parentDir), nodePath.resolve(targetPath));
+  return relativePath === '' || (!relativePath.startsWith('..') && !nodePath.isAbsolute(relativePath));
+}
+
 /** Note：该函数逻辑已定，不要擅自修改  --TO AI
  * @description 把 kbs 内的相对路径转换成绝对路径；禁止通过 ../ 或绝对路径访问 kbs 之外的文件
  * @param { string } rootDir: 工作目录绝对路径
@@ -141,6 +273,21 @@ function _fs_resolveKbsPath(rootDir, relPath) {
     throw new Error('路径越界: ' + relPath);
   }
   return result;
+}
+
+function _fs_requireSafeKbsTextFile(rootDir, relPath) {
+  if (typeof relPath !== 'string') throw new Error('文件路径必须是字符串');
+  var safeRelPath = relPath.trim().replace(/\\/g, '/');
+  if (!safeRelPath || safeRelPath.length > 512 || /[\x00-\x1F\x7F]/.test(safeRelPath)) {
+    throw new Error('文件路径无效');
+  }
+  if (nodePath.isAbsolute(safeRelPath)) throw new Error('文件路径必须是相对路径');
+  var resolvedPath = _fs_resolveKbsPath(rootDir, safeRelPath);
+  var ext = nodePath.extname(resolvedPath).toLowerCase();
+  if (!['.md', '.txt', '.json', '.csv'].includes(ext)) {
+    throw new Error('不支持读取或写入该类型文件');
+  }
+  return resolvedPath;
 }
 
 /**
@@ -200,7 +347,34 @@ function _fs_readJsonFile(filePath) {
  * @returns { void }
  */
 function _fs_writeJsonFile(filePath, data) {
-  nodeFs.writeFileSync(filePath, JSON.stringify(data || {}, null, 2), 'utf-8');
+  _fs_ensureDir(nodePath.dirname(filePath));
+  var tempPath = filePath + '.tmp-' + process.pid + '-' + Date.now();
+  var fd = null;
+  try {
+    fd = nodeFs.openSync(tempPath, 'w');
+    nodeFs.writeFileSync(fd, JSON.stringify(data || {}, null, 2), 'utf-8');
+    nodeFs.fsyncSync(fd);
+    nodeFs.closeSync(fd);
+    fd = null;
+    nodeFs.renameSync(tempPath, filePath);
+  } catch (e) {
+    if (fd !== null) {
+      try {
+        nodeFs.closeSync(fd);
+      } catch {}
+    }
+    try {
+      if (nodeFs.existsSync(tempPath)) nodeFs.rmSync(tempPath, { force: true });
+    } catch {}
+    throw e;
+  }
+}
+
+function _fs_requirePlainObject(value, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error((label || '内容') + '必须是普通对象');
+  }
+  return value;
 }
 
 /**
@@ -219,6 +393,9 @@ function _fs_graphFilePath(dir) {
  * @throws { Error } 路径为相对路径时抛出错误
  */
 function _fs_validateAbsolutePath(dir) {
+  if (typeof dir !== 'string' || !dir.trim() || /[\x00-\x1F\x7F]/.test(dir)) {
+    throw new Error('路径无效');
+  }
   if (!nodePath.isAbsolute(dir)) {
     throw new Error('路径必须是绝对路径');
   }
@@ -261,8 +438,26 @@ function _fs_createCardDir(rootDir, parentPath, cardName) {
 
 function _fs_deleteKbsDir(rootDir, dirPath) {
   rootDir = _fs_requireValidWorkDir(rootDir);
+  if (!String(dirPath || '').trim()) {
+    throw new Error('不能删除知识库根目录');
+  }
   var d = _fs_resolveKbsPath(rootDir, dirPath);
-  if (nodeFs.existsSync(d)) nodeFs.rmSync(d, { recursive: true, force: true });
+  var normalizedPath = String(dirPath || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  var kind = normalizedPath.includes('/') ? 'card' : 'kb';
+  _fs_moveToTrash(rootDir, d, 'kbs', {
+    kind: kind,
+    kbsPath: normalizedPath,
+  });
+}
+
+function _fs_kbsTrashItemKind(item) {
+  var kind = item && item.meta ? String(item.meta.kind || '') : '';
+  if (kind === 'kb' || kind === 'card') return kind;
+  var originalPath = String(item && item.originalPath || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (originalPath.toLowerCase().startsWith('kbs/')) {
+    originalPath = originalPath.slice(4);
+  }
+  return originalPath && !originalPath.includes('/') ? 'kb' : 'card';
 }
 
 function _fs_safeFileName(name) {
@@ -286,6 +481,60 @@ function _fs_extFromMime(mime) {
   return 'bin';
 }
 
+function _fs_requireAttachmentSize(byteLength) {
+  if (byteLength > MAX_ATTACHMENT_BYTES) {
+    throw new Error('附件大小不能超过 20MB');
+  }
+}
+
+function _fs_requireSafeOpenAttachment(filePath) {
+  var ext = nodePath.extname(filePath).toLowerCase();
+  if (BLOCKED_OPEN_ATTACHMENT_EXTENSIONS.has(ext)) {
+    throw new Error('出于安全考虑，不允许直接打开该类型附件: ' + ext);
+  }
+}
+
+function _fs_isPrivateIp(address) {
+  if (nodeNet.isIP(address) === 4) {
+    var parts = address.split('.').map(function(part) { return Number(part); });
+    if (parts[0] === 10) return true;
+    if (parts[0] === 127) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 0) return true;
+    return false;
+  }
+  var normalized = String(address || '').toLowerCase();
+  if (normalized === '::1') return true;
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
+  if (normalized.startsWith('fe80:')) return true;
+  if (normalized.startsWith('::ffff:')) {
+    return _fs_isPrivateIp(normalized.replace('::ffff:', ''));
+  }
+  return false;
+}
+
+async function _fs_requirePublicHttpUrl(rawUrl) {
+  var parsed = new URL(rawUrl);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('只支持 http/https 图片链接');
+  }
+  var hostname = parsed.hostname.toLowerCase();
+  if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    throw new Error('不允许访问本机或内网地址');
+  }
+  if (nodeNet.isIP(hostname)) {
+    if (_fs_isPrivateIp(hostname)) throw new Error('不允许访问本机或内网地址');
+    return parsed;
+  }
+  var records = await nodeDns.lookup(hostname, { all: true });
+  if (!records.length || records.some(function(record) { return _fs_isPrivateIp(record.address); })) {
+    throw new Error('不允许访问本机或内网地址');
+  }
+  return parsed;
+}
+
 function _fs_uniqueFilePath(dir, desiredName) {
   var safeName = _fs_safeFileName(desiredName);
   var dot = safeName.lastIndexOf('.');
@@ -302,6 +551,7 @@ function _fs_uniqueFilePath(dir, desiredName) {
 
 function _fs_writeAttachmentBuffer(rootDir, cardPath, fileName, buffer) {
   rootDir = _fs_requireValidWorkDir(rootDir);
+  _fs_requireAttachmentSize(buffer.length);
   var cardDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, cardPath);
   var attachDir = nodePath.join(cardDir, '_attach');
   _fs_ensureDir(attachDir);
@@ -322,7 +572,13 @@ export function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
     normalizedRef = '_attach/' + nodePath.basename(normalizedRef);
   }
   var baseDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, String(cardPath || ''));
-  return nodePath.resolve(baseDir, normalizedRef);
+  var attachDir = nodePath.resolve(baseDir, '_attach');
+  var target = nodePath.resolve(baseDir, normalizedRef);
+  var relativePath = nodePath.relative(attachDir, target);
+  if (relativePath === '' || relativePath.startsWith('..') || nodePath.isAbsolute(relativePath)) {
+    throw new Error('附件路径越界: ' + rawRef);
+  }
+  return target;
 }
 
 function _fs_listAttachments(rootDir, cardPath) {
@@ -350,29 +606,75 @@ function _fs_listAttachments(rootDir, cardPath) {
 
 function _fs_importAttachment(rootDir, cardPath, sourceFilePath, targetFileName) {
   rootDir = _fs_requireValidWorkDir(rootDir);
-  if (!nodeFs.existsSync(sourceFilePath)) {
-    throw new Error('源文件不存在: ' + sourceFilePath);
+  var sourcePath = _fs_validateAbsolutePath(sourceFilePath);
+  if (!nodeFs.existsSync(sourcePath)) {
+    throw new Error('源文件不存在: ' + sourcePath);
   }
-  var stat = nodeFs.statSync(sourceFilePath);
+  if (nodeFs.lstatSync(sourcePath).isSymbolicLink()) {
+    throw new Error('不能导入符号链接文件');
+  }
+  var stat = nodeFs.statSync(sourcePath);
   if (!stat.isFile()) {
     throw new Error('只能导入文件');
   }
+  _fs_requireAttachmentSize(stat.size);
   
-  var fileName = targetFileName || nodePath.basename(sourceFilePath);
+  var fileName = targetFileName || nodePath.basename(sourcePath);
   var cardDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, cardPath);
   var attachDir = nodePath.join(cardDir, '_attach');
   _fs_ensureDir(attachDir);
   var target = _fs_uniqueFilePath(attachDir, fileName);
   
-  nodeFs.copyFileSync(sourceFilePath, target);
+  nodeFs.copyFileSync(sourcePath, target);
   return '_attach/' + nodePath.basename(target);
 }
 
 function _fs_deleteAttachment(rootDir, cardPath, attachmentName) {
   var filePath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentName);
-  if (nodeFs.existsSync(filePath)) {
-    nodeFs.rmSync(filePath, { force: true });
+  _fs_moveToTrash(_fs_requireValidWorkDir(rootDir), filePath, 'attachments');
+}
+
+function _fs_attachmentDir(rootDir, cardPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var cardDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, cardPath);
+  return nodePath.join(cardDir, '_attach');
+}
+
+function _fs_listTrashAttachments(rootDir, cardPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var attachDir = _fs_attachmentDir(rootDir, cardPath);
+  var expectedOriginalDir = nodePath.relative(rootDir, attachDir).split(nodePath.sep).join('/');
+  return _fs_listTrashItems(rootDir, 'attachments').filter(function(item) {
+    return nodePath.dirname(item.originalPath).split(nodePath.sep).join('/') === expectedOriginalDir;
+  });
+}
+
+function _fs_restoreTrashAttachment(rootDir, cardPath, trashName) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var attachDir = _fs_attachmentDir(rootDir, cardPath);
+  var allowed = _fs_listTrashAttachments(rootDir, cardPath).some(function(item) {
+    return item.trashName === trashName;
+  });
+  if (!allowed) throw new Error('附件不属于当前文档回收站');
+  var safeTrashName = nodePath.basename(String(trashName || '').trim());
+  var trashDir = nodePath.join(rootDir, '.trash', 'attachments');
+  var source = nodePath.resolve(trashDir, safeTrashName);
+  if (!isPathWithinDirCompat(trashDir, source) || !nodeFs.existsSync(source)) {
+    throw new Error('回收站附件不存在');
   }
+  var meta = {};
+  try {
+    meta = _fs_readJsonFile(source + '.trash.json');
+  } catch {}
+  var fileName = _fs_safeFileName(meta.originalName || safeTrashName);
+  _fs_ensureDir(attachDir);
+  var target = _fs_uniqueFilePath(attachDir, fileName);
+  nodeFs.copyFileSync(source, target);
+  try {
+    if (nodeFs.existsSync(source)) nodeFs.rmSync(source, { force: true });
+    if (nodeFs.existsSync(source + '.trash.json')) nodeFs.rmSync(source + '.trash.json', { force: true });
+  } catch {}
+  return '_attach/' + nodePath.basename(target);
 }
 
 const TOPO_DOCUMENT_DIR = '_docs';
@@ -855,13 +1157,93 @@ function _fs_deleteTopoDocument(rootDir, cardPath, documentId) {
   toDelete.forEach(function(id) {
     var item = found.manifest.documents[id];
     var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, item);
-    if (nodeFs.existsSync(filePath)) {
-      nodeFs.rmSync(filePath, { force: true });
-    }
+    _fs_moveToTrash(_fs_requireValidWorkDir(rootDir), filePath, 'topo-documents', {
+      cardPath: String(cardPath || ''),
+      topoDocumentItem: item,
+    });
     delete found.manifest.documents[id];
   });
   
   _fs_writeTopoDocumentManifest(rootDir, cardPath, found.manifest);
+}
+
+function _fs_listTrashTopoDocuments(rootDir, cardPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  return _fs_listTrashItems(rootDir, 'topo-documents').filter(function(item) {
+    return item.meta && item.meta.cardPath === String(cardPath || '');
+  }).map(function(item) {
+    var topoItem = item.meta && item.meta.topoDocumentItem;
+    var type = 'smart';
+    try {
+      type = _fs_normalizeTopoDocumentType(topoItem && topoItem.type);
+    } catch {}
+    return {
+      trashName: item.trashName,
+      originalName: item.originalName,
+      originalPath: item.originalPath,
+      deletedAt: item.deletedAt,
+      size: item.size,
+      isDirectory: item.isDirectory,
+      documentId: topoItem && topoItem.id ? String(topoItem.id) : '',
+      title: topoItem && topoItem.title ? String(topoItem.title) : item.originalName,
+      type: type,
+    };
+  });
+}
+
+function _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var trashItems = _fs_listTrashItems(rootDir, 'topo-documents');
+  var item = trashItems.find(function(candidate) {
+    return candidate.trashName === trashName && candidate.meta && candidate.meta.cardPath === String(cardPath || '');
+  });
+  if (!item) throw new Error('回收站文档不存在');
+  var topoItem = item.meta.topoDocumentItem;
+  if (!_fs_isPlainObject(topoItem)) throw new Error('回收站文档元数据损坏');
+  var type = _fs_normalizeTopoDocumentType(topoItem.type);
+  var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
+  var manifest = _fs_readTopoDocumentManifest(rootDir, cardPath);
+  var nextId = String(topoItem.id || '');
+  if (!nextId || manifest.documents[nextId]) {
+    nextId = 'doc_' + randomUUID().replace(/-/g, '');
+  }
+  var safePath = _fs_normalizeTopoDocumentPath(type, topoItem.path || (nextId + TOPO_DOCUMENT_EXTENSIONS[type]));
+  if (manifest.documents[nextId] || Object.values(manifest.documents).some(function(existing) { return existing.path === safePath; })) {
+    safePath = nextId + TOPO_DOCUMENT_EXTENSIONS[type];
+  }
+  _fs_ensureDir(docsDir);
+  var trashDir = nodePath.join(rootDir, '.trash', 'topo-documents');
+  var source = nodePath.resolve(trashDir, nodePath.basename(String(trashName || '')));
+  if (!isPathWithinDirCompat(trashDir, source) || !nodeFs.existsSync(source)) throw new Error('回收站文档文件不存在');
+  var target = nodePath.join(docsDir, safePath);
+  if (nodeFs.existsSync(target)) target = _fs_uniqueFilePath(docsDir, safePath);
+  nodeFs.copyFileSync(source, target);
+  var restoredPath = nodePath.basename(target);
+  var restoredItem = {
+    id: nextId,
+    type: type,
+    title: String(topoItem.title || item.originalName || '未命名文档'),
+    path: restoredPath,
+    parentId: topoItem.parentId && manifest.documents[String(topoItem.parentId)] ? String(topoItem.parentId) : null,
+    sortOrder: Object.keys(manifest.documents).length + 1,
+    createdAt: Number.isFinite(topoItem.createdAt) ? topoItem.createdAt : Date.now(),
+    updatedAt: Date.now(),
+    version: Number.isFinite(topoItem.version) ? topoItem.version : 1,
+  };
+  try {
+    manifest.documents[nextId] = restoredItem;
+    _fs_writeTopoDocumentManifest(rootDir, cardPath, manifest);
+  } catch (e) {
+    try {
+      if (nodeFs.existsSync(target)) nodeFs.rmSync(target, { force: true });
+    } catch {}
+    throw e;
+  }
+  try {
+    if (nodeFs.existsSync(source)) nodeFs.rmSync(source, { force: true });
+    if (nodeFs.existsSync(source + '.trash.json')) nodeFs.rmSync(source + '.trash.json', { force: true });
+  } catch {}
+  return restoredItem;
 }
 
 function _fs_moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder) {
@@ -907,9 +1289,10 @@ const fileService = {
      */
     writeAppConfig: function(rootDir, content) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var data = content;
-      if (typeof content === 'string') {
-        try { data = JSON.parse(content); } catch (e) { data = {}; }
+      var data = _fs_requirePlainObject(content, '配置内容');
+      var serialized = JSON.stringify(data);
+      if (Buffer.byteLength(serialized, 'utf-8') > MAX_APP_CONFIG_BYTES) {
+        throw new Error('配置内容过大，拒绝写入');
       }
       _fs_ensureDir(rootDir);
       _fs_writeJsonFile(_fs_appConfigPath(rootDir), data);
@@ -977,6 +1360,29 @@ const fileService = {
         return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
       });
       return children;
+    },
+
+    listTrashKBs: function(rootDir) {
+      return _fs_listTrashItems(rootDir, 'kbs').filter(function(item) {
+        return _fs_kbsTrashItemKind(item) === 'kb';
+      });
+    },
+
+    restoreTrashKB: function(rootDir, trashName) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      var trashItem = _fs_listTrashItems(rootDir, 'kbs').find(function(item) {
+        return item.trashName === trashName;
+      });
+      if (!trashItem || _fs_kbsTrashItemKind(trashItem) !== 'kb') {
+        throw new Error('该回收站项目不是知识库，不能从首页恢复');
+      }
+      var restoredPath = _fs_restoreTrashItem(rootDir, 'kbs', trashName, _fs_kbsDir(rootDir));
+      return nodePath.basename(restoredPath);
+    },
+
+    clearTrashKBs: function(rootDir) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      _fs_clearTrashItems(rootDir, 'kbs');
     },
 
     /**
@@ -1089,8 +1495,13 @@ const fileService = {
      */
     readFile: function(rootDir, filePath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var f = _fs_resolveKbsPath(rootDir, filePath);
-      if (nodeFs.existsSync(f)) return nodeFs.readFileSync(f, 'utf-8');
+      var f = _fs_requireSafeKbsTextFile(rootDir, filePath);
+      if (nodeFs.existsSync(f)) {
+        var stat = nodeFs.statSync(f);
+        if (!stat.isFile()) throw new Error('读取目标不是文件');
+        if (stat.size > MAX_TEXT_FILE_BYTES) throw new Error('文件过大，拒绝读取');
+        return nodeFs.readFileSync(f, 'utf-8');
+      }
       return '';
     },
 
@@ -1103,7 +1514,9 @@ const fileService = {
      */
     writeFile: function(rootDir, filePath, content) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var f = _fs_resolveKbsPath(rootDir, filePath);
+      if (typeof content !== 'string') throw new Error('文件内容必须是字符串');
+      if (Buffer.byteLength(content, 'utf-8') > MAX_TEXT_FILE_BYTES) throw new Error('文件过大，拒绝写入');
+      var f = _fs_requireSafeKbsTextFile(rootDir, filePath);
       _fs_ensureDir(nodePath.dirname(f));
       nodeFs.writeFileSync(f, content, 'utf-8');
     },
@@ -1130,6 +1543,25 @@ const fileService = {
 
     deleteTopoDocument: function(rootDir, cardPath, documentId) {
       return _fs_deleteTopoDocument(rootDir, cardPath, documentId);
+    },
+
+    listTrashTopoDocuments: function(rootDir, cardPath) {
+      return _fs_listTrashTopoDocuments(rootDir, cardPath);
+    },
+
+    restoreTrashTopoDocument: function(rootDir, cardPath, trashName) {
+      return _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName);
+    },
+
+    clearTrashTopoDocuments: function(rootDir, cardPath) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      _fs_listTrashItems(rootDir, 'topo-documents')
+        .filter(function(item) {
+          return item.meta && item.meta.cardPath === String(cardPath || '');
+        })
+        .forEach(function(item) {
+          _fs_deleteTrashItem(rootDir, 'topo-documents', item.trashName);
+        });
     },
 
     moveTopoDocument: function(rootDir, cardPath, documentId, newParentId, newSortOrder) {
@@ -1160,9 +1592,31 @@ const fileService = {
       return _fs_deleteAttachment(rootDir, cardPath, attachmentName);
     },
 
+    listTrashAttachments: function(rootDir, cardPath) {
+      return _fs_listTrashAttachments(rootDir, cardPath);
+    },
+
+    restoreTrashAttachment: function(rootDir, cardPath, trashName) {
+      return _fs_restoreTrashAttachment(rootDir, cardPath, trashName);
+    },
+
+    clearTrashAttachments: function(rootDir, cardPath) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      var attachDir = _fs_attachmentDir(rootDir, cardPath);
+      var expectedOriginalDir = nodePath.relative(rootDir, attachDir).split(nodePath.sep).join('/');
+      _fs_listTrashItems(rootDir, 'attachments')
+        .filter(function(item) {
+          return nodePath.dirname(item.originalPath).split(nodePath.sep).join('/') === expectedOriginalDir;
+        })
+        .forEach(function(item) {
+          _fs_deleteTrashItem(rootDir, 'attachments', item.trashName);
+        });
+    },
+
     openAttachment: async function(rootDir, cardPath, attachmentRef) {
       var filePath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef);
       if (!nodeFs.existsSync(filePath)) return false;
+      _fs_requireSafeOpenAttachment(filePath);
       var err = await shell.openPath(filePath);
       return err === '';
     },
@@ -1171,15 +1625,21 @@ const fileService = {
       var ext = _fs_extFromMime(mimeType);
       var safeName = _fs_safeFileName(fileName || ('image.' + ext));
       if (safeName.indexOf('.') < 0) safeName += '.' + ext;
-      return _fs_writeAttachmentBuffer(rootDir, cardPath, safeName, Buffer.from(String(base64 || ''), 'base64'));
+      var buffer = Buffer.from(String(base64 || ''), 'base64');
+      _fs_requireAttachmentSize(buffer.length);
+      return _fs_writeAttachmentBuffer(rootDir, cardPath, safeName, buffer);
     },
 
     downloadAttachment: async function(rootDir, cardPath, url, targetFileName) {
-      var targetUrl = String(url || '').trim();
-      if (!/^https?:\/\//i.test(targetUrl)) {
-        throw new Error('只支持 http/https 图片链接');
+      var parsedUrl = await _fs_requirePublicHttpUrl(String(url || '').trim());
+      var abortController = new AbortController();
+      var timeout = setTimeout(function() { abortController.abort(); }, ATTACHMENT_DOWNLOAD_TIMEOUT_MS);
+      var response;
+      try {
+        response = await fetch(parsedUrl.href, { redirect: 'error', signal: abortController.signal });
+      } finally {
+        clearTimeout(timeout);
       }
-      var response = await fetch(targetUrl);
       if (!response.ok) {
         throw new Error('下载失败: ' + response.status);
       }
@@ -1187,16 +1647,21 @@ const fileService = {
       if (!/^image\//i.test(mimeType)) {
         throw new Error('链接不是图片: ' + mimeType);
       }
-      var urlPath = new URL(targetUrl).pathname;
+      var contentLength = Number(response.headers.get('content-length') || 0);
+      if (contentLength > 0) _fs_requireAttachmentSize(contentLength);
+      var urlPath = parsedUrl.pathname;
       var fileName = targetFileName || nodePath.basename(urlPath) || ('image.' + _fs_extFromMime(mimeType));
       if (fileName.indexOf('.') < 0) fileName += '.' + _fs_extFromMime(mimeType);
       var arrayBuffer = await response.arrayBuffer();
-      return _fs_writeAttachmentBuffer(rootDir, cardPath, fileName, Buffer.from(arrayBuffer));
+      var buffer = Buffer.from(arrayBuffer);
+      _fs_requireAttachmentSize(buffer.length);
+      return _fs_writeAttachmentBuffer(rootDir, cardPath, fileName, buffer);
     },
 
     readAttachmentDataUrl: function(rootDir, cardPath, attachmentRef) {
       var filePath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef);
       if (!nodeFs.existsSync(filePath)) return '';
+      _fs_requireAttachmentSize(nodeFs.statSync(filePath).size);
       var ext = nodePath.extname(filePath).slice(1).toLowerCase();
       var mimeMap = {
         jpg: 'image/jpeg',
@@ -1246,8 +1711,13 @@ const fileService = {
      */
     importKB: function(rootDir, sourcePath) {
       rootDir = _fs_requireValidWorkDir(rootDir);
-      var src = nodePath.resolve(sourcePath);
+      var src = _fs_validateAbsolutePath(sourcePath);
+      var relToRoot = nodePath.relative(rootDir, src);
+      if (relToRoot === '' || (!relToRoot.startsWith('..') && !nodePath.isAbsolute(relToRoot))) {
+        throw new Error('不能从当前工作目录内部导入知识库');
+      }
       if (!nodeFs.existsSync(src)) throw new Error('源目录不存在: ' + src);
+      if (!nodeFs.statSync(src).isDirectory()) throw new Error('源路径不是目录');
       if (!nodeFs.existsSync(nodePath.join(src, '_graph.json'))) {
         throw new Error('不是有效的知识库目录');
       }
@@ -1269,6 +1739,7 @@ const fileService = {
         for (var i = 0; i < entries.length; i++) {
           var entry = entries[i];
           if (entry.name === 'node_modules') continue;
+          if (entry.isSymbolicLink()) continue;
           var srcEntry = nodePath.join(srcDir, entry.name);
           var destEntry = nodePath.join(destDir, entry.name);
           if (entry.isDirectory()) {
@@ -1285,7 +1756,14 @@ const fileService = {
           }
         }
       }
-      copyDirRecursive(src, dest);
+      try {
+        copyDirRecursive(src, dest);
+      } catch (e) {
+        try {
+          if (nodeFs.existsSync(dest)) nodeFs.rmSync(dest, { recursive: true, force: true });
+        } catch {}
+        throw e;
+      }
 
       return nodePath.relative(_fs_kbsDir(rootDir), dest).split(nodePath.sep).join('/');
     },

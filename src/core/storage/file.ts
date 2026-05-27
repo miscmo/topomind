@@ -195,6 +195,18 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.listKBs(requireRootDir())
     },
 
+    listTrashKBs: async () => {
+      return FSB.listTrashKBs(requireRootDir())
+    },
+
+    restoreTrashKB: async (trashName: string) => {
+      return FSB.restoreTrashKB(requireRootDir(), trashName)
+    },
+
+    clearTrashKBs: async () => {
+      await FSB.clearTrashKBs(requireRootDir())
+    },
+
     createKB: async (name: string): Promise<void> => {
       await FSB.createKbsDir(requireRootDir(), name)
     },
@@ -271,6 +283,18 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       await FSB.deleteTopoDocument(requireRootDir(), cardPath, documentId)
     },
 
+    listTrashTopoDocuments: async (cardPath: string) => {
+      return FSB.listTrashTopoDocuments(requireRootDir(), cardPath)
+    },
+
+    restoreTrashTopoDocument: async (cardPath: string, trashName: string) => {
+      return FSB.restoreTrashTopoDocument(requireRootDir(), cardPath, trashName)
+    },
+
+    clearTrashTopoDocuments: async (cardPath: string) => {
+      await FSB.clearTrashTopoDocuments(requireRootDir(), cardPath)
+    },
+
     moveTopoDocument: async (cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number): Promise<TopoDocumentManifestItem> => {
       return FSB.moveTopoDocument(requireRootDir(), cardPath, documentId, newParentId, newSortOrder)
     },
@@ -297,6 +321,18 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
 
     deleteAttachment: async (cardPath: string, attachmentName: string) => {
       await FSB.deleteAttachment(requireRootDir(), cardPath, attachmentName)
+    },
+
+    listTrashAttachments: async (cardPath: string) => {
+      return FSB.listTrashAttachments(requireRootDir(), cardPath)
+    },
+
+    restoreTrashAttachment: async (cardPath: string, trashName: string) => {
+      return FSB.restoreTrashAttachment(requireRootDir(), cardPath, trashName)
+    },
+
+    clearTrashAttachments: async (cardPath: string) => {
+      await FSB.clearTrashAttachments(requireRootDir(), cardPath)
     },
 
     openAttachment: async (cardPath: string, attachmentRef: string) => {

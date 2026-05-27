@@ -6,6 +6,7 @@ import { logger } from './logger'
 import type { ElectronAPI } from '../types/electron-api'
 import type { EdgeRelation, EdgeWeight } from '../types'
 import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentRepairResult } from './storage/service'
+import type { TopoDocumentType } from './topoDocumentTypes'
 
 const getApi = (): ElectronAPI | null => {
   const w = window as Window
@@ -67,8 +68,26 @@ export interface FSBResult {
   error?: string
 }
 
+export interface FSBTrashItem {
+  trashName: string
+  originalName: string
+  originalPath: string
+  deletedAt: number
+  size: number
+  isDirectory: boolean
+}
+
+export interface FSBTrashTopoDocumentItem extends FSBTrashItem {
+  documentId: string
+  title: string
+  type: TopoDocumentType
+}
+
 export interface FSB {
   listKBs: (rootDir: string) => Promise<FSBKBInfo[]>
+  listTrashKBs: (rootDir: string) => Promise<FSBTrashItem[]>
+  restoreTrashKB: (rootDir: string, trashName: string) => Promise<string>
+  clearTrashKBs: (rootDir: string) => Promise<void>
   readCardChildren: (rootDir: string, cardPath: string) => Promise<FSBCardChildren>
   createKbsDir: (rootDir: string, kbName: string) => Promise<void>
   createCardDir: (rootDir: string, parentPath: string, cardName: string) => Promise<string>
@@ -76,13 +95,15 @@ export interface FSB {
   renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
   readGraphMeta: (rootDir: string, roomPath: string) => Promise<FSBGraphMeta>
   writeGraphMeta: (rootDir: string, roomPath: string, meta: FSBGraphMeta) => Promise<unknown>
-  readFile: (rootDir: string, filePath: string) => Promise<string>
   listTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentManifestItem[]>
   createTopoDocument: (rootDir: string, cardPath: string, input: TopoDocumentCreateInput) => Promise<TopoDocumentManifestItem>
   readTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<unknown>
   writeTopoDocument: (rootDir: string, cardPath: string, documentId: string, content: unknown) => Promise<void>
   renameTopoDocument: (rootDir: string, cardPath: string, documentId: string, title: string) => Promise<TopoDocumentManifestItem>
   deleteTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<void>
+  listTrashTopoDocuments: (rootDir: string, cardPath: string) => Promise<FSBTrashTopoDocumentItem[]>
+  restoreTrashTopoDocument: (rootDir: string, cardPath: string, trashName: string) => Promise<TopoDocumentManifestItem>
+  clearTrashTopoDocuments: (rootDir: string, cardPath: string) => Promise<void>
   moveTopoDocument: (rootDir: string, cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   repairTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentRepairResult>
   exportTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
@@ -90,6 +111,9 @@ export interface FSB {
   listAttachments: (rootDir: string, cardPath: string) => Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>
   importAttachment: (rootDir: string, cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
   deleteAttachment: (rootDir: string, cardPath: string, attachmentName: string) => Promise<void>
+  listTrashAttachments: (rootDir: string, cardPath: string) => Promise<FSBTrashItem[]>
+  restoreTrashAttachment: (rootDir: string, cardPath: string, trashName: string) => Promise<string>
+  clearTrashAttachments: (rootDir: string, cardPath: string) => Promise<void>
   openAttachment: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<boolean>
   getAttachmentAbsoluteUrl: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<string | null>
   writeAttachmentBase64: (rootDir: string, cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
@@ -97,7 +121,6 @@ export interface FSB {
   readAttachmentDataUrl: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<string>
   readAppConfig: (rootDir: string) => Promise<unknown>
   writeAppConfig: (rootDir: string, content: unknown) => Promise<unknown>
-  writeFile: (rootDir: string, filePath: string, content: string) => Promise<unknown>
   isValidWorkDir: (dirPath: string) => Promise<FSBResult>
   selectDirectory: () => Promise<FSBResult>
   createWorkDir: (dirPath: string) => Promise<FSBResult>
@@ -108,6 +131,9 @@ export interface FSB {
 
 const FSBImpl: FSB = {
   listKBs: (rootDir) => _call('fs:listKBs', rootDir) as Promise<FSBKBInfo[]>,
+  listTrashKBs: (rootDir) => _call('fs:listTrashKBs', rootDir) as Promise<FSBTrashItem[]>,
+  restoreTrashKB: (rootDir, trashName) => _call('fs:restoreTrashKB', rootDir, trashName) as Promise<string>,
+  clearTrashKBs: (rootDir) => _call('fs:clearTrashKBs', rootDir) as Promise<void>,
   readCardChildren: (rootDir, cardPath) => _call('fs:readCardChildren', rootDir, cardPath) as Promise<FSBCardChildren>,
   createKbsDir: (rootDir, kbName) => _call('fs:createKbsDir', rootDir, kbName) as Promise<void>,
   createCardDir: (rootDir, parentPath, cardName) => _call('fs:createCardDir', rootDir, parentPath, cardName) as Promise<string>,
@@ -116,7 +142,6 @@ const FSBImpl: FSB = {
   readGraphMeta: (rootDir, roomPath) => _call('fs:readGraphMeta', rootDir, roomPath) as Promise<FSBGraphMeta>,
   writeGraphMeta: (rootDir, roomPath, meta) => _call('fs:writeGraphMeta', rootDir, roomPath, meta),
 
-  readFile: (rootDir, filePath) => _call('fs:readFile', rootDir, filePath) as Promise<string>,
   listTopoDocuments: (rootDir, cardPath) =>
     _call('fs:listTopoDocuments', rootDir, cardPath) as Promise<TopoDocumentManifestItem[]>,
   createTopoDocument: (rootDir, cardPath, input) =>
@@ -129,6 +154,12 @@ const FSBImpl: FSB = {
     _call('fs:renameTopoDocument', rootDir, cardPath, documentId, title) as Promise<TopoDocumentManifestItem>,
   deleteTopoDocument: (rootDir, cardPath, documentId) =>
     _call('fs:deleteTopoDocument', rootDir, cardPath, documentId) as Promise<void>,
+  listTrashTopoDocuments: (rootDir, cardPath) =>
+    _call('fs:listTrashTopoDocuments', rootDir, cardPath) as Promise<FSBTrashTopoDocumentItem[]>,
+  restoreTrashTopoDocument: (rootDir, cardPath, trashName) =>
+    _call('fs:restoreTrashTopoDocument', rootDir, cardPath, trashName) as Promise<TopoDocumentManifestItem>,
+  clearTrashTopoDocuments: (rootDir, cardPath) =>
+    _call('fs:clearTrashTopoDocuments', rootDir, cardPath) as Promise<void>,
   moveTopoDocument: (rootDir, cardPath, documentId, newParentId, newSortOrder) =>
     _call('fs:moveTopoDocument', rootDir, cardPath, documentId, newParentId, newSortOrder) as Promise<TopoDocumentManifestItem>,
   repairTopoDocuments: (rootDir, cardPath) =>
@@ -143,6 +174,12 @@ const FSBImpl: FSB = {
     _call('fs:importAttachment', rootDir, cardPath, sourceFilePath, targetFileName) as Promise<string>,
   deleteAttachment: (rootDir, cardPath, attachmentName) =>
     _call('fs:deleteAttachment', rootDir, cardPath, attachmentName) as Promise<void>,
+  listTrashAttachments: (rootDir, cardPath) =>
+    _call('fs:listTrashAttachments', rootDir, cardPath) as Promise<FSBTrashItem[]>,
+  restoreTrashAttachment: (rootDir, cardPath, trashName) =>
+    _call('fs:restoreTrashAttachment', rootDir, cardPath, trashName) as Promise<string>,
+  clearTrashAttachments: (rootDir, cardPath) =>
+    _call('fs:clearTrashAttachments', rootDir, cardPath) as Promise<void>,
   openAttachment: (rootDir, cardPath, attachmentRef) =>
     _call('fs:openAttachment', rootDir, cardPath, attachmentRef) as Promise<boolean>,
   getAttachmentAbsoluteUrl: (rootDir, cardPath, attachmentRef) =>
@@ -155,7 +192,6 @@ const FSBImpl: FSB = {
     _call('fs:readAttachmentDataUrl', rootDir, cardPath, attachmentRef) as Promise<string>,
   readAppConfig: (rootDir) => _call('fs:readAppConfig', rootDir),
   writeAppConfig: (rootDir, content) => _call('fs:writeAppConfig', rootDir, content),
-  writeFile: (rootDir, filePath, content) => _call('fs:writeFile', rootDir, filePath, content),
 
   isValidWorkDir: (dirPath) => _call('fs:isValidWorkDir', dirPath) as Promise<FSBResult>,
   selectDirectory: () => _call('fs:selectDirectory') as Promise<FSBResult>,

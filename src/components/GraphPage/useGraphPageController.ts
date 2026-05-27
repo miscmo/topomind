@@ -58,7 +58,7 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
   useEffect(() => {
     return registerTabSaver(tabId, async () => {
       await flushCurrentRoomSaveRef.current()
-    })
+    }, () => false)
   }, [tabId])
 
   return { graphSession, graph }

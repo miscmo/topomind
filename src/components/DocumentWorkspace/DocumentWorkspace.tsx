@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
+import type { FSBTrashTopoDocumentItem } from '../../core/fs-backend'
 import { DocumentSidebar } from './DocumentSidebar'
 import { DocumentEditorHost } from './DocumentEditorHost'
 
@@ -13,6 +14,7 @@ interface DocumentWorkspaceProps {
   attachmentCardPath: string | null
   detailHeader: ReactNode
   topoDocuments: TopoDocumentManifestItem[]
+  trashTopoDocuments?: FSBTrashTopoDocumentItem[]
   activeDocumentPath: string
   detailSidebarCollapsed: boolean
   detailSidebarFloating?: boolean
@@ -24,6 +26,8 @@ interface DocumentWorkspaceProps {
   onExportTopoDocument: (documentPath: string) => void
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
+  onRestoreDocument?: (trashName: string) => void
+  onClearTrashDocuments?: () => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
   isDocumentBusy?: boolean
 }
@@ -37,6 +41,7 @@ export function DocumentWorkspace({
   attachmentCardPath,
   detailHeader,
   topoDocuments,
+  trashTopoDocuments = [],
   activeDocumentPath,
   detailSidebarCollapsed,
   detailSidebarFloating,
@@ -48,12 +53,15 @@ export function DocumentWorkspace({
   onExportTopoDocument,
   onRenameDocument,
   onDeleteDocument,
+  onRestoreDocument,
+  onClearTrashDocuments,
   onMoveDocument,
   isDocumentBusy,
 }: DocumentWorkspaceProps) {
   const sidebarContent = (
     <DocumentSidebar
       topoDocuments={topoDocuments}
+      trashTopoDocuments={trashTopoDocuments}
       activeDocumentPath={activeDocumentPath}
       isBusy={isDocumentBusy}
       onSelectDocument={onSelectDocument}
@@ -61,6 +69,8 @@ export function DocumentWorkspace({
       onExportTopoDocument={onExportTopoDocument}
       onRenameDocument={onRenameDocument}
       onDeleteDocument={onDeleteDocument}
+      onRestoreDocument={onRestoreDocument}
+      onClearTrashDocuments={onClearTrashDocuments}
       onMoveDocument={onMoveDocument}
     />
   )

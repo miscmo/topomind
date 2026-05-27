@@ -8,6 +8,7 @@ import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import { SaveCoordinator } from '../../domain/persistence/saveCoordinator'
 import { normalizeGraphMeta } from '../../domain/graph/normalizeGraphMeta'
 import { isTopoDocumentType, type TopoDocumentType } from '../topoDocumentTypes'
+import type { FSBTrashItem, FSBTrashTopoDocumentItem } from '../fs-backend'
 
 interface VaultConfig {
   edgeDefaultsVersion?: number
@@ -82,6 +83,9 @@ export interface StorageBackend {
   isValidVault: (dirPath: string) => Promise<{ valid: boolean; error?: string }>
 
   listKBs: () => Promise<KBListItem[]>
+  listTrashKBs: () => Promise<FSBTrashItem[]>
+  restoreTrashKB: (trashName: string) => Promise<string>
+  clearTrashKBs: () => Promise<void>
   createKB: (name: string) => Promise<void>
   deleteKB: (kbPath: string) => Promise<void>
   renameKB: (kbPath: string, newName: string) => Promise<void>
@@ -98,6 +102,9 @@ export interface StorageBackend {
   writeTopoDocument: (cardPath: string, documentId: string, content: unknown) => Promise<void>
   renameTopoDocument: (cardPath: string, documentId: string, title: string) => Promise<TopoDocumentManifestItem>
   deleteTopoDocument: (cardPath: string, documentId: string) => Promise<void>
+  listTrashTopoDocuments: (cardPath: string) => Promise<FSBTrashTopoDocumentItem[]>
+  restoreTrashTopoDocument: (cardPath: string, trashName: string) => Promise<TopoDocumentManifestItem>
+  clearTrashTopoDocuments: (cardPath: string) => Promise<void>
   moveTopoDocument: (cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   repairTopoDocuments: (cardPath: string) => Promise<TopoDocumentRepairResult>
   exportTopoDocument: (cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
@@ -106,6 +113,9 @@ export interface StorageBackend {
   listAttachments: (cardPath: string) => Promise<AttachmentItem[]>
   importAttachment: (cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
   deleteAttachment: (cardPath: string, attachmentName: string) => Promise<void>
+  listTrashAttachments: (cardPath: string) => Promise<FSBTrashItem[]>
+  restoreTrashAttachment: (cardPath: string, trashName: string) => Promise<string>
+  clearTrashAttachments: (cardPath: string) => Promise<void>
   openAttachment: (cardPath: string, attachmentRef: string) => Promise<boolean>
   getAttachmentAbsoluteUrl: (cardPath: string, attachmentRef: string) => Promise<string | null>
   
@@ -250,6 +260,21 @@ export function createStore(backend: StorageBackend) {
         return await backend.listKBs()
       } catch (e) { logger.catch('Store.listKBs', '列出知识库失败', e); throw e }
     },
+    async listTrashKBs() {
+      try {
+        return await backend.listTrashKBs()
+      } catch (e) { logger.catch('Store.listTrashKBs', '列出回收站知识库失败', e); throw e }
+    },
+    async restoreTrashKB(trashName: string) {
+      try {
+        return await backend.restoreTrashKB(trashName)
+      } catch (e) { logger.catch('Store.restoreTrashKB', `恢复知识库失败: ${trashName}`, e); throw e }
+    },
+    async clearTrashKBs() {
+      try {
+        await backend.clearTrashKBs()
+      } catch (e) { logger.catch('Store.clearTrashKBs', '清空知识库回收站失败', e); throw e }
+    },
     async createKB(name: string): Promise<void> {
       try {
         await backend.createKB(name)
@@ -314,6 +339,15 @@ export function createStore(backend: StorageBackend) {
     async deleteTopoDocument(cardPath: string, documentId: string) {
       try { await backend.deleteTopoDocument(cardPath, documentId) } catch (e) { logger.catch('Store.deleteTopoDocument', `删除多类型文档失败: ${cardPath}/${documentId}`, e); throw e }
     },
+    async listTrashTopoDocuments(cardPath: string) {
+      try { return await backend.listTrashTopoDocuments(cardPath) } catch (e) { logger.catch('Store.listTrashTopoDocuments', `列出多类型文档回收站失败: ${cardPath}`, e); throw e }
+    },
+    async restoreTrashTopoDocument(cardPath: string, trashName: string) {
+      try { return await backend.restoreTrashTopoDocument(cardPath, trashName) } catch (e) { logger.catch('Store.restoreTrashTopoDocument', `恢复多类型文档失败: ${cardPath}/${trashName}`, e); throw e }
+    },
+    async clearTrashTopoDocuments(cardPath: string) {
+      try { await backend.clearTrashTopoDocuments(cardPath) } catch (e) { logger.catch('Store.clearTrashTopoDocuments', `清空多类型文档回收站失败: ${cardPath}`, e); throw e }
+    },
     async moveTopoDocument(cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) {
       try { return await backend.moveTopoDocument(cardPath, documentId, newParentId, newSortOrder) } catch (e) { logger.catch('Store.moveTopoDocument', `移动多类型文档失败: ${cardPath}/${documentId}`, e); throw e }
     },
@@ -334,6 +368,15 @@ export function createStore(backend: StorageBackend) {
     },
     async deleteAttachment(cardPath: string, attachmentName: string) {
       try { await backend.deleteAttachment(cardPath, attachmentName) } catch (e) { logger.catch('Store.deleteAttachment', `删除附件失败: ${cardPath}/${attachmentName}`, e); throw e }
+    },
+    async listTrashAttachments(cardPath: string) {
+      try { return await backend.listTrashAttachments(cardPath) } catch (e) { logger.catch('Store.listTrashAttachments', `列出附件回收站失败: ${cardPath}`, e); throw e }
+    },
+    async restoreTrashAttachment(cardPath: string, trashName: string) {
+      try { return await backend.restoreTrashAttachment(cardPath, trashName) } catch (e) { logger.catch('Store.restoreTrashAttachment', `恢复附件失败: ${cardPath}/${trashName}`, e); throw e }
+    },
+    async clearTrashAttachments(cardPath: string) {
+      try { await backend.clearTrashAttachments(cardPath) } catch (e) { logger.catch('Store.clearTrashAttachments', `清空附件回收站失败: ${cardPath}`, e); throw e }
     },
     async openAttachment(cardPath: string, attachmentRef: string) {
       try { return await backend.openAttachment(cardPath, attachmentRef) } catch (e) { logger.catch('Store.openAttachment', `打开附件失败: ${cardPath}/${attachmentRef}`, e); throw e }

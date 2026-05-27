@@ -2,7 +2,7 @@
  * 首页：知识库列表
  */
 import { useState } from 'react'
-import { Plus, Download, Book } from 'lucide-react'
+import { Plus, Download, Book, Trash2 } from 'lucide-react'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { useHomeKnowledgeBases, type KBItem } from './useHomeKnowledgeBases'
 import { useHomeCreateKB } from './useHomeCreateKB'
@@ -11,6 +11,7 @@ import { CreateKBDialog } from './CreateKBDialog'
 import { ImportKBDialog } from './ImportKBDialog'
 import { KBSettingsDialog } from './KBSettingsDialog'
 import { KnowledgeBaseGrid } from './KnowledgeBaseGrid'
+import { TrashDialog } from './TrashDialog'
 
 export default function HomePage() {
   const currentWorkDir = useWorkspaceStore((s) => s.currentWorkDir)
@@ -50,6 +51,7 @@ export default function HomePage() {
   } = useHomeImportKB({ refreshKBList })
 
   const [settingsKB, setSettingsKB] = useState<KBItem | null>(null)
+  const [showTrashDialog, setShowTrashDialog] = useState(false)
 
   return (
     <div id="home-modal" className="flex h-full w-full flex-col overflow-hidden bg-background">
@@ -70,6 +72,13 @@ export default function HomePage() {
             </div>
             
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowTrashDialog(true)}
+                className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border border-input bg-transparent px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                回收站
+              </button>
               <button
                 onClick={openImportSheet}
                 className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border border-input bg-transparent px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
@@ -157,6 +166,12 @@ export default function HomePage() {
         visible={!!settingsKB}
         kb={settingsKB}
         onClose={() => setSettingsKB(null)}
+        refreshKBList={refreshKBList}
+      />
+
+      <TrashDialog
+        visible={showTrashDialog}
+        onClose={() => setShowTrashDialog(false)}
         refreshKBList={refreshKBList}
       />
     </div>

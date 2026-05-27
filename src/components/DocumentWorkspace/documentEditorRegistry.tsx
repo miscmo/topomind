@@ -76,7 +76,7 @@ function SmartDocumentAdapter({
 
   const uploadFile = React.useCallback(async (file: File) => {
     if (!attachmentCardPath) {
-      return URL.createObjectURL(file)
+      throw new Error('当前文档未绑定附件目录，无法上传文件')
     }
     try {
       const base64 = await new Promise<string>((resolve, reject) => {
@@ -86,12 +86,13 @@ function SmartDocumentAdapter({
         reader.readAsDataURL(file)
       })
       const base64Data = base64.split(',')[1]
-      await store.writeAttachmentBase64(attachmentCardPath, file.name, file.type, base64Data)
-      const url = await store.getAttachmentAbsoluteUrl(attachmentCardPath, file.name)
-      return url || URL.createObjectURL(file)
+      const attachmentRef = await store.writeAttachmentBase64(attachmentCardPath, file.name, file.type, base64Data)
+      const url = await store.getAttachmentAbsoluteUrl(attachmentCardPath, attachmentRef)
+      if (!url) throw new Error('附件写入成功，但无法生成访问地址')
+      return url
     } catch (e) {
       console.error('Failed to upload file', e)
-      return URL.createObjectURL(file)
+      throw e
     }
   }, [attachmentCardPath, store])
 
