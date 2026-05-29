@@ -191,3 +191,32 @@
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* 修复图片块在加载失败或未加载时的布局塌陷问题，防止拖拽坐标映射错误 */
+.smart-document-content .bn-block-content[data-content-type="image"] {
+  min-height: 2em;
+}
+
+.smart-document-content .bn-block-content[data-content-type="image"] img {
+  min-height: 24px;
+  background-color: var(--color-bg-muted);
+  position: relative;
+}
+
+.smart-document-content .bn-block-content[data-content-type="image"] img:after {
+  content: "图片加载失败或丢失";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-bg-muted);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 4px;
+}
+
