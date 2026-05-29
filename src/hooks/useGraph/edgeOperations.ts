@@ -2,9 +2,10 @@ import type { Connection } from '@xyflow/react'
 import type { EdgeLineMode, EdgeLineStyle, EdgeRelation, EdgeWeight, KnowledgeEdge, KnowledgeNode } from '../../types'
 import { logAction } from '../../core/log-backend'
 import { buildEdgeView } from './edgeView'
-import type { GraphSession } from '../../stores/tabStore'
+import type { GraphSession } from '../../stores/tabs/tabStore'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
+import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 
 export interface EdgeOperationsDeps {
   getActiveGraphSession: () => GraphSession | undefined
@@ -13,9 +14,9 @@ export interface EdgeOperationsDeps {
 }
 
 function withEdgeSelection(edge: KnowledgeEdge, selected: boolean): KnowledgeEdge {
-  const color = edge.data?.color ?? '#7f8c8d'
-  const lineStyle = edge.data?.lineStyle ?? 'solid'
-  const arrow = edge.data?.arrow ?? true
+  const color = edge.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
+  const lineStyle = edge.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
+  const arrow = edge.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
   const weight = edge.data?.weight ?? 'minor'
 
   return {
@@ -52,10 +53,10 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     edgeId: string,
     defaultStyle?: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean }
   ) => {
-    const lineMode = defaultStyle?.lineMode ?? 'straight'
-    const lineStyle = defaultStyle?.lineStyle ?? 'solid'
-    const color = defaultStyle?.color ?? '#7f8c8d'
-    const arrow = defaultStyle?.arrow ?? true
+    const lineMode = defaultStyle?.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
+    const lineStyle = defaultStyle?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
+    const color = defaultStyle?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
+    const arrow = defaultStyle?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
     const newEdge: KnowledgeEdge = {
       id: edgeId,
       source: connection.source,
@@ -133,17 +134,17 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     const nextEdges = store.edges.map((e) => {
       if (e.id !== edgeId) return e
       const currentSelected = e.data?.selected ?? false
-      const nextColor = style.color ?? e.data?.color ?? '#7f8c8d'
-      const nextLineStyle = style.lineStyle ?? e.data?.lineStyle ?? 'solid'
+      const nextColor = style.color ?? e.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
+      const nextLineStyle = style.lineStyle ?? e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
       const nextLineMode = style.lineMode ?? e.data?.lineMode
-      const nextArrow = style.arrow ?? e.data?.arrow ?? true
+      const nextArrow = style.arrow ?? e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
       const nextWeight = e.data?.weight ?? 'minor'
       const nextSelected = style.selected ?? currentSelected
       if (
         nextLineMode === e.data?.lineMode &&
-        nextLineStyle === (e.data?.lineStyle ?? 'solid') &&
-        nextColor === (e.data?.color ?? '#7f8c8d') &&
-        nextArrow === (e.data?.arrow ?? true) &&
+        nextLineStyle === (e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle) &&
+        nextColor === (e.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color) &&
+        nextArrow === (e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow) &&
         nextSelected === currentSelected
       ) {
         return e

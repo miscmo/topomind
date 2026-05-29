@@ -8,6 +8,24 @@ import nodeDns from 'dns/promises';
 import nodeNet from 'net';
 import { shell } from 'electron';
 import { randomUUID } from 'crypto';
+import {
+  appConfigPath as pathGuardAppConfigPath,
+  isValidWorkDir as pathGuardIsValidWorkDir,
+  kbsDir as pathGuardKbsDir,
+  logsDir as pathGuardLogsDir,
+  requireValidWorkDir as pathGuardRequireValidWorkDir,
+  validateAbsolutePath as pathGuardValidateAbsolutePath,
+} from './services/path-guard.js';
+import {
+  createWorkDir as workspaceCreateWorkDir,
+  isValidWorkDir as workspaceIsValidWorkDir,
+} from './services/workspace-service.js';
+import { createKbService } from './services/kb-service.js';
+import { createCardService } from './services/card-service.js';
+import { createGraphMetaService } from './services/graph-meta-service.js';
+import { createAttachmentService } from './services/attachment-service.js';
+import { createDocumentService } from './services/document-service.js';
+import { createTrashService } from './services/trash-service.js';
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_TEXT_FILE_BYTES = 5 * 1024 * 1024;
@@ -41,7 +59,7 @@ const BLOCKED_OPEN_ATTACHMENT_EXTENSIONS = new Set([
  * @returns { string } kbs 目录路径
  */
 function _fs_kbsDir(dir) {
-  return nodePath.join(dir, 'kbs');
+  return pathGuardKbsDir(dir);
 }
 
 /**
@@ -50,7 +68,7 @@ function _fs_kbsDir(dir) {
  * @returns { string } logs 目录路径
  */
 function _fs_logsDir(dir) {
-  return nodePath.join(dir, 'logs');
+  return pathGuardLogsDir(dir);
 }
 
 /**
@@ -59,7 +77,7 @@ function _fs_logsDir(dir) {
  * @returns { string } _config.json 文件路径
  */
 function _fs_appConfigPath(dir) {
-  return nodePath.join(dir, '_config.json');
+  return pathGuardAppConfigPath(dir);
 }
 
 /**
@@ -82,17 +100,7 @@ function _fs_isDirEmpty(dirPath) {
  * @throws { Error } 路径处理异常时抛出错误
  */
 function _fs_isValidWorkDir(dirPath) {
-  try {
-    if (!dirPath) return { valid: false, error: '工作目录路径为空' };
-    if (!nodeFs.existsSync(dirPath)) return { valid: false, error: '工作目录不存在' };
-    if (!nodeFs.statSync(dirPath).isDirectory()) return { valid: false, error: '工作目录路径不是文件夹' };
-    if (!nodeFs.existsSync(nodePath.join(dirPath, '_config.json'))) return { valid: false, error: '缺少工作目录配置文件 _config.json' };
-    if (!nodeFs.existsSync(_fs_kbsDir(dirPath))) return { valid: false, error: '缺少知识库目录 kbs' };
-    if (!nodeFs.existsSync(_fs_logsDir(dirPath))) return { valid: false, error: '缺少日志目录 logs' };
-    return { valid: true };
-  } catch (e) {
-    return { valid: false, error: e && e.message ? e.message : '工作目录校验失败' };
-  }
+  return pathGuardIsValidWorkDir(dirPath);
 }
 
 /**
@@ -393,13 +401,7 @@ function _fs_graphFilePath(dir) {
  * @throws { Error } 路径为相对路径时抛出错误
  */
 function _fs_validateAbsolutePath(dir) {
-  if (typeof dir !== 'string' || !dir.trim() || /[\x00-\x1F\x7F]/.test(dir)) {
-    throw new Error('路径无效');
-  }
-  if (!nodePath.isAbsolute(dir)) {
-    throw new Error('路径必须是绝对路径');
-  }
-  return nodePath.resolve(dir);
+  return pathGuardValidateAbsolutePath(dir);
 }
 
 /**
@@ -409,12 +411,7 @@ function _fs_validateAbsolutePath(dir) {
  * @throws { Error } 当工作目录无效时抛出错误
  */
 export function _fs_requireValidWorkDir(rootDir) {
-  var dir = _fs_validateAbsolutePath(rootDir);
-  var validation = _fs_isValidWorkDir(dir);
-  if (!validation.valid) {
-    throw new Error(validation.error || '不是有效的工作目录');
-  }
-  return dir;
+  return pathGuardRequireValidWorkDir(rootDir);
 }
 
 function _fs_createCardDir(rootDir, parentPath, cardName) {
@@ -1308,6 +1305,99 @@ function _fs_moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSor
   return found.item;
 }
 
+const trashService = createTrashService({
+  clearTrashItems: _fs_clearTrashItems,
+  deleteTrashItem: _fs_deleteTrashItem,
+  listTrashItems: _fs_listTrashItems,
+  moveToTrash: _fs_moveToTrash,
+  restoreTrashItem: _fs_restoreTrashItem,
+});
+
+const kbService = createKbService({
+  clearTrashItems: trashService.clearTrashItems,
+  ensureDir: _fs_ensureDir,
+  kbsDir: _fs_kbsDir,
+  kbsTrashItemKind: _fs_kbsTrashItemKind,
+  listTrashItems: trashService.listTrashItems,
+  moveToTrash: trashService.moveToTrash,
+  relativeToKbs: _fs_relativeToKbs,
+  requireSafeDirName: _fs_requireSafeDirName,
+  requireValidWorkDir: _fs_requireValidWorkDir,
+  resolveKbsPath: _fs_resolveKbsPath,
+  restoreTrashItem: trashService.restoreTrashItem,
+  safeSegment: _fs_safeSegment,
+  uniqueFolderName: _fs_uniqueFolderName,
+  validateAbsolutePath: _fs_validateAbsolutePath,
+});
+
+const cardService = createCardService({
+  ensureDir: _fs_ensureDir,
+  graphFilePath: _fs_graphFilePath,
+  readJsonFile: _fs_readJsonFile,
+  relativeToKbs: _fs_relativeToKbs,
+  requireValidWorkDir: _fs_requireValidWorkDir,
+  resolveKbsPath: _fs_resolveKbsPath,
+  safeSegment: _fs_safeSegment,
+  writeJsonFile: _fs_writeJsonFile,
+});
+
+const graphMetaService = createGraphMetaService({
+  ensureDir: _fs_ensureDir,
+  graphFilePath: _fs_graphFilePath,
+  readJsonFile: _fs_readJsonFile,
+  requireValidWorkDir: _fs_requireValidWorkDir,
+  resolveKbsPath: _fs_resolveKbsPath,
+  writeJsonFile: _fs_writeJsonFile,
+});
+
+const attachmentService = createAttachmentService({
+  attachmentDir: _fs_attachmentDir,
+  attachmentDownloadTimeoutMs: ATTACHMENT_DOWNLOAD_TIMEOUT_MS,
+  attachmentRefToPath: _fs_attachmentRefToPath,
+  deleteTrashItem: trashService.deleteTrashItem,
+  ensureDir: _fs_ensureDir,
+  extFromMime: _fs_extFromMime,
+  listTrashItems: trashService.listTrashItems,
+  moveToTrash: trashService.moveToTrash,
+  readJsonFile: _fs_readJsonFile,
+  requireAttachmentSize: _fs_requireAttachmentSize,
+  requirePublicHttpUrl: _fs_requirePublicHttpUrl,
+  requireSafeOpenAttachment: _fs_requireSafeOpenAttachment,
+  requireValidWorkDir: _fs_requireValidWorkDir,
+  resolveKbsPath: _fs_resolveKbsPath,
+  safeFileName: _fs_safeFileName,
+  shell,
+  trashPathWithinDir: isPathWithinDirCompat,
+  uniqueFilePath: _fs_uniqueFilePath,
+  validateAbsolutePath: _fs_validateAbsolutePath,
+  writeAttachmentBuffer: _fs_writeAttachmentBuffer,
+});
+
+const documentService = createDocumentService({
+  clearTrashTopoDocuments: function(rootDir, cardPath) {
+    rootDir = _fs_requireValidWorkDir(rootDir);
+    trashService.listTrashItems(rootDir, 'topo-documents')
+      .filter(function(item) {
+        return item.meta && item.meta.cardPath === String(cardPath || '');
+      })
+      .forEach(function(item) {
+        trashService.deleteTrashItem(rootDir, 'topo-documents', item.trashName);
+      });
+  },
+  createTopoDocument: _fs_createTopoDocument,
+  deleteTopoDocument: _fs_deleteTopoDocument,
+  exportTopoDocument: _fs_exportTopoDocument,
+  listTopoDocuments: _fs_listTopoDocuments,
+  listTrashTopoDocuments: _fs_listTrashTopoDocuments,
+  moveTopoDocument: _fs_moveTopoDocument,
+  openTopoDocumentFolder: _fs_openTopoDocumentFolder,
+  readTopoDocument: _fs_readTopoDocument,
+  renameTopoDocument: _fs_renameTopoDocument,
+  repairTopoDocuments: _fs_repairTopoDocuments,
+  restoreTrashTopoDocument: _fs_restoreTrashTopoDocument,
+  writeTopoDocument: _fs_writeTopoDocument,
+});
+
 const fileService = {
     /**
      * @description 读取工作目录应用配置
@@ -1343,23 +1433,7 @@ const fileService = {
      * @returns { { valid: boolean, nodePath: string | null, error?: string } } 创建结果
      */
     createWorkDir: function(dirPath) {
-      var dir = dirPath || null;
-      try {
-        if (!dir) {
-          return { valid: false, nodePath: null, error: '工作目录路径为空' };
-        }
-        dir = _fs_validateAbsolutePath(dir);
-        if (nodeFs.existsSync(dir) && !_fs_isDirEmpty(dir)) {
-          return { valid: false, nodePath: dir, error: '工作目录必须是空目录' };
-        }
-        _fs_ensureDir(dir);
-        _fs_ensureDir(_fs_kbsDir(dir));
-        _fs_ensureDir(_fs_logsDir(dir));
-        _fs_writeJsonFile(_fs_appConfigPath(dir), {});
-        return { valid: true, nodePath: dir };
-      } catch (e) {
-        return { valid: false, nodePath: dir, error: e && e.message ? e.message : '创建工作目录失败' };
-      }
+      return workspaceCreateWorkDir(dirPath);
     },
 
     /**
@@ -1368,16 +1442,7 @@ const fileService = {
      * @returns { { valid: boolean, nodePath: string | null, error?: string } } 校验结果
      */
     isValidWorkDir: function(dirPath) {
-      var dir = dirPath;
-      if (!dir) {
-        return { valid: false, nodePath: null, error: '工作目录路径为空' };
-      }
-      dir = _fs_validateAbsolutePath(dir);
-      var validation = _fs_isValidWorkDir(dir);
-      if (!validation.valid) {
-        return { valid: false, nodePath: dir, error: validation.error || '不是有效的工作目录' };
-      }
-      return { valid: true, nodePath: dir };
+      return workspaceIsValidWorkDir(dirPath);
     },
 
     /**
@@ -1386,41 +1451,19 @@ const fileService = {
      * @returns { Array<{ name: string }> } 知识库列表
      */
     listKBs: function(rootDir) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var dir = _fs_kbsDir(rootDir);
-      var children = nodeFs.readdirSync(dir, { withFileTypes: true })
-        .filter(function(e) { return e.isDirectory() && !e.name.startsWith('.') && e.name !== 'images'; })
-        .map(function(e) {
-          return { name: e.name };
-        });
-      // 默认按照名字排序，后续再优化
-      children.sort(function(a, b) {
-        return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
-      });
-      return children;
+      return kbService.listKBs(rootDir);
     },
 
     listTrashKBs: function(rootDir) {
-      return _fs_listTrashItems(rootDir, 'kbs').filter(function(item) {
-        return _fs_kbsTrashItemKind(item) === 'kb';
-      });
+      return kbService.listTrashKBs(rootDir);
     },
 
     restoreTrashKB: function(rootDir, trashName) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var trashItem = _fs_listTrashItems(rootDir, 'kbs').find(function(item) {
-        return item.trashName === trashName;
-      });
-      if (!trashItem || _fs_kbsTrashItemKind(trashItem) !== 'kb') {
-        throw new Error('该回收站项目不是知识库，不能从首页恢复');
-      }
-      var restoredPath = _fs_restoreTrashItem(rootDir, 'kbs', trashName, _fs_kbsDir(rootDir));
-      return nodePath.basename(restoredPath);
+      return kbService.restoreTrashKB(rootDir, trashName);
     },
 
     clearTrashKBs: function(rootDir) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      _fs_clearTrashItems(rootDir, 'kbs');
+      return kbService.clearTrashKBs(rootDir);
     },
 
     /**
@@ -1430,10 +1473,7 @@ const fileService = {
      * @returns { Object } _graph.json.children 原始映射表
      */
     readCardChildren: function(rootDir, cardPath) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var dir = _fs_resolveKbsPath(rootDir, cardPath);
-      var parentGraph = _fs_readJsonFile(_fs_graphFilePath(dir));
-      return parentGraph.children || {};
+      return cardService.readCardChildren(rootDir, cardPath);
     },
 
     /** 不能再改这部分代码了  --to ai
@@ -1443,13 +1483,7 @@ const fileService = {
      * @returns { void }
      */
     createKbsDir: function(rootDir, kbName) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var finalName = _fs_requireSafeDirName(kbName, '知识库名称');
-      var d = nodePath.join(_fs_kbsDir(rootDir), finalName);
-      if (nodeFs.existsSync(d)) {
-        throw new Error('目录已存在: ' + _fs_relativeToKbs(rootDir, d));
-      }
-      _fs_ensureDir(d);
+      return kbService.createKbsDir(rootDir, kbName);
     },
 
     /**
@@ -1460,7 +1494,7 @@ const fileService = {
      * @returns { string } 创建后的目录相对路径
      */
     createCardDir: function(rootDir, parentPath, cardName) {
-      return _fs_createCardDir(rootDir, parentPath, cardName);
+      return cardService.createCardDir(rootDir, parentPath, cardName);
     },
 
     /**
@@ -1470,7 +1504,7 @@ const fileService = {
      * @returns { void }
      */
     deleteKbsDir: function(rootDir, dirPath) {
-      _fs_deleteKbsDir(rootDir, dirPath);
+      return kbService.deleteKbsDir(rootDir, dirPath);
     },
 
     /**
@@ -1481,19 +1515,7 @@ const fileService = {
      * @returns { string | null } 重命名后的路径，知识库不存在时返回 null
      */
     renameKB: function(rootDir, kbPath, newName) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_resolveKbsPath(rootDir, kbPath);
-      if (!nodeFs.existsSync(d)) return null;
-      var parentDir = _fs_kbsDir(rootDir);
-      var newSafeName = _fs_safeSegment(newName);
-      var newDirName = _fs_uniqueFolderName(parentDir, newSafeName);
-      var oldDirName = nodePath.basename(d);
-      var newDir = nodePath.join(parentDir, newDirName);
-      if (oldDirName !== newDirName) {
-        nodeFs.renameSync(d, newDir);
-      }
-      var newRelPath = nodePath.relative(_fs_kbsDir(rootDir), newDir).split(nodePath.sep).join('/');
-      return newRelPath;
+      return kbService.renameKB(rootDir, kbPath, newName);
     },
 
     /**
@@ -1503,9 +1525,7 @@ const fileService = {
      * @returns { Object } 图元数据对象
      */
     readGraphMeta: function(rootDir, roomPath) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_resolveKbsPath(rootDir, roomPath);
-      return _fs_readJsonFile(_fs_graphFilePath(d));
+      return graphMetaService.readGraphMeta(rootDir, roomPath);
     },
 
     /**
@@ -1516,13 +1536,7 @@ const fileService = {
      * @returns { void }
      */
     writeGraphMeta: function(rootDir, roomPath, meta) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var d = _fs_resolveKbsPath(rootDir, roomPath);
-      _fs_ensureDir(d);
-      if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
-        throw new Error('writeGraphMeta: meta 必须是普通对象');
-      }
-      _fs_writeJsonFile(_fs_graphFilePath(d), meta);
+      return graphMetaService.writeGraphMeta(rootDir, roomPath, meta);
     },
 
     /**
@@ -1560,158 +1574,95 @@ const fileService = {
     },
 
     listTopoDocuments: function(rootDir, cardPath) {
-      return _fs_listTopoDocuments(rootDir, cardPath);
+      return documentService.listTopoDocuments(rootDir, cardPath);
     },
 
     createTopoDocument: function(rootDir, cardPath, input) {
-      return _fs_createTopoDocument(rootDir, cardPath, input);
+      return documentService.createTopoDocument(rootDir, cardPath, input);
     },
 
     readTopoDocument: function(rootDir, cardPath, documentId) {
-      return _fs_readTopoDocument(rootDir, cardPath, documentId);
+      return documentService.readTopoDocument(rootDir, cardPath, documentId);
     },
 
     writeTopoDocument: function(rootDir, cardPath, documentId, content) {
-      return _fs_writeTopoDocument(rootDir, cardPath, documentId, content);
+      return documentService.writeTopoDocument(rootDir, cardPath, documentId, content);
     },
 
     renameTopoDocument: function(rootDir, cardPath, documentId, title) {
-      return _fs_renameTopoDocument(rootDir, cardPath, documentId, title);
+      return documentService.renameTopoDocument(rootDir, cardPath, documentId, title);
     },
 
     deleteTopoDocument: function(rootDir, cardPath, documentId) {
-      return _fs_deleteTopoDocument(rootDir, cardPath, documentId);
+      return documentService.deleteTopoDocument(rootDir, cardPath, documentId);
     },
 
     listTrashTopoDocuments: function(rootDir, cardPath) {
-      return _fs_listTrashTopoDocuments(rootDir, cardPath);
+      return documentService.listTrashTopoDocuments(rootDir, cardPath);
     },
 
     restoreTrashTopoDocument: function(rootDir, cardPath, trashName) {
-      return _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName);
+      return documentService.restoreTrashTopoDocument(rootDir, cardPath, trashName);
     },
 
     clearTrashTopoDocuments: function(rootDir, cardPath) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      _fs_listTrashItems(rootDir, 'topo-documents')
-        .filter(function(item) {
-          return item.meta && item.meta.cardPath === String(cardPath || '');
-        })
-        .forEach(function(item) {
-          _fs_deleteTrashItem(rootDir, 'topo-documents', item.trashName);
-        });
+      return documentService.clearTrashTopoDocuments(rootDir, cardPath);
     },
 
     moveTopoDocument: function(rootDir, cardPath, documentId, newParentId, newSortOrder) {
-      return _fs_moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder);
+      return documentService.moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder);
     },
 
     repairTopoDocuments: function(rootDir, cardPath) {
-      return _fs_repairTopoDocuments(rootDir, cardPath);
+      return documentService.repairTopoDocuments(rootDir, cardPath);
     },
 
     exportTopoDocument: function(rootDir, cardPath, documentId) {
-      return _fs_exportTopoDocument(rootDir, cardPath, documentId);
+      return documentService.exportTopoDocument(rootDir, cardPath, documentId);
     },
 
     openTopoDocumentFolder: async function(rootDir, cardPath, documentId) {
-      return _fs_openTopoDocumentFolder(rootDir, cardPath, documentId);
+      return documentService.openTopoDocumentFolder(rootDir, cardPath, documentId);
     },
 
     listAttachments: function(rootDir, cardPath) {
-      return _fs_listAttachments(rootDir, cardPath);
+      return attachmentService.listAttachments(rootDir, cardPath);
     },
 
     importAttachment: function(rootDir, cardPath, sourceFilePath, targetFileName) {
-      return _fs_importAttachment(rootDir, cardPath, sourceFilePath, targetFileName);
+      return attachmentService.importAttachment(rootDir, cardPath, sourceFilePath, targetFileName);
     },
 
     deleteAttachment: function(rootDir, cardPath, attachmentName) {
-      return _fs_deleteAttachment(rootDir, cardPath, attachmentName);
+      return attachmentService.deleteAttachment(rootDir, cardPath, attachmentName);
     },
 
     listTrashAttachments: function(rootDir, cardPath) {
-      return _fs_listTrashAttachments(rootDir, cardPath);
+      return attachmentService.listTrashAttachments(rootDir, cardPath);
     },
 
     restoreTrashAttachment: function(rootDir, cardPath, trashName) {
-      return _fs_restoreTrashAttachment(rootDir, cardPath, trashName);
+      return attachmentService.restoreTrashAttachment(rootDir, cardPath, trashName);
     },
 
     clearTrashAttachments: function(rootDir, cardPath) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var attachDir = _fs_attachmentDir(rootDir, cardPath);
-      var expectedOriginalDir = nodePath.relative(rootDir, attachDir).split(nodePath.sep).join('/');
-      _fs_listTrashItems(rootDir, 'attachments')
-        .filter(function(item) {
-          return nodePath.dirname(item.originalPath).split(nodePath.sep).join('/') === expectedOriginalDir;
-        })
-        .forEach(function(item) {
-          _fs_deleteTrashItem(rootDir, 'attachments', item.trashName);
-        });
+      return attachmentService.clearTrashAttachments(rootDir, cardPath);
     },
 
     openAttachment: async function(rootDir, cardPath, attachmentRef) {
-      var filePath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef);
-      if (!nodeFs.existsSync(filePath)) return false;
-      _fs_requireSafeOpenAttachment(filePath);
-      var err = await shell.openPath(filePath);
-      return err === '';
+      return attachmentService.openAttachment(rootDir, cardPath, attachmentRef);
     },
 
     writeAttachmentBase64: function(rootDir, cardPath, fileName, mimeType, base64) {
-      var ext = _fs_extFromMime(mimeType);
-      var safeName = _fs_safeFileName(fileName || ('image.' + ext));
-      if (safeName.indexOf('.') < 0) safeName += '.' + ext;
-      var buffer = Buffer.from(String(base64 || ''), 'base64');
-      _fs_requireAttachmentSize(buffer.length);
-      return _fs_writeAttachmentBuffer(rootDir, cardPath, safeName, buffer);
+      return attachmentService.writeAttachmentBase64(rootDir, cardPath, fileName, mimeType, base64);
     },
 
     downloadAttachment: async function(rootDir, cardPath, url, targetFileName) {
-      var parsedUrl = await _fs_requirePublicHttpUrl(String(url || '').trim());
-      var abortController = new AbortController();
-      var timeout = setTimeout(function() { abortController.abort(); }, ATTACHMENT_DOWNLOAD_TIMEOUT_MS);
-      var response;
-      try {
-        response = await fetch(parsedUrl.href, { redirect: 'error', signal: abortController.signal });
-      } finally {
-        clearTimeout(timeout);
-      }
-      if (!response.ok) {
-        throw new Error('下载失败: ' + response.status);
-      }
-      var mimeType = response.headers.get('content-type') || '';
-      if (!/^image\//i.test(mimeType)) {
-        throw new Error('链接不是图片: ' + mimeType);
-      }
-      var contentLength = Number(response.headers.get('content-length') || 0);
-      if (contentLength > 0) _fs_requireAttachmentSize(contentLength);
-      var urlPath = parsedUrl.pathname;
-      var fileName = targetFileName || nodePath.basename(urlPath) || ('image.' + _fs_extFromMime(mimeType));
-      if (fileName.indexOf('.') < 0) fileName += '.' + _fs_extFromMime(mimeType);
-      var arrayBuffer = await response.arrayBuffer();
-      var buffer = Buffer.from(arrayBuffer);
-      _fs_requireAttachmentSize(buffer.length);
-      return _fs_writeAttachmentBuffer(rootDir, cardPath, fileName, buffer);
+      return attachmentService.downloadAttachment(rootDir, cardPath, url, targetFileName);
     },
 
     readAttachmentDataUrl: function(rootDir, cardPath, attachmentRef) {
-      var filePath = _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef);
-      if (!nodeFs.existsSync(filePath)) return '';
-      _fs_requireAttachmentSize(nodeFs.statSync(filePath).size);
-      var ext = nodePath.extname(filePath).slice(1).toLowerCase();
-      var mimeMap = {
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        png: 'image/png',
-        gif: 'image/gif',
-        webp: 'image/webp',
-        svg: 'image/svg+xml',
-        bmp: 'image/bmp',
-      };
-      var mimeType = mimeMap[ext] || 'application/octet-stream';
-      return 'data:' + mimeType + ';base64,' + nodeFs.readFileSync(filePath).toString('base64');
+      return attachmentService.readAttachmentDataUrl(rootDir, cardPath, attachmentRef);
     },
 
     /**
@@ -1748,62 +1699,7 @@ const fileService = {
      * @throws { Error } 源目录不存在或不是有效知识库时抛出错误
      */
     importKB: function(rootDir, sourcePath) {
-      rootDir = _fs_requireValidWorkDir(rootDir);
-      var src = _fs_validateAbsolutePath(sourcePath);
-      var relToRoot = nodePath.relative(rootDir, src);
-      if (relToRoot === '' || (!relToRoot.startsWith('..') && !nodePath.isAbsolute(relToRoot))) {
-        throw new Error('不能从当前工作目录内部导入知识库');
-      }
-      if (!nodeFs.existsSync(src)) throw new Error('源目录不存在: ' + src);
-      if (!nodeFs.statSync(src).isDirectory()) throw new Error('源路径不是目录');
-      if (!nodeFs.existsSync(nodePath.join(src, '_graph.json'))) {
-        throw new Error('不是有效的知识库目录');
-      }
-      var kbName = nodePath.basename(src);
-      _fs_ensureDir(_fs_kbsDir(rootDir));
-      var destName = _fs_uniqueFolderName(_fs_kbsDir(rootDir), kbName);
-      var dest = nodePath.join(_fs_kbsDir(rootDir), destName);
-      _fs_ensureDir(dest);
-
-      /**
-       * @description 递归复制目录内容到目标目录
-       * @param { string } srcDir: 源目录路径
-       * @param { string } destDir: 目标目录路径
-       * @returns { void }
-       */
-      function copyDirRecursive(srcDir, destDir) {
-        _fs_ensureDir(destDir);
-        var entries = nodeFs.readdirSync(srcDir, { withFileTypes: true });
-        for (var i = 0; i < entries.length; i++) {
-          var entry = entries[i];
-          if (entry.name === 'node_modules') continue;
-          if (entry.isSymbolicLink()) continue;
-          var srcEntry = nodePath.join(srcDir, entry.name);
-          var destEntry = nodePath.join(destDir, entry.name);
-          if (entry.isDirectory()) {
-            copyDirRecursive(srcEntry, destEntry);
-          } else {
-            _fs_ensureDir(nodePath.dirname(destEntry));
-            if (/\.(json|txt)$/i.test(entry.name)) {
-              var text = nodeFs.readFileSync(srcEntry, 'utf-8');
-              nodeFs.writeFileSync(destEntry, text, 'utf-8');
-            } else {
-              var data = nodeFs.readFileSync(srcEntry);
-              nodeFs.writeFileSync(destEntry, data);
-            }
-          }
-        }
-      }
-      try {
-        copyDirRecursive(src, dest);
-      } catch (e) {
-        try {
-          if (nodeFs.existsSync(dest)) nodeFs.rmSync(dest, { recursive: true, force: true });
-        } catch {}
-        throw e;
-      }
-
-      return nodePath.relative(_fs_kbsDir(rootDir), dest).split(nodePath.sep).join('/');
+      return kbService.importKB(rootDir, sourcePath);
     },
   };
 

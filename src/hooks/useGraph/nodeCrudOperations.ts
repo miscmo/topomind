@@ -5,23 +5,27 @@ import { generateId } from './graphBuilder'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 import {
-  createChildCard,
-  deleteCardAndPruneGraph,
-  renameCard as renameCardInService,
-} from '../../domain/card/cardService'
+  createChildCardNode,
+  deleteCardNodeAndPruneGraph,
+  renameCardNode,
+} from '../../application/graph'
 import type { StorageApi } from './graphOperations'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
-import { tabStore } from '../../stores/tabStore'
-
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+import { tabStore } from '../../stores/tabs/tabStore'
+import { NODE_STYLE_NUMBER_LIMITS, clampNumber } from '../../domain/style/styleConstraints'
 
 function normalizeNodeStylePatch(style: KnowledgeNodeStyle): KnowledgeNodeStyle {
   const next: KnowledgeNodeStyle = {}
-  if (Number.isFinite(style.headerFontSize)) next.headerFontSize = clamp(style.headerFontSize as number, 8, 28)
-  if (Number.isFinite(style.bodyFontSize)) next.bodyFontSize = clamp(style.bodyFontSize as number, 8, 24)
+  if (Number.isFinite(style.headerFontSize)) next.headerFontSize = clampNumber(style.headerFontSize as number, NODE_STYLE_NUMBER_LIMITS.headerFontSize.min, NODE_STYLE_NUMBER_LIMITS.headerFontSize.max)
+  if (Number.isFinite(style.bodyFontSize)) next.bodyFontSize = clampNumber(style.bodyFontSize as number, NODE_STYLE_NUMBER_LIMITS.bodyFontSize.min, NODE_STYLE_NUMBER_LIMITS.bodyFontSize.max)
   if (typeof style.headerColor === 'string') next.headerColor = style.headerColor.trim()
   if (typeof style.headerBackgroundColor === 'string') next.headerBackgroundColor = style.headerBackgroundColor.trim()
+  if (style.headerFontWeight === 'normal' || style.headerFontWeight === 'bold') next.headerFontWeight = style.headerFontWeight
+  if (style.headerFontStyle === 'normal' || style.headerFontStyle === 'italic') next.headerFontStyle = style.headerFontStyle
+  if (typeof style.borderColor === 'string') next.borderColor = style.borderColor.trim()
+  if (Number.isFinite(style.borderWidth)) next.borderWidth = clampNumber(style.borderWidth as number, NODE_STYLE_NUMBER_LIMITS.borderWidth.min, NODE_STYLE_NUMBER_LIMITS.borderWidth.max)
+  if (Number.isFinite(style.borderRadius)) next.borderRadius = clampNumber(style.borderRadius as number, NODE_STYLE_NUMBER_LIMITS.borderRadius.min, NODE_STYLE_NUMBER_LIMITS.borderRadius.max)
   return next
 }
 
@@ -69,7 +73,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       if (reloadPath) await saveNow(reloadPath)
       const cardId = generateId('card-')
       const defaultNodeSize = useGraphUiStore.getState().defaultNodeSize
-      const result = await createChildCard(storage, {
+      const result = await createChildCardNode(storage, {
         name,
         parentRef: targetPath,
         reloadRef: reloadPath,
@@ -128,7 +132,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     const currentRoomPath = dirPath || getActiveGraphSession().kbPath || ''
     const cardPath = resolveRoomChildRef(currentRoomPath, nodeId)
     try {
-      await deleteCardAndPruneGraph(storage, cardPath, nodeId, store.nodesMap, store.edgesMap)
+      await deleteCardNodeAndPruneGraph(storage, cardPath, nodeId, store.nodesMap, store.edgesMap)
       logAction('节点:删除', 'graphOperations', { nodeId, label: nodeLabel, path: cardPath })
 
       if (currentRoomPath) await saveNow(currentRoomPath)
@@ -155,7 +159,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     const currentRoomPath = dirPath || getActiveGraphSession().kbPath || ''
     const cardPath = resolveRoomChildRef(currentRoomPath, nodeId)
     try {
-      await renameCardInService(storage, cardPath, newName)
+      await renameCardNode(storage, cardPath, newName)
       const store = storeApi.getState()
       const oldName = store.nodesMap.get(nodeId)?.data.label ?? nodeId
       logAction('节点:重命名', 'graphOperations', { nodeId, oldName, newName, path: cardPath })
@@ -207,11 +211,37 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     logAction('节点:更新样式(批量)', 'graphOperations', { nodeIds, style: patch })
   }
 
+  const clearNodesStyle = async (nodeIds: string[]): Promise<void> => {
+    const store = storeApi.getState()
+    let anyChanged = false
+
+    nodeIds.forEach(nodeId => {
+      const node = store.nodesMap.get(nodeId)
+      if (!node?.data.nodeStyle) return
+      anyChanged = true
+      store.updateNode(nodeId, (currentNode) => {
+        const { nodeStyle, ...nextData } = currentNode.data
+        return {
+          ...currentNode,
+          data: nextData,
+        }
+      })
+    })
+
+    if (!anyChanged) return
+
+    const graphSession = getActiveGraphSession()
+    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
+    if (currentRoomPath) await saveNow(currentRoomPath)
+    logAction('节点:清除自有样式(批量)', 'graphOperations', { nodeIds })
+  }
+
   return {
     createChildNode,
     deleteChildNode,
     renameNode,
     updateNodeStyle,
     updateNodesStyle,
+    clearNodesStyle,
   }
 }

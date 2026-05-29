@@ -122,6 +122,3 @@ export function useSelectedNodeId() {
   return useGraphStore((s) => s.nodes.find((n) => n.selected)?.id ?? null)
 }
 
-export function useSelectedNode() {
-  return useGraphStore((s) => s.nodes.find((n) => n.selected) ?? null)
-}

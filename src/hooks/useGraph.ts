@@ -10,10 +10,10 @@
  * - React Flow event handlers
  * - room navigation
  */
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import type { KnowledgeNode, KnowledgeEdge } from '../types'
 import { useGraphUiStore } from '../stores/graphUiStore'
-import { tabStore } from '../stores/tabStore'
+import { tabStore } from '../stores/tabs/tabStore'
 import { useStorage, type Store } from '../core/storage'
 import { buildGraphOperations } from './useGraph/graphOperations'
 import { buildGraphNavigation } from './useGraph/navigation'
@@ -30,33 +30,11 @@ export function useGraph(tabId: string) {
   const storage = useStorage() as Store
 
   const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
-  const setDefaultEdgeStyle = useGraphUiStore((s) => s.setDefaultEdgeStyle)
-  const setDefaultNodeStyle = useGraphUiStore((s) => s.setDefaultNodeStyle)
-  const setDefaultNodeSize = useGraphUiStore((s) => s.setDefaultNodeSize)
-  const setDefaultEditorStyle = useGraphUiStore((s) => s.setDefaultEditorStyle)
-  const setNodeSizeLimits = useGraphUiStore((s) => s.setNodeSizeLimits)
-  const setNodeBadgeSize = useGraphUiStore((s) => s.setNodeBadgeSize)
   const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
 
   const isCreatingRef = useRef(false)
 
   const getActiveGraphSession = useCallback(() => tabStore.getState().getGraphSession(tabId), [tabId])
-
-  useEffect(() => {
-    let active = true
-    storage.readConfig().then((config) => {
-      if (!active) return
-      if (config.defaultEdgeStyle) setDefaultEdgeStyle(config.defaultEdgeStyle)
-      if (config.defaultNodeStyle) setDefaultNodeStyle(config.defaultNodeStyle)
-      if (config.defaultNodeSize) setDefaultNodeSize(config.defaultNodeSize)
-      if (config.defaultEditorStyle) setDefaultEditorStyle(config.defaultEditorStyle)
-      if (config.nodeSizeLimits) setNodeSizeLimits(config.nodeSizeLimits)
-      if (typeof config.nodeBadgeSize === 'number') setNodeBadgeSize(config.nodeBadgeSize)
-    })
-    return () => {
-      active = false
-    }
-  }, [storage, setDefaultEdgeStyle, setDefaultEditorStyle, setDefaultNodeSize, setDefaultNodeStyle, setNodeBadgeSize, setNodeSizeLimits])
 
   const { loadRoom } = useGraphRoomLoader({
     storage,
@@ -138,6 +116,7 @@ export function useGraph(tabId: string) {
     renameNode: ops.renameNode,
     updateNodeStyle: ops.updateNodeStyle,
     updateNodesStyle: ops.updateNodesStyle,
+    clearNodesStyle: ops.clearNodesStyle,
     selectNode: ops.selectNode,
     deselectNode: ops.deselectNode,
     createEdge,
@@ -165,6 +144,7 @@ export function useGraph(tabId: string) {
     ops.renameNode,
     ops.updateNodeStyle,
     ops.updateNodesStyle,
+    ops.clearNodesStyle,
     ops.selectNode,
     ops.deselectNode,
     createEdge,

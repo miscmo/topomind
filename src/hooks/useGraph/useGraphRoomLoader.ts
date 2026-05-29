@@ -4,7 +4,7 @@ import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { logPerformanceMetric, PERFORMANCE_METRICS } from '../../core/performance-log'
 import { loadRoomGraph } from './roomLoader'
-import type { GraphSession } from '../../stores/tabStore'
+import type { GraphSession } from '../../stores/tabs/tabStore'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 

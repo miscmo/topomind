@@ -14,7 +14,7 @@ import { buildSelectionOperations } from './selectionOperations'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 
-import type { GraphSession } from '../../stores/tabStore'
+import type { GraphSession } from '../../stores/tabs/tabStore'
 
 export interface StorageApi {
   createCard: (parentPath: string, cardName: string) => Promise<string | null>

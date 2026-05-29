@@ -11,6 +11,7 @@ import type { GraphMeta } from '../../core/storage'
 import { basenameRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { graphMetaToRoomGraph, roomGraphToGraphMeta } from '../../domain/graph/graphMapper'
 import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph/model'
+import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { buildEdgeView } from './edgeView'
 
 const AUTO_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
@@ -97,10 +98,10 @@ export function buildMetaFromNodesEdges(
     targetRef: e.target,
     relation: e.data?.relation ?? '相关',
     weight: e.data?.weight ?? 'minor',
-    lineMode: e.data?.lineMode ?? 'straight',
-    lineStyle: e.data?.lineStyle ?? 'solid',
-    color: e.data?.color ?? '#7f8c8d',
-    arrow: e.data?.arrow ?? true,
+    lineMode: e.data?.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode,
+    lineStyle: e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle,
+    color: e.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color,
+    arrow: e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow,
     highlighted: e.data?.highlighted ?? false,
     faded: e.data?.faded ?? false,
   }))
@@ -183,10 +184,10 @@ export async function buildNodes(
 export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
   const roomGraph = graphMetaToRoomGraph(dirPath, meta)
   return roomGraph.edges.map((e) => {
-    const lineMode = e.lineMode ?? 'straight'
-    const lineStyle = e.lineStyle ?? 'solid'
-    const color = e.color ?? '#7f8c8d'
-    const arrow = e.arrow ?? true
+    const lineMode = e.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
+    const lineStyle = e.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
+    const color = e.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
+    const arrow = e.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
 
     return {
       id: e.id,

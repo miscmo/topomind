@@ -36,6 +36,7 @@ export interface GraphContextValue {
   renameNode: (nodeId: string, newName: string) => Promise<boolean>
   updateNodeStyle: (nodeId: string, style: KnowledgeNodeStyle) => Promise<void>
   updateNodesStyle: (nodeIds: string[], style: KnowledgeNodeStyle) => Promise<void>
+  clearNodesStyle: (nodeIds: string[]) => Promise<void>
   selectNode: (nodeId: string, multiSelect?: boolean) => void
   deselectNode: () => void
   createEdge: (source: string, target: string) => Promise<string | null>
@@ -69,6 +70,7 @@ const emptyContext: GraphContextValue = {
   renameNode: async () => false,
   updateNodeStyle: async () => {},
   updateNodesStyle: async () => {},
+  clearNodesStyle: async () => {},
   selectNode: () => {},
   deselectNode: () => {},
   createEdge: async () => null,
@@ -103,6 +105,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     renameNode: graph.renameNode,
     updateNodeStyle: graph.updateNodeStyle,
     updateNodesStyle: graph.updateNodesStyle,
+    clearNodesStyle: graph.clearNodesStyle,
     selectNode: graph.selectNode,
     deselectNode: graph.deselectNode,
     createEdge: graph.createEdge,

@@ -4,210 +4,31 @@
  */
 import { logger } from '../logger'
 import type { KBListItem } from '../../types'
-import type { CardInfo, GraphMeta } from '../../domain/graph/model'
+import type { GraphMeta } from '../../domain/graph/model'
 import { SaveCoordinator } from '../../domain/persistence/saveCoordinator'
 import { normalizeGraphMeta } from '../../domain/graph/normalizeGraphMeta'
 import { isTopoDocumentType, type TopoDocumentType } from '../topoDocumentTypes'
-import type { FSBTrashItem, FSBTrashTopoDocumentItem } from '../fs-backend'
-
-interface VaultConfig {
-  edgeDefaultsVersion?: number
-  defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
-  defaultNodeStyle?: {
-    headerFontSize?: number
-    bodyFontSize?: number
-    headerColor?: string
-    headerBackgroundColor?: string
-    headerFontWeight?: 'normal' | 'bold'
-    headerFontStyle?: 'normal' | 'italic'
-    borderColor?: string
-    borderWidth?: number
-    borderRadius?: number
-  }
-  defaultNodeSize?: { width?: number; height?: number }
-  defaultEditorStyle?: {
-    fontSize?: number
-    fontFamily?: string
-    backgroundColor?: string
-    textColor?: string
-    lineHeight?: number
-  }
-  nodeSizeLimits?: { minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number }
-  nodeBadgeSize?: number
-  kbCovers?: Record<string, string>
-  kbCoverOffsets?: Record<string, number>
-  kbOrder?: string[]
-  [key: string]: unknown
-}
-
-export interface TopoDocumentManifestItem {
-  id: string
-  type: TopoDocumentType
-  title: string
-  path: string
-  parentId: string | null
-  originalParentId?: string
-  originalDocumentId?: string
-  sortOrder: number
-  createdAt: number
-  updatedAt: number
-  version: number
-}
-
-export interface TopoDocumentManifest {
-  version: 2
-  documents: Record<string, TopoDocumentManifestItem>
-}
-
-export interface TopoDocumentCreateInput {
-  type: TopoDocumentType
-  title: string
-  parentId?: string | null
-}
-
-export interface TopoDocumentRepairResult {
-  repaired: boolean
-  corrupted: boolean
-  added: number
-  removed: number
-  documents: TopoDocumentManifestItem[]
-}
-
-export interface TopoDocumentExportPayload {
-  fileName: string
-  type: TopoDocumentType
-  mimeType: string
-  content: string
-}
-
-export interface StorageBackend {
-  createVault: (dirPath: string) => Promise<void>
-  isValidVault: (dirPath: string) => Promise<{ valid: boolean; error?: string }>
-
-  listKBs: () => Promise<KBListItem[]>
-  listTrashKBs: () => Promise<FSBTrashItem[]>
-  restoreTrashKB: (trashName: string) => Promise<string>
-  clearTrashKBs: () => Promise<void>
-  createKB: (name: string) => Promise<void>
-  deleteKB: (kbPath: string) => Promise<void>
-  renameKB: (kbPath: string, newName: string) => Promise<void>
-  importKB: (sourcePath: string) => Promise<string>
-
-  listCards: (parentCardPath: string) => Promise<CardInfo[]>
-  createCard: (parentPath: string, name: string) => Promise<CardInfo>
-  deleteCard: (cardPath: string) => Promise<void>
-  renameCard: (cardPath: string, newName: string) => Promise<void>
-
-  listTopoDocuments: (cardPath: string) => Promise<TopoDocumentManifestItem[]>
-  createTopoDocument: (cardPath: string, input: TopoDocumentCreateInput) => Promise<TopoDocumentManifestItem>
-  readTopoDocument: (cardPath: string, documentId: string) => Promise<unknown>
-  writeTopoDocument: (cardPath: string, documentId: string, content: unknown) => Promise<void>
-  renameTopoDocument: (cardPath: string, documentId: string, title: string) => Promise<TopoDocumentManifestItem>
-  deleteTopoDocument: (cardPath: string, documentId: string) => Promise<void>
-  listTrashTopoDocuments: (cardPath: string) => Promise<FSBTrashTopoDocumentItem[]>
-  restoreTrashTopoDocument: (cardPath: string, trashName: string) => Promise<TopoDocumentManifestItem>
-  clearTrashTopoDocuments: (cardPath: string) => Promise<void>
-  moveTopoDocument: (cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
-  repairTopoDocuments: (cardPath: string) => Promise<TopoDocumentRepairResult>
-  exportTopoDocument: (cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
-  openTopoDocumentFolder: (cardPath: string, documentId: string) => Promise<boolean>
-  
-  listAttachments: (cardPath: string) => Promise<AttachmentItem[]>
-  importAttachment: (cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
-  deleteAttachment: (cardPath: string, attachmentName: string) => Promise<void>
-  listTrashAttachments: (cardPath: string) => Promise<FSBTrashItem[]>
-  restoreTrashAttachment: (cardPath: string, trashName: string) => Promise<string>
-  clearTrashAttachments: (cardPath: string) => Promise<void>
-  openAttachment: (cardPath: string, attachmentRef: string) => Promise<boolean>
-  getAttachmentAbsoluteUrl: (cardPath: string, attachmentRef: string) => Promise<string | null>
-  
-  writeAttachmentBase64: (cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
-  downloadAttachment: (cardPath: string, url: string, targetFileName?: string) => Promise<string>
-  readAttachmentDataUrl: (cardPath: string, attachmentRef: string) => Promise<string>
-
-  readLayout: (roomPath: string) => Promise<GraphMeta>
-  writeLayout: (roomPath: string, meta: GraphMeta) => Promise<void>
-
-  readConfig: () => Promise<unknown>
-  writeConfig: (content: unknown) => Promise<void>
-}
+import { normalizeConfig } from './normalizeConfig'
+import type { StorageBackend, TopoDocumentCreateInput, VaultConfig } from './types'
+export type {
+  AttachmentItem,
+  AttachmentStorageBackend,
+  CardStorageBackend,
+  ConfigStorageBackend,
+  GraphLayoutStorageBackend,
+  KnowledgeBaseStorageBackend,
+  StorageBackend,
+  TopoDocumentCreateInput,
+  TopoDocumentExportPayload,
+  TopoDocumentManifest,
+  TopoDocumentManifestItem,
+  TopoDocumentRepairResult,
+  TopoDocumentStorageBackend,
+  VaultConfig,
+  VaultStorageBackend,
+} from './types'
 
 function normalizeName(name: unknown): string { return String(name || '').trim() }
-function finiteNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
-}
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
-}
-function normalizeConfig(configRaw: unknown): VaultConfig {
-  const c = (configRaw && typeof configRaw === 'object' && !Array.isArray(configRaw)) ? configRaw as Record<string, unknown> : {}
-  const s = (c.defaultEdgeStyle && typeof c.defaultEdgeStyle === 'object' && !Array.isArray(c.defaultEdgeStyle)) ? c.defaultEdgeStyle as Record<string, unknown> : {}
-  const ns = (c.defaultNodeStyle && typeof c.defaultNodeStyle === 'object' && !Array.isArray(c.defaultNodeStyle)) ? c.defaultNodeStyle as Record<string, unknown> : {}
-  const defaultNodeSize = (c.defaultNodeSize && typeof c.defaultNodeSize === 'object' && !Array.isArray(c.defaultNodeSize)) ? c.defaultNodeSize as Record<string, unknown> : {}
-  const defaultEditorStyle = (c.defaultEditorStyle && typeof c.defaultEditorStyle === 'object' && !Array.isArray(c.defaultEditorStyle)) ? c.defaultEditorStyle as Record<string, unknown> : {}
-  const limits = (c.nodeSizeLimits && typeof c.nodeSizeLimits === 'object' && !Array.isArray(c.nodeSizeLimits)) ? c.nodeSizeLimits as Record<string, unknown> : {}
-  const edgeDefaultsVersion = c.edgeDefaultsVersion === 2 ? 2 : undefined
-  
-  const covers = (c.kbCovers && typeof c.kbCovers === 'object' && !Array.isArray(c.kbCovers)) ? c.kbCovers as Record<string, unknown> : {}
-  const kbCovers: Record<string, string> = {}
-  for (const [k, v] of Object.entries(covers)) {
-    if (typeof v === 'string') kbCovers[k] = v
-  }
-
-  const offsets = (c.kbCoverOffsets && typeof c.kbCoverOffsets === 'object' && !Array.isArray(c.kbCoverOffsets)) ? c.kbCoverOffsets as Record<string, unknown> : {}
-  const kbCoverOffsets: Record<string, number> = {}
-  for (const [k, v] of Object.entries(offsets)) {
-    if (typeof v === 'number') kbCoverOffsets[k] = v
-  }
-
-  const kbOrder = Array.isArray(c.kbOrder) ? c.kbOrder.filter(item => typeof item === 'string') : undefined
-  const minWidth = Math.max(1, finiteNumber(limits.minWidth, 120))
-  const minHeight = Math.max(1, finiteNumber(limits.minHeight, 52))
-  const maxWidth = Math.max(minWidth, finiteNumber(limits.maxWidth, 640))
-  const maxHeight = Math.max(minHeight, finiteNumber(limits.maxHeight, 480))
-
-  return {
-    edgeDefaultsVersion: 2,
-    defaultEdgeStyle: {
-      lineMode: edgeDefaultsVersion === 2 && s.lineMode === 'smoothstep' ? 'smoothstep' : 'straight',
-      lineStyle: s.lineStyle === 'dashed' ? 'dashed' : 'solid',
-      color: typeof s.color === 'string' ? s.color : '#7f8c8d',
-      arrow: edgeDefaultsVersion === 2 && typeof s.arrow === 'boolean' ? s.arrow : true,
-    },
-    defaultNodeStyle: {
-      headerFontSize: clampNumber(finiteNumber(ns.headerFontSize, 11), 8, 28),
-      bodyFontSize: clampNumber(finiteNumber(ns.bodyFontSize, 12), 8, 24),
-      headerColor: typeof ns.headerColor === 'string' ? ns.headerColor : '#475569',
-      headerBackgroundColor: typeof ns.headerBackgroundColor === 'string' ? ns.headerBackgroundColor : '#f8fafc',
-      headerFontWeight: ns.headerFontWeight === 'bold' ? 'bold' : 'normal',
-      headerFontStyle: ns.headerFontStyle === 'italic' ? 'italic' : 'normal',
-      borderColor: typeof ns.borderColor === 'string' ? ns.borderColor : '#e2e8f0',
-      borderWidth: clampNumber(finiteNumber(ns.borderWidth, 1), 0, 8),
-      borderRadius: clampNumber(finiteNumber(ns.borderRadius, 8), 0, 32),
-    },
-    defaultNodeSize: {
-      width: clampNumber(finiteNumber(defaultNodeSize.width, 120), minWidth, maxWidth),
-      height: clampNumber(finiteNumber(defaultNodeSize.height, 52), minHeight, maxHeight),
-    },
-    defaultEditorStyle: {
-      fontSize: clampNumber(finiteNumber(defaultEditorStyle.fontSize, 16), 10, 36),
-      fontFamily: typeof defaultEditorStyle.fontFamily === 'string' ? defaultEditorStyle.fontFamily : 'inherit',
-      backgroundColor: typeof defaultEditorStyle.backgroundColor === 'string' ? defaultEditorStyle.backgroundColor : '#ffffff',
-      textColor: typeof defaultEditorStyle.textColor === 'string' ? defaultEditorStyle.textColor : '#333333',
-      lineHeight: clampNumber(finiteNumber(defaultEditorStyle.lineHeight, 1.5), 1, 3),
-    },
-    nodeSizeLimits: {
-      minWidth,
-      minHeight,
-      maxWidth,
-      maxHeight,
-    },
-    nodeBadgeSize: clampNumber(finiteNumber(c.nodeBadgeSize, 14), 8, 28),
-    kbCovers,
-    kbCoverOffsets,
-    kbOrder,
-  }
-}
 function ensureValidName(name: unknown, label = '名称'): string {
   const n = normalizeName(name)
   if (!n) throw new Error(`${label}不能为空`)
@@ -469,14 +290,6 @@ export function createStore(backend: StorageBackend) {
     },
   }
   return store
-}
-
-export interface AttachmentItem {
-  name: string
-  path: string
-  isImage: boolean
-  size: number
-  mtime: number
 }
 
 export type Store = ReturnType<typeof createStore>
