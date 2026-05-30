@@ -8,6 +8,7 @@ import { DocumentContextMenu } from './components/DocumentContextMenu'
 import { DocumentTrashItem } from './components/DocumentTrashItem'
 
 export interface DocumentSidebarProps {
+  nodeId?: string
   topoDocuments: TopoDocumentManifestItem[]
   trashTopoDocuments?: FSBTrashTopoDocumentItem[]
   activeDocumentPath: string
@@ -23,6 +24,7 @@ export interface DocumentSidebarProps {
 }
 
 export function DocumentSidebar({
+  nodeId,
   topoDocuments,
   trashTopoDocuments = [],
   activeDocumentPath,
@@ -37,6 +39,7 @@ export function DocumentSidebar({
   onMoveDocument,
 }: DocumentSidebarProps) {
   const { state, refs, actions } = useDocumentSidebarModel({
+    nodeId,
     topoDocuments,
     isBusy,
     onSelectDocument,

@@ -1,4 +1,5 @@
-import { memo, useEffect, useState, useCallback } from 'react'
+import { memo, useEffect, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useStorage } from '../../../../core/storage'
 import { useConfirmStore } from '../../../../shared/ui/ConfirmModal/confirmStore'
 import { logger } from '../../../../core/logger'
@@ -16,6 +17,128 @@ export function generateUniqueFileName(originalName: string): string {
   }
   return `${originalName}_${uuid}`
 }
+
+const AttachmentItemRow = memo(function AttachmentItemRow({
+  item,
+  attachmentCardPath,
+  onInsert,
+  onOpen,
+  onShowInFolder,
+  onDelete
+}: {
+  item: AttachmentItem
+  attachmentCardPath: string
+  onInsert: (item: AttachmentItem, e: React.MouseEvent) => void
+  onOpen: (item: AttachmentItem, e: React.MouseEvent) => void
+  onShowInFolder: (item: AttachmentItem, e: React.MouseEvent) => void
+  onDelete: (item: AttachmentItem, e: React.MouseEvent) => void
+}) {
+  const storage = useStorage()
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isHovering, setIsHovering] = useState(false)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const hoverTimer = useRef<number | null>(null)
+  const elRef = useRef<HTMLDivElement>(null)
+
+  const handleMouseEnter = () => {
+    setIsHovering(true)
+    if (elRef.current) {
+      setRect(elRef.current.getBoundingClientRect())
+    }
+    if (item.isImage && !previewUrl) {
+      hoverTimer.current = window.setTimeout(() => {
+        storage.getAttachmentAbsoluteUrl(attachmentCardPath, item.name).then(url => {
+          if (url) setPreviewUrl(url)
+        }).catch(err => {
+          logger.catch('AttachmentItemRow', 'getPreview', err)
+        })
+      }, 400)
+    }
+  }
+
+  const handleMouseLeave = () => {
+    setIsHovering(false)
+    if (hoverTimer.current) {
+      window.clearTimeout(hoverTimer.current)
+      hoverTimer.current = null
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+    }
+  }, [])
+
+  return (
+    <>
+      <div 
+        ref={elRef}
+        className="flex items-center gap-2 p-2 rounded-md select-none transition-colors duration-75 hover:bg-[#f1f5f9] hover:!bg-[var(--color-hover-bg)] group relative"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div className="text-[18px] flex items-center justify-center w-6 shrink-0 text-[#64748b] !text-[var(--color-text-muted)]">
+          {item.isImage ? '🖼️' : '📄'}
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+          <div className="text-[13px] text-[#334155] !text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis" title={item.name}>{item.name}</div>
+          <div className="text-[11px] text-[#94a3b8] !text-[var(--color-text-muted)]">
+            {(item.size / 1024).toFixed(1)} KB
+          </div>
+        </div>
+        <div className="opacity-0 flex items-center gap-1 group-hover:opacity-100 transition-all duration-75">
+          <button
+            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#e2e8f0] hover:!text-[#0f172a] hover:!bg-[var(--color-hover-bg)] hover:!text-[var(--color-text-primary)]"
+            onClick={(e) => onInsert(item, e)}
+            title="插入到文档"
+          >
+            ↵
+          </button>
+          <button
+            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#e2e8f0] hover:!text-[#0f172a] hover:!bg-[var(--color-hover-bg)] hover:!text-[var(--color-text-primary)]"
+            onClick={(e) => onOpen(item, e)}
+            title="使用系统默认程序打开"
+          >
+            ↗
+          </button>
+          <button
+            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[12px] hover:!bg-[#e2e8f0] hover:!text-[#0f172a] hover:!bg-[var(--color-hover-bg)] hover:!text-[var(--color-text-primary)]"
+            onClick={(e) => onShowInFolder(item, e)}
+            title="在资源管理器中显示"
+          >
+            📂
+          </button>
+          <button
+            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#fee2e2] hover:!text-[#ef4444] hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]"
+            onClick={(e) => onDelete(item, e)}
+            title="删除附件"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+      {item.isImage && isHovering && previewUrl && rect && createPortal(
+        <div style={{
+          position: 'fixed',
+          zIndex: 9999,
+          top: Math.min(rect.top, window.innerHeight - 340),
+          left: rect.right + 340 > window.innerWidth ? rect.left - 330 : rect.right + 10,
+          width: '320px',
+          backgroundColor: 'var(--color-bg-float, #fff)',
+          border: '1px solid var(--color-border, #e2e8f0)',
+          borderRadius: '6px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          padding: '6px',
+          pointerEvents: 'none'
+        }}>
+          <img src={previewUrl} alt="Preview" style={{ width: '100%', height: 'auto', maxHeight: '320px', objectFit: 'contain', borderRadius: '4px', backgroundColor: 'var(--color-bg, #f8fafc)' }} />
+        </div>,
+        document.body
+      )}
+    </>
+  )
+})
 
 interface AttachmentsTabProps {
   attachmentCardPath: string
@@ -169,9 +292,13 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
     e.stopPropagation()
     try {
       const url = await storage.getAttachmentAbsoluteUrl(attachmentCardPath, item.name)
+      if (!url) {
+        throw new Error(`无法生成附件访问地址: ${item.name}`)
+      }
       window.dispatchEvent(new CustomEvent('insert-attachment', {
         detail: {
           name: item.name,
+          attachmentRef: item.path || `_attach/${item.name}`,
           url,
           isImage: item.isImage,
           targetKey: insertTargetKey
@@ -181,6 +308,26 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
       logger.catch('AttachmentsTab', 'handleInsert', err)
     }
   }, [attachmentCardPath, insertTargetKey, storage])
+
+  const handleOpen = useCallback(async (item: AttachmentItem, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await storage.openAttachment(attachmentCardPath, item.name)
+      logAction('附件管理:系统打开', 'AttachmentsTab', { attachmentCardPath, name: item.name })
+    } catch (err) {
+      logger.catch('AttachmentsTab', 'handleOpen', err)
+    }
+  }, [attachmentCardPath, storage])
+
+  const handleShowInFolder = useCallback(async (item: AttachmentItem, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await storage.showAttachmentInFolder(attachmentCardPath, item.name)
+      logAction('附件管理:资源管理器打开', 'AttachmentsTab', { attachmentCardPath, name: item.name })
+    } catch (err) {
+      logger.catch('AttachmentsTab', 'handleShowInFolder', err)
+    }
+  }, [attachmentCardPath, storage])
 
   const shownTrash = viewMode === 'trash'
   const isInitialLoading = loading && attachments.length === 0 && trashAttachments.length === 0
@@ -237,36 +384,15 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
       ) : (
         <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
           {attachments.map(item => (
-            <div 
-              key={item.name} 
-              className="flex items-center gap-2 p-2 rounded-md select-none transition-colors duration-75 hover:bg-[#f1f5f9] hover:!bg-[var(--color-hover-bg)] group"
-            >
-              <div className="text-[18px] flex items-center justify-center w-6 shrink-0 text-[#64748b] !text-[var(--color-text-muted)]">
-                {item.isImage ? '🖼️' : '📄'}
-              </div>
-              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                <div className="text-[13px] text-[#334155] !text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis" title={item.name}>{item.name}</div>
-                <div className="text-[11px] text-[#94a3b8] !text-[var(--color-text-muted)]">
-                  {(item.size / 1024).toFixed(1)} KB
-                </div>
-              </div>
-              <div className="opacity-0 flex items-center gap-1 group-hover:opacity-100 transition-all duration-75">
-                <button
-                  className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#e2e8f0] hover:!text-[#0f172a] hover:!bg-[var(--color-hover-bg)] hover:!text-[var(--color-text-primary)]"
-                  onClick={(e) => handleInsert(item, e)}
-                  title="插入到文档"
-                >
-                  ↵
-                </button>
-                <button
-                  className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#fee2e2] hover:!text-[#ef4444] hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]"
-                  onClick={(e) => handleDelete(item, e)}
-                  title="删除附件"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
+            <AttachmentItemRow
+              key={item.name}
+              item={item}
+              attachmentCardPath={attachmentCardPath}
+              onInsert={handleInsert}
+              onOpen={handleOpen}
+              onShowInFolder={handleShowInFolder}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       )}

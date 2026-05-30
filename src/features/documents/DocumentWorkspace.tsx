@@ -4,8 +4,10 @@ import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/stor
 import type { FSBTrashTopoDocumentItem } from '../../core/fs-backend'
 import { DocumentSidebar } from './DocumentSidebar'
 import { DocumentEditorHost } from './DocumentEditorHost'
+import type { DetailSidebarTab } from './types/workspaceTypes'
 
 interface DocumentWorkspaceProps {
+  nodeId?: string
   value: unknown
   isDirty: boolean
   isContentLoaded?: boolean
@@ -16,8 +18,10 @@ interface DocumentWorkspaceProps {
   topoDocuments: TopoDocumentManifestItem[]
   trashTopoDocuments?: FSBTrashTopoDocumentItem[]
   activeDocumentPath: string
+  detailSidebarTab?: DetailSidebarTab
   detailSidebarCollapsed: boolean
   detailSidebarFloating?: boolean
+  onDetailSidebarTabChange?: (tab: DetailSidebarTab) => void
   onDetailSidebarCollapsedChange: (collapsed: boolean) => void
   onSidebarHoverChange: (hovered: boolean) => void
   onSelectDocument: (documentPath: string) => void
@@ -43,8 +47,10 @@ export function DocumentWorkspace({
   topoDocuments,
   trashTopoDocuments = [],
   activeDocumentPath,
+  detailSidebarTab,
   detailSidebarCollapsed,
   detailSidebarFloating,
+  onDetailSidebarTabChange,
   onDetailSidebarCollapsedChange,
   onSidebarHoverChange,
   onSelectDocument,
@@ -86,6 +92,8 @@ export function DocumentWorkspace({
       detailHeader={detailHeader}
       documentsTabContent={sidebarContent}
       activeDetailDocumentPath={activeDocumentPath}
+      detailSidebarTab={detailSidebarTab}
+      onDetailSidebarTabChange={onDetailSidebarTabChange}
       detailSidebarCollapsed={detailSidebarCollapsed}
       detailSidebarFloating={detailSidebarFloating}
       onDetailSidebarCollapsedChange={onDetailSidebarCollapsedChange}

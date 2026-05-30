@@ -9,6 +9,7 @@ import { logger } from '../../../core/logger'
 import { joinRefs } from '../../../domain/graph/path-utils'
 import { topoDocumentIdFromPath, topoDocumentPath } from '../../../features/documents/types/documentTypes'
 import { getTopoDocumentTypeDefinition } from '../../../features/documents/services/documentTypeRegistry'
+import { useDetailPanelStore } from './detailPanelStore'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
 import type { FSBTrashTopoDocumentItem } from '../../../core/fs-backend'
 
@@ -30,14 +31,33 @@ export function useDetailDocuments({
   const storeApi = useGraphStoreApi()
   const clearDetailDraft = useDraftStore((s) => s.clearDetailDraft)
   const clearDetailContent = useCardContentStore((s) => s.clearDetailContent)
+  const setDocumentListForNodePath = useDetailPanelStore((s) => s.setDocumentListForNodePath)
+  const setTrashDocumentListForNodePath = useDetailPanelStore((s) => s.setTrashDocumentListForNodePath)
 
-  const [topoDocuments, setTopoDocuments] = useState<TopoDocumentManifestItem[]>([])
-  const [trashTopoDocuments, setTrashTopoDocuments] = useState<FSBTrashTopoDocumentItem[]>([])
-  const [topoDocumentsCardPath, setTopoDocumentsCardPath] = useState('')
+  const [topoDocuments, setTopoDocuments] = useState<TopoDocumentManifestItem[]>(() => (
+    nodePath ? (useDetailPanelStore.getState().documentListsByNodePath[nodePath] ?? []) : []
+  ))
+  const [trashTopoDocuments, setTrashTopoDocuments] = useState<FSBTrashTopoDocumentItem[]>(() => (
+    nodePath ? (useDetailPanelStore.getState().trashDocumentListsByNodePath[nodePath] ?? []) : []
+  ))
+  const [topoDocumentsCardPath, setTopoDocumentsCardPath] = useState(() => nodePath ?? '')
   const [isDocumentBusy, setIsDocumentBusy] = useState(false)
   const [documentLinkNotice, setDocumentLinkNotice] = useState('')
 
   const documentListRequestSeqRef = useRef(0)
+
+  useEffect(() => {
+    if (!nodePath) {
+      setTopoDocuments([])
+      setTrashTopoDocuments([])
+      setTopoDocumentsCardPath('')
+      return
+    }
+    const state = useDetailPanelStore.getState()
+    setTopoDocuments(state.documentListsByNodePath[nodePath] ?? [])
+    setTrashTopoDocuments(state.trashDocumentListsByNodePath[nodePath] ?? [])
+    setTopoDocumentsCardPath(nodePath)
+  }, [nodePath])
 
   const loadDocuments = useCallback(async (cardPath: string, requestSeq?: number) => {
     const nextTopoDocuments = await storage.listTopoDocuments(cardPath).catch((e) => {
@@ -49,6 +69,7 @@ export function useDetailDocuments({
     }
     setTopoDocuments(nextTopoDocuments)
     setTopoDocumentsCardPath(cardPath)
+    setDocumentListForNodePath(cardPath, nextTopoDocuments)
     
     // Default to the first available document if the active one doesn't exist anymore
     setActiveDocumentPath((currentPath) => {
@@ -58,7 +79,7 @@ export function useDetailDocuments({
       return nextTopoDocuments.length > 0 ? topoDocumentPath(nextTopoDocuments[0].id) : ''
     })
     return nextTopoDocuments
-  }, [storage, setActiveDocumentPath])
+  }, [setDocumentListForNodePath, storage, setActiveDocumentPath])
 
   const loadTrashDocuments = useCallback(async (cardPath: string) => {
     if (!cardPath) {
@@ -70,8 +91,9 @@ export function useDetailDocuments({
       return [] as FSBTrashTopoDocumentItem[]
     })
     setTrashTopoDocuments(nextTrashDocuments)
+    setTrashDocumentListForNodePath(cardPath, nextTrashDocuments)
     return nextTrashDocuments
-  }, [storage])
+  }, [setTrashDocumentListForNodePath, storage])
 
   useEffect(() => {
     if (!documentLinkNotice) return

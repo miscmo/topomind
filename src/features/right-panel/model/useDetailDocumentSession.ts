@@ -32,8 +32,8 @@ export function useDetailDocumentSession({
   const setDraftContent = useDraftStore((s) => s.setDetailDraft)
   const detailEntry = useCardContentStore((s) => currentDocumentKey ? s.detailEntries[currentDocumentKey] : undefined)
   const setDetailContent = useCardContentStore((s) => s.setDetailContent)
-  const [savedContent, setSavedContent] = useState<unknown>('')
-  const [loadedDocumentKey, setLoadedDocumentKey] = useState('')
+  const [savedContent, setSavedContent] = useState<unknown>(() => detailEntry?.content ?? '')
+  const [loadedDocumentKey, setLoadedDocumentKey] = useState(() => (detailEntry ? currentDocumentKey : ''))
   const contentRequestSeqRef = useRef(0)
   const selectionPerfRef = useRef<{ nodeId: string; startedAt: number; logged: boolean } | null>(null)
 
@@ -93,6 +93,10 @@ export function useDetailDocumentSession({
   }, [selectedNodeId, nodePath, currentDocumentKey, draftContent, savedContent, handleSave])
 
   const isDocumentDirty = useMemo(() => areDocumentContentsEqual(draftContent, savedContent) === false, [draftContent, savedContent])
+  const isContentLoaded = useMemo(() => {
+    if (!currentDocumentKey) return false
+    return loadedDocumentKey === currentDocumentKey || detailEntry !== undefined
+  }, [currentDocumentKey, detailEntry, loadedDocumentKey])
 
   useEffect(() => {
     setSavedContent('')
@@ -216,6 +220,7 @@ export function useDetailDocumentSession({
   return {
     draftContent,
     isDocumentDirty,
+    isContentLoaded,
     loadedDocumentKey,
     handleDraftChange,
     handleSave,

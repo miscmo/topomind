@@ -18,7 +18,8 @@ export interface SmartDocumentEditorProps {
   onTocChange?: (items: TocItem[]) => void
   onTocItemClickReady?: (handler: ((item: TocItem) => void) | null) => void
   readOnly?: boolean
-  uploadFile?: (file: File) => Promise<string>
+  uploadFile?: (file: File) => Promise<string | Record<string, unknown>>
+  resolveFileUrl?: (url: string) => Promise<string>
   onWordCountChange?: (stats: { characters: number; words: number; blocks: number }) => void
   attachmentInsertTargetKey?: string
 }

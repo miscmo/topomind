@@ -18,6 +18,7 @@ export interface DocumentInlineEditState {
 }
 
 export interface UseDocumentSidebarModelProps {
+  nodeId?: string
   topoDocuments: TopoDocumentManifestItem[]
   isBusy?: boolean
   onSelectDocument: (documentPath: string) => void
@@ -29,6 +30,7 @@ export interface UseDocumentSidebarModelProps {
 }
 
 export function useDocumentSidebarModel({
+  nodeId,
   topoDocuments,
   isBusy,
   onSelectDocument,
@@ -43,7 +45,15 @@ export function useDocumentSidebarModel({
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
   const [inlineEdit, setInlineEdit] = useState<DocumentInlineEditState | null>(null)
   const [viewMode, setViewMode] = useState<'active' | 'trash'>('active')
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
+    if (!nodeId) return new Set()
+    try {
+      const saved = localStorage.getItem(`topomind_expanded_nodes_${nodeId}`)
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch (e) {
+      return new Set()
+    }
+  })
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<{ id: string, position: 'before' | 'inside' | 'after' } | null>(null)
   const inlineInputRef = useRef<HTMLInputElement>(null)
@@ -58,6 +68,21 @@ export function useDocumentSidebarModel({
       }, 0)
     }
   }, [inlineEdit?.mode, inlineEdit?.targetId, inlineEdit?.parentId])
+
+  useEffect(() => {
+    if (!nodeId) return
+    try {
+      const saved = localStorage.getItem(`topomind_expanded_nodes_${nodeId}`)
+      setExpandedNodes(saved ? new Set(JSON.parse(saved)) : new Set())
+    } catch (e) {
+      setExpandedNodes(new Set())
+    }
+  }, [nodeId])
+
+  useEffect(() => {
+    if (!nodeId) return
+    localStorage.setItem(`topomind_expanded_nodes_${nodeId}`, JSON.stringify(Array.from(expandedNodes)))
+  }, [expandedNodes, nodeId])
 
   useEffect(() => {
     if (!contextMenu) return

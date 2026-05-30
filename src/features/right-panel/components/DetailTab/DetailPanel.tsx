@@ -10,6 +10,8 @@ import { joinRefs, resolveRoomChildRef } from '../../../../domain/graph/path-uti
 import { topoDocumentPath, topoDocumentIdFromPath } from '../../../../features/documents/types/documentTypes'
 import { useDetailDocuments } from '../../model/useDetailDocuments'
 import { useDetailDocumentSession } from '../../model/useDetailDocumentSession'
+import { useDetailPanelStore } from '../../model/detailPanelStore'
+import type { DetailSidebarTab } from '../../../../features/documents/types/workspaceTypes'
 
 interface DetailPanelProps {
   tabId: string
@@ -30,14 +32,31 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   const nodeLabel = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.label ?? '' : '')
   const hasSelectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.has(selectedNodeId) : false)
 
-  const [activeDocumentPath, setActiveDocumentPath] = useState('')
+  const activeDocumentPath = useDetailPanelStore((state) => (
+    selectedNodeId ? (state.activeDocumentPathsByNodeId[selectedNodeId] ?? '') : ''
+  ))
+  const setActiveDocumentPathForNode = useDetailPanelStore((state) => state.setActiveDocumentPathForNode)
+  const detailSidebarTab = useDetailPanelStore((state) => (
+    selectedNodeId ? (state.detailSidebarTabsByNodeId[selectedNodeId] ?? 'documents') : 'documents'
+  ))
+  const setDetailSidebarTabForNode = useDetailPanelStore((state) => state.setDetailSidebarTabForNode)
+
+  const setActiveDocumentPathSafe = useCallback((path: string | ((prev: string) => string)) => {
+    if (!selectedNodeId) return
+    const nextPath = typeof path === 'function' ? path(useDetailPanelStore.getState().activeDocumentPathsByNodeId[selectedNodeId] ?? '') : path
+    setActiveDocumentPathForNode(selectedNodeId, nextPath)
+  }, [selectedNodeId, setActiveDocumentPathForNode])
+  const setDetailSidebarTabSafe = useCallback((tab: DetailSidebarTab) => {
+    if (!selectedNodeId) return
+    setDetailSidebarTabForNode(selectedNodeId, tab)
+  }, [selectedNodeId, setDetailSidebarTabForNode])
   const currentDocumentKey = nodePath ? joinRefs(nodePath, activeDocumentPath) : ''
   const activeTopoDocumentId = topoDocumentIdFromPath(activeDocumentPath)
 
   const {
     draftContent,
     isDocumentDirty,
-    loadedDocumentKey,
+    isContentLoaded,
     handleDraftChange,
     handleSave,
     flushDocumentSave,
@@ -75,7 +94,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     selectedNodeId,
     nodePath,
     activeDocumentPath,
-    setActiveDocumentPath,
+    setActiveDocumentPath: setActiveDocumentPathSafe,
     flushDocumentSave,
   })
 
@@ -108,23 +127,32 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
 
   useEffect(() => {
     const requestSeq = ++documentListRequestSeqRef.current
-    // When node changes, reset state
-    setActiveDocumentPath('')
-    setTopoDocuments([])
-    loadTrashDocuments('')
-    setTopoDocumentsCardPath('')
 
-    if (!selectedNodeId || !nodePath) return
-    
-    // After loading, ensure active path is set to the first document if available
+    if (!selectedNodeId || !nodePath) {
+      setTopoDocuments([])
+      setTopoDocumentsCardPath('')
+      void loadTrashDocuments('')
+      return
+    }
+
     void loadDocuments(nodePath, requestSeq).then((docs) => {
       if (documentListRequestSeqRef.current !== requestSeq) return
-      if (docs.length > 0) {
-        setActiveDocumentPath(topoDocumentPath(docs[0].id))
+
+      const savedActivePath = useDetailPanelStore.getState().activeDocumentPathsByNodeId[selectedNodeId] ?? ''
+      const docExists = savedActivePath ? docs.some((d) => topoDocumentPath(d.id) === savedActivePath) : false
+
+      if (savedActivePath && docExists) {
+        setActiveDocumentPathSafe(savedActivePath)
+      } else if (docs.length > 0) {
+        setActiveDocumentPathSafe(topoDocumentPath(docs[0].id))
+      } else {
+        setActiveDocumentPathSafe('')
       }
     })
     void loadTrashDocuments(nodePath)
-  }, [selectedNodeId, nodePath, loadDocuments, loadTrashDocuments])
+  }, [selectedNodeId, nodePath, loadDocuments, loadTrashDocuments, setTopoDocuments, setTopoDocumentsCardPath, setActiveDocumentPathSafe])
+
+
 
   const handleDetailSidebarCollapsedChange = useCallback((collapsed: boolean) => {
     setDetailSidebarCollapsed(collapsed)
@@ -146,7 +174,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         <DocumentWorkspace
           value={draftContent}
           isDirty={isDocumentDirty}
-          isContentLoaded={loadedDocumentKey === currentDocumentKey}
+          isContentLoaded={isContentLoaded}
           onChange={handleDraftChange}
           onSave={handleSave}
           attachmentCardPath={nodePath}
@@ -197,7 +225,12 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           topoDocuments={topoDocuments}
           trashTopoDocuments={trashTopoDocuments}
           activeDocumentPath={activeDocumentPath}
-          onSelectDocument={(documentPath: string) => { void handleSelectDocument(documentPath) }}
+          detailSidebarTab={detailSidebarTab}
+          onDetailSidebarTabChange={setDetailSidebarTabSafe}
+          onSelectDocument={(documentPath: string) => { 
+            setActiveDocumentPathSafe(documentPath)
+            void handleSelectDocument(documentPath) 
+          }}
           onOpenDetailDocumentLink={(documentPath: string) => { void handleOpenDetailDocumentLink(documentPath) }}
           onCreateTopoDocument={(type, name: string, parentId?: string | null) => { void handleCreateTopoDocument(type, name, parentId) }}
           onExportTopoDocument={(documentPath: string) => { void handleExportTopoDocument(documentPath) }}
@@ -207,6 +240,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           onClearTrashDocuments={() => { void handleClearTrashDocuments() }}
           onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
           isDocumentBusy={isDocumentBusy}
+          nodeId={selectedNodeId}
         />
       </div>
     </div>

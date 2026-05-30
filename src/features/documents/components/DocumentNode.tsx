@@ -84,6 +84,11 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           className={`group w-full flex items-center mb-[2px] py-[7px] pr-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[var(--color-hover-bg)] ${isActive ? '!bg-[var(--color-selected-bg)]' : ''} ${dragClass} ${draggedId === node.id ? 'opacity-50' : ''}`}
           style={{ paddingLeft: `${level * 16 + 4}px` }}
           onClick={() => onSelectDocument(topoDocumentPath(node.id))}
+          onDoubleClick={(e) => {
+            if (hasChildren) {
+              onToggleExpand(e, node.id)
+            }
+          }}
           onContextMenu={(e) => onContextMenu(e, node.id)}
           title={node.title}
         >

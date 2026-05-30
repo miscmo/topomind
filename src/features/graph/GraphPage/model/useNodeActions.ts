@@ -14,6 +14,7 @@ import type { KnowledgeNode } from '../../../../types'
 import type { GraphContextValue } from '../../../../contexts/GraphContext'
 import { useEdgeActions } from './useEdgeActions'
 import { useGraphStoreApi } from '../../../../stores/graphStore'
+import { resolveRoomChildRef } from '../../../../domain/graph/path-utils'
 
 export interface UseNodeActionsOptions {
   /** Called after an action to notify parent (e.g., for focus management) */
@@ -57,8 +58,9 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   const handleEnterNode = useCallback(async (nodeId: string) => {
     const node = findNodeById(nodeId)
     if (!node) return
+    const absoluteChildPath = resolveRoomChildRef(typeof node.data.parent === 'string' ? node.data.parent : '', node.id)
     logAction('节点:进入', 'useNodeActions', { nodeId, label: node.data.label, source: 'context-menu' })
-    await graph.navigateToChildRoom(nodeId, node.data.label)
+    await graph.navigateToChildRoom(absoluteChildPath, node.data.label)
     onAction?.()
   }, [findNodeById, graph, onAction])
 

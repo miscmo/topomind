@@ -129,6 +129,7 @@ export interface AttachmentStorageBackend {
   restoreTrashAttachment: (cardPath: string, trashName: string) => Promise<string>
   clearTrashAttachments: (cardPath: string) => Promise<void>
   openAttachment: (cardPath: string, attachmentRef: string) => Promise<boolean>
+  showAttachmentInFolder: (cardPath: string, attachmentRef: string) => Promise<boolean>
   getAttachmentAbsoluteUrl: (cardPath: string, attachmentRef: string) => Promise<string | null>
   writeAttachmentBase64: (cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
   downloadAttachment: (cardPath: string, url: string, targetFileName?: string) => Promise<string>

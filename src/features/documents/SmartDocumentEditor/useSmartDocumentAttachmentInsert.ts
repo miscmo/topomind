@@ -55,7 +55,7 @@ export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachment
 
   useEffect(() => {
     const handleInsertAttachment = (e: CustomEvent) => {
-      const { name, url, isImage, targetKey } = e.detail
+      const { name, url, isImage, targetKey, attachmentRef } = e.detail
       if (!editor) return
       if (targetKey && attachmentInsertTargetKey && targetKey !== attachmentInsertTargetKey) return
 
@@ -97,8 +97,9 @@ export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachment
           {
             type: isImage ? 'image' : 'file',
             props: {
-              url,
+              url: typeof attachmentRef === 'string' && attachmentRef ? attachmentRef : url,
               name,
+              ...(typeof attachmentRef === 'string' && attachmentRef ? { attachmentRef } : {}),
             },
           },
         ],

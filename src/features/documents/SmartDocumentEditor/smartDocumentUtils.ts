@@ -6,6 +6,19 @@ export function inlineContentToText(content: unknown): string {
   return content.map((item) => {
     if (typeof item === 'string') return item
     if (item && typeof item === 'object' && 'text' in item && typeof item.text === 'string') return item.text
+    if (
+      item &&
+      typeof item === 'object' &&
+      'type' in item &&
+      item.type === 'inlineMath' &&
+      'props' in item &&
+      item.props &&
+      typeof item.props === 'object' &&
+      'latex' in item.props &&
+      typeof item.props.latex === 'string'
+    ) {
+      return item.props.latex
+    }
     return ''
   }).join('').trim()
 }

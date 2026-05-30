@@ -1,4 +1,3 @@
-import { useEffect, type RefObject } from 'react'
 import { AiOutlinePlus } from 'react-icons/ai'
 import { DragHandleButton, SideMenu, useBlockNoteEditor, useComponentsContext, useExtension, useExtensionState } from '@blocknote/react'
 import { SideMenuExtension } from '@blocknote/core/extensions'
@@ -59,24 +58,4 @@ export function SmartDocumentSideMenu() {
       {isEmptyBlock ? <SmartDocumentAddBlockButton /> : <DragHandleButton dragHandleMenu={SmartDocumentDragHandleMenu} />}
     </SideMenu>
   )
-}
-
-export function SmartDocumentSideMenuBoundary({ editorRootRef }: { editorRootRef: RefObject<HTMLDivElement | null> }) {
-  const sideMenu = useExtension(SideMenuExtension)
-
-  useEffect(() => {
-    const ownerDocument = editorRootRef.current?.ownerDocument ?? document
-    const handleMouseMove = (event: MouseEvent) => {
-      const editorRoot = editorRootRef.current
-      const target = event.target
-      if (!editorRoot || !(target instanceof Node)) return
-      if (editorRoot.contains(target)) return
-      sideMenu.hideMenuIfNotFrozen()
-    }
-
-    ownerDocument.addEventListener('mousemove', handleMouseMove, true)
-    return () => ownerDocument.removeEventListener('mousemove', handleMouseMove, true)
-  }, [editorRootRef, sideMenu])
-
-  return null
 }

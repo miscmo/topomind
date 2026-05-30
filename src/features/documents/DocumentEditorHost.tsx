@@ -1,6 +1,6 @@
 import React from 'react'
 import { DocumentWorkspaceLayout } from './components/Layout/DocumentWorkspaceLayout'
-import type { TocItem } from './types/workspaceTypes'
+import type { DetailSidebarTab, TocItem } from './types/workspaceTypes'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
 import { topoDocumentIdFromPath } from './types/documentTypes'
 import { getTopoDocumentTypeDefinition, TOPO_DOCUMENT_TYPES } from './services/documentTypeRegistry'
@@ -17,6 +17,8 @@ interface DocumentEditorHostProps {
   detailHeader: React.ReactNode
   documentsTabContent?: React.ReactNode
   activeDetailDocumentPath: string
+  detailSidebarTab?: DetailSidebarTab
+  onDetailSidebarTabChange?: (tab: DetailSidebarTab) => void
   detailSidebarCollapsed: boolean
   detailSidebarFloating?: boolean
   onDetailSidebarCollapsedChange: (collapsed: boolean) => void
@@ -37,6 +39,8 @@ export function DocumentEditorHost({
   detailHeader,
   documentsTabContent,
   activeDetailDocumentPath,
+  detailSidebarTab,
+  onDetailSidebarTabChange,
   detailSidebarCollapsed,
   detailSidebarFloating,
   onDetailSidebarCollapsedChange,
@@ -73,6 +77,8 @@ export function DocumentEditorHost({
         detailHeader={detailHeader}
         documentsTabContent={documentsTabContent}
         activeDetailDocumentPath={activeDetailDocumentPath}
+        detailSidebarTab={detailSidebarTab}
+        onDetailSidebarTabChange={onDetailSidebarTabChange}
         editorContent={(
           <div className="h-full min-h-0 flex items-center justify-center bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] p-6">
             <div className="max-w-[360px] rounded-2xl text-center flex flex-col items-center gap-3">
@@ -134,6 +140,8 @@ export function DocumentEditorHost({
       detailHeader={detailHeader}
       documentsTabContent={documentsTabContent}
       activeDetailDocumentPath={activeDetailDocumentPath}
+      detailSidebarTab={detailSidebarTab}
+      onDetailSidebarTabChange={onDetailSidebarTabChange}
       tocItems={adapter.hasToc ? smartTocItems : undefined}
       onTocItemClick={adapter.hasToc ? smartTocItemClick ?? undefined : undefined}
       editorContent={editorContent}

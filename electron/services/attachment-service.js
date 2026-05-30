@@ -133,6 +133,13 @@ export function createAttachmentService(deps) {
       return err === '';
     },
 
+    async showAttachmentInFolder(rootDir, cardPath, attachmentRef) {
+      var filePath = attachmentRefToPath(rootDir, cardPath, attachmentRef);
+      if (!nodeFs.existsSync(filePath)) return false;
+      shell.showItemInFolder(filePath);
+      return true;
+    },
+
     writeAttachmentBase64(rootDir, cardPath, fileName, mimeType, base64) {
       var ext = extFromMime(mimeType);
       var safeName = safeFileName(fileName || ('image.' + ext));

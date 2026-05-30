@@ -331,6 +331,9 @@ function registerIPC() {
       return null;
     }
   });
+  ipcMain.handle('fs:showAttachmentInFolder', async function(e, rootDir, cardPath, attachmentRef) {
+    return fileService.showAttachmentInFolder(requireActiveWorkDir(rootDir), cardPath, attachmentRef);
+  });
   ipcMain.handle('fs:openAttachment', async function(e, rootDir, cardPath, attachmentRef) {
     return fileService.openAttachment(requireActiveWorkDir(rootDir), cardPath, attachmentRef);
   });

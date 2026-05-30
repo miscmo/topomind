@@ -201,6 +201,9 @@ export function createStore(backend: StorageBackend) {
     async clearTrashAttachments(cardPath: string) {
       try { await backend.clearTrashAttachments(cardPath) } catch (e) { logger.catch('Store.clearTrashAttachments', `清空附件回收站失败: ${cardPath}`, e); throw e }
     },
+    async showAttachmentInFolder(cardPath: string, attachmentRef: string) {
+      try { return await backend.showAttachmentInFolder(cardPath, attachmentRef) } catch (e) { logger.catch('Store.showAttachmentInFolder', `在文件夹中显示附件失败: ${cardPath}/${attachmentRef}`, e); throw e }
+    },
     async openAttachment(cardPath: string, attachmentRef: string) {
       try { return await backend.openAttachment(cardPath, attachmentRef) } catch (e) { logger.catch('Store.openAttachment', `打开附件失败: ${cardPath}/${attachmentRef}`, e); throw e }
     },

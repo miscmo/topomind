@@ -5,6 +5,7 @@ import { useThemeStore } from '../../../../stores/themeStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../smartDocumentTypes'
 import { calculateSmartDocumentStats, extractSmartDocumentToc } from '../smartDocumentUtils'
+import { inlineMathInputRuleExtension, mathBlockShortcutExtension } from '../mathSupport'
 import { smartDocumentSchema } from '../smartDocumentSchema'
 import type { SmartDocumentEditorProps } from '../types'
 import type { TocItem } from '../../types/workspaceTypes'
@@ -15,7 +16,8 @@ export function useSmartDocumentEditorModel({
   onTocChange,
   onWordCountChange,
   onTocItemClickReady,
-  uploadFile
+  uploadFile,
+  resolveFileUrl,
 }: SmartDocumentEditorProps) {
   const theme = useThemeStore((state: any) => state.theme)
   const defaultEditorStyle = useGraphUiStore((state: any) => state.defaultEditorStyle)
@@ -31,6 +33,11 @@ export function useSmartDocumentEditorModel({
     schema: smartDocumentSchema,
     initialContent,
     uploadFile,
+    resolveFileUrl,
+    extensions: [mathBlockShortcutExtension()],
+    _tiptapOptions: {
+      extensions: [inlineMathInputRuleExtension],
+    },
   })
 
   const updateStatsAndTocRef = useRef<number | null>(null)
@@ -41,18 +48,25 @@ export function useSmartDocumentEditorModel({
     }
 
     const execute = () => {
+      // Avoid calling this in the render cycle or synchronously during typing if it triggers state updates that cause re-renders
       onTocChange?.(extractSmartDocumentToc(editor))
       onWordCountChange?.(calculateSmartDocumentStats(editor))
     }
 
     if (isImmediate) {
-      execute()
+      // Use setTimeout even for immediate to ensure we don't trigger state updates during render phase
+      updateStatsAndTocRef.current = window.setTimeout(execute, 0)
     } else {
       updateStatsAndTocRef.current = window.setTimeout(execute, 500)
     }
   }, [editor, onTocChange, onWordCountChange])
 
   const handleChange = useCallback(() => {
+    // Only update if the document has actually changed to avoid infinite loops
+    // The editor.document is a proxy, so we check if it's the same array reference or structurally different
+    // Since this is called frequently, we just use a simple check
+    if (editor.document === value.blocks) return
+
     const nextValue = withSmartDocumentUpdatedAt({
       ...value,
       blocks: editor.document,
@@ -78,11 +92,9 @@ export function useSmartDocumentEditorModel({
       if (updateStatsAndTocRef.current !== null) {
         window.clearTimeout(updateStatsAndTocRef.current)
       }
-      onTocChange?.([])
-      onWordCountChange?.({ characters: 0, words: 0, blocks: 0 })
       onTocItemClickReady?.(null)
     }
-  }, [editor, handleTocItemClick, onTocChange, onWordCountChange, onTocItemClickReady, updateStatsAndToc])
+  }, [editor, handleTocItemClick, onTocItemClickReady, updateStatsAndToc])
 
   const customTheme = useMemo(() => {
     const baseTheme = theme === 'dark' ? darkDefaultTheme : lightDefaultTheme

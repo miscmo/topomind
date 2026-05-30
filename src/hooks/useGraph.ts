@@ -33,6 +33,7 @@ export function useGraph(tabId: string) {
   const setSelectedEdgeId = useGraphUiStore((s) => s.setSelectedEdgeId)
 
   const isCreatingRef = useRef(false)
+  const currentLoadedRoomPathRef = useRef('')
 
   const getActiveGraphSession = useCallback(() => tabStore.getState().getGraphSession(tabId), [tabId])
 
@@ -40,6 +41,7 @@ export function useGraph(tabId: string) {
     storage,
     getActiveGraphSession,
     storeApi,
+    currentLoadedRoomPathRef,
   })
 
   const storageApi = useGraphStorageApi(storage)
@@ -53,6 +55,7 @@ export function useGraph(tabId: string) {
       getActiveGraphSession,
       loadRoom,
       isCreatingRef,
+      currentLoadedRoomPathRef,
       storeApi,
     }),
     [tabId, storageApi, getActiveGraphSession, loadRoom, storeApi]

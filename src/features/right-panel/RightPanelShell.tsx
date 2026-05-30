@@ -14,11 +14,12 @@ interface RightPanelShellProps {
 export default memo(function RightPanelShell({ tabId, rightPanelTab, width, onTabChange, onCollapse }: RightPanelShellProps) {
   return (
     <div className="h-full bg-white/90 dark:bg-[#1b2330]/90 backdrop-blur-xl shrink-0 overflow-hidden border-l border-[var(--color-border)] shadow-[-4px_0_24px_rgba(0,0,0,0.06)] flex flex-col" style={{ width }}>
-      {rightPanelTab === 'detail' ? (
+      <div className={rightPanelTab === 'detail' ? 'flex flex-1 min-h-0 flex-col overflow-hidden' : 'hidden'} aria-hidden={rightPanelTab !== 'detail'}>
         <DetailPanel tabId={tabId} />
-      ) : (
+      </div>
+      <div className={rightPanelTab === 'style' ? 'flex flex-1 min-h-0 flex-col overflow-hidden' : 'hidden'} aria-hidden={rightPanelTab !== 'style'}>
         <StyleSection />
-      )}
+      </div>
     </div>
   )
 })

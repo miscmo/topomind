@@ -339,6 +339,10 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.openAttachment(requireRootDir(), cardPath, attachmentRef)
     },
 
+    showAttachmentInFolder: async (cardPath: string, attachmentRef: string) => {
+      return FSB.showAttachmentInFolder(requireRootDir(), cardPath, attachmentRef)
+    },
+
     getAttachmentAbsoluteUrl: async (cardPath: string, attachmentRef: string) => {
       return FSB.getAttachmentAbsoluteUrl(requireRootDir(), cardPath, attachmentRef)
     },

@@ -220,3 +220,90 @@
   border-radius: 4px;
 }
 
+.smart-document-content .tm-inline-math-shell {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  max-width: 100%;
+}
+
+.smart-document-content .tm-inline-math-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 1.5em;
+  padding: 0.08em 0.35em;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  cursor: text;
+}
+
+.smart-document-content .tm-inline-math-chip .katex {
+  font-size: 1.02em;
+}
+
+.smart-document-content .tm-inline-math-input {
+  min-width: 140px;
+  max-width: min(50vw, 420px);
+  padding: 0.18em 0.45em;
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.92em;
+  line-height: 1.5;
+  outline: none;
+}
+
+.smart-document-content .tm-math-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-bg-muted) 70%, transparent);
+}
+
+.smart-document-content .tm-math-block-preview {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  text-align: center;
+  cursor: text;
+  overflow-x: auto;
+}
+
+.smart-document-content .tm-math-block-preview .katex-display {
+  margin: 0;
+  text-align: inherit;
+}
+
+.smart-document-content .tm-math-block--editing .tm-math-block-preview {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+.smart-document-content .tm-math-block-placeholder {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.smart-document-content .tm-math-block-input {
+  width: 100%;
+  min-height: 92px;
+  padding: 9px 12px;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  outline: none;
+  resize: vertical;
+}

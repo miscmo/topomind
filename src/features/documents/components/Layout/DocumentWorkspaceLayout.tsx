@@ -13,6 +13,8 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   detailHeader,
   documentsTabContent,
   activeDetailDocumentPath,
+  detailSidebarTab: controlledDetailSidebarTab,
+  onDetailSidebarTabChange,
   detailSidebarCollapsed: controlledDetailSidebarCollapsed,
   detailSidebarFloating,
   onDetailSidebarCollapsedChange,
@@ -27,20 +29,27 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
   const [internalDetailSidebarCollapsed, setInternalDetailSidebarCollapsed] = useState(false)
-  const [detailSidebarWidth, setDetailSidebarWidth] = useState(180)
-  const [detailSidebarTab, setDetailSidebarTab] = useState<DetailSidebarTab>('documents')
+  const [detailSidebarWidth, setDetailSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('topomind_detail_sidebar_width')
+    return saved ? parseInt(saved, 10) : 180
+  })
+  const [internalDetailSidebarTab, setInternalDetailSidebarTab] = useState<DetailSidebarTab>('documents')
   const containerRef = useRef<HTMLDivElement>(null)
   
   const tocItems = providedTocItems ?? []
   const currentDetailDocumentPath = activeDetailDocumentPath ?? ''
   const detailSidebarCollapsed = controlledDetailSidebarCollapsed ?? internalDetailSidebarCollapsed
+  const detailSidebarTab = controlledDetailSidebarTab ?? internalDetailSidebarTab
   const effectiveFloating = detailSidebarFloating
   const showSidebarContent = !detailSidebarCollapsed || effectiveFloating
   const isSaving = saveStatus === 'saving'
 
   const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
     initialWidth: detailSidebarWidth,
-    onWidthChange: setDetailSidebarWidth,
+    onWidthChange: (width) => {
+      setDetailSidebarWidth(width)
+      localStorage.setItem('topomind_detail_sidebar_width', String(width))
+    },
     minWidth: 180,
     maxWidth: 360,
     direction: 'left',
@@ -52,6 +61,13 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     }
     onDetailSidebarCollapsedChange?.(collapsed)
   }, [controlledDetailSidebarCollapsed, onDetailSidebarCollapsedChange])
+
+  const setDetailSidebarTab = useCallback((tab: DetailSidebarTab) => {
+    if (controlledDetailSidebarTab === undefined) {
+      setInternalDetailSidebarTab(tab)
+    }
+    onDetailSidebarTabChange?.(tab)
+  }, [controlledDetailSidebarTab, onDetailSidebarTabChange])
 
   const handleSave = useCallback(async () => {
     if (!isDirty || isSaving) return
@@ -98,7 +114,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
       setDetailSidebarTab(tab)
       setDetailSidebarCollapsed(false)
     }
-  }, [detailSidebarCollapsed, detailSidebarTab, setDetailSidebarCollapsed])
+  }, [detailSidebarCollapsed, detailSidebarTab, setDetailSidebarCollapsed, setDetailSidebarTab])
 
   return (
     <div 
@@ -164,10 +180,11 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             </div>
             {showSidebarContent && (
               <>
-                {detailSidebarTab === 'documents' ? (
-                  documentsTabContent
-                ) : detailSidebarTab === 'toc' ? (
-                  tocItems.length > 0 ? (
+                <div className={`flex-1 min-h-0 flex flex-col ${detailSidebarTab === 'documents' ? '' : 'hidden'}`}>
+                  {documentsTabContent}
+                </div>
+                <div className={`flex-1 min-h-0 flex flex-col ${detailSidebarTab === 'toc' ? '' : 'hidden'}`}>
+                  {tocItems.length > 0 ? (
                     <div className="flex-1 overflow-y-auto p-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
                       {tocItems.map(item => (
                         <button
@@ -184,17 +201,16 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                     </div>
                   ) : (
                     <div className="py-8 px-4 text-center text-[#94a3b8] !text-[var(--color-text-muted)] text-[13px] leading-[1.6]">当前文档暂无目录</div>
-                  )
-                ) : detailSidebarTab === 'attachments' ? (
-                  <div className="flex-1 min-h-0 flex flex-col" style={{ padding: 0 }}>
-                    {attachmentCardPath && (
-                      <AttachmentsTab
-                        attachmentCardPath={attachmentCardPath}
-                        insertTargetKey={currentDetailDocumentPath}
-                      />
-                    )}
-                  </div>
-                ) : null}
+                  )}
+                </div>
+                <div className={`flex-1 min-h-0 flex flex-col ${detailSidebarTab === 'attachments' ? '' : 'hidden'}`} style={{ padding: 0 }}>
+                  {attachmentCardPath && (
+                    <AttachmentsTab
+                      attachmentCardPath={attachmentCardPath}
+                      insertTargetKey={currentDetailDocumentPath}
+                    />
+                  )}
+                </div>
               </>
             )}
           </aside>

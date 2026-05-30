@@ -39,6 +39,8 @@ export interface DocumentWorkspaceLayoutProps {
   detailHeader?: ReactNode
   documentsTabContent?: ReactNode
   activeDetailDocumentPath?: string
+  detailSidebarTab?: DetailSidebarTab
+  onDetailSidebarTabChange?: (tab: DetailSidebarTab) => void
   tocItems?: TocItem[]
   onTocItemClick?: (item: TocItem) => void
   editorContent?: ReactNode

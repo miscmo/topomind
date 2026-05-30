@@ -116,8 +116,8 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const handleDrillDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    graph.navigateToChildRoom?.(id, data.label)
-  }, [id, data.label, graph])
+    graph.navigateToChildRoom?.(cardPath, data.label)
+  }, [cardPath, data.label, graph])
 
   const confirmTitleEdit = useCallback(async () => {
     if (titleSavingRef.current) return

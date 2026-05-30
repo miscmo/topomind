@@ -1649,6 +1649,10 @@ const fileService = {
       return attachmentService.clearTrashAttachments(rootDir, cardPath);
     },
 
+    showAttachmentInFolder: async function(rootDir, cardPath, attachmentRef) {
+      return attachmentService.showAttachmentInFolder(rootDir, cardPath, attachmentRef);
+    },
+
     openAttachment: async function(rootDir, cardPath, attachmentRef) {
       return attachmentService.openAttachment(rootDir, cardPath, attachmentRef);
     },

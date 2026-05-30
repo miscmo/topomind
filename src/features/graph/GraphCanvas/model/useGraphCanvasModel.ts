@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReactFlow, type Viewport, type NodeChange, type Node, type Edge } from '@xyflow/react'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
-import { useGraphStore } from '../../../../stores/graphStore'
+import { useGraphStore, useGraphStoreApi } from '../../../../stores/graphStore'
 import { useTabStore } from '../../../../stores/tabs/tabStore'
 import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useShortcut } from '../../../../hooks/useShortcut'
@@ -33,6 +33,7 @@ export function useGraphCanvasModel({
   const edges = useGraphStore((s) => s.edges)
   const storedViewport = useGraphStore((s) => s.viewport)
   const setStoredViewport = useGraphStore((s) => s.setViewport)
+  const graphStoreApi = useGraphStoreApi()
   const activeTabId = useTabStore((s) => s.activeTabId)
   
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -74,6 +75,20 @@ export function useGraphCanvasModel({
   useEffect(() => {
     updateZoomLevel(storedViewport.zoom)
   }, [storedViewport.zoom, updateZoomLevel])
+
+  useShortcut(['Control+z', 'Meta+z'], (event) => {
+    if (activeTabId !== tabId) return
+    event.preventDefault()
+    ;(graphStoreApi as any).temporal.getState().undo()
+    logAction('快捷键:撤销', 'GraphCanvas', { source: 'undo' })
+  }, { scope: 'canvas', preventDefault: true })
+
+  useShortcut(['Control+y', 'Meta+y', 'Control+Shift+Z', 'Meta+Shift+Z'], (event) => {
+    if (activeTabId !== tabId) return
+    event.preventDefault()
+    ;(graphStoreApi as any).temporal.getState().redo()
+    logAction('快捷键:重做', 'GraphCanvas', { source: 'redo' })
+  }, { scope: 'canvas', preventDefault: true })
 
   useShortcut(['Enter', 'NumpadEnter', 'Tab'], (event) => {
     if (activeTabId !== tabId) return

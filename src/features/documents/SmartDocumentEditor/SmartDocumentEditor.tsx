@@ -7,7 +7,7 @@ import { insertMermaid } from 'blocknote-mermaid'
 import type { SmartDocumentEditorProps } from './types'
 import { useSmartDocumentEditorModel } from './model/useSmartDocumentEditorModel'
 import { useSmartDocumentAttachmentInsert } from './useSmartDocumentAttachmentInsert'
-import { SmartDocumentSideMenu, SmartDocumentSideMenuBoundary } from './components/SmartDocumentSideMenu'
+import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
 
 import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
@@ -24,6 +24,29 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     '--topomind-smart-line-height': String(defaultEditorStyle.lineHeight),
   }) as CSSProperties, [defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight])
   const editorRootRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer || !attachmentInsertTargetKey) return
+
+    const savedScroll = localStorage.getItem(`topomind_scroll_${attachmentInsertTargetKey}`)
+    if (savedScroll) {
+      setTimeout(() => {
+        if (scrollContainer) {
+          scrollContainer.scrollTop = parseFloat(savedScroll)
+        }
+      }, 50)
+    }
+
+    const handleScroll = () => {
+      localStorage.setItem(`topomind_scroll_${attachmentInsertTargetKey}`, scrollContainer.scrollTop.toString())
+    }
+    
+    // Use debounced or passive listener
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
+    return () => scrollContainer.removeEventListener('scroll', handleScroll)
+  }, [attachmentInsertTargetKey])
 
   useEffect(() => {
     const ownerDocument = editorRootRef.current?.ownerDocument ?? document
@@ -51,7 +74,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   }, [])
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto" spellCheck={false} style={{ backgroundColor: defaultEditorStyle.backgroundColor || 'var(--color-surface)' }}>
+    <div ref={scrollContainerRef} className="h-full min-h-0 overflow-y-auto" spellCheck={false} style={{ backgroundColor: defaultEditorStyle.backgroundColor || 'var(--color-surface)' }}>
       <div
         ref={editorRootRef}
         className="smart-document-content relative min-h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-4 [&_.bn-container]:!py-0 [&_.bn-container]:!max-w-[800px] [&_.bn-container]:!mx-auto [&_.bn-container]:!w-full [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-4 [&_.bn-editor]:!w-full [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"
@@ -73,12 +96,15 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
                   ...getDefaultReactSlashMenuItems(editor),
                   insertMermaid(),
                   {
-                    title: '数学公式 (KaTeX)',
+                    title: '块级数学公式 (KaTeX)',
                     onItemClick: () => {
                       editor.insertBlocks(
                         [
                           {
                             type: 'math',
+                            props: {
+                              autoEdit: true,
+                            },
                           },
                         ],
                         editor.getTextCursorPosition().block,
@@ -88,14 +114,13 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
                     aliases: ['math', 'equation', 'latex', 'katex'],
                     group: 'Media',
                     icon: <span>∑</span>,
-                    subtext: '插入 LaTeX 数学公式',
+                    subtext: '插入块级 LaTeX 数学公式',
                   } as any,
                 ],
                 query
               )
             }
           />
-          <SmartDocumentSideMenuBoundary editorRootRef={editorRootRef} />
           <SideMenuController sideMenu={SmartDocumentSideMenu} />
         </BlockNoteView>
       </div>

@@ -47,7 +47,7 @@ function splitTextByNewlines(blocks: BlockNoteBlock[]): BlockNoteBlock[] {
     // 只处理包含内联文本内容的块（比如 paragraph, heading, list item）
     if (Array.isArray(block.content)) {
       let currentContent: any[] = []
-      let currentBlock = { ...block, children, content: currentContent }
+      let currentBlock: BlockNoteBlock = { ...block, children, content: currentContent }
       // 为了防止生成的块 id 冲突，如果拆分出新块，后续块不保留原有 id
       let isFirstPart = true
       

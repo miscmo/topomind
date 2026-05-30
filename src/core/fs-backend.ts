@@ -115,6 +115,7 @@ export interface FSB {
   restoreTrashAttachment: (rootDir: string, cardPath: string, trashName: string) => Promise<string>
   clearTrashAttachments: (rootDir: string, cardPath: string) => Promise<void>
   openAttachment: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<boolean>
+  showAttachmentInFolder: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<boolean>
   getAttachmentAbsoluteUrl: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<string | null>
   writeAttachmentBase64: (rootDir: string, cardPath: string, fileName: string, mimeType: string, base64: string) => Promise<string>
   downloadAttachment: (rootDir: string, cardPath: string, url: string, targetFileName?: string) => Promise<string>
@@ -182,6 +183,8 @@ const FSBImpl: FSB = {
     _call('fs:clearTrashAttachments', rootDir, cardPath) as Promise<void>,
   openAttachment: (rootDir, cardPath, attachmentRef) =>
     _call('fs:openAttachment', rootDir, cardPath, attachmentRef) as Promise<boolean>,
+  showAttachmentInFolder: (rootDir, cardPath, attachmentRef) =>
+    _call('fs:showAttachmentInFolder', rootDir, cardPath, attachmentRef) as Promise<boolean>,
   getAttachmentAbsoluteUrl: (rootDir, cardPath, attachmentRef) =>
     _call('fs:getAttachmentAbsoluteUrl', rootDir, cardPath, attachmentRef) as Promise<string | null>,
   writeAttachmentBase64: (rootDir, cardPath, fileName, mimeType, base64) =>
