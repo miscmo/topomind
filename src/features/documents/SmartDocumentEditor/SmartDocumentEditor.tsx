@@ -65,15 +65,21 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       // 这可以强制 BlockNote/Prosemirror 将光标移动到鼠标当前悬停的块
       // 从而解决右键粘贴时，内容没有插入到鼠标位置而是插入到旧光标位置的 bug
       if (e.target instanceof Element) {
-        const mousedownEvent = new MouseEvent('mousedown', {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-          clientX: e.clientX,
-          clientY: e.clientY,
-          button: 0,
-        })
-        e.target.dispatchEvent(mousedownEvent)
+        // 只有当目标是文本节点或者普通的段落容器时，才模拟左键点击
+        // 避免在非文本块（如图片、表格、divider）上触发导致 ProseMirror 选区越界崩溃
+        const isSafeTarget = e.target.closest('.bn-inline-content') || e.target.closest('[data-content-type="paragraph"]') || e.target.closest('[data-content-type="heading"]')
+        
+        if (isSafeTarget) {
+          const mousedownEvent = new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            clientX: e.clientX,
+            clientY: e.clientY,
+            button: 0,
+          })
+          e.target.dispatchEvent(mousedownEvent)
+        }
       }
     }
     ownerDocument.addEventListener('contextmenu', handleContextMenu, true)

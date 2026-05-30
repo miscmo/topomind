@@ -8,6 +8,7 @@ import { calculateSmartDocumentStats, extractSmartDocumentToc } from '../smartDo
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension } from '../mathSupport'
 import { containsMathDelimiters, convertHtmlWithMathToHtml, convertMarkdownWithMathToHtml } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
+import { currentBlockHighlightExtension } from '../currentBlockHighlightExtension'
 import type { SmartDocumentEditorProps } from '../types'
 import type { TocItem } from '../../types/workspaceTypes'
 import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
@@ -66,7 +67,7 @@ export function useSmartDocumentEditorModel({
 
       return defaultPasteHandler()
     },
-    extensions: [mathBlockShortcutExtension()],
+    extensions: [mathBlockShortcutExtension(), currentBlockHighlightExtension()],
     _tiptapOptions: {
       extensions: [inlineMathInputRuleExtension],
     },

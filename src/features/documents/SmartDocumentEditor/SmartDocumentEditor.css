@@ -331,9 +331,17 @@
 }
 
 /* Paragraph spacing */
-.smart-document-content .bn-block-outer[data-node-type="blockContainer"] {
+.smart-document-content .bn-block-outer {
   margin-top: var(--topomind-smart-block-spacing, 6px);
   margin-bottom: var(--topomind-smart-block-spacing, 6px);
+}
+
+/* Current block highlight */
+.smart-document-content .bn-block-outer[data-current-block="true"] > .bn-block > .bn-block-content {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 16%, transparent);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 /* Headings */
