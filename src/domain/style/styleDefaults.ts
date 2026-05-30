@@ -2,8 +2,8 @@ import type { StyleConfigDefaults } from './styleTypes'
 import { NODE_SIZE_LIMIT_DEFAULTS } from './styleConstraints'
 
 export const EDITOR_FONT_FAMILIES = {
-  documentSans: '"Inter", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", sans-serif',
-  sans: '"Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", sans-serif',
+  documentSans: '"Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
+  sans: '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
   serif: '"Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif',
 } as const
 
