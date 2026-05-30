@@ -1,12 +1,13 @@
 import { memo, useMemo, useRef, useEffect, type CSSProperties } from 'react'
 import { BlockNoteView } from '@blocknote/mantine'
-import { SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
+import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
 import { filterSuggestionItems } from '@blocknote/core'
 import { insertMermaid } from 'blocknote-mermaid'
 
 import type { SmartDocumentEditorProps } from './types'
 import { useSmartDocumentEditorModel } from './model/useSmartDocumentEditorModel'
 import { useSmartDocumentAttachmentInsert } from './useSmartDocumentAttachmentInsert'
+import { SmartDocumentFormattingToolbar } from './components/SmartDocumentFormattingToolbar'
 import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
 
 import 'katex/dist/katex.min.css'
@@ -21,8 +22,9 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 
   const blockNoteViewStyle = useMemo(() => ({
     '--topomind-smart-body-font-size': `${defaultEditorStyle.fontSize}px`,
+    '--topomind-smart-font-family': customTheme.fontFamily,
     '--topomind-smart-line-height': String(defaultEditorStyle.lineHeight),
-  }) as CSSProperties, [defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight])
+  }) as CSSProperties, [customTheme.fontFamily, defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight])
   const editorRootRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -85,6 +87,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
           theme={customTheme}
           style={blockNoteViewStyle}
           onChange={handleChange}
+          formattingToolbar={false}
           sideMenu={false}
           slashMenu={false}
         >
@@ -121,6 +124,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
               )
             }
           />
+          <FormattingToolbarController formattingToolbar={SmartDocumentFormattingToolbar} />
           <SideMenuController sideMenu={SmartDocumentSideMenu} />
         </BlockNoteView>
       </div>

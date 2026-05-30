@@ -1,4 +1,5 @@
 .smart-document-content .bn-default-styles {
+  font-family: var(--topomind-smart-font-family) !important;
   font-size: var(--topomind-smart-body-font-size) !important;
   line-height: var(--topomind-smart-line-height) !important;
 }
@@ -306,4 +307,60 @@
   line-height: 1.6;
   outline: none;
   resize: vertical;
+}
+
+/* --- Notion/Wolai Style Typography Overrides --- */
+
+/* Enhance text clarity and spacing */
+.smart-document-content .bn-default-styles {
+  /* Use the theme's font-family and color dynamically, just enforce better rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Paragraph spacing */
+.smart-document-content .bn-block-outer[data-node-type="blockContainer"] {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+/* Headings */
+.smart-document-content .bn-block-content[data-content-type="heading"] {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Heading level 1 */
+.smart-document-content .bn-block-content[data-content-type="heading"][data-level="1"] {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+.smart-document-content .bn-block-content[data-content-type="heading"][data-level="1"] > h1 {
+  font-size: 1.875em;
+}
+
+/* Heading level 2 */
+.smart-document-content .bn-block-content[data-content-type="heading"][data-level="2"] {
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+}
+.smart-document-content .bn-block-content[data-content-type="heading"][data-level="2"] > h2 {
+  font-size: 1.5em;
+}
+
+/* Heading level 3 */
+.smart-document-content .bn-block-content[data-content-type="heading"][data-level="3"] {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+.smart-document-content .bn-block-content[data-content-type="heading"][data-level="3"] > h3 {
+  font-size: 1.25em;
+}
+
+/* Lists spacing */
+.smart-document-content .bn-block-content[data-content-type="bulletListItem"],
+.smart-document-content .bn-block-content[data-content-type="numberedListItem"],
+.smart-document-content .bn-block-content[data-content-type="checkListItem"] {
+  margin-top: 2px;
+  margin-bottom: 2px;
 }

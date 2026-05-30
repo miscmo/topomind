@@ -1,4 +1,5 @@
 import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeSize, DefaultNodeStyle } from '../../../../types/uiStoreTypes'
+import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
 
 const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max)
 
@@ -100,7 +101,7 @@ export function EditorStylePreview({ style }: { style: DefaultEditorStyle }) {
         style={{
           backgroundColor: style.backgroundColor,
           color: style.textColor,
-          fontFamily: style.fontFamily === 'inherit' ? undefined : style.fontFamily,
+          fontFamily: resolveEditorFontFamily(style.fontFamily),
           fontSize: style.fontSize,
           lineHeight: style.lineHeight,
         }}

@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import type { DefaultEditorStyle } from '../../../../types/uiStoreTypes'
 import { EDITOR_STYLE_NUMBER_LIMITS } from '../../../../domain/style/styleConstraints'
+import { resolveEditorFontChoice } from '../../../../domain/style/styleDefaults'
 import { CollapsibleBlock, ColorField, NumberField, PresetButtonGrid, SegmentedControl, StyleCard } from './StyleControls'
 import { EditorStylePreview } from './StylePreviews'
 import { EDITOR_STYLE_PRESETS } from '../../model/stylePresets'
@@ -47,11 +48,11 @@ export const EditorStylePanel = memo(function EditorStylePanel({
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">字体</label>
               <SegmentedControl
                 options={[
-                  { label: '系统默认', value: 'inherit' },
+                  { label: '阅读体', value: 'document-sans' },
                   { label: '黑体', value: 'sans-serif' },
                   { label: '宋体', value: 'serif' }
                 ]}
-                value={defaultEditorStyle.fontFamily || 'inherit'}
+                value={resolveEditorFontChoice(defaultEditorStyle.fontFamily)}
                 onChange={(v) => onUpdateDefaultEditorStyle({ fontFamily: v as string })}
               />
             </div>

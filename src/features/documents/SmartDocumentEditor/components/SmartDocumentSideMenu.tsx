@@ -1,5 +1,4 @@
-import { AiOutlinePlus } from 'react-icons/ai'
-import { DragHandleButton, SideMenu, useBlockNoteEditor, useComponentsContext, useExtension, useExtensionState } from '@blocknote/react'
+import { AddBlockButton, DragHandleButton, SideMenu, type SideMenuProps, useBlockNoteEditor, useExtensionState } from '@blocknote/react'
 import { SideMenuExtension } from '@blocknote/core/extensions'
 import { SmartDocumentBlockMenu } from './SmartDocumentBlockMenu'
 
@@ -7,41 +6,7 @@ export function SmartDocumentDragHandleMenu({ children }: { children?: React.Rea
   return <SmartDocumentBlockMenu mode="edit">{children}</SmartDocumentBlockMenu>
 }
 
-export function SmartDocumentAddBlockButton() {
-  const Components = useComponentsContext()
-  const editor = useBlockNoteEditor<any, any, any>()
-  const sideMenu = useExtension(SideMenuExtension)
-  const block = useExtensionState(SideMenuExtension, {
-    editor,
-    selector: (state) => state?.block,
-  })
-
-  if (!Components || !block) return null
-
-  return (
-    <Components.Generic.Menu.Root
-      onOpenChange={(open: boolean) => {
-        if (open) {
-          sideMenu.freezeMenu()
-        } else {
-          sideMenu.unfreezeMenu()
-        }
-      }}
-      position="left"
-    >
-      <Components.Generic.Menu.Trigger>
-        <Components.SideMenu.Button
-          className="bn-button"
-          label="添加块"
-          icon={<AiOutlinePlus size={24} data-test="dragHandleAdd" />}
-        />
-      </Components.Generic.Menu.Trigger>
-      <SmartDocumentBlockMenu mode="insert" />
-    </Components.Generic.Menu.Root>
-  )
-}
-
-export function SmartDocumentSideMenu() {
+export function SmartDocumentSideMenu(props: SideMenuProps) {
   const editor = useBlockNoteEditor<any, any, any>()
   const block = useExtensionState(SideMenuExtension, {
     editor,
@@ -54,8 +19,8 @@ export function SmartDocumentSideMenu() {
   }
 
   return (
-    <SideMenu>
-      {isEmptyBlock ? <SmartDocumentAddBlockButton /> : <DragHandleButton dragHandleMenu={SmartDocumentDragHandleMenu} />}
+    <SideMenu {...props}>
+      {isEmptyBlock ? <AddBlockButton /> : <DragHandleButton {...props} dragHandleMenu={SmartDocumentDragHandleMenu} />}
     </SideMenu>
   )
 }

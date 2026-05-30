@@ -57,6 +57,6 @@ export const EDGE_STYLE_PRESETS: Array<{ label: string; style: DefaultEdgeStyle 
 
 export const EDITOR_STYLE_PRESETS: Array<{ label: string; style: DefaultEditorStyle }> = [
   { label: '默认', style: STYLE_CONFIG_DEFAULTS.defaultEditorStyle },
-  { label: '护眼', style: { fontSize: 16, fontFamily: 'inherit', backgroundColor: '#f7f3e8', textColor: '#3f3a2f', lineHeight: 1.7 } },
-  { label: '紧凑', style: { fontSize: 14, fontFamily: 'inherit', backgroundColor: '#ffffff', textColor: '#1f2937', lineHeight: 1.35 } },
+  { label: '护眼', style: { fontSize: 16, fontFamily: 'document-sans', backgroundColor: '#f7f3e8', textColor: '#3f3a2f', lineHeight: 1.7 } },
+  { label: '紧凑', style: { fontSize: 14, fontFamily: 'document-sans', backgroundColor: '#ffffff', textColor: '#1f2937', lineHeight: 1.35 } },
 ]

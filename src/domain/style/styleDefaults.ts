@@ -1,6 +1,42 @@
 import type { StyleConfigDefaults } from './styleTypes'
 import { NODE_SIZE_LIMIT_DEFAULTS } from './styleConstraints'
 
+export const EDITOR_FONT_FAMILIES = {
+  documentSans: '"Inter", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", sans-serif',
+  sans: '"Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", sans-serif',
+  serif: '"Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif',
+} as const
+
+export function resolveEditorFontFamily(fontFamily: string | null | undefined): string {
+  switch (fontFamily) {
+    case 'inherit':
+    case 'document-sans':
+    case '':
+    case undefined:
+    case null:
+      return EDITOR_FONT_FAMILIES.documentSans
+    case 'sans-serif':
+      return EDITOR_FONT_FAMILIES.sans
+    case 'serif':
+      return EDITOR_FONT_FAMILIES.serif
+    default:
+      return fontFamily
+  }
+}
+
+export function resolveEditorFontChoice(fontFamily: string | null | undefined): string {
+  if (!fontFamily || fontFamily === 'inherit' || fontFamily === EDITOR_FONT_FAMILIES.documentSans) {
+    return 'document-sans'
+  }
+  if (fontFamily === 'sans-serif' || fontFamily === EDITOR_FONT_FAMILIES.sans) {
+    return 'sans-serif'
+  }
+  if (fontFamily === 'serif' || fontFamily === EDITOR_FONT_FAMILIES.serif) {
+    return 'serif'
+  }
+  return fontFamily
+}
+
 export const STYLE_CONFIG_DEFAULTS: StyleConfigDefaults = {
   defaultEdgeStyle: {
     lineMode: 'straight',
@@ -25,10 +61,10 @@ export const STYLE_CONFIG_DEFAULTS: StyleConfigDefaults = {
   },
   defaultEditorStyle: {
     fontSize: 16,
-    fontFamily: 'inherit',
+    fontFamily: 'document-sans',
     backgroundColor: '#ffffff',
-    textColor: '#333333',
-    lineHeight: 1.5,
+    textColor: '#37352f',
+    lineHeight: 1.6,
   },
   nodeSizeLimits: NODE_SIZE_LIMIT_DEFAULTS,
   nodeBadgeSize: 14,
