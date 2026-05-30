@@ -32,7 +32,11 @@ export function useDetailDocumentSession({
   const setDraftContent = useDraftStore((s) => s.setDetailDraft)
   const detailEntry = useCardContentStore((s) => currentDocumentKey ? s.detailEntries[currentDocumentKey] : undefined)
   const setDetailContent = useCardContentStore((s) => s.setDetailContent)
-  const [savedContent, setSavedContent] = useState<unknown>(() => detailEntry?.content ?? '')
+  const [savedContentState, setSavedContentState] = useState<{ key: string; content: unknown }>(() => ({
+    key: currentDocumentKey,
+    content: detailEntry?.content ?? ''
+  }))
+  const savedContent = savedContentState.key === currentDocumentKey ? savedContentState.content : ''
   const [loadedDocumentKey, setLoadedDocumentKey] = useState(() => (detailEntry ? currentDocumentKey : ''))
   const contentRequestSeqRef = useRef(0)
   const selectionPerfRef = useRef<{ nodeId: string; startedAt: number; logged: boolean } | null>(null)
@@ -56,11 +60,11 @@ export function useDetailDocumentSession({
         await storage.writeTopoDocument(nodePath, activeTopoDocumentId, contentToWrite)
         setDetailContent(currentDocumentKey, contentToWrite)
         setDraftContent(currentDocumentKey, contentToWrite)
-        setSavedContent(contentToWrite)
+        setSavedContentState({ key: currentDocumentKey, content: contentToWrite })
         savedContentLength = getDocumentContentLength(contentToWrite)
       } else {
         setDetailContent(currentDocumentKey, draftContent)
-        setSavedContent(draftContent)
+        setSavedContentState({ key: currentDocumentKey, content: draftContent })
         savedContentLength = getDocumentContentLength(draftContent)
       }
 
@@ -99,8 +103,8 @@ export function useDetailDocumentSession({
   }, [currentDocumentKey, detailEntry, loadedDocumentKey])
 
   useEffect(() => {
-    setSavedContent('')
-  }, [selectedNodeId, nodePath])
+    setSavedContentState({ key: currentDocumentKey, content: '' })
+  }, [selectedNodeId, nodePath, currentDocumentKey])
 
   useEffect(() => {
     if (!selectedNodeId) {
@@ -123,7 +127,7 @@ export function useDetailDocumentSession({
 
     const cachedContent = useCardContentStore.getState().detailEntries[currentDocumentKey]?.content
     if (cachedContent !== undefined) {
-      setSavedContent(cachedContent)
+      setSavedContentState({ key: currentDocumentKey, content: cachedContent })
       setLoadedDocumentKey(currentDocumentKey)
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
         setDraftContent(currentDocumentKey, cachedContent)
@@ -156,7 +160,7 @@ export function useDetailDocumentSession({
         contentLength,
       }, 'DetailPanel')
       setDetailContent(currentDocumentKey, content)
-      setSavedContent(content)
+      setSavedContentState({ key: currentDocumentKey, content })
       setLoadedDocumentKey(currentDocumentKey)
 
       const currentDraft = useDraftStore.getState().detailDrafts[currentDocumentKey]
@@ -184,7 +188,7 @@ export function useDetailDocumentSession({
         documentPath: activeDocumentPath,
       }, 'DetailPanel')
       setDetailContent(currentDocumentKey, '')
-      setSavedContent('')
+      setSavedContentState({ key: currentDocumentKey, content: '' })
       setLoadedDocumentKey(currentDocumentKey)
 
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
@@ -204,10 +208,10 @@ export function useDetailDocumentSession({
   }, [selectedNodeId, nodePath, activeDocumentPath, currentDocumentKey, activeTopoDocumentId, storage, setDraftContent, setDetailContent])
 
   useEffect(() => {
-    if (activeDocumentPath !== '' && detailEntry) {
-      setSavedContent(detailEntry.content)
+    if (currentDocumentKey && detailEntry) {
+      setSavedContentState({ key: currentDocumentKey, content: detailEntry.content })
     }
-  }, [detailEntry, activeDocumentPath])
+  }, [detailEntry, currentDocumentKey])
 
   useEffect(() => {
     return registerTabSaver(tabId, flushDocumentSave, () => areDocumentContentsEqual(draftContent, savedContent) === false)

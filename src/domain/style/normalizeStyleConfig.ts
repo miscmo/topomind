@@ -63,6 +63,11 @@ export function normalizeDefaultEditorStyle(raw: unknown): DefaultEditorStyle {
     backgroundColor: typeof style.backgroundColor === 'string' ? style.backgroundColor : defaults.backgroundColor,
     textColor: typeof style.textColor === 'string' ? style.textColor : defaults.textColor,
     lineHeight: clampNumber(finiteNumber(style.lineHeight, defaults.lineHeight), EDITOR_STYLE_NUMBER_LIMITS.lineHeight.min, EDITOR_STYLE_NUMBER_LIMITS.lineHeight.max),
+    contentWidth: clampNumber(finiteNumber(style.contentWidth, defaults.contentWidth), EDITOR_STYLE_NUMBER_LIMITS.contentWidth.min, EDITOR_STYLE_NUMBER_LIMITS.contentWidth.max),
+    blockSpacing: clampNumber(finiteNumber(style.blockSpacing, defaults.blockSpacing), EDITOR_STYLE_NUMBER_LIMITS.blockSpacing.min, EDITOR_STYLE_NUMBER_LIMITS.blockSpacing.max),
+    headingSpacingRatio: clampNumber(finiteNumber(style.headingSpacingRatio, defaults.headingSpacingRatio), EDITOR_STYLE_NUMBER_LIMITS.headingSpacingRatio.min, EDITOR_STYLE_NUMBER_LIMITS.headingSpacingRatio.max),
+    letterSpacing: clampNumber(finiteNumber(style.letterSpacing, defaults.letterSpacing), EDITOR_STYLE_NUMBER_LIMITS.letterSpacing.min, EDITOR_STYLE_NUMBER_LIMITS.letterSpacing.max),
+    fontWeight: clampNumber(finiteNumber(style.fontWeight, defaults.fontWeight), EDITOR_STYLE_NUMBER_LIMITS.fontWeight.min, EDITOR_STYLE_NUMBER_LIMITS.fontWeight.max),
   }
 }
 

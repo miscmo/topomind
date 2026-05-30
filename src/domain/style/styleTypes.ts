@@ -28,6 +28,11 @@ export interface DefaultEditorStyle {
   backgroundColor: string
   textColor: string
   lineHeight: number
+  contentWidth: number
+  blockSpacing: number
+  headingSpacingRatio: number
+  letterSpacing: number
+  fontWeight: number
 }
 
 export interface NodeSizeLimits {

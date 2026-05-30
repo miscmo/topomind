@@ -16,9 +16,14 @@ export const NODE_SIZE_LIMIT_DEFAULTS: NodeSizeLimits = {
 
 export const NODE_BADGE_SIZE_LIMIT = { min: 8, max: 28 }
 
-export const EDITOR_STYLE_NUMBER_LIMITS: Record<keyof Pick<DefaultEditorStyle, 'fontSize' | 'lineHeight'>, { min: number; max: number; step?: number }> = {
+export const EDITOR_STYLE_NUMBER_LIMITS: Record<keyof Pick<DefaultEditorStyle, 'fontSize' | 'lineHeight' | 'contentWidth' | 'blockSpacing' | 'headingSpacingRatio' | 'letterSpacing' | 'fontWeight'>, { min: number; max: number; step?: number }> = {
   fontSize: { min: 10, max: 36 },
   lineHeight: { min: 1, max: 3, step: 0.1 },
+  contentWidth: { min: 400, max: 1200, step: 10 },
+  blockSpacing: { min: 0, max: 32, step: 1 },
+  headingSpacingRatio: { min: 0.5, max: 3.0, step: 0.1 },
+  letterSpacing: { min: -0.1, max: 0.5, step: 0.01 },
+  fontWeight: { min: 100, max: 900, step: 10 },
 }
 
 export function clampNumber(value: number, min: number, max: number): number {

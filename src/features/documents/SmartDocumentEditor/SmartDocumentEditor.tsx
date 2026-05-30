@@ -24,7 +24,12 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     '--topomind-smart-body-font-size': `${defaultEditorStyle.fontSize}px`,
     '--topomind-smart-font-family': customTheme.fontFamily,
     '--topomind-smart-line-height': String(defaultEditorStyle.lineHeight),
-  }) as CSSProperties, [customTheme.fontFamily, defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight])
+    '--topomind-smart-content-width': `${defaultEditorStyle.contentWidth ?? 800}px`,
+    '--topomind-smart-block-spacing': `${defaultEditorStyle.blockSpacing ?? 6}px`,
+    '--topomind-smart-heading-spacing-ratio': String(defaultEditorStyle.headingSpacingRatio ?? 1.5),
+    '--topomind-smart-letter-spacing': `${defaultEditorStyle.letterSpacing ?? -0.003}em`,
+    '--topomind-smart-font-weight': String(defaultEditorStyle.fontWeight ?? 400),
+  }) as CSSProperties, [customTheme.fontFamily, defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight, defaultEditorStyle.contentWidth, defaultEditorStyle.blockSpacing, defaultEditorStyle.headingSpacingRatio, defaultEditorStyle.letterSpacing, defaultEditorStyle.fontWeight])
   const editorRootRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -79,7 +84,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     <div ref={scrollContainerRef} className="h-full min-h-0 overflow-y-auto" spellCheck={false} style={{ backgroundColor: defaultEditorStyle.backgroundColor || 'var(--color-surface)' }}>
       <div
         ref={editorRootRef}
-        className="smart-document-content relative min-h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-4 [&_.bn-container]:!py-0 [&_.bn-container]:!max-w-[800px] [&_.bn-container]:!mx-auto [&_.bn-container]:!w-full [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-4 [&_.bn-editor]:!w-full [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"
+        className="smart-document-content relative min-h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-4 [&_.bn-container]:!py-0 [&_.bn-container]:!mx-auto [&_.bn-container]:!w-full [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-4 [&_.bn-editor]:!w-full [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"
       >
         <BlockNoteView
           editor={editor}

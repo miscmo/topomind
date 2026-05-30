@@ -2,9 +2,12 @@ import type { StyleConfigDefaults } from './styleTypes'
 import { NODE_SIZE_LIMIT_DEFAULTS } from './styleConstraints'
 
 export const EDITOR_FONT_FAMILIES = {
-  documentSans: '"Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
-  sans: '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
+  documentSans: '"Inter", "SF Pro Display", "PingFang SC", "Helvetica Neue", "Microsoft YaHei", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
+  sans: '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
   serif: '"Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif',
+  lxgw: '"LXGW WenKai", "LXGW WenKai Screen", "Source Han Serif SC", "Noto Serif SC", serif',
+  notoSans: '"Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+  kaiti: '"Kaiti SC", "STKaiti", "KaiTi", "楷体", serif',
 } as const
 
 export function resolveEditorFontFamily(fontFamily: string | null | undefined): string {
@@ -19,6 +22,12 @@ export function resolveEditorFontFamily(fontFamily: string | null | undefined): 
       return EDITOR_FONT_FAMILIES.sans
     case 'serif':
       return EDITOR_FONT_FAMILIES.serif
+    case 'lxgw':
+      return EDITOR_FONT_FAMILIES.lxgw
+    case 'noto-sans':
+      return EDITOR_FONT_FAMILIES.notoSans
+    case 'kaiti':
+      return EDITOR_FONT_FAMILIES.kaiti
     default:
       return fontFamily
   }
@@ -33,6 +42,15 @@ export function resolveEditorFontChoice(fontFamily: string | null | undefined): 
   }
   if (fontFamily === 'serif' || fontFamily === EDITOR_FONT_FAMILIES.serif) {
     return 'serif'
+  }
+  if (fontFamily === 'lxgw' || fontFamily === EDITOR_FONT_FAMILIES.lxgw) {
+    return 'lxgw'
+  }
+  if (fontFamily === 'noto-sans' || fontFamily === EDITOR_FONT_FAMILIES.notoSans) {
+    return 'noto-sans'
+  }
+  if (fontFamily === 'kaiti' || fontFamily === EDITOR_FONT_FAMILIES.kaiti) {
+    return 'kaiti'
   }
   return fontFamily
 }
@@ -63,8 +81,13 @@ export const STYLE_CONFIG_DEFAULTS: StyleConfigDefaults = {
     fontSize: 16,
     fontFamily: 'document-sans',
     backgroundColor: '#ffffff',
-    textColor: '#37352f',
-    lineHeight: 1.6,
+    textColor: '#333333',
+    lineHeight: 1.75,
+    contentWidth: 800,
+    blockSpacing: 6,
+    headingSpacingRatio: 1.5,
+    letterSpacing: -0.003,
+    fontWeight: 400,
   },
   nodeSizeLimits: NODE_SIZE_LIMIT_DEFAULTS,
   nodeBadgeSize: 14,

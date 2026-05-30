@@ -2,8 +2,8 @@
   font-family: var(--topomind-smart-font-family) !important;
   font-size: var(--topomind-smart-body-font-size) !important;
   line-height: var(--topomind-smart-line-height) !important;
-  font-weight: 400;
-  letter-spacing: -0.003em;
+  font-weight: var(--topomind-smart-font-weight, 400);
+  letter-spacing: var(--topomind-smart-letter-spacing, -0.003em);
   font-feature-settings: "calt" 1, "liga" 1;
   text-rendering: optimizeLegibility;
 }
@@ -21,7 +21,9 @@
   color: var(--color-text-secondary);
   background: color-mix(in srgb, var(--color-bg-muted) 58%, transparent);
   border-radius: 0 8px 8px 0;
-  padding: 0.35em 0.75em 0.35em 1em;
+  padding: 0.6em 0.75em 0.6em 1em;
+  margin-top: var(--topomind-smart-block-spacing, 6px);
+  margin-bottom: var(--topomind-smart-block-spacing, 6px);
 }
 .smart-document-content [data-content-type="divider"] hr,
 .smart-document-content [data-content-type="pageBreak"] > div {
@@ -320,101 +322,137 @@
   /* Use the theme's font-family and color dynamically, just enforce better rendering */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color: var(--color-text-primary); /* Ensure base color matches the soft dark gray */
+}
+
+/* Container width */
+.smart-document-content .bn-container {
+  max-width: var(--topomind-smart-content-width, 800px) !important;
 }
 
 /* Paragraph spacing */
 .smart-document-content .bn-block-outer[data-node-type="blockContainer"] {
-  margin-top: 3px;
-  margin-bottom: 3px;
+  margin-top: var(--topomind-smart-block-spacing, 6px);
+  margin-bottom: var(--topomind-smart-block-spacing, 6px);
 }
 
 /* Headings */
 .smart-document-content .bn-block-content[data-content-type="heading"] {
   font-family: var(--topomind-smart-font-family) !important;
-  font-weight: 650 !important;
-  letter-spacing: -0.016em;
-  line-height: 1.28 !important;
-  padding-top: 6px !important;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+  color: var(--color-text); /* Slightly darker for headings */
 }
 
 /* Keep the side menu vertically centered with the new heading scale */
 .smart-document-content .bn-side-menu {
   display: flex;
-  align-items: center;
+  /* Align items to flex-end to push the menu icon to the bottom where the text baseline is */
+  align-items: flex-end;
 }
 
+/* Adjust side menu heights and padding to match the actual text height at the bottom */
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="1"] {
-  height: 44px !important;
+  height: auto !important;
+  /* Match the heading's padding-top + font-size * line-height + padding-bottom */
+  padding-bottom: calc(0.5em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  /* Give it a fixed height for the actual icon container to align with text */
+  margin-top: calc(1.8em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
 }
 
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="2"] {
-  height: 40px !important;
+  height: auto !important;
+  padding-bottom: calc(0.4em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: calc(1.5em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
 }
 
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="3"] {
-  height: 36px !important;
+  height: auto !important;
+  padding-bottom: calc(0.3em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: calc(1.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
 }
 
-.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="4"],
+.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="4"] {
+  height: auto !important;
+  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: calc(1em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+}
+
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="5"],
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="6"] {
-  height: 32px !important;
+  height: auto !important;
+  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: calc(0.8em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
 }
 
 /* Heading level 1 */
 .smart-document-content .bn-block-content[data-content-type="heading"][data-level="1"] {
-  font-size: 1.58em !important;
-  font-weight: 700 !important;
-  line-height: 1.22 !important;
-  padding-top: 8px !important;
+  font-size: 1.75em !important; /* ~28px if base is 16px */
+  line-height: 1.3 !important;
+  padding-top: calc(1.8em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  padding-bottom: calc(0.5em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 /* Heading level 2 */
 .smart-document-content .bn-block-content[data-content-type="heading"][data-level="2"] {
-  font-size: 1.4em !important;
-  font-weight: 700 !important;
-  line-height: 1.24 !important;
-  padding-top: 7px !important;
+  font-size: 1.5em !important; /* ~24px */
+  line-height: 1.35 !important;
+  padding-top: calc(1.5em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  padding-bottom: calc(0.4em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 /* Heading level 3 */
 .smart-document-content .bn-block-content[data-content-type="heading"][data-level="3"] {
-  font-size: 1.24em !important;
+  font-size: 1.25em !important; /* ~20px */
   font-weight: 600 !important;
-  line-height: 1.26 !important;
-  padding-top: 6px !important;
+  line-height: 1.4 !important;
+  padding-top: calc(1.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  padding-bottom: calc(0.3em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 /* Heading level 4 */
 .smart-document-content .bn-block-content[data-content-type="heading"][data-level="4"] {
-  font-size: 1.13em !important;
+  font-size: 1.15em !important;
   font-weight: 600 !important;
-  line-height: 1.3 !important;
-  padding-top: 5px !important;
+  line-height: 1.4 !important;
+  padding-top: calc(1em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 /* Heading level 5 */
 .smart-document-content .bn-block-content[data-content-type="heading"][data-level="5"] {
-  font-size: 1.06em !important;
+  font-size: 1.05em !important;
   font-weight: 600 !important;
-  line-height: 1.32 !important;
-  padding-top: 4px !important;
+  line-height: 1.4 !important;
+  padding-top: calc(0.8em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 /* Heading level 6 */
 .smart-document-content .bn-block-content[data-content-type="heading"][data-level="6"] {
   font-size: 1em !important;
   font-weight: 600 !important;
-  line-height: 1.34 !important;
-  padding-top: 4px !important;
+  line-height: 1.4 !important;
+  padding-top: calc(0.8em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 /* Lists spacing */
 .smart-document-content .bn-block-content[data-content-type="bulletListItem"],
 .smart-document-content .bn-block-content[data-content-type="numberedListItem"],
 .smart-document-content .bn-block-content[data-content-type="checkListItem"] {
-  margin-top: 2px;
-  margin-bottom: 2px;
+  margin-top: 4px;
+  margin-bottom: 4px;
 }
