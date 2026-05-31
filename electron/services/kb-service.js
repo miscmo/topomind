@@ -99,7 +99,7 @@ export function createKbService(deps) {
       rootDir = requireValidWorkDir(rootDir);
       var src = validateAbsolutePath(sourcePath);
       var relToRoot = nodePath.relative(rootDir, src);
-      if (relToRoot === '' || (!relToRoot.startsWith('..') && !nodePath.isAbsolute(relToRoot))) {
+      if (relToRoot === '' || (!relToRoot.startsWith('..' + nodePath.sep) && relToRoot !== '..' && !nodePath.isAbsolute(relToRoot))) {
         throw new Error('不能从当前工作目录内部导入知识库');
       }
       if (!nodeFs.existsSync(src)) throw new Error('源目录不存在: ' + src);

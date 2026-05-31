@@ -6,7 +6,6 @@
   letter-spacing: var(--topomind-smart-letter-spacing, -0.003em);
   font-feature-settings: "calt" 1, "liga" 1;
   text-rendering: optimizeLegibility;
-  color: inherit !important;
 }
 .smart-document-content .bn-default-styles a[href] {
   color: var(--color-primary) !important;
@@ -323,6 +322,8 @@
   /* Use the theme's font-family and color dynamically, just enforce better rendering */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+.smart-document-content .bn-block-content:not([data-text-color]) {
   color: var(--color-text-primary); /* Ensure base color matches the soft dark gray */
 }
 

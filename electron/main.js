@@ -124,11 +124,8 @@ function parseLocalFileUrl(urlString) {
 }
 
 function isPathWithinDir(parentDir, targetPath) {
-  const relativePath = nodePath.relative(
-    nodePath.resolve(parentDir),
-    nodePath.resolve(targetPath)
-  );
-  return relativePath === '' || (!relativePath.startsWith('..') && !nodePath.isAbsolute(relativePath));
+  const relativePath = nodePath.relative(nodePath.resolve(parentDir), nodePath.resolve(targetPath));
+  return relativePath === '' || (!relativePath.startsWith('..' + nodePath.sep) && relativePath !== '..' && !nodePath.isAbsolute(relativePath));
 }
 
 function normalizedPathForCompare(absPath) {

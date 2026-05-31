@@ -262,7 +262,7 @@ function _fs_deleteTrashItem(rootDir, category, trashName) {
 
 function isPathWithinDirCompat(parentDir, targetPath) {
   var relativePath = nodePath.relative(nodePath.resolve(parentDir), nodePath.resolve(targetPath));
-  return relativePath === '' || (!relativePath.startsWith('..') && !nodePath.isAbsolute(relativePath));
+  return relativePath === '' || (!relativePath.startsWith('..' + nodePath.sep) && relativePath !== '..' && !nodePath.isAbsolute(relativePath));
 }
 
 /** Note：该函数逻辑已定，不要擅自修改  --TO AI
@@ -277,7 +277,7 @@ function _fs_resolveKbsPath(rootDir, relPath) {
   if (!relPath) return resolvedRoot;
   var result = nodePath.resolve(resolvedRoot, relPath);
   var rel = nodePath.relative(resolvedRoot, result);
-  if (rel.startsWith('..') || nodePath.isAbsolute(rel)) {
+  if (rel === '..' || rel.startsWith('..' + nodePath.sep) || nodePath.isAbsolute(rel)) {
     throw new Error('路径越界: ' + relPath);
   }
   return result;
@@ -572,7 +572,7 @@ export function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
   var attachDir = nodePath.resolve(baseDir, '_attach');
   var target = nodePath.resolve(baseDir, normalizedRef);
   var relativePath = nodePath.relative(attachDir, target);
-  if (relativePath === '' || relativePath.startsWith('..') || nodePath.isAbsolute(relativePath)) {
+  if (relativePath === '' || relativePath === '..' || relativePath.startsWith('..' + nodePath.sep) || nodePath.isAbsolute(relativePath)) {
     throw new Error('附件路径越界: ' + rawRef);
   }
   return target;
@@ -725,7 +725,7 @@ function _fs_topoDocumentAbsolutePath(rootDir, cardPath, item) {
   var normalizedPath = _fs_normalizeTopoDocumentPath(item.type, item.path);
   var resolvedPath = nodePath.resolve(docsDir, normalizedPath);
   var rel = nodePath.relative(docsDir, resolvedPath);
-  if (rel.startsWith('..') || nodePath.isAbsolute(rel)) {
+  if (rel === '..' || rel.startsWith('..' + nodePath.sep) || nodePath.isAbsolute(rel)) {
     throw new Error('文档路径越界: ' + item.path);
   }
   return resolvedPath;

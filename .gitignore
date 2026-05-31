@@ -11,3 +11,4 @@ auto_tasks/
 test-results/
 .vscode/
 graphify-out/
+stats.html
