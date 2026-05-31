@@ -43,6 +43,24 @@ export function containsMathDelimiters(text: string): boolean {
   return /(^|\n)\s*\$\$[\s\S]*?\$\$\s*($|\n)/m.test(text) || /(^|[^\\])\$[^$\n]+\$(?!\$)/m.test(text)
 }
 
+export function containsMarkdownDelimiters(text: string): boolean {
+  if (!text) return false
+  return (
+    // Bold / Italic (e.g. **bold** or __bold__)
+    /(\*\*|__)(?!\s)[\s\S]+?(?<!\s)\1/.test(text) ||
+    // Headings
+    /(^|\n)#{1,6}\s/.test(text) ||
+    // Lists
+    /(^|\n)\s*([*+-]|\d+\.)\s/.test(text) ||
+    // Blockquote
+    /(^|\n)>\s/.test(text) ||
+    // Code block or inline code
+    /`{1,3}[^`]+`{1,3}/.test(text) ||
+    // Links
+    /\[[^\]]+\]\([^)]+\)/.test(text)
+  )
+}
+
 export function convertMarkdownWithMathToHtml(markdown: string): string {
   const normalized = markdown.replace(/\r\n?/g, '\n')
   const lines = normalized.split('\n')

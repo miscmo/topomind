@@ -11,6 +11,7 @@ import OrganizationStructure from 'simple-mind-map/src/layouts/OrganizationStruc
 import CatalogOrganization from 'simple-mind-map/src/layouts/CatalogOrganization.js'
 import Timeline from 'simple-mind-map/src/layouts/Timeline.js'
 import Fishbone from 'simple-mind-map/src/layouts/Fishbone.js'
+import { useThemeStore, isDarkTheme } from '../../../stores/themeStore'
 import type { MindMapDocumentContent } from './mindMapDocumentTypes'
 import { withMindMapUpdatedAt } from './mindMapDocumentTypes'
 
@@ -38,6 +39,12 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
   const mindMapRef = useRef<MindMap | null>(null)
   const [isReady, setIsReady] = useState(false)
   const valueRef = useRef(value)
+  
+  const globalTheme = useThemeStore((s: any) => s.theme)
+  const isDark = isDarkTheme(globalTheme)
+  const effectiveTheme = (!value.theme || value.theme === 'default') 
+    ? (isDark ? 'dark2' : 'default') 
+    : value.theme
 
   useEffect(() => {
     valueRef.current = value
@@ -59,7 +66,10 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
       el: containerRef.current,
       data: value.root,
       readonly: readOnly,
-      theme: value.theme || 'default',
+      theme: effectiveTheme,
+      themeConfig: {
+        backgroundColor: 'transparent' // 强制覆盖其自带背景色，以便透出外部全局 CSS 变量背景
+      },
       layout: value.layout || 'logicalStructure',
       mousewheelAction: 'zoom', // Zoom with mouse wheel
     } as any)
@@ -123,6 +133,13 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
       mindMapRef.current.updateConfig({ readonly: readOnly })
     }
   }, [readOnly, isReady])
+
+  // Update theme if effectiveTheme changes
+  useEffect(() => {
+    if (mindMapRef.current && isReady) {
+      mindMapRef.current.setTheme(effectiveTheme)
+    }
+  }, [effectiveTheme, isReady])
 
   return (
     <div 

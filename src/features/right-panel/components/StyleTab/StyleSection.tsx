@@ -70,7 +70,7 @@ export default memo(function StyleSection() {
 
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
         {saveError && (
-          <div className="max-w-[380px] mx-auto w-full mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-[1.45] text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+          <div className="max-w-[380px] mx-auto w-full mb-3 rounded-lg border border-[var(--color-danger-soft)] bg-[var(--color-danger-soft)] px-3 py-2 text-[12px] leading-[1.45] text-[var(--color-danger)]">
             保存样式设置失败：{saveError}
           </div>
         )}

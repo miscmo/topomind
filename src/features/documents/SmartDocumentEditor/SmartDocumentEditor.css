@@ -6,6 +6,7 @@
   letter-spacing: var(--topomind-smart-letter-spacing, -0.003em);
   font-feature-settings: "calt" 1, "liga" 1;
   text-rendering: optimizeLegibility;
+  color: inherit !important;
 }
 .smart-document-content .bn-default-styles a[href] {
   color: var(--color-primary) !important;

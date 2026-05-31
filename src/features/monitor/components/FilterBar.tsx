@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react'
 import { useMonitorStore, type LogEntry } from '../model/monitorStore'
+
 import { logQuery, logClear, logAction } from '../../../core/log-backend'
 import { LEVELS, LEVEL_COLORS } from '../constants'
 
@@ -44,15 +45,15 @@ export function FilterBar() {
   }, [setEntries, entries])
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-[#e0e4ea] gap-3 shrink-0 flex-wrap">
+    <div className="flex items-center justify-between px-4 py-2 bg-[var(--titlebar-bg)] border-b border-[var(--color-border-subtle)] gap-3 shrink-0 flex-wrap">
       <div className="flex items-center gap-2.5 flex-wrap flex-1">
         {/* 关键词搜索 */}
         <div className="relative flex items-center">
           <span className="absolute left-2 text-[#999] text-[11px] pointer-events-none">&#9906;</span>
           <input
-            className="h-7 pl-[26px] pr-[28px] border border-[#e0e4ea] rounded-md text-[12px] outline-none w-[220px] bg-[#f8f9fb] transition-all duration-75 focus:border-[#3498db] focus:bg-white focus:shadow-[0_0_0_2px_rgba(52,152,219,0.1)]"
-            type="text"
-            placeholder="搜索关键词..."
+              className="h-7 pl-[26px] pr-[28px] border border-[var(--color-border)] rounded-md text-[12px] outline-none w-[220px] bg-[var(--color-bg-muted)] transition-all duration-75 focus:border-[var(--color-primary)] focus:bg-[var(--color-surface)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
+              type="text"
+              placeholder="搜索关键词..."
             value={keyword}
             onChange={(e) => {
               const newKeyword = e.target.value
@@ -61,7 +62,7 @@ export function FilterBar() {
             }}
           />
           {keyword && (
-            <button className="absolute right-1.5 bg-transparent border-none text-[#aaa] cursor-pointer text-[10px] p-0.5 flex items-center justify-center hover:text-[#e74c3c]" onClick={() => {
+              <button className="absolute right-[3px] w-5 h-5 flex items-center justify-center border-none bg-transparent cursor-pointer text-[#aaa] text-[10px] hover:text-[var(--color-text-primary)] rounded-[4px] hover:bg-[var(--color-hover-bg)]" onClick={() => {
               logAction('监控:清除关键词', 'MonitorPage', { previousKeyword: keyword })
               setKeyword('')
             }}>
@@ -72,31 +73,31 @@ export function FilterBar() {
 
         {/* 日期选择 */}
         <select
-          className="h-7 px-2 border border-[#e0e4ea] rounded-md text-[12px] outline-none bg-[#f8f9fb] cursor-pointer text-[#2d3436] focus:border-[#3498db]"
-          value={selectedDate}
+          className="h-7 px-2 border border-[var(--color-border)] rounded-md text-[12px] outline-none bg-[var(--color-bg-muted)] cursor-pointer text-[var(--color-text-primary)] focus:border-[var(--color-primary)]"
+          value={selectedDate || ''}
           onChange={(e) => {
             logAction('监控:日期选择', 'MonitorPage', { previousDate: selectedDate || '全部', newDate: e.target.value || '全部' })
-            setSelectedDate(e.target.value)
+            setSelectedDate(e.target.value || null)
           }}
         >
-          <option value="">全部日期</option>
+          <option value="" className="text-[var(--color-text-primary)] bg-[var(--color-surface)]">全部日期</option>
           {availableDates.map((d) => (
-            <option key={d} value={d}>
+            <option key={d} value={d} className="text-[var(--color-text-primary)] bg-[var(--color-surface)]">
               {d}
             </option>
           ))}
         </select>
 
         {/* 等级过滤 */}
-        <div className="flex gap-1">
-          {LEVELS.map((l) => (
-            <button
-              key={l}
-              className={`h-6 px-2 rounded font-semibold cursor-pointer border border-[#e0e4ea] bg-[#f8f9fb] text-[#888] transition-all duration-120 tracking-[0.3px] text-[10px] hover:bg-[#eee] ${
-                selectedLevels.length === 0 || selectedLevels.includes(l)
-                  ? 'bg-[color-mix(in_srgb,var(--level-color)_12%,transparent)] border-[var(--level-color)] text-[var(--level-color)]'
-                  : ''
-              }`}
+          <div className="flex gap-1 bg-[var(--color-bg-muted)] rounded-[6px] p-0.5 border border-[var(--color-border-subtle)]">
+            {LEVELS.map((l) => (
+              <button
+                key={l}
+                className={`h-6 px-2 rounded font-semibold cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] transition-all duration-120 tracking-[0.3px] text-[10px] hover:bg-[var(--color-hover-bg)] ${
+                  selectedLevels.length === 0 || selectedLevels.includes(l)
+                    ? 'bg-[color-mix(in_srgb,var(--level-color)_12%,transparent)] border-[var(--level-color)] text-[var(--level-color)]'
+                    : ''
+                }`}
               style={
                 {
                   '--level-color': LEVEL_COLORS[l],
@@ -112,7 +113,7 @@ export function FilterBar() {
 
       <div className="flex items-center gap-2 shrink-0">
         {/* 实时流开关 */}
-        <label className="flex items-center gap-1 cursor-pointer text-[12px] text-[#555] select-none [&>input]:accent-[#3498db]">
+        <label className="flex items-center gap-1 cursor-pointer text-[12px] text-[var(--color-text-muted)] select-none [&>input]:accent-[var(--color-primary)]">
           <input
             type="checkbox"
             checked={streaming}
@@ -125,10 +126,10 @@ export function FilterBar() {
           <span>实时</span>
         </label>
 
-        <button className="w-7 h-7 flex items-center justify-center border border-[#e0e4ea] rounded-md bg-[#f8f9fb] text-[#555] cursor-pointer text-[13px] transition-all duration-120 hover:bg-[#eee] hover:border-[#ccc]" onClick={handleRefresh} title="刷新">
+        <button className="w-7 h-7 flex items-center justify-center border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-muted)] cursor-pointer text-[13px] transition-all duration-120 hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]" onClick={handleRefresh} title="刷新">
           &#8635;
         </button>
-        <button className={`w-7 h-7 flex items-center justify-center border border-[#e0e4ea] rounded-md bg-[#f8f9fb] text-[#555] cursor-pointer text-[13px] transition-all duration-120 hover:bg-[#eee] hover:border-[#ccc] hover:!bg-[#fee2e2] hover:!border-[#e74c3c] hover:!text-[#e74c3c]`} onClick={handleClear} title="清空">
+        <button className={`w-7 h-7 flex items-center justify-center border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-muted)] cursor-pointer text-[13px] transition-all duration-120 hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)] hover:!bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] hover:!border-[var(--color-danger)] hover:!text-[var(--color-danger)]`} onClick={handleClear} title="清空">
           &#10005;
         </button>
       </div>

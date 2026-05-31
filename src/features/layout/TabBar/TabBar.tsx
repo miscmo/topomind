@@ -87,7 +87,7 @@ export default memo(function TabBar() {
 
       {/* 下拉菜单 */}
       {isOpen && (
-        <div className="absolute top-[calc(100%+6px)] left-0 min-w-[220px] max-w-[320px] max-h-[60vh] overflow-y-auto overflow-x-hidden p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-10" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div className="absolute top-[calc(100%+6px)] left-0 min-w-[220px] max-w-[320px] max-h-[60vh] overflow-y-auto overflow-x-hidden p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-10" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
           {tabs.map((tab) => (
             <div
               key={tab.id}

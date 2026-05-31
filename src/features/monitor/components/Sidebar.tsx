@@ -13,7 +13,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-[220px] min-w-[220px] bg-[var(--color-surface)] border-r border-[var(--color-border-subtle)] flex flex-col text-[var(--color-text-secondary)]">
+    <aside className="w-[220px] min-w-[220px] bg-[var(--titlebar-bg)] border-r border-[var(--color-border-subtle)] flex flex-col text-[var(--color-text-secondary)]">
       <div className="flex items-center gap-2 px-4 pt-4 pb-3 text-[14px] font-semibold text-[var(--color-text-primary)] border-b border-[var(--color-border-subtle)] tracking-[0.3px]">
         <span className="text-[10px] text-[#3498db]">&#9673;</span>
         <span>TopoMind</span>
@@ -40,29 +40,29 @@ export function Sidebar() {
           <span className="ml-auto w-[18px]" />
         </button>
       </nav>
-      <div className="mt-auto py-3 px-4 border-t border-white/10 bg-black/15">
-        <div className="text-[10px] uppercase tracking-[0.8px] text-[#6b7280] mb-2 font-medium">统计</div>
+      <div className="mt-auto py-3 px-4 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-muted)]">
+        <div className="text-[10px] uppercase tracking-[0.8px] text-[var(--color-text-muted)] mb-2 font-medium">统计</div>
         <div className="flex items-center gap-1.5 mb-1 text-[11px]">
           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#888' }} />
-          <span className="text-[#9aa5b1] flex-1">DEBUG</span>
-          <span className="text-[#c8d0d8] font-mono text-[11px]">{stats.debug}</span>
+          <span className="text-[var(--color-text-secondary)] flex-1">DEBUG</span>
+          <span className="text-[var(--color-text-primary)] font-mono text-[11px]">{stats.debug}</span>
         </div>
         <div className="flex items-center gap-1.5 mb-1 text-[11px]">
           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#3498db' }} />
-          <span className="text-[#9aa5b1] flex-1">INFO</span>
-          <span className="text-[#c8d0d8] font-mono text-[11px]">{stats.info}</span>
+          <span className="text-[var(--color-text-secondary)] flex-1">INFO</span>
+          <span className="text-[var(--color-text-primary)] font-mono text-[11px]">{stats.info}</span>
         </div>
         <div className="flex items-center gap-1.5 mb-1 text-[11px]">
           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#f39c12' }} />
-          <span className="text-[#9aa5b1] flex-1">WARN</span>
-          <span className="text-[#c8d0d8] font-mono text-[11px]">{stats.warn}</span>
+          <span className="text-[var(--color-text-secondary)] flex-1">WARN</span>
+          <span className="text-[var(--color-text-primary)] font-mono text-[11px]">{stats.warn}</span>
         </div>
         <div className="flex items-center gap-1.5 mb-1 text-[11px]">
           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#e74c3c' }} />
-          <span className="text-[#9aa5b1] flex-1">ERROR</span>
-          <span className="text-[#c8d0d8] font-mono text-[11px]">{stats.error}</span>
+          <span className="text-[var(--color-text-secondary)] flex-1">ERROR</span>
+          <span className="text-[var(--color-text-primary)] font-mono text-[11px]">{stats.error}</span>
         </div>
-        <div className="mt-2 pt-1.5 border-t border-white/5 text-[11px] text-[#6b7280] text-center">共 {stats.total} 条</div>
+        <div className="mt-2 pt-1.5 border-t border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)] text-center">共 {stats.total} 条</div>
       </div>
     </aside>
   )

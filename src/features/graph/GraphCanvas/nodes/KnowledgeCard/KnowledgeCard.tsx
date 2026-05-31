@@ -68,10 +68,10 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       onPointerDownCapture={selectNode}
       onPointerLeave={() => setIsHovered(false)}
       className={cn(
-        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-surface shadow-sm transition-opacity duration-75 active:border-accent active:shadow-[0_0_0_1px_var(--color-accent-soft)] w-full h-full box-border",
-        selected && "border-accent shadow-[0_0_0_1px_var(--color-accent)] z-10",
-        isConnectTarget && "border-2 border-success shadow-[0_0_0_1px_var(--color-success)] !border-success z-10",
-        visuallyHovered && !visuallySelected && !isConnectTarget && "border-border-strong",
+        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-[var(--color-surface)] shadow-sm transition-opacity duration-75 active:border-[var(--color-accent)] active:shadow-[0_0_0_1px_var(--color-accent-soft)] w-full h-full box-border",
+        selected && "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] z-10",
+        isConnectTarget && "border-2 border-[var(--color-success)] shadow-[0_0_0_1px_var(--color-success)] !border-[var(--color-success)] z-10",
+        visuallyHovered && !visuallySelected && !isConnectTarget && "border-[var(--color-border-strong)]",
         dragging && "opacity-90"
       )}
       style={{
@@ -89,7 +89,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         minHeight={nodeSizeLimits.minHeight}
         maxWidth={nodeSizeLimits.maxWidth}
         maxHeight={nodeSizeLimits.maxHeight}
-        handleClassName="w-2 h-2 bg-surface border-[1.5px] border-accent rounded-[2px] shadow-sm z-30"
+        handleClassName="w-2 h-2 bg-[var(--color-surface)] border-[1.5px] border-[var(--color-accent)] rounded-[2px] shadow-sm z-30"
         lineClassName="border-transparent z-20"
         onResizeStart={(_, params) => updateResizePreview(params)}
         onResize={(_, params) => updateResizePreview(params)}
@@ -97,7 +97,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       />
 
       {showResizeLabel && (
-        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-2 py-0.5 text-xs text-muted-foreground shadow-sm pointer-events-none whitespace-nowrap z-50">
+        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-0.5 text-xs text-[var(--color-text-muted)] shadow-sm pointer-events-none whitespace-nowrap z-50">
           {resizeLabel}
         </div>
       )}
@@ -110,8 +110,8 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
           "w-5 h-5 border-[1.5px] border-accent rounded-full shadow-[0_2px_4px_var(--color-accent-soft)] !-right-[18px] z-30 flex items-center justify-center transition-all duration-75 cursor-crosshair",
           showHoverControls ? "opacity-100" : "opacity-0 pointer-events-none",
           isConnectSource
-            ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)] dark:text-white ring-2 ring-[var(--color-accent-soft)]"
-            : "bg-[var(--color-surface)] text-black dark:bg-[var(--color-surface)] dark:text-white hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)] dark:hover:text-white"
+            ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-2 ring-[var(--color-accent-soft)]"
+            : "bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)]"
         )}
       >
         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -127,7 +127,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
           <div style={{ flex: '1 1 0', pointerEvents: 'none' }}></div>
 
           <div
-            className={cn("flex items-center min-w-0 min-h-[calc(1.3em+4px)] py-[1px] rounded-md transition-colors duration-75", titleEditing && "bg-surface/20 shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-surface/40 focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
+            className={cn("flex items-center min-w-0 min-h-[calc(1.3em+4px)] py-[1px] rounded-md transition-colors duration-75", titleEditing && "bg-[var(--color-surface)]/20 shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-[var(--color-surface)]/40 focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
             style={titleFieldStyle}
           >
             {titleEditing ? (
@@ -158,7 +158,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
 
           <div className="relative z-50 flex items-center justify-end gap-[2px] shrink-0 ml-0 pr-[6px] pointer-events-auto" style={{ flex: '1 1 0' }}>
             {hasDetail && (
-              <div className="flex items-center justify-center shrink-0 text-muted-foreground leading-none" title="包含详情" style={docIconStyle}>
+              <div className="flex items-center justify-center shrink-0 text-[var(--color-text-muted)] leading-none" title="包含详情" style={docIconStyle}>
                 <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={docIconSvgStyle}>
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
@@ -170,7 +170,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
             {hasChildBadge && (
               <div
-                className="flex items-center justify-center bg-accent text-accent-foreground cursor-pointer transition-colors duration-75 hover:bg-accent-hover font-bold select-none nodrag nowheel"
+                className="flex items-center justify-center bg-[var(--color-accent)] text-[var(--color-text-inverse)] cursor-pointer transition-colors duration-75 hover:bg-[var(--color-accent-hover)] font-bold select-none nodrag nowheel"
                 onClick={handleDrillDown}
                 onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}

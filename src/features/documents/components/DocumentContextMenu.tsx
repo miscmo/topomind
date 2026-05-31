@@ -32,7 +32,7 @@ export const DocumentContextMenu: React.FC<DocumentContextMenuProps> = ({
     <div
       ref={menuRef}
       id="document-context-menu"
-      className="fixed min-w-[180px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[1200] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
+      className="fixed min-w-[180px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[1200] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
       style={{ left: adjustedX, top: adjustedY, transformOrigin: 'top left' }}
     >
       <div 
@@ -53,7 +53,7 @@ export const DocumentContextMenu: React.FC<DocumentContextMenuProps> = ({
           </span>
         </button>
         {activeSubmenu === 'create' && (
-          <div className="absolute left-[calc(100%-4px)] top-[-6px] min-w-[160px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[1200] backdrop-blur-xl animate-in fade-in slide-in-from-left-1 duration-100">
+          <div className="absolute left-[calc(100%-4px)] top-[-6px] min-w-[160px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[1200] backdrop-blur-xl animate-in fade-in slide-in-from-left-1 duration-100">
             {TOPO_DOCUMENT_TYPES.map((type) => {
               const definition = getTopoDocumentTypeDefinition(type)
               return (

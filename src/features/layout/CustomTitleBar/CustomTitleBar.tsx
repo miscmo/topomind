@@ -136,10 +136,29 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     ],
     view: [
       { 
-        label: '主题', 
+        label: '浅色主题', 
         submenu: [
-          { label: '浅色', checked: theme === 'light', action: () => setTheme('light') },
-          { label: '深色', checked: theme === 'dark', action: () => setTheme('dark') },
+          { label: '经典浅色 (Light)', checked: theme === 'light', action: () => setTheme('light') },
+          { label: 'Notion Light', checked: theme === 'notion-light', action: () => setTheme('notion-light') },
+          { label: 'Linear Light', checked: theme === 'linear-light', action: () => setTheme('linear-light') },
+          { label: 'Nord Light', checked: theme === 'nord-light', action: () => setTheme('nord-light') },
+          { label: 'Rose Pine Dawn', checked: theme === 'rose-pine-dawn', action: () => setTheme('rose-pine-dawn') },
+          { label: 'Catppuccin Latte', checked: theme === 'catppuccin-latte', action: () => setTheme('catppuccin-latte') },
+          { label: 'GitHub Light', checked: theme === 'github-light', action: () => setTheme('github-light') },
+          { label: 'Solarized Light', checked: theme === 'solarized-light', action: () => setTheme('solarized-light') },
+        ]
+      },
+      { 
+        label: '深色主题', 
+        submenu: [
+          { label: '经典深色 (Dark)', checked: theme === 'dark', action: () => setTheme('dark') },
+          { label: 'Tokyo Night', checked: theme === 'tokyo-night', action: () => setTheme('tokyo-night') },
+          { label: 'Catppuccin Mocha', checked: theme === 'catppuccin-mocha', action: () => setTheme('catppuccin-mocha') },
+          { label: 'One Dark Pro', checked: theme === 'one-dark-pro', action: () => setTheme('one-dark-pro') },
+          { label: 'Dracula', checked: theme === 'dracula', action: () => setTheme('dracula') },
+          { label: 'Monokai', checked: theme === 'monokai', action: () => setTheme('monokai') },
+          { label: 'GitHub Dark', checked: theme === 'github-dark', action: () => setTheme('github-dark') },
+          { label: 'Solarized Dark', checked: theme === 'solarized-dark', action: () => setTheme('solarized-dark') },
         ]
       },
       { label: '系统日志', action: () => openMonitorTab() },
@@ -184,7 +203,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                   {menu.label}
                 </button>
                 {activeMenu === menu.key && (
-                  <div className="absolute top-[calc(100%+6px)] left-0 min-w-[188px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-[3001]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                  <div className="absolute top-[calc(100%+6px)] left-0 min-w-[188px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-[3001]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
                     {menuItems[menu.key].map((item) => (
                       item.submenu ? (
                         <div key={item.label} className="relative group">
@@ -195,7 +214,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                             <span>{item.label}</span>
                             <span className="text-[var(--color-text-muted)] text-[10px]">▶</span>
                           </button>
-                          <div className="absolute top-[-6px] left-[calc(100%-4px)] min-w-[140px] p-1.5 bg-white/90 dark:bg-[#1b2330]/90 border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-100 animate-in fade-in slide-in-from-left-1 z-[3002]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                          <div className="absolute top-[-6px] left-[calc(100%-4px)] min-w-[140px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-100 animate-in fade-in slide-in-from-left-1 z-[3002]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
                             {item.submenu.map(subItem => (
                               <button
                                 key={subItem.label}

@@ -74,43 +74,43 @@ const AttachmentItemRow = memo(function AttachmentItemRow({
     <>
       <div 
         ref={elRef}
-        className="flex items-center gap-2 p-2 rounded-md select-none transition-colors duration-75 hover:bg-[#f1f5f9] hover:!bg-[var(--color-hover-bg)] group relative"
+        className="flex items-center gap-2 p-2 rounded-md select-none transition-colors duration-75 hover:bg-[var(--color-hover-bg)] group relative"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <div className="text-[18px] flex items-center justify-center w-6 shrink-0 text-[#64748b] !text-[var(--color-text-muted)]">
+        <div className="text-[18px] flex items-center justify-center w-6 shrink-0 text-[var(--color-text-muted)]">
           {item.isImage ? '🖼️' : '📄'}
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-          <div className="text-[13px] text-[#334155] !text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis" title={item.name}>{item.name}</div>
-          <div className="text-[11px] text-[#94a3b8] !text-[var(--color-text-muted)]">
+          <div className="text-[13px] text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis" title={item.name}>{item.name}</div>
+          <div className="text-[11px] text-[var(--color-text-muted)]">
             {(item.size / 1024).toFixed(1)} KB
           </div>
         </div>
         <div className="opacity-0 flex items-center gap-1 group-hover:opacity-100 transition-all duration-75">
           <button
-            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#e2e8f0] hover:!text-[#0f172a] hover:!bg-[var(--color-hover-bg)] hover:!text-[var(--color-text-primary)]"
+            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]"
             onClick={(e) => onInsert(item, e)}
             title="插入到文档"
           >
             ↵
           </button>
           <button
-            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#e2e8f0] hover:!text-[#0f172a] hover:!bg-[var(--color-hover-bg)] hover:!text-[var(--color-text-primary)]"
+            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]"
             onClick={(e) => onOpen(item, e)}
             title="使用系统默认程序打开"
           >
             ↗
           </button>
           <button
-            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[12px] hover:!bg-[#e2e8f0] hover:!text-[#0f172a] hover:!bg-[var(--color-hover-bg)] hover:!text-[var(--color-text-primary)]"
+            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]"
             onClick={(e) => onShowInFolder(item, e)}
-            title="在资源管理器中显示"
+            title="在文件夹中显示"
           >
-            📂
+            📁
           </button>
           <button
-            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[#94a3b8] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:!bg-[#fee2e2] hover:!text-[#ef4444] hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]"
+            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-danger)]"
             onClick={(e) => onDelete(item, e)}
             title="删除附件"
           >
@@ -333,18 +333,18 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
   const isInitialLoading = loading && attachments.length === 0 && trashAttachments.length === 0
 
   if (isInitialLoading) {
-    return <div className="py-8 px-4 text-center text-[#94a3b8] !text-[var(--color-text-muted)] text-[13px] leading-[1.6]">加载中...</div>
+    return <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">加载中...</div>
   }
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-[#f1f5f9] !border-[var(--color-border-subtle)]">
+      <div className="p-3 border-b border-[var(--color-border-subtle)]">
         <div className="flex gap-1 mb-2">
           <button className={`flex-1 py-1.5 px-2 rounded-md text-[12px] border transition-colors ${!shownTrash ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] border-[var(--color-primary-soft)]' : 'bg-transparent text-[var(--color-text-muted)] border-[var(--color-border-light)] hover:bg-[var(--color-hover-bg)]'}`} onClick={() => setViewMode('active')} disabled={loading}>当前附件</button>
           <button className={`flex-1 py-1.5 px-2 rounded-md text-[12px] border transition-colors ${shownTrash ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] border-[var(--color-primary-soft)]' : 'bg-transparent text-[var(--color-text-muted)] border-[var(--color-border-light)] hover:bg-[var(--color-hover-bg)]'}`} onClick={() => setViewMode('trash')} disabled={loading}>回收站</button>
         </div>
         {!shownTrash && (
-          <button className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 border border-dashed border-[#cbd5e1] !border-[var(--color-border-strong)] bg-[#f8fafc] !bg-[var(--color-bg)] text-[#475569] !text-[var(--color-text-muted)] rounded-md text-[13px] cursor-pointer transition-all duration-75 disabled:opacity-60 disabled:cursor-not-allowed hover:not(:disabled):bg-[#f1f5f9] hover:not(:disabled):border-[#94a3b8] hover:not(:disabled):!border-[var(--color-border-strong)] hover:not(:disabled):text-[#334155] hover:not(:disabled):!text-[var(--color-text-primary)]" onClick={handleUpload} disabled={loading}>
+          <button className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 border border-dashed border-[var(--color-border-strong)] bg-[var(--color-bg)] text-[var(--color-text-muted)] rounded-md text-[13px] cursor-pointer transition-all duration-75 disabled:opacity-60 disabled:cursor-not-allowed hover:not(:disabled):bg-[var(--color-hover-bg)] hover:not(:disabled):border-[var(--color-border-strong)] hover:not(:disabled):text-[var(--color-text-primary)]" onClick={handleUpload} disabled={loading}>
             <span className="text-[16px] font-bold">+</span> 上传附件
           </button>
         )}
@@ -358,18 +358,18 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
       
       {shownTrash ? (
         trashAttachments.length === 0 ? (
-          <div className="py-8 px-4 text-center text-[#94a3b8] !text-[var(--color-text-muted)] text-[13px] leading-[1.6]">附件回收站为空</div>
+          <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">附件回收站为空</div>
         ) : (
           <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
             {trashAttachments.map(item => (
-              <div key={item.trashName} className="flex items-center gap-2 p-2 rounded-md select-none transition-colors duration-75 hover:bg-[#f1f5f9] hover:!bg-[var(--color-hover-bg)] group">
-                <div className="text-[18px] flex items-center justify-center w-6 shrink-0 text-[#64748b] !text-[var(--color-text-muted)]">🗑️</div>
+              <div key={item.trashName} className="flex items-center gap-2 p-2 rounded-md select-none transition-colors duration-75 hover:bg-[var(--color-hover-bg)] group">
+                <div className="text-[18px] flex items-center justify-center w-6 shrink-0 text-[var(--color-text-muted)]">🗑️</div>
                 <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                  <div className="text-[13px] text-[#334155] !text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis" title={item.originalName}>{item.originalName}</div>
-                  <div className="text-[11px] text-[#94a3b8] !text-[var(--color-text-muted)]">{new Date(item.deletedAt).toLocaleString('zh-CN')}</div>
+                  <div className="text-[13px] text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis" title={item.originalName}>{item.originalName}</div>
+                  <div className="text-[11px] text-[var(--color-text-muted)]">{new Date(item.deletedAt).toLocaleString('zh-CN')}</div>
                 </div>
                 <button
-                  className="px-2 h-6 flex items-center justify-center border border-[var(--color-border)] bg-transparent text-[#64748b] !text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[12px] hover:!bg-[var(--color-hover-bg)] hover:!text-[var(--color-text-primary)]"
+                  className="px-2 h-6 flex items-center justify-center border border-[var(--color-border)] bg-transparent text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[12px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]"
                   onClick={(e) => handleRestore(item, e)}
                   title="恢复附件"
                 >
@@ -380,7 +380,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
           </div>
         )
       ) : attachments.length === 0 ? (
-        <div className="py-8 px-4 text-center text-[#94a3b8] !text-[var(--color-text-muted)] text-[13px] leading-[1.6]">暂无附件<br/><span style={{ fontSize: '11px', marginTop: 4, display: 'inline-block' }}>点击上方按钮或拖拽文件到编辑器</span></div>
+        <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">暂无附件<br/><span style={{ fontSize: '11px', marginTop: 4, display: 'inline-block' }}>点击上方按钮或拖拽文件到编辑器</span></div>
       ) : (
         <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
           {attachments.map(item => (
