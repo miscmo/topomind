@@ -6,7 +6,7 @@ import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../smartDocumentTypes'
 import { calculateSmartDocumentStats, extractSmartDocumentToc } from '../smartDocumentUtils'
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension } from '../mathSupport'
-import { containsMathDelimiters, containsMarkdownDelimiters, convertHtmlWithMathToHtml, convertMarkdownWithMathToHtml } from '../mathPaste'
+import { containsMathDelimiters, containsMarkdownDelimiters, containsStrictMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
 import { currentBlockHighlightExtension } from '../currentBlockHighlightExtension'
 import type { SmartDocumentEditorProps } from '../types'
@@ -46,36 +46,38 @@ export function useSmartDocumentEditorModel({
 
       const hasHtml = clipboardData.types.includes('text/html')
       const hasExplicitMarkdown = clipboardData.types.includes('text/markdown')
+      const isVsCode = clipboardData.types.includes('vscode-editor-data')
+      
       const html = hasHtml ? clipboardData.getData('text/html') : ''
       const markdown = hasExplicitMarkdown ? clipboardData.getData('text/markdown') : ''
       const plainText = clipboardData.getData('text/plain')
 
       const hasMath = containsMathDelimiters(plainText) || containsMathDelimiters(markdown)
       const hasMarkdown = containsMarkdownDelimiters(plainText) || containsMarkdownDelimiters(markdown)
+      const hasStrictMarkdown = containsStrictMarkdownDelimiters(plainText)
 
-      // 1. 如果有显式的 markdown 格式（如从某些专门的编辑器复制）
+      // 1. 显式 Markdown 格式 (如从 Typora、Obsidian 等专门 MD 编辑器复制)
       if (hasExplicitMarkdown && (hasMath || hasMarkdown)) {
         editor.pasteHTML(convertMarkdownWithMathToHtml(markdown))
         return true
       }
 
-      // 2. 如果包含 HTML（富文本），但纯文本中存在 Markdown 或数学公式特征
-      // 很多时候从代码编辑器或普通笔记软件复制的内容会带有一层无用的 HTML 外壳，
-      // 我们优先将纯文本作为 Markdown 解析，以保证 **粗体** 等标签生效
-      if (hasHtml && (hasMath || hasMarkdown)) {
-        if (hasMarkdown) {
-           // 如果文本中包含 Markdown 标记（例如 **粗体**），通常代表用户复制的是带有 Markdown 语法的文本
-           // 此时直接解析纯文本可以确保所有 Markdown 语法生效
-           editor.pasteHTML(convertMarkdownWithMathToHtml(plainText))
-           return true
-        } else if (hasMath) {
-           // 对于仅包含数学公式的富文本，为了向后兼容和最大程度保留其他富文本格式，替换 HTML 中的公式节点
-           editor.pasteHTML(convertHtmlWithMathToHtml(html))
-           return true
-        }
+      // 2. 从代码编辑器 (如 VSCode) 复制，带有一层无用的代码高亮 HTML 外壳
+      // 此时我们剥离 HTML，直接将纯文本作为 Markdown 解析
+      if (isVsCode && (hasMath || hasMarkdown)) {
+        editor.pasteHTML(convertMarkdownWithMathToHtml(plainText))
+        return true
       }
 
-      // 3. 纯文本情况
+      // 3. 常规富文本 (如网页、Word、Excel 等)
+      // 优先信任并保留 HTML 格式，防止丢失图片、表格和排版。同时扫描并转换其中的数学公式和夹杂的 Markdown 语法。
+      if (hasHtml) {
+        // 使用混合模式解析，处理 HTML 内部的 Markdown 和公式，修复残缺的代码块等
+        editor.pasteHTML(convertMixedHtmlToHtml(html))
+        return true
+      }
+
+      // 4. 纯文本情况 (如记事本、Ctrl+Shift+V 无格式粘贴)
       if (hasMath || hasMarkdown) {
         editor.pasteHTML(convertMarkdownWithMathToHtml(plainText))
         return true

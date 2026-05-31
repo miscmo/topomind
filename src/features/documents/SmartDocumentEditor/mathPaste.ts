@@ -61,6 +61,18 @@ export function containsMarkdownDelimiters(text: string): boolean {
   )
 }
 
+export function containsStrictMarkdownDelimiters(text: string): boolean {
+  if (!text) return false
+  return (
+    // Bold / Italic (e.g. **bold** or __bold__)
+    /(\*\*|__)(?!\s)[\s\S]+?(?<!\s)\1/.test(text) ||
+    // Code block or inline code
+    /`{1,3}[^`]+`{1,3}/.test(text) ||
+    // Links
+    /\[[^\]]+\]\([^)]+\)/.test(text)
+  )
+}
+
 export function convertMarkdownWithMathToHtml(markdown: string): string {
   const normalized = markdown.replace(/\r\n?/g, '\n')
   const lines = normalized.split('\n')
@@ -243,10 +255,131 @@ function replaceBlockMathInHtmlDocument(root: ParentNode) {
   replaceSingleElementBlockMath(root)
 }
 
-export function convertHtmlWithMathToHtml(html: string): string {
+function replaceBlockMarkdownInHtmlDocument(root: ParentNode) {
+  if (!(root instanceof Element)) return
+
+  // 1. Fix <pre> blocks without <code> (common in many rich text editors)
+  const pres = Array.from(root.querySelectorAll('pre'))
+  for (const pre of pres) {
+    if (!pre.querySelector('code')) {
+      const code = document.createElement('code')
+      code.innerHTML = pre.innerHTML
+      pre.innerHTML = ''
+      pre.appendChild(code)
+    }
+  }
+
+  // 2. Detect literal block markdown like ``` in paragraphs and convert to <pre><code>
+  const blockElements = Array.from(root.querySelectorAll('p, div'))
+  for (let i = 0; i < blockElements.length; i++) {
+    const startEl = blockElements[i]
+    if (!startEl.parentElement) continue
+
+    const text = (startEl.textContent || '').trim()
+    const match = text.match(/^(`{3,})(\w*)$/)
+    if (!match) continue
+
+    const fence = match[1]
+    const language = match[2]
+
+    let j = i + 1
+    let closingEl: Element | null = null
+    const contentElements: Element[] = []
+
+    while (j < blockElements.length) {
+      const nextEl = blockElements[j]
+      if (nextEl.parentElement !== startEl.parentElement) break
+      const nextText = (nextEl.textContent || '').trim()
+      if (nextText === fence) {
+        closingEl = nextEl
+        break
+      }
+      contentElements.push(nextEl)
+      j++
+    }
+
+    if (closingEl) {
+      const pre = document.createElement('pre')
+      const code = document.createElement('code')
+      if (language) code.setAttribute('data-language', language)
+
+      code.textContent = contentElements.map(el => el.textContent || '').join('\n')
+      pre.appendChild(code)
+
+      startEl.replaceWith(pre)
+      closingEl.remove()
+      contentElements.forEach(el => el.remove())
+
+      i = j
+    }
+  }
+}
+
+function replaceInlineMarkdownInHtmlDocument(root: ParentNode) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const textNodes: Text[] = []
+
+  while (walker.nextNode()) {
+    const current = walker.currentNode
+    if (!(current instanceof Text)) continue
+    const parentElement = current.parentElement
+    if (!parentElement) continue
+    if (parentElement.closest('code, pre, [data-inline-content-type], [data-content-type]')) continue
+    textNodes.push(current)
+  }
+
+  for (const textNode of textNodes) {
+    const originalText = textNode.textContent || ''
+    if (!originalText.trim()) continue
+
+    let newHtml = escapeHtml(originalText)
+    let changed = false
+
+    // Inline code
+    if (/`([^`\n]+)`/.test(newHtml)) {
+      newHtml = newHtml.replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      changed = true
+    }
+
+    // Bold
+    if (/\*\*([^\*\n]+)\*\*/.test(newHtml)) {
+      newHtml = newHtml.replace(/\*\*([^\*\n]+)\*\*/g, '<strong>$1</strong>')
+      changed = true
+    }
+    if (/__([^_\n]+)__/.test(newHtml)) {
+      newHtml = newHtml.replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+      changed = true
+    }
+
+    // Italic
+    if (/(?<!\*)\*([^\*\n]+)\*(?!\*)/.test(newHtml)) {
+      newHtml = newHtml.replace(/(?<!\*)\*([^\*\n]+)\*(?!\*)/g, '<em>$1</em>')
+      changed = true
+    }
+    if (/(?<!_)_([^_\n]+)_(?!_)/.test(newHtml)) {
+      newHtml = newHtml.replace(/(?<!_)_([^_\n]+)_(?!_)/g, '<em>$1</em>')
+      changed = true
+    }
+
+    if (changed) {
+      const template = document.createElement('template')
+      template.innerHTML = newHtml
+      textNode.replaceWith(template.content)
+    }
+  }
+}
+
+export function convertMixedHtmlToHtml(html: string): string {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
+  
+  // 1. 深度解析并转换 HTML 中的 Markdown 语法（块级与行内）
+  replaceBlockMarkdownInHtmlDocument(doc.body)
+  replaceInlineMarkdownInHtmlDocument(doc.body)
+  
+  // 2. 深度解析并转换 HTML 中的数学公式
   replaceBlockMathInHtmlDocument(doc.body)
   replaceInlineMathInHtmlDocument(doc.body)
+  
   return doc.body.innerHTML
 }

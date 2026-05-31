@@ -37,25 +37,217 @@
   padding: 0.08em 0.35em;
   font-size: 0.92em;
 }
-.smart-document-content .bn-block-content[data-content-type="codeBlock"]:not([data-background-color]) {
-  background-color: var(--color-bg-muted);
+/* --- Code Block UI Enhancements (Notion/Feishu Style) --- */
+.smart-document-content .bn-block-content[data-content-type="codeBlock"] {
+  position: relative;
+  background-color: var(--color-bg-muted) !important;
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
+
 .smart-document-content .bn-block-content[data-content-type="codeBlock"][data-background-color] {
-  background-color: transparent;
+  background-color: transparent !important;
 }
+
 .smart-document-content .bn-block-content[data-content-type="codeBlock"]:not([data-text-color]) {
   color: var(--color-text-primary);
 }
+
 .smart-document-content .bn-block-content[data-content-type="codeBlock"][data-text-color] {
   color: inherit;
 }
+
 .smart-document-content .bn-block-content[data-content-type="codeBlock"] select {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: color-mix(in srgb, var(--color-bg-muted) 50%, var(--color-surface));
+  border: 1px solid var(--color-border);
+  font-size: 12px;
   color: var(--color-text-secondary);
+  cursor: pointer;
+  z-index: 10;
+  opacity: 0.6;
+  transition: opacity 0.2s, background-color 0.2s;
 }
+
+.smart-document-content .bn-block-content[data-content-type="codeBlock"] > div:first-child {
+  display: none !important;
+}
+
+.smart-document-content .bn-block-content[data-content-type="codeBlock"]:hover select {
+  opacity: 1;
+}
+
+.smart-document-content .bn-block-content[data-content-type="codeBlock"] select:hover {
+  background-color: var(--color-surface);
+}
+
 .smart-document-content .bn-block-content[data-content-type="codeBlock"] select option {
   color: var(--color-text-primary);
   background-color: var(--color-surface);
 }
+
+.smart-document-content .bn-block-content[data-content-type="codeBlock"] pre {
+  margin: 0 !important;
+  padding: 0 !important;
+  padding-top: 34px !important;
+  background: transparent !important;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace !important;
+  font-size: 13.5px !important;
+  line-height: 1.6 !important;
+  overflow-x: auto;
+}
+
+.smart-document-content .bn-block-content[data-content-type="codeBlock"].tm-code-wrap pre {
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+
+.smart-document-content .tm-code-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.smart-document-content .tm-code-toolbar__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.smart-document-content .tm-code-toolbar__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.smart-document-content .tm-code-toolbar__menu-shell {
+  position: relative;
+}
+
+.smart-document-content .tm-code-toolbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--color-bg-muted) 45%, var(--color-surface));
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.smart-document-content .tm-code-toolbar__button:hover {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.smart-document-content .tm-code-toolbar__button.is-active {
+  background: var(--color-active-bg);
+  color: var(--color-text-primary);
+}
+
+.smart-document-content .tm-code-toolbar__button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.smart-document-content .tm-code-toolbar__button--language {
+  justify-content: space-between;
+  min-width: 108px;
+  max-width: 180px;
+}
+
+.smart-document-content .tm-code-toolbar__button-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.smart-document-content .tm-code-toolbar__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 220px;
+  max-height: 320px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+}
+
+.smart-document-content .tm-code-toolbar__search-shell {
+  padding-bottom: 8px;
+}
+
+.smart-document-content .tm-code-toolbar__search {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.smart-document-content .tm-code-toolbar__search:focus {
+  border-color: var(--color-primary);
+}
+
+.smart-document-content .tm-code-toolbar__menu-list {
+  max-height: 266px;
+  overflow-y: auto;
+}
+
+.smart-document-content .tm-code-toolbar__menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.smart-document-content .tm-code-toolbar__menu-item:hover,
+.smart-document-content .tm-code-toolbar__menu-item.is-active {
+  background: var(--color-hover-bg);
+  color: var(--color-text-primary);
+}
+
+.smart-document-content .bn-block-content[data-content-type="codeBlock"] code {
+  font-family: inherit !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: inherit !important;
+}
+
 .smart-document-content .bn-editor [data-content-type="table"] th,
 .smart-document-content .bn-editor [data-content-type="table"] td {
   border-color: var(--color-border);

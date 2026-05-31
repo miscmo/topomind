@@ -227,10 +227,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           activeDocumentPath={activeDocumentPath}
           detailSidebarTab={detailSidebarTab}
           onDetailSidebarTabChange={setDetailSidebarTabSafe}
-          onSelectDocument={(documentPath: string) => { 
-            setActiveDocumentPathSafe(documentPath)
-            void handleSelectDocument(documentPath) 
-          }}
+          onSelectDocument={(documentPath: string) => { void handleSelectDocument(documentPath) }}
           onOpenDetailDocumentLink={(documentPath: string) => { void handleOpenDetailDocumentLink(documentPath) }}
           onCreateTopoDocument={(type, name: string, parentId?: string | null) => { void handleCreateTopoDocument(type, name, parentId) }}
           onExportTopoDocument={(documentPath: string) => { void handleExportTopoDocument(documentPath) }}
