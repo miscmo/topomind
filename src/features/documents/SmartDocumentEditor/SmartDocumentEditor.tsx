@@ -1,4 +1,5 @@
-import { memo, useMemo, useRef, useEffect, type CSSProperties } from 'react'
+import { memo, useMemo, useRef, useEffect, useState, useCallback, type CSSProperties } from 'react'
+import { ChevronUp } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
 import { filterSuggestionItems } from '@blocknote/core'
@@ -32,24 +33,60 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   }) as CSSProperties, [customTheme.fontFamily, defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight, defaultEditorStyle.contentWidth, defaultEditorStyle.blockSpacing, defaultEditorStyle.headingSpacingRatio, defaultEditorStyle.letterSpacing, defaultEditorStyle.fontWeight])
   const editorRootRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [showBackToTop, setShowBackToTop] = useState(false)
+
+  const scrollToTop = useCallback(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    // 使用 requestAnimationFrame 实现自定义的平滑滚动
+    // 避免部分浏览器（或 Windows 系统关闭了动画效果时）原生 behavior: 'smooth' 失效变成瞬间跳转的问题
+    const start = scrollContainer.scrollTop
+    const startTime = performance.now()
+    const duration = 400 // 滚动动画持续时间 400ms
+
+    const animateScroll = (currentTime: number) => {
+      const elapsed = currentTime - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      
+      // easeOutQuart 缓动函数，实现先快后慢的丝滑减速效果
+      const easeProgress = 1 - Math.pow(1 - progress, 4)
+      
+      scrollContainer.scrollTop = start * (1 - easeProgress)
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateScroll)
+      }
+    }
+    
+    requestAnimationFrame(animateScroll)
+  }, [])
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
-    if (!scrollContainer || !attachmentInsertTargetKey) return
+    if (!scrollContainer) return
 
-    const savedScroll = localStorage.getItem(`topomind_scroll_${attachmentInsertTargetKey}`)
-    if (savedScroll) {
-      setTimeout(() => {
-        if (scrollContainer) {
-          scrollContainer.scrollTop = parseFloat(savedScroll)
-        }
-      }, 50)
+    if (attachmentInsertTargetKey) {
+      const savedScroll = localStorage.getItem(`topomind_scroll_${attachmentInsertTargetKey}`)
+      if (savedScroll) {
+        setTimeout(() => {
+          if (scrollContainer) {
+            scrollContainer.scrollTop = parseFloat(savedScroll)
+          }
+        }, 50)
+      }
     }
 
     const handleScroll = () => {
-      localStorage.setItem(`topomind_scroll_${attachmentInsertTargetKey}`, scrollContainer.scrollTop.toString())
+      if (attachmentInsertTargetKey) {
+        localStorage.setItem(`topomind_scroll_${attachmentInsertTargetKey}`, scrollContainer.scrollTop.toString())
+      }
+      setShowBackToTop(scrollContainer.scrollTop > 300)
     }
     
+    // Initial check
+    handleScroll()
+
     // Use debounced or passive listener
     scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
     return () => scrollContainer.removeEventListener('scroll', handleScroll)
@@ -82,14 +119,18 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
         }
       }
     }
+
     ownerDocument.addEventListener('contextmenu', handleContextMenu, true)
-    return () => ownerDocument.removeEventListener('contextmenu', handleContextMenu, true)
+    return () => {
+      ownerDocument.removeEventListener('contextmenu', handleContextMenu, true)
+    }
   }, [])
 
   return (
-    <div ref={scrollContainerRef} className="h-full min-h-0 overflow-y-auto bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]" spellCheck={false}>
-      <div
-        ref={editorRootRef}
+    <div className="relative h-full w-full min-h-0">
+      <div ref={scrollContainerRef} className="h-full min-h-0 overflow-y-auto bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]" spellCheck={false}>
+        <div
+          ref={editorRootRef}
         className="smart-document-content relative min-h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-4 [&_.bn-container]:!py-0 [&_.bn-container]:!mx-auto [&_.bn-container]:!w-full [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-4 [&_.bn-editor]:!w-full [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"
         style={{ color: 'var(--color-text-primary)' }}
       >
@@ -140,6 +181,18 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
           <SideMenuController sideMenu={SmartDocumentSideMenu} />
         </BlockNoteView>
       </div>
+      </div>
+      
+      {/* 回到顶部按钮 */}
+      <button
+        onClick={scrollToTop}
+        className={`absolute bottom-8 right-8 w-10 h-10 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] shadow-md text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-bg)] transition-all duration-300 z-50 flex items-center justify-center ${
+          showBackToTop ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+        title="回到顶部"
+      >
+        <ChevronUp size={24} />
+      </button>
     </div>
   )
 })
