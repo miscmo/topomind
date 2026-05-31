@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron/simple'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 import { resolve } from 'path'
 
@@ -73,16 +74,17 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('@xyflow') || id.includes('reactflow')) {
-              return 'vendor-reactflow'
-            }
-          }
-        },
-      },
+      plugins: [
+        visualizer({
+          open: false,
+          filename: 'stats.html',
+          gzipSize: true,
+          brotliSize: true,
+        }),
+      ],
+      // Use default Vite chunking
+      output: {},
     },
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 1000,
   },
 })

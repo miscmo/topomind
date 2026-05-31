@@ -4,7 +4,7 @@ import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { logPerformanceMetric, PERFORMANCE_METRICS } from '../../core/performance-log'
 import { loadRoomGraph } from './roomLoader'
-import type { GraphSession } from '../../stores/tabStore'
+import type { GraphSession } from '../../stores/tabs/tabStore'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 
@@ -12,6 +12,7 @@ interface UseGraphRoomLoaderOptions {
   storage: Store
   getActiveGraphSession: () => GraphSession
   storeApi: StoreApi<GraphState>
+  currentLoadedRoomPathRef: { current: string }
 }
 
 export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
@@ -19,6 +20,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
     storage,
     getActiveGraphSession,
     storeApi,
+    currentLoadedRoomPathRef,
   } = options
   const loadRequestSeqRef = useRef(0)
   const latestAppliedLoadSeqRef = useRef(0)
@@ -74,6 +76,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
           y: loaded.meta.viewport.pan.y,
           zoom: loaded.meta.viewport.zoom,
         })
+        currentLoadedRoomPathRef.current = dirPath
         store.setLoading(false)
         
         logAction('房间:加载完成', 'useGraph', {
@@ -106,7 +109,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
         }
       }
     },
-    [storage, getActiveGraphSession, storeApi]
+    [currentLoadedRoomPathRef, storage, getActiveGraphSession, storeApi]
   )
 
   return { loadRoom }

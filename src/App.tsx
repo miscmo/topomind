@@ -5,20 +5,21 @@
  */
 import { memo, useEffect, lazy, Suspense } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
-import SetupPage from './components/SetupPage'
-import PromptModal from './components/PromptModal/PromptModal'
-import ConfirmModal from './components/ConfirmModal/ConfirmModal'
-import CustomTitleBar from './components/CustomTitleBar/CustomTitleBar'
-import { useTabStore } from './stores/tabStore'
+const SetupPage = lazy(() => import('./features/setup/SetupPage'))
+const PromptModal = lazy(() => import('./shared/ui/PromptModal/PromptModal').then(m => ({ default: m.PromptModal })))
+const ConfirmModal = lazy(() => import('./shared/ui/ConfirmModal/ConfirmModal').then(m => ({ default: m.ConfirmModal })))
+const CustomTitleBar = lazy(() => import('./features/layout/CustomTitleBar/CustomTitleBar'))
+import { useTabStore } from './stores/tabs/tabStore'
 import { useWorkspaceStore } from './stores/workspaceStore'
-import { useConfirmStore } from './stores/confirmStore'
+import { useConfirmStore } from './shared/ui/ConfirmModal/confirmStore'
 import { GraphStoreProvider } from './stores/graphStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
+import { useConfigBootstrap } from './application/config'
 
-const HomePage = lazy(() => import('./components/HomePage'))
-const GraphPage = lazy(() => import('./components/GraphPage'))
-const MonitorPage = lazy(() => import('./components/MonitorPage/MonitorPage'))
+const HomePage = lazy(() => import('./features/kb/HomePage'))
+const GraphPage = lazy(() => import('./features/graph/GraphPage'))
+const MonitorPage = lazy(() => import('./features/monitor/MonitorPage'))
 
 export default memo(function App() {
   const initHomeTab = useTabStore((s) => s.initHomeTab)
@@ -26,6 +27,7 @@ export default memo(function App() {
   const activeTabId = useTabStore((s) => s.activeTabId)
   const confirmOpen = useConfirmStore((s) => s.open)
   const view = useWorkspaceStore((s) => s.view)
+  useConfigBootstrap()
 
   useEffect(() => { initHomeTab() }, [initHomeTab])
 
@@ -54,18 +56,22 @@ export default memo(function App() {
   const isSetup = view === 'setup'
   return (
     <div className="w-full h-full min-h-0 flex flex-col bg-[var(--color-bg-app)] overflow-hidden">
-      <ConfirmModal />
-      <PromptModal />
+      <Suspense fallback={null}>
+        <ConfirmModal />
+        <PromptModal />
+      </Suspense>
       {isSetup ? (
-        <>
+        <Suspense fallback={null}>
           <CustomTitleBar mode="setup" />
           <div className="relative flex-1 min-h-0 overflow-hidden">
             <SetupPage />
           </div>
-        </>
+        </Suspense>
       ) : (
         <div className="w-full h-full min-h-0 flex flex-col bg-[var(--color-bg-muted)] overflow-hidden">
-          <CustomTitleBar mode="workspace" />
+          <Suspense fallback={null}>
+            <CustomTitleBar mode="workspace" />
+          </Suspense>
           <div className="relative w-full flex-1 min-h-0 overflow-hidden bg-[var(--color-surface)]">
             <div
               className="absolute inset-0 transition-opacity duration-120 ease-in-out"

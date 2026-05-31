@@ -7,6 +7,10 @@ import App from './App'
 import { PlatformProvider } from './core/platform-context'
 import { StorageProvider } from './core/storage'
 import { useThemeStore } from './stores/themeStore'
+import '@fontsource/inter/400.css'
+import '@fontsource/inter/500.css'
+import '@fontsource/inter/600.css'
+import '@fontsource/inter/700.css'
 import '@xyflow/react/dist/style.css'
 import './styles/base.css'
 import './styles/tokens.css'
@@ -14,6 +18,24 @@ import './styles/tokens.css'
 const container = document.getElementById('root')!
 const root = createRoot(container)
 useThemeStore.getState().initializeTheme()
+
+// Suppress harmless ResizeObserver loop limit exceeded error
+const suppressResizeObserverError = () => {
+  const originalError = console.error
+  console.error = (...args: any[]) => {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('ResizeObserver loop')) {
+      return
+    }
+    originalError.apply(console, args)
+  }
+  window.addEventListener('error', (e) => {
+    if (e.message === 'ResizeObserver loop completed with undelivered notifications.' || e.message === 'ResizeObserver loop limit exceeded') {
+      e.stopImmediatePropagation()
+    }
+  })
+}
+suppressResizeObserverError()
+
 root.render(
   <StrictMode>
     <PlatformProvider>

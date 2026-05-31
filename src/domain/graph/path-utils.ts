@@ -28,14 +28,3 @@ export function basenameRef(ref: string | null | undefined): string {
   return parts[parts.length - 1] ?? ''
 }
 
-export function parentRef(ref: string | null | undefined): string {
-  const normalized = normalizeRef(ref)
-  if (!normalized.includes('/')) return ''
-  return normalized.slice(0, normalized.lastIndexOf('/'))
-}
-
-export function isSameOrChildRef(parent: string, child: string): boolean {
-  const parentNormalized = normalizeRef(parent)
-  const childNormalized = normalizeRef(child)
-  return childNormalized === parentNormalized || childNormalized.startsWith(`${parentNormalized}/`)
-}

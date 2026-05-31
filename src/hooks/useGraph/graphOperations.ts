@@ -14,7 +14,7 @@ import { buildSelectionOperations } from './selectionOperations'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 
-import type { GraphSession } from '../../stores/tabStore'
+import type { GraphSession } from '../../stores/tabs/tabStore'
 
 export interface StorageApi {
   createCard: (parentPath: string, cardName: string) => Promise<string | null>
@@ -31,6 +31,7 @@ export interface GraphOpsDeps {
   getActiveGraphSession: () => GraphSession
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   isCreatingRef: { current: boolean }
+  currentLoadedRoomPathRef: { current: string }
   storeApi: StoreApi<GraphState>
 }
 
@@ -41,6 +42,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     getActiveGraphSession,
     loadRoom,
     isCreatingRef,
+    currentLoadedRoomPathRef,
     storeApi,
   } = deps
 
@@ -48,6 +50,9 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   const saveNow = async (dirPath: string) => {
     if (!dirPath) return
+    if (currentLoadedRoomPathRef.current !== dirPath) {
+      return
+    }
     const store = storeApi.getState()
     await storage.flushGraphSave(
       dirPath,

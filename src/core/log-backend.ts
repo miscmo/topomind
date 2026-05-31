@@ -66,13 +66,6 @@ export async function logQuery(opts: LogQueryOptions = {}): Promise<LogEntry[]> 
   }
 }
 
-export async function logSetLevel(level: string | number): Promise<boolean> {
-  try {
-    return await (_call('log:setLevel', level) as Promise<boolean>)
-  } catch {
-    return false
-  }
-}
 
 export async function logClear(): Promise<boolean> {
   try {
@@ -87,14 +80,6 @@ export async function logGetAvailableDates(): Promise<string[]> {
     return await (_call('log:getAvailableDates') as Promise<string[]>)
   } catch {
     return []
-  }
-}
-
-export async function logGetLogDir(): Promise<string | null> {
-  try {
-    return await (_call('log:getLogDir') as Promise<string | null>)
-  } catch {
-    return null
   }
 }
 

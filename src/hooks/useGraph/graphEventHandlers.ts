@@ -1,10 +1,10 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
-import { tabStore } from '../../stores/tabStore'
+import { tabStore } from '../../stores/tabs/tabStore'
 import { logAction } from '../../core/log-backend'
 import { markPerformanceMetricStart, PERFORMANCE_METRICS } from '../../core/performance-log'
 import type { KnowledgeNodeData } from '../../types'
-import type { RightPanelTab } from '../../stores/uiStoreTypes'
+import type { RightPanelTab } from '../../types/uiStoreTypes'
 import { generateId } from './graphBuilder'
 import type { GraphOperations } from './graphOperations'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
@@ -30,6 +30,16 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     setSelectedEdgeId,
     storeApi,
   } = deps
+  const navigationTargetRef = useRef('')
+  const navigationResetTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (navigationResetTimerRef.current !== null) {
+        window.clearTimeout(navigationResetTimerRef.current)
+      }
+    }
+  }, [])
 
   const resetConnectTargetHighlight = useCallback(() => {
     const graphUi = useGraphUiStore.getState()
@@ -170,19 +180,38 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   const navigateToChildRoom = useCallback(async (childPath: string, childName: string) => {
     const graphSession = getActiveGraphSession()
     const dirPath = graphSession.roomPath
-
-    if (dirPath) {
-      await ops.saveNow(dirPath)
-    }
-
     const absoluteChildPath = resolveRoomChildRef(dirPath || graphSession.kbPath, childPath)
 
-    tabStore.getState().enterRoomInTab(tabId, {
-      path: absoluteChildPath,
-      kbPath: graphSession.kbPath || '',
-      name: childName,
-    })
-    logAction('房间:钻入', 'useGraph', { roomPath: childPath, roomName: childName, fromRoom: dirPath })
+    if (!absoluteChildPath || absoluteChildPath === dirPath) {
+      return
+    }
+    if (navigationTargetRef.current === absoluteChildPath) {
+      return
+    }
+    navigationTargetRef.current = absoluteChildPath
+    if (navigationResetTimerRef.current !== null) {
+      window.clearTimeout(navigationResetTimerRef.current)
+    }
+
+    try {
+      if (dirPath) {
+        await ops.saveNow(dirPath)
+      }
+
+      tabStore.getState().enterRoomInTab(tabId, {
+        path: absoluteChildPath,
+        kbPath: graphSession.kbPath || '',
+        name: childName,
+      })
+      logAction('房间:钻入', 'useGraph', { roomPath: absoluteChildPath, roomName: childName, fromRoom: dirPath })
+    } finally {
+      navigationResetTimerRef.current = window.setTimeout(() => {
+        if (navigationTargetRef.current === absoluteChildPath) {
+          navigationTargetRef.current = ''
+        }
+        navigationResetTimerRef.current = null
+      }, 800)
+    }
   }, [getActiveGraphSession, tabId, ops])
 
   const onNodeContextMenu = useCallback(

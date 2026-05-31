@@ -1,6 +1,5 @@
 import type { EdgeLineMode, EdgeLineStyle, EdgeWeight, KnowledgeEdge } from '../../types'
-
-const DEFAULT_EDGE_COLOR = '#7f8c8d'
+import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 
 export interface EdgeViewOptions {
   lineMode?: EdgeLineMode
@@ -12,10 +11,10 @@ export interface EdgeViewOptions {
 }
 
 export function buildEdgeView(options: EdgeViewOptions = {}): Pick<KnowledgeEdge, 'type' | 'animated' | 'style' | 'markerEnd'> {
-  const lineMode = options.lineMode ?? 'straight'
-  const lineStyle = options.lineStyle ?? 'solid'
-  const color = options.color ?? DEFAULT_EDGE_COLOR
-  const arrow = options.arrow ?? true
+  const lineMode = options.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
+  const lineStyle = options.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
+  const color = options.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
+  const arrow = options.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
   const weight = options.weight ?? 'minor'
   const selected = options.selected ?? false
 

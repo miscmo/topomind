@@ -1,4 +1,5 @@
 import { createStore, useStore, type StoreApi } from 'zustand'
+import { temporal } from 'zundo'
 import { createContext, useContext, useRef } from 'react'
 import type { ReactNode } from 'react'
 import type { KnowledgeEdge, KnowledgeNode } from '../types'
@@ -36,7 +37,7 @@ function buildEdgesMap(edges: KnowledgeEdge[]) {
   return edgesMap
 }
 
-export const createGraphStore = () => createStore<GraphState>((set) => ({
+export const createGraphStore = () => createStore<GraphState>()(temporal((set) => ({
   nodes: [],
   edges: [],
   loading: false,
@@ -95,6 +96,9 @@ export const createGraphStore = () => createStore<GraphState>((set) => ({
       edgesMap: buildEdgesMap(nextEdges)
     }
   }),
+}), { 
+  partialize: (state) => ({ nodes: state.nodes, edges: state.edges }), // Only track nodes and edges for undo/redo
+  limit: 50 // Keep max 50 history steps
 }))
 
 export const GraphStoreContext = createContext<StoreApi<GraphState> | null>(null)
@@ -122,6 +126,3 @@ export function useSelectedNodeId() {
   return useGraphStore((s) => s.nodes.find((n) => n.selected)?.id ?? null)
 }
 
-export function useSelectedNode() {
-  return useGraphStore((s) => s.nodes.find((n) => n.selected) ?? null)
-}

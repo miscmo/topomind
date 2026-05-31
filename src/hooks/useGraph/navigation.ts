@@ -1,4 +1,4 @@
-import { tabStore } from '../../stores/tabStore'
+import { tabStore } from '../../stores/tabs/tabStore'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 

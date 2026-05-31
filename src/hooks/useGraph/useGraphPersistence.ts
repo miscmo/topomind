@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { GraphSession } from '../../stores/tabStore'
+import type { GraphSession } from '../../stores/tabs/tabStore'
 
 interface UseGraphPersistenceOptions {
   getActiveGraphSession: () => GraphSession

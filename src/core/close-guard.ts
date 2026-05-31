@@ -1,26 +1,41 @@
 type Saver = () => Promise<void>
 type DirtyChecker = () => boolean
 
-const tabSavers = new Map<string, { saver: Saver; isDirty: DirtyChecker }>()
+interface SaverEntry {
+  id: symbol
+  saver: Saver
+  isDirty: DirtyChecker
+}
+
+const tabSavers = new Map<string, SaverEntry[]>()
 
 export function registerTabSaver(tabId: string, saver: Saver, isDirty: DirtyChecker = () => true) {
-  tabSavers.set(tabId, { saver, isDirty })
+  const entry: SaverEntry = { id: Symbol(tabId), saver, isDirty }
+  const entries = tabSavers.get(tabId) ?? []
+  entries.push(entry)
+  tabSavers.set(tabId, entries)
   return () => {
     const current = tabSavers.get(tabId)
-    if (current?.saver === saver) {
+    if (!current) return
+    const next = current.filter((item) => item.id !== entry.id)
+    if (next.length === 0) {
       tabSavers.delete(tabId)
+    } else {
+      tabSavers.set(tabId, next)
     }
   }
 }
 
 export async function flushTabs(tabIds: string[]): Promise<{ ok: boolean; failedTabId?: string }> {
   for (const tabId of tabIds) {
-    const entry = tabSavers.get(tabId)
-    if (!entry) continue
-    try {
-      await entry.saver()
-    } catch {
-      return { ok: false, failedTabId: tabId }
+    const entries = tabSavers.get(tabId)
+    if (!entries) continue
+    for (const entry of entries) {
+      try {
+        await entry.saver()
+      } catch {
+        return { ok: false, failedTabId: tabId }
+      }
     }
   }
   return { ok: true }
@@ -33,7 +48,7 @@ export async function flushAllTabs(): Promise<{ ok: boolean; failedTabId?: strin
 
 export function getDirtyState(): { hasDirty: boolean; dirtyTabIds: string[] } {
   const dirtyTabIds = Array.from(tabSavers.entries())
-    .filter(([, entry]) => entry.isDirty())
+    .filter(([, entries]) => entries.some((entry) => entry.isDirty()))
     .map(([tabId]) => tabId)
   return { hasDirty: dirtyTabIds.length > 0, dirtyTabIds }
 }

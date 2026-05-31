@@ -1,11 +1,36 @@
 import { create } from 'zustand'
 
-export type ThemeMode = 'light' | 'dark'
+export type ThemeMode = 
+  | 'light' 
+  | 'dark' 
+  | 'dracula' 
+  | 'monokai' 
+  | 'github-light' 
+  | 'github-dark' 
+  | 'solarized-light' 
+  | 'solarized-dark' 
+  | 'one-dark-pro'
+  | 'notion-light'
+  | 'linear-light'
+  | 'catppuccin-latte'
+  | 'rose-pine-dawn'
+  | 'nord-light'
+  | 'tokyo-night'
+  | 'catppuccin-mocha'
 
 const THEME_STORAGE_KEY = 'topomind:theme-mode'
 
+const THEME_MODES = [
+  'light', 'dark', 'dracula', 'monokai', 'github-light', 'github-dark', 'solarized-light', 'solarized-dark', 'one-dark-pro',
+  'notion-light', 'linear-light', 'catppuccin-latte', 'rose-pine-dawn', 'nord-light', 'tokyo-night', 'catppuccin-mocha'
+]
+
 function isThemeMode(value: unknown): value is ThemeMode {
-  return value === 'light' || value === 'dark'
+  return typeof value === 'string' && THEME_MODES.includes(value)
+}
+
+export function isDarkTheme(theme: ThemeMode): boolean {
+  return ['dark', 'dracula', 'monokai', 'github-dark', 'solarized-dark', 'one-dark-pro', 'tokyo-night', 'catppuccin-mocha'].includes(theme)
 }
 
 function getSystemTheme(): ThemeMode {
@@ -32,7 +57,13 @@ function persistTheme(theme: ThemeMode) {
 
 function applyTheme(theme: ThemeMode) {
   document.documentElement.dataset.theme = theme
-  document.documentElement.style.colorScheme = theme
+  document.documentElement.style.colorScheme = isDarkTheme(theme) ? 'dark' : 'light'
+  
+  if (isDarkTheme(theme)) {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
 }
 
 interface ThemeStore {
@@ -55,7 +86,8 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
     set({ theme })
   },
   toggleTheme: () => {
-    const nextTheme = get().theme === 'dark' ? 'light' : 'dark'
+    const current = get().theme
+    const nextTheme = isDarkTheme(current) ? 'light' : 'dark'
     get().setTheme(nextTheme)
   },
 }))

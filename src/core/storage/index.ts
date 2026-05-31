@@ -1,10 +1,10 @@
 export type { CardInfo, GraphMeta, KBEdge } from '../../domain/graph/model'
+export type { TopoDocumentType } from '../topoDocumentTypes'
 export {
   createStore,
   type Store,
   type StorageBackend,
   type AttachmentItem,
-  type TopoDocumentType,
   type TopoDocumentManifestItem,
   type TopoDocumentManifest,
   type TopoDocumentCreateInput,

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, DefaultEditorStyle } from './uiStoreTypes'
+import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, DefaultEditorStyle } from '../types/uiStoreTypes'
+import { STYLE_CONFIG_DEFAULTS } from '../domain/style/styleDefaults'
 
 interface GraphUiStore {
   showGrid: boolean
@@ -34,41 +35,7 @@ export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEd
   selectedEdgeId: null,
   connectingSourceId: null,
   connectingTargetId: null,
-  defaultEdgeStyle: {
-    lineMode: 'straight',
-    lineStyle: 'solid',
-    color: '#7f8c8d',
-    arrow: true,
-  },
-  defaultNodeStyle: {
-    headerFontSize: 11,
-    bodyFontSize: 12,
-    headerColor: '#475569',
-    headerBackgroundColor: '#f8fafc',
-    headerFontWeight: 'normal',
-    headerFontStyle: 'normal',
-    borderColor: '#e2e8f0',
-    borderWidth: 1,
-    borderRadius: 8,
-  },
-  defaultNodeSize: {
-    width: 120,
-    height: 52,
-  },
-  defaultEditorStyle: {
-    fontSize: 16,
-    fontFamily: 'inherit',
-    backgroundColor: '#ffffff',
-    textColor: '#333333',
-    lineHeight: 1.5,
-  },
-  nodeSizeLimits: {
-    minWidth: 120,
-    minHeight: 52,
-    maxWidth: 640,
-    maxHeight: 480,
-  },
-  nodeBadgeSize: 14,
+  ...STYLE_CONFIG_DEFAULTS,
 }
 
 export const useGraphUiStore = create<GraphUiStore>((set) => ({
