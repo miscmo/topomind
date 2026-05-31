@@ -341,8 +341,7 @@
 .smart-document-content .bn-block-outer[data-current-block="true"] > .bn-block > .bn-block-content {
   border-radius: 6px;
   background: color-mix(in srgb, var(--color-primary) 12%, transparent) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 16%, transparent);
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 /* Headings */
