@@ -122,6 +122,10 @@ export interface FSB {
   readAttachmentDataUrl: (rootDir: string, cardPath: string, attachmentRef: string) => Promise<string>
   readAppConfig: (rootDir: string) => Promise<unknown>
   writeAppConfig: (rootDir: string, content: unknown) => Promise<unknown>
+  readLearningStatsData: (rootDir: string, dateStr?: string) => Promise<unknown>
+  readAllLearningStatsData: (rootDir: string) => Promise<Record<string, unknown>>
+  readLearningStatsSummary: (rootDir: string, days: number) => Promise<Record<string, number>>
+  writeLearningStatsData: (rootDir: string, dateStr: string | undefined | null, content: unknown) => Promise<void>
   isValidWorkDir: (dirPath: string) => Promise<FSBResult>
   selectDirectory: () => Promise<FSBResult>
   createWorkDir: (dirPath: string) => Promise<FSBResult>
@@ -195,6 +199,10 @@ const FSBImpl: FSB = {
     _call('fs:readAttachmentDataUrl', rootDir, cardPath, attachmentRef) as Promise<string>,
   readAppConfig: (rootDir) => _call('fs:readAppConfig', rootDir),
   writeAppConfig: (rootDir, content) => _call('fs:writeAppConfig', rootDir, content),
+  readLearningStatsData: (rootDir, dateStr) => _call('fs:readLearningStatsData', rootDir, dateStr),
+  readAllLearningStatsData: (rootDir) => _call('fs:readAllLearningStatsData', rootDir) as Promise<Record<string, unknown>>,
+  readLearningStatsSummary: (rootDir, days) => _call('fs:readLearningStatsSummary', rootDir, days) as Promise<Record<string, number>>,
+  writeLearningStatsData: (rootDir, dateStr, content) => _call('fs:writeLearningStatsData', rootDir, dateStr, content) as Promise<void>,
 
   isValidWorkDir: (dirPath) => _call('fs:isValidWorkDir', dirPath) as Promise<FSBResult>,
   selectDirectory: () => _call('fs:selectDirectory') as Promise<FSBResult>,

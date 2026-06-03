@@ -12,6 +12,7 @@ export interface LogEntry {
   action?: string
   module?: string
   params?: object
+  error?: string | null
   // Extended fields from log-backend
   id?: string
   func?: string
@@ -26,7 +27,7 @@ export interface LogEntry {
 const MONITOR_INITIAL_STATE = {
   activeTab: 'log' as const,
   keyword: '',
-  selectedDate: '',
+  selectedDate: null as string | null,
   availableDates: [] as string[],
   selectedLevels: [] as string[],
   entries: [] as LogEntry[],
@@ -43,12 +44,12 @@ interface MonitorState {
 
   // 筛选条件
   keyword: string
-  selectedDate: string  // YYYY-MM-DD
+  selectedDate: string | null  // YYYY-MM-DD
   availableDates: string[]
   selectedLevels: string[]  // ['DEBUG','INFO','WARN','ERROR']
 
   setKeyword: (kw: string) => void
-  setSelectedDate: (d: string) => void
+  setSelectedDate: (d: string | null) => void
   setAvailableDates: (dates: string[]) => void
   setSelectedLevels: (levels: string[]) => void
 

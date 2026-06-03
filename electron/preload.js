@@ -12,7 +12,7 @@ const ALLOWED_CHANNELS = new Set([
   'fs:renameKB',
   'fs:listTopoDocuments', 'fs:createTopoDocument', 'fs:readTopoDocument', 'fs:writeTopoDocument', 'fs:renameTopoDocument', 'fs:deleteTopoDocument', 'fs:listTrashTopoDocuments', 'fs:restoreTrashTopoDocument', 'fs:clearTrashTopoDocuments', 'fs:repairTopoDocuments', 'fs:exportTopoDocument', 'fs:openTopoDocumentFolder', 'fs:moveTopoDocument',
   'fs:writeAttachmentBase64', 'fs:downloadAttachment', 'fs:readAttachmentDataUrl', 'fs:listAttachments', 'fs:importAttachment', 'fs:deleteAttachment', 'fs:listTrashAttachments', 'fs:restoreTrashAttachment', 'fs:clearTrashAttachments', 'fs:openAttachment', 'fs:showAttachmentInFolder', 'fs:getAttachmentAbsoluteUrl',
-  'fs:readAppConfig', 'fs:writeAppConfig',
+  'fs:readAppConfig', 'fs:writeAppConfig', 'fs:readLearningStatsData', 'fs:readAllLearningStatsData', 'fs:writeLearningStatsData', 'fs:readLearningStatsSummary',
   'fs:isValidWorkDir', 'fs:selectDirectory', 'fs:createWorkDir', 'fs:importKB',
   // app
   'app:openExternal',

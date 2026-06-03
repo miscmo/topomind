@@ -349,6 +349,18 @@ function registerIPC() {
   ipcMain.handle('fs:writeAppConfig', function(e, rootDir, content) {
     return fileService.writeAppConfig(requireActiveWorkDir(rootDir), content);
   });
+  ipcMain.handle('fs:readLearningStatsData', function(e, rootDir, dateStr) {
+    return fileService.readLearningStatsData(requireActiveWorkDir(rootDir), dateStr);
+  });
+  ipcMain.handle('fs:readAllLearningStatsData', function(e, rootDir) {
+    return fileService.readAllLearningStatsData(requireActiveWorkDir(rootDir));
+  });
+  ipcMain.handle('fs:readLearningStatsSummary', function(e, rootDir, days) {
+    return fileService.readLearningStatsSummary(requireActiveWorkDir(rootDir), days);
+  });
+  ipcMain.handle('fs:writeLearningStatsData', function(e, rootDir, dateStr, content) {
+    return fileService.writeLearningStatsData(requireActiveWorkDir(rootDir), dateStr, content);
+  });
   ipcMain.handle('fs:isValidWorkDir', function(e, dirPath) {
     var result = fileService.isValidWorkDir(dirPath);
     LogService.write({

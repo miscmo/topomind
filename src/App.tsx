@@ -16,10 +16,12 @@ import { GraphStoreProvider } from './stores/graphStore'
 import { logAction } from './core/log-backend'
 import { resetClientSession } from './core/session-reset'
 import { useConfigBootstrap } from './application/config'
+import { LearningTrackerProvider } from './features/learning-tracker/LearningTrackerProvider'
 
 const HomePage = lazy(() => import('./features/kb/HomePage'))
 const GraphPage = lazy(() => import('./features/graph/GraphPage'))
 const MonitorPage = lazy(() => import('./features/monitor/MonitorPage'))
+const LearningStatisticsPage = lazy(() => import('./features/learning-tracker/pages/LearningStatisticsPage'))
 
 export default memo(function App() {
   const initHomeTab = useTabStore((s) => s.initHomeTab)
@@ -55,9 +57,10 @@ export default memo(function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const isSetup = view === 'setup'
   return (
-    <div className="w-full h-full min-h-0 flex flex-col bg-[var(--color-bg-app)] overflow-hidden">
-      <Suspense fallback={null}>
-        <ConfirmModal />
+    <LearningTrackerProvider>
+      <div className="w-full h-full min-h-0 flex flex-col bg-[var(--color-bg-app)] overflow-hidden">
+        <Suspense fallback={null}>
+          <ConfirmModal />
         <PromptModal />
       </Suspense>
       {isSetup ? (
@@ -102,6 +105,21 @@ export default memo(function App() {
                 {tabs.some(t => t.type === 'monitor') && <MonitorPage />}
               </Suspense>
             </div>
+            <div
+              className="absolute inset-0 transition-opacity duration-120 ease-in-out"
+              inert={activeTab?.type === 'statistics' ? undefined : true}
+              style={{
+                visibility: activeTab?.type === 'statistics' ? 'visible' : 'hidden',
+                opacity: activeTab?.type === 'statistics' ? 1 : 0,
+                pointerEvents: activeTab?.type === 'statistics' ? 'auto' : 'none',
+                background: 'var(--color-bg-app)',
+                zIndex: activeTab?.type === 'statistics' ? 10 : -1,
+              }}
+            >
+              <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)] text-[var(--color-text-muted)] text-[13px]">加载学习统计中...</div>}>
+                {tabs.some(t => t.type === 'statistics') && <LearningStatisticsPage />}
+              </Suspense>
+            </div>
             {tabs.filter(t => t.type === 'kb').map(tab => (
               <div
                 key={tab.id}
@@ -127,5 +145,6 @@ export default memo(function App() {
         </div>
       )}
     </div>
+    </LearningTrackerProvider>
   )
 })

@@ -4,6 +4,7 @@ import {
   appendKBTab,
   ensureHomeTab,
   ensureMonitorTab,
+  ensureStatisticsTab,
   findActiveTab,
   findTabById,
   getClosableTabInfo,
@@ -87,6 +88,12 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
       set((state) => ({
         tabs: ensureMonitorTab(state.tabs),
         activeTabId: 'monitor',
+      }))
+    },
+    openStatisticsTab: () => {
+      set((state) => ({
+        tabs: ensureStatisticsTab(state.tabs),
+        activeTabId: 'statistics',
       }))
     },
     closeTab: (tabId) => {
@@ -201,4 +208,3 @@ export function createTabRoomActions(set: SetState, get: GetState): TabRoomActio
     getRoomStateFromTab: (tabId) => getRoomState(findTabById(get().tabs, tabId)),
   }
 }
-

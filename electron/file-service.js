@@ -1399,7 +1399,81 @@ const documentService = createDocumentService({
 });
 
 const fileService = {
-    /**
+  readLearningStatsData: function(rootDir, dateStr) {
+    rootDir = _fs_requireValidWorkDir(rootDir);
+    var d = nodePath.join(rootDir, 'learning_stats');
+    _fs_ensureDir(d);
+    if (!dateStr) {
+      return _fs_readJsonFile(nodePath.join(d, 'meta.json'));
+    } else {
+      var safeDate = String(dateStr).replace(/[^0-9-]/g, '').slice(0, 10);
+      return _fs_readJsonFile(nodePath.join(d, safeDate + '.json'));
+    }
+  },
+
+  readAllLearningStatsData: function(rootDir) {
+    rootDir = _fs_requireValidWorkDir(rootDir);
+    var d = nodePath.join(rootDir, 'learning_stats');
+    if (!nodeFs.existsSync(d)) return {};
+
+    var result = {};
+    nodeFs.readdirSync(d, { withFileTypes: true }).forEach(function(entry) {
+      if (!entry.isFile()) return;
+      if (!/^\d{4}-\d{2}-\d{2}\.json$/.test(entry.name)) return;
+
+      var dateStr = entry.name.slice(0, 10);
+      try {
+        var data = _fs_readJsonFile(nodePath.join(d, entry.name));
+        if (data && typeof data === 'object') {
+          result[dateStr] = data;
+        }
+      } catch (e) {}
+    });
+
+    return result;
+  },
+
+  readLearningStatsSummary: function(rootDir, days) {
+    rootDir = _fs_requireValidWorkDir(rootDir);
+    var d = nodePath.join(rootDir, 'learning_stats');
+    if (!nodeFs.existsSync(d)) return {};
+    
+    var result = {};
+    var today = new Date();
+    for (var i = 0; i < days; i++) {
+      var date = new Date(today);
+      date.setDate(today.getDate() - i);
+      var year = date.getFullYear();
+      var month = String(date.getMonth() + 1).padStart(2, '0');
+      var day = String(date.getDate()).padStart(2, '0');
+      var dateStr = year + '-' + month + '-' + day;
+      
+      var filePath = nodePath.join(d, dateStr + '.json');
+      try {
+        if (nodeFs.existsSync(filePath)) {
+          var data = _fs_readJsonFile(filePath);
+          if (data && typeof data.totalDuration === 'number') {
+            result[dateStr] = data.totalDuration;
+          }
+        }
+      } catch(e) {}
+    }
+    return result;
+  },
+  writeLearningStatsData: function(rootDir, dateStr, content) {
+    rootDir = _fs_requireValidWorkDir(rootDir);
+    var d = nodePath.join(rootDir, 'learning_stats');
+    _fs_ensureDir(d);
+    var safeContent = typeof content === 'string' ? JSON.parse(content) : content;
+    if (!dateStr) {
+      _fs_writeJsonFile(nodePath.join(d, 'meta.json'), safeContent);
+    } else {
+      var safeDate = String(dateStr).replace(/[^0-9-]/g, '').slice(0, 10);
+      _fs_writeJsonFile(nodePath.join(d, safeDate + '.json'), safeContent);
+    }
+  },
+
+  /**
      * @description 读取工作目录应用配置
      * @param { string } rootDir: 工作目录路径
      * @returns { Object } 应用配置对象

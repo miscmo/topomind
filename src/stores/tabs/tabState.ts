@@ -51,6 +51,25 @@ export function ensureMonitorTab(tabs: Tab[]) {
   return newTabs
 }
 
+export function ensureStatisticsTab(tabs: Tab[]) {
+  if (tabs.some((tab) => tab.id === 'statistics')) return tabs
+
+  const monitorIdx = tabs.findIndex(t => t.id === 'monitor')
+  const homeIdx = tabs.findIndex(t => t.id === 'home')
+  const newTabs = [...tabs]
+  const statisticsTab: Tab = { id: 'statistics', type: 'statistics', label: '学习统计' }
+
+  if (monitorIdx !== -1) {
+    newTabs.splice(monitorIdx + 1, 0, statisticsTab)
+  } else if (homeIdx !== -1) {
+    newTabs.splice(homeIdx + 1, 0, statisticsTab)
+  } else {
+    newTabs.push(statisticsTab)
+  }
+
+  return newTabs
+}
+
 export function removeTabById(tabs: Tab[], activeTabId: string, tabId: string) {
   if (tabId === 'home') return { tabs, activeTabId }
 
