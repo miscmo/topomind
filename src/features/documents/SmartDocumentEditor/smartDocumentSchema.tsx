@@ -1,11 +1,11 @@
 import { BlockNoteSchema, createCodeBlockSpec } from '@blocknote/core'
-import { codeBlockOptions } from '@blocknote/code-block'
 import { MermaidBlock } from 'blocknote-mermaid'
 import { InlineMath, MathBlock } from './mathSupport'
+import { customCodeBlockOptions } from './components/CustomCodeBlock'
 
 export const smartDocumentSchema = BlockNoteSchema.create().extend({
   blockSpecs: {
-    codeBlock: createCodeBlockSpec(codeBlockOptions),
+    codeBlock: createCodeBlockSpec(customCodeBlockOptions),
     mermaid: MermaidBlock(),
     math: MathBlock(),
   },

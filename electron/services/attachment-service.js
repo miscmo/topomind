@@ -153,28 +153,46 @@ export function createAttachmentService(deps) {
       var parsedUrl = await requirePublicHttpUrl(String(url || '').trim());
       var abortController = new AbortController();
       var timeout = setTimeout(function() { abortController.abort(); }, deps.attachmentDownloadTimeoutMs);
-      var response;
       try {
-        response = await fetch(parsedUrl.href, { redirect: 'error', signal: abortController.signal });
+        var response = await fetch(parsedUrl.href, { redirect: 'error', signal: abortController.signal });
+        if (!response.ok) {
+          throw new Error('下载失败: ' + response.status);
+        }
+        var mimeType = response.headers.get('content-type') || '';
+        if (!/^image\//i.test(mimeType)) {
+          throw new Error('链接不是图片: ' + mimeType);
+        }
+        var contentLength = Number(response.headers.get('content-length') || 0);
+        if (contentLength > 0) requireAttachmentSize(contentLength);
+        var urlPath = parsedUrl.pathname;
+        var fileName = targetFileName || nodePath.basename(urlPath) || ('image.' + extFromMime(mimeType));
+        if (fileName.indexOf('.') < 0) fileName += '.' + extFromMime(mimeType);
+        
+        var buffer;
+        if (response.body && response.body.getReader) {
+          var reader = response.body.getReader();
+          var chunks = [];
+          var receivedLength = 0;
+          while (true) {
+            var { done, value } = await reader.read();
+            if (done) break;
+            if (value) {
+              receivedLength += value.length;
+              requireAttachmentSize(receivedLength);
+              chunks.push(value);
+            }
+          }
+          buffer = Buffer.concat(chunks);
+        } else {
+          var arrayBuffer = await response.arrayBuffer();
+          buffer = Buffer.from(arrayBuffer);
+          requireAttachmentSize(buffer.length);
+        }
+        
+        return writeAttachmentBuffer(rootDir, cardPath, fileName, buffer);
       } finally {
         clearTimeout(timeout);
       }
-      if (!response.ok) {
-        throw new Error('下载失败: ' + response.status);
-      }
-      var mimeType = response.headers.get('content-type') || '';
-      if (!/^image\//i.test(mimeType)) {
-        throw new Error('链接不是图片: ' + mimeType);
-      }
-      var contentLength = Number(response.headers.get('content-length') || 0);
-      if (contentLength > 0) requireAttachmentSize(contentLength);
-      var urlPath = parsedUrl.pathname;
-      var fileName = targetFileName || nodePath.basename(urlPath) || ('image.' + extFromMime(mimeType));
-      if (fileName.indexOf('.') < 0) fileName += '.' + extFromMime(mimeType);
-      var arrayBuffer = await response.arrayBuffer();
-      var buffer = Buffer.from(arrayBuffer);
-      requireAttachmentSize(buffer.length);
-      return writeAttachmentBuffer(rootDir, cardPath, fileName, buffer);
     },
 
     readAttachmentDataUrl(rootDir, cardPath, attachmentRef) {

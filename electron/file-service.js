@@ -262,7 +262,7 @@ function _fs_deleteTrashItem(rootDir, category, trashName) {
 
 function isPathWithinDirCompat(parentDir, targetPath) {
   var relativePath = nodePath.relative(nodePath.resolve(parentDir), nodePath.resolve(targetPath));
-  return relativePath === '' || (!relativePath.startsWith('..') && !nodePath.isAbsolute(relativePath));
+  return relativePath === '' || (!relativePath.startsWith('..' + nodePath.sep) && relativePath !== '..' && !nodePath.isAbsolute(relativePath));
 }
 
 /** Note：该函数逻辑已定，不要擅自修改  --TO AI
@@ -277,7 +277,7 @@ function _fs_resolveKbsPath(rootDir, relPath) {
   if (!relPath) return resolvedRoot;
   var result = nodePath.resolve(resolvedRoot, relPath);
   var rel = nodePath.relative(resolvedRoot, result);
-  if (rel.startsWith('..') || nodePath.isAbsolute(rel)) {
+  if (rel === '..' || rel.startsWith('..' + nodePath.sep) || nodePath.isAbsolute(rel)) {
     throw new Error('路径越界: ' + relPath);
   }
   return result;
@@ -572,7 +572,7 @@ export function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
   var attachDir = nodePath.resolve(baseDir, '_attach');
   var target = nodePath.resolve(baseDir, normalizedRef);
   var relativePath = nodePath.relative(attachDir, target);
-  if (relativePath === '' || relativePath.startsWith('..') || nodePath.isAbsolute(relativePath)) {
+  if (relativePath === '' || relativePath === '..' || relativePath.startsWith('..' + nodePath.sep) || nodePath.isAbsolute(relativePath)) {
     throw new Error('附件路径越界: ' + rawRef);
   }
   return target;
@@ -725,7 +725,7 @@ function _fs_topoDocumentAbsolutePath(rootDir, cardPath, item) {
   var normalizedPath = _fs_normalizeTopoDocumentPath(item.type, item.path);
   var resolvedPath = nodePath.resolve(docsDir, normalizedPath);
   var rel = nodePath.relative(docsDir, resolvedPath);
-  if (rel.startsWith('..') || nodePath.isAbsolute(rel)) {
+  if (rel === '..' || rel.startsWith('..' + nodePath.sep) || nodePath.isAbsolute(rel)) {
     throw new Error('文档路径越界: ' + item.path);
   }
   return resolvedPath;
@@ -1399,7 +1399,81 @@ const documentService = createDocumentService({
 });
 
 const fileService = {
-    /**
+  readLearningStatsData: function(rootDir, dateStr) {
+    rootDir = _fs_requireValidWorkDir(rootDir);
+    var d = nodePath.join(rootDir, 'learning_stats');
+    _fs_ensureDir(d);
+    if (!dateStr) {
+      return _fs_readJsonFile(nodePath.join(d, 'meta.json'));
+    } else {
+      var safeDate = String(dateStr).replace(/[^0-9-]/g, '').slice(0, 10);
+      return _fs_readJsonFile(nodePath.join(d, safeDate + '.json'));
+    }
+  },
+
+  readAllLearningStatsData: function(rootDir) {
+    rootDir = _fs_requireValidWorkDir(rootDir);
+    var d = nodePath.join(rootDir, 'learning_stats');
+    if (!nodeFs.existsSync(d)) return {};
+
+    var result = {};
+    nodeFs.readdirSync(d, { withFileTypes: true }).forEach(function(entry) {
+      if (!entry.isFile()) return;
+      if (!/^\d{4}-\d{2}-\d{2}\.json$/.test(entry.name)) return;
+
+      var dateStr = entry.name.slice(0, 10);
+      try {
+        var data = _fs_readJsonFile(nodePath.join(d, entry.name));
+        if (data && typeof data === 'object') {
+          result[dateStr] = data;
+        }
+      } catch (e) {}
+    });
+
+    return result;
+  },
+
+  readLearningStatsSummary: function(rootDir, days) {
+    rootDir = _fs_requireValidWorkDir(rootDir);
+    var d = nodePath.join(rootDir, 'learning_stats');
+    if (!nodeFs.existsSync(d)) return {};
+    
+    var result = {};
+    var today = new Date();
+    for (var i = 0; i < days; i++) {
+      var date = new Date(today);
+      date.setDate(today.getDate() - i);
+      var year = date.getFullYear();
+      var month = String(date.getMonth() + 1).padStart(2, '0');
+      var day = String(date.getDate()).padStart(2, '0');
+      var dateStr = year + '-' + month + '-' + day;
+      
+      var filePath = nodePath.join(d, dateStr + '.json');
+      try {
+        if (nodeFs.existsSync(filePath)) {
+          var data = _fs_readJsonFile(filePath);
+          if (data && typeof data.totalDuration === 'number') {
+            result[dateStr] = data.totalDuration;
+          }
+        }
+      } catch(e) {}
+    }
+    return result;
+  },
+  writeLearningStatsData: function(rootDir, dateStr, content) {
+    rootDir = _fs_requireValidWorkDir(rootDir);
+    var d = nodePath.join(rootDir, 'learning_stats');
+    _fs_ensureDir(d);
+    var safeContent = typeof content === 'string' ? JSON.parse(content) : content;
+    if (!dateStr) {
+      _fs_writeJsonFile(nodePath.join(d, 'meta.json'), safeContent);
+    } else {
+      var safeDate = String(dateStr).replace(/[^0-9-]/g, '').slice(0, 10);
+      _fs_writeJsonFile(nodePath.join(d, safeDate + '.json'), safeContent);
+    }
+  },
+
+  /**
      * @description 读取工作目录应用配置
      * @param { string } rootDir: 工作目录路径
      * @returns { Object } 应用配置对象

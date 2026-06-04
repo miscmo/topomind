@@ -1,4 +1,5 @@
-import { memo, useMemo, useRef, useEffect, type CSSProperties } from 'react'
+import { memo, useMemo, useRef, useEffect, useState, useCallback, type CSSProperties } from 'react'
+import { Check, ChevronDown, ChevronUp, Copy, WrapText } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
 import { filterSuggestionItems } from '@blocknote/core'
@@ -9,10 +10,47 @@ import { useSmartDocumentEditorModel } from './model/useSmartDocumentEditorModel
 import { useSmartDocumentAttachmentInsert } from './useSmartDocumentAttachmentInsert'
 import { SmartDocumentFormattingToolbar } from './components/SmartDocumentFormattingToolbar'
 import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
+import { customCodeBlockOptions } from './components/CustomCodeBlock'
 
 import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
 import './SmartDocumentEditor.css'
+
+type HoveredCodeBlockState = {
+  blockId: string
+  element: HTMLElement
+}
+
+type CodeToolbarPosition = {
+  top: number
+  left: number
+  width: number
+}
+
+const SUPPORTED_CODE_LANGUAGES = Object.entries(customCodeBlockOptions.supportedLanguages ?? {}).map(([value, config]) => ({
+  value,
+  label: config.name,
+}))
+const SUPPORTED_CODE_LANGUAGES_MAP = customCodeBlockOptions.supportedLanguages as Record<string, { name: string }>
+
+function getCodeBlockContainer(target: EventTarget | null): HTMLElement | null {
+  if (!(target instanceof Element)) return null
+  return target.closest('.bn-block-content[data-content-type="codeBlock"]')
+}
+
+function getCodeBlockId(element: HTMLElement): string | null {
+  return element.closest('[data-node-type="blockContainer"][data-id], [data-node-type="blockOuter"][data-id]')?.getAttribute('data-id') ?? null
+}
+
+function getCodeBlockLanguage(element: HTMLElement): string {
+  const select = element.querySelector('select')
+  return select instanceof HTMLSelectElement ? select.value : (customCodeBlockOptions.defaultLanguage ?? 'text')
+}
+
+function getCodeBlockText(element: HTMLElement): string {
+  const code = element.querySelector('code')
+  return code?.textContent ?? ''
+}
 
 export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: SmartDocumentEditorProps) {
   const { readOnly = false, attachmentInsertTargetKey } = props
@@ -32,24 +70,67 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   }) as CSSProperties, [customTheme.fontFamily, defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight, defaultEditorStyle.contentWidth, defaultEditorStyle.blockSpacing, defaultEditorStyle.headingSpacingRatio, defaultEditorStyle.letterSpacing, defaultEditorStyle.fontWeight])
   const editorRootRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [showBackToTop, setShowBackToTop] = useState(false)
+  const [hoveredCodeBlock, setHoveredCodeBlock] = useState<HoveredCodeBlockState | null>(null)
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
+  const [languageQuery, setLanguageQuery] = useState('')
+  const [copiedCodeBlockId, setCopiedCodeBlockId] = useState<string | null>(null)
+  const [wrapByBlockId, setWrapByBlockId] = useState<Record<string, boolean>>({})
+  const [toolbarPosition, setToolbarPosition] = useState<CodeToolbarPosition | null>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
+
+  const scrollToTop = useCallback(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    // 使用 requestAnimationFrame 实现自定义的平滑滚动
+    // 避免部分浏览器（或 Windows 系统关闭了动画效果时）原生 behavior: 'smooth' 失效变成瞬间跳转的问题
+    const start = scrollContainer.scrollTop
+    const startTime = performance.now()
+    const duration = 400 // 滚动动画持续时间 400ms
+
+    const animateScroll = (currentTime: number) => {
+      const elapsed = currentTime - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      
+      // easeOutQuart 缓动函数，实现先快后慢的丝滑减速效果
+      const easeProgress = 1 - Math.pow(1 - progress, 4)
+      
+      scrollContainer.scrollTop = start * (1 - easeProgress)
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateScroll)
+      }
+    }
+    
+    requestAnimationFrame(animateScroll)
+  }, [])
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
-    if (!scrollContainer || !attachmentInsertTargetKey) return
+    if (!scrollContainer) return
 
-    const savedScroll = localStorage.getItem(`topomind_scroll_${attachmentInsertTargetKey}`)
-    if (savedScroll) {
-      setTimeout(() => {
-        if (scrollContainer) {
-          scrollContainer.scrollTop = parseFloat(savedScroll)
-        }
-      }, 50)
+    if (attachmentInsertTargetKey) {
+      const savedScroll = localStorage.getItem(`topomind_scroll_${attachmentInsertTargetKey}`)
+      if (savedScroll) {
+        setTimeout(() => {
+          if (scrollContainer) {
+            scrollContainer.scrollTop = parseFloat(savedScroll)
+          }
+        }, 50)
+      }
     }
 
     const handleScroll = () => {
-      localStorage.setItem(`topomind_scroll_${attachmentInsertTargetKey}`, scrollContainer.scrollTop.toString())
+      if (attachmentInsertTargetKey) {
+        localStorage.setItem(`topomind_scroll_${attachmentInsertTargetKey}`, scrollContainer.scrollTop.toString())
+      }
+      setShowBackToTop(scrollContainer.scrollTop > 300)
     }
     
+    // Initial check
+    handleScroll()
+
     // Use debounced or passive listener
     scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
     return () => scrollContainer.removeEventListener('scroll', handleScroll)
@@ -82,14 +163,175 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
         }
       }
     }
+
     ownerDocument.addEventListener('contextmenu', handleContextMenu, true)
-    return () => ownerDocument.removeEventListener('contextmenu', handleContextMenu, true)
+    return () => {
+      ownerDocument.removeEventListener('contextmenu', handleContextMenu, true)
+    }
   }, [])
 
+  useEffect(() => {
+    const editorRoot = editorRootRef.current
+    if (!editorRoot) return
+
+    const syncToolbarPosition = (element: HTMLElement) => {
+      const rootRect = editorRoot.getBoundingClientRect()
+      const elementRect = element.getBoundingClientRect()
+      setToolbarPosition({
+        top: elementRect.top - rootRect.top + 8,
+        left: elementRect.left - rootRect.left + 12,
+        width: Math.max(elementRect.width - 24, 120),
+      })
+    }
+
+    const updateHoveredCodeBlock = (target: EventTarget | null) => {
+      if (target instanceof Element && target.closest('.tm-code-toolbar')) {
+        return
+      }
+
+      const element = getCodeBlockContainer(target)
+      if (!element) {
+        if (!languageMenuOpen) {
+          setHoveredCodeBlock(null)
+          setToolbarPosition(null)
+        }
+        return
+      }
+
+      const blockId = getCodeBlockId(element)
+      if (!blockId) return
+
+      syncToolbarPosition(element)
+
+      setHoveredCodeBlock((prev) => {
+        if (prev?.blockId === blockId && prev.element === element) return prev
+        return { blockId, element }
+      })
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      updateHoveredCodeBlock(event.target)
+    }
+
+    const handleMouseLeave = () => {
+      if (!languageMenuOpen) {
+        setHoveredCodeBlock(null)
+        setToolbarPosition(null)
+      }
+    }
+
+    editorRoot.addEventListener('mousemove', handleMouseMove)
+    editorRoot.addEventListener('mouseleave', handleMouseLeave)
+    return () => {
+      editorRoot.removeEventListener('mousemove', handleMouseMove)
+      editorRoot.removeEventListener('mouseleave', handleMouseLeave)
+    }
+  }, [languageMenuOpen])
+
+  useEffect(() => {
+    if (!hoveredCodeBlock) return
+
+    const syncToolbarPosition = () => {
+      const editorRoot = editorRootRef.current
+      if (!editorRoot) return
+      const rootRect = editorRoot.getBoundingClientRect()
+      const elementRect = hoveredCodeBlock.element.getBoundingClientRect()
+      setToolbarPosition({
+        top: elementRect.top - rootRect.top + 8,
+        left: elementRect.left - rootRect.left + 12,
+        width: Math.max(elementRect.width - 24, 120),
+      })
+    }
+
+    syncToolbarPosition()
+
+    const scrollContainer = scrollContainerRef.current
+    scrollContainer?.addEventListener('scroll', syncToolbarPosition, { passive: true })
+    window.addEventListener('resize', syncToolbarPosition)
+    return () => {
+      scrollContainer?.removeEventListener('scroll', syncToolbarPosition)
+      window.removeEventListener('resize', syncToolbarPosition)
+    }
+  }, [hoveredCodeBlock, languageMenuOpen])
+
+  useEffect(() => {
+    const ownerDocument = editorRootRef.current?.ownerDocument ?? document
+    if (!languageMenuOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return
+      const clickedInsideToolbar = event.target.closest('.tm-code-toolbar')
+      if (!clickedInsideToolbar) {
+        setLanguageMenuOpen(false)
+        setLanguageQuery('')
+      }
+    }
+
+    ownerDocument.addEventListener('mousedown', handlePointerDown, true)
+    return () => {
+      ownerDocument.removeEventListener('mousedown', handlePointerDown, true)
+    }
+  }, [languageMenuOpen])
+
+  useEffect(() => {
+    const editorRoot = editorRootRef.current
+    if (!editorRoot) return
+
+    const codeBlocks = Array.from(
+      editorRoot.querySelectorAll<HTMLElement>('.bn-block-content[data-content-type="codeBlock"]')
+    )
+
+    for (const element of codeBlocks) {
+      const blockId = getCodeBlockId(element)
+      if (!blockId) continue
+      element.classList.toggle('tm-code-wrap', Boolean(wrapByBlockId[blockId]))
+    }
+  }, [wrapByBlockId, hoveredCodeBlock, handleChange])
+
+  const hoveredLanguage = hoveredCodeBlock ? getCodeBlockLanguage(hoveredCodeBlock.element) : (customCodeBlockOptions.defaultLanguage ?? 'text')
+
+  const filteredLanguages = useMemo(() => {
+    const query = languageQuery.trim().toLowerCase()
+    if (!query) return SUPPORTED_CODE_LANGUAGES
+    return SUPPORTED_CODE_LANGUAGES.filter((language) =>
+      language.label.toLowerCase().includes(query) || language.value.toLowerCase().includes(query)
+    )
+  }, [languageQuery])
+
+  const hoveredLanguageLabel = SUPPORTED_CODE_LANGUAGES_MAP[hoveredLanguage]?.name ?? hoveredLanguage
+
+  const handleCopyCodeBlock = useCallback(async () => {
+    if (!hoveredCodeBlock) return
+    const text = getCodeBlockText(hoveredCodeBlock.element)
+    await navigator.clipboard.writeText(text)
+    setCopiedCodeBlockId(hoveredCodeBlock.blockId)
+    window.setTimeout(() => {
+      setCopiedCodeBlockId((prev) => (prev === hoveredCodeBlock.blockId ? null : prev))
+    }, 1600)
+  }, [hoveredCodeBlock])
+
+  const handleToggleWrap = useCallback(() => {
+    if (!hoveredCodeBlock) return
+    setWrapByBlockId((prev) => ({
+      ...prev,
+      [hoveredCodeBlock.blockId]: !prev[hoveredCodeBlock.blockId],
+    }))
+  }, [hoveredCodeBlock])
+
+  const handleLanguageChange = useCallback((language: string) => {
+    if (!hoveredCodeBlock) return
+    editor.updateBlock(hoveredCodeBlock.blockId, {
+      props: { language },
+    })
+    setLanguageMenuOpen(false)
+    setLanguageQuery('')
+  }, [editor, hoveredCodeBlock])
+
   return (
-    <div ref={scrollContainerRef} className="h-full min-h-0 overflow-y-auto bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]" spellCheck={false}>
-      <div
-        ref={editorRootRef}
+    <div className="relative h-full w-full min-h-0">
+      <div ref={scrollContainerRef} className="h-full min-h-0 overflow-y-auto bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]" spellCheck={false}>
+        <div
+          ref={editorRootRef}
         className="smart-document-content relative min-h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-4 [&_.bn-container]:!py-0 [&_.bn-container]:!mx-auto [&_.bn-container]:!w-full [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-4 [&_.bn-editor]:!w-full [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"
         style={{ color: 'var(--color-text-primary)' }}
       >
@@ -139,7 +381,86 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
           <FormattingToolbarController formattingToolbar={SmartDocumentFormattingToolbar} />
           <SideMenuController sideMenu={SmartDocumentSideMenu} />
         </BlockNoteView>
+        {hoveredCodeBlock && toolbarPosition ? (
+          <div
+            ref={toolbarRef}
+            className="tm-code-toolbar"
+            contentEditable={false}
+            style={{ top: `${toolbarPosition.top}px`, left: `${toolbarPosition.left}px`, width: `${toolbarPosition.width}px` }}
+          >
+            <div className="tm-code-toolbar__row">
+              <div className="tm-code-toolbar__menu-shell">
+                <button
+                  type="button"
+                  className="tm-code-toolbar__button tm-code-toolbar__button--language"
+                  onClick={() => setLanguageMenuOpen((prev) => !prev)}
+                  disabled={readOnly}
+                >
+                  <span className="tm-code-toolbar__button-label">
+                    {hoveredLanguageLabel}
+                  </span>
+                  <ChevronDown size={14} />
+                </button>
+                {languageMenuOpen ? (
+                  <div className="tm-code-toolbar__menu">
+                    <div className="tm-code-toolbar__search-shell">
+                      <input
+                        value={languageQuery}
+                        onChange={(event) => setLanguageQuery(event.target.value)}
+                        placeholder="搜索语言"
+                        className="tm-code-toolbar__search"
+                      />
+                    </div>
+                    <div className="tm-code-toolbar__menu-list">
+                      {filteredLanguages.map((language) => (
+                        <button
+                          key={language.value}
+                          type="button"
+                          className={`tm-code-toolbar__menu-item ${language.value === hoveredLanguage ? 'is-active' : ''}`}
+                          onClick={() => handleLanguageChange(language.value)}
+                        >
+                          <span>{language.label}</span>
+                          {language.value === hoveredLanguage ? <Check size={14} /> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="tm-code-toolbar__actions">
+                <button
+                  type="button"
+                  className={`tm-code-toolbar__button ${wrapByBlockId[hoveredCodeBlock.blockId] ? 'is-active' : ''}`}
+                  onClick={handleToggleWrap}
+                  title="自动换行"
+                >
+                  <WrapText size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="tm-code-toolbar__button"
+                  onClick={() => void handleCopyCodeBlock()}
+                  title="复制代码"
+                >
+                  {copiedCodeBlockId === hoveredCodeBlock.blockId ? <Check size={14} /> : <Copy size={14} />}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
+      </div>
+      
+      {/* 回到顶部按钮 */}
+      <button
+        onClick={scrollToTop}
+        className={`absolute bottom-8 right-8 w-10 h-10 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] shadow-md text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-bg)] transition-all duration-300 z-50 flex items-center justify-center ${
+          showBackToTop ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+        title="回到顶部"
+      >
+        <ChevronUp size={24} />
+      </button>
     </div>
   )
 })

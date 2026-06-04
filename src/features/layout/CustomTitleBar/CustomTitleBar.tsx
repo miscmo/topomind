@@ -4,6 +4,7 @@ import { useThemeStore } from '../../../stores/themeStore'
 import { useRightPanelStore } from '../../right-panel/model/rightPanelStore'
 import { useShortcut } from '../../../hooks/useShortcut'
 import TabBar from '../TabBar/TabBar'
+import { LearningTrackerWidget } from '../../learning-tracker/components/LearningTrackerWidget'
 import type { WindowControlsState } from '../../../types/electron-api'
 
 type TitleBarMode = 'setup' | 'workspace'
@@ -260,8 +261,9 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
 
       <div className="flex-1 min-w-0 flex items-center justify-start h-full mx-2.5 relative" style={{ WebkitAppRegion: 'drag' } as any}>
         {mode === 'workspace' && (
-          <div className="h-full max-w-[50%] min-w-0 flex items-center">
+          <div className="h-full max-w-[65%] min-w-0 flex items-center gap-2">
             <TabBar />
+            <LearningTrackerWidget />
           </div>
         )}
       </div>

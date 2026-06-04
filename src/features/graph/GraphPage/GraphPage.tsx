@@ -2,9 +2,11 @@
  * 图谱页面：两栏布局
  * React Flow 图谱 + 右侧详情和样式配置
  */
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { GraphContextProvider } from '../../../contexts/GraphContext'
+import { useSelectedNodeId } from '../../../stores/graphStore'
 import Breadcrumb from '../../layout/Breadcrumb/Breadcrumb'
+import { useLearningTrackerContextStore } from '../../learning-tracker/model/learningTrackerContextStore'
 import RightPanelContainer from '../../right-panel/RightPanelContainer'
 import GraphCanvas from '../GraphCanvas'
 import GraphPageContextMenu from './components/GraphPageContextMenu'
@@ -18,6 +20,19 @@ interface GraphPageProps {
 export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const { graphSession, graph } = useGraphPageController({ tabId })
   const { canvasProps, contextMenuProps } = useGraphPageActions({ graph })
+  const selectedNodeId = useSelectedNodeId()
+  const setSelectedNodeIdForTab = useLearningTrackerContextStore((s) => s.setSelectedNodeIdForTab)
+  const clearTabContext = useLearningTrackerContextStore((s) => s.clearTabContext)
+
+  useEffect(() => {
+    setSelectedNodeIdForTab(tabId, selectedNodeId)
+  }, [tabId, selectedNodeId, setSelectedNodeIdForTab])
+
+  useEffect(() => {
+    return () => {
+      clearTabContext(tabId)
+    }
+  }, [tabId, clearTabContext])
 
   return (
     <GraphContextProvider graph={graph}>

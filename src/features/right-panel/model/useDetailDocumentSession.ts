@@ -164,7 +164,7 @@ export function useDetailDocumentSession({
       setLoadedDocumentKey(currentDocumentKey)
 
       const currentDraft = useDraftStore.getState().detailDrafts[currentDocumentKey]
-      if (currentDraft === undefined || currentDraft === cachedContent) {
+      if (currentDraft === undefined || currentDraft === cachedContent || currentDraft === '') {
         setDraftContent(currentDocumentKey, content)
       }
       const selectionPerf = selectionPerfRef.current
@@ -191,9 +191,6 @@ export function useDetailDocumentSession({
       setSavedContentState({ key: currentDocumentKey, content: '' })
       setLoadedDocumentKey(currentDocumentKey)
 
-      if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
-        setDraftContent(currentDocumentKey, '')
-      }
       const selectionPerf = selectionPerfRef.current
       if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
         selectionPerf.logged = true

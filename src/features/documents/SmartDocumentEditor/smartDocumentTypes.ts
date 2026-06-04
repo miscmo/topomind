@@ -34,6 +34,19 @@ function createParagraphBlock(content = ''): BlockNoteBlock {
   }
 }
 
+const NEWLINE_SPLITTABLE_BLOCK_TYPES = new Set([
+  'paragraph',
+  'heading',
+  'bulletListItem',
+  'numberedListItem',
+  'checkListItem',
+  'quote',
+])
+
+function shouldSplitBlockTextByNewlines(block: BlockNoteBlock): boolean {
+  return typeof block.type === 'string' && NEWLINE_SPLITTABLE_BLOCK_TYPES.has(block.type)
+}
+
 function splitTextByNewlines(blocks: BlockNoteBlock[]): BlockNoteBlock[] {
   const result: BlockNoteBlock[] = []
   
@@ -44,8 +57,8 @@ function splitTextByNewlines(blocks: BlockNoteBlock[]): BlockNoteBlock[] {
       children = splitTextByNewlines(children as BlockNoteBlock[])
     }
 
-    // 只处理包含内联文本内容的块（比如 paragraph, heading, list item）
-    if (Array.isArray(block.content)) {
+    // 只处理普通文本块，不能作用到 codeBlock 这类本身依赖换行的块
+    if (shouldSplitBlockTextByNewlines(block) && Array.isArray(block.content)) {
       let currentContent: any[] = []
       let currentBlock: BlockNoteBlock = { ...block, children, content: currentContent }
       // 为了防止生成的块 id 冲突，如果拆分出新块，后续块不保留原有 id
