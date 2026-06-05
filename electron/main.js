@@ -576,7 +576,7 @@ function registerIPC() {
   ipcMain.handle('log:getLogDir', function() { return LogService.getLogDir(); });
   ipcMain.handle('monitor:open', function() {
     if (win && !win.isDestroyed()) {
-      win.webContents.send('app:menu-action', 'open-monitor');
+      win.webContents.send('app:menu-action', 'monitor.open');
     }
   });
 }
@@ -766,7 +766,13 @@ function createWindow() {
 
 function toggleMonitorWindow() {
   if (win && !win.isDestroyed()) {
-    win.webContents.send('app:menu-action', 'open-monitor');
+    win.webContents.send('app:menu-action', 'monitor.open');
+  }
+}
+
+function openLearningStatisticsWindow() {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('app:menu-action', 'learning.open');
   }
 }
 
@@ -804,7 +810,8 @@ function buildMenu(isSetupView) {
       { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'resetZoom' },
       { type: 'separator' }, { role: 'togglefullscreen' },
       { type: 'separator' },
-      { label: '日志性能监控', click: function() { toggleMonitorWindow(); } },
+      { label: '系统日志', click: function() { toggleMonitorWindow(); } },
+      { label: '学习统计', click: function() { openLearningStatisticsWindow(); } },
     ]},
   ];
   if (process.platform === 'darwin') {

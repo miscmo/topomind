@@ -1,0 +1,43 @@
+{
+  "id": "topomind.monitor",
+  "name": "monitor",
+  "displayName": "系统日志",
+  "description": "提供系统日志与性能监控页面。",
+  "version": "1.0.0",
+  "hostVersion": "^5.2.0",
+  "kind": "builtin",
+  "entry": "./index.ts",
+  "activationEvents": [
+    "onCommand:monitor.open",
+    "onViewOpen:monitor.logs"
+  ],
+  "permissions": [
+    "logs.read",
+    "logs.subscribe",
+    "performance.read",
+    "performance.subscribe",
+    "plugins.diagnostics.read",
+    "plugins.diagnostics.retry",
+    "view.register",
+    "view.open",
+    "command.register",
+    "log.write"
+  ],
+  "contributes": {
+    "secondaryViews": [
+      {
+        "id": "monitor.logs",
+        "title": "系统日志",
+        "icon": "terminal",
+        "placement": "workspace-secondary",
+        "openCommand": "monitor.open"
+      }
+    ],
+    "commands": [
+      {
+        "id": "monitor.open",
+        "title": "打开系统日志"
+      }
+    ]
+  }
+}

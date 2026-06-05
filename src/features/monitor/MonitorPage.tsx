@@ -4,6 +4,7 @@
  */
 import { useEffect } from 'react'
 import { useMonitorStore, type LogEntry } from './model/monitorStore'
+import { getPluginManager } from '@/plugins'
 import PerformanceTab from './PerformanceTab'
 import {
   logGetBuffer,
@@ -16,6 +17,7 @@ import { Sidebar } from './components/Sidebar'
 import { FilterBar } from './components/FilterBar'
 import { LogList } from './components/LogList'
 import { DetailPanel } from './components/DetailPanel'
+import { PluginDiagnosticsPanel } from './components/PluginDiagnosticsPanel'
 
 export default function MonitorPage() {
   const activeTab = useMonitorStore((s) => s.activeTab)
@@ -24,6 +26,7 @@ export default function MonitorPage() {
   const setEntries = useMonitorStore((s) => s.setEntries)
   const setAvailableDates = useMonitorStore((s) => s.setAvailableDates)
   const setLoaded = useMonitorStore((s) => s.setLoaded)
+  const setPluginDiagnostics = useMonitorStore((s) => s.setPluginDiagnostics)
 
   // 初始化：加载缓冲区 + 可用日期
   useEffect(() => {
@@ -59,6 +62,17 @@ export default function MonitorPage() {
     }
   }, [appendEntries, streaming])
 
+  useEffect(() => {
+    const manager = getPluginManager()
+    const subscription = manager.subscribeDiagnostics((diagnostics) => {
+      setPluginDiagnostics(diagnostics)
+    })
+
+    return () => {
+      subscription.dispose()
+    }
+  }, [setPluginDiagnostics])
+
   return (
     <div className="flex w-full h-full bg-[var(--color-bg-app)] font-sans text-[13px] text-[var(--color-text-primary)]">
       <Sidebar />
@@ -71,6 +85,8 @@ export default function MonitorPage() {
               <DetailPanel />
             </div>
           </>
+        ) : activeTab === 'plugins' ? (
+          <PluginDiagnosticsPanel />
         ) : (
           <PerformanceTab />
         )}

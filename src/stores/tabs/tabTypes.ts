@@ -29,6 +29,12 @@ export interface OpenKnowledgeBaseInput {
   name: string
 }
 
+export interface OpenSecondaryViewInput {
+  viewId: string
+  label: string
+  tabId?: string
+}
+
 export interface ClosableTabInfo {
   id: string
   label: string
@@ -57,19 +63,14 @@ export interface KBTab {
   currentRoomName: string
 }
 
-export interface MonitorTab {
-  id: 'monitor'
-  type: 'monitor'
+export interface SecondaryViewTab {
+  id: string
+  type: 'secondary-view'
   label: string
+  viewId: string
 }
 
-export interface StatisticsTab {
-  id: 'statistics'
-  type: 'statistics'
-  label: string
-}
-
-export type Tab = HomeTab | KBTab | MonitorTab | StatisticsTab
+export type Tab = HomeTab | KBTab | SecondaryViewTab
 
 export interface TabDataState {
   tabs: Tab[]
@@ -84,6 +85,7 @@ export interface TabLifecycleActions {
   activateTab: (tabId: string) => boolean
   openHomeTab: () => boolean
   openKnowledgeBase: (kb: OpenKnowledgeBaseInput) => boolean
+  openSecondaryViewTab: (input: OpenSecondaryViewInput) => void
   openMonitorTab: () => void
   openStatisticsTab: () => void
   closeTab: (tabId: string) => ClosableTabInfo | null

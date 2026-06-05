@@ -173,6 +173,7 @@ export const PAGE_TYPE_LABELS: Record<LearningPageType, string> = {
   document: '文档',
   monitor: '系统监控',
   statistics: '学习统计',
+  'secondary-view': '插件视图',
   setup: '工作区设置',
 }
 

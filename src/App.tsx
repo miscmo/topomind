@@ -13,15 +13,14 @@ import { useTabStore } from './stores/tabs/tabStore'
 import { useWorkspaceStore } from './stores/workspaceStore'
 import { useConfirmStore } from './shared/ui/ConfirmModal/confirmStore'
 import { GraphStoreProvider } from './stores/graphStore'
-import { logAction } from './core/log-backend'
+import { executeCommand } from './application/commands'
 import { resetClientSession } from './core/session-reset'
+import { PluginViewHost } from './plugins'
 import { useConfigBootstrap } from './application/config'
 import { LearningTrackerProvider } from './features/learning-tracker/LearningTrackerProvider'
 
 const HomePage = lazy(() => import('./features/kb/HomePage'))
 const GraphPage = lazy(() => import('./features/graph/GraphPage'))
-const MonitorPage = lazy(() => import('./features/monitor/MonitorPage'))
-const LearningStatisticsPage = lazy(() => import('./features/learning-tracker/pages/LearningStatisticsPage'))
 
 export default memo(function App() {
   const initHomeTab = useTabStore((s) => s.initHomeTab)
@@ -44,9 +43,13 @@ export default memo(function App() {
   useEffect(() => {
     function onMenuAction(...args: unknown[]) {
       const action = args[0]
-      if (action === 'open-monitor') {
-        useTabStore.getState().openMonitorTab()
+      if (typeof action !== 'string') {
+        return
       }
+
+      void executeCommand(action).catch((error) => {
+        console.error(`Failed to execute menu command: ${action}`, error)
+      })
     }
     window.electronAPI?.on('app:menu-action', onMenuAction)
     return () => {
@@ -56,6 +59,8 @@ export default memo(function App() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const isSetup = view === 'setup'
+  const activeSecondaryViewId = activeTab?.type === 'secondary-view' ? activeTab.viewId : null
+
   return (
     <LearningTrackerProvider>
       <div className="w-full h-full min-h-0 flex flex-col bg-[var(--color-bg-app)] overflow-hidden">
@@ -92,33 +97,23 @@ export default memo(function App() {
             </div>
             <div
               className="absolute inset-0 transition-opacity duration-120 ease-in-out"
-              inert={activeTab?.type === 'monitor' ? undefined : true}
+              inert={activeTab?.type === 'secondary-view' ? undefined : true}
               style={{
-                visibility: activeTab?.type === 'monitor' ? 'visible' : 'hidden',
-                opacity: activeTab?.type === 'monitor' ? 1 : 0,
-                pointerEvents: activeTab?.type === 'monitor' ? 'auto' : 'none',
-                background: 'var(--color-surface)',
-                zIndex: activeTab?.type === 'monitor' ? 10 : -1,
+                visibility: activeTab?.type === 'secondary-view' ? 'visible' : 'hidden',
+                opacity: activeTab?.type === 'secondary-view' ? 1 : 0,
+                pointerEvents: activeTab?.type === 'secondary-view' ? 'auto' : 'none',
+                background:
+                  activeSecondaryViewId === 'learning.statistics'
+                    ? 'var(--color-bg-app)'
+                    : 'var(--color-surface)',
+                zIndex: activeTab?.type === 'secondary-view' ? 10 : -1,
               }}
             >
-              <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)] text-[var(--color-text-muted)] text-[13px]">加载监控中...</div>}>
-                {tabs.some(t => t.type === 'monitor') && <MonitorPage />}
-              </Suspense>
-            </div>
-            <div
-              className="absolute inset-0 transition-opacity duration-120 ease-in-out"
-              inert={activeTab?.type === 'statistics' ? undefined : true}
-              style={{
-                visibility: activeTab?.type === 'statistics' ? 'visible' : 'hidden',
-                opacity: activeTab?.type === 'statistics' ? 1 : 0,
-                pointerEvents: activeTab?.type === 'statistics' ? 'auto' : 'none',
-                background: 'var(--color-bg-app)',
-                zIndex: activeTab?.type === 'statistics' ? 10 : -1,
-              }}
-            >
-              <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)] text-[var(--color-text-muted)] text-[13px]">加载学习统计中...</div>}>
-                {tabs.some(t => t.type === 'statistics') && <LearningStatisticsPage />}
-              </Suspense>
+              {activeSecondaryViewId && (
+                <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)] text-[var(--color-text-muted)] text-[13px]">加载页面中...</div>}>
+                  <PluginViewHost viewId={activeSecondaryViewId} />
+                </Suspense>
+              )}
             </div>
             {tabs.filter(t => t.type === 'kb').map(tab => (
               <div

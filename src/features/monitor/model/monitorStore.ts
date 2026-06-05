@@ -3,6 +3,7 @@
  * 日志性能监控窗口的状态
  */
 import { create } from 'zustand'
+import type { PluginDiagnostics } from '@/plugins'
 
 /** Log entry shape emitted by log-backend */
 export interface LogEntry {
@@ -34,13 +35,15 @@ const MONITOR_INITIAL_STATE = {
   selectedEntry: null as LogEntry | null,
   streaming: true,
   stats: { total: 0, debug: 0, info: 0, warn: 0, error: 0 },
+  pluginDiagnostics: [] as PluginDiagnostics[],
+  selectedPluginId: null as string | null,
   loaded: false,
 }
 
 interface MonitorState {
   // 当前 tab
-  activeTab: 'log' | 'performance'
-  setActiveTab: (tab: 'log' | 'performance') => void
+  activeTab: 'log' | 'performance' | 'plugins'
+  setActiveTab: (tab: 'log' | 'performance' | 'plugins') => void
 
   // 筛选条件
   keyword: string
@@ -75,6 +78,11 @@ interface MonitorState {
     error: number
   }
   updateStats: () => void
+
+  pluginDiagnostics: PluginDiagnostics[]
+  selectedPluginId: string | null
+  setPluginDiagnostics: (diagnostics: PluginDiagnostics[]) => void
+  setSelectedPluginId: (pluginId: string | null) => void
 
   // 是否已加载
   loaded: boolean
@@ -128,6 +136,21 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
     }
     set({ stats })
   },
+
+  setPluginDiagnostics: (pluginDiagnostics) =>
+    set((state) => {
+      const selectedPluginId =
+        state.selectedPluginId && pluginDiagnostics.some((item) => item.pluginId === state.selectedPluginId)
+          ? state.selectedPluginId
+          : pluginDiagnostics[0]?.pluginId ?? null
+
+      return {
+        pluginDiagnostics,
+        selectedPluginId,
+      }
+    }),
+
+  setSelectedPluginId: (selectedPluginId) => set({ selectedPluginId }),
 
   setLoaded: (loaded) => set({ loaded }),
 

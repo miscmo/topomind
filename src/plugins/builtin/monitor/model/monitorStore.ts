@@ -1,0 +1,171 @@
+import { create } from 'zustand'
+import type { LogEntrySnapshot, PluginDiagnosticsSnapshot as PluginDiagnostics } from '../../../public'
+
+export interface LogEntry {
+  id?: string
+  timestamp: string
+  level: string
+  action?: string
+  module?: string
+  message: string
+  params?: Record<string, unknown> | null
+  error?: string | null
+  func?: string
+  file?: string
+  line?: number
+  traceId?: string | null
+  spanId?: string | null
+  parentId?: string | null
+  meta?: Record<string, unknown> | null
+}
+
+export function normalizeLogEntry(entry: LogEntrySnapshot): LogEntry {
+  return {
+    id: entry.id,
+    timestamp: entry.timestamp ?? new Date(0).toISOString(),
+    level: entry.level ?? 'INFO',
+    action: entry.action,
+    module: entry.module,
+    message: entry.message ?? '',
+    params: entry.params ?? null,
+    func: entry.func,
+    file: entry.file,
+    line: entry.line,
+    traceId: entry.traceId ?? null,
+    spanId: entry.spanId ?? null,
+    parentId: entry.parentId ?? null,
+    meta: entry.meta ?? null,
+  }
+}
+
+const MONITOR_INITIAL_STATE = {
+  activeTab: 'log' as const,
+  keyword: '',
+  selectedDate: null as string | null,
+  availableDates: [] as string[],
+  selectedLevels: [] as string[],
+  entries: [] as LogEntry[],
+  selectedEntry: null as LogEntry | null,
+  streaming: true,
+  stats: { total: 0, debug: 0, info: 0, warn: 0, error: 0 },
+  pluginDiagnostics: [] as PluginDiagnostics[],
+  selectedPluginId: null as string | null,
+  loaded: false,
+}
+
+interface MonitorState {
+  // 当前 tab
+  activeTab: 'log' | 'performance' | 'plugins'
+  setActiveTab: (tab: 'log' | 'performance' | 'plugins') => void
+
+  // 筛选条件
+  keyword: string
+  selectedDate: string | null  // YYYY-MM-DD
+  availableDates: string[]
+  selectedLevels: string[]  // ['DEBUG','INFO','WARN','ERROR']
+
+  setKeyword: (kw: string) => void
+  setSelectedDate: (d: string | null) => void
+  setAvailableDates: (dates: string[]) => void
+  setSelectedLevels: (levels: string[]) => void
+
+  // 日志列表
+  entries: LogEntry[]
+  setEntries: (entries: LogEntry[]) => void
+  appendEntries: (newEntries: LogEntry[]) => void
+
+  // 选中的条目
+  selectedEntry: LogEntry | null
+  setSelectedEntry: (entry: LogEntry | null) => void
+
+  // 实时流开关
+  streaming: boolean
+  setStreaming: (on: boolean) => void
+
+  // 统计
+  stats: {
+    total: number
+    debug: number
+    info: number
+    warn: number
+    error: number
+  }
+  updateStats: () => void
+
+  pluginDiagnostics: PluginDiagnostics[]
+  selectedPluginId: string | null
+  setPluginDiagnostics: (diagnostics: PluginDiagnostics[]) => void
+  setSelectedPluginId: (pluginId: string | null) => void
+
+  // 是否已加载
+  loaded: boolean
+  setLoaded: (v: boolean) => void
+  reset: () => void
+}
+
+const EMPTY_STATS = { total: 0, debug: 0, info: 0, warn: 0, error: 0 }
+
+export const useMonitorStore = create<MonitorState>((set, get) => ({
+  ...MONITOR_INITIAL_STATE,
+
+  setActiveTab: (tab) => set({ activeTab: tab }),
+
+  setKeyword: (keyword) => set({ keyword }),
+  setSelectedDate: (selectedDate) => set({ selectedDate }),
+  setAvailableDates: (availableDates) => set({ availableDates }),
+  setSelectedLevels: (selectedLevels) => set({ selectedLevels }),
+
+  setEntries: (entries) => {
+    set({ entries, loaded: true })
+    get().updateStats()
+  },
+
+  appendEntries: (newEntries) => {
+    const { entries } = get()
+    // 按 id 去重，防止同一条日志通过 buffer 加载和 IPC 订阅两个路径重复添加
+    const existingIds = new Set(entries.map((e) => e.id).filter(Boolean))
+    const unique = newEntries.filter((n) => !n.id || !existingIds.has(n.id))
+    // 保留最新 5000 条
+    const combined = [...entries, ...unique]
+    const trimmed = combined.length > 5000 ? combined.slice(-5000) : combined
+    set({ entries: trimmed })
+    get().updateStats()
+  },
+
+  setSelectedEntry: (selectedEntry) => set({ selectedEntry }),
+
+  setStreaming: (streaming) => set({ streaming }),
+
+  updateStats: () => {
+    const { entries } = get()
+    const stats = { ...EMPTY_STATS }
+    for (const e of entries) {
+      const l = (e.level || 'INFO').toLowerCase()
+      if (l === 'debug') stats.debug++
+      else if (l === 'info') stats.info++
+      else if (l === 'warn') stats.warn++
+      else if (l === 'error') stats.error++
+      stats.total++
+    }
+    set({ stats })
+  },
+
+  setPluginDiagnostics: (pluginDiagnostics) =>
+    set((state) => {
+      const selectedPluginId =
+        state.selectedPluginId && pluginDiagnostics.some((item) => item.pluginId === state.selectedPluginId)
+          ? state.selectedPluginId
+          : pluginDiagnostics[0]?.pluginId ?? null
+
+      return {
+        pluginDiagnostics,
+        selectedPluginId,
+      }
+    }),
+
+  setSelectedPluginId: (selectedPluginId) => set({ selectedPluginId }),
+
+  setLoaded: (loaded) => set({ loaded }),
+
+  reset: () => set({ ...MONITOR_INITIAL_STATE, stats: { ...EMPTY_STATS } }),
+}))

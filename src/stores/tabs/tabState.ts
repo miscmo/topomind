@@ -1,4 +1,5 @@
 import type { ClosableTabInfo, GraphSession, RoomState, RoomSnapshot, Tab } from './tabTypes'
+import { getDefaultSecondaryViewTabId } from '@/plugins/secondaryViews'
 
 type KBTab = Extract<Tab, { type: 'kb' }>
 
@@ -35,12 +36,57 @@ export function appendKBTab(tabs: Tab[], tab: { id: string; label: string; kbPat
   return [...tabs, createKBTab(tab)]
 }
 
+export function createSecondaryViewTab(tab: { id?: string; label: string; viewId: string }): Tab {
+  return {
+    id: tab.id ?? getDefaultSecondaryViewTabId(tab.viewId),
+    type: 'secondary-view',
+    label: tab.label,
+    viewId: tab.viewId,
+  }
+}
+
+export function appendSecondaryViewTab(
+  tabs: Tab[],
+  tab: { id?: string; label: string; viewId: string },
+) {
+  const nextTabId = tab.id ?? getDefaultSecondaryViewTabId(tab.viewId)
+  const existingById = tabs.find((item) => item.id === nextTabId)
+  if (existingById) return tabs
+
+  const existingByViewId = tabs.find((item) => item.type === 'secondary-view' && item.viewId === tab.viewId)
+  if (existingByViewId) return tabs
+
+  return [...tabs, createSecondaryViewTab({ ...tab, id: nextTabId })]
+}
+
+export function findSecondaryViewTab(
+  tabs: Tab[],
+  input: { id?: string; viewId: string },
+): Extract<Tab, { type: 'secondary-view' }> | undefined {
+  if (input.id) {
+    const matchById = tabs.find(
+      (item): item is Extract<Tab, { type: 'secondary-view' }> =>
+        item.id === input.id && item.type === 'secondary-view',
+    )
+    if (matchById) {
+      return matchById
+    }
+  }
+
+  return tabs.find(
+    (item): item is Extract<Tab, { type: 'secondary-view' }> =>
+      item.type === 'secondary-view' && item.viewId === input.viewId,
+  )
+}
+
 export function ensureMonitorTab(tabs: Tab[]) {
-  if (tabs.some((tab) => tab.id === 'monitor')) return tabs
+  if (tabs.some((tab) => tab.id === 'monitor' || (tab.type === 'secondary-view' && tab.viewId === 'monitor.logs'))) {
+    return tabs
+  }
   
   const homeIdx = tabs.findIndex(t => t.id === 'home')
   const newTabs = [...tabs]
-  const monitorTab: Tab = { id: 'monitor', type: 'monitor', label: '系统日志' }
+  const monitorTab = createSecondaryViewTab({ id: 'monitor', viewId: 'monitor.logs', label: '系统日志' })
   
   if (homeIdx !== -1) {
     newTabs.splice(homeIdx + 1, 0, monitorTab)
@@ -52,12 +98,20 @@ export function ensureMonitorTab(tabs: Tab[]) {
 }
 
 export function ensureStatisticsTab(tabs: Tab[]) {
-  if (tabs.some((tab) => tab.id === 'statistics')) return tabs
+  if (
+    tabs.some((tab) => tab.id === 'statistics' || (tab.type === 'secondary-view' && tab.viewId === 'learning.statistics'))
+  ) {
+    return tabs
+  }
 
   const monitorIdx = tabs.findIndex(t => t.id === 'monitor')
   const homeIdx = tabs.findIndex(t => t.id === 'home')
   const newTabs = [...tabs]
-  const statisticsTab: Tab = { id: 'statistics', type: 'statistics', label: '学习统计' }
+  const statisticsTab = createSecondaryViewTab({
+    id: 'statistics',
+    viewId: 'learning.statistics',
+    label: '学习统计',
+  })
 
   if (monitorIdx !== -1) {
     newTabs.splice(monitorIdx + 1, 0, statisticsTab)

@@ -2,10 +2,12 @@ import type { StoreApi } from 'zustand'
 import { enterRoom, goBack, navigateToHistoryIndex, restoreRoomState } from './tabNavigation'
 import {
   appendKBTab,
+  appendSecondaryViewTab,
   ensureHomeTab,
   ensureMonitorTab,
   ensureStatisticsTab,
   findActiveTab,
+  findSecondaryViewTab,
   findTabById,
   getClosableTabInfo,
   getGraphSession,
@@ -83,6 +85,32 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
       get().restoreRoomStateToTab(tabId, snapshot)
       set({ activeTabId: tabId })
       return true
+    },
+    openSecondaryViewTab: ({ viewId, label, tabId }) => {
+      const nextTabId = tabId ?? `secondary-view:${viewId}`
+
+      set((state) => {
+        const existing = findSecondaryViewTab(state.tabs, {
+          id: nextTabId,
+          viewId,
+        })
+
+        if (existing) {
+          return {
+            tabs: state.tabs,
+            activeTabId: existing.id,
+          }
+        }
+
+        return {
+          tabs: appendSecondaryViewTab(state.tabs, {
+            id: nextTabId,
+            label,
+            viewId,
+          }),
+          activeTabId: nextTabId,
+        }
+      })
     },
     openMonitorTab: () => {
       set((state) => ({
