@@ -18,6 +18,7 @@ import { PluginManager } from '../src/plugins/host/pluginManager.ts'
 import { createPluginContext } from '../src/plugins/host/pluginContext.ts'
 import { validatePluginManifest } from '../src/plugins/host/pluginManifest.ts'
 import { PluginRegistry } from '../src/plugins/host/pluginRegistry.ts'
+import { chooseWidgetActivationReason } from '../src/plugins/host/widgetActivation.ts'
 import type {
   LearningApi,
   LoggingApi,
@@ -87,6 +88,33 @@ async function loadModuleWithVite<T = Record<string, unknown>>(entryPath: string
 
   const server = await viteServerPromise
   return server.ssrLoadModule(entryPath) as Promise<T>
+}
+
+{
+  assert.throws(
+    () =>
+      validatePluginManifest({
+        id: 'topomind.invalid-widget-placement',
+        name: 'invalid-widget-placement',
+        displayName: 'Invalid Widget Placement',
+        version: '0.1.0',
+        hostVersion: '^5.2.0',
+        kind: 'builtin',
+        entry: './index.ts',
+        activationEvents: ['onAppReady'],
+        permissions: ['widget.register', 'log.write'],
+        contributes: {
+          widgets: [
+            {
+              id: 'invalid.widget',
+              title: 'Invalid Widget',
+              placement: 'sidebar',
+            },
+          ],
+        },
+      }),
+    /widgets\[0\]\.placement must be one of: titlebar, home/,
+  )
 }
 
 {
@@ -402,6 +430,59 @@ async function loadModuleWithVite<T = Record<string, unknown>>(entryPath: string
 }
 
 {
+  const loader = new BuiltinPluginLoader([
+    {
+      manifestData: {
+        id: 'topomind.workspace-ready-widget',
+        name: 'workspace-ready-widget',
+        displayName: 'Workspace Ready Widget',
+        version: '0.1.0',
+        hostVersion: '^5.2.0',
+        kind: 'builtin',
+        entry: './index.ts',
+        activationEvents: ['onWorkspaceReady'],
+        permissions: ['widget.register', 'log.write'],
+        contributes: {
+          widgets: [
+            {
+              id: 'workspace.ready.widget',
+              title: 'Workspace Ready Widget',
+              placement: 'titlebar',
+            },
+          ],
+        },
+      },
+      loadModule: async () => ({
+        default: {
+          activate(ctx: PluginContext) {
+            ctx.subscriptions.push(
+              ctx.ui.registerWidget({
+                widgetId: 'workspace.ready.widget',
+                placement: 'titlebar',
+                render: () => null,
+              }),
+            )
+          },
+        },
+      }),
+    },
+  ])
+
+  const manager = new PluginManager({
+    loader,
+    hostServices: noopHostServices,
+  })
+  manager.discover()
+
+  const staticWidget = manager.getRegistry().getStaticWidget('workspace.ready.widget')
+  assert.equal(staticWidget?.pluginId, 'topomind.workspace-ready-widget')
+  assert.deepEqual(chooseWidgetActivationReason(staticWidget!), { type: 'workspace-ready' })
+
+  await manager.ensureActivated('topomind.workspace-ready-widget', chooseWidgetActivationReason(staticWidget!)!)
+  assert.equal(manager.getRegistry().getWidgetRenderer('workspace.ready.widget') != null, true)
+}
+
+{
   let activateCount = 0
   const loader = new BuiltinPluginLoader([
     {
@@ -450,6 +531,59 @@ async function loadModuleWithVite<T = Record<string, unknown>>(entryPath: string
   await assert.rejects(() => manager.executeCommand('disable.run'), /Plugin is disabled/)
   assert.equal(activateCount, 1)
   assert.equal(manager.getPluginDiagnostics('topomind.disable-guard')?.state, 'disabled')
+}
+
+{
+  const loader = new BuiltinPluginLoader([
+    {
+      manifestData: {
+        id: 'topomind.deactivate-cleanup',
+        name: 'deactivate-cleanup',
+        displayName: 'Deactivate Cleanup',
+        version: '0.1.0',
+        hostVersion: '^5.2.0',
+        kind: 'builtin',
+        entry: './index.ts',
+        activationEvents: ['onCommand:deactivate.cleanup'],
+        permissions: ['command.register', 'log.write'],
+        contributes: {
+          commands: [
+            {
+              id: 'deactivate.cleanup',
+              title: 'Deactivate cleanup command',
+            },
+          ],
+        },
+      },
+      loadModule: async () => ({
+        default: {
+          activate(ctx: PluginContext) {
+            ctx.subscriptions.push(
+              ctx.commands.register({
+                commandId: 'deactivate.cleanup',
+                execute: async () => {},
+              }),
+            )
+          },
+          deactivate() {
+            throw new Error('deactivate failed')
+          },
+        },
+      }),
+    },
+  ])
+
+  const manager = new PluginManager({
+    loader,
+    hostServices: noopHostServices,
+  })
+
+  await manager.executeCommand('deactivate.cleanup')
+  assert.equal(manager.getRegistry().getCommandHandler('deactivate.cleanup') != null, true)
+  await assert.rejects(() => manager.deactivate('topomind.deactivate-cleanup'), /deactivate failed/)
+  assert.equal(manager.getRegistry().getCommandHandler('deactivate.cleanup'), undefined)
+  assert.deepEqual(manager.getPluginDiagnostics('topomind.deactivate-cleanup')?.runtimeRecords, [])
+  assert.equal(manager.getPluginDiagnostics('topomind.deactivate-cleanup')?.state, 'failed')
 }
 
 {

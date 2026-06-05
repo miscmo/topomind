@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 
 import { getPluginManager } from '../bootstrap'
 import type { StaticContributionRecord } from './pluginTypes'
+import { chooseWidgetActivationReason } from './widgetActivation'
 
 interface WidgetSlotState {
   widgets: Array<{
@@ -10,7 +11,10 @@ interface WidgetSlotState {
     pluginId: string
     render: (props: { widgetId: string; pluginId: string }) => ReactNode
   }>
-  missingPluginIds: string[]
+  missingPlugins: Array<{
+    pluginId: string
+    widgetIds: string[]
+  }>
 }
 
 export interface PluginWidgetSlotProps {
@@ -21,13 +25,15 @@ function readRuntimeWidgets(
   staticWidgets: StaticContributionRecord[],
   getRenderer: (widgetId: string) => ((props: { widgetId: string; pluginId: string }) => ReactNode) | undefined,
 ): WidgetSlotState {
-  const missingPluginIds = new Set<string>()
+  const missingPluginsByPluginId = new Map<string, Set<string>>()
 
   return {
     widgets: staticWidgets.flatMap((record) => {
       const render = getRenderer(record.contributionId)
       if (!render) {
-        missingPluginIds.add(record.pluginId)
+        const widgetIds = missingPluginsByPluginId.get(record.pluginId) ?? new Set<string>()
+        widgetIds.add(record.contributionId)
+        missingPluginsByPluginId.set(record.pluginId, widgetIds)
         return []
       }
 
@@ -39,7 +45,10 @@ function readRuntimeWidgets(
         },
       ]
     }),
-    missingPluginIds: [...missingPluginIds],
+    missingPlugins: [...missingPluginsByPluginId].map(([pluginId, widgetIds]) => ({
+      pluginId,
+      widgetIds: [...widgetIds],
+    })),
   }
 }
 
@@ -60,7 +69,7 @@ export function PluginWidgetSlot({ placement }: PluginWidgetSlotProps) {
         registry.listStaticWidgetsByPlacement(placement),
         (widgetId) => registry.getWidgetRenderer(widgetId),
       ),
-    () => ({ widgets: [], missingPluginIds: [] }),
+    () => ({ widgets: [], missingPlugins: [] }),
   )
 
   useEffect(() => {
@@ -68,23 +77,32 @@ export function PluginWidgetSlot({ placement }: PluginWidgetSlotProps) {
   }, [placement])
 
   useEffect(() => {
-    const missingPluginIds = state.missingPluginIds.filter(
-      (pluginId) => !attemptedPluginIdsRef.current.has(pluginId),
+    const missingPlugins = state.missingPlugins.filter(
+      (missingPlugin) => !attemptedPluginIdsRef.current.has(missingPlugin.pluginId),
     )
 
-    if (missingPluginIds.length === 0) {
+    if (missingPlugins.length === 0) {
       return
     }
 
     let disposed = false
-    for (const pluginId of missingPluginIds) {
-      attemptedPluginIdsRef.current.add(pluginId)
+    for (const missingPlugin of missingPlugins) {
+      attemptedPluginIdsRef.current.add(missingPlugin.pluginId)
     }
 
     void Promise.allSettled(
-      missingPluginIds.map(async (pluginId) => {
-        await manager.ensureActivated(pluginId, { type: 'app-ready' })
-        return pluginId
+      missingPlugins.map(async (missingPlugin) => {
+        const staticWidget = missingPlugin.widgetIds
+          .map((widgetId) => registry.getStaticWidget(widgetId))
+          .find((record) => record?.pluginId === missingPlugin.pluginId)
+        const activationReason = staticWidget ? chooseWidgetActivationReason(staticWidget) : null
+
+        if (!activationReason) {
+          throw new Error(`Plugin ${missingPlugin.pluginId} has no supported widget activation event`)
+        }
+
+        await manager.ensureActivated(missingPlugin.pluginId, activationReason)
+        return missingPlugin.pluginId
       }),
     ).then((results) => {
       if (disposed) {
@@ -104,7 +122,7 @@ export function PluginWidgetSlot({ placement }: PluginWidgetSlotProps) {
     return () => {
       disposed = true
     }
-  }, [manager, placement, state.missingPluginIds])
+  }, [manager, placement, registry, state.missingPlugins])
 
   return (
     <>

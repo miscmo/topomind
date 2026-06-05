@@ -206,11 +206,26 @@ export class PluginManager {
       return
     }
 
-    await loaded.module.deactivate?.()
-    disposeAll(loaded.context.subscriptions)
-    this.registry.clearRuntimeBindings(pluginId)
-    this.loadedPluginsByPluginId.delete(pluginId)
-    this.lifecycle.setState(pluginId, 'deactivated')
+    let deactivationError: unknown
+
+    try {
+      await loaded.module.deactivate?.()
+    } catch (error) {
+      deactivationError = error
+    } finally {
+      disposeAll(loaded.context.subscriptions)
+      this.registry.clearRuntimeBindings(pluginId)
+      this.loadedPluginsByPluginId.delete(pluginId)
+      this.lifecycle.setState(
+        pluginId,
+        deactivationError ? 'failed' : 'deactivated',
+        deactivationError ? { error: deactivationError } : undefined,
+      )
+    }
+
+    if (deactivationError) {
+      throw deactivationError
+    }
   }
 
   async disable(pluginId: string): Promise<void> {

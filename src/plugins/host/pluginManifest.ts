@@ -15,6 +15,8 @@ import {
   type SecondaryViewContribution,
 } from '../extension-points/secondaryViews.ts'
 
+const WIDGET_PLACEMENTS = ['titlebar', 'home'] as const
+
 function asRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${label} must be an object`)
@@ -152,10 +154,11 @@ function parseWidgets(value: unknown): WidgetContribution[] | undefined {
     return {
       id: asString(record.id, `manifest.contributes.widgets[${index}].id`),
       title: asString(record.title, `manifest.contributes.widgets[${index}].title`),
-      placement: asString(
+      placement: asOneOf(
         record.placement,
+        WIDGET_PLACEMENTS,
         `manifest.contributes.widgets[${index}].placement`,
-      ) as WidgetContribution['placement'],
+      ),
     }
   })
 }
