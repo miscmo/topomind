@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { getPluginManager } from '../bootstrap'
@@ -56,25 +56,33 @@ export function PluginWidgetSlot({ placement }: PluginWidgetSlotProps) {
   const manager = useMemo(() => getPluginManager(), [])
   const registry = manager.getRegistry()
   const attemptedPluginIdsRef = useRef<Set<string>>(new Set())
-
-  const state = useSyncExternalStore(
-    (listener) => {
-      const subscription = registry.subscribe(listener)
-      return () => {
-        subscription.dispose()
-      }
-    },
-    () =>
-      readRuntimeWidgets(
-        registry.listStaticWidgetsByPlacement(placement),
-        (widgetId) => registry.getWidgetRenderer(widgetId),
-      ),
-    () => ({ widgets: [], missingPlugins: [] }),
+  const [state, setState] = useState<WidgetSlotState>(() =>
+    readRuntimeWidgets(
+      registry.listStaticWidgetsByPlacement(placement),
+      (widgetId) => registry.getWidgetRenderer(widgetId),
+    ),
   )
 
   useEffect(() => {
     attemptedPluginIdsRef.current.clear()
   }, [placement])
+
+  useEffect(() => {
+    const readState = () =>
+      readRuntimeWidgets(
+        registry.listStaticWidgetsByPlacement(placement),
+        (widgetId) => registry.getWidgetRenderer(widgetId),
+      )
+
+    setState(readState())
+    const subscription = registry.subscribe(() => {
+      setState(readState())
+    })
+
+    return () => {
+      subscription.dispose()
+    }
+  }, [placement, registry])
 
   useEffect(() => {
     const missingPlugins = state.missingPlugins.filter(
