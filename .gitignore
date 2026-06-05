@@ -4,6 +4,7 @@ Thumbs.db
 *.log
 .codebuddy/
 node_modules/
+server/.env
 dist/
 dist-electron/
 release/

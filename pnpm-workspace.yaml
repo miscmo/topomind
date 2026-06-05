@@ -1,0 +1,8 @@
+packages:
+  - server
+
+allowBuilds:
+  '@nestjs/core': true
+  electron: true
+  esbuild: true
+  puppeteer: true
