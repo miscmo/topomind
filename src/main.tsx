@@ -4,8 +4,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { bootstrapCommandRegistry } from './application/commands'
 import { PlatformProvider } from './core/platform-context'
 import { StorageProvider } from './core/storage'
+import { bootstrapPlugins } from './plugins'
 import { useThemeStore } from './stores/themeStore'
 import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'
@@ -18,6 +20,8 @@ import './styles/tokens.css'
 const container = document.getElementById('root')!
 const root = createRoot(container)
 useThemeStore.getState().initializeTheme()
+bootstrapCommandRegistry()
+bootstrapPlugins()
 
 // Suppress harmless ResizeObserver loop limit exceeded error
 const suppressResizeObserverError = () => {

@@ -14,6 +14,7 @@ export type LearningPageType =
   | 'document'
   | 'monitor'
   | 'statistics'
+  | 'secondary-view'
   | 'setup'
 
 export interface LearningSessionContext {
@@ -90,17 +91,16 @@ export const resolveLearningSessionContext = (): LearningSessionContext => {
     }
   }
 
-  if (activeTab.type === 'monitor') {
-    return {
-      pageType: 'monitor',
-      tabId: activeTab.id,
-      tabType: activeTab.type,
-    }
-  }
+  if (activeTab.type === 'secondary-view') {
+    const pageType =
+      activeTab.viewId === 'monitor.logs'
+        ? 'monitor'
+        : activeTab.viewId === 'learning.statistics'
+          ? 'statistics'
+          : 'secondary-view'
 
-  if (activeTab.type === 'statistics') {
     return {
-      pageType: 'statistics',
+      pageType,
       tabId: activeTab.id,
       tabType: activeTab.type,
     }

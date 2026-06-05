@@ -11,6 +11,10 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit --pretty false",
+    "verify:plugins:static": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-plugin-static-discovery.mts",
+    "verify:plugins:boundaries": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-plugin-boundaries.mts",
+    "verify:plugins:runtime": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-plugin-runtime-guards.mts",
+    "verify:plugins": "npm run verify:plugins:static && npm run verify:plugins:boundaries && npm run verify:plugins:runtime",
     "clean": "node -e \"const fs=require('fs');['dist','dist-electron'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",
     "build": "npm run clean && vite build",
     "build:mac": "npm run build && electron-builder --mac",

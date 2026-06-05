@@ -1,0 +1,38 @@
+{
+  "id": "topomind.devtools-sample",
+  "name": "devtools-sample",
+  "displayName": "开发测试插件",
+  "description": "用于验证内建插件发现、索引与激活链路。",
+  "version": "0.1.0",
+  "hostVersion": "^5.2.0",
+  "kind": "builtin",
+  "entry": "./index.tsx",
+  "activationEvents": [
+    "onCommand:devtoolsSample.open",
+    "onViewOpen:devtools.sample"
+  ],
+  "permissions": [
+    "workspace.read",
+    "view.register",
+    "view.open",
+    "command.register",
+    "log.write"
+  ],
+  "contributes": {
+    "secondaryViews": [
+      {
+        "id": "devtools.sample",
+        "title": "开发测试页面",
+        "icon": "flask",
+        "placement": "workspace-secondary",
+        "openCommand": "devtoolsSample.open"
+      }
+    ],
+    "commands": [
+      {
+        "id": "devtoolsSample.open",
+        "title": "打开开发测试页面"
+      }
+    ]
+  }
+}

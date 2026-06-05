@@ -1065,10 +1065,109 @@ Plugin -> Host API -> Host Adapter -> FSB / Renderer Facade -> IPC
 
 ## 16. 分阶段实施计划
 
+### 16.1 总体执行原则
+
+后续所有插件系统改造，必须严格按“计划 -> 实施 -> 验证 -> 回写”的闭环推进，不允许跳过中间环节直接扩散修改范围。
+
+执行原则如下：
+
+- 先修宿主骨架，再迁业务模块
+- 先打通最小链路，再扩展贡献点
+- 每次只解决一个明确阶段或一个明确子任务
+- 每次执行都必须回写本文档中的阶段状态、任务状态、落地文件与验证结果
+- 未完成上一阶段验收，不进入下一阶段正式实现
+- 若执行中发现设计偏差，先更新本文档，再继续编码
+
+### 16.2 后续整体修复总路线
+
+建议将后续整体修复拆成 8 个连续阶段：
+
+| 阶段 | 名称 | 目标 | 是否进入当前计划 |
+| --- | --- | --- | --- |
+| P0 | 文档收敛与基线确认 | 将设计、MVP、验收、执行规则收敛到同一文档 | 是 |
+| P1 | 插件宿主骨架 | 建立 manifest、registry、lifecycle、loader、manager 的最小骨架 | 是 |
+| P2 | `secondaryViews` 链路 | 打通视图静态索引、懒激活、运行时绑定、宿主渲染 | 是 |
+| P3 | Host API 与工程边界 | 建立最小 Host API、权限映射、目录边界与静态校验 | 是 |
+| P4 | 命令系统统一化 | 统一标题栏、菜单、快捷键与插件命令入口 | 是 |
+| P5 | 官方插件迁移样板 | 迁移学习统计、监控等官方模块为标准 `builtin` 插件 | 是 |
+| P6 | 稳定性与诊断增强 | 补插件错误面板、诊断视图、失败恢复与更多自动验证 | 是 |
+| P7 | 隔离式 `local-trusted` 评估 | 仅在前置条件满足后评估执行容器与加载协议 | 否，延后 |
+
+### 16.3 阶段依赖关系
+
+各阶段存在明确前后依赖，不得跳步：
+
+```text
+P0 -> P1 -> P2 -> P3 -> P4 -> P5 -> P6 -> P7
+```
+
+进一步约束：
+
+- `P2` 不完成，不进入 `P4` 与 `P5`
+- `P3` 不完成，不进入任何正式业务插件迁移
+- `P5` 不完成，不进入“第一阶段完成验收”
+- `P6` 是第一阶段收尾阶段，用于把工程能力从“可运行”提升到“可持续维护”
+
+### 16.4 每阶段统一执行闸门
+
+每个阶段开始前，必须满足以下进入条件：
+
+- 上一阶段状态为“已完成”或“有明确批准的并行例外”
+- 本阶段目标、范围、不做项已经写入本文档
+- 本阶段的验证方式已经写入本文档
+- 预计改动文件范围已在本文档或执行记录中声明
+
+每个阶段结束时，必须满足以下退出条件：
+
+- 目标范围内代码已落地
+- 本阶段验收项至少完成一次验证
+- 本文档已更新状态、落地文件、验证结果、风险变化
+- 若有未完成项，必须显式转为下一阶段输入，而不是隐性遗留
+
+### 16.5 阶段状态定义
+
+为保证后续更新口径一致，所有阶段统一使用以下状态：
+
+- `待实施`：已定义目标，但尚未开始编码
+- `进行中`：已有实际代码改动正在推进
+- `阻塞`：因前置条件、设计问题或外部依赖暂时停滞
+- `待验证`：代码已落地，等待集中验证或补充验证
+- `已完成`：验收通过且文档已回写
+- `延后`：明确不进入当前周期
+
+### 16.6 推荐执行节奏
+
+后续建议按“小步快跑、每次单一目标”的方式推进：
+
+1. 每次只选择一个阶段中的一个子任务
+2. 先更新本文档中的“本次执行目标”
+3. 再进行代码修改
+4. 完成后更新本文档中的“实际落地结果”
+5. 最后再决定下一次执行是否继续当前阶段，或切换到下一个阶段
+
+### 16.7 当前总计划看板
+
+| 阶段 | 名称 | 当前状态 | 下一步 |
+| --- | --- | --- | --- |
+| P0 | 文档收敛与基线确认 | 已完成 | 进入 P1 |
+| P1 | 插件宿主骨架 | 已完成 | 进入 P2 |
+| P2 | `secondaryViews` 链路 | 已完成 | 进入 P3 |
+| P3 | Host API 与工程边界 | 已完成 | 进入 P4 |
+| P4 | 命令系统统一化 | 已完成 | 进入 P5 |
+| P5 | 官方插件迁移样板 | 已完成 | 进入 P6 |
+| P6 | 稳定性与诊断增强 | 已完成 | 进入 P8（第二周期） |
+| P7 | 隔离式 `local-trusted` 评估 | 延后 | 不进入当前周期 |
+| P8 | 完全插件化基线与边界收敛 | 已完成 | 进入 P9 |
+| P9 | Host API 扩容与宿主适配收敛 | 已完成 | 进入 P10 |
+| P10 | 学习统计完全插件化迁移 | 已完成 | 进入 P11 |
+| P11 | 监控模块完全插件化迁移 | 已完成 | 进入 P12 |
+| P12 | 共享层与跨插件边界固化 | 已完成 | 进入 P13 |
+| P13 | 完全插件化验收与 `local-trusted` 前置复核 | 已完成 | 继续延后 P7 |
+
 ## 阶段 A. 建立插件宿主骨架
 
 **目标**：建立可用的 `PluginManager`、`PluginRegistry`、`PluginContext`、`HostApi` 类型边界，以及静态贡献索引能力。  
-**状态**：待实施
+**状态**：已完成
 
 产出：
 
@@ -1088,7 +1187,7 @@ Plugin -> Host API -> Host Adapter -> FSB / Renderer Facade -> IPC
 ## 阶段 B. 重构“次级页面入口”
 
 **目标**：在不动 `home / kb` 核心语义的前提下，把监控、学习统计这类页面抽象成可注册入口，并跑通首个懒激活闭环。  
-**状态**：待实施
+**状态**：已完成
 
 产出：
 
@@ -1107,8 +1206,8 @@ Plugin -> Host API -> Host Adapter -> FSB / Renderer Facade -> IPC
 
 ## 阶段 C. 抽 Host API 与适配层
 
-**目标**：让插件面向抽象 API，而不是直接依赖 store / FSB / IPC。  
-**状态**：待实施
+**目标**：让插件面向抽象 API，而不是直接依赖 store / FSB / IPC。
+**状态**：已完成
 
 产出：
 
@@ -1131,7 +1230,7 @@ Plugin -> Host API -> Host Adapter -> FSB / Renderer Facade -> IPC
 ## 阶段 D. 统一命令入口
 
 **目标**：将标题栏、菜单、按钮等动作入口统一切到命令系统。  
-**状态**：待实施
+**状态**：已完成
 
 产出：
 
@@ -1149,7 +1248,7 @@ Plugin -> Host API -> Host Adapter -> FSB / Renderer Facade -> IPC
 ## 阶段 E. 迁移内建插件样板
 
 **目标**：把现有官方功能迁移为标准 `builtin` 插件。  
-**状态**：待实施
+**状态**：已完成
 
 优先顺序：
 
@@ -1184,6 +1283,67 @@ Plugin -> Host API -> Host Adapter -> FSB / Renderer Facade -> IPC
 - 已解决本地代码加载与 CSP / 打包兼容问题
 
 本阶段未满足前，不得把“本地目录 JS 直接 import”作为正式设计落地。
+
+### 16.8 阶段与总计划映射
+
+为避免“阶段 A/B/C”和“P1/P2/P3”口径混淆，后续统一按下表理解：
+
+| 总计划阶段 | 对应文档阶段 | 说明 |
+| --- | --- | --- |
+| `P0` | 文档修订阶段 | 当前已完成 |
+| `P1` | 阶段 A | 插件宿主骨架 |
+| `P2` | 阶段 B | `secondaryViews` 链路 |
+| `P3` | 阶段 C | Host API 与工程边界 |
+| `P4` | 阶段 D | 命令系统统一 |
+| `P5` | 阶段 E | 官方插件迁移样板 |
+| `P6` | 阶段 E 完成后追加稳定性工作 | 诊断、验证、失败恢复补齐 |
+| `P7` | 阶段 F | 隔离式 `local-trusted` 评估 |
+| `P8` | 第二周期基线阶段 | 完全插件化边界与白名单收敛 |
+| `P9` | 第二周期 API 阶段 | Host API 扩容与宿主适配收敛 |
+| `P10` | 第二周期业务迁移阶段 1 | 学习统计完全插件化迁移 |
+| `P11` | 第二周期业务迁移阶段 2 | 监控模块完全插件化迁移 |
+| `P12` | 第二周期工程固化阶段 | `shared/*` 与跨插件边界固化 |
+| `P13` | 第二周期验收阶段 | 完全插件化验收与 `local-trusted` 前置复核 |
+
+后续执行记录、进度汇报、提交说明中，建议优先使用 `P1`、`P2` 这类总计划编号，以便横向跟踪整体进度。
+
+---
+
+### 16.9 第二周期总路线：完全插件化收敛
+
+第一周期 `P0-P6` 已完成“插件宿主骨架 + 官方插件入口化 + 稳定性与诊断增强”，但当前官方插件仍存在以下过渡性特征：
+
+- `src/plugins/builtin/*` 已承担 manifest、激活与运行时注册
+- `src/plugins/official/*` 仍作为 UI adapter 直接复用 `src/features/*`
+- 学习统计、监控的主实现仍直接依赖 `src/core/*`、`src/stores/*`、`src/application/*` 或宿主内部 service
+
+若目标提升为“完全插件化”，则第二周期必须继续推进，把“插件入口化”收敛为“插件实现内聚化 + 宿主 API 收口化 + 工程边界强约束”。
+
+为避免改写第一周期历史编号，同时保留 `P7` 作为隔离式 `local-trusted` 的延后评估阶段，第二周期统一从 `P8` 开始编号。
+
+第二周期阶段如下：
+
+| 阶段 | 名称 | 目标 | 前置条件 |
+| --- | --- | --- | --- |
+| P8 | 完全插件化基线与边界收敛 | 固化允许/禁止依赖矩阵，扩展边界校验至官方插件与跨插件依赖 | `P6` 已完成 |
+| P9 | Host API 扩容与宿主适配收敛 | 为学习统计、监控、工作区、观测与诊断建立稳定 Host API 与 DTO | `P8` 已完成 |
+| P10 | 学习统计完全插件化迁移 | 将学习统计主实现迁入插件目录，切断对宿主内部模块的直接依赖 | `P9` 已完成 |
+| P11 | 监控模块完全插件化迁移 | 将监控主实现迁入插件目录，改为通过 observability / diagnostics API 读取数据 | `P10` 已完成 |
+| P12 | 共享层与跨插件边界固化 | 收口 `shared/*` 白名单层、扩展点协议与跨插件调用规则 | `P11` 已完成 |
+| P13 | 完全插件化验收与 `local-trusted` 前置复核 | 对 builtin 插件完全插件化结果做集中验收，并复核是否具备重启 `P7` 的前提 | `P12` 已完成 |
+
+第二周期依赖关系如下：
+
+```text
+P8 -> P9 -> P10 -> P11 -> P12 -> P13
+```
+
+补充约束：
+
+- `P9` 未完成前，不允许继续迁移学习统计或监控的主实现目录
+- `P10` 未完成前，不允许以监控模块作为“完全插件化已经成立”的依据
+- `P12` 未完成前，不允许把 `shared/*` 当成无边界的宿主内部兜底目录
+- `P13` 未完成前，不重启 `P7`
 
 ---
 
@@ -1587,7 +1747,6 @@ export default plugin
 - 学习统计 provider 何时从宿主级服务继续下沉
 - `builtin` 的内部 UI 运行时桥接何时收敛为更统一的视图渲染模型
 - 如果未来实现隔离式 `local-trusted`，执行容器选型是什么
-- 插件错误诊断面板是否作为监控模块的一部分复用
 
 ---
 
@@ -1603,3 +1762,743 @@ export default plugin
 - 新出现的设计偏差
 
 若实现过程中发现设计与现状不一致，优先先修订本文档，再进入代码实现。
+
+### 22.1 后续执行方式
+
+后续所有修改必须严格按以下流程执行：
+
+1. 先在本文档中明确“本次执行所属阶段”
+2. 写明“本次执行目标”
+3. 写明“本次执行不做什么”
+4. 完成代码修改
+5. 回写“实际落地文件”
+6. 回写“验证结果”
+7. 更新“阶段状态”和“下一步”
+
+不允许的做法：
+
+- 在未声明目标范围的情况下直接大面积改代码
+- 同一次执行同时跨越多个大阶段
+- 不更新文档状态就开始下一轮实现
+- 发现设计偏差后先改代码、后补文档
+
+### 22.2 每次执行必须回写的字段
+
+后续每次执行结束后，至少必须回写以下字段：
+
+- 本次执行日期
+- 所属阶段编号，例如 `P1`
+- 本次执行目标
+- 本次实际完成
+- 本次未完成
+- 实际落地文件
+- 验证方式
+- 验证结果
+- 当前阻塞项
+- 下一步计划
+
+### 22.3 推荐进度更新位置
+
+建议在本文档末尾长期维护以下 3 类信息：
+
+- “阶段看板”：展示整体进度
+- “执行日志”：逐次记录每次实施动作
+- “偏差记录”：记录设计变更、范围调整和风险变化
+
+### 22.4 阶段看板模板
+
+后续更新时，建议按以下模板维护：
+
+```md
+| 阶段 | 名称 | 状态 | 最近更新 | 下一步 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| P1 | 插件宿主骨架 | 进行中 | 2026-06-03 | 完成 manifest 校验 | 无 |
+| P2 | secondaryViews 链路 | 待实施 | - | 等待 P1 完成 | - |
+```
+
+### 22.5 执行日志模板
+
+后续每次执行后，在文档末尾追加一条执行日志，建议格式如下：
+
+```md
+#### 执行记录 YYYY-MM-DD / P1
+
+- 本次目标：补齐 manifest 校验与内建插件清单
+- 本次不做：不接入视图渲染，不迁移业务模块
+- 实际完成：
+  - 新增 `src/plugins/host/pluginManifest.ts`
+  - 新增 manifest schema 校验
+  - 建立内建插件清单入口
+- 实际落地文件：
+  - `src/plugins/host/pluginManifest.ts`
+  - `src/plugins/runtime/builtinPluginLoader.ts`
+- 验证方式：
+  - `npm run typecheck`
+  - 手动确认测试插件 manifest 可被发现
+- 验证结果：
+  - typecheck 通过
+  - 测试插件可被索引
+- 当前风险变化：
+  - 暂无新增风险
+- 当前阻塞项：
+  - 无
+- 下一步：
+  - 进入 `pluginRegistry` 静态贡献索引实现
+```
+
+### 22.6 偏差记录模板
+
+若后续实现发现设计与现实不一致，必须追加偏差记录，建议格式如下：
+
+```md
+#### 偏差记录 YYYY-MM-DD
+
+- 所属阶段：P2
+- 偏差描述：现有 tab store 无法直接承载 `secondary-view` 过渡态
+- 影响范围：`App.tsx`、`tabStore`、`tabTypes`
+- 处理决定：先补 `SecondaryViewTab` 过渡结构，再继续视图宿主接入
+- 是否影响后续计划：是
+- 计划调整：P2 增加一项 tab 过渡改造子任务
+```
+
+### 22.7 阶段完成时必须补的总结
+
+每个阶段切换为“已完成”前，必须补一段阶段总结，至少包含：
+
+- 本阶段目标是否全部达成
+- 实际落地文件范围
+- 已通过的验证项
+- 遗留问题是否已经显式转移到下一阶段
+- 风险是否下降，或出现新的长期风险
+
+### 22.8 文档末尾建议新增常驻区块
+
+建议在本文档最后长期维护以下常驻区块，后续每次执行都更新：
+
+```md
+## 23. 阶段看板
+
+## 24. 执行日志
+
+## 25. 偏差记录
+```
+
+若开始进入实际编码阶段，应先创建以上区块，再开始记录第一次执行。
+
+---
+
+## 23. 阶段看板
+
+| 阶段 | 名称 | 状态 | 最近更新 | 下一步 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| P0 | 文档收敛与基线确认 | 已完成 | 2026-06-03 | 进入 P1 | 设计、MVP、验收与执行规则已收敛到本文档 |
+| P1 | 插件宿主骨架 | 已完成 | 2026-06-03 | 进入 P2 | 已完成 `discover()` 启动接线、样例插件静态索引验证与宿主骨架验收 |
+| P2 | `secondaryViews` 链路 | 已完成 | 2026-06-03 | 进入 P3 | 对应阶段 B |
+| P3 | Host API 与工程边界 | 已完成 | 2026-06-03 | 进入 P4 或 P5 | 已补权限收口、边界静态校验与运行时 guard |
+| P4 | 命令系统统一化 | 已完成 | 2026-06-03 | 进入 P5 | 已补宿主 `CommandRegistry`、标题栏桥接与菜单命令分发 | 对应阶段 D |
+| P5 | 官方插件迁移样板 | 已完成 | 2026-06-03 | 进入 P6 | 已完成学习统计 `builtin` 迁移样板、标题栏 widget 插槽与 `onAppReady` 激活闭环 | 对应阶段 E |
+| P6 | 稳定性与诊断增强 | 已完成 | 2026-06-03 | 进入 P8（第二周期） | 已补插件诊断快照、视图失败态重试与 widget 部分成功激活 | 第一阶段收尾 |
+| P7 | 隔离式 `local-trusted` 评估 | 延后 | - | 不进入当前周期 | 对应阶段 F，等待 `P13` 完成后再复核 |
+| P8 | 完全插件化基线与边界收敛 | 已完成 | 2026-06-04 | 进入 P9，开始 Host API 扩容草案 | 已补官方插件/共享层边界校验、跨插件静态约束与遗留债务基线 |
+| P9 | Host API 扩容与宿主适配收敛 | 已完成 | 2026-06-04 | 进入 P10，开始学习统计完全插件化迁移 | 已补 learning / logs / performance / plugins diagnostics Host API、宿主接线、权限映射与最小 runtime 验证 | 第二周期 |
+| P10 | 学习统计完全插件化迁移 | 已完成 | 2026-06-04 | 进入 P11，开始监控模块完全插件化迁移 | 已完成学习统计主实现内聚、官方适配层清空、运行时入口包装与插件级验证 | 第二周期 |
+| P11 | 监控模块完全插件化迁移 | 已完成 | 2026-06-04 | 进入 P12，开始共享层与跨插件边界固化 | 已完成监控页 builtin 迁移、官方适配层清空、Host API 接线与插件级验证 | 第二周期 |
+| P12 | 共享层与跨插件边界固化 | 已完成 | 2026-06-04 | 进入 P13，开始完全插件化验收与 `local-trusted` 前置复核 | 已完成 `shared` 子域白名单固化、monitor 通用格式化下沉、跨插件约束文档与工程校验收口 | 第二周期 |
+| P13 | 完全插件化验收与 `local-trusted` 前置复核 | 已完成 | 2026-06-04 | builtin 完全插件化验收完成，继续延后 `P7` | 已完成静态发现、边界、运行时与 Host API 集中复核，并确认当前仍不具备重启隔离式 `local-trusted` 的前提 | 第二周期 |
+
+## 24. 执行日志
+
+#### 执行记录 2026-06-03 / P1
+
+- 本次执行目标：建立 `src/plugins/` 目录骨架、核心宿主类型与首个测试 `builtin` 插件样例
+- 实际落地结果：
+  - 新增 `src/plugins/public/*`，定义 `PluginManifest`、`PluginContext`、`TopoMindPluginModule`、`WorkspaceApi`、`ViewApi`、`CommandApi` 等公开接口
+  - 新增 `src/plugins/host/*`，落地 `PluginManager`、`PluginRegistry`、`PluginLifecycle`、`createPluginContext()`、`validatePluginManifest()`
+  - 新增 `src/plugins/runtime/builtinPluginLoader.ts`，建立内建插件清单加载入口
+  - 新增 `src/plugins/builtin/devtools-sample/*`，作为后续 `secondaryViews` 懒激活链路的测试插件样板
+- 验证结果：
+  - `npm run typecheck` 通过
+  - 当前未接入 `App.tsx` 与现有导航渲染链路，未改变现有用户可见行为
+- 当前结论：
+  - `P1` 已完成“目录骨架 + 核心类型 + manifest 校验 + builtin loader + 测试插件样板”的首个子任务
+  - `P1` 仍未完成正式验收，尚需补宿主侧 discover 接线与最小静态贡献验证
+- 下一步：
+  - 继续停留在 `P1`
+  - 补一个宿主可调用的 discover 初始化入口
+  - 完成对测试插件静态贡献的最小验证，再决定是否进入 `P2`
+
+#### 执行记录 2026-06-03 / P1
+
+- 本次执行目标：补宿主 discover 初始化接线，并完成测试插件静态贡献的最小验证
+- 实际落地结果：
+  - 新增 `src/plugins/bootstrap.ts`，提供 `bootstrapPlugins()` 与 `getPluginManager()` 单例入口
+  - 在 `src/main.tsx` 接入 `bootstrapPlugins()`，应用启动时即执行 `discover()`
+  - 新增 `scripts/verify-plugin-static-discovery.mts` 与 `npm run verify:plugins:static`
+  - 为 `PluginRegistry` 增加静态命令查询能力，便于校验静态索引结果
+- 验证结果：
+  - `npm run verify:plugins:static` 通过
+  - `npm run typecheck` 通过
+  - 已确认当前改动不改变现有用户可见渲染逻辑
+- 当前结论：
+  - `P1` 阶段验收条件已满足
+  - 后续可以按计划正式进入 `P2`
+- 下一步：
+  - 开始 `P2`
+  - 接入 `secondaryViews` 的静态视图索引读取与宿主渲染占位
+  - 继续打通首次打开视图时的懒激活链路
+
+#### 执行记录 2026-06-03 / P2
+
+- 本次执行目标：接入 `secondaryViews` 链路，跑通首个内建插件的静态视图索引、懒激活与渲染闭环
+- 实际落地结果：
+  - 确认现有代码已包含完整 P2 实现骨架
+  - 核心组件 `PluginViewHost.tsx` 已实现，支持视图懒激活与错误边界
+  - `App.tsx` 已接入 `PluginViewHost`，并保留对 `monitor.logs`/`learning.statistics` 的回退渲染
+  - `tabStore` 已支持 `secondary-view` 类型的 Tab 创建与管理
+  - `bootstrap.ts` 中已实现真实的 `hostServices.openView()`，通过 `tabStore.openSecondaryViewTab()` 打开插件视图
+  - 测试插件 `devtools-sample` 已完整配置，包含 `secondaryViews`/`commands` 静态贡献
+  - 修复了 `LearningPageType` 缺少 `'secondary-view'` 标签导致的类型错误
+- 验证结果：
+  - `npm run typecheck` 通过
+  - 保留了现有监控和学习统计页面的完整功能（通过 `fallbackRender` 支持）
+  - 新增的 devtools 测试插件不会对现有用户行为产生影响
+- 当前结论：
+  - `P2` 验收条件已满足
+  - 首个插件视图（`devtools.sample`）可通过静态索引发现、懒激活并渲染
+  - 对现有页面保持完全兼容
+- 下一步：
+  - 继续进入 P3
+  - 完善 Host API 边界与工程化约束
+
+#### 执行记录 2026-06-03 / P3
+
+- 本次执行目标：完善 Host API、权限-API 映射与插件目录工程边界
+- 实际落地结果：
+  - 补充 `src/plugins/README.md` 开发指南，明确插件目录边界规范
+  - 完整实现权限-API 映射表（与设计文档一致）
+  - 更新测试插件 manifest，添加 `workspace.read` 权限
+  - 更新 SampleView，完整验证 `workspace.getCurrentWorkspaceId()` 与 `views.open()` Host API 链路
+  - 确保插件代码没有直接访问 `src/core/*`、`src/stores/*`、`src/features/*` 或 `window.electronAPI`
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins:static` 通过
+  - 测试插件完整实现通过 Host API 读取 workspace 信息与打开视图，无越界访问
+- 当前结论：
+  - P3 验收条件已满足
+  - MVP（A+B+C 阶段）完整闭环已完成
+- 下一步：
+  - 可选进入 P4（命令系统统一化）或 P5（官方插件迁移样板）
+
+#### 执行记录 2026-06-03 / P3 加固
+
+- 本次执行目标：消除 P3 中“文档已完成但约束未真正落地”的技术债，补齐权限收口、激活事件校验与工程边界检查
+- 实际落地结果：
+  - 新增 `src/plugins/host/pluginPermissions.ts`，集中维护 API -> 权限映射与权限错误类型
+  - 收紧 `createPluginContext()`，为 `workspace.getCurrentWorkspaceId()`、`views.open()`、`commands.execute()`、`ui.notify()`、`log.*()` 增加运行时权限校验
+  - 为 `PluginManager` 增加激活事件校验与 `executeCommand()`，补齐命令懒激活闭环
+  - 为 `bootstrap.ts` 的 `openView()` 增加未知视图 fail-fast，避免把非法视图直接打开成坏页签
+  - 修复 `tabStore.openSecondaryViewTab()` 对已存在视图页签的激活逻辑，避免写入不存在的 `activeTabId`
+  - 新增 `scripts/verify-plugin-boundaries.mts` 与 `scripts/verify-plugin-runtime-guards.mts`
+  - 在 `package.json` 中补充 `verify:plugins:boundaries`、`verify:plugins:runtime` 与聚合脚本 `verify:plugins`
+  - 强化 manifest 校验：补 kind/permission/placement 枚举校验、贡献项去重校验、`openCommand` 引用校验与权限-贡献一致性校验
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins` 通过
+  - 样例插件可继续通过静态发现、边界检查与运行时 guard 验证
+- 当前结论：
+  - P3 的“Host API 与工程边界”已从文档约定收敛为可执行约束
+  - 继续进入 P4/P5 前，前置技术债已明显下降
+
+#### 执行记录 2026-06-03 / P4
+
+- 本次执行目标：建立统一命令入口，将标题栏、应用菜单与插件命令执行面收敛到同一调度层
+- 实际落地结果：
+  - 新增 `src/application/commands/commandRegistry.ts`，实现宿主 `CommandRegistry` 单例与默认宿主命令注册
+  - 将宿主命令与插件静态命令接入同一执行入口，`PluginContext.commands.execute()` 不再绕过宿主命令层
+  - `CustomTitleBar` 中的系统日志、学习统计、主题切换、右侧面板、窗口控制与切换工作目录入口全部改为通过命令 ID 执行
+  - `App.tsx` 中的 `app:menu-action` 事件改为统一分发命令 ID，不再直接调用业务 store action
+  - Electron 菜单改为发送 `monitor.open` / `learning.open` 等命令 ID，并补充“学习统计”菜单项
+  - 修复 `tsconfig.node.json` 的引用工程配置，使 IDE 不再因 JS 输入与 emit 冲突持续报错
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins` 通过
+  - `tsconfig.node.json` 相关 IDE 诊断已清理
+- 当前结论：
+  - `monitor.open`、`learning.open` 已由统一命令调度执行
+  - 标题栏与菜单入口不再直接依赖业务模块 action
+  - 后续进入 P5 时，可直接复用命令层承接官方插件迁移
+
+#### 执行记录 2026-06-03 / P5
+
+- 本次执行目标：将学习统计迁移为首个官方 `builtin` 插件样板，并补齐 widget 宿主链路与启动激活闭环
+- 实际落地结果：
+  - 新增 `src/plugins/builtin/learning-statistics/*`，以标准 manifest + module 形式声明 `learning.statistics` 视图、`learning.open` 命令与 `learning.titlebar.overview` widget
+  - 新增 `src/plugins/official/learningStatistics.tsx`，作为官方插件 UI adapter，复用现有学习统计页面与标题栏速览组件
+  - 新增 `src/plugins/host/PluginWidgetSlot.tsx`，宿主可按 placement 读取静态 widget 贡献、触发插件激活并渲染运行时 widget
+  - `src/features/layout/CustomTitleBar/CustomTitleBar.tsx` 已改为通过 `PluginWidgetSlot` 渲染标题栏学习速览，不再硬编码学习统计 widget
+  - `src/main.tsx` / `src/plugins/bootstrap.ts` 已接入 `onAppReady` 激活，官方 widget 可在应用启动后按协议注册
+  - `src/App.tsx` 已移除 `learning.statistics` 的宿主 fallback，仅保留 `monitor.logs` 兼容分支，学习统计页面入口改由插件视图宿主承接
+  - 插件静态发现与运行时校验脚本已扩展到多内建插件与 widget 场景，并修复 `verify-plugin-runtime-guards.mts` 中与新 manifest 规则不一致的测试样例
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins` 通过
+  - 当前全局 IDE 诊断为空
+- 当前结论：
+  - 第一阶段“至少一个官方模块完成 `builtin` 迁移样板”的验收项已满足，学习统计已完整跑通命令、页面、widget 三条链路
+  - 监控模块后续可继续作为第二个官方迁移样板，验证插件系统不是只为学习统计定制
+  - 后续可以正式进入 P6，收敛失败态诊断、禁用态体验与稳定性验证补齐
+
+#### 执行记录 2026-06-03 / P6
+
+- 本次执行目标：补齐插件失败态诊断、禁用态验证与多 widget 激活场景下的稳定性处理
+- 实际落地结果：
+  - 为 `PluginManager` 增加统一诊断读取能力，可返回插件生命周期快照与运行时绑定记录，便于宿主按插件查看失败状态与最近错误
+  - `PluginViewHost` 失败态已接入插件诊断信息展示，错误页现在可显示 `state`、最近错误与失败时间，并在非禁用态下提供“重试激活插件”入口
+  - `PluginWidgetSlot` 已改为 `Promise.allSettled()` 激活缺失 widget，单个插件激活失败不再阻断同一 placement 下其他 widget 的正常渲染
+  - `verify-plugin-runtime-guards.mts` 已补充禁用后阻止自动重激活、失败诊断快照保留等运行时校验
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins` 通过
+  - 相关新增文件 IDE 诊断已清理
+- 当前结论：
+  - 当前周期第一阶段的“诊断、验证、失败恢复补齐”范围已完成，插件宿主具备最小可用的失败态可观测性
+  - 学习统计插件化样板之外，宿主现在也能更稳定地处理插件激活失败、插件禁用与 widget 局部失败场景
+  - 若后续继续推进，可将监控模块作为第二个官方迁移样板，或单独开启 P7 的隔离评估
+
+#### 执行记录 2026-06-03 / P6 追加
+
+- 本次执行目标：将监控模块迁移为第二个官方 `builtin` 插件样板，移除对 `monitor.logs` 的宿主 fallback 依赖
+- 实际落地结果：
+  - 新增 `src/plugins/builtin/monitor/*`，以标准 manifest + module 形式声明 `monitor.logs` 视图与 `monitor.open` 命令
+  - 新增 `src/plugins/official/monitor.tsx`，作为官方插件 UI adapter，复用现有 `MonitorPage`
+  - `BuiltinPluginLoader` 与静态发现校验已纳入 `topomind.monitor`
+  - `CommandRegistry` 已移除宿主默认 `monitor.open` 实现，命令执行改由插件命令承接，避免宿主命令遮蔽插件命令
+  - `src/App.tsx` 已移除 `monitor.logs` 的宿主 fallback，监控页面入口现与学习统计一致，由 `PluginViewHost` 纯插件化承接
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins` 通过
+  - 相关新增文件 IDE 诊断已清理
+- 当前结论：
+  - 监控模块已成为第二个官方迁移样板，当前插件系统已不再只围绕学习统计验证
+  - `monitor.open` / `learning.open` 现均由插件命令与插件视图宿主承接，宿主壳层不再保留对应页面 fallback
+  - 若继续推进，可转入 P7 评估，或继续补“插件诊断面板是否复用监控模块”的后续设计
+
+#### 执行记录 2026-06-03 / P6 收尾
+
+- 本次执行目标：确定并落地“插件错误诊断面板复用监控模块”的方案，避免再新增独立诊断页面
+- 实际落地结果：
+  - 监控模块已正式采用“日志监控 / 性能监控 / 插件诊断”三标签结构，插件诊断作为监控页内建标签复用现有导航与容器
+  - `MonitorPage` 已通过 `PluginManager.subscribeDiagnostics()` 订阅插件诊断快照，并将数据写入 `monitorStore`
+  - `PluginDiagnosticsPanel` 已成为监控模块内的插件诊断详情面板，支持状态汇总、失败信息查看、激活重试与快照复制
+  - `PluginRegistry` 已补充运行时绑定变更订阅，`subscribeDiagnostics()` 现在同时监听生命周期与运行时绑定变化，避免运行时记录变更时监控页诊断数据不刷新
+  - `scripts/verify-plugin-runtime-guards.mts` 已新增诊断流刷新校验，用例覆盖“运行时绑定失败时订阅方可收到更新”
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins` 通过
+  - 相关编辑文件 IDE 诊断已清理
+- 当前结论：
+  - “插件错误诊断面板是否作为监控模块的一部分复用”已不再是未决问题，当前结论是复用监控模块并以内置标签维护
+  - 当前方案避免了新增导航入口，同时保留了插件诊断作为长期运维视图所需的实时性与可操作性
+
+#### 执行记录 2026-06-04 / P8 规划
+
+- 本次执行目标：把“完全插件化”第二周期的目标结构、阶段计划、工作清单与后续更新方式正式写入架构文档
+- 本次不做：
+  - 不直接修改 `src/plugins/*`、`src/features/*` 或宿主 Host API 实现
+  - 不在本次执行中启动 `P9` 及后续编码
+- 实际落地结果：
+  - 在本文档中新增第二周期 `P8-P13` 的阶段定义、依赖关系与进入/退出约束
+  - 明确“官方插件入口化”与“完全插件化”之间的差距，收口为宿主 API 收敛、插件实现内聚化、共享层白名单与跨插件边界四类工作
+  - 新增第二周期目标目录结构、依赖矩阵、Host API 补齐方向与分阶段任务清单
+  - 明确后续所有进度更新必须同步更新 `23. 阶段看板`、`24. 执行日志`、`27. 第二周期工作计划清单` 与 `25. 偏差记录`
+- 验证结果：
+  - 第二周期计划已与第一周期历史记录并存，不覆盖既有实施日志
+  - 后续执行可直接按 `P8 -> P13` 编号推进并回写进度
+- 当前结论：
+  - 从本次开始，builtin 插件后续实施以“完全插件化收敛”为第二周期主线
+  - `P7` 继续保持延后，待 `P13` 完成后再决定是否重启
+- 下一步：
+  - 进入 `P8`
+  - 先补边界校验范围，禁止官方插件继续直接依赖 `src/features/*`
+  - 同步定义 `shared/*` 白名单层与学习统计、监控所需 Host API 草案
+
+#### 执行记录 2026-06-04 / P8
+
+- 本次执行目标：把第二周期边界规则落成工程约束，并冻结当前官方插件适配层的已知越界依赖
+- 实际落地结果：
+  - 扩展 `scripts/verify-plugin-boundaries.mts`，将 `src/plugins/official/*`、`src/shared/*` 与跨插件 import 一并纳入校验
+  - 为官方适配层现存越界依赖建立显式基线登记，防止 `learningStatistics`、`monitor` 之外新增同类宿主直连
+  - 将 `cn()` 从 `src/lib/utils.ts` 下沉到 `src/shared/utils/cn.ts`，切断 `src/shared/ui/*` 对外层 `lib/*` 的反向依赖
+  - 在 `src/plugins/README.md` 中补齐第二周期边界要求，明确 `shared/*` 白名单规则、跨插件限制与当前登记债务
+  - 明确当前宿主直连清单：
+    - `src/plugins/official/learningStatistics.tsx` 仍依赖 `src/application/commands`、`src/features/learning-tracker/components/LearningTrackerWidget`、`src/features/learning-tracker/pages/LearningStatisticsPage`
+    - `src/plugins/official/monitor.tsx` 仍依赖 `src/features/monitor/MonitorPage`
+- 验证结果：
+  - `npm run verify:plugins:boundaries` 通过
+  - 校验结果已覆盖 `builtin`、`official`、`shared` 与跨插件 import
+- 当前结论：
+  - `P8` 已完成“边界规则工程化 + 已知债务基线冻结”的阶段目标
+  - 后续清理官方适配层对宿主内部模块的直连，转入 `P9-P11` 继续推进
+- 下一步：
+  - 进入 `P9`
+  - 起草学习统计、监控、工作区变化与插件诊断所需的 Host API 与 DTO
+  - 评估权限点与运行时校验如何覆盖新增能力
+
+#### 执行记录 2026-06-04 / P9
+
+- 本次执行目标：为学习统计、监控与后续完全插件化迁移补齐稳定 Host API、宿主适配与权限/验证收口
+- 实际落地结果：
+  - 在 `src/plugins/public/api.ts` 与 `src/plugins/public/plugin.ts` 中补齐 `learning`、`logs`、`performance`、`plugins diagnostics` 相关 Host API、DTO 与 `PluginContext` 暴露面
+  - 在 `src/plugins/host/pluginContext.ts`、`src/plugins/host/pluginPermissions.ts` 与 `src/plugins/public/manifest.ts` 中补齐新增 API 的权限点、运行时校验与权限映射
+  - 在 `src/plugins/bootstrap.ts` 中接入学习统计读取/订阅、工作区订阅、日志查询/订阅、性能样本提取、插件诊断快照与激活重试的宿主默认实现
+  - 将性能协议与样本提取逻辑沉到 `src/shared/observability/*`，避免共享层反向依赖 `src/core/*`，并让宿主 API 与监控页面共用同一套 DTO/解析逻辑
+  - 在 `scripts/verify-plugin-runtime-guards.mts` 中补充 `learning`、`performance`、`plugins diagnostics` 的最小权限 guard，确保新增能力不是只停留在类型层
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins:boundaries` 通过
+  - `npm run verify:plugins:runtime` 通过
+- 当前结论：
+  - `P9` 已完成“稳定 Host API + 宿主默认适配 + 权限/验证收口”的阶段目标
+  - 学习统计与监控后续迁移可直接消费现有 Host API，无需继续新增 `core/stores` 直连能力面
+  - `src/plugins/official/*` 的宿主内部直连仍为过渡债务，实际清理继续在 `P10`、`P11` 完成
+- 下一步：
+  - 进入 `P10`
+  - 先把学习统计页面、widget 与数据读取改为依赖插件 service / Host API
+  - 移除对 `FSB`、`workspaceStore`、`tabStore` 等宿主内部模块的直接依赖
+
+#### 执行记录 2026-06-04 / P10（完成）
+
+- 本次执行目标：完成学习统计从过渡适配层到插件目录自持实现的迁移收口，并补齐插件级验证与运行时可执行入口
+- 实际落地结果：
+  - 将 `src/plugins/builtin/learning-statistics/index.ts` 改为直接注册插件目录内的页面与标题栏 widget，不再经过 `src/plugins/official/learningStatistics.tsx`
+  - 在 `src/plugins/builtin/learning-statistics/*` 中新增页面、widget、速览预览、统计面板、分析函数与 runtime state hook，形成插件内自持的 UI / model / service 组合
+  - 学习统计页面和标题栏速览已改为通过 `ctx.learning` / `ctx.workspace` 读取实时状态、历史 summary、daily records 与工作区变化，不再直接 import `FSB`、`workspaceStore`、`tabStore`
+  - 新增宿主命令 `home.open`，供学习统计插件通过命令桥返回首页，避免插件直接调用宿主 tab store
+  - 将 `src/plugins/official/learningStatistics.tsx` 收缩为空过渡壳，并从官方插件边界债务基线中移除该项
+  - 在 `scripts/verify-plugin-runtime-guards.mts` 中补充真实加载 `topomind.learning-statistics` builtin 插件的验证，覆盖命令、页面、标题栏 widget、统计读取依赖注入与返回首页闭环
+  - 在 `src/plugins/runtime/builtinPluginLoader.ts` 中将 builtin 动态导入改为显式扩展名，并为学习统计新增纯 `.ts` 包装入口，使 Node 运行时校验可执行而实际 UI 仍由 `tsx` 组件承载
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins:boundaries` 通过
+  - `npm run verify:plugins:runtime` 通过
+- 当前结论：
+  - `P10` 已完成，学习统计现已满足“插件目录内聚实现 + Host API 驱动 + 插件级验证覆盖”的阶段目标
+  - 当前官方适配层遗留债务只剩监控模块，后续继续在 `P11` 清理
+- 下一步：
+  - 进入 `P11`
+  - 将监控页改为依赖 `logs / performance / plugins diagnostics` Host API
+  - 清理 `src/plugins/official/monitor.tsx` 的历史业务适配并补监控插件级验证
+
+#### 执行记录 2026-06-04 / P11（完成）
+
+- 本次执行目标：完成监控模块从官方过渡适配层到 builtin 插件目录自持实现的迁移收口，并补齐真实插件级验证
+- 实际落地结果：
+  - 将 `src/plugins/builtin/monitor/index.ts` 改为直接注册插件目录内的 `monitor.logs` 视图与 `monitor.open` 命令，不再经过 `src/plugins/official/monitor.tsx`
+  - 在 `src/plugins/builtin/monitor/*` 中迁入监控页、性能页、插件诊断面板、日志列表、筛选栏、明细面板、侧栏与 Zustand store，形成插件内自持的 UI / model 组合
+  - 监控页、性能页与插件诊断页统一改为通过 `ctx.logs`、`ctx.performance`、`ctx.plugins`、`ctx.log` 读取日志缓冲、性能样本、诊断快照与重试激活能力，不再直接 import `log-backend`、`PluginManager` 或宿主内部 store adapter
+  - 新增 `src/plugins/builtin/monitor/MonitorPageEntry.ts` 纯 `.ts` 包装入口，通过 `React.lazy + Suspense` 延迟加载真实 `tsx` 页面，确保 Node 运行时校验可执行
+  - 将 `src/plugins/official/monitor.tsx` 收缩为空过渡壳，并从官方插件边界债务基线中移除 monitor 项
+  - 在 `scripts/verify-plugin-runtime-guards.mts` 中补充真实加载 `topomind.monitor` builtin 插件的验证，覆盖命令执行、视图打开、日志查询、性能订阅、插件诊断与重试激活闭环
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins:boundaries` 通过
+  - `npm run verify:plugins:runtime` 通过
+- 当前结论：
+  - `P11` 已完成，监控模块现已满足“插件目录内聚实现 + observability / diagnostics Host API 驱动 + 插件级验证覆盖”的阶段目标
+  - 第二周期业务迁移阶段已经收口完成，后续可直接进入 `P12`
+- 下一步：
+  - 进入 `P12`
+  - 识别可安全下沉到 `shared/*` 的纯 UI / 工具 / 类型
+  - 固化跨插件调用只能通过命令、扩展点与宿主 DTO
+
+#### 执行记录 2026-06-04 / P12（完成）
+
+- 本次执行目标：固化 `shared/*` 白名单边界、收口跨插件交互约束，并把已确认稳定的纯工具下沉到共享层
+- 实际落地结果：
+  - 新增 `src/shared/observability/logFormatting.tsx`，将 monitor 页面与 builtin monitor 插件共用的日志时间格式化、日期归一化与关键词高亮逻辑下沉到共享层
+  - 将 `src/features/monitor/*` 与 `src/plugins/builtin/monitor/*` 中相关组件统一改为消费 `@/shared/observability/logFormatting`，避免同类逻辑在宿主与插件目录重复演化
+  - 强化 `scripts/verify-plugin-boundaries.mts`：插件侧仅允许使用 `@/shared/ui/*`、`@/shared/utils/*`、`@/shared/observability/*` 三个白名单子域；`src/shared/*` 文件也必须落在这三个顶级域中
+  - 更新 `src/plugins/README.md`，将 `shared/*` 白名单子域、无基线债务现状与“新增共享域需同步更新文档与校验”的约束显式化
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins:boundaries` 通过
+  - `npm run verify:plugins:runtime` 通过
+- 当前结论：
+  - `P12` 已完成，`shared/*` 现已具备可审计的子域白名单与工程校验，不再是模糊的宿主兜底层
+  - 第二周期工程固化阶段已完成，下一步进入 `P13` 做集中验收与 `local-trusted` 前置复核
+- 下一步：
+  - 进入 `P13`
+  - 汇总学习统计、监控与共享层收口的最终文件范围
+  - 对 Host API、边界校验、运行时验证和 builtin 完全插件化前提做集中复核
+
+#### 执行记录 2026-06-04 / P13（完成）
+
+- 本次执行目标：对第二周期 builtin 完全插件化结果做集中验收，并复核是否具备重启 `P7 local-trusted` 的前置条件
+- 实际落地结果：
+  - 汇总完全插件化落地范围：学习统计主实现已收口到 `src/plugins/builtin/learning-statistics/*`，监控主实现已收口到 `src/plugins/builtin/monitor/*`，共享白名单层收口到 `src/shared/ui/*`、`src/shared/utils/*`、`src/shared/observability/*`
+  - 复核 Host API 已覆盖工作区、学习统计、日志、性能、插件诊断、命令、视图与 widget 注册能力，builtin 插件通过 `PluginContext` 访问宿主，不再直接 import `src/core/*`、`src/features/*`、`src/stores/*`、`src/application/*`
+  - 复核静态发现、边界与运行时三类工程验证已全部覆盖 `topomind.learning-statistics`、`topomind.monitor` 与 `topomind.devtools-sample`，并通过 `npm run verify:plugins` 串联验收
+  - 确认 `src/plugins/official/learningStatistics.tsx` 与 `src/plugins/official/monitor.tsx` 已收缩为空壳，`App.tsx` 当前不再保留学习统计或监控业务 fallback，二级页面统一经由 `PluginViewHost`
+  - 复核 `local-trusted` 前置条件结论：当前加载模型仍由 `BuiltinPluginLoader` 直接 import 内建模块，`ViewApi` / `UiApi` 仍以 React 渲染器函数在宿主进程内注册运行时绑定，因此仅满足 builtin 同进程桥接，不满足“独立执行上下文或等价隔离模型”的 `P7` 启动条件
+- 验证结果：
+  - `npm run typecheck` 通过
+  - `npm run verify:plugins:static` 通过
+  - `npm run verify:plugins:boundaries` 通过
+  - `npm run verify:plugins:runtime` 通过
+  - `npm run verify:plugins` 通过
+- 当前结论：
+  - `P13` 已完成，第二周期 `P8-P13` 的完全插件化验收项全部闭环，builtin 官方插件已满足“实现内聚 + Host API 驱动 + 工程边界强约束 + 运行时可验证”的目标
+  - `P7` 继续延后；在引入隔离执行上下文、等价的序列化渲染协议或其他可验证隔离模型前，不应启动 `local-trusted` 设计与实现
+- 下一步：
+  - 维持 `P7` 延后状态
+  - 后续如要重启 `P7`，需先补隔离执行容器方案、序列化渲染协议边界与对应安全/权限模型设计
+
+## 25. 偏差记录
+
+当前无偏差记录。
+
+后续若实现中发现设计与现状不一致，必须在此区块追加记录，再决定是否继续后续编码。
+
+## 26. 第二周期目标架构（完全插件化）
+
+### 26.1 目标定义
+
+第二周期完成后，builtin 官方插件应满足以下条件：
+
+- 每个官方插件以“一个独立目录”作为实现边界，目录内包含 manifest、入口、UI、model、service 与测试
+- 插件只能依赖 `src/plugins/public/*`、`src/plugins/extension-points/*`、插件目录自身代码，以及明确批准的 `src/shared/*`
+- 插件不得直接依赖 `src/core/*`、`src/stores/*`、`src/features/*`、`src/application/*`、`src/plugins/host/*`
+- 插件之间不得直接源码 import；如需交互，只能通过命令、扩展点或宿主定义的数据协议
+- 宿主必须通过稳定 Host API 向插件提供工作区、导航、数据查询、日志监控、性能观测与插件诊断能力
+
+### 26.2 目标目录结构
+
+目标结构建议如下：
+
+```text
+src/
+  plugins/
+    host/
+    public/
+    extension-points/
+    builtin/
+      learning-statistics/
+        manifest.json
+        index.tsx
+        ui/
+        model/
+        services/
+      monitor/
+        manifest.json
+        index.tsx
+        ui/
+        model/
+        services/
+  shared/
+    ui/
+    utils/
+    types/
+  features/
+    ...仅保留尚未插件化完成的旧模块
+```
+
+补充约束：
+
+- `src/plugins/official/*` 仅作为第一周期遗留的过渡层，第二周期结束前应被删除或收缩为零业务逻辑入口
+- `src/shared/*` 只能承载纯 UI、纯工具、纯类型与无宿主状态依赖的通用逻辑；当前白名单子域固定为 `ui`、`utils`、`observability`
+- 一旦某个模块在第二周期中完成完全插件化，其主实现不再继续留在 `src/features/*`
+
+### 26.3 依赖矩阵
+
+| 代码层 | 允许依赖 | 禁止依赖 |
+| --- | --- | --- |
+| `src/plugins/builtin/<plugin>/*` | `@/plugins`、`@/plugins/public/*`、`@/plugins/extension-points/*`、`@/shared/ui/*`、`@/shared/utils/*`、`@/shared/observability/*`、本插件目录内文件、标准第三方库 | `@/core/*`、`@/stores/*`、`@/features/*`、`@/application/*`、`@/plugins/host/*`、`@/plugins/bootstrap`、其他插件目录、未登记的 `@/shared/*` 子域 |
+| `src/shared/*` | 标准第三方库、`src/shared/*` 内部文件 | `src/plugins/builtin/*`、`src/features/*`、`src/stores/*`、`src/core/*`、未登记的 `shared` 顶级子域 |
+| `src/plugins/host/*` | 宿主内部实现、`src/plugins/public/*` | 不向插件代码暴露直接 import 路径 |
+| 插件间交互 | 命令 ID、扩展点、宿主协议 DTO | 直接源码 import、共享 store 实例、直接访问对方 service |
+
+### 26.4 第二周期需要补齐的 Host API
+
+为完成学习统计与监控的完全插件化，宿主至少需要补齐以下能力面：
+
+- `workspace`：
+  - `getCurrentWorkspaceId()`
+  - `subscribeWorkspaceChange()`
+- `views`：
+  - `open(viewId)`
+  - `focus(viewId)`
+  - `close(viewId)`
+  - `listOpenViews()`
+- `commands`：
+  - `register()`
+  - `execute()`
+- `ui`：
+  - `registerWidget()`
+  - `notify()`
+  - `clipboard.writeText()`（如官方插件有复制场景）
+- `learning`：
+  - `getSummary(workspaceId, days)`
+  - `getDailyRecords(workspaceId, dates)`
+  - `getMeta(workspaceId)`
+  - `subscribeCurrentSession(workspaceId)`
+- `observability`：
+  - `logs.getBuffer()`
+  - `logs.query()`
+  - `logs.subscribe()`
+  - `logs.getAvailableDates()`
+  - `performance.queryMetrics()`
+  - `performance.subscribeMetrics()`
+- `plugins`：
+  - `getDiagnostics()`
+  - `subscribeDiagnostics()`
+  - `retryActivation(pluginId, reason)`
+
+设计要求：
+
+- 插件 API 返回稳定 DTO，不暴露 Zustand store、`FSB`、`log-backend` 或 `PluginManager` 这些宿主实现细节
+- Host API 面向能力而非具体模块文件路径，后续如进入隔离执行模型时可继续复用相同抽象
+
+### 26.5 第二周期迁移方法
+
+第二周期统一采用以下迁移顺序：
+
+1. 先定义 Host API 与 DTO
+2. 再把业务实现改成依赖 API / service，而不是直接依赖宿主内部模块
+3. 最后把业务实现搬入插件目录
+4. 搬迁完成后立即补边界校验与回归验证
+
+明确禁止的做法：
+
+- 只搬目录，不改依赖方向
+- 继续通过 `src/plugins/official/*` 长期复用 `src/features/*` 作为正式终态
+- 把 `src/shared/*` 当作绕过插件边界的宿主实现兜底目录
+
+## 27. 第二周期工作计划清单
+
+### 27.1 `P8` 完全插件化基线与边界收敛
+
+目标：
+
+- 把第二周期边界规则从“建议”收敛为“可执行约束”
+
+任务清单：
+
+- [x] 将 `src/plugins/official/*` 纳入插件边界校验
+- [x] 增加“禁止跨插件 import”的静态校验
+- [x] 明确 `src/shared/*` 白名单规则与禁止依赖规则
+- [x] 在本文档与 `src/plugins/README.md` 中同步更新完全插件化边界要求
+- [x] 识别学习统计、监控当前仍直连宿主内部模块的清单
+
+当前识别到的遗留直连清单：
+
+- 当前无遗留直连项；此前学习统计与 monitor 官方适配层债务已分别在 `P10`、`P11` 清理完成
+- `verify-plugin-boundaries` 当前仅用于持续防回归，不再携带官方插件过渡债务基线
+
+阶段验收：
+
+- [x] `verify-plugin-boundaries` 能覆盖 `builtin`、`official`、跨插件依赖
+- [x] 第二周期允许/禁止依赖矩阵已经固化到文档与工程校验
+
+### 27.2 `P9` Host API 扩容与宿主适配收敛
+
+目标：
+
+- 宿主提供学习统计、监控与工作区变化所需的稳定能力面
+
+任务清单：
+
+- [x] 定义 `learning` Host API 与 DTO
+- [x] 定义 `observability` Host API 与 DTO
+- [x] 定义 `plugins diagnostics` Host API 与 DTO
+- [x] 为新增 API 建立权限点与运行时校验
+- [x] 为新增 API 补最小 runtime / typecheck 验证
+
+阶段验收：
+
+- [x] 学习统计和监控不再需要新增 `core/stores` 直连能力
+- [x] Host API 可独立支撑 `P10` 和 `P11`
+
+### 27.3 `P10` 学习统计完全插件化迁移
+
+目标：
+
+- 让学习统计从“插件入口化”进入“插件实现内聚化”
+
+任务清单：
+
+- [x] 把学习统计页面改为依赖插件 service / Host API
+- [x] 移除对 `FSB`、`workspaceStore`、`tabStore` 的直接依赖
+- [x] 将 UI、model、service 迁入 `src/plugins/builtin/learning-statistics/*`
+- [x] 清理 `src/plugins/official/learningStatistics.tsx` 中的业务逻辑适配
+- [x] 补学习统计插件级验证用例
+
+阶段验收：
+
+- [x] 学习统计插件目录不再 import `features/core/stores/application`
+- [x] 原功能闭环保持可用：命令、页面、widget、统计数据读取、返回首页
+
+### 27.4 `P11` 监控模块完全插件化迁移
+
+目标：
+
+- 让监控页通过 observability / diagnostics API 工作，而不是直接依赖宿主内部实现
+
+任务清单：
+
+- [x] 把监控页改为依赖 `logs/performance/plugins diagnostics` Host API
+- [x] 移除对 `log-backend`、`PluginManager`、宿主内部 store adapter 的直接依赖
+- [x] 将监控页 UI、model、service 迁入 `src/plugins/builtin/monitor/*`
+- [x] 清理 `src/plugins/official/monitor.tsx` 中的业务逻辑适配
+- [x] 补监控插件级验证用例
+
+阶段验收：
+
+- [x] 监控插件目录不再 import `features/core/stores/application`
+- [x] 日志、性能、插件诊断三标签功能保持完整
+
+### 27.5 `P12` 共享层与跨插件边界固化
+
+目标：
+
+- 建立可长期维护的 `shared/*` 共享层，避免插件边界被二次侵蚀
+
+任务清单：
+
+- [x] 识别可安全下沉到 `shared/*` 的纯 UI / 工具 / 类型
+- [x] 禁止 `shared/*` 反向依赖插件实现与宿主私有模块
+- [x] 明确跨插件交互仅允许命令、扩展点、宿主 DTO
+- [x] 对跨插件调用新增校验或文档约束
+
+阶段验收：
+
+- [x] `shared/*` 已具备清晰白名单边界
+- [x] 插件之间不存在直接源码 import
+
+### 27.6 `P13` 完全插件化验收与 `local-trusted` 前置复核
+
+目标：
+
+- 对第二周期结果做集中验收，并决定是否满足重启 `P7` 的条件
+
+任务清单：
+
+- [x] 汇总学习统计、监控的完全插件化落地文件范围
+- [x] 对 Host API、边界校验、运行时验证、回归能力做集中复核
+- [x] 评估 builtin 插件是否已不再依赖宿主内部实现路径
+- [x] 复核是否具备重启 `P7` 的前置条件
+
+阶段验收：
+
+- [x] 第二周期所有验收项通过
+- [x] 明确给出“继续延后 `P7`”或“可以重启 `P7`”的结论
+
+## 28. 第二周期进度更新规则
+
+从本次文档更新开始，后续所有与“完全插件化”相关的实施都必须遵守以下更新要求：
+
+1. 每次执行前，先在提交说明或任务描述中声明当前所属阶段（`P8-P13`）
+2. 执行完成后，必须同步更新 `23. 阶段看板`
+3. 执行完成后，必须在 `24. 执行日志` 追加一条对应阶段记录
+4. 若阶段任务或验收项有变化，必须同步更新 `27. 第二周期工作计划清单`
+5. 若实现发现设计与现状不一致，必须同步更新 `25. 偏差记录`
+6. 未在本文档回写前，不进入下一阶段编码

@@ -13,7 +13,13 @@ const formatDuration = (seconds: number) => {
   return `${s}s`
 }
 
-export const LearningTrackerWidget = memo(function LearningTrackerWidget() {
+interface LearningTrackerWidgetProps {
+  onOpenStatistics?: () => void
+}
+
+export const LearningTrackerWidget = memo(function LearningTrackerWidget({
+  onOpenStatistics,
+}: LearningTrackerWidgetProps) {
   const isActive = useLearningTrackerStore(s => s.isActive)
   const todayDuration = useLearningTrackerStore(s => s.todayDuration)
   const openStatisticsTab = useTabStore(s => s.openStatisticsTab)
@@ -72,6 +78,10 @@ export const LearningTrackerWidget = memo(function LearningTrackerWidget() {
           }`}
         onClick={() => {
           setPreviewOpen(false)
+          if (onOpenStatistics) {
+            onOpenStatistics()
+            return
+          }
           openStatisticsTab()
         }}
         title={isActive ? "正在学习中" : "休息中"}

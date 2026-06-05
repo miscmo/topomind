@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PERFORMANCE_METRIC_DEFINITIONS, extractPerformanceSamples, percentile, average, formatDuration, formatSuccessRate, formatCompactDateTime, type PerformanceSample } from './performanceMetrics'
-import type { PerformanceMetricId } from '../../core/performance-log'
+import { PERFORMANCE_METRIC_DEFINITIONS, extractPerformanceSamples, percentile, average, formatDuration, formatSuccessRate, formatCompactDateTime, type PerformanceSample } from '@/shared/observability/performanceMetrics'
+import type { PerformanceMetricId } from '@/shared/observability/performanceContract'
 import { logQuery, logSubscribe, logUnsubscribe } from '../../core/log-backend'
 import { useMonitorStore, type LogEntry } from './model/monitorStore'
 

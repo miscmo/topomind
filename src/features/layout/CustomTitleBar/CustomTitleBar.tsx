@@ -1,17 +1,15 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTabStore } from '../../../stores/tabs/tabStore'
+import { executeCommand } from '../../../application/commands'
 import { useThemeStore } from '../../../stores/themeStore'
+import { PluginWidgetSlot } from '../../../plugins'
 import { useRightPanelStore } from '../../right-panel/model/rightPanelStore'
 import { useShortcut } from '../../../hooks/useShortcut'
 import TabBar from '../TabBar/TabBar'
-import { LearningTrackerWidget } from '../../learning-tracker/components/LearningTrackerWidget'
 import type { WindowControlsState } from '../../../types/electron-api'
 
 type TitleBarMode = 'setup' | 'workspace'
 
 type MenuKey = 'file' | 'view' | 'help'
-
-type WindowCommandChannel = 'app:window:minimize' | 'app:window:toggleMaximize' | 'app:window:close'
 
 interface CustomTitleBarProps {
   mode: TitleBarMode
@@ -40,23 +38,9 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null)
   const [windowState, setWindowState] = useState<WindowControlsState>({ isMaximized: false, isFocused: true })
-  const openMonitorTab = useTabStore((s: any) => s.openMonitorTab)
   const theme = useThemeStore((s: any) => s.theme)
-  const setTheme = useThemeStore((s: any) => s.setTheme)
-
   const rightPanelCollapsed = useRightPanelStore((s: any) => s.rightPanelCollapsed)
-  const collapseRightPanel = useRightPanelStore((s: any) => s.collapseRightPanel)
-  const expandRightPanel = useRightPanelStore((s: any) => s.expandRightPanel)
   const rightPanelTab = useRightPanelStore((s: any) => s.rightPanelTab)
-  const setRightPanelTab = useRightPanelStore((s: any) => s.setRightPanelTab)
-
-  const toggleRightPanel = useCallback(() => {
-    if (rightPanelCollapsed) {
-      expandRightPanel()
-    } else {
-      collapseRightPanel()
-    }
-  }, [rightPanelCollapsed, collapseRightPanel, expandRightPanel])
 
   useEffect(() => {
     const api = window.electronAPI
@@ -121,57 +105,55 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     }
   }, [activeMenu])
 
-  const invokeWindowCommand = useCallback((channel: WindowCommandChannel) => {
-    const api = window.electronAPI
-    if (!api) return
-
-    void api.invoke(channel).then((state) => {
-      if (isWindowControlsState(state)) setWindowState(state)
+  const runCommand = useCallback((commandId: string, args?: unknown) => {
+    void executeCommand(commandId, args).catch((error) => {
+      console.error(`Failed to execute title bar command: ${commandId}`, error)
     })
   }, [])
 
   const menuItems = useMemo<Record<MenuKey, MenuItem[]>>(() => ({
     file: [
-      { label: '切换工作目录', action: () => { void window.electronAPI?.invoke('app:switchWorkDir') } },
-      { label: '退出 TopoMind', shortcut: 'Alt+F4', action: () => invokeWindowCommand('app:window:close') },
+      { label: '切换工作目录', action: () => runCommand('workspace.switch') },
+      { label: '退出 TopoMind', shortcut: 'Alt+F4', action: () => runCommand('window.close') },
     ],
     view: [
       { 
         label: '浅色主题', 
         submenu: [
-          { label: '经典浅色 (Light)', checked: theme === 'light', action: () => setTheme('light') },
-          { label: 'Notion Light', checked: theme === 'notion-light', action: () => setTheme('notion-light') },
-          { label: 'Linear Light', checked: theme === 'linear-light', action: () => setTheme('linear-light') },
-          { label: 'Nord Light', checked: theme === 'nord-light', action: () => setTheme('nord-light') },
-          { label: 'Rose Pine Dawn', checked: theme === 'rose-pine-dawn', action: () => setTheme('rose-pine-dawn') },
-          { label: 'Catppuccin Latte', checked: theme === 'catppuccin-latte', action: () => setTheme('catppuccin-latte') },
-          { label: 'GitHub Light', checked: theme === 'github-light', action: () => setTheme('github-light') },
-          { label: 'Solarized Light', checked: theme === 'solarized-light', action: () => setTheme('solarized-light') },
+          { label: '经典浅色 (Light)', checked: theme === 'light', action: () => runCommand('theme.set', { theme: 'light' }) },
+          { label: 'Notion Light', checked: theme === 'notion-light', action: () => runCommand('theme.set', { theme: 'notion-light' }) },
+          { label: 'Linear Light', checked: theme === 'linear-light', action: () => runCommand('theme.set', { theme: 'linear-light' }) },
+          { label: 'Nord Light', checked: theme === 'nord-light', action: () => runCommand('theme.set', { theme: 'nord-light' }) },
+          { label: 'Rose Pine Dawn', checked: theme === 'rose-pine-dawn', action: () => runCommand('theme.set', { theme: 'rose-pine-dawn' }) },
+          { label: 'Catppuccin Latte', checked: theme === 'catppuccin-latte', action: () => runCommand('theme.set', { theme: 'catppuccin-latte' }) },
+          { label: 'GitHub Light', checked: theme === 'github-light', action: () => runCommand('theme.set', { theme: 'github-light' }) },
+          { label: 'Solarized Light', checked: theme === 'solarized-light', action: () => runCommand('theme.set', { theme: 'solarized-light' }) },
         ]
       },
       { 
         label: '深色主题', 
         submenu: [
-          { label: '经典深色 (Dark)', checked: theme === 'dark', action: () => setTheme('dark') },
-          { label: 'Tokyo Night', checked: theme === 'tokyo-night', action: () => setTheme('tokyo-night') },
-          { label: 'Catppuccin Mocha', checked: theme === 'catppuccin-mocha', action: () => setTheme('catppuccin-mocha') },
-          { label: 'One Dark Pro', checked: theme === 'one-dark-pro', action: () => setTheme('one-dark-pro') },
-          { label: 'Dracula', checked: theme === 'dracula', action: () => setTheme('dracula') },
-          { label: 'Monokai', checked: theme === 'monokai', action: () => setTheme('monokai') },
-          { label: 'GitHub Dark', checked: theme === 'github-dark', action: () => setTheme('github-dark') },
-          { label: 'Solarized Dark', checked: theme === 'solarized-dark', action: () => setTheme('solarized-dark') },
+          { label: '经典深色 (Dark)', checked: theme === 'dark', action: () => runCommand('theme.set', { theme: 'dark' }) },
+          { label: 'Tokyo Night', checked: theme === 'tokyo-night', action: () => runCommand('theme.set', { theme: 'tokyo-night' }) },
+          { label: 'Catppuccin Mocha', checked: theme === 'catppuccin-mocha', action: () => runCommand('theme.set', { theme: 'catppuccin-mocha' }) },
+          { label: 'One Dark Pro', checked: theme === 'one-dark-pro', action: () => runCommand('theme.set', { theme: 'one-dark-pro' }) },
+          { label: 'Dracula', checked: theme === 'dracula', action: () => runCommand('theme.set', { theme: 'dracula' }) },
+          { label: 'Monokai', checked: theme === 'monokai', action: () => runCommand('theme.set', { theme: 'monokai' }) },
+          { label: 'GitHub Dark', checked: theme === 'github-dark', action: () => runCommand('theme.set', { theme: 'github-dark' }) },
+          { label: 'Solarized Dark', checked: theme === 'solarized-dark', action: () => runCommand('theme.set', { theme: 'solarized-dark' }) },
         ]
       },
-      { label: '系统日志', action: () => openMonitorTab() },
+      { label: '系统日志', action: () => runCommand('monitor.open') },
+      { label: '学习统计', action: () => runCommand('learning.open') },
       { label: '命令中心', shortcut: 'Ctrl+Shift+P', disabled: true },
       { label: '重置布局', disabled: true },
     ],
     help: [
       { label: '快捷键', disabled: true },
-      { label: '开发者工具', shortcut: 'F12', action: () => { void window.electronAPI?.invoke('app:window:toggleDevTools') } },
+      { label: '开发者工具', shortcut: 'F12', action: () => runCommand('window.toggleDevTools') },
       { label: '关于 TopoMind', disabled: true },
     ],
-  }), [invokeWindowCommand, openMonitorTab, theme, setTheme])
+  }), [runCommand, theme])
 
   return (
     <div 
@@ -182,7 +164,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
         if (e.target instanceof Element && e.target.closest(`button, [role="tab"], .truncate`)) {
           return
         }
-        invokeWindowCommand('app:window:toggleMaximize')
+        runCommand('window.toggleMaximize')
       }}
     >
       <div className="shrink-0 flex items-center pl-2 gap-2 h-full relative after:content-[''] after:absolute after:right-0 after:top-[18%] after:bottom-[18%] after:w-px after:bg-[color-mix(in_srgb,var(--titlebar-text)_18%,var(--color-border-subtle))] after:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] pr-2">
@@ -263,7 +245,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
         {mode === 'workspace' && (
           <div className="h-full max-w-[65%] min-w-0 flex items-center gap-2">
             <TabBar />
-            <LearningTrackerWidget />
+            <PluginWidgetSlot placement="titlebar" />
           </div>
         )}
       </div>
@@ -274,7 +256,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
             <button
               type="button"
               className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)] aria-pressed:text-[var(--color-accent)]"
-              onClick={toggleRightPanel}
+              onClick={() => runCommand('rightPanel.toggle')}
               title={rightPanelCollapsed ? '展开右侧面板' : '折叠右侧面板'}
               aria-label={rightPanelCollapsed ? '展开右侧面板' : '折叠右侧面板'}
               style={{ WebkitAppRegion: 'no-drag' } as any}
@@ -297,20 +279,14 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                 <button
                   type="button"
                   className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-colors ${rightPanelTab === 'detail' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.05)]' : 'text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)]'}`}
-                  onClick={() => {
-                    setRightPanelTab('detail')
-                    if (rightPanelCollapsed) expandRightPanel()
-                  }}
+                  onClick={() => runCommand('rightPanel.reveal', { tab: 'detail' })}
                 >
                   详情
                 </button>
                 <button
                   type="button"
                   className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-colors ${rightPanelTab === 'style' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.05)]' : 'text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)]'}`}
-                  onClick={() => {
-                    setRightPanelTab('style')
-                    if (rightPanelCollapsed) expandRightPanel()
-                  }}
+                  onClick={() => runCommand('rightPanel.reveal', { tab: 'style' })}
                 >
                   样式
                 </button>
@@ -320,12 +296,12 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
           </>
         )}
         <div className="h-full inline-flex items-stretch">
-          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]" onClick={() => invokeWindowCommand('app:window:minimize')} aria-label="最小化窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]" onClick={() => runCommand('window.minimize')} aria-label="最小化窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M0 5H10" stroke="currentColor" strokeWidth="1"/>
             </svg>
           </button>
-          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]" onClick={() => invokeWindowCommand('app:window:toggleMaximize')} aria-label={windowState.isMaximized ? '还原窗口' : '最大化窗口'} style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]" onClick={() => runCommand('window.toggleMaximize')} aria-label={windowState.isMaximized ? '还原窗口' : '最大化窗口'} style={{ WebkitAppRegion: 'no-drag' } as any}>
             {windowState.isMaximized ? (
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="2.5" y="0.5" width="7" height="7" stroke="currentColor" strokeWidth="1"/>
@@ -337,7 +313,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
               </svg>
             )}
           </button>
-          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:!bg-[#e81123] hover:!text-white" onClick={() => invokeWindowCommand('app:window:close')} aria-label="关闭窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:!bg-[#e81123] hover:!text-white" onClick={() => runCommand('window.close')} aria-label="关闭窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1"/>
             </svg>

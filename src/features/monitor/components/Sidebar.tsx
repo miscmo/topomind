@@ -6,8 +6,11 @@ export function Sidebar() {
   const activeTab = useMonitorStore((s) => s.activeTab)
   const setActiveTab = useMonitorStore((s) => s.setActiveTab)
   const stats = useMonitorStore((s) => s.stats)
+  const pluginDiagnostics = useMonitorStore((s) => s.pluginDiagnostics)
 
-  const handleTabClick = (tab: 'log' | 'performance') => {
+  const pluginFailedCount = pluginDiagnostics.filter((item) => item.state === 'failed').length
+
+  const handleTabClick = (tab: 'log' | 'performance' | 'plugins') => {
     logAction('监控页:切换Tab', 'MonitorPage', { tab, previousTab: activeTab })
     setActiveTab(tab)
   }
@@ -38,6 +41,20 @@ export function Sidebar() {
           <span className="text-[14px] w-5 text-center shrink-0">&#9651;</span>
           <span>性能监控</span>
           <span className="ml-auto w-[18px]" />
+        </button>
+        <button
+          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-75 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'plugins' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
+          onClick={() => handleTabClick('plugins')}
+        >
+          <span className="text-[14px] w-5 text-center shrink-0">&#9881;</span>
+          <span>插件诊断</span>
+          {pluginFailedCount > 0 ? (
+            <span className="ml-auto bg-[#e74c3c] text-white text-[10px] font-semibold py-[1px] px-[5px] rounded-lg min-w-[18px] text-center">
+              {pluginFailedCount}
+            </span>
+          ) : (
+            <span className="ml-auto w-[18px]" />
+          )}
         </button>
       </nav>
       <div className="mt-auto py-3 px-4 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-muted)]">

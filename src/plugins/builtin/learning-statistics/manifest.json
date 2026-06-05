@@ -1,0 +1,50 @@
+{
+  "id": "topomind.learning-statistics",
+  "name": "learning-statistics",
+  "displayName": "学习统计",
+  "description": "提供学习统计页面与标题栏速览组件。",
+  "version": "1.0.0",
+  "hostVersion": "^5.2.0",
+  "kind": "builtin",
+  "entry": "./index.ts",
+  "activationEvents": [
+    "onAppReady",
+    "onCommand:learning.open",
+    "onViewOpen:learning.statistics"
+  ],
+  "permissions": [
+    "workspace.observe",
+    "learning.read",
+    "learning.observe",
+    "view.register",
+    "view.open",
+    "command.register",
+    "command.execute",
+    "widget.register",
+    "log.write"
+  ],
+  "contributes": {
+    "secondaryViews": [
+      {
+        "id": "learning.statistics",
+        "title": "学习统计",
+        "icon": "chart",
+        "placement": "workspace-secondary",
+        "openCommand": "learning.open"
+      }
+    ],
+    "commands": [
+      {
+        "id": "learning.open",
+        "title": "打开学习统计"
+      }
+    ],
+    "widgets": [
+      {
+        "id": "learning.titlebar.overview",
+        "title": "学习速览",
+        "placement": "titlebar"
+      }
+    ]
+  }
+}
