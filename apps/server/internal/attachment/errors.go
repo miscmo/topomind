@@ -1,0 +1,27 @@
+package attachment
+
+import "errors"
+
+var ErrInvalidAttachmentID = errors.New("invalid attachment id")
+var ErrInvalidAttachmentTarget = errors.New("invalid attachment target")
+var ErrInvalidKnowledgeBaseID = errors.New("invalid knowledge base id")
+var ErrInvalidCardID = errors.New("invalid card id")
+var ErrInvalidDocumentID = errors.New("invalid document id")
+var ErrInvalidFileName = errors.New("invalid file name")
+var ErrInvalidMimeType = errors.New("invalid mime type")
+var ErrInvalidSizeBytes = errors.New("invalid size bytes")
+var ErrInvalidCommitToken = errors.New("invalid commit token")
+var ErrAttachmentNotFound = errors.New("attachment not found")
+var ErrAttachmentAlreadyDeleted = errors.New("attachment already deleted")
+var ErrAttachmentAlreadyActive = errors.New("attachment already active")
+var ErrAttachmentNotDeleted = errors.New("attachment not deleted")
+var ErrAttachmentUploadNotFound = errors.New("attachment upload not found")
+var ErrAttachmentSizeMismatch = errors.New("attachment size mismatch")
+var ErrAttachmentChecksumMismatch = errors.New("attachment checksum mismatch")
+var ErrKnowledgeBaseNotFound = errors.New("knowledge base not found")
+var ErrKnowledgeBaseDeleted = errors.New("knowledge base deleted")
+var ErrCardNotFound = errors.New("card not found")
+var ErrCardDeleted = errors.New("card deleted")
+var ErrDocumentNotFound = errors.New("document not found")
+var ErrDocumentDeleted = errors.New("document deleted")
+var ErrDocumentCardMismatch = errors.New("document card mismatch")

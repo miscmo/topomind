@@ -1,0 +1,160 @@
+/**
+ * TopoMind Domain Types
+ * Pure domain model types — no UI constants here.
+ * See constants.ts for visual/design constants.
+ */
+import type { Node, Edge } from '@xyflow/react'
+
+// ============== 视图状态 ==============
+
+/** 应用视图类型 */
+export type AppView = 'setup' | 'workspace'
+
+// ============== 图谱元数据 ==============
+
+/**
+ * _graph.json 中的 children 条目
+ * key = 目录名（唯一），name = 显示名称（可不同）
+ */
+export interface GraphChild {
+  name: string
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  expanded?: boolean
+  style?: KnowledgeNodeStyle
+  expandedWidth?: number
+  expandedHeight?: number
+}
+
+/**
+ * _graph.json 中的 edges 条目
+ */
+export type EdgeLineMode = 'smoothstep' | 'straight'
+export type EdgeLineStyle = 'solid' | 'dashed'
+
+export interface GraphEdge {
+  id: string
+  source: string
+  target: string
+  relation: EdgeRelation
+  weight: EdgeWeight
+  lineMode?: EdgeLineMode
+  lineStyle?: EdgeLineStyle
+  color?: string
+  arrow?: boolean
+  /** 高亮状态（搜索/选中连线时置 true） */
+  highlighted?: boolean
+  /** 淡化状态（其他连线淡化时置 true） */
+  faded?: boolean
+}
+
+/**
+ * _graph.json 完整结构
+ */
+export interface GraphMeta {
+  children?: Record<string, GraphChild>
+  edges?: GraphEdge[]
+  zoom?: number | null
+  pan?: { x: number; y: number } | null
+  canvasBounds?: object | null
+}
+
+// ============== 边类型 ==============
+
+/** 关系类型 */
+export type EdgeRelation = '演进' | '依赖' | '相关'
+
+/** 边权重（决定主线/次线） */
+export type EdgeWeight = 'main' | 'minor'
+
+// ============== React Flow 节点/边 ==============
+
+/**
+ * React Flow 自定义节点数据
+ */
+export interface KnowledgeNodeData {
+  /** 显示名称（来自 _graph.children[name].name） */
+  label: string
+  /** 父节点 ID（顶层 KB 无 parent） */
+  parent?: string
+  /** 域颜色 */
+  domainColor?: string
+  /** 子节点数量（用于徽章显示） */
+  childCount?: number
+  /** 是否存在卡片摘要内容 */
+  hasContent?: boolean
+  hasDetail?: boolean
+  /** 选中状态 */
+  selected?: boolean
+  /** 悬停状态 */
+  hovered?: boolean
+  /** 上次展开时的宽度 */
+  expandedWidth?: number
+  /** 上次展开时的高度 */
+  expandedHeight?: number
+  /** 上次收起时的宽度 */
+  collapsedWidth?: number
+  /** 上次收起时的高度 */
+  collapsedHeight?: number
+  /** 作为连线目标高亮 */
+  connectTarget?: boolean
+  nodeStyle?: KnowledgeNodeStyle
+  titleEditRequested?: boolean
+  /** Index signature for React Flow Record<string, unknown> compatibility */
+  [key: string]: unknown
+}
+
+export interface KnowledgeNodeStyle {
+  headerFontSize?: number
+  bodyFontSize?: number
+  headerColor?: string
+  headerBackgroundColor?: string
+  headerFontWeight?: 'normal' | 'bold'
+  headerFontStyle?: 'normal' | 'italic'
+  borderColor?: string
+  borderWidth?: number
+  borderRadius?: number
+}
+
+/** TopoMind 知识卡片节点 */
+export type KnowledgeNode = Node<KnowledgeNodeData, 'knowledgeCard'>
+
+/** TopoMind 边 */
+export type KnowledgeEdge = Edge<{
+  relation: EdgeRelation
+  weight: EdgeWeight
+  lineMode?: EdgeLineMode
+  lineStyle?: EdgeLineStyle
+  color?: string
+  arrow?: boolean
+  highlighted?: boolean
+  faded?: boolean
+  /** 选中状态（运行时状态，不持久化） */
+  selected?: boolean
+}>
+
+// ============== 房间/导航 ==============
+
+/** 房间信息 */
+export interface Room {
+  id: string
+  kbId: string
+  name: string
+}
+
+/** 房间历史条目 */
+export interface RoomHistoryItem {
+  room: Room
+  savedZoom?: number
+  savedPan?: { x: number; y: number }
+}
+
+// ============== IPC 响应类型 ==============
+
+/** KB 列表项 */
+export interface KBListItem {
+  name: string
+  childCount?: number
+}
