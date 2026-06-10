@@ -34,10 +34,8 @@ export default defineConfig({
           },
         },
         processAsync: true,
-        onstart({ startup, url }) {
-          startup(['.'], {
-            env: { ...process.env, VITE_DEV_SERVER_URL: url },
-          })
+        onstart({ startup }) {
+          startup()
         },
       },
       preload: {
