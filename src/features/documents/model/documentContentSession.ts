@@ -24,11 +24,30 @@ export function prepareStructuredDocumentContentForSave(value: DocumentContentVa
 }
 
 function canonicalizeDocumentContent(value: DocumentContentValue): DocumentContentValue {
-  if (typeof value !== 'string') return value
+  if (typeof value !== 'string') {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const cloned = { ...value } as Record<string, unknown>
+      if (cloned.metadata && typeof cloned.metadata === 'object') {
+        const meta = { ...(cloned.metadata as Record<string, unknown>) }
+        delete meta.updatedAt
+        delete meta.createdAt
+        cloned.metadata = meta
+      }
+      return cloned
+    }
+    return value
+  }
   const trimmed = value.trim()
   if (!trimmed) return ''
   try {
-    return JSON.parse(trimmed)
+    const parsed = JSON.parse(trimmed)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      if (parsed.metadata && typeof parsed.metadata === 'object') {
+        delete parsed.metadata.updatedAt
+        delete parsed.metadata.createdAt
+      }
+    }
+    return parsed
   } catch {
     return value
   }

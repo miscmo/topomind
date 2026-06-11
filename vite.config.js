@@ -35,7 +35,12 @@ export default defineConfig({
         },
         processAsync: true,
         onstart({ startup }) {
-          startup()
+          if (process.env.VSCODE_DEBUG) {
+            console.log('[startup] Electron App')
+          } else {
+            startup(['.', '--no-sandbox']).then(() => {
+            }).catch(() => {})
+          }
         },
       },
       preload: {

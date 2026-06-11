@@ -283,13 +283,17 @@ async function confirmAndFlushBeforeExit(reason) {
 
   const flushResult = await flushRendererDirtyTabs();
   if (!flushResult.ok) {
-    await dialog.showMessageBox(win, {
+    const errorResponse = await dialog.showMessageBox(win, {
       type: 'error',
-      buttons: ['知道了'],
+      buttons: ['取消', '强制退出(可能丢失修改)'],
       defaultId: 0,
+      cancelId: 0,
       title: '保存失败',
-      message: '存在修改未能成功写入磁盘，本次操作已取消。',
+      message: `存在修改未能成功写入磁盘。\n\n错误信息: ${flushResult.error || '未知错误'}`,
     });
+    if (errorResponse.response === 1) {
+      return { ok: true, hasDirty: true };
+    }
     return { ok: false, failed: true };
   }
 
@@ -298,7 +302,8 @@ async function confirmAndFlushBeforeExit(reason) {
 
 function registerIPC() {
   ipcMain.on('app:close-guard:response', function(event, payload) {
-    if (!win || win.isDestroyed() || event.sender !== win.webContents) return;
+    if (!win || win.isDestroyed()) return;
+    if (event.sender.id !== win.webContents.id) return;
     if (!payload || typeof payload !== 'object') return;
     const requestId = typeof payload.requestId === 'string' ? payload.requestId : '';
     if (!requestId) return;

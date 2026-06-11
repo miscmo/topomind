@@ -31,15 +31,16 @@ export function registerTabSaver(tabId: string, saver: Saver, isDirty: DirtyChec
   }
 }
 
-export async function flushTabs(tabIds: string[]): Promise<{ ok: boolean; failedTabId?: string }> {
+export async function flushTabs(tabIds: string[]): Promise<{ ok: boolean; failedTabId?: string; error?: string }> {
   for (const tabId of tabIds) {
     const entries = tabSavers.get(tabId)
     if (!entries) continue
     for (const entry of entries) {
       try {
         await entry.saver()
-      } catch {
-        return { ok: false, failedTabId: tabId }
+      } catch (e) {
+        console.error(`[close-guard] flush error on tab ${tabId}`, e)
+        return { ok: false, failedTabId: tabId, error: e instanceof Error ? e.message : String(e) }
       }
     }
   }
