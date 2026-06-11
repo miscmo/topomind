@@ -338,7 +338,7 @@ function SmartDocumentAdapter({
         onTocItemClickReady={onTocItemClickReady}
         uploadFile={uploadFile}
         resolveFileUrl={resolveFileUrl}
-        onWordCountChange={(stats: any) => onWordCountChange(stats)}
+        onWordCountChange={onWordCountChange}
         attachmentInsertTargetKey={attachmentInsertTargetKey}
       />
     </Suspense>

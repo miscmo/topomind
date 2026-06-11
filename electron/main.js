@@ -681,8 +681,8 @@ function createWindow() {
   } else {
     win.loadFile(rendererIndexPath);
   }
-  win.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    console.log(`[Browser Console] ${level} ${message} (${sourceId}:${line})`);
+  win.webContents.on('console-message', ({ level, message, lineNumber, sourceId }) => {
+    console.log(`[Browser Console] ${level} ${message} (${sourceId}:${lineNumber})`);
   });
   // Open the DevTools.
   // win.webContents.openDevTools()
