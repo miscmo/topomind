@@ -78,11 +78,12 @@ export function useGraph(tabId: string) {
     () => buildGraphNavigation({
       tabId,
       getActiveGraphSession,
-      saveNow: ops.saveNow,
+      captureSaveSnapshot: ops.captureSaveSnapshot,
+      saveSnapshot: ops.saveSnapshot,
       loadRoom,
       storeApi,
     }),
-    [tabId, getActiveGraphSession, ops.saveNow, loadRoom, storeApi]
+    [tabId, getActiveGraphSession, ops.captureSaveSnapshot, ops.saveSnapshot, loadRoom, storeApi]
   )
 
   const { flushCurrentRoomSave } = useGraphPersistence({

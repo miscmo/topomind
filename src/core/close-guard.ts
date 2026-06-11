@@ -1,6 +1,11 @@
 type Saver = () => Promise<void>
 type DirtyChecker = () => boolean
 
+interface CloseGuardRequestMessage {
+  requestId: string
+  type: 'get-dirty-state' | 'flush-all-tabs' | 'flush-dirty-tabs'
+}
+
 interface SaverEntry {
   id: symbol
   saver: Saver
@@ -57,17 +62,50 @@ export async function flushAllDirtyTabs(): Promise<{ ok: boolean; failedTabId?: 
   return flushTabs(getDirtyState().dirtyTabIds)
 }
 
-// Expose close-guard helpers for the Electron main process quit/switch-workdir flow.
-if (typeof window !== 'undefined') {
-  ;(window as typeof window & {
-    __topomindCloseGuard?: {
-      getDirtyState: () => { hasDirty: boolean; dirtyTabIds: string[] }
-      flushAllTabs: () => Promise<{ ok: boolean; failedTabId?: string }>
-      flushAllDirtyTabs: () => Promise<{ ok: boolean; failedTabId?: string }>
+function isCloseGuardRequestMessage(value: unknown): value is CloseGuardRequestMessage {
+  if (!value || typeof value !== 'object') return false
+  const request = value as Partial<CloseGuardRequestMessage>
+  return typeof request.requestId === 'string'
+    && (request.type === 'get-dirty-state' || request.type === 'flush-all-tabs' || request.type === 'flush-dirty-tabs')
+}
+
+async function handleCloseGuardRequest(message: CloseGuardRequestMessage) {
+  if (!window.electronAPI) return
+
+  try {
+    if (message.type === 'get-dirty-state') {
+      window.electronAPI.send('app:close-guard:response', {
+        requestId: message.requestId,
+        type: message.type,
+        result: getDirtyState(),
+      })
+      return
     }
-  }).__topomindCloseGuard = {
-    getDirtyState,
-    flushAllTabs,
-    flushAllDirtyTabs,
+
+    const result = message.type === 'flush-all-tabs'
+      ? await flushAllTabs()
+      : await flushAllDirtyTabs()
+
+    window.electronAPI.send('app:close-guard:response', {
+      requestId: message.requestId,
+      type: message.type,
+      result,
+    })
+  } catch (error) {
+    window.electronAPI.send('app:close-guard:response', {
+      requestId: message.requestId,
+      type: message.type,
+      result: {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    })
   }
+}
+
+if (typeof window !== 'undefined' && window.electronAPI) {
+  window.electronAPI.on('app:close-guard:request', (message: unknown) => {
+    if (!isCloseGuardRequestMessage(message)) return
+    void handleCloseGuardRequest(message)
+  })
 }

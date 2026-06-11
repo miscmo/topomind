@@ -35,6 +35,11 @@ export interface GraphOpsDeps {
   storeApi: StoreApi<GraphState>
 }
 
+export interface GraphSaveSnapshot {
+  dirPath: string
+  meta: GraphMeta
+}
+
 export function buildGraphOperations(deps: GraphOpsDeps) {
   const {
     tabId,
@@ -48,21 +53,30 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   // ===== Internal helpers =====
 
-  const saveNow = async (dirPath: string) => {
-    if (!dirPath) return
+  const buildGraphMetaSnapshot = (store: GraphState): GraphMeta => buildMetaFromNodesEdges(
+    Array.from(store.nodesMap.values()),
+    Array.from(store.edgesMap.values()),
+    { zoom: store.viewport.zoom, pan: { x: store.viewport.x, y: store.viewport.y } }
+  )
+
+  const captureSaveSnapshot = (dirPath: string): GraphSaveSnapshot | null => {
+    if (!dirPath) return null
     if (currentLoadedRoomPathRef.current !== dirPath) {
-      return
+      return null
     }
-    const store = storeApi.getState()
-    await storage.flushGraphSave(
+    return {
       dirPath,
-      () => buildMetaFromNodesEdges(
-        Array.from(store.nodesMap.values()),
-        Array.from(store.edgesMap.values()),
-        { zoom: store.viewport.zoom, pan: { x: store.viewport.x, y: store.viewport.y } }
-      ),
-      undefined
-    )
+      meta: buildGraphMetaSnapshot(storeApi.getState()),
+    }
+  }
+
+  const saveSnapshot = async (snapshot: GraphSaveSnapshot | null) => {
+    if (!snapshot?.dirPath) return
+    await storage.flushGraphSave(snapshot.dirPath, () => snapshot.meta, undefined)
+  }
+
+  const saveNow = async (dirPath: string) => {
+    await saveSnapshot(captureSaveSnapshot(dirPath))
   }
 
   // ===== Node CRUD =====
@@ -111,6 +125,8 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     // Selection
     ...selectionOps,
     // Internal
+    captureSaveSnapshot,
+    saveSnapshot,
     saveNow,
   }
 }

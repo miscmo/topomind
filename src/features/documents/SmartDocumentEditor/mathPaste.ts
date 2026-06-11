@@ -1,4 +1,69 @@
 import { markdownToHTML } from '@blocknote/core'
+import DOMPurify from 'dompurify'
+
+const SANITIZE_OPTIONS = {
+  ALLOWED_TAGS: [
+    'a',
+    'blockquote',
+    'br',
+    'caption',
+    'code',
+    'col',
+    'colgroup',
+    'div',
+    'em',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'hr',
+    'i',
+    'img',
+    'li',
+    'ol',
+    'p',
+    'pre',
+    's',
+    'span',
+    'strong',
+    'sub',
+    'sup',
+    'table',
+    'tbody',
+    'td',
+    'th',
+    'thead',
+    'tr',
+    'u',
+    'ul',
+  ],
+  ALLOWED_ATTR: [
+    'alt',
+    'colspan',
+    'data-content-type',
+    'data-expression',
+    'data-inline-content-type',
+    'data-language',
+    'data-latex',
+    'height',
+    'href',
+    'rel',
+    'rowspan',
+    'src',
+    'target',
+    'title',
+    'width',
+  ],
+  KEEP_CONTENT: true,
+  ADD_DATA_URI_TAGS: ['img'],
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|local-file):|data:image\/(?:bmp|gif|jpeg|jpg|png|svg\+xml|webp);base64,|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+}
+
+function sanitizeEditorHtml(html: string): string {
+  return DOMPurify.sanitize(html, SANITIZE_OPTIONS)
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -263,7 +328,7 @@ function replaceBlockMarkdownInHtmlDocument(root: ParentNode) {
   for (const pre of pres) {
     if (!pre.querySelector('code')) {
       const code = document.createElement('code')
-      code.innerHTML = pre.innerHTML
+      code.textContent = pre.textContent || ''
       pre.innerHTML = ''
       pre.appendChild(code)
     }
@@ -370,8 +435,9 @@ function replaceInlineMarkdownInHtmlDocument(root: ParentNode) {
 }
 
 export function convertMixedHtmlToHtml(html: string): string {
+  const sanitizedHtml = sanitizeEditorHtml(html)
   const parser = new DOMParser()
-  const doc = parser.parseFromString(html, 'text/html')
+  const doc = parser.parseFromString(sanitizedHtml, 'text/html')
   
   // 1. 深度解析并转换 HTML 中的 Markdown 语法（块级与行内）
   replaceBlockMarkdownInHtmlDocument(doc.body)
@@ -381,5 +447,5 @@ export function convertMixedHtmlToHtml(html: string): string {
   replaceBlockMathInHtmlDocument(doc.body)
   replaceInlineMathInHtmlDocument(doc.body)
   
-  return doc.body.innerHTML
+  return sanitizeEditorHtml(doc.body.innerHTML)
 }

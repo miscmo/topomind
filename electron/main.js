@@ -40,6 +40,9 @@ const HOME_WINDOW_WIDTH = 1400;
 const HOME_WINDOW_HEIGHT = 900;
 const WINDOW_BACKGROUND_COLOR = '#ffffff';
 const IS_DEV = !!process.env.VITE_DEV_SERVER_URL;
+const CLOSE_GUARD_REQUEST_TIMEOUT_MS = 5000;
+let closeGuardRequestSeq = 0;
+const pendingCloseGuardRequests = new Map();
 
 function buildLocalFileUrl(absPath) {
   return pathToFileURL(absPath).href.replace(/^file:\/\//i, 'local-file://');
@@ -171,6 +174,57 @@ function isTrustedAppUrl(rawUrl) {
   }
 }
 
+function sanitizeCloseGuardDirtyState(result) {
+  const dirtyTabIds = Array.isArray(result && result.dirtyTabIds)
+    ? result.dirtyTabIds.filter(function(tabId) { return typeof tabId === 'string'; })
+    : [];
+  return {
+    hasDirty: !!(result && result.hasDirty),
+    dirtyTabIds,
+  };
+}
+
+function sanitizeCloseGuardFlushResult(result) {
+  return {
+    ok: !!(result && result.ok),
+    hasDirty: result && typeof result.hasDirty === 'boolean' ? result.hasDirty : true,
+    failedTabId: result && typeof result.failedTabId === 'string' ? result.failedTabId : null,
+    error: result && typeof result.error === 'string' ? result.error : null,
+  };
+}
+
+function resolveCloseGuardRequest(requestId, payload) {
+  const pending = pendingCloseGuardRequests.get(requestId);
+  if (!pending) return;
+  if (pending.timer) clearTimeout(pending.timer);
+  pendingCloseGuardRequests.delete(requestId);
+  pending.resolve(payload);
+}
+
+function requestRendererCloseGuard(type) {
+  if (!win || win.isDestroyed()) {
+    if (type === 'get-dirty-state') {
+      return Promise.resolve({ hasDirty: false, dirtyTabIds: [] });
+    }
+    return Promise.resolve({ ok: true, hasDirty: false, failedTabId: null, error: null });
+  }
+
+  const requestId = 'close-guard-' + (++closeGuardRequestSeq);
+  return new Promise(function(resolve) {
+    const timer = setTimeout(function() {
+      pendingCloseGuardRequests.delete(requestId);
+      if (type === 'get-dirty-state') {
+        resolve({ hasDirty: true, dirtyTabIds: [] });
+        return;
+      }
+      resolve({ ok: false, hasDirty: true, failedTabId: null, error: 'close-guard-timeout' });
+    }, CLOSE_GUARD_REQUEST_TIMEOUT_MS);
+
+    pendingCloseGuardRequests.set(requestId, { resolve, timer, type });
+    win.webContents.send('app:close-guard:request', { requestId, type });
+  });
+}
+
 // ============================================================
 // IPC HANDLERS
 // ============================================================
@@ -179,32 +233,24 @@ function isTrustedAppUrl(rawUrl) {
  * 注册渲染进程与主进程之间的所有 IPC 通道。
  */
 async function readRendererDirtyState() {
-  if (!win || win.isDestroyed()) return { hasDirty: false, dirtyTabIds: [] };
   try {
-    const result = await win.webContents.executeJavaScript(`(() => {
-      const guard = window.__topomindCloseGuard;
-      return guard ? guard.getDirtyState() : { hasDirty: false, dirtyTabIds: [] };
-    })()`);
-    return result || { hasDirty: false, dirtyTabIds: [] };
+    const result = await requestRendererCloseGuard('get-dirty-state');
+    return sanitizeCloseGuardDirtyState(result);
   } catch (e) {
-    return { hasDirty: false, dirtyTabIds: [] };
+    return { hasDirty: true, dirtyTabIds: [] };
   }
 }
 
 async function flushRendererDirtyTabs() {
-  if (!win || win.isDestroyed()) return { ok: true, hasDirty: false };
   try {
-    const result = await win.webContents.executeJavaScript(`(async () => {
-      const guard = window.__topomindCloseGuard;
-      if (!guard) return { ok: true, hasDirty: false };
-      const state = guard.getDirtyState();
-      if (!state.hasDirty) return { ok: true, hasDirty: false };
-      const flushResult = await guard.flushAllDirtyTabs();
-      return { ok: !!flushResult.ok, hasDirty: true, failedTabId: flushResult.failedTabId || null };
-    })()`);
-    return result || { ok: true, hasDirty: false };
+    const dirtyState = await readRendererDirtyState();
+    if (!dirtyState.hasDirty) {
+      return { ok: true, hasDirty: false, failedTabId: null, error: null };
+    }
+    const result = await requestRendererCloseGuard('flush-dirty-tabs');
+    return sanitizeCloseGuardFlushResult({ ...result, hasDirty: true });
   } catch (e) {
-    return { ok: false, hasDirty: true };
+    return { ok: false, hasDirty: true, failedTabId: null, error: e && e.message ? e.message : String(e) };
   }
 }
 
@@ -251,6 +297,20 @@ async function confirmAndFlushBeforeExit(reason) {
 }
 
 function registerIPC() {
+  ipcMain.on('app:close-guard:response', function(event, payload) {
+    if (!win || win.isDestroyed() || event.sender !== win.webContents) return;
+    if (!payload || typeof payload !== 'object') return;
+    const requestId = typeof payload.requestId === 'string' ? payload.requestId : '';
+    if (!requestId) return;
+    const pending = pendingCloseGuardRequests.get(requestId);
+    if (!pending) return;
+    if (pending.type === 'get-dirty-state') {
+      resolveCloseGuardRequest(requestId, sanitizeCloseGuardDirtyState(payload.result));
+      return;
+    }
+    resolveCloseGuardRequest(requestId, sanitizeCloseGuardFlushResult(payload.result));
+  });
+
   // ----- File system handlers -----
   ipcMain.handle('fs:listKBs', function(e, rootDir) { return fileService.listKBs(requireActiveWorkDir(rootDir)); });
   ipcMain.handle('fs:listTrashKBs', function(e, rootDir) { return fileService.listTrashKBs(requireActiveWorkDir(rootDir)); });
@@ -760,6 +820,9 @@ function createWindow() {
   });
 
   win.on('closed', function() {
+    for (const requestId of pendingCloseGuardRequests.keys()) {
+      resolveCloseGuardRequest(requestId, { ok: false, hasDirty: true, failedTabId: null, error: 'window-closed' });
+    }
     win = null;
   });
 }

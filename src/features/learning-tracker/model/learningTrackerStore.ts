@@ -45,7 +45,7 @@ interface LearningTrackerState {
   init: () => Promise<void>
   recordActivity: () => void
   tick: () => void
-  flush: (rootDirOverride?: string | null) => Promise<void>
+  flush: (rootDirOverride?: string | null, stateSnapshot?: LearningTrackerState) => Promise<void>
   setIdle: () => void
   shutdown: (rootDirOverride?: string | null) => Promise<void>
 }
@@ -119,6 +119,7 @@ export const useLearningTrackerStore = create<LearningTrackerState>((set, get) =
   let tickInterval: ReturnType<typeof setInterval> | null = null
   let saveInterval: ReturnType<typeof setInterval> | null = null
   let activeFlush: Promise<void> | null = null
+  let activeDateRollover: Promise<void> | null = null
   let queuedFlush = false
 
   const clearTimers = () => {
@@ -148,11 +149,11 @@ export const useLearningTrackerStore = create<LearningTrackerState>((set, get) =
     }
   })
 
-  const doFlush = async (rootDirOverride?: string | null) => {
+  const doFlush = async (rootDirOverride?: string | null, stateSnapshot?: LearningTrackerState) => {
     const rootDir = resolveRootDir(rootDirOverride)
     if (!rootDir) return
 
-    const state = get()
+    const state = stateSnapshot || get()
     if (!state.meta) return
 
     try {
@@ -200,16 +201,21 @@ export const useLearningTrackerStore = create<LearningTrackerState>((set, get) =
 
       await FSB.writeLearningStatsData(rootDir, null, nextMeta)
 
-      set(current => ({
-        meta: nextMeta,
-        lastFlushedDuration: state.todayDuration
-      }))
+      set(current => {
+        if (stateSnapshot && current.currentDateStr !== stateSnapshot.currentDateStr) {
+          return { meta: nextMeta }
+        }
+        return {
+          meta: nextMeta,
+          lastFlushedDuration: state.todayDuration
+        }
+      })
     } catch (err) {
       console.error("Failed to flush learning stats", err)
     }
   }
 
-  const enqueueFlush = async (rootDirOverride?: string | null) => {
+  const enqueueFlush = async (rootDirOverride?: string | null, stateSnapshot?: LearningTrackerState) => {
     if (activeFlush) {
       queuedFlush = true
       return activeFlush
@@ -217,10 +223,12 @@ export const useLearningTrackerStore = create<LearningTrackerState>((set, get) =
 
     activeFlush = (async () => {
       let override = rootDirOverride
+      let snapshot = stateSnapshot
       do {
         queuedFlush = false
-        await doFlush(override)
+        await doFlush(override, snapshot)
         override = undefined
+        snapshot = undefined
       } while (queuedFlush)
     })().finally(() => {
       activeFlush = null
@@ -321,27 +329,38 @@ export const useLearningTrackerStore = create<LearningTrackerState>((set, get) =
 
     tick: () => {
       const now = Date.now()
-      const { isActive, lastActiveTime, currentSession, todayDuration, currentDateStr } = get()
+      const state = get()
+      const { isActive, lastActiveTime, currentSession, todayDuration, currentDateStr } = state
       const rootDir = useWorkspaceStore.getState().currentWorkDir
       if (!rootDir) return
 
       const todayStr = getTodayDateStr()
       if (todayStr !== currentDateStr) {
+        if (activeDateRollover) return
+
         const keepActive = isActive && ((now - lastActiveTime) / 1000) <= IDLE_THRESHOLD
-        void get().flush(rootDir).then(() => {
-          set({
-            currentDateStr: todayStr,
-            todayDuration: 0,
-            lastFlushedDuration: 0,
-            currentSession: keepActive ? {
-              id: now.toString(),
-              startTime: now,
-              endTime: now,
-              duration: 0,
-              context: resolveLearningSessionContext(),
-            } : null,
-            isActive: keepActive
-          })
+        
+        // 先冻结旧日期的状态快照
+        const snapshot = { ...state }
+
+        // 立即更新 store 到新日期，避免后续 tick 污染旧状态
+        set({
+          currentDateStr: todayStr,
+          todayDuration: 0,
+          lastFlushedDuration: 0,
+          currentSession: keepActive ? {
+            id: now.toString(),
+            startTime: now,
+            endTime: now,
+            duration: 0,
+            context: resolveLearningSessionContext(),
+          } : null,
+          isActive: keepActive
+        })
+
+        // 异步 flush 旧快照
+        activeDateRollover = enqueueFlush(rootDir, snapshot).finally(() => {
+          activeDateRollover = null
         })
         return
       }
@@ -365,8 +384,8 @@ export const useLearningTrackerStore = create<LearningTrackerState>((set, get) =
       }
     },
 
-    flush: async (rootDirOverride?: string | null) => {
-      await enqueueFlush(rootDirOverride)
+    flush: async (rootDirOverride?: string | null, stateSnapshot?: LearningTrackerState) => {
+      await enqueueFlush(rootDirOverride, stateSnapshot)
     },
 
     shutdown: async (rootDirOverride?: string | null) => {

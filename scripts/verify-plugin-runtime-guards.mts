@@ -80,6 +80,11 @@ async function loadModuleWithVite<T = Record<string, unknown>>(entryPath: string
           '@': path.resolve(repoRoot, 'src'),
         },
       },
+      optimizeDeps: {
+        noDiscovery: true,
+        include: [],
+        holdUntilCrawlEnd: false,
+      },
       server: {
         middlewareMode: true,
       },

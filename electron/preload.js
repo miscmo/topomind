@@ -31,11 +31,13 @@ const ALLOWED_CHANNELS = new Set([
 ]);
 
 const ALLOWED_SEND_CHANNELS = new Set([
+  'app:close-guard:response',
   'log:subscribe',
   'log:unsubscribe',
 ]);
 
 const ALLOWED_RECEIVE_CHANNELS = new Set([
+  'app:close-guard:request',
   'app:menu-action',
   'app:reset-session',
   'app:window-state-change',

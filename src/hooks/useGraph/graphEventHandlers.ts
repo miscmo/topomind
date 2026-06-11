@@ -194,9 +194,8 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     }
 
     try {
-      if (dirPath) {
-        await ops.saveNow(dirPath)
-      }
+      const snapshot = dirPath ? ops.captureSaveSnapshot(dirPath) : null
+      if (snapshot) await ops.saveSnapshot(snapshot)
 
       tabStore.getState().enterRoomInTab(tabId, {
         path: absoluteChildPath,

@@ -1,17 +1,19 @@
 import { tabStore } from '../../stores/tabs/tabStore'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
+import type { GraphSaveSnapshot } from './graphOperations'
 
 export interface GraphNavigationDeps {
   tabId: string
   storeApi: StoreApi<GraphState>
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
-  saveNow: (dirPath: string) => Promise<void>
+  captureSaveSnapshot: (dirPath: string) => GraphSaveSnapshot | null
+  saveSnapshot: (snapshot: GraphSaveSnapshot | null) => Promise<void>
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
 }
 
 export function buildGraphNavigation(deps: GraphNavigationDeps) {
-  const { tabId, storeApi, getActiveGraphSession, saveNow, loadRoom } = deps
+  const { tabId, storeApi, getActiveGraphSession, captureSaveSnapshot, saveSnapshot, loadRoom } = deps
 
   const clearSelection = () => {
     const store = storeApi.getState()
@@ -26,7 +28,8 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
 
   const navigateBack = async () => {
     const dirPath = getActiveGraphSession().roomPath
-    if (dirPath) await saveNow(dirPath)
+    const snapshot = dirPath ? captureSaveSnapshot(dirPath) : null
+    if (snapshot) await saveSnapshot(snapshot)
     clearSelection()
     tabStore.getState().goBackInTab(tabId)
   }
@@ -36,7 +39,8 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
     if (index < 0 || index >= historyLength) return
 
     const dirPath = getActiveGraphSession().roomPath
-    if (dirPath) await saveNow(dirPath)
+    const snapshot = dirPath ? captureSaveSnapshot(dirPath) : null
+    if (snapshot) await saveSnapshot(snapshot)
     clearSelection()
 
     const target = tabStore.getState().navigateToHistoryIndexInTab(tabId, index)
@@ -48,7 +52,8 @@ export function buildGraphNavigation(deps: GraphNavigationDeps) {
     const dirPath = graphSession.roomPath
     const kbPath = graphSession.kbPath || dirPath || ''
     if (!kbPath) return
-    if (dirPath) await saveNow(dirPath)
+    const snapshot = dirPath ? captureSaveSnapshot(dirPath) : null
+    if (snapshot) await saveSnapshot(snapshot)
     clearSelection()
     tabStore.getState().restoreRootRoom(tabId, {
       kbPath,
