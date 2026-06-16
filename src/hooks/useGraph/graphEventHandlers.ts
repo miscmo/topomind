@@ -51,7 +51,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     (changes: NodeChange[]) => {
       const positionChanges: Array<{ id: string; position?: { x: number; y: number }; dragging?: boolean }> = []
       const removeIds: string[] = []
-      const dimensionChanges: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean }> = []
+      const dimensionChanges: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean; origin?: 'auto-size' | 'manual' }> = []
       const selectionChanges: Array<{ id: string; selected: boolean }> = []
 
       for (const change of changes) {
@@ -65,7 +65,12 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
         } else if (change.type === 'remove') {
           removeIds.push(change.id)
         } else if (change.type === 'dimensions') {
-          dimensionChanges.push({ id: change.id, dimensions: change.dimensions, resizing: change.resizing })
+          dimensionChanges.push({
+            id: change.id,
+            dimensions: change.dimensions,
+            resizing: change.resizing,
+            origin: (change as NodeChange & { origin?: 'auto-size' | 'manual' }).origin,
+          })
         } else if (change.type === 'select') {
           selectionChanges.push({ id: change.id, selected: change.selected })
         }

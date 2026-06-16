@@ -4,7 +4,7 @@ import { basenameRef } from '../../domain/graph/path-utils'
 
 export interface CardNodeServiceStorage {
   createCard: (parentRef: string, name: string) => Promise<string | null>
-  deleteCard: (cardRef: string) => Promise<unknown>
+  deleteCard: (cardRef: string, label?: string) => Promise<unknown>
   renameCard: (cardRef: string, newName: string) => Promise<unknown>
   readLayout: (roomRef: string) => Promise<GraphMeta>
   writeLayout: (roomRef: string, meta: GraphMeta) => Promise<void>
@@ -81,7 +81,8 @@ export async function deleteCardNodeAndPruneGraph(
   nodesById: Map<string, KnowledgeNode>,
   edgesById: Map<string, KnowledgeEdge>
 ): Promise<void> {
-  await storage.deleteCard(cardRef)
+  const node = nodesById.get(nodeId)
+  await storage.deleteCard(cardRef, node?.data?.label)
   nodesById.delete(nodeId)
   for (const [edgeId, edge] of edgesById.entries()) {
     if (edge.source === nodeId || edge.target === nodeId) {

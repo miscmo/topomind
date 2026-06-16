@@ -38,6 +38,33 @@ export function useGraphCanvasModel({
   
   const [zoomLevel, setZoomLevel] = useState(1)
   const zoomLevelRef = useRef(1)
+  const [isShiftPressed, setIsShiftPressed] = useState(false)
+  const [isMouseOverCanvas, setIsMouseOverCanvas] = useState(false)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(true)
+      }
+    }
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(false)
+      }
+    }
+    const handleBlur = () => setIsShiftPressed(false)
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('blur', handleBlur)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('blur', handleBlur)
+    }
+  }, [])
+
   const reactFlow = useReactFlow()
   const graph = useGraphContext()
   
@@ -50,6 +77,13 @@ export function useGraphCanvasModel({
 
   const handlePaneClick = useCallback(() => {
     onCloseContextMenu?.()
+    
+    // Check if format painter is active, if so, exit format painter mode
+    const uiStore = useGraphUiStore.getState()
+    if (uiStore.formatPainterStyle !== null) {
+      uiStore.setFormatPainterStyle(null)
+    }
+    
     graph.onPaneClick()
   }, [graph, onCloseContextMenu])
 
@@ -72,6 +106,14 @@ export function useGraphCanvasModel({
     if (viewportChanged) setStoredViewport(viewport)
   }, [setStoredViewport, storedViewport, updateZoomLevel])
 
+  useShortcut(['Escape'], (event) => {
+    if (activeTabId !== tabId) return
+    const uiStore = useGraphUiStore.getState()
+    if (uiStore.formatPainterStyle !== null) {
+      uiStore.setFormatPainterStyle(null)
+    }
+  }, { scope: 'canvas', preventDefault: false })
+
   useEffect(() => {
     updateZoomLevel(storedViewport.zoom)
   }, [storedViewport.zoom, updateZoomLevel])
@@ -80,6 +122,10 @@ export function useGraphCanvasModel({
     if (activeTabId !== tabId) return
     event.preventDefault()
     ;(graphStoreApi as any).temporal.getState().undo()
+    const graphSession = useTabStore.getState().tabs.find(t => t.id === tabId)?.graphSession
+    if (graphSession?.roomPath) {
+      void graph.saveNow(graphSession.roomPath)
+    }
     logAction('快捷键:撤销', 'GraphCanvas', { source: 'undo' })
   }, { scope: 'canvas', preventDefault: true })
 
@@ -87,6 +133,10 @@ export function useGraphCanvasModel({
     if (activeTabId !== tabId) return
     event.preventDefault()
     ;(graphStoreApi as any).temporal.getState().redo()
+    const graphSession = useTabStore.getState().tabs.find(t => t.id === tabId)?.graphSession
+    if (graphSession?.roomPath) {
+      void graph.saveNow(graphSession.roomPath)
+    }
     logAction('快捷键:重做', 'GraphCanvas', { source: 'redo' })
   }, { scope: 'canvas', preventDefault: true })
 
@@ -182,6 +232,30 @@ export function useGraphCanvasModel({
     setConnectingTargetId(null)
   }, [connectingSourceId, setConnectingTargetId])
 
+  const isFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
+
+  const handleCanvasMouseEnter = useCallback((e: React.MouseEvent) => {
+    setIsMouseOverCanvas(true)
+    setIsShiftPressed(e.shiftKey)
+  }, [])
+
+  const handleCanvasMouseLeave = useCallback((e: React.MouseEvent) => {
+    setIsMouseOverCanvas(false)
+    setIsShiftPressed(e.shiftKey)
+    if (connectingSourceId) {
+      handleConnectionMouseLeave()
+    }
+  }, [connectingSourceId, handleConnectionMouseLeave])
+
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isShiftPressed !== e.shiftKey) {
+      setIsShiftPressed(e.shiftKey)
+    }
+    if (connectingSourceId) {
+      handleConnectionMouseMove(e)
+    }
+  }, [isShiftPressed, connectingSourceId, handleConnectionMouseMove])
+
   return {
     state: {
       showGrid,
@@ -191,6 +265,9 @@ export function useGraphCanvasModel({
       storedViewport,
       zoomLevel,
       guideLines,
+      isFormatPainterActive,
+      isShiftPressed,
+      isMouseOverCanvas,
     },
     graph,
     actions: {
@@ -204,6 +281,9 @@ export function useGraphCanvasModel({
       handlePaneContextMenu,
       handleConnectionMouseMove,
       handleConnectionMouseLeave,
+      handleCanvasMouseEnter,
+      handleCanvasMouseLeave,
+      handleCanvasMouseMove,
     }
   }
 }

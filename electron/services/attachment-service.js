@@ -72,7 +72,7 @@ export function createAttachmentService(deps) {
 
     deleteAttachment(rootDir, cardPath, attachmentName) {
       var filePath = attachmentRefToPath(rootDir, cardPath, attachmentName);
-      moveToTrash(requireValidWorkDir(rootDir), filePath, 'attachments');
+      moveToTrash(requireValidWorkDir(rootDir), filePath, 'attachments', { cardPath: cardPath || '' });
     },
 
     listTrashAttachments(rootDir, cardPath) {
@@ -86,21 +86,35 @@ export function createAttachmentService(deps) {
 
     restoreTrashAttachment(rootDir, cardPath, trashName) {
       rootDir = requireValidWorkDir(rootDir);
-      var attachDir = attachmentDir(rootDir, cardPath);
-      var allowed = this.listTrashAttachments(rootDir, cardPath).some(function(item) {
-        return item.trashName === trashName;
-      });
-      if (!allowed) throw new Error('附件不属于当前文档回收站');
       var safeTrashName = nodePath.basename(String(trashName || '').trim());
       var trashDir = nodePath.join(rootDir, '.trash', 'attachments');
       var source = nodePath.resolve(trashDir, safeTrashName);
       if (!trashPathWithinDir(trashDir, source) || !nodeFs.existsSync(source)) {
         throw new Error('回收站附件不存在');
       }
+
       var meta = {};
       try {
         meta = readJsonFile(source + '.trash.json');
       } catch {}
+
+      // If cardPath is empty, try to guess from originalPath
+      if (!cardPath && meta.originalPath) {
+        var parentDir = nodePath.dirname(meta.originalPath).split(nodePath.sep).join('/');
+        if (parentDir.endsWith('/_attach')) {
+          cardPath = parentDir.slice(0, -('/_attach'.length));
+        } else if (parentDir === '_attach') {
+          cardPath = '';
+        }
+      }
+
+      var attachDir = attachmentDir(rootDir, cardPath);
+      var expectedOriginalDir = nodePath.relative(rootDir, attachDir).split(nodePath.sep).join('/');
+      var originalDir = nodePath.dirname(meta.originalPath || '').split(nodePath.sep).join('/');
+      if (originalDir !== expectedOriginalDir) {
+        throw new Error('附件不属于当前文档回收站');
+      }
+
       var fileName = safeFileName(meta.originalName || safeTrashName);
       ensureDir(attachDir);
       var target = uniqueFilePath(attachDir, fileName);

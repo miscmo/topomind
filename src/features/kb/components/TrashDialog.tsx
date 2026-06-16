@@ -1,10 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
-import { RotateCcw, Trash2 } from 'lucide-react'
-import { useStorage } from '../../../core/storage'
-import { logger } from '../../../core/logger'
-import { logAction } from '../../../core/log-backend'
+import { RotateCcw, Trash2, Book, FileText, Paperclip, AppWindow } from 'lucide-react'
 import type { FSBTrashItem } from '../../../core/fs-backend'
 import { modalOverlayBaseClassName, modalOverlayEnterClassName, modalPanelEnterClassName } from '../../../shared/ui/modal'
+import { useTrashDialogModel } from './TrashDialog/model/useTrashDialogModel'
 
 interface TrashDialogProps {
   visible: boolean
@@ -17,66 +14,28 @@ function formatDeletedAt(value: number) {
   return new Date(value).toLocaleString('zh-CN')
 }
 
+function getItemIcon(item: FSBTrashItem) {
+  if (item.category === 'kbs') {
+    if (item.meta?.kind === 'card') return <AppWindow className="h-4 w-4 text-indigo-500" />
+    return <Book className="h-4 w-4 text-[var(--color-primary)]" />
+  }
+  if (item.category === 'topo-documents') return <FileText className="h-4 w-4 text-sky-500" />
+  if (item.category === 'attachments') return <Paperclip className="h-4 w-4 text-amber-500" />
+  return <FileText className="h-4 w-4 text-gray-500" />
+}
+
+function getItemTypeName(item: FSBTrashItem) {
+  if (item.category === 'kbs') {
+    if (item.meta?.kind === 'card') return '节点'
+    return '知识库'
+  }
+  if (item.category === 'topo-documents') return '文档'
+  if (item.category === 'attachments') return '附件'
+  return '未知'
+}
+
 export function TrashDialog({ visible, onClose, refreshKBList }: TrashDialogProps) {
-  const storage = useStorage()
-  const [items, setItems] = useState<FSBTrashItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const loadItems = useCallback(async () => {
-    if (!visible) return
-    setLoading(true)
-    setError('')
-    try {
-      setItems(await storage.listTrashKBs())
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
-      setError(message)
-      logger.catch('TrashDialog', 'loadItems', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [storage, visible])
-
-  useEffect(() => {
-    void loadItems()
-  }, [loadItems])
-
-  const handleRestore = useCallback(async (item: FSBTrashItem) => {
-    setLoading(true)
-    setError('')
-    try {
-      const restoredName = await storage.restoreTrashKB(item.trashName)
-      await refreshKBList()
-      await loadItems()
-      logAction('回收站:恢复知识库', 'TrashDialog', { trashName: item.trashName, restoredName })
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
-      setError(message)
-      logger.catch('TrashDialog', 'handleRestore', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [loadItems, refreshKBList, storage])
-
-  const handleClear = useCallback(async () => {
-    if (items.length === 0) return
-    const confirmed = window.confirm('确定要永久清空工作区回收站中的知识库和已删除节点吗？该操作不可恢复。')
-    if (!confirmed) return
-    setLoading(true)
-    setError('')
-    try {
-      await storage.clearTrashKBs()
-      setItems([])
-      logAction('回收站:清空知识库', 'TrashDialog', { count: items.length })
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
-      setError(message)
-      logger.catch('TrashDialog', 'handleClear', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [items.length, storage])
+  const { items, loading, error, handleRestore, handleClear } = useTrashDialogModel(visible, refreshKBList)
 
   if (!visible) return null
 
@@ -87,12 +46,12 @@ export function TrashDialog({ visible, onClose, refreshKBList }: TrashDialogProp
     >
       <div className={`w-[560px] max-w-[92%] overflow-hidden rounded-2xl border border-[var(--color-border)] bg-surface shadow-[var(--shadow-lg)] ${modalPanelEnterClassName}`}>
         <div className="p-[18px_24px] bg-[var(--color-bg)] border-b border-[var(--color-border-light)] flex justify-between items-center [&>h3]:text-[var(--color-primary)] [&>h3]:text-[16px] [&>h3]:m-0 [&>h3]:font-bold">
-          <h3>知识库回收站</h3>
+          <h3>全局回收站</h3>
           <button className="w-7 h-7 rounded-md border-none bg-[var(--color-hover-bg)] text-[var(--color-text-muted)] cursor-pointer text-[14px] transition-all duration-75 hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)]" onClick={onClose}>✕</button>
         </div>
         <div className="p-[20px_24px]">
           {error && <div className="mb-3 rounded-lg bg-[var(--color-danger-soft)] px-3 py-2 text-[13px] text-[var(--color-danger)]">{error}</div>}
-          <div className="mb-4 text-[13px] text-[var(--color-text-secondary)]">这里显示已删除的知识库。清空时也会一并永久清理已删除节点占用的空间。文档和附件可在对应节点内的回收站中恢复或清空。恢复时如果原名称已存在，会自动添加后缀避免覆盖。</div>
+          <div className="mb-4 text-[13px] text-[var(--color-text-secondary)]">这里显示所有已删除的知识库、节点、文档和附件。清空操作不可恢复。恢复时如果原名称已存在，会自动添加后缀避免覆盖。</div>
           <div className="max-h-[360px] overflow-y-auto rounded-xl border border-[var(--color-border-light)]">
             {loading && items.length === 0 ? (
               <div className="p-8 text-center text-[13px] text-[var(--color-text-muted)]">加载中...</div>
@@ -101,9 +60,28 @@ export function TrashDialog({ visible, onClose, refreshKBList }: TrashDialogProp
             ) : (
               items.map((item) => (
                 <div key={item.trashName} className="flex items-center justify-between gap-4 border-b border-[var(--color-border-light)] p-3 last:border-b-0">
-                  <div className="min-w-0">
-                    <div className="truncate text-[14px] font-medium text-[var(--color-text-primary)]" title={item.originalName}>{item.originalName}</div>
-                    <div className="mt-1 truncate text-[12px] text-[var(--color-text-muted)]" title={item.originalPath || item.trashName}>删除时间：{formatDeletedAt(item.deletedAt)}</div>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--color-bg-muted)]">
+                      {getItemIcon(item)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-[14px] font-medium text-[var(--color-text-primary)]" title={item.businessName || item.originalName}>{item.businessName || item.originalName}</span>
+                        <span className="flex-shrink-0 rounded bg-[var(--color-border)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-secondary)]">{getItemTypeName(item)}</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-3 truncate text-[12px] text-[var(--color-text-muted)]">
+                        <span title={item.originalPath}>路径：{item.originalPath || item.trashName}</span>
+                        <span>时间：{formatDeletedAt(item.deletedAt)}</span>
+                        {item.isImage && item.previewUrl && (
+                          <div className="group relative flex items-center">
+                            <span className="cursor-pointer text-[var(--color-primary)] hover:underline">预览图片</span>
+                            <div className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg group-hover:block">
+                              <img src={item.previewUrl} alt="preview" className="h-auto w-full rounded object-contain" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <button
                     className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-hover-bg)] disabled:cursor-not-allowed disabled:opacity-50"

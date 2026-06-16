@@ -7,7 +7,11 @@ export function serializeStructuredDocumentContent(value: unknown): string {
 export function parseStructuredDocumentDraft(value: string): unknown {
   const trimmed = value.trim()
   if (!trimmed) return {}
-  return JSON.parse(trimmed)
+  try {
+    return JSON.parse(trimmed)
+  } catch (e) {
+    return {}
+  }
 }
 
 export function parseStructuredDocumentValue(value: unknown): unknown {

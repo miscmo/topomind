@@ -836,7 +836,8 @@ function _fs_scanTopoDocumentFiles(rootDir, cardPath, previousManifest) {
       var filePath = nodePath.join(docsDir, fileName);
       var stat = nodeFs.statSync(filePath);
       var previous = previousByPath.get(type + ':' + fileName);
-      var id = previous ? previous.id : 'doc_' + randomUUID().replace(/-/g, '');
+      var extension = TOPO_DOCUMENT_EXTENSIONS[type];
+      var id = previous ? previous.id : (fileName.endsWith(extension) ? fileName.slice(0, -extension.length) : 'doc_' + randomUUID().replace(/-/g, ''));
       documents[id] = {
         id: id,
         type: type,
@@ -1577,8 +1578,8 @@ const fileService = {
      * @param { string } dirPath: 相对于 kbs/ 的目录路径
      * @returns { void }
      */
-    deleteKbsDir: function(rootDir, dirPath) {
-      return kbService.deleteKbsDir(rootDir, dirPath);
+    deleteKbsDir: function(rootDir, dirPath, options) {
+      kbService.deleteKbsDir(rootDir, dirPath, options);
     },
 
     /**
@@ -1741,6 +1742,62 @@ const fileService = {
 
     readAttachmentDataUrl: function(rootDir, cardPath, attachmentRef) {
       return attachmentService.readAttachmentDataUrl(rootDir, cardPath, attachmentRef);
+    },
+
+    listAllTrashItems: function(rootDir) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      var kbs = trashService.listTrashItems(rootDir, 'kbs').map(item => {
+        var isCard = item.meta && item.meta.kind === 'card';
+        var businessName = item.originalName;
+        if (isCard && item.meta.label) {
+          businessName = item.meta.label;
+        }
+        return { ...item, category: 'kbs', businessName: businessName };
+      });
+      var docs = trashService.listTrashItems(rootDir, 'topo-documents').map(item => {
+        var topoItem = item.meta && item.meta.topoDocumentItem;
+        var businessName = topoItem && topoItem.title ? String(topoItem.title) : item.originalName;
+        return { ...item, category: 'topo-documents', businessName: businessName };
+      });
+      var attachments = trashService.listTrashItems(rootDir, 'attachments').map(item => {
+        var ext = nodePath.extname(item.originalName).slice(1).toLowerCase();
+        var isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
+        var previewUrl = null;
+        if (isImage) {
+          previewUrl = 'local-file://' + nodePath.join(rootDir, '.trash', 'attachments', item.trashName).replace(/\\/g, '/');
+        }
+        return { ...item, category: 'attachments', businessName: item.originalName, isImage: isImage, previewUrl: previewUrl };
+      });
+      return kbs.concat(docs, attachments).sort((a, b) => b.deletedAt - a.deletedAt);
+    },
+
+    restoreGlobalTrashItem: function(rootDir, category, trashName) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      
+      const handlers = {
+        'kbs': () => kbService.restoreTrashKB(rootDir, trashName),
+        'topo-documents': () => {
+          var item = trashService.listTrashItems(rootDir, 'topo-documents').find(i => i.trashName === trashName);
+          if (!item) throw new Error('回收站文档不存在');
+          return documentService.restoreTrashTopoDocument(rootDir, item.meta?.cardPath || '', trashName);
+        },
+        'attachments': () => {
+          var item = trashService.listTrashItems(rootDir, 'attachments').find(i => i.trashName === trashName);
+          if (!item) throw new Error('回收站附件不存在');
+          return attachmentService.restoreTrashAttachment(rootDir, item.meta?.cardPath || '', trashName);
+        }
+      };
+
+      const handler = handlers[category];
+      if (!handler) throw new Error('未知的回收站分类: ' + category);
+      return handler();
+    },
+
+    clearAllTrashItems: function(rootDir) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      trashService.clearTrashItems(rootDir, 'kbs');
+      trashService.clearTrashItems(rootDir, 'topo-documents');
+      trashService.clearTrashItems(rootDir, 'attachments');
     },
 
     /**

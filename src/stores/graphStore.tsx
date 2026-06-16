@@ -70,6 +70,10 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
     const node = state.nodesMap.get(nodeId)
     if (!node) return state
     const nextNode = updater(node)
+    
+    // Check if node actually changed to avoid unnecessary history states
+    if (node === nextNode) return state
+    
     const nextNodes = state.nodes.map(n => n.id === nodeId ? nextNode : n)
     const nextNodesMap = new Map(state.nodesMap)
     nextNodesMap.set(nodeId, nextNode)
@@ -98,8 +102,59 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
   }),
 }), { 
   partialize: (state) => ({ nodes: state.nodes, edges: state.edges }), // Only track nodes and edges for undo/redo
-  limit: 50 // Keep max 50 history steps
+  limit: 50, // Keep max 50 history steps
+  onSave: (pastState, currentState) => {
+    // Optional: hook for when a state is saved to history
+  },
+  equality: (a, b) => {
+    // Only add to history if actual data changes, ignore selection state changes
+    if (a.nodes.length !== b.nodes.length || a.edges.length !== b.edges.length) return false;
+    
+    // Deep comparison of node data and dimensions
+    for (let i = 0; i < a.nodes.length; i++) {
+      const nodeA = a.nodes[i];
+      const nodeB = b.nodes[i];
+      if (nodeA.id !== nodeB.id) return false;
+      const widthModeA = nodeA.data?.widthMode ?? 'auto';
+      const widthModeB = nodeB.data?.widthMode ?? 'auto';
+      if (widthModeA !== 'auto' || widthModeB !== 'auto') {
+        if (nodeA.width !== nodeB.width) return false;
+      }
+
+      const heightModeA = nodeA.data?.heightMode ?? 'auto';
+      const heightModeB = nodeB.data?.heightMode ?? 'auto';
+      if (heightModeA !== 'auto' || heightModeB !== 'auto') {
+        if (nodeA.height !== nodeB.height) return false;
+      }
+      if (nodeA.position?.x !== nodeB.position?.x || nodeA.position?.y !== nodeB.position?.y) return false;
+      if (JSON.stringify(nodeA.data) !== JSON.stringify(nodeB.data)) return false;
+    }
+
+    // Edge comparison
+    for (let i = 0; i < a.edges.length; i++) {
+      const edgeA = a.edges[i];
+      const edgeB = b.edges[i];
+      if (edgeA.id !== edgeB.id) return false;
+      if (JSON.stringify(edgeA.data) !== JSON.stringify(edgeB.data)) return false;
+    }
+    
+    return true;
+  }
 }))
+
+// Auto-sync maps when temporal state changes
+export const setupTemporalMapSync = (store: StoreApi<GraphState>) => {
+  store.subscribe((state, prevState) => {
+    // If nodes or edges array reference changed (which happens on undo/redo)
+    // We must unconditionally rebuild the maps based on the new array references
+    if (state.nodes !== prevState.nodes) {
+      store.setState({ nodesMap: buildNodesMap(state.nodes) })
+    }
+    if (state.edges !== prevState.edges) {
+      store.setState({ edgesMap: buildEdgesMap(state.edges) })
+    }
+  })
+}
 
 export const GraphStoreContext = createContext<StoreApi<GraphState> | null>(null)
 
@@ -107,6 +162,7 @@ export function GraphStoreProvider({ children }: { children: ReactNode }) {
   const storeRef = useRef<StoreApi<GraphState> | null>(null)
   if (!storeRef.current) {
     storeRef.current = createGraphStore()
+    setupTemporalMapSync(storeRef.current)
   }
   return <GraphStoreContext.Provider value={storeRef.current}>{children}</GraphStoreContext.Provider>
 }

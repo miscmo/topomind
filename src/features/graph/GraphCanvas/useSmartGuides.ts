@@ -219,6 +219,12 @@ export function useSmartGuides(nodes: Node[]) {
       }
     }
 
+    // If there are multiple nodes being dragged, ignore alignment guides
+    if (nodes.filter(n => n.selected).length > 1) {
+      bestSnapX = null;
+      bestSnapY = null;
+    }
+
     if (isResize) {
       const dimChange = change as Extract<NodeChange, { type: 'dimensions' }>
       if (bestSnapX?.snapWidth !== undefined && dimChange.dimensions) dimChange.dimensions.width = Math.max(bestSnapX.snapWidth, 10)

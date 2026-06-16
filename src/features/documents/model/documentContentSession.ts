@@ -10,9 +10,9 @@ export function areDocumentContentsEqual(left: DocumentContentValue, right: Docu
   return serializeStructuredDocumentContent(canonicalizeDocumentContent(left)) === serializeStructuredDocumentContent(canonicalizeDocumentContent(right))
 }
 
-export function prepareStructuredDocumentContentForSave(value: DocumentContentValue): Record<string, unknown> {
+export function prepareStructuredDocumentContentForSave(value: DocumentContentValue): Record<string, unknown> | null {
   if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
-    throw new Error('文档内容为空，为防止覆盖，已终止保存')
+    return null
   }
 
   const parsedContent = parseStructuredDocumentValue(value)

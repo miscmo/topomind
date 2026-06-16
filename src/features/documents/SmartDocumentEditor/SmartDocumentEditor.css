@@ -532,8 +532,8 @@
 
 /* Current block highlight */
 .smart-document-content .bn-block-outer[data-current-block="true"] > .bn-block > .bn-block-content {
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent) !important;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent) !important;
   transition: background-color 0.15s ease;
 }
 

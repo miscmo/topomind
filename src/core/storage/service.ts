@@ -126,17 +126,14 @@ export function createStore(backend: StorageBackend) {
         return cardInfo.ref
       } catch (e) { logger.catch('Store.createCard', `创建卡片失败: ${kbPath}/${cardName}`, e); throw e }
     },
-    async deleteCard(cardPath: string) {
+    async deleteCard(cardPath: string, label?: string) {
       try {
-        await backend.deleteCard(cardPath)
+        await backend.deleteCard(cardPath, label)
       } catch (e) { logger.catch('Store.deleteCard', `删除卡片失败: ${cardPath}`, e); throw e }
     },
     async renameCard(cardPath: string, newName: unknown) {
       const safeName = ensureValidName(newName, '卡片名称')
       try {
-        const parentPath = cardPath.includes('/') ? cardPath.slice(0, cardPath.lastIndexOf('/')) : ''
-        const siblings = await backend.listCards(parentPath)
-        if (siblings.some(s => s.ref !== cardPath && (s?.name || '').trim() === safeName)) throw new Error(`同级下已存在同名卡片：${safeName}`)
         await backend.renameCard(cardPath, safeName)
         return cardPath
       } catch (e) { logger.catch('Store.renameCard', `重命名卡片失败: ${cardPath} -> ${newName}`, e); throw e }
@@ -245,6 +242,21 @@ export function createStore(backend: StorageBackend) {
       try {
         return (await backend.listCards(cardPath)).length
       } catch (e) { logger.catch('Store.countChildren', `统计子节点失败: ${cardPath}`, e); throw e }
+    },
+    async listAllTrashItems() {
+      try {
+        return await backend.listAllTrashItems()
+      } catch (e) { logger.catch('Store.listAllTrashItems', '获取全局回收站失败', e); throw e }
+    },
+    async restoreGlobalTrashItem(category: string, trashName: string) {
+      try {
+        return await backend.restoreGlobalTrashItem(category, trashName)
+      } catch (e) { logger.catch('Store.restoreGlobalTrashItem', `恢复全局回收站项目失败: ${trashName}`, e); throw e }
+    },
+    async clearAllTrashItems() {
+      try {
+        await backend.clearAllTrashItems()
+      } catch (e) { logger.catch('Store.clearAllTrashItems', '清空全局回收站失败', e); throw e }
     },
     async readConfig(): Promise<VaultConfig> {
       const now = Date.now()

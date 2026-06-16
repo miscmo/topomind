@@ -56,6 +56,11 @@ export function useDetailDocumentSession({
         } catch (parseError) {
           throw new Error(`文档内容解析失败，为防止覆盖，已终止保存: ${(parseError as Error).message}`)
         }
+        
+        if (contentToWrite === null) {
+          // Empty content, no need to save for topo document, just return early or proceed to update draft state
+          contentToWrite = {}
+        }
 
         await storage.writeTopoDocument(nodePath, activeTopoDocumentId, contentToWrite)
         setDetailContent(currentDocumentKey, contentToWrite)

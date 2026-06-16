@@ -6,6 +6,7 @@ import { topoDocumentIdFromPath } from './types/documentTypes'
 import { getTopoDocumentTypeDefinition, TOPO_DOCUMENT_TYPES } from './services/documentTypeRegistry'
 import { getDocumentEditorAdapter } from './services/documentEditorRegistry'
 import { DocumentStatusBar } from './components/Layout/DocumentStatusBar'
+import { useGraphStoreApi } from '../../stores/graphStore'
 
 interface DocumentEditorHostProps {
   value: unknown
@@ -27,6 +28,7 @@ interface DocumentEditorHostProps {
   onCreateTopoDocument: (type: TopoDocumentType, name: string, parentId?: string | null) => void
   isDetailDocumentBusy?: boolean
   topoDocuments: TopoDocumentManifestItem[]
+  nodeId?: string
 }
 
 export function DocumentEditorHost({
@@ -48,7 +50,9 @@ export function DocumentEditorHost({
   onCreateTopoDocument,
   isDetailDocumentBusy,
   topoDocuments,
+  nodeId,
 }: DocumentEditorHostProps) {
+  const graphStoreApi = useGraphStoreApi()
   const activeTopoDocumentId = topoDocumentIdFromPath(activeDetailDocumentPath)
   const activeTopoDocument = activeTopoDocumentId
     ? topoDocuments.find((item) => item.id === activeTopoDocumentId)
@@ -94,7 +98,16 @@ export function DocumentEditorHost({
                       className={index === 0
                         ? 'h-8 px-3 rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)] text-white text-[12px] font-semibold cursor-pointer disabled:opacity-50'
                         : 'h-8 px-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] font-semibold cursor-pointer disabled:opacity-50 hover:bg-[var(--color-hover-bg)]'}
-                      onClick={() => onCreateTopoDocument(type, definition.defaultTitle)}
+                      onClick={() => {
+                        let initialValue = definition.defaultTitle
+                        if (topoDocuments.length === 0 && nodeId) {
+                          const node = graphStoreApi.getState().nodesMap.get(nodeId)
+                          if (node?.data?.label) {
+                            initialValue = node.data.label
+                          }
+                        }
+                        onCreateTopoDocument(type, initialValue)
+                      }}
                       disabled={isDetailDocumentBusy}
                     >
                       {index === 0 ? `新建${definition.label}` : definition.label}

@@ -81,6 +81,8 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       card,
       height: asFiniteNumber(rawNode.height, DEFAULT_NODE_SIZE.height),
       width: asFiniteNumber(rawNode.width, DEFAULT_NODE_SIZE.width),
+      widthMode: rawNode.widthMode === 'manual' ? 'manual' : (rawNode.widthMode === 'auto' ? 'auto' : undefined),
+      heightMode: rawNode.heightMode === 'manual' ? 'manual' : (rawNode.heightMode === 'auto' ? 'auto' : undefined),
       position: isRecord(rawNode.position)
         ? normalizePoint(rawNode.position, { x: 0, y: 0 })
         : undefined,

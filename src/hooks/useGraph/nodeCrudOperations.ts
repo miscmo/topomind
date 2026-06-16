@@ -1,4 +1,4 @@
-import type { KnowledgeEdge, KnowledgeNode, KnowledgeNodeStyle } from '../../types'
+import type { KnowledgeEdge, KnowledgeNode, KnowledgeNodeStyle, NodeSizingMode } from '../../types'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { generateId } from './graphBuilder'
@@ -236,6 +236,35 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     logAction('节点:清除自有样式(批量)', 'graphOperations', { nodeIds })
   }
 
+  const updateNodeSizingMode = async (
+    nodeId: string,
+    patch: Partial<{ widthMode: NodeSizingMode; heightMode: NodeSizingMode }>,
+  ): Promise<void> => {
+    const store = storeApi.getState()
+    const node = store.nodesMap.get(nodeId)
+    if (!node) return
+
+    const nextWidthMode = patch.widthMode ?? node.data.widthMode
+    const nextHeightMode = patch.heightMode ?? node.data.heightMode
+    if (nextWidthMode === node.data.widthMode && nextHeightMode === node.data.heightMode) {
+      return
+    }
+
+    store.updateNode(nodeId, (currentNode) => ({
+      ...currentNode,
+      data: {
+        ...currentNode.data,
+        ...(patch.widthMode ? { widthMode: patch.widthMode } : {}),
+        ...(patch.heightMode ? { heightMode: patch.heightMode } : {}),
+      },
+    }))
+
+    const graphSession = getActiveGraphSession()
+    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
+    if (currentRoomPath) await saveNow(currentRoomPath)
+    logAction('节点:更新尺寸模式', 'graphOperations', { nodeId, ...patch })
+  }
+
   return {
     createChildNode,
     deleteChildNode,
@@ -243,5 +272,6 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     updateNodeStyle,
     updateNodesStyle,
     clearNodesStyle,
+    updateNodeSizingMode,
   }
 }

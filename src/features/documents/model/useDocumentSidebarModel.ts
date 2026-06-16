@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
 import { topoDocumentPath, buildDocumentTree } from '../types/documentTypes'
 import { TOPO_DOCUMENT_TYPES } from '../services/documentTypeRegistry'
+import { useGraphStoreApi } from '../../../stores/graphStore'
 
 export interface DocumentContextMenuState {
   x: number
@@ -40,11 +41,11 @@ export function useDocumentSidebarModel({
   onDeleteDocument,
   onMoveDocument,
 }: UseDocumentSidebarModelProps) {
+  const graphStoreApi = useGraphStoreApi()
   const { rootItems, childrenMap } = useMemo(() => buildDocumentTree(topoDocuments), [topoDocuments])
   const [contextMenu, setContextMenu] = useState<DocumentContextMenuState | null>(null)
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
   const [inlineEdit, setInlineEdit] = useState<DocumentInlineEditState | null>(null)
-  const [viewMode, setViewMode] = useState<'active' | 'trash'>('active')
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
     if (!nodeId) return new Set()
     try {
@@ -146,12 +147,21 @@ export function useDocumentSidebarModel({
     } else if (action.startsWith('create:')) {
       const createType = action.slice('create:'.length) as TopoDocumentType
       if (!TOPO_DOCUMENT_TYPES.includes(createType)) return
-      setInlineEdit({ mode: 'createTopoDocument', createType, targetId: null, parentId: targetId || null, value: '' })
+      
+      let initialValue = ''
+      if (topoDocuments.length === 0 && nodeId) {
+        const node = graphStoreApi.getState().nodesMap.get(nodeId)
+        if (node?.data?.label) {
+          initialValue = node.data.label
+        }
+      }
+
+      setInlineEdit({ mode: 'createTopoDocument', createType, targetId: null, parentId: targetId || null, value: initialValue })
       if (targetId) {
         setExpandedNodes(prev => new Set(prev).add(targetId))
       }
     }
-  }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument])
+  }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, nodeId])
 
   const commitInlineEdit = useCallback(() => {
     if (!inlineEdit || isBusy) return
@@ -280,7 +290,6 @@ export function useDocumentSidebarModel({
       contextMenu,
       activeSubmenu,
       inlineEdit,
-      viewMode,
       expandedNodes,
       draggedId,
       dragState,
@@ -290,7 +299,6 @@ export function useDocumentSidebarModel({
       menuRef,
     },
     actions: {
-      setViewMode,
       setInlineEdit,
       setActiveSubmenu,
       toggleExpand,

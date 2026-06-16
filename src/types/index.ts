@@ -9,6 +9,7 @@ export type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from './gr
 export type {
   KnowledgeNodeData,
   KnowledgeNodeStyle,
+  NodeSizingMode,
   KnowledgeNode,
   KnowledgeEdge,
 } from './graph'

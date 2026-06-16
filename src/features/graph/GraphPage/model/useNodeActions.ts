@@ -48,7 +48,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   const confirmAndDeleteNode = useCallback(async (nodeId: string) => {
     const node = findNodeById(nodeId)
     if (!node) return false
-    const confirmed = await confirm({ title: '删除节点', message: `将删除节点「${node.data.label}」。节点目录会移入工作区回收站。` })
+    const confirmed = await confirm({ title: '删除节点', message: `将删除节点「${node.data.label}」。节点目录会移入全局回收站。` })
     if (!confirmed) return false
     logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, source: 'context-menu' })
     await graph.deleteChildNode(nodeId)

@@ -22,11 +22,15 @@ export interface GraphChild {
   y?: number
   width?: number
   height?: number
+  widthMode?: NodeSizingMode
+  heightMode?: NodeSizingMode
   expanded?: boolean
   style?: KnowledgeNodeStyle
   expandedWidth?: number
   expandedHeight?: number
 }
+
+export type NodeSizingMode = 'auto' | 'manual'
 
 /**
  * _graph.json 中的 edges 条目
@@ -98,6 +102,10 @@ export interface KnowledgeNodeData {
   collapsedWidth?: number
   /** 上次收起时的高度 */
   collapsedHeight?: number
+  /** 当前宽度模式 */
+  widthMode?: NodeSizingMode
+  /** 当前高度模式 */
+  heightMode?: NodeSizingMode
   /** 作为连线目标高亮 */
   connectTarget?: boolean
   nodeStyle?: KnowledgeNodeStyle

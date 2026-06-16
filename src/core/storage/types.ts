@@ -96,12 +96,15 @@ export interface KnowledgeBaseStorageBackend {
   deleteKB: (kbPath: string) => Promise<void>
   renameKB: (kbPath: string, newName: string) => Promise<void>
   importKB: (sourcePath: string) => Promise<string>
+  listAllTrashItems: () => Promise<FSBTrashItem[]>
+  restoreGlobalTrashItem: (category: string, trashName: string) => Promise<any>
+  clearAllTrashItems: () => Promise<void>
 }
 
 export interface CardStorageBackend {
   listCards: (parentCardPath: string) => Promise<CardInfo[]>
   createCard: (parentPath: string, name: string) => Promise<CardInfo>
-  deleteCard: (cardPath: string) => Promise<void>
+  deleteCard: (cardPath: string, label?: string) => Promise<void>
   renameCard: (cardPath: string, newName: string) => Promise<void>
 }
 

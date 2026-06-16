@@ -1,4 +1,4 @@
-import type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, KnowledgeNodeStyle } from '../../types'
+import type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, KnowledgeNodeStyle, NodeSizingMode } from '../../types'
 
 export interface CardInfo {
   ref: string
@@ -22,6 +22,8 @@ export interface RoomGraphNode {
   name: string
   position?: GraphPoint
   size?: GraphSize
+  widthMode?: NodeSizingMode
+  heightMode?: NodeSizingMode
   expanded?: boolean
   color?: string
   style?: KnowledgeNodeStyle
@@ -53,6 +55,8 @@ export interface KBNode {
   card: CardInfo
   height: number
   width: number
+  widthMode?: NodeSizingMode
+  heightMode?: NodeSizingMode
   position?: GraphPoint
   expanded?: boolean
   color?: string

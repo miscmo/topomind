@@ -42,6 +42,8 @@ export interface FSBGraphMeta {
     y?: number
     width?: number
     height?: number
+    widthMode?: 'auto' | 'manual'
+    heightMode?: 'auto' | 'manual'
     expanded?: boolean
     style?: unknown
     expandedWidth?: number
@@ -75,6 +77,11 @@ export interface FSBTrashItem {
   deletedAt: number
   size: number
   isDirectory: boolean
+  category?: string
+  meta?: any
+  businessName?: string
+  isImage?: boolean
+  previewUrl?: string | null
 }
 
 export interface FSBTrashTopoDocumentItem extends FSBTrashItem {
@@ -91,7 +98,7 @@ export interface FSB {
   readCardChildren: (rootDir: string, cardPath: string) => Promise<FSBCardChildren>
   createKbsDir: (rootDir: string, kbName: string) => Promise<void>
   createCardDir: (rootDir: string, parentPath: string, cardName: string) => Promise<string>
-  deleteKbsDir: (rootDir: string, dirPath: string) => Promise<unknown>
+  deleteKbsDir: (rootDir: string, dirPath: string, options?: { label?: string }) => Promise<unknown>
   renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
   readGraphMeta: (rootDir: string, roomPath: string) => Promise<FSBGraphMeta>
   writeGraphMeta: (rootDir: string, roomPath: string, meta: FSBGraphMeta) => Promise<unknown>
@@ -130,6 +137,9 @@ export interface FSB {
   selectDirectory: () => Promise<FSBResult>
   createWorkDir: (dirPath: string) => Promise<FSBResult>
   importKB: (rootDir: string, sourcePath: string) => Promise<string>
+  listAllTrashItems: (rootDir: string) => Promise<FSBTrashItem[]>
+  restoreGlobalTrashItem: (rootDir: string, category: string, trashName: string) => Promise<any>
+  clearAllTrashItems: (rootDir: string) => Promise<void>
 }
 
 // ===== FSB 实现 =====
@@ -142,7 +152,7 @@ const FSBImpl: FSB = {
   readCardChildren: (rootDir, cardPath) => _call('fs:readCardChildren', rootDir, cardPath) as Promise<FSBCardChildren>,
   createKbsDir: (rootDir, kbName) => _call('fs:createKbsDir', rootDir, kbName) as Promise<void>,
   createCardDir: (rootDir, parentPath, cardName) => _call('fs:createCardDir', rootDir, parentPath, cardName) as Promise<string>,
-  deleteKbsDir: (rootDir, dirPath) => _call('fs:deleteKbsDir', rootDir, dirPath),
+  deleteKbsDir: (rootDir, dirPath, options) => _call('fs:deleteKbsDir', rootDir, dirPath, options),
   renameKB: (rootDir, kbPath, newName) => _call('fs:renameKB', rootDir, kbPath, newName) as Promise<string>,
   readGraphMeta: (rootDir, roomPath) => _call('fs:readGraphMeta', rootDir, roomPath) as Promise<FSBGraphMeta>,
   writeGraphMeta: (rootDir, roomPath, meta) => _call('fs:writeGraphMeta', rootDir, roomPath, meta),
@@ -208,6 +218,9 @@ const FSBImpl: FSB = {
   selectDirectory: () => _call('fs:selectDirectory') as Promise<FSBResult>,
   createWorkDir: (dirPath) => _call('fs:createWorkDir', dirPath) as Promise<FSBResult>,
   importKB: (rootDir, sourcePath) => _call('fs:importKB', rootDir, sourcePath) as Promise<string>,
+  listAllTrashItems: (rootDir) => _call('fs:listAllTrashItems', rootDir) as Promise<FSBTrashItem[]>,
+  restoreGlobalTrashItem: (rootDir, category, trashName) => _call('fs:restoreGlobalTrashItem', rootDir, category, trashName),
+  clearAllTrashItems: (rootDir) => _call('fs:clearAllTrashItems', rootDir) as Promise<void>,
 }
 
 export { FSBImpl as FSB }

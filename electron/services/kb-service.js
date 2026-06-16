@@ -44,11 +44,23 @@ export function createKbService(deps) {
       var trashItem = listTrashItems(rootDir, 'kbs').find(function(item) {
         return item.trashName === trashName;
       });
-      if (!trashItem || kbsTrashItemKind(trashItem) !== 'kb') {
-        throw new Error('该回收站项目不是知识库，不能从首页恢复');
+      if (!trashItem) {
+        throw new Error('回收站项目不存在');
       }
-      var restoredPath = restoreTrashItem(rootDir, 'kbs', trashName, kbsDir(rootDir));
-      return nodePath.basename(restoredPath);
+
+      var destDir = kbsDir(rootDir);
+      if (kbsTrashItemKind(trashItem) === 'card' && trashItem.meta && trashItem.meta.kbsPath) {
+        var parentPath = nodePath.dirname(trashItem.meta.kbsPath);
+        if (parentPath && parentPath !== '.') {
+          var originalParentAbs = nodePath.join(kbsDir(rootDir), parentPath);
+          if (nodeFs.existsSync(originalParentAbs)) {
+            destDir = originalParentAbs;
+          }
+        }
+      }
+
+      var restoredPath = restoreTrashItem(rootDir, 'kbs', trashName, destDir);
+      return nodePath.relative(kbsDir(rootDir), restoredPath).split(nodePath.sep).join('/');
     },
 
     clearTrashKBs(rootDir) {
@@ -66,7 +78,7 @@ export function createKbService(deps) {
       ensureDir(dir);
     },
 
-    deleteKbsDir(rootDir, dirPath) {
+    deleteKbsDir(rootDir, dirPath, options) {
       rootDir = requireValidWorkDir(rootDir);
       if (!String(dirPath || '').trim()) {
         throw new Error('不能删除知识库根目录');
@@ -77,6 +89,7 @@ export function createKbService(deps) {
       moveToTrash(rootDir, dir, 'kbs', {
         kind: kind,
         kbsPath: normalizedPath,
+        label: options && options.label,
       });
     },
 

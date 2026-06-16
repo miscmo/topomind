@@ -324,7 +324,7 @@ function registerIPC() {
   ipcMain.handle('fs:readCardChildren', function(e, rootDir, p) { return fileService.readCardChildren(requireActiveWorkDir(rootDir), p); });
   ipcMain.handle('fs:createKbsDir', function(e, rootDir, p) { return fileService.createKbsDir(requireActiveWorkDir(rootDir), p); });
   ipcMain.handle('fs:createCardDir', function(e, rootDir, parentPath, cardName) { return fileService.createCardDir(requireActiveWorkDir(rootDir), parentPath, cardName); });
-  ipcMain.handle('fs:deleteKbsDir', function(e, rootDir, p) { fileService.deleteKbsDir(requireActiveWorkDir(rootDir), p); });
+  ipcMain.handle('fs:deleteKbsDir', function(e, rootDir, p, options) { fileService.deleteKbsDir(requireActiveWorkDir(rootDir), p, options); });
   ipcMain.handle('fs:renameKB', function(e, rootDir, p, n) { return fileService.renameKB(requireActiveWorkDir(rootDir), p, n); });
   ipcMain.handle('fs:readGraphMeta', function(e, rootDir, p) { return fileService.readGraphMeta(requireActiveWorkDir(rootDir), p); });
   ipcMain.handle('fs:writeGraphMeta', function(e, rootDir, p, m) { fileService.writeGraphMeta(requireActiveWorkDir(rootDir), p, m); });
@@ -458,6 +458,10 @@ function registerIPC() {
     });
     return result;
   });
+
+  ipcMain.handle('fs:listAllTrashItems', function(e, rootDir) { return fileService.listAllTrashItems(requireActiveWorkDir(rootDir)); });
+  ipcMain.handle('fs:restoreGlobalTrashItem', function(e, rootDir, category, trashName) { return fileService.restoreGlobalTrashItem(requireActiveWorkDir(rootDir), category, trashName); });
+  ipcMain.handle('fs:clearAllTrashItems', function(e, rootDir) { return fileService.clearAllTrashItems(requireActiveWorkDir(rootDir)); });
 
   // ----- App handlers -----
   ipcMain.handle('app:navigateHome', function() {

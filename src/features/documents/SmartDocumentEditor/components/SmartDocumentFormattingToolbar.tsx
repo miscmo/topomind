@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { Copy, Sigma, SquareSigma } from 'lucide-react'
 import {
   BasicTextStyleButton,
   BlockTypeSelect,
@@ -62,7 +63,7 @@ function CopySelectionButton() {
       isSelected={false}
       label="复制"
       mainTooltip="复制选中的文字"
-      icon={<span>⧉</span>}
+      icon={<Copy size={16} strokeWidth={2} />}
     />
   )
 }
@@ -112,7 +113,7 @@ function SelectionMathButton({ mode }: { mode: MathButtonMode }) {
       isSelected={false}
       label={label}
       mainTooltip={tooltip}
-      icon={<span>{isInline ? '∑' : '∫'}</span>}
+      icon={isInline ? <Sigma size={16} strokeWidth={2} /> : <SquareSigma size={16} strokeWidth={2} />}
     />
   )
 }

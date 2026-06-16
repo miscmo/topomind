@@ -31,8 +31,21 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       return n
     })
     
-    if (changed) {
-      store.setNodes(nextNodes)
+    const isDragging = changes.some((change) => change.dragging === true)
+    const isDragEnd = changes.some((change) => change.dragging === false)
+    
+    const temporalState = (storeApi as any).temporal?.getState?.()
+    
+    if (temporalState) {
+      if (isDragging && !isDragEnd) {
+        temporalState.pause()
+      } else {
+        temporalState.resume()
+      }
+    }
+
+    if (changed || isDragEnd) {
+      store.setNodes(changed ? nextNodes : store.nodes)
     }
 
     const graphSession = getActiveGraphSession()
@@ -52,7 +65,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     if (currentRoomPath) await saveNow(currentRoomPath)
   }
 
-  const applyNodeDimensionChanges = async (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean }>) => {
+  const applyNodeDimensionChanges = async (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean; origin?: 'auto-size' | 'manual' }>) => {
     let shouldSave = false
     let changed = false
     const store = storeApi.getState()
@@ -93,6 +106,12 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
         expandedDimensions.collapsedHeight = n.height
       }
 
+      const isAutoSizeChange = change.origin === 'auto-size'
+      const prevWidth = n.width ?? n.initialWidth ?? n.measured?.width ?? 120
+      const prevHeight = n.height ?? n.initialHeight ?? n.measured?.height ?? 52
+      const widthChanged = Math.abs(prevWidth - nextWidth) > 0.5
+      const heightChanged = Math.abs(prevHeight - nextHeight) > 0.5
+      const shouldSwitchToManual = !isAutoSizeChange && (widthChanged || heightChanged)
       return {
         ...n,
         width: nextWidth,
@@ -100,11 +119,23 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
         measured: nextMeasured,
         data: {
           ...n.data,
-          ...expandedDimensions
+          ...expandedDimensions,
+          ...(shouldSwitchToManual ? { widthMode: 'manual' as const, heightMode: 'manual' as const } : {}),
         }
       }
     })
     
+    const isResizing = changes.some((change) => change.resizing === true)
+    const temporalState = (storeApi as any).temporal?.getState?.()
+    
+    if (temporalState) {
+      if (isResizing) {
+        temporalState.pause()
+      } else {
+        temporalState.resume()
+      }
+    }
+
     if (changed) store.setNodes(nextNodes)
     
     if (changed && shouldSave) {

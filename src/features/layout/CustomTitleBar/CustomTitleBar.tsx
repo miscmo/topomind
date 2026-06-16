@@ -4,6 +4,7 @@ import { useThemeStore } from '../../../stores/themeStore'
 import { PluginWidgetSlot } from '../../../plugins'
 import { useRightPanelStore } from '../../right-panel/model/rightPanelStore'
 import { useShortcut } from '../../../hooks/useShortcut'
+import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import TabBar from '../TabBar/TabBar'
 import type { WindowControlsState } from '../../../types/electron-api'
 
@@ -167,7 +168,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
         runCommand('window.toggleMaximize')
       }}
     >
-      <div className="shrink-0 flex items-center pl-2 gap-2 h-full relative after:content-[''] after:absolute after:right-0 after:top-[18%] after:bottom-[18%] after:w-px after:bg-[color-mix(in_srgb,var(--titlebar-text)_18%,var(--color-border-subtle))] after:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] pr-2">
+      <div className="shrink-0 flex items-center pl-2 gap-2 h-full relative after:content-[''] after:absolute after:right-0 after:top-[25%] after:bottom-[25%] after:w-px after:bg-[var(--titlebar-text)] after:opacity-10 pr-2">
         <div className="inline-flex items-center h-6 gap-[6px] px-1.5 rounded-[6px] text-[var(--titlebar-text)]" title="TopoMind" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <img src="./icon.svg" alt="Logo" className="w-4 h-4 drop-shadow-sm" />
         </div>
@@ -255,44 +256,33 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
           <>
             <button
               type="button"
-              className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)] aria-pressed:text-[var(--color-accent)]"
+              className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)] aria-pressed:text-[var(--color-accent)] transition-colors"
               onClick={() => runCommand('rightPanel.toggle')}
               title={rightPanelCollapsed ? '展开右侧面板' : '折叠右侧面板'}
               aria-label={rightPanelCollapsed ? '展开右侧面板' : '折叠右侧面板'}
               style={{ WebkitAppRegion: 'no-drag' } as any}
             >
-              {rightPanelCollapsed ? (
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M10.5 2.5v11" stroke="currentColor" strokeWidth="1.5"/>
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M10.5 2.5v11" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M10.5 2.5H13A1.5 1.5 0 0 1 14.5 4V12A1.5 1.5 0 0 1 13 13.5H10.5V2.5Z" fill="currentColor"/>
-                </svg>
-              )}
+              {rightPanelCollapsed ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
             </button>
             <div className="flex items-center h-full mx-1 mr-2 relative z-[3002]" style={{ WebkitAppRegion: 'no-drag' } as any}>
-              <div className="flex items-center h-[24px] bg-[var(--titlebar-bg-unfocused)] border border-[var(--color-border-subtle)] rounded-[6px] p-[2px]">
+              <div className="flex items-center h-[24px] bg-[var(--color-bg-muted)] shadow-inner rounded-md p-[2px]">
                 <button
                   type="button"
-                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-colors ${rightPanelTab === 'detail' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.05)]' : 'text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)]'}`}
+                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-all duration-200 border-none ${rightPanelTab === 'detail' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--color-hover-bg)]'}`}
                   onClick={() => runCommand('rightPanel.reveal', { tab: 'detail' })}
                 >
                   详情
                 </button>
                 <button
                   type="button"
-                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-colors ${rightPanelTab === 'style' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.05)]' : 'text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)]'}`}
+                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-all duration-200 border-none ${rightPanelTab === 'style' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--color-hover-bg)]'}`}
                   onClick={() => runCommand('rightPanel.reveal', { tab: 'style' })}
                 >
                   样式
                 </button>
               </div>
             </div>
-            <div className="mx-1 h-[18px] w-px bg-[color-mix(in_srgb,var(--titlebar-text)_22%,var(--color-border-subtle))] shadow-[0_0_0_1px_rgba(255,255,255,0.03)]" />
+            <div className="mx-1 h-[18px] w-px bg-[var(--titlebar-text)] opacity-10" />
           </>
         )}
         <div className="h-full inline-flex items-stretch">
@@ -313,7 +303,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
               </svg>
             )}
           </button>
-          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:!bg-[#e81123] hover:!text-white" onClick={() => runCommand('window.close')} aria-label="关闭窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:!bg-[var(--color-danger)] hover:!text-white transition-colors" onClick={() => runCommand('window.close')} aria-label="关闭窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1"/>
             </svg>

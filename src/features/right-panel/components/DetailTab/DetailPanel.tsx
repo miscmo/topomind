@@ -71,7 +71,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
 
   const {
     topoDocuments,
-    trashTopoDocuments,
     setTopoDocuments,
     topoDocumentsCardPath,
     setTopoDocumentsCardPath,
@@ -79,14 +78,11 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     documentLinkNotice,
     documentListRequestSeqRef,
     loadDocuments,
-    loadTrashDocuments,
     handleSelectDocument,
     handleOpenDetailDocumentLink,
     handleCreateTopoDocument,
     handleRenameDocument,
     handleDeleteDocument,
-    handleRestoreDocument,
-    handleClearTrashDocuments,
     handleMoveDocument,
     handleExportTopoDocument,
     handleOpenCurrentDocumentFolder,
@@ -103,10 +99,14 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
       const hasDetail = topoDocuments.length > 0
       const node = storeApi.getState().nodesMap.get(selectedNodeId)
       if (node && node.data.hasDetail !== hasDetail) {
+        // use temporal pause to avoid polluting undo history with hasDetail changes
+        const temporalState = (storeApi as any).temporal?.getState?.()
+        if (temporalState) temporalState.pause()
         storeApi.getState().updateNode(selectedNodeId, n => ({
           ...n,
           data: { ...n.data, hasDetail }
         }))
+        if (temporalState) temporalState.resume()
       }
     }
   }, [topoDocuments, selectedNodeId, storeApi])
@@ -131,7 +131,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     if (!selectedNodeId || !nodePath) {
       setTopoDocuments([])
       setTopoDocumentsCardPath('')
-      void loadTrashDocuments('')
       return
     }
 
@@ -149,8 +148,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         setActiveDocumentPathSafe('')
       }
     })
-    void loadTrashDocuments(nodePath)
-  }, [selectedNodeId, nodePath, loadDocuments, loadTrashDocuments, setTopoDocuments, setTopoDocumentsCardPath, setActiveDocumentPathSafe])
+  }, [selectedNodeId, nodePath, loadDocuments, setTopoDocuments, setTopoDocumentsCardPath, setActiveDocumentPathSafe])
 
 
 
@@ -223,7 +221,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
             </div>
           )}
           topoDocuments={topoDocuments}
-          trashTopoDocuments={trashTopoDocuments}
           activeDocumentPath={activeDocumentPath}
           detailSidebarTab={detailSidebarTab}
           onDetailSidebarTabChange={setDetailSidebarTabSafe}
@@ -233,8 +230,6 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           onExportTopoDocument={(documentPath: string) => { void handleExportTopoDocument(documentPath) }}
           onRenameDocument={(documentPath: string, name: string) => { void handleRenameDocument(documentPath, name) }}
           onDeleteDocument={(documentPath: string) => { void handleDeleteDocument(documentPath) }}
-          onRestoreDocument={(trashName: string) => handleRestoreDocument(trashName)}
-          onClearTrashDocuments={() => { void handleClearTrashDocuments() }}
           onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
           isDocumentBusy={isDocumentBusy}
           nodeId={selectedNodeId}

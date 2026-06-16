@@ -54,12 +54,12 @@ export default memo(function StyleSection() {
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-bg)]">
-      <div className="px-4 py-3 bg-[var(--color-surface)] border-b border-[var(--color-border-light)] shrink-0">
-        <div className="flex bg-[var(--color-bg-muted)] rounded-lg p-1 w-full box-border shadow-inner">
+      <div className="px-4 py-3 bg-[var(--color-surface)] border-b border-[var(--color-border)] shrink-0">
+        <div className="flex bg-[var(--color-bg-muted)] rounded-lg p-[3px] w-full box-border shadow-inner">
           {(['nodes', 'edges', 'editor'] as const).map(tab => (
             <button
               key={tab}
-              className={`flex-1 py-1.5 text-[12px] font-medium rounded-md cursor-pointer transition-all duration-200 text-center select-none border-none ${activeTab === tab ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-bg)]'}`}
+              className={`flex-1 py-1.5 text-[12px] font-medium rounded-[6px] cursor-pointer transition-all duration-200 text-center select-none border-none ${activeTab === tab ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-bg)]'}`}
               onClick={() => setActiveTab(tab)}
             >
               {tab === 'nodes' ? '节点卡片' : tab === 'edges' ? '连线样式' : '文档编辑器'}

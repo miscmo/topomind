@@ -12,6 +12,9 @@ import GraphCanvas from '../GraphCanvas'
 import GraphPageContextMenu from './components/GraphPageContextMenu'
 import { useGraphPageController } from './model/useGraphPageController'
 import { useGraphPageActions } from './model/useGraphPageActions'
+import { useShortcut } from '../../../hooks/useShortcut'
+import { useTabStore } from '../../../stores/tabs/tabStore'
+import { useRightPanelStore } from '../../right-panel/model/rightPanelStore'
 
 interface GraphPageProps {
   tabId: string
@@ -23,6 +26,18 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
   const selectedNodeId = useSelectedNodeId()
   const setSelectedNodeIdForTab = useLearningTrackerContextStore((s) => s.setSelectedNodeIdForTab)
   const clearTabContext = useLearningTrackerContextStore((s) => s.clearTabContext)
+  const activeTabId = useTabStore((s) => s.activeTabId)
+
+  useShortcut(['Control+Tab', 'Meta+Tab'], (event) => {
+    if (activeTabId !== tabId) return
+    event.preventDefault()
+    const { rightPanelCollapsed, collapseRightPanel, expandRightPanel } = useRightPanelStore.getState()
+    if (rightPanelCollapsed) {
+      expandRightPanel()
+    } else {
+      collapseRightPanel()
+    }
+  }, { scope: 'global', preventDefault: true, enableInInput: true })
 
   useEffect(() => {
     setSelectedNodeIdForTab(tabId, selectedNodeId)

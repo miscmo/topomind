@@ -11,7 +11,6 @@ import { topoDocumentIdFromPath, topoDocumentPath } from '../../../features/docu
 import { getTopoDocumentTypeDefinition } from '../../../features/documents/services/documentTypeRegistry'
 import { useDetailPanelStore } from './detailPanelStore'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
-import type { FSBTrashTopoDocumentItem } from '../../../core/fs-backend'
 
 export function useDetailDocuments({
   selectedNodeId,
@@ -32,13 +31,9 @@ export function useDetailDocuments({
   const clearDetailDraft = useDraftStore((s) => s.clearDetailDraft)
   const clearDetailContent = useCardContentStore((s) => s.clearDetailContent)
   const setDocumentListForNodePath = useDetailPanelStore((s) => s.setDocumentListForNodePath)
-  const setTrashDocumentListForNodePath = useDetailPanelStore((s) => s.setTrashDocumentListForNodePath)
 
   const [topoDocuments, setTopoDocuments] = useState<TopoDocumentManifestItem[]>(() => (
     nodePath ? (useDetailPanelStore.getState().documentListsByNodePath[nodePath] ?? []) : []
-  ))
-  const [trashTopoDocuments, setTrashTopoDocuments] = useState<FSBTrashTopoDocumentItem[]>(() => (
-    nodePath ? (useDetailPanelStore.getState().trashDocumentListsByNodePath[nodePath] ?? []) : []
   ))
   const [topoDocumentsCardPath, setTopoDocumentsCardPath] = useState(() => nodePath ?? '')
   const [isDocumentBusy, setIsDocumentBusy] = useState(false)
@@ -49,13 +44,11 @@ export function useDetailDocuments({
   useEffect(() => {
     if (!nodePath) {
       setTopoDocuments([])
-      setTrashTopoDocuments([])
       setTopoDocumentsCardPath('')
       return
     }
     const state = useDetailPanelStore.getState()
     setTopoDocuments(state.documentListsByNodePath[nodePath] ?? [])
-    setTrashTopoDocuments(state.trashDocumentListsByNodePath[nodePath] ?? [])
     setTopoDocumentsCardPath(nodePath)
   }, [nodePath])
 
@@ -80,20 +73,6 @@ export function useDetailDocuments({
     })
     return nextTopoDocuments
   }, [setDocumentListForNodePath, storage, setActiveDocumentPath])
-
-  const loadTrashDocuments = useCallback(async (cardPath: string) => {
-    if (!cardPath) {
-      setTrashTopoDocuments([])
-      return [] as FSBTrashTopoDocumentItem[]
-    }
-    const nextTrashDocuments = await storage.listTrashTopoDocuments(cardPath).catch((e) => {
-      logger.catch('DetailPanel', `loadTrashTopoDocuments: ${cardPath}`, e)
-      return [] as FSBTrashTopoDocumentItem[]
-    })
-    setTrashTopoDocuments(nextTrashDocuments)
-    setTrashDocumentListForNodePath(cardPath, nextTrashDocuments)
-    return nextTrashDocuments
-  }, [setTrashDocumentListForNodePath, storage])
 
   useEffect(() => {
     if (!documentLinkNotice) return
@@ -138,8 +117,15 @@ export function useDetailDocuments({
       const createdDocumentKey = joinRefs(nodePath, createdDocumentPath)
       clearDetailDraft(createdDocumentKey)
       clearDetailContent(createdDocumentKey)
-      await loadDocuments(nodePath)
-      setActiveDocumentPath(createdDocumentPath)
+      const nextDocs = await loadDocuments(nodePath)
+      
+      // Make sure the document we just created is actually loaded in the tree
+      if (nextDocs.some(d => d.id === created.id)) {
+        setActiveDocumentPath(createdDocumentPath)
+      } else {
+        // Fallback to reload again or log warning if it failed to appear
+        logger.warn('DetailPanel', `Created document ${created.id} not found in the reloaded list.`)
+      }
       logAction(definition.createLogName, 'DetailPanel', { nodePath, documentId: created.id, documentPath: created.path })
     } catch (e) {
       logger.catch('DetailPanel', `createTopoDocumentByType:${type}`, e)
@@ -188,7 +174,7 @@ export function useDetailDocuments({
     const documentName = targetDocument ? targetDocument.title : documentPath
     const confirmed = await confirm({
       title: '删除文档',
-      message: `将删除节点「${label}」的文档「${documentName}」。文档会移入回收站，可从文档侧栏恢复。`
+      message: `将删除节点「${label}」的文档「${documentName}」。文档会移入全局回收站。`
     })
     if (!confirmed) return
     setIsDocumentBusy(true)
@@ -206,7 +192,6 @@ export function useDetailDocuments({
       clearDetailContent(documentKey)
       
       const nextDocs = await loadDocuments(nodePath)
-      await loadTrashDocuments(nodePath)
       if (documentPath === activeDocumentPath || activeDocumentPath === '') {
         setActiveDocumentPath(nextDocs.length > 0 ? topoDocumentPath(nextDocs[0].id) : '')
       }
@@ -217,45 +202,7 @@ export function useDetailDocuments({
     } finally {
       setIsDocumentBusy(false)
     }
-  }, [activeDocumentPath, clearDetailDraft, clearDetailContent, confirm, topoDocuments, loadDocuments, loadTrashDocuments, nodePath, selectedNodeId, storeApi, storage, setActiveDocumentPath])
-
-  const handleRestoreDocument = useCallback(async (trashName: string) => {
-    if (!nodePath || !trashName) return
-    setIsDocumentBusy(true)
-    try {
-      await flushDocumentSave()
-      const restored = await storage.restoreTrashTopoDocument(nodePath, trashName)
-      await loadDocuments(nodePath)
-      await loadTrashDocuments(nodePath)
-      setActiveDocumentPath(topoDocumentPath(restored.id))
-      logAction('文档:恢复', 'DetailPanel', { nodePath, trashName, documentId: restored.id })
-    } catch (e) {
-      setDocumentLinkNotice(`恢复文档失败：${e instanceof Error ? e.message : String(e)}`)
-      logger.catch('DetailPanel', 'handleRestoreDocument', e)
-    } finally {
-      setIsDocumentBusy(false)
-    }
-  }, [flushDocumentSave, loadDocuments, loadTrashDocuments, nodePath, setActiveDocumentPath, storage])
-
-  const handleClearTrashDocuments = useCallback(async () => {
-    if (!nodePath || trashTopoDocuments.length === 0) return
-    const confirmed = await confirm({
-      title: '清空文档回收站',
-      message: '确定要永久清空当前节点的文档回收站吗？该操作不可恢复。'
-    })
-    if (!confirmed) return
-    setIsDocumentBusy(true)
-    try {
-      await storage.clearTrashTopoDocuments(nodePath)
-      await loadTrashDocuments(nodePath)
-      logAction('文档:清空回收站', 'DetailPanel', { nodePath, count: trashTopoDocuments.length })
-    } catch (e) {
-      setDocumentLinkNotice(`清空文档回收站失败：${e instanceof Error ? e.message : String(e)}`)
-      logger.catch('DetailPanel', 'handleClearTrashDocuments', e)
-    } finally {
-      setIsDocumentBusy(false)
-    }
-  }, [confirm, loadTrashDocuments, nodePath, storage, trashTopoDocuments.length])
+  }, [activeDocumentPath, clearDetailDraft, clearDetailContent, confirm, topoDocuments, loadDocuments, nodePath, selectedNodeId, storeApi, storage, setActiveDocumentPath])
 
   const handleMoveDocument = useCallback(async (documentId: string, newParentId: string | null, newSortOrder: number) => {
     if (!nodePath) return
@@ -318,7 +265,6 @@ export function useDetailDocuments({
 
   return {
     topoDocuments,
-    trashTopoDocuments,
     setTopoDocuments,
     topoDocumentsCardPath,
     setTopoDocumentsCardPath,
@@ -326,14 +272,11 @@ export function useDetailDocuments({
     documentLinkNotice,
     documentListRequestSeqRef,
     loadDocuments,
-    loadTrashDocuments,
     handleSelectDocument,
     handleOpenDetailDocumentLink,
     handleCreateTopoDocument,
     handleRenameDocument,
     handleDeleteDocument,
-    handleRestoreDocument,
-    handleClearTrashDocuments,
     handleMoveDocument,
     handleExportTopoDocument,
     handleOpenCurrentDocumentFolder,

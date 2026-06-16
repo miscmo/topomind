@@ -8,7 +8,7 @@
  */
 import { createContext, useContext, useMemo, type Context } from 'react'
 import { useGraph } from '../hooks/useGraph'
-import type { KnowledgeNodeData, KnowledgeNodeStyle, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from '../types'
+import type { KnowledgeNodeData, KnowledgeNodeStyle, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, NodeSizingMode } from '../types'
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 
 export interface GraphContextValue {
@@ -37,6 +37,7 @@ export interface GraphContextValue {
   updateNodeStyle: (nodeId: string, style: KnowledgeNodeStyle) => Promise<void>
   updateNodesStyle: (nodeIds: string[], style: KnowledgeNodeStyle) => Promise<void>
   clearNodesStyle: (nodeIds: string[]) => Promise<void>
+  updateNodeSizingMode: (nodeId: string, patch: Partial<{ widthMode: NodeSizingMode; heightMode: NodeSizingMode }>) => Promise<void>
   selectNode: (nodeId: string, multiSelect?: boolean) => void
   deselectNode: () => void
   createEdge: (source: string, target: string) => Promise<string | null>
@@ -71,6 +72,7 @@ const emptyContext: GraphContextValue = {
   updateNodeStyle: async () => {},
   updateNodesStyle: async () => {},
   clearNodesStyle: async () => {},
+  updateNodeSizingMode: async () => {},
   selectNode: () => {},
   deselectNode: () => {},
   createEdge: async () => null,
@@ -106,6 +108,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     updateNodeStyle: graph.updateNodeStyle,
     updateNodesStyle: graph.updateNodesStyle,
     clearNodesStyle: graph.clearNodesStyle,
+    updateNodeSizingMode: graph.updateNodeSizingMode,
     selectNode: graph.selectNode,
     deselectNode: graph.deselectNode,
     createEdge: graph.createEdge,

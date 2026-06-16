@@ -10,6 +10,7 @@ import type { KnowledgeNode } from '../../../../../types'
 import { cn } from '@/lib/utils'
 import { useKnowledgeCardModel } from './model/useKnowledgeCardModel'
 import { getKnowledgeCardStyles } from './utils/styles'
+import QuickNodeToolbar from './QuickNodeToolbar'
 
 interface KnowledgeCardProps extends NodeProps<KnowledgeNode> {
   resizing?: boolean
@@ -34,6 +35,10 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     nodeHeight,
     nodeSizeLimits,
     nodeBadgeSize,
+    widthMode,
+    showQuickToolbar,
+    accessoryWidth,
+    isFormatPainterActive,
   } = state
 
   const {
@@ -45,6 +50,12 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     confirmTitleEdit,
     cancelTitleEdit,
     startTitleEdit,
+    setSizingMode,
+    updateHeaderBackgroundColor,
+    updateHeaderFontSize,
+    toggleBold,
+    toggleItalic,
+    toggleFormatPainter,
     selectNode
   } = actions
 
@@ -83,6 +94,23 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         height: nodeHeight,
       }}
     >
+      {showQuickToolbar && !dragging && (
+        <QuickNodeToolbar
+          autoWidth={widthMode === 'auto'}
+          fontSize={nodeStyle.headerFontSize ?? 11}
+          backgroundColor={nodeStyle.headerBackgroundColor ?? '#f8fafc'}
+          bold={nodeStyle.headerFontWeight === 'bold'}
+          italic={nodeStyle.headerFontStyle === 'italic'}
+          isFormatPainterActive={isFormatPainterActive}
+          onToggleAutoWidth={() => { void setSizingMode(widthMode !== 'auto') }}
+          onBackgroundColorChange={(value) => { void updateHeaderBackgroundColor(value) }}
+          onFontSizeChange={(value) => { void updateHeaderFontSize(value) }}
+          onToggleBold={() => { void toggleBold() }}
+          onToggleItalic={() => { void toggleItalic() }}
+          onToggleFormatPainter={() => { void toggleFormatPainter() }}
+        />
+      )}
+
       <NodeResizer
         isVisible={showHoverControls}
         minWidth={nodeSizeLimits.minWidth}
@@ -120,34 +148,35 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         </svg>
       </Handle>
 
-      <div className="flex flex-1 flex-col items-stretch justify-start overflow-hidden pointer-events-none min-w-0 min-h-0" style={{ borderRadius }}>
+      <div className="flex flex-1 flex-col items-center justify-center overflow-hidden pointer-events-none min-w-0 min-h-0" style={{ borderRadius }}>
         {/* Header 层 */}
-        <div className="flex w-full items-center justify-between shrink-0" style={headerStyle}>
-          {/* 左侧占位符，用来平衡右侧控件宽度，保证标题居中 */}
-          <div style={{ flex: '1 1 0', pointerEvents: 'none' }}></div>
-
+        <div className="relative flex w-full items-center justify-center shrink-0 min-h-0 h-full" style={headerStyle}>
           <div
-            className={cn("flex items-center min-w-0 min-h-[calc(1.3em+4px)] py-[1px] rounded-md transition-colors duration-75", titleEditing && "bg-[var(--color-surface)]/20 shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-[var(--color-surface)]/40 focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
-            style={titleFieldStyle}
+            className={cn("flex w-full rounded-md transition-colors duration-75 items-center justify-center h-full", titleEditing && "bg-[var(--color-surface)]/20 shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-[var(--color-surface)]/40 focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
+            style={{
+              ...titleFieldStyle,
+              paddingLeft: '8px',
+              paddingRight: `${Math.max(8, accessoryWidth)}px`,
+            }}
           >
             {titleEditing ? (
               <input
                 ref={titleInputRef}
-                className="w-full min-w-0 min-h-[calc(1.3em+4px)] px-[3px] py-[1px] border-none rounded-none bg-transparent text-inherit font-inherit text-inherit leading-inherit outline-none box-border pointer-events-auto shadow-none caret-current transition-colors duration-75 nodrag nowheel"
+                className="w-full h-full px-[3px] py-[1px] border-none rounded-none bg-transparent text-inherit font-inherit text-inherit leading-inherit outline-none box-border pointer-events-auto shadow-none caret-current transition-colors duration-75 nodrag nowheel text-center"
                 value={titleDraft}
                 onChange={(event) => setTitleDraft(event.target.value)}
-                onBlur={confirmTitleEdit}
+                onBlur={() => void confirmTitleEdit({ restoreFocus: false })}
                 onPointerDown={(event) => event.stopPropagation()}
                 onDoubleClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => {
                   event.stopPropagation()
-                  if (event.key === 'Enter') void confirmTitleEdit()
-                  if (event.key === 'Escape') cancelTitleEdit()
+                  if (event.key === 'Enter') void confirmTitleEdit({ restoreFocus: true })
+                  if (event.key === 'Escape') cancelTitleEdit({ restoreFocus: true })
                 }}
               />
             ) : (
               <div
-                className="block w-full font-inherit text-inherit leading-inherit break-normal whitespace-nowrap overflow-hidden text-ellipsis pointer-events-auto select-none"
+                className="w-full h-full break-words whitespace-pre-wrap pointer-events-auto select-none flex items-center justify-center"
                 onDoubleClick={contentInteractionsEnabled ? startTitleEdit : undefined}
                 title={contentInteractionsEnabled ? '双击编辑标题' : undefined}
               >
@@ -156,7 +185,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
           </div>
 
-          <div className="relative z-50 flex items-center justify-end gap-[2px] shrink-0 ml-0 pr-[6px] pointer-events-auto" style={{ flex: '1 1 0' }}>
+          <div className="absolute right-[6px] top-1/2 z-50 flex -translate-y-1/2 items-center justify-end gap-[2px] shrink-0 pointer-events-auto">
             {hasDetail && (
               <div className="flex items-center justify-center shrink-0 text-[var(--color-text-muted)] leading-none" title="包含详情" style={docIconStyle}>
                 <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={docIconSvgStyle}>

@@ -106,7 +106,7 @@ export default memo(function TabBar() {
               
               {tab.id !== 'home' && (
                 <button
-                  className="shrink-0 w-[20px] h-[20px] rounded-md border-none bg-transparent flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none opacity-0 group-hover:opacity-100 hover:!bg-[#e81123] hover:!text-white transition-all"
+                  className="shrink-0 w-[20px] h-[20px] rounded-md border-none bg-transparent flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none opacity-0 group-hover:opacity-100 hover:!bg-[var(--color-danger)] hover:!text-white transition-all"
                   onClick={(e) => handleCloseTab(e, tab.id)}
                   title={`关闭 ${tab.label}`}
                 >

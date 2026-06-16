@@ -10,6 +10,8 @@ interface FSBGraphChild {
   y?: number
   width?: number
   height?: number
+  widthMode?: 'auto' | 'manual'
+  heightMode?: 'auto' | 'manual'
   expanded?: boolean
   style?: KnowledgeNodeStyle
   expandedWidth?: number
@@ -81,6 +83,8 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
       card: { ref, name: child.name, updatedAt: undefined },
       height: Number.isFinite(child.height) ? child.height as number : 52,
       width: Number.isFinite(child.width) ? child.width as number : 120,
+      widthMode: child.widthMode === 'manual' ? 'manual' : (child.widthMode === 'auto' ? 'auto' : undefined),
+      heightMode: child.heightMode === 'manual' ? 'manual' : (child.heightMode === 'auto' ? 'auto' : undefined),
       position: Number.isFinite(child.x) && Number.isFinite(child.y)
         ? { x: child.x as number, y: child.y as number }
         : undefined,
@@ -140,6 +144,8 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
       y: node.position?.y,
       width: node.width,
       height: node.height,
+      widthMode: node.widthMode,
+      heightMode: node.heightMode,
       expanded: node.expanded,
       style: node.style,
       expandedWidth: node.expandedWidth,
@@ -207,6 +213,18 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       await FSB.clearTrashKBs(requireRootDir())
     },
 
+    listAllTrashItems: async () => {
+      return FSB.listAllTrashItems(requireRootDir())
+    },
+
+    restoreGlobalTrashItem: async (category: string, trashName: string) => {
+      return FSB.restoreGlobalTrashItem(requireRootDir(), category, trashName)
+    },
+
+    clearAllTrashItems: async () => {
+      await FSB.clearAllTrashItems(requireRootDir())
+    },
+
     createKB: async (name: string): Promise<void> => {
       await FSB.createKbsDir(requireRootDir(), name)
     },
@@ -235,8 +253,8 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return { ref: cardPath, name, updatedAt: undefined }
     },
 
-    deleteCard: async (cardPath: string): Promise<void> => {
-      await FSB.deleteKbsDir(requireRootDir(), cardPath)
+    deleteCard: async (cardPath: string, label?: string): Promise<void> => {
+      await FSB.deleteKbsDir(requireRootDir(), cardPath, { label })
     },
 
     renameCard: async (cardPath: string, newName: string): Promise<void> => {

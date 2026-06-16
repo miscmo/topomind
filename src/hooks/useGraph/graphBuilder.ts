@@ -175,6 +175,8 @@ export async function buildNodes(
         expandedHeight: roomNode.expandedHeight,
         collapsedWidth: roomNode.size?.width,
         collapsedHeight: roomNode.size?.height,
+        widthMode: roomNode.widthMode,
+        heightMode: roomNode.heightMode,
       },
     }
   })

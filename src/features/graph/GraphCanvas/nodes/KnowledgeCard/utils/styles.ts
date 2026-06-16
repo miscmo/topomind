@@ -32,8 +32,10 @@ export function getKnowledgeCardStyles(
     ...(nodeStyle.headerColor ? { color: nodeStyle.headerColor } : {}),
   }
   const titleFieldStyle: CSSProperties = {
-    flex: '0 1 auto',
+    flex: '1 1 auto',
     minWidth: 0,
+    display: 'flex',
+    alignItems: 'center',
     justifyContent: 'center',
     textAlign: 'center',
     lineHeight: 1.3,

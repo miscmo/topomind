@@ -58,19 +58,19 @@ export default memo(function RightPanelContainer({ tabId }: RightPanelContainerP
     <div className="relative flex h-full shrink-0 right-panel-container">
       {willAutoCollapse && isResizing && (
         <>
-          <div className="pointer-events-none absolute right-0 top-0 bottom-0 z-[22] w-[3px] bg-[var(--color-accent)] shadow-[-10px_0_20px_rgba(59,130,246,0.22)]" />
-          <div className="pointer-events-none absolute right-3 top-3 z-[23] rounded-full border border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_14%,var(--color-surface))] px-2.5 py-1 text-[11px] font-medium text-[var(--color-accent)] shadow-[var(--shadow-sm)]">
-            松开折叠
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 z-[22] w-[3px] bg-[var(--color-danger)] shadow-[-10px_0_20px_rgba(239,68,68,0.15)] transition-all" />
+          <div className="pointer-events-none absolute right-3 top-3 z-[23] rounded-full border border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-danger)] shadow-[var(--shadow-md)] backdrop-blur-md animate-in fade-in slide-in-from-right-2">
+            松开即可折叠
           </div>
         </>
       )}
       <div
-        className="group w-1 h-full cursor-col-resize shrink-0 bg-transparent z-[20] relative select-none transition-colors"
+        className="group w-2 -ml-1 h-full cursor-col-resize shrink-0 bg-transparent z-[20] relative select-none transition-colors"
         onMouseDown={handleResizeStart}
         onDoubleClick={handleResizeDoubleClick}
         title="拖拽调整宽度，拖到当前宽度一半或双击可折叠"
       >
-        <div className={`absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px transition-colors group-hover:bg-[var(--color-accent)] group-active:bg-[var(--color-accent)] ${isResizing ? 'bg-[var(--color-accent)]' : 'bg-transparent'} ${willAutoCollapse ? 'bg-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent-soft)]' : ''}`} />
+        <div className={`absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px transition-all duration-200 group-hover:bg-[var(--color-accent)]/40 group-active:bg-[var(--color-accent)] group-active:w-[2px] ${isResizing ? 'bg-[var(--color-accent)] w-[2px]' : 'bg-transparent'} ${willAutoCollapse ? '!bg-[var(--color-danger)] !w-[3px]' : ''}`} />
       </div>
       <RightPanelShell
         tabId={tabId}
