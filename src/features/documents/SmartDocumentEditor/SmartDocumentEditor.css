@@ -1,3 +1,58 @@
+/* --- BlockNote Global UI Overrides --- */
+.bn-toolbar,
+.bn-menu-dropdown,
+.bn-suggestion-menu {
+  background: var(--titlebar-menu-bg) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--shadow-popover) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.bn-toolbar,
+.bn-suggestion-menu {
+  padding: 4px !important;
+}
+
+.bn-menu-dropdown:not(.tm-smart-block-menu) {
+  padding: 4px !important;
+}
+
+.bn-menu-dropdown .bn-menu-item:hover,
+.bn-menu-dropdown .bn-menu-item[data-selected="true"],
+.bn-suggestion-menu .bn-menu-item:hover,
+.bn-suggestion-menu .bn-menu-item[data-selected="true"] {
+  background: var(--color-hover-bg) !important;
+  border-radius: 6px !important;
+}
+
+.bn-toolbar .bn-button,
+.bn-toolbar .bn-button:hover,
+.bn-toolbar .bn-button[data-selected="true"],
+.bn-toolbar .bn-button[data-selected="true"]:hover {
+  background: transparent !important;
+  border: none !important;
+  color: var(--color-text-primary) !important;
+  border-radius: 6px !important;
+}
+
+.bn-toolbar .bn-button:hover,
+.bn-toolbar .bn-button[data-selected="true"]:hover {
+  background: var(--color-hover-bg) !important;
+}
+
+.bn-toolbar .bn-button[data-selected="true"] {
+  background: var(--color-active-bg) !important;
+  color: var(--color-accent) !important;
+}
+
+.bn-menu-dropdown .bn-menu-item,
+.bn-suggestion-menu .bn-menu-item {
+  color: var(--color-text-primary) !important;
+}
+
 .smart-document-content .bn-default-styles {
   font-family: var(--topomind-smart-font-family) !important;
   font-size: var(--topomind-smart-body-font-size) !important;
@@ -263,10 +318,12 @@
   width: 246px;
   max-height: 420px;
   padding: 0 !important;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  border: 1px solid var(--color-border) !important;
+  border-radius: 12px !important;
+  background: var(--titlebar-menu-bg) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  box-shadow: var(--shadow-popover) !important;
   overflow-y: auto;
   color: var(--color-text-primary);
 }
@@ -361,10 +418,12 @@
 .tm-smart-block-menu__sub {
   min-width: 174px;
   padding: 8px 0 !important;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  border: 1px solid var(--color-border) !important;
+  border-radius: 12px !important;
+  background: var(--titlebar-menu-bg) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  box-shadow: var(--shadow-popover) !important;
 }
 .tm-smart-block-menu__subitem {
   width: 100%;

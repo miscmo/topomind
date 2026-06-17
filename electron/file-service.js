@@ -1112,7 +1112,15 @@ function _fs_createTopoDocument(rootDir, cardPath, input) {
 }
 
 function _fs_readTopoDocument(rootDir, cardPath, documentId) {
-  var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  var found;
+  try {
+    found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  } catch (e) {
+    if (e.message.indexOf('文档不存在') !== -1) {
+      return null;
+    }
+    throw e;
+  }
   var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, found.item);
   if (!nodeFs.existsSync(filePath)) {
     return _fs_createTopoDocumentInitialContent(found.item.type, found.item.title, Date.now());
