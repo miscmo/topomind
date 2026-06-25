@@ -4,13 +4,18 @@
  *
  * @file components/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx
  */
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
+import Picker from '@emoji-mart/react'
+import emojiData from '@emoji-mart/data'
+import emojiI18nZh from '@emoji-mart/data/i18n/zh.json'
 import type { KnowledgeNode } from '../../../../../types'
 import { cn } from '@/lib/utils'
 import { useKnowledgeCardModel } from './model/useKnowledgeCardModel'
 import { getKnowledgeCardStyles } from './utils/styles'
 import QuickNodeToolbar from './QuickNodeToolbar'
+import { useGraphContext } from '../../../../../contexts/GraphContext'
 
 interface KnowledgeCardProps extends NodeProps<KnowledgeNode> {
   resizing?: boolean
@@ -57,6 +62,11 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     selectNode
   } = actions
 
+  const { updateNodeEmojis } = useGraphContext()
+  const [editingEmojiIndex, setEditingEmojiIndex] = useState<number | null>(null)
+  const [emojiPickerPosition, setEmojiPickerPosition] = useState<{ x: number, y: number } | null>(null)
+  const cardRootRef = useRef<HTMLDivElement>(null)
+
   const { titleInputRef, titleDraftRef } = refs
 
   const {
@@ -68,11 +78,68 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     titleFieldStyle
   } = useMemo(() => getKnowledgeCardStyles(nodeStyle, nodeBadgeSize), [nodeStyle, nodeBadgeSize])
 
+  const resolvePickerPosition = useCallback((anchorRect: DOMRect, preferredPlacement: 'node' | 'emoji' = 'node') => {
+    const PICKER_WIDTH = 352
+    const PICKER_HEIGHT = 435
+    const GAP = 6
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+
+    let x = preferredPlacement === 'emoji'
+      ? anchorRect.left - 12
+      : anchorRect.right + GAP
+    let y = preferredPlacement === 'emoji'
+      ? anchorRect.bottom + GAP
+      : anchorRect.top - 6
+
+    if (preferredPlacement === 'node' && x + PICKER_WIDTH > viewportWidth - GAP) {
+      x = anchorRect.left - PICKER_WIDTH - GAP
+    }
+    if (preferredPlacement === 'emoji' && x + PICKER_WIDTH > viewportWidth - GAP) {
+      x = Math.max(GAP, viewportWidth - PICKER_WIDTH - GAP)
+    }
+
+    if (x < GAP) x = GAP
+    if (x + PICKER_WIDTH > viewportWidth - GAP) {
+      x = Math.max(GAP, viewportWidth - PICKER_WIDTH - GAP)
+    }
+
+    if (y + PICKER_HEIGHT > viewportHeight - GAP) {
+      y = anchorRect.top - PICKER_HEIGHT - GAP
+    }
+    if (y < GAP) {
+      y = Math.max(GAP, Math.min(anchorRect.bottom + GAP, viewportHeight - PICKER_HEIGHT - GAP))
+    }
+
+    return {
+      x,
+      y,
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleAddEmojiEvent = (e: CustomEvent<{ nodeId: string, position?: { x: number, y: number } }>) => {
+      if (e.detail.nodeId === id) {
+        setTimeout(() => {
+          const cardRect = cardRootRef.current?.getBoundingClientRect()
+          if (!cardRect) return
+          setEmojiPickerPosition(resolvePickerPosition(cardRect, 'node'))
+          setEditingEmojiIndex(null) // null means append new emoji
+        }, 10)
+      }
+    }
+    document.addEventListener('topomind:add-emoji', handleAddEmojiEvent as EventListener)
+    return () => {
+      document.removeEventListener('topomind:add-emoji', handleAddEmojiEvent as EventListener)
+    }
+  }, [id, resolvePickerPosition])
+
   const hasChildBadge = data.childCount !== undefined && data.childCount > 0
   const hasDetail = data.hasDetail === true
 
   return (
     <div
+      ref={cardRootRef}
       onPointerEnter={() => setIsHovered(true)}
       onPointerDownCapture={selectNode}
       onPointerLeave={() => setIsHovered(false)}
@@ -180,11 +247,30 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
               />
             ) : (
               <div
-                className="w-full h-full break-words whitespace-pre-wrap pointer-events-auto select-none flex items-center justify-center"
+                className="w-full h-full break-words whitespace-pre-wrap pointer-events-auto select-none flex items-center justify-center gap-[3px] min-w-0"
                 onDoubleClick={contentInteractionsEnabled ? startTitleEdit : undefined}
                 title={contentInteractionsEnabled ? '双击编辑标题' : undefined}
               >
-                {data.label}
+                {data.emojis && data.emojis.length > 0 && (
+                  <div className="flex items-center gap-[2px] shrink-0 pr-[2px]" onDoubleClick={e => e.stopPropagation()}>
+                    {data.emojis.map((emoji, index) => (
+                      <div 
+                        key={`${index}-${emoji}`}
+                        className="inline-flex items-center justify-center cursor-pointer rounded-[6px] px-[2px] transition-colors leading-none hover:bg-black/[0.045] dark:hover:bg-white/[0.06]"
+                        style={{ fontSize: '1.08em', lineHeight: 1, transform: 'translateY(0.02em)' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          setEmojiPickerPosition(resolvePickerPosition(rect, 'emoji'))
+                          setEditingEmojiIndex(index)
+                        }}
+                      >
+                        {emoji}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <span className="min-w-0 flex-1 text-center leading-[inherit] tracking-[-0.005em]">{data.label}</span>
               </div>
             )}
           </div>
@@ -216,6 +302,56 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
           </div>
         </div>
       </div>
+
+      {emojiPickerPosition && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed z-[1000] shadow-xl border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] overflow-hidden"
+          style={{ left: emojiPickerPosition.x, top: emojiPickerPosition.y }}
+          onPointerDown={e => e.stopPropagation()}
+          onDoubleClick={e => e.stopPropagation()}
+        >
+          {editingEmojiIndex !== null && (
+            <div className="w-full p-2 border-b border-[var(--color-border-light)] bg-[var(--color-surface-hover)] relative z-10">
+              <button
+                className="w-full py-1.5 text-sm text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                onClick={() => {
+                  const newEmojis = [...(data.emojis || [])]
+                  newEmojis.splice(editingEmojiIndex, 1)
+                  void updateNodeEmojis(id, newEmojis.length > 0 ? newEmojis : undefined)
+                  setEmojiPickerPosition(null)
+                  setEditingEmojiIndex(null)
+                }}
+              >
+                移除此表情
+              </button>
+            </div>
+          )}
+          <Picker 
+            data={emojiData} 
+            i18n={emojiI18nZh}
+            onEmojiSelect={(emoji: any) => {
+              const currentEmojis = data.emojis || []
+              let newEmojis = [...currentEmojis]
+              if (editingEmojiIndex !== null) {
+                newEmojis[editingEmojiIndex] = emoji.native
+              } else {
+                newEmojis.push(emoji.native)
+              }
+              void updateNodeEmojis(id, newEmojis)
+              setEmojiPickerPosition(null)
+              setEditingEmojiIndex(null)
+            }}
+            onClickOutside={(e: any) => {
+              const target = e.target as Element
+              if (target.closest?.('[data-context-menu-item]')) return
+              setEmojiPickerPosition(null)
+              setEditingEmojiIndex(null)
+            }}
+            theme="auto"
+          />
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

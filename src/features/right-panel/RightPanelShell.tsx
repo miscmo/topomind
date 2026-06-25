@@ -6,7 +6,7 @@ import type { RightPanelTab } from '../../types/uiStoreTypes'
 interface RightPanelShellProps {
   tabId: string
   rightPanelTab: RightPanelTab
-  width: number
+  width: number | string
   onTabChange: (tab: RightPanelTab) => void
   onCollapse: () => void
 }

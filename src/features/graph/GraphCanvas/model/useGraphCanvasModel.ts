@@ -43,9 +43,11 @@ export function useGraphCanvasModel({
   const [isMouseOverCanvas, setIsMouseOverCanvas] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isInputFocused, setIsInputFocused] = useState(false)
+  const [isCanvasPointerActive, setIsCanvasPointerActive] = useState(false)
   const pendingConnectionPointRef = useRef<{ x: number; y: number } | null>(null)
   const connectionFrameRef = useRef<number | null>(null)
   const connectingTargetIdRef = useRef<string | null>(connectingTargetId)
+  const previousBodyUserSelectRef = useRef<string | null>(null)
 
   useEffect(() => {
     const checkFocus = () => {
@@ -115,6 +117,37 @@ export function useGraphCanvasModel({
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!isCanvasPointerActive) return
+
+    previousBodyUserSelectRef.current = document.body.style.userSelect
+    document.body.style.userSelect = 'none'
+
+    const releasePointerLock = () => {
+      const selection = window.getSelection()
+      if (selection && selection.type === 'Range') {
+        selection.removeAllRanges()
+      }
+      setIsCanvasPointerActive(false)
+    }
+
+    window.addEventListener('mouseup', releasePointerLock)
+    window.addEventListener('pointerup', releasePointerLock)
+    window.addEventListener('pointercancel', releasePointerLock)
+    window.addEventListener('dragend', releasePointerLock)
+    window.addEventListener('blur', releasePointerLock)
+
+    return () => {
+      window.removeEventListener('mouseup', releasePointerLock)
+      window.removeEventListener('pointerup', releasePointerLock)
+      window.removeEventListener('pointercancel', releasePointerLock)
+      window.removeEventListener('dragend', releasePointerLock)
+      window.removeEventListener('blur', releasePointerLock)
+      document.body.style.userSelect = previousBodyUserSelectRef.current ?? ''
+      previousBodyUserSelectRef.current = null
+    }
+  }, [isCanvasPointerActive])
 
   useEffect(() => {
     if (connectingSourceId) return
@@ -343,6 +376,19 @@ export function useGraphCanvasModel({
     }
   }, [isShiftPressed, connectingSourceId, handleConnectionMouseMove])
 
+  const handleCanvasMouseDown = useCallback((event: React.MouseEvent) => {
+    if (event.button !== 0) return
+    if (!(event.target instanceof HTMLElement)) {
+      setIsCanvasPointerActive(true)
+      return
+    }
+
+    const editableTarget = event.target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"]')
+    if (editableTarget) return
+
+    setIsCanvasPointerActive(true)
+  }, [])
+
   const handleSearchSelectNode = useCallback((node: Node) => {
     graph.selectNode(node.id)
     setIsSearchOpen(false)
@@ -386,6 +432,7 @@ export function useGraphCanvasModel({
       handleCanvasMouseEnter,
       handleCanvasMouseLeave,
       handleCanvasMouseMove,
+      handleCanvasMouseDown,
       setIsSearchOpen,
       handleSearchSelectNode,
     }

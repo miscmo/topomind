@@ -91,6 +91,7 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       style: normalizeNodeStyle(rawNode.style),
       expandedWidth: typeof rawNode.expandedWidth === 'number' ? rawNode.expandedWidth : undefined,
       expandedHeight: typeof rawNode.expandedHeight === 'number' ? rawNode.expandedHeight : undefined,
+      emojis: Array.isArray(rawNode.emojis) ? rawNode.emojis.filter((emoji): emoji is string => typeof emoji === 'string') : undefined,
     }
   }
 

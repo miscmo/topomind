@@ -41,6 +41,20 @@ export function useDetailDocuments({
 
   const documentListRequestSeqRef = useRef(0)
 
+  const syncNodeHasDetail = useCallback((targetNodeId: string | null, hasDetail: boolean) => {
+    if (!targetNodeId) return
+    const node = storeApi.getState().nodesMap.get(targetNodeId)
+    if (!node || node.data.hasDetail === hasDetail) return
+
+    const temporalState = (storeApi as any).temporal?.getState?.()
+    if (temporalState) temporalState.pause()
+    storeApi.getState().updateNode(targetNodeId, (currentNode) => ({
+      ...currentNode,
+      data: { ...currentNode.data, hasDetail },
+    }))
+    if (temporalState) temporalState.resume()
+  }, [storeApi])
+
   useEffect(() => {
     if (!nodePath) {
       setTopoDocuments([])
@@ -48,11 +62,15 @@ export function useDetailDocuments({
       return
     }
     const state = useDetailPanelStore.getState()
-    setTopoDocuments(state.documentListsByNodePath[nodePath] ?? [])
+    const cachedDocuments = state.documentListsByNodePath[nodePath] ?? []
+    setTopoDocuments(cachedDocuments)
     setTopoDocumentsCardPath(nodePath)
-  }, [nodePath])
+    if (Object.prototype.hasOwnProperty.call(state.documentListsByNodePath, nodePath)) {
+      syncNodeHasDetail(selectedNodeId, cachedDocuments.length > 0)
+    }
+  }, [nodePath, selectedNodeId, syncNodeHasDetail])
 
-  const loadDocuments = useCallback(async (cardPath: string, requestSeq?: number) => {
+  const loadDocuments = useCallback(async (cardPath: string, requestSeq?: number, targetNodeId?: string | null) => {
     const nextTopoDocuments = await storage.listTopoDocuments(cardPath).catch((e) => {
       logger.catch('DetailPanel', `loadTopoDocuments: ${cardPath}`, e)
       return [] as TopoDocumentManifestItem[]
@@ -63,6 +81,7 @@ export function useDetailDocuments({
     setTopoDocuments(nextTopoDocuments)
     setTopoDocumentsCardPath(cardPath)
     setDocumentListForNodePath(cardPath, nextTopoDocuments)
+    syncNodeHasDetail(targetNodeId ?? selectedNodeId, nextTopoDocuments.length > 0)
     
     // Default to the first available document if the active one doesn't exist anymore
     setActiveDocumentPath((currentPath) => {
@@ -72,7 +91,7 @@ export function useDetailDocuments({
       return nextTopoDocuments.length > 0 ? topoDocumentPath(nextTopoDocuments[0].id) : ''
     })
     return nextTopoDocuments
-  }, [setDocumentListForNodePath, storage, setActiveDocumentPath])
+  }, [selectedNodeId, setDocumentListForNodePath, setActiveDocumentPath, storage, syncNodeHasDetail])
 
   useEffect(() => {
     if (!documentLinkNotice) return

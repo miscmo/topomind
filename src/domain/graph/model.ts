@@ -29,6 +29,7 @@ export interface RoomGraphNode {
   style?: KnowledgeNodeStyle
   expandedWidth?: number
   expandedHeight?: number
+  emojis?: string[]
 }
 
 export interface RoomGraphEdge {
@@ -63,6 +64,7 @@ export interface KBNode {
   style?: KnowledgeNodeStyle
   expandedWidth?: number
   expandedHeight?: number
+  emojis?: string[]
 }
 
 export interface KBEdge {

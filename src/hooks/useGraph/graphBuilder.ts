@@ -90,6 +90,7 @@ export function buildMetaFromNodesEdges(
       style: node.data.nodeStyle,
       expandedWidth: node.data.expandedWidth,
       expandedHeight: node.data.expandedHeight,
+      emojis: node.data.emojis,
     }
   }
   const roomEdges: RoomGraphEdge[] = edges.map((e) => ({
@@ -177,6 +178,7 @@ export async function buildNodes(
         collapsedHeight: roomNode.size?.height,
         widthMode: roomNode.widthMode,
         heightMode: roomNode.heightMode,
+        emojis: roomNode.emojis,
       },
     }
   })

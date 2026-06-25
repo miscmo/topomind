@@ -10,6 +10,8 @@ const RIGHT_SLOT_ICON_WIDTH = 16
 const RIGHT_SLOT_BADGE_WIDTH = 22
 const HEADER_VERTICAL_PADDING = 6
 const HEADER_MIN_HEIGHT = 24
+const EMOJI_GAP = 2
+const EMOJI_TEXT_GAP = 3
 
 let measureCanvas: HTMLCanvasElement | null = null
 
@@ -62,7 +64,16 @@ export function calculateKnowledgeCardAutoSize(
   const accessoryWidth = getKnowledgeCardAccessoryWidth(data)
   
   // 左右内边距，减少无谓的空白
-  const leftPadding = TITLE_HORIZONTAL_PADDING
+  const emojiCount = data.emojis?.length || 0
+  // Emoji in Segoe UI / Apple Color Emoji tends to render wider than plain text measurement.
+  const emojiWidth = emojiCount > 0
+    ? (
+      emojiCount * Math.ceil(fontSize * 1.78) +
+      Math.max(0, emojiCount - 1) * EMOJI_GAP +
+      EMOJI_TEXT_GAP
+    )
+    : 0
+  const leftPadding = TITLE_HORIZONTAL_PADDING + emojiWidth
   const rightPadding = Math.max(TITLE_HORIZONTAL_PADDING, accessoryWidth)
   
   // 准确计算所需的额外宽度

@@ -3,6 +3,7 @@ import type { DetailSidebarTab, DocumentSaveStatus, DocumentWorkspaceLayoutProps
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../../../hooks/useResizePanel'
 import { logAction } from '../../../../core/log-backend'
+import { useRightPanelStore } from '../../../right-panel/model/rightPanelStore'
 
 export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   isDirty,
@@ -43,6 +44,9 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   const effectiveFloating = detailSidebarFloating
   const showSidebarContent = !detailSidebarCollapsed || effectiveFloating
   const isSaving = saveStatus === 'saving'
+
+  const isMaximized = useRightPanelStore((s) => s.rightPanelMaximized)
+  const toggleMaximized = useRightPanelStore((s) => s.toggleRightPanelMaximized)
 
   const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
     initialWidth: detailSidebarWidth,
@@ -124,6 +128,20 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
       <div className="flex flex-1 overflow-hidden relative">
         {documentType === 'detail' && !effectiveFloating && (
           <div className="w-9 shrink-0 border-r border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] flex flex-col items-center gap-1 py-2 z-10">
+            <button
+              type="button"
+              className={`w-7 h-7 rounded-lg border border-transparent text-[14px] font-semibold cursor-pointer transition-colors bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] flex items-center justify-center`}
+              onClick={toggleMaximized}
+              title={isMaximized ? "还原面板" : "最大化面板"}
+              aria-label={isMaximized ? "还原面板" : "最大化面板"}
+            >
+              {isMaximized ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              )}
+            </button>
+            <div className="w-5 h-px bg-[var(--color-border-light)] my-0.5" />
             <button
               type="button"
               className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'documents' ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'}`}

@@ -42,6 +42,7 @@ export function graphMetaToRoomGraph(roomRef: string, meta: GraphMeta): RoomGrap
       style: node.style,
       expandedWidth: node.expandedWidth,
       expandedHeight: node.expandedHeight,
+      emojis: node.emojis,
     }
   }
 
@@ -89,6 +90,7 @@ export function roomGraphToGraphMeta(graph: RoomGraph): GraphMeta {
       style: node.style,
       expandedWidth: node.expandedWidth,
       expandedHeight: node.expandedHeight,
+      emojis: node.emojis,
     }
   }
 

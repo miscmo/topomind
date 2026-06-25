@@ -16,6 +16,7 @@ interface FSBGraphChild {
   style?: KnowledgeNodeStyle
   expandedWidth?: number
   expandedHeight?: number
+  emojis?: string[]
 }
 
 interface FSBGraphEdge {
@@ -92,6 +93,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
       style: child.style,
       expandedWidth: Number.isFinite(child.expandedWidth) ? child.expandedWidth as number : undefined,
       expandedHeight: Number.isFinite(child.expandedHeight) ? child.expandedHeight as number : undefined,
+      emojis: Array.isArray(child.emojis) ? child.emojis.filter((emoji): emoji is string => typeof emoji === 'string') : undefined,
     }
   }
 
@@ -150,6 +152,7 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
       style: node.style,
       expandedWidth: node.expandedWidth,
       expandedHeight: node.expandedHeight,
+      emojis: node.emojis,
     }
   }
 

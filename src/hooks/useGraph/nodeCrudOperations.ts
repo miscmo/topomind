@@ -264,6 +264,25 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     logAction('节点:更新尺寸模式', 'graphOperations', { nodeId, ...patch })
   }
 
+  const updateNodeEmojis = async (nodeId: string, emojis: string[] | undefined): Promise<void> => {
+    const store = storeApi.getState()
+    const node = store.nodesMap.get(nodeId)
+    if (!node) return
+
+    store.updateNode(nodeId, (currentNode) => ({
+      ...currentNode,
+      data: {
+        ...currentNode.data,
+        emojis,
+      },
+    }))
+
+    const graphSession = getActiveGraphSession()
+    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
+    if (currentRoomPath) await saveLater(currentRoomPath)
+    logAction('节点:更新表情', 'graphOperations', { nodeId, emojis })
+  }
+
   return {
     createChildNode,
     deleteChildNode,
@@ -272,5 +291,6 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     updateNodesStyle,
     clearNodesStyle,
     updateNodeSizingMode,
+    updateNodeEmojis,
   }
 }

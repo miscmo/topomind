@@ -406,12 +406,25 @@ const MiniMapViewportOverlay = memo(function MiniMapViewportOverlay({
     height: canvasSize.height / Math.max(viewport.zoom, 0.0001),
   }), [canvasSize.height, canvasSize.width, viewport.x, viewport.y, viewport.zoom])
 
+  const cornerSize = useMemo(
+    () => Math.max(8, Math.min(18, Math.min(visibleFlowBounds.width, visibleFlowBounds.height) * 0.18)),
+    [visibleFlowBounds.height, visibleFlowBounds.width],
+  )
+
   return (
     <>
-      <path
-        d={`M${previewBounds.x},${previewBounds.y}h${previewBounds.width}v${previewBounds.height}h${-previewBounds.width}z M${visibleFlowBounds.x},${visibleFlowBounds.y}h${visibleFlowBounds.width}v${visibleFlowBounds.height}h${-visibleFlowBounds.width}z`}
-        fill="rgba(15, 23, 42, 0.14)"
-        fillRule="evenodd"
+      <rect
+        x={visibleFlowBounds.x}
+        y={visibleFlowBounds.y}
+        width={visibleFlowBounds.width}
+        height={visibleFlowBounds.height}
+        fill="var(--color-accent-soft)"
+        fillOpacity="0.55"
+        stroke="var(--color-surface)"
+        strokeOpacity="0.9"
+        strokeWidth="4"
+        rx="3"
+        ry="3"
         pointerEvents="none"
       />
       <rect
@@ -421,7 +434,23 @@ const MiniMapViewportOverlay = memo(function MiniMapViewportOverlay({
         height={visibleFlowBounds.height}
         fill="none"
         stroke="var(--color-primary)"
-        strokeWidth="2"
+        strokeWidth="2.5"
+        rx="3"
+        ry="3"
+        pointerEvents="none"
+      />
+      <path
+        d={[
+          `M${visibleFlowBounds.x},${visibleFlowBounds.y + cornerSize} L${visibleFlowBounds.x},${visibleFlowBounds.y} L${visibleFlowBounds.x + cornerSize},${visibleFlowBounds.y}`,
+          `M${visibleFlowBounds.x + visibleFlowBounds.width - cornerSize},${visibleFlowBounds.y} L${visibleFlowBounds.x + visibleFlowBounds.width},${visibleFlowBounds.y} L${visibleFlowBounds.x + visibleFlowBounds.width},${visibleFlowBounds.y + cornerSize}`,
+          `M${visibleFlowBounds.x + visibleFlowBounds.width},${visibleFlowBounds.y + visibleFlowBounds.height - cornerSize} L${visibleFlowBounds.x + visibleFlowBounds.width},${visibleFlowBounds.y + visibleFlowBounds.height} L${visibleFlowBounds.x + visibleFlowBounds.width - cornerSize},${visibleFlowBounds.y + visibleFlowBounds.height}`,
+          `M${visibleFlowBounds.x + cornerSize},${visibleFlowBounds.y + visibleFlowBounds.height} L${visibleFlowBounds.x},${visibleFlowBounds.y + visibleFlowBounds.height} L${visibleFlowBounds.x},${visibleFlowBounds.y + visibleFlowBounds.height - cornerSize}`,
+        ].join(' ')}
+        fill="none"
+        stroke="var(--color-primary)"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
         pointerEvents="none"
       />
     </>

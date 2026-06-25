@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Palette, Trash2, Maximize2 } from 'lucide-react'
+import { Plus, Palette, Trash2, Maximize2, SmilePlus } from 'lucide-react'
 
 interface MenuItem {
   label: string
@@ -34,6 +34,7 @@ interface GraphPageContextMenuProps {
   onDelete: (nodeId: string) => void
   onEdgeDelete: (edgeId: string) => void
   onEdgeStyle: (edgeId: string) => void
+  onAddEmoji: (nodeId: string, position: { x: number, y: number }) => void
   onClose: () => void
 }
 
@@ -48,6 +49,7 @@ export default memo(function GraphPageContextMenu({
   onDelete,
   onEdgeDelete,
   onEdgeStyle,
+  onAddEmoji,
   onClose,
 }: GraphPageContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -101,6 +103,14 @@ export default memo(function GraphPageContextMenu({
               onClose()
             },
           },
+          {
+            label: '添加表情',
+            icon: <SmilePlus className="w-4 h-4" />,
+            action: async () => {
+              if (targetId) await onAddEmoji(targetId, { x, y })
+              onClose()
+            },
+          },
           { separator: true },
           {
             label: '删除节点',
@@ -133,6 +143,10 @@ export default memo(function GraphPageContextMenu({
   useEffect(() => {
     if (!visible) return
     const handler = (e: MouseEvent) => {
+      // Don't close if clicking inside the emoji picker (it mounts in a portal or has a specific class)
+      const target = e.target as Element
+      if (target.closest('em-emoji-picker')) return
+      
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose()
       }
@@ -144,10 +158,11 @@ export default memo(function GraphPageContextMenu({
         onClose()
       }
     }
-    document.addEventListener('mousedown', handler)
+    // Use capture phase to intercept clicks before they reach the window
+    document.addEventListener('mousedown', handler, true)
     document.addEventListener('contextmenu', blockMenu)
     return () => {
-      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('mousedown', handler, true)
       document.removeEventListener('contextmenu', blockMenu)
     }
   }, [visible, onClose])
@@ -230,6 +245,7 @@ export default memo(function GraphPageContextMenu({
         return (
           <button
             key={i}
+            data-context-menu-item="true"
             className={`flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none disabled:opacity-40 disabled:cursor-not-allowed ${bgColor} ${textColor}`}
             onClick={async () => { await item.action() }}
             onMouseEnter={() => setFocusedIndex(currentIndex)}

@@ -50,6 +50,8 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const widthMode = data.widthMode ?? 'auto'
   const heightMode = data.heightMode ?? 'auto'
   const autoSize = useMemo(() => calculateKnowledgeCardAutoSize(data.label, nodeStyle, data), [data, nodeStyle])
+  const displayWidth = widthMode === 'auto' ? autoSize.width : nodeWidth
+  const displayHeight = heightMode === 'auto' ? autoSize.height : nodeHeight
   const accessoryWidth = useMemo(() => getKnowledgeCardAccessoryWidth(data), [data])
   
   const cardPath = useMemo(() => {
@@ -295,8 +297,8 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       isConnectSource,
       contentInteractionsEnabled,
       nodeStyle,
-      nodeWidth,
-      nodeHeight,
+      nodeWidth: displayWidth,
+      nodeHeight: displayHeight,
       nodeSizeLimits,
       nodeBadgeSize,
       cardPath,

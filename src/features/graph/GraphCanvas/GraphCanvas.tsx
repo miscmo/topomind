@@ -90,6 +90,7 @@ export default memo(function GraphCanvas({
       ref={containerRef}
       style={{ width: '100%', height: '100%', position: 'relative' }}
       className={isFormatPainterActive ? "format-painter-active" : undefined}
+      onMouseDown={actions.handleCanvasMouseDown}
       onMouseEnter={actions.handleCanvasMouseEnter}
       onMouseMove={actions.handleCanvasMouseMove}
       onMouseLeave={actions.handleCanvasMouseLeave}

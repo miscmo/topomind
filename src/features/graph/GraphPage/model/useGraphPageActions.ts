@@ -98,6 +98,12 @@ export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
       onDelete: handleDelete,
       onEdgeDelete: handleEdgeDelete,
       onEdgeStyle: handleEdgeStyle,
+      onAddEmoji: (nodeId: string, position: { x: number, y: number }) => {
+        // We use setTimeout to ensure the menu close event doesn't immediately dismiss the picker
+        setTimeout(() => {
+          document.dispatchEvent(new CustomEvent('topomind:add-emoji', { detail: { nodeId, position } }))
+        }, 50)
+      },
       onClose: closeContextMenu,
     },
   }

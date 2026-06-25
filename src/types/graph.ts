@@ -28,6 +28,7 @@ export interface GraphChild {
   style?: KnowledgeNodeStyle
   expandedWidth?: number
   expandedHeight?: number
+  emojis?: string[]
 }
 
 export type NodeSizingMode = 'auto' | 'manual'
@@ -94,6 +95,8 @@ export interface KnowledgeNodeData {
   selected?: boolean
   /** 悬停状态 */
   hovered?: boolean
+  /** 节点表情列表 */
+  emojis?: string[]
   /** 上次展开时的宽度 */
   expandedWidth?: number
   /** 上次展开时的高度 */

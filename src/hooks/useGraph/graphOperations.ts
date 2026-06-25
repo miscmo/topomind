@@ -138,6 +138,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     ...nodeChangeOps,
     // Selection
     ...selectionOps,
+    updateNodeEmojis: nodeCrudOps.updateNodeEmojis,
     // Internal
     captureSaveSnapshot,
     saveSnapshot,
