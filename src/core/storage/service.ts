@@ -233,6 +233,10 @@ export function createStore(backend: StorageBackend) {
       if (!kbPath) return Promise.resolve()
       return layoutSaveCoordinator.flush(kbPath, buildMetaFn, onSaved)
     },
+    hasPendingGraphSave(kbPath: string): boolean {
+      if (!kbPath) return false
+      return layoutSaveCoordinator.hasPending(kbPath)
+    },
     async importKB(sourcePath: string) {
       try {
         return await backend.importKB(sourcePath)

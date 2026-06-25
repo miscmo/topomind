@@ -17,6 +17,8 @@ import type { StoreApi } from 'zustand'
 import type { GraphSession } from '../../stores/tabs/tabStore'
 
 export interface StorageApi {
+  saveGraphDebounced: (dirPath: string, buildMeta: () => GraphMeta, onSaved: (() => void) | undefined) => Promise<void>
+  hasPendingGraphSave: (dirPath: string) => boolean
   createCard: (parentPath: string, cardName: string) => Promise<string | null>
   deleteCard: (cardPath: string) => Promise<unknown>
   renameCard: (cardPath: string, newName: string) => Promise<unknown>
@@ -75,8 +77,17 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     await storage.flushGraphSave(snapshot.dirPath, () => snapshot.meta, undefined)
   }
 
+  const scheduleSaveSnapshot = async (snapshot: GraphSaveSnapshot | null) => {
+    if (!snapshot?.dirPath) return
+    await storage.saveGraphDebounced(snapshot.dirPath, () => snapshot.meta, undefined)
+  }
+
   const saveNow = async (dirPath: string) => {
     await saveSnapshot(captureSaveSnapshot(dirPath))
+  }
+
+  const saveLater = async (dirPath: string) => {
+    await scheduleSaveSnapshot(captureSaveSnapshot(dirPath))
   }
 
   // ===== Node CRUD =====
@@ -87,6 +98,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     getActiveGraphSession,
     loadRoom,
     saveNow,
+      saveLater,
     isCreatingRef,
     storeApi,
   })
@@ -96,6 +108,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
   const edgeOps = buildEdgeOperations({
     getActiveGraphSession,
     saveNow,
+      saveLater,
     storeApi,
   })
 
@@ -105,6 +118,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     tabId,
     getActiveGraphSession,
     saveNow,
+      saveLater,
     storeApi,
   })
 
@@ -127,7 +141,9 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     // Internal
     captureSaveSnapshot,
     saveSnapshot,
+    scheduleSaveSnapshot,
     saveNow,
+    saveLater,
   }
 }
 

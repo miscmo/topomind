@@ -35,6 +35,7 @@ export interface NodeCrudOperationsDeps {
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   saveNow: (dirPath: string) => Promise<void>
+  saveLater: (dirPath: string) => Promise<void>
   isCreatingRef: { current: boolean }
   storeApi: StoreApi<GraphState>
 }
@@ -46,6 +47,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     getActiveGraphSession,
     loadRoom,
     saveNow,
+    saveLater,
     isCreatingRef,
     storeApi,
   } = deps
@@ -106,9 +108,6 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
             : node.data,
         })))
       }
-      const savePath = getActiveGraphSession().roomPath || getActiveGraphSession().kbPath
-      if (savePath) await saveNow(savePath)
-
       return cardId
     } catch (e) {
       isCreatingRef.current = false
@@ -166,7 +165,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       
       store.updateNode(nodeId, (node) => ({ ...node, data: { ...node.data, label: newName } }))
 
-      if (currentRoomPath) await saveNow(currentRoomPath)
+      if (currentRoomPath) await saveLater(currentRoomPath)
       return true
     } catch (e) {
       logger.catch('graphOperations', 'renameNode', e)
@@ -207,7 +206,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
 
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-    if (currentRoomPath) await saveNow(currentRoomPath)
+    if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('节点:更新样式(批量)', 'graphOperations', { nodeIds, style: patch })
   }
 
@@ -232,7 +231,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
 
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-    if (currentRoomPath) await saveNow(currentRoomPath)
+    if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('节点:清除自有样式(批量)', 'graphOperations', { nodeIds })
   }
 
@@ -261,7 +260,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
 
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-    if (currentRoomPath) await saveNow(currentRoomPath)
+    if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('节点:更新尺寸模式', 'graphOperations', { nodeId, ...patch })
   }
 

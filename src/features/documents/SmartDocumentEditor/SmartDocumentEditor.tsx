@@ -340,6 +340,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
           editable={!readOnly}
           theme={customTheme}
           style={blockNoteViewStyle}
+          portalElements={{ default: null }}
           onChange={handleChange}
           formattingToolbar={false}
           sideMenu={false}
@@ -347,39 +348,153 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
         >
           <SuggestionMenuController
             triggerCharacter="/"
-            getItems={async (query) =>
-              filterSuggestionItems(
-                [
-                  ...getDefaultReactSlashMenuItems(editor),
-                  insertMermaid(),
-                  {
-                    title: '块级数学公式 (KaTeX)',
-                    onItemClick: () => {
-                      editor.insertBlocks(
-                        [
-                          {
-                            type: 'math',
-                            props: {
-                              autoEdit: true,
-                            },
-                          },
-                        ],
-                        editor.getTextCursorPosition().block,
-                        'after'
-                      )
-                    },
-                    aliases: ['math', 'equation', 'latex', 'katex'],
-                    group: 'Media',
-                    icon: <span>∑</span>,
-                    subtext: '插入块级 LaTeX 数学公式',
-                  } as any,
-                ],
-                query
+            portalElement={null}
+            getItems={async (query) => {
+              const defaultItems = getDefaultReactSlashMenuItems(editor)
+              const mermaidItem = insertMermaid()
+              const mathItem = {
+                title: '块级数学公式 (KaTeX)',
+                onItemClick: () => {
+                  editor.insertBlocks(
+                    [
+                      {
+                        type: 'math',
+                        props: {
+                          autoEdit: true,
+                        },
+                      },
+                    ],
+                    editor.getTextCursorPosition().block,
+                    'after'
+                  )
+                },
+                aliases: ['math', 'equation', 'latex', 'katex'],
+                group: 'Media',
+                icon: <span>∑</span>,
+                subtext: '插入块级 LaTeX 数学公式',
+              } as any
+              const mergedItems = [
+                ...defaultItems,
+                mermaidItem,
+                mathItem,
+              ]
+              const filteredItems = filterSuggestionItems(mergedItems, query)
+              const mergedGroupCounts = mergedItems.reduce<Record<string, number>>((acc, item) => {
+                const group = typeof item.group === 'string' ? item.group : '(none)'
+                acc[group] = (acc[group] ?? 0) + 1
+                return acc
+              }, {})
+              const filteredGroupCounts = filteredItems.reduce<Record<string, number>>((acc, item) => {
+                const group = typeof item.group === 'string' ? item.group : '(none)'
+                acc[group] = (acc[group] ?? 0) + 1
+                return acc
+              }, {})
+              const duplicateMergedGroups = Object.entries(mergedGroupCounts)
+                .filter(([, count]) => count > 1)
+                .map(([group, count]) => `${group}:${count}`)
+              const duplicateFilteredGroups = Object.entries(filteredGroupCounts)
+                .filter(([, count]) => count > 1)
+                .map(([group, count]) => `${group}:${count}`)
+              const duplicateFilteredTitles = Array.from(
+                filteredItems.reduce<Map<string, number>>((acc, item) => {
+                  const title = typeof item.title === 'string' ? item.title : '(untitled)'
+                  acc.set(title, (acc.get(title) ?? 0) + 1)
+                  return acc
+                }, new Map())
               )
-            }
+                .filter(([, count]) => count > 1)
+                .map(([title, count]) => `${title}:${count}`)
+
+              // #region debug-point A:slash-menu-source-items
+              fetch('http://127.0.0.1:7777/event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: 'duplicate-media-key',
+                  runId: 'pre-fix',
+                  hypothesisId: 'A',
+                  location: 'SmartDocumentEditor.tsx:getItems:source',
+                  msg: '[DEBUG] slash menu source items prepared',
+                  data: {
+                    query,
+                    defaultItemCount: defaultItems.length,
+                    defaultMediaTitles: defaultItems
+                      .filter((item: any) => item?.group === 'Media')
+                      .map((item: any) => item?.title ?? '(untitled)'),
+                    mermaidTitle: (mermaidItem as any)?.title ?? '(untitled)',
+                    mermaidGroup: (mermaidItem as any)?.group ?? '(none)',
+                    mathGroup: mathItem.group,
+                    mergedGroupCounts,
+                  },
+                  ts: Date.now(),
+                }),
+              }).catch(() => {})
+              // #endregion
+
+              // #region debug-point B:slash-menu-duplicate-groups
+              fetch('http://127.0.0.1:7777/event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: 'duplicate-media-key',
+                  runId: 'pre-fix',
+                  hypothesisId: 'B',
+                  location: 'SmartDocumentEditor.tsx:getItems:filtered',
+                  msg: '[DEBUG] slash menu filtered items analyzed',
+                  data: {
+                    query,
+                    filteredItemCount: filteredItems.length,
+                    filteredTitles: filteredItems.map((item: any) => item?.title ?? '(untitled)'),
+                    filteredGroups: filteredItems.map((item: any) => item?.group ?? '(none)'),
+                    duplicateMergedGroups,
+                    duplicateFilteredGroups,
+                    duplicateFilteredTitles,
+                  },
+                  ts: Date.now(),
+                }),
+              }).catch(() => {})
+              // #endregion
+
+              // #region debug-point C:slash-menu-media-focus
+              if (
+                duplicateMergedGroups.some((entry) => entry.startsWith('Media:'))
+                || duplicateFilteredGroups.some((entry) => entry.startsWith('Media:'))
+              ) {
+                fetch('http://127.0.0.1:7777/event', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    sessionId: 'duplicate-media-key',
+                    runId: 'pre-fix',
+                    hypothesisId: 'C',
+                    location: 'SmartDocumentEditor.tsx:getItems:media-focus',
+                    msg: '[DEBUG] media group duplication detected',
+                    data: {
+                      query,
+                      mergedMediaItems: mergedItems
+                        .filter((item: any) => item?.group === 'Media')
+                        .map((item: any) => ({
+                          title: item?.title ?? '(untitled)',
+                          group: item?.group ?? '(none)',
+                        })),
+                      filteredMediaItems: filteredItems
+                        .filter((item: any) => item?.group === 'Media')
+                        .map((item: any) => ({
+                          title: item?.title ?? '(untitled)',
+                          group: item?.group ?? '(none)',
+                        })),
+                    },
+                    ts: Date.now(),
+                  }),
+                }).catch(() => {})
+              }
+              // #endregion
+
+              return filteredItems
+            }}
           />
-          <FormattingToolbarController formattingToolbar={SmartDocumentFormattingToolbar} />
-          <SideMenuController sideMenu={SmartDocumentSideMenu} />
+          <FormattingToolbarController formattingToolbar={SmartDocumentFormattingToolbar} portalElement={null} />
+          <SideMenuController sideMenu={SmartDocumentSideMenu} portalElement={null} />
         </BlockNoteView>
         {hoveredCodeBlock && toolbarPosition ? (
           <div
@@ -463,4 +578,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       </button>
     </div>
   )
-})
+}, (prevProps, nextProps) => (
+  prevProps.readOnly === nextProps.readOnly
+  && prevProps.attachmentInsertTargetKey === nextProps.attachmentInsertTargetKey
+))

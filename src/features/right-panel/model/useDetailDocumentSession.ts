@@ -38,6 +38,7 @@ export function useDetailDocumentSession({
   }))
   const savedContent = savedContentState.key === currentDocumentKey ? savedContentState.content : ''
   const [loadedDocumentKey, setLoadedDocumentKey] = useState(() => (detailEntry ? currentDocumentKey : ''))
+  const [isDocumentDirty, setIsDocumentDirty] = useState(false)
   const contentRequestSeqRef = useRef(0)
   const selectionPerfRef = useRef<{ nodeId: string; startedAt: number; logged: boolean } | null>(null)
 
@@ -66,10 +67,12 @@ export function useDetailDocumentSession({
         setDetailContent(currentDocumentKey, contentToWrite)
         setDraftContent(currentDocumentKey, contentToWrite)
         setSavedContentState({ key: currentDocumentKey, content: contentToWrite })
+        setIsDocumentDirty(false)
         savedContentLength = getDocumentContentLength(contentToWrite)
       } else {
         setDetailContent(currentDocumentKey, draftContent)
         setSavedContentState({ key: currentDocumentKey, content: draftContent })
+        setIsDocumentDirty(false)
         savedContentLength = getDocumentContentLength(draftContent)
       }
 
@@ -97,11 +100,14 @@ export function useDetailDocumentSession({
 
   const flushDocumentSave = useCallback(async () => {
     if (!selectedNodeId || !nodePath || !currentDocumentKey) return
-    if (areDocumentContentsEqual(draftContent, savedContent)) return
+    if (!isDocumentDirty) return
+    if (areDocumentContentsEqual(draftContent, savedContent)) {
+      setIsDocumentDirty(false)
+      return
+    }
     await handleSave()
-  }, [selectedNodeId, nodePath, currentDocumentKey, draftContent, savedContent, handleSave])
+  }, [selectedNodeId, nodePath, currentDocumentKey, isDocumentDirty, draftContent, savedContent, handleSave])
 
-  const isDocumentDirty = useMemo(() => areDocumentContentsEqual(draftContent, savedContent) === false, [draftContent, savedContent])
   const isContentLoaded = useMemo(() => {
     if (!currentDocumentKey) return false
     return loadedDocumentKey === currentDocumentKey || detailEntry !== undefined
@@ -109,6 +115,7 @@ export function useDetailDocumentSession({
 
   useEffect(() => {
     setSavedContentState({ key: currentDocumentKey, content: '' })
+    setIsDocumentDirty(false)
   }, [selectedNodeId, nodePath, currentDocumentKey])
 
   useEffect(() => {
@@ -134,6 +141,7 @@ export function useDetailDocumentSession({
     if (cachedContent !== undefined) {
       setSavedContentState({ key: currentDocumentKey, content: cachedContent })
       setLoadedDocumentKey(currentDocumentKey)
+      setIsDocumentDirty(false)
       if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
         setDraftContent(currentDocumentKey, cachedContent)
       }
@@ -167,6 +175,7 @@ export function useDetailDocumentSession({
       setDetailContent(currentDocumentKey, content)
       setSavedContentState({ key: currentDocumentKey, content })
       setLoadedDocumentKey(currentDocumentKey)
+      setIsDocumentDirty(false)
 
       const currentDraft = useDraftStore.getState().detailDrafts[currentDocumentKey]
       if (currentDraft === undefined || currentDraft === cachedContent || currentDraft === '') {
@@ -195,6 +204,7 @@ export function useDetailDocumentSession({
       setDetailContent(currentDocumentKey, '')
       setSavedContentState({ key: currentDocumentKey, content: '' })
       setLoadedDocumentKey(currentDocumentKey)
+      setIsDocumentDirty(false)
 
       const selectionPerf = selectionPerfRef.current
       if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
@@ -216,12 +226,14 @@ export function useDetailDocumentSession({
   }, [detailEntry, currentDocumentKey])
 
   useEffect(() => {
-    return registerTabSaver(tabId, flushDocumentSave, () => areDocumentContentsEqual(draftContent, savedContent) === false)
-  }, [tabId, flushDocumentSave, draftContent, savedContent])
+    return registerTabSaver(tabId, flushDocumentSave, () => isDocumentDirty)
+  }, [tabId, flushDocumentSave, isDocumentDirty])
 
   const handleDraftChange = useCallback((value: unknown) => {
-    if (currentDocumentKey) setDraftContent(currentDocumentKey, value)
-  }, [currentDocumentKey, setDraftContent])
+    if (!currentDocumentKey) return
+    setDraftContent(currentDocumentKey, value)
+    setIsDocumentDirty((current) => current || !areDocumentContentsEqual(value, savedContent))
+  }, [currentDocumentKey, savedContent, setDraftContent])
 
   return {
     draftContent,

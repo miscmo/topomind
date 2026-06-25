@@ -9,6 +9,10 @@ export interface GraphState {
   edges: KnowledgeEdge[]
   loading: boolean
   viewport: { x: number; y: number; zoom: number }
+  selectedNodeCount: number
+  selectedNodeId: string | null
+  selectedNodeIds: string[]
+  selectedNodes: KnowledgeNode[]
   
   // Derived O(1) maps, automatically kept in sync
   nodesMap: Map<string, KnowledgeNode>
@@ -37,11 +41,89 @@ function buildEdgesMap(edges: KnowledgeEdge[]) {
   return edgesMap
 }
 
+function getSelectionState(nodes: KnowledgeNode[], previousState?: Pick<GraphState, 'selectedNodeIds' | 'selectedNodes'>) {
+  let selectedNodeCount = 0
+  let selectedNodeId: string | null = null
+  const nextSelectedNodeIds: string[] = []
+  const nextSelectedNodes: KnowledgeNode[] = []
+  for (const node of nodes) {
+    if (!node.selected) continue
+    selectedNodeCount += 1
+    if (selectedNodeId === null) {
+      selectedNodeId = node.id
+    }
+    nextSelectedNodeIds.push(node.id)
+    nextSelectedNodes.push(node)
+  }
+
+  const canReuseSelectedNodes =
+    previousState !== undefined
+    && previousState.selectedNodes.length === nextSelectedNodes.length
+    && previousState.selectedNodes.every((node, index) => node === nextSelectedNodes[index])
+  const canReuseSelectedNodeIds =
+    previousState !== undefined
+    && previousState.selectedNodeIds.length === nextSelectedNodeIds.length
+    && previousState.selectedNodeIds.every((id, index) => id === nextSelectedNodeIds[index])
+
+  return {
+    selectedNodeCount,
+    selectedNodeId,
+    selectedNodeIds: canReuseSelectedNodeIds ? previousState.selectedNodeIds : nextSelectedNodeIds,
+    selectedNodes: canReuseSelectedNodes ? previousState.selectedNodes : nextSelectedNodes,
+  }
+}
+
+function buildDerivedGraphState(
+  nodes: KnowledgeNode[],
+  edges: KnowledgeEdge[],
+  previousState?: Pick<GraphState, 'selectedNodeIds' | 'selectedNodes'>
+) {
+  return {
+    nodesMap: buildNodesMap(nodes),
+    edgesMap: buildEdgesMap(edges),
+    ...getSelectionState(nodes, previousState),
+  }
+}
+
+function areNodesEqual(nodeA: KnowledgeNode, nodeB: KnowledgeNode) {
+  return (
+    nodeA === nodeB
+    || (
+      nodeA.id === nodeB.id
+      && nodeA.type === nodeB.type
+      && nodeA.position?.x === nodeB.position?.x
+      && nodeA.position?.y === nodeB.position?.y
+      && nodeA.width === nodeB.width
+      && nodeA.height === nodeB.height
+      && nodeA.selected === nodeB.selected
+      && nodeA.data === nodeB.data
+    )
+  )
+}
+
+function areEdgesEqual(edgeA: KnowledgeEdge, edgeB: KnowledgeEdge) {
+  return (
+    edgeA === edgeB
+    || (
+      edgeA.id === edgeB.id
+      && edgeA.type === edgeB.type
+      && edgeA.source === edgeB.source
+      && edgeA.target === edgeB.target
+      && edgeA.selected === edgeB.selected
+      && edgeA.data === edgeB.data
+    )
+  )
+}
+
 export const createGraphStore = () => createStore<GraphState>()(temporal((set) => ({
   nodes: [],
   edges: [],
   loading: false,
   viewport: { x: 0, y: 0, zoom: 1 },
+  selectedNodeCount: 0,
+  selectedNodeId: null,
+  selectedNodeIds: [],
+  selectedNodes: [],
   nodesMap: new Map(),
   edgesMap: new Map(),
 
@@ -49,13 +131,13 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
     nodes,
     edges,
     viewport: viewport ?? state.viewport,
-    nodesMap: buildNodesMap(nodes),
-    edgesMap: buildEdgesMap(edges),
+    ...buildDerivedGraphState(nodes, edges, state),
   })),
 
   setNodes: (nodes) => set((state) => ({
     nodes,
     nodesMap: buildNodesMap(nodes),
+    ...getSelectionState(nodes, state),
   })),
 
   setEdges: (edges) => set((state) => ({
@@ -77,18 +159,22 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
     const nextNodes = state.nodes.map(n => n.id === nodeId ? nextNode : n)
     const nextNodesMap = new Map(state.nodesMap)
     nextNodesMap.set(nodeId, nextNode)
+    const selectionState = getSelectionState(nextNodes, state)
     return {
       nodes: nextNodes,
-      nodesMap: nextNodesMap
+      nodesMap: nextNodesMap,
+      ...selectionState,
     }
   }),
 
   removeNodes: (nodeIds) => set((state) => {
     const removedSet = new Set(nodeIds)
     const nextNodes = state.nodes.filter(n => !removedSet.has(n.id))
+    const selectionState = getSelectionState(nextNodes, state)
     return {
       nodes: nextNodes,
-      nodesMap: buildNodesMap(nextNodes)
+      nodesMap: buildNodesMap(nextNodes),
+      ...selectionState,
     }
   }),
 
@@ -110,32 +196,17 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
     // Only add to history if actual data changes, ignore selection state changes
     if (a.nodes.length !== b.nodes.length || a.edges.length !== b.edges.length) return false;
     
-    // Deep comparison of node data and dimensions
+    // Reference and key-field comparison keeps history checks off the JSON.stringify hot path.
     for (let i = 0; i < a.nodes.length; i++) {
       const nodeA = a.nodes[i];
       const nodeB = b.nodes[i];
-      if (nodeA.id !== nodeB.id) return false;
-      const widthModeA = nodeA.data?.widthMode ?? 'auto';
-      const widthModeB = nodeB.data?.widthMode ?? 'auto';
-      if (widthModeA !== 'auto' || widthModeB !== 'auto') {
-        if (nodeA.width !== nodeB.width) return false;
-      }
-
-      const heightModeA = nodeA.data?.heightMode ?? 'auto';
-      const heightModeB = nodeB.data?.heightMode ?? 'auto';
-      if (heightModeA !== 'auto' || heightModeB !== 'auto') {
-        if (nodeA.height !== nodeB.height) return false;
-      }
-      if (nodeA.position?.x !== nodeB.position?.x || nodeA.position?.y !== nodeB.position?.y) return false;
-      if (JSON.stringify(nodeA.data) !== JSON.stringify(nodeB.data)) return false;
+      if (!areNodesEqual(nodeA, nodeB)) return false;
     }
 
-    // Edge comparison
     for (let i = 0; i < a.edges.length; i++) {
       const edgeA = a.edges[i];
       const edgeB = b.edges[i];
-      if (edgeA.id !== edgeB.id) return false;
-      if (JSON.stringify(edgeA.data) !== JSON.stringify(edgeB.data)) return false;
+      if (!areEdgesEqual(edgeA, edgeB)) return false;
     }
     
     return true;
@@ -145,14 +216,12 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
 // Auto-sync maps when temporal state changes
 export const setupTemporalMapSync = (store: StoreApi<GraphState>) => {
   store.subscribe((state, prevState) => {
-    // If nodes or edges array reference changed (which happens on undo/redo)
-    // We must unconditionally rebuild the maps based on the new array references
-    if (state.nodes !== prevState.nodes) {
-      store.setState({ nodesMap: buildNodesMap(state.nodes) })
+    if (state.nodes === prevState.nodes && state.edges === prevState.edges) {
+      return
     }
-    if (state.edges !== prevState.edges) {
-      store.setState({ edgesMap: buildEdgesMap(state.edges) })
-    }
+    store.setState({
+      ...buildDerivedGraphState(state.nodes, state.edges, state),
+    })
   })
 }
 
@@ -179,6 +248,6 @@ export function useGraphStore<T>(selector: (state: GraphState) => T): T {
 }
 
 export function useSelectedNodeId() {
-  return useGraphStore((s) => s.nodes.find((n) => n.selected)?.id ?? null)
+  return useGraphStore((s) => s.selectedNodeId)
 }
 

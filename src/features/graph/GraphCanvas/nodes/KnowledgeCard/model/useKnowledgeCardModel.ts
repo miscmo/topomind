@@ -1,22 +1,26 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import { useReactFlow } from '@xyflow/react'
 import type { KnowledgeNode } from '../../../../../../types'
 import { resolveRoomChildRef } from '../../../../../../domain/graph/path-utils'
 import { useGraphUiStore } from '../../../../../../stores/graphUiStore'
 import { useGraphStore, useGraphStoreApi } from '../../../../../../stores/graphStore'
 import { useGraphContext } from '../../../../../../contexts/GraphContext'
+import { logAction } from '../../../../../../core/log-backend'
 import { calculateKnowledgeCardAutoSize, getKnowledgeCardAccessoryWidth } from './autoSize'
+import { useConfirmStore } from '../../../../../../shared/ui/ConfirmModal/confirmStore'
 
 export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], selected: boolean, width?: number, height?: number, resizing?: boolean) {
   const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
-  const selectedNodeCount = useGraphStore((state) => state.nodes.reduce((count, node) => count + (node.selected ? 1 : 0), 0))
+  const reactFlow = useReactFlow()
+  const selectedNodeCount = useGraphStore((state) => state.selectedNodeCount)
   
   const [isHovered, setIsHovered] = useState<boolean>(false)
   const [titleEditing, setTitleEditing] = useState(false)
-  const [titleDraft, setTitleDraft] = useState(data.label)
   const [resizePreviewSize, setResizePreviewSize] = useState<{ width: number; height: number } | null>(null)
   
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const titleDraftRef = useRef(data.label)
   const titleSavingRef = useRef(false)
   const resizeHideTimerRef = useRef<number | null>(null)
   
@@ -24,6 +28,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const defaultNodeSize = useGraphUiStore((state: any) => state.defaultNodeSize)
   const nodeSizeLimits = useGraphUiStore((state: any) => state.nodeSizeLimits)
   const nodeBadgeSize = useGraphUiStore((state: any) => state.nodeBadgeSize)
+  const isConnecting = useGraphUiStore((state: any) => state.connectingSourceId !== null)
   
   const isConnectTarget = useGraphUiStore((state: any) => !!state.connectingSourceId && state.connectingTargetId === id)
   const isConnectSource = useGraphUiStore((state: any) => state.connectingSourceId === id)
@@ -36,9 +41,12 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   
   const visuallySelected = selected
   const visuallyHovered = isHovered || data.hovered === true
-  const showHoverControls = visuallyHovered || visuallySelected || isConnectTarget || isConnectSource
+  const showHoverControls = !isConnecting && (visuallyHovered || visuallySelected || isConnectTarget || isConnectSource)
   const contentInteractionsEnabled = selected
-  const nodeStyle = { ...defaultNodeStyle, ...(data.nodeStyle ?? {}) }
+  const nodeStyle = useMemo(
+    () => ({ ...defaultNodeStyle, ...(data.nodeStyle ?? {}) }),
+    [data.nodeStyle, defaultNodeStyle],
+  )
   const widthMode = data.widthMode ?? 'auto'
   const heightMode = data.heightMode ?? 'auto'
   const autoSize = useMemo(() => calculateKnowledgeCardAutoSize(data.label, nodeStyle, data), [data, nodeStyle])
@@ -50,12 +58,12 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   }, [data.parent, id])
 
   useEffect(() => {
-    if (!titleEditing) setTitleDraft(data.label)
+    if (!titleEditing) titleDraftRef.current = data.label
   }, [data.label, titleEditing])
 
   useEffect(() => {
     if (!data.titleEditRequested) return
-    setTitleDraft(data.label)
+    titleDraftRef.current = data.label
     setTitleEditing(true)
     storeApi.getState().updateNode(id, (node: any) => ({
       ...node,
@@ -128,30 +136,82 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const confirmTitleEdit = useCallback(async (options?: { restoreFocus?: boolean }) => {
     if (titleSavingRef.current) return
     titleSavingRef.current = true
-    const nextTitle = titleDraft.trim()
+    const nextTitle = (titleInputRef.current?.value ?? titleDraftRef.current).trim()
     
     const canvas = titleInputRef.current?.closest('[data-shortcut-scope="canvas"]') as HTMLElement | null
 
     setTitleEditing(false)
+
+    if (!nextTitle || nextTitle === data.label) {
+      titleDraftRef.current = data.label
+      titleSavingRef.current = false
+      if (canvas && options?.restoreFocus !== false) {
+        requestAnimationFrame(() => canvas.focus())
+      }
+      return
+    }
+
+    const nodes = storeApi.getState().nodes
+    const hasDuplicate = nodes.some(n => n.id !== id && n.data?.label?.trim() === nextTitle)
+
+    if (hasDuplicate) {
+      const confirm = useConfirmStore.getState().open
+      
+      try {
+        const confirmed = await confirm({
+          title: '同名节点确认',
+          message: `当前画布中已存在名为「${nextTitle}」的节点，是否继续创建/重命名为该名称？`,
+          confirmText: '继续创建/重命名',
+          extraButtonText: '查看已存在节点',
+          onExtraAction: () => {
+            const duplicateNode = nodes.find(n => n.id !== id && n.data?.label?.trim() === nextTitle)
+            if (duplicateNode) {
+              graph.selectNode(duplicateNode.id)
+              setTimeout(() => {
+                const nodeRect = {
+                  x: duplicateNode.position.x,
+                  y: duplicateNode.position.y,
+                  width: duplicateNode.width ?? 120,
+                  height: duplicateNode.height ?? 52
+                }
+                const zoom = reactFlow.getZoom()
+                reactFlow.setCenter(nodeRect.x + nodeRect.width / 2, nodeRect.y + nodeRect.height / 2, { zoom, duration: 300 })
+              }, 50)
+            }
+          }
+        })
+        if (!confirmed) {
+          titleDraftRef.current = data.label
+          titleSavingRef.current = false
+          if (canvas && options?.restoreFocus !== false) {
+            requestAnimationFrame(() => canvas.focus())
+          }
+          return
+        }
+      } catch (err) {
+        console.error('Confirm error:', err)
+        titleDraftRef.current = data.label
+        titleSavingRef.current = false
+        if (canvas && options?.restoreFocus !== false) {
+          requestAnimationFrame(() => canvas.focus())
+        }
+        return
+      }
+    }
+
+    const renamed = await graph.renameNode(id, nextTitle)
+    if (!renamed) titleDraftRef.current = data.label
+    titleSavingRef.current = false
     
     if (canvas && options?.restoreFocus !== false) {
       requestAnimationFrame(() => canvas.focus())
     }
-
-    if (!nextTitle || nextTitle === data.label) {
-      setTitleDraft(data.label)
-      titleSavingRef.current = false
-      return
-    }
-    const renamed = await graph.renameNode(id, nextTitle)
-    if (!renamed) setTitleDraft(data.label)
-    titleSavingRef.current = false
-  }, [data.label, graph, id, titleDraft])
+  }, [data.label, graph, id, storeApi])
 
   const cancelTitleEdit = useCallback((options?: { restoreFocus?: boolean }) => {
     const canvas = titleInputRef.current?.closest('[data-shortcut-scope="canvas"]') as HTMLElement | null
 
-    setTitleDraft(data.label)
+    titleDraftRef.current = data.label
     setTitleEditing(false)
 
     if (canvas && options?.restoreFocus !== false) {
@@ -163,7 +223,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
     if (!contentInteractionsEnabled) return
     event.preventDefault()
     event.stopPropagation()
-    setTitleDraft(data.label)
+    titleDraftRef.current = data.label
     setTitleEditing(true)
   }, [contentInteractionsEnabled, data.label])
 
@@ -226,7 +286,6 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
     state: {
       isHovered,
       titleEditing,
-      titleDraft,
       showHoverControls,
       showResizeLabel,
       resizeLabel,
@@ -243,13 +302,12 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       cardPath,
       widthMode,
       heightMode,
-      showQuickToolbar: selected && selectedNodeCount === 1 && !titleEditing && !isFormatPainterActive,
+      showQuickToolbar: selected && selectedNodeCount === 1 && !titleEditing && !isFormatPainterActive && !isConnecting,
       accessoryWidth,
       isFormatPainterActive,
     },
     actions: {
       setIsHovered,
-      setTitleDraft,
       updateResizePreview,
       hideResizePreviewSoon,
       handleDrillDown,
@@ -290,7 +348,8 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       }
     },
     refs: {
-      titleInputRef
+      titleInputRef,
+      titleDraftRef,
     }
   }
 }

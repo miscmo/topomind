@@ -3,6 +3,7 @@ import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/s
 import { topoDocumentPath, buildDocumentTree } from '../types/documentTypes'
 import { TOPO_DOCUMENT_TYPES } from '../services/documentTypeRegistry'
 import { useGraphStoreApi } from '../../../stores/graphStore'
+import { useConfirmStore } from '../../../shared/ui/ConfirmModal/confirmStore'
 
 export interface DocumentContextMenuState {
   x: number
@@ -58,7 +59,7 @@ export function useDocumentSidebarModel({
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<{ id: string, position: 'before' | 'inside' | 'after' } | null>(null)
   const inlineInputRef = useRef<HTMLInputElement>(null)
-  const cancelInlineEditOnBlurRef = useRef(false)
+  const cancelInlineEditOnBlurRef = useRef<boolean | 'saving'>(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -163,12 +164,36 @@ export function useDocumentSidebarModel({
     }
   }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, nodeId])
 
-  const commitInlineEdit = useCallback(() => {
-    if (!inlineEdit || isBusy) return
+  const commitInlineEdit = useCallback(async () => {
+    if (!inlineEdit || isBusy || cancelInlineEditOnBlurRef.current === 'saving') return
     const nextName = inlineEdit.value.trim()
     if (!nextName) {
       setInlineEdit(null)
       return
+    }
+
+    // Check for duplicates
+    const hasDuplicate = topoDocuments.some(d => d.id !== inlineEdit.targetId && d.title.trim() === nextName)
+    if (hasDuplicate) {
+      cancelInlineEditOnBlurRef.current = 'saving'
+      const confirm = useConfirmStore.getState().open
+      const confirmed = await confirm({
+        title: '同名节点确认',
+        message: `当前目录下已存在名为「${nextName}」的节点，是否继续创建/重命名为该名称？`,
+        confirmText: '继续创建/重命名',
+        extraButtonText: '查看已存在节点',
+        onExtraAction: () => {
+          const duplicateDoc = topoDocuments.find(d => d.id !== inlineEdit.targetId && d.title.trim() === nextName)
+          if (duplicateDoc) {
+            onSelectDocument(topoDocumentPath(duplicateDoc.id))
+          }
+        }
+      })
+      cancelInlineEditOnBlurRef.current = false
+      if (!confirmed) {
+        setInlineEdit(null)
+        return
+      }
     }
 
     if (inlineEdit.mode === 'rename' && inlineEdit.targetId) {
@@ -178,13 +203,13 @@ export function useDocumentSidebarModel({
     }
     
     setInlineEdit(null)
-  }, [inlineEdit, isBusy, onRenameDocument, onCreateTopoDocument])
+  }, [inlineEdit, isBusy, onRenameDocument, onCreateTopoDocument, topoDocuments])
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      cancelInlineEditOnBlurRef.current = true
-      commitInlineEdit()
+      cancelInlineEditOnBlurRef.current = 'saving'
+      void commitInlineEdit()
     } else if (e.key === 'Escape') {
       e.preventDefault()
       cancelInlineEditOnBlurRef.current = true
@@ -194,10 +219,12 @@ export function useDocumentSidebarModel({
 
   const handleInputBlur = useCallback(() => {
     if (cancelInlineEditOnBlurRef.current) {
-      cancelInlineEditOnBlurRef.current = false
+      if (cancelInlineEditOnBlurRef.current !== 'saving') {
+        cancelInlineEditOnBlurRef.current = false
+      }
       return
     }
-    commitInlineEdit()
+    void commitInlineEdit()
   }, [commitInlineEdit])
 
   const handleDragStart = useCallback((e: React.DragEvent, id: string) => {

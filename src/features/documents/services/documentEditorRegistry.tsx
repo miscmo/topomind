@@ -81,14 +81,24 @@ function mapBlocksRecursively(
   blocks: BlockNoteBlock[],
   mapper: (block: BlockNoteBlock) => BlockNoteBlock
 ): BlockNoteBlock[] {
-  return blocks.map((block) => {
+  let hasChanges = false
+  const nextBlocks = blocks.map((block) => {
     const nextBlock = mapper(block)
+    if (nextBlock !== block) {
+      hasChanges = true
+    }
     if (!Array.isArray(nextBlock.children)) return nextBlock
+
+    const nextChildren = mapBlocksRecursively(nextBlock.children as BlockNoteBlock[], mapper)
+    if (nextChildren === nextBlock.children) return nextBlock
+
+    hasChanges = true
     return {
       ...nextBlock,
-      children: mapBlocksRecursively(nextBlock.children as BlockNoteBlock[], mapper),
+      children: nextChildren,
     }
   })
+  return hasChanges ? nextBlocks : blocks
 }
 
 function buildSmartDocumentRuntimeValue(
@@ -101,12 +111,19 @@ function buildSmartDocumentRuntimeValue(
     if (!isRecord(block.props)) return block
     const attachmentRef = getAttachmentRefFromBlockProps(block.props, knownAttachmentNames)
     if (!attachmentRef) return block
+    const nextName = typeof block.props.name === 'string' ? block.props.name : getAttachmentFileNameFromRef(attachmentRef)
     const nextProps: Record<string, unknown> = {
       ...block.props,
       attachmentRef,
-      name: typeof block.props.name === 'string' ? block.props.name : getAttachmentFileNameFromRef(attachmentRef),
+      name: nextName,
     }
+    const attachmentRefChanged = block.props.attachmentRef !== attachmentRef
+    const nameChanged = block.props.name !== nextName
     if (block.type === 'image') {
+      const urlChanged = block.props.url !== attachmentRef
+      if (!attachmentRefChanged && !nameChanged && !urlChanged) {
+        return block
+      }
       nextProps.url = attachmentRef
       return {
         ...block,
@@ -118,6 +135,10 @@ function buildSmartDocumentRuntimeValue(
       nextProps.url = cachedUrl
     } else {
       missingAttachmentRefs.add(attachmentRef)
+    }
+    const urlChanged = Boolean(cachedUrl && block.props.url !== cachedUrl)
+    if (!attachmentRefChanged && !nameChanged && !urlChanged) {
+      return block
     }
     return {
       ...block,
@@ -141,10 +162,15 @@ function buildSmartDocumentPersistedValue(
     if (!isRecord(block.props)) return block
     const attachmentRef = getAttachmentRefFromBlockProps(block.props, knownAttachmentNames)
     if (!attachmentRef) return block
+    const nextName = typeof block.props.name === 'string' ? block.props.name : getAttachmentFileNameFromRef(attachmentRef)
+    const hasUrl = Object.prototype.hasOwnProperty.call(block.props, 'url')
+    if (block.props.attachmentRef === attachmentRef && block.props.name === nextName && !hasUrl) {
+      return block
+    }
     const nextProps: Record<string, unknown> = {
       ...block.props,
       attachmentRef,
-      name: typeof block.props.name === 'string' ? block.props.name : getAttachmentFileNameFromRef(attachmentRef),
+      name: nextName,
     }
     delete nextProps.url
     return {
@@ -152,6 +178,7 @@ function buildSmartDocumentPersistedValue(
       props: nextProps,
     }
   })
+  if (blocks === value.blocks) return value
   return {
     ...value,
     blocks,
@@ -277,7 +304,8 @@ function SmartDocumentAdapter({
   }, [attachmentCardPath, missingAttachmentRefsKey, store])
 
   const handleChange = React.useCallback((nextValue: SmartDocumentContent) => {
-    onChange(buildSmartDocumentPersistedValue(nextValue, knownAttachmentNamesRef.current))
+    const nextPersistedValue = buildSmartDocumentPersistedValue(nextValue, knownAttachmentNamesRef.current)
+    onChange(nextPersistedValue)
   }, [onChange])
 
   const uploadFile = React.useCallback(async (file: File) => {

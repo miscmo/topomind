@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { Node, NodeChange } from '@xyflow/react'
 
 const SNAP_THRESHOLD = 8
@@ -30,6 +30,17 @@ function getNodeRect(node: Node, pos?: { x?: number, y?: number }, dim?: { width
 
 export function useSmartGuides(nodes: Node[]) {
   const [guideLines, setGuideLines] = useState<GuideLine[]>([])
+  const nodeMeta = useMemo(() => {
+    const byId = new Map<string, { node: Node; rect: ReturnType<typeof getNodeRect> }>()
+    let selectedNodeCount = 0
+    for (const node of nodes) {
+      if (node.selected) {
+        selectedNodeCount += 1
+      }
+      byId.set(node.id, { node, rect: getNodeRect(node) })
+    }
+    return { byId, selectedNodeCount }
+  }, [nodes])
   
   const onNodesChangeIntercept = useCallback((changes: NodeChange[]) => {
     const nextChanges = [...changes]
@@ -48,8 +59,9 @@ export function useSmartGuides(nodes: Node[]) {
     }
 
     const change = (dragChanges.length > 0 ? dragChanges[0] : resizeChanges[0]) as any
-    const draggedNode = nodes.find(n => n.id === change.id)
-    if (!draggedNode) return nextChanges
+    const draggedNodeMeta = nodeMeta.byId.get(change.id)
+    if (!draggedNodeMeta) return nextChanges
+    const draggedNode = draggedNodeMeta.node
 
     const isResize = change.type === 'dimensions'
     // React Flow usually dispatches a position change along with dimensions when top/left is dragged.
@@ -79,10 +91,10 @@ export function useSmartGuides(nodes: Node[]) {
     let bestSnapX: { diff: number, snapX?: number, snapWidth?: number, guide?: GuideLine } | null = null;
     let bestSnapY: { diff: number, snapY?: number, snapHeight?: number, guide?: GuideLine } | null = null;
 
-    const others = nodes.filter(n => n.id !== draggedNode.id && !n.selected)
-
-    for (const other of others) {
-      const oRect = getNodeRect(other)
+    for (const otherMeta of nodeMeta.byId.values()) {
+      const other = otherMeta.node
+      if (other.id === draggedNode.id || other.selected) continue
+      const oRect = otherMeta.rect
 
       // === X Axis ===
       const xPoints = [];
@@ -220,7 +232,7 @@ export function useSmartGuides(nodes: Node[]) {
     }
 
     // If there are multiple nodes being dragged, ignore alignment guides
-    if (nodes.filter(n => n.selected).length > 1) {
+    if (nodeMeta.selectedNodeCount > 1) {
       bestSnapX = null;
       bestSnapY = null;
     }
@@ -245,7 +257,7 @@ export function useSmartGuides(nodes: Node[]) {
     setGuideLines(newGuideLines)
 
     return nextChanges
-  }, [nodes])
+  }, [nodeMeta])
 
   const clearGuides = useCallback(() => {
     setGuideLines([])

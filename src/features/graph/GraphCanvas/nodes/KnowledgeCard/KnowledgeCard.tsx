@@ -4,7 +4,7 @@
  *
  * @file components/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx
  */
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
 import type { KnowledgeNode } from '../../../../../types'
 import { cn } from '@/lib/utils'
@@ -21,7 +21,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   const {
     isHovered,
     titleEditing,
-    titleDraft,
     showHoverControls,
     showResizeLabel,
     resizeLabel,
@@ -43,7 +42,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
 
   const {
     setIsHovered,
-    setTitleDraft,
     updateResizePreview,
     hideResizePreviewSoon,
     handleDrillDown,
@@ -59,7 +57,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     selectNode
   } = actions
 
-  const { titleInputRef } = refs
+  const { titleInputRef, titleDraftRef } = refs
 
   const {
     borderRadius,
@@ -68,7 +66,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     docIconSvgStyle,
     headerStyle,
     titleFieldStyle
-  } = getKnowledgeCardStyles(nodeStyle, nodeBadgeSize)
+  } = useMemo(() => getKnowledgeCardStyles(nodeStyle, nodeBadgeSize), [nodeStyle, nodeBadgeSize])
 
   const hasChildBadge = data.childCount !== undefined && data.childCount > 0
   const hasDetail = data.hasDetail === true
@@ -162,16 +160,22 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             {titleEditing ? (
               <input
                 ref={titleInputRef}
-                className="w-full h-full px-[3px] py-[1px] border-none rounded-none bg-transparent text-inherit font-inherit text-inherit leading-inherit outline-none box-border pointer-events-auto shadow-none caret-current transition-colors duration-75 nodrag nowheel text-center"
-                value={titleDraft}
-                onChange={(event) => setTitleDraft(event.target.value)}
+                className="w-full h-full px-[3px] py-[1px] border-none rounded-none bg-transparent text-inherit font-inherit leading-inherit outline-none box-border pointer-events-auto shadow-none caret-current transition-colors duration-75 nodrag nowheel text-center"
+                defaultValue={titleDraftRef.current}
+                onChange={(event) => { titleDraftRef.current = event.target.value }}
                 onBlur={() => void confirmTitleEdit({ restoreFocus: false })}
                 onPointerDown={(event) => event.stopPropagation()}
                 onDoubleClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => {
                   event.stopPropagation()
-                  if (event.key === 'Enter') void confirmTitleEdit({ restoreFocus: true })
-                  if (event.key === 'Escape') cancelTitleEdit({ restoreFocus: true })
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void confirmTitleEdit({ restoreFocus: true })
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    cancelTitleEdit({ restoreFocus: true })
+                  }
                 }}
               />
             ) : (

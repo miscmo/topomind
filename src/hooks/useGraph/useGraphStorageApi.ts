@@ -3,6 +3,16 @@ import type { Store, GraphMeta } from '../../core/storage'
 import type { StorageApi } from './graphOperations'
 
 export function useGraphStorageApi(storage: Store): StorageApi {
+  const saveGraphDebounced = useCallback(
+    async (dirPath: string, buildMeta: () => GraphMeta, onSaved: (() => void) | undefined) => {
+      await storage.saveGraphDebounced(dirPath, buildMeta, onSaved)
+    },
+    [storage]
+  )
+  const hasPendingGraphSave = useCallback(
+    (dirPath: string) => storage.hasPendingGraphSave(dirPath),
+    [storage]
+  )
   const createCard = useCallback(
     async (parentPath: string, cardName: string) => storage.createCard(parentPath, cardName),
     [storage]
@@ -26,6 +36,8 @@ export function useGraphStorageApi(storage: Store): StorageApi {
 
   return useMemo(
     () => ({
+      saveGraphDebounced,
+      hasPendingGraphSave,
       createCard,
       deleteCard,
       renameCard,
@@ -33,6 +45,6 @@ export function useGraphStorageApi(storage: Store): StorageApi {
       readLayout,
       writeLayout,
     }),
-    [createCard, deleteCard, renameCard, flushGraphSave, readLayout, writeLayout]
+    [saveGraphDebounced, hasPendingGraphSave, createCard, deleteCard, renameCard, flushGraphSave, readLayout, writeLayout]
   )
 }

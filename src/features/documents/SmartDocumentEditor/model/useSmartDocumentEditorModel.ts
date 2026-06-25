@@ -4,7 +4,7 @@ import { useCreateBlockNote } from '@blocknote/react'
 import { useThemeStore, isDarkTheme } from '../../../../stores/themeStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../smartDocumentTypes'
-import { calculateSmartDocumentStats, extractSmartDocumentToc } from '../smartDocumentUtils'
+import { getSmartDocumentOutlineAndStats, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension } from '../mathSupport'
 import { containsMathDelimiters, containsMarkdownDelimiters, containsStrictMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
@@ -25,6 +25,17 @@ export function useSmartDocumentEditorModel({
   const theme = useThemeStore((state: any) => state.theme)
   const defaultEditorStyle = useGraphUiStore((state: any) => state.defaultEditorStyle)
   const resolvedFontFamily = useMemo(() => resolveEditorFontFamily(defaultEditorStyle.fontFamily), [defaultEditorStyle.fontFamily])
+  const valueRef = useRef(value)
+  const onChangeRef = useRef(onChange)
+  const onTocChangeRef = useRef(onTocChange)
+  const onWordCountChangeRef = useRef(onWordCountChange)
+  const onTocItemClickReadyRef = useRef(onTocItemClickReady)
+
+  valueRef.current = value
+  onChangeRef.current = onChange
+  onTocChangeRef.current = onTocChange
+  onWordCountChangeRef.current = onWordCountChange
+  onTocItemClickReadyRef.current = onTocItemClickReady
 
   const initialContent = useMemo(() => {
     // If the document has no blocks at all (new document), let BlockNote use its default empty paragraph
@@ -92,39 +103,88 @@ export function useSmartDocumentEditorModel({
   })
 
   const updateStatsAndTocRef = useRef<number | null>(null)
+  const idleUpdateStatsAndTocRef = useRef<number | null>(null)
+  const lastPublishedTocRef = useRef<TocItem[] | null>(null)
+  const lastPublishedStatsRef = useRef<{ characters: number; words: number; blocks: number } | null>(null)
 
-  const updateStatsAndToc = useCallback((isImmediate = false) => {
+  const clearScheduledStatsAndToc = useCallback(() => {
     if (updateStatsAndTocRef.current !== null) {
       window.clearTimeout(updateStatsAndTocRef.current)
+      updateStatsAndTocRef.current = null
     }
 
-    const execute = () => {
-      // Avoid calling this in the render cycle or synchronously during typing if it triggers state updates that cause re-renders
-      onTocChange?.(extractSmartDocumentToc(editor))
-      onWordCountChange?.(calculateSmartDocumentStats(editor))
+    if (idleUpdateStatsAndTocRef.current !== null) {
+      const idleWindow = window as Window & {
+        cancelIdleCallback?: (handle: number) => void
+      }
+      if (typeof idleWindow.cancelIdleCallback === 'function') {
+        idleWindow.cancelIdleCallback(idleUpdateStatsAndTocRef.current)
+      } else {
+        window.clearTimeout(idleUpdateStatsAndTocRef.current)
+      }
+      idleUpdateStatsAndTocRef.current = null
+    }
+  }, [])
+
+  const updateStatsAndToc = useCallback((isImmediate = false) => {
+    clearScheduledStatsAndToc()
+
+    const runDerivedCalculation = () => {
+      const { toc, stats } = getSmartDocumentOutlineAndStats(editor)
+
+      if (!isSameSmartDocumentToc(lastPublishedTocRef.current, toc)) {
+        lastPublishedTocRef.current = toc
+        onTocChangeRef.current?.(toc)
+      }
+
+      if (!isSameSmartDocumentStats(lastPublishedStatsRef.current, stats)) {
+        lastPublishedStatsRef.current = stats
+        onWordCountChangeRef.current?.(stats)
+      }
     }
 
-    if (isImmediate) {
-      // Use setTimeout even for immediate to ensure we don't trigger state updates during render phase
-      updateStatsAndTocRef.current = window.setTimeout(execute, 0)
-    } else {
-      updateStatsAndTocRef.current = window.setTimeout(execute, 500)
+    const scheduleDerivedCalculation = () => {
+      const idleWindow = window as Window & {
+        requestIdleCallback?: (
+          callback: () => void,
+          options?: { timeout: number }
+        ) => number
+      }
+
+      if (typeof idleWindow.requestIdleCallback === 'function') {
+        idleUpdateStatsAndTocRef.current = idleWindow.requestIdleCallback(() => {
+          idleUpdateStatsAndTocRef.current = null
+          runDerivedCalculation()
+        }, { timeout: 300 })
+        return
+      }
+
+      idleUpdateStatsAndTocRef.current = window.setTimeout(() => {
+        idleUpdateStatsAndTocRef.current = null
+        runDerivedCalculation()
+      }, 0)
     }
-  }, [editor, onTocChange, onWordCountChange])
+
+    updateStatsAndTocRef.current = window.setTimeout(
+      scheduleDerivedCalculation,
+      isImmediate ? 0 : 700
+    )
+  }, [clearScheduledStatsAndToc, editor])
 
   const handleChange = useCallback(() => {
+    const currentValue = valueRef.current
     // Only update if the document has actually changed to avoid infinite loops
     // The editor.document is a proxy, so we check if it's the same array reference or structurally different
     // Since this is called frequently, we just use a simple check
-    if (editor.document === value.blocks) return
+    if (editor.document === currentValue.blocks) return
 
     const nextValue = withSmartDocumentUpdatedAt({
-      ...value,
+      ...currentValue,
       blocks: editor.document,
     })
-    onChange(nextValue)
+    onChangeRef.current(nextValue)
     updateStatsAndToc(false)
-  }, [editor, onChange, value, updateStatsAndToc])
+  }, [editor, updateStatsAndToc])
 
   const handleTocItemClick = useCallback((item: TocItem) => {
     try {
@@ -138,14 +198,12 @@ export function useSmartDocumentEditorModel({
 
   useEffect(() => {
     updateStatsAndToc(true)
-    onTocItemClickReady?.(handleTocItemClick)
+    onTocItemClickReadyRef.current?.(handleTocItemClick)
     return () => {
-      if (updateStatsAndTocRef.current !== null) {
-        window.clearTimeout(updateStatsAndTocRef.current)
-      }
-      onTocItemClickReady?.(null)
+      clearScheduledStatsAndToc()
+      onTocItemClickReadyRef.current?.(null)
     }
-  }, [editor, handleTocItemClick, onTocItemClickReady, updateStatsAndToc])
+  }, [clearScheduledStatsAndToc, editor, handleTocItemClick, updateStatsAndToc])
 
   const customTheme = useMemo(() => {
     const baseTheme = isDarkTheme(theme) ? darkDefaultTheme : lightDefaultTheme

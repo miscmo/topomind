@@ -1,55 +1,84 @@
 /* --- BlockNote Global UI Overrides --- */
-.bn-toolbar,
+.bn-formatting-toolbar,
 .bn-menu-dropdown,
-.bn-suggestion-menu {
-  background: var(--titlebar-menu-bg) !important;
-  backdrop-filter: blur(24px) !important;
-  -webkit-backdrop-filter: blur(24px) !important;
+.bn-suggestion-menu,
+.bn-mantine .mantine-Popover-dropdown,
+.bn-mantine .mantine-Menu-dropdown {
+  background: var(--color-surface-elevated) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   border: 1px solid var(--color-border) !important;
   border-radius: 12px !important;
   box-shadow: var(--shadow-popover) !important;
   color: var(--color-text-primary) !important;
 }
 
-.bn-toolbar,
+.bn-formatting-toolbar,
 .bn-suggestion-menu {
-  padding: 4px !important;
+  padding: 6px !important;
 }
 
-.bn-menu-dropdown:not(.tm-smart-block-menu) {
+.bn-formatting-toolbar {
+  gap: 4px !important;
+}
+
+.bn-menu-dropdown:not(.tm-smart-block-menu),
+.bn-mantine .mantine-Menu-dropdown {
   padding: 4px !important;
 }
 
 .bn-menu-dropdown .bn-menu-item:hover,
 .bn-menu-dropdown .bn-menu-item[data-selected="true"],
 .bn-suggestion-menu .bn-menu-item:hover,
-.bn-suggestion-menu .bn-menu-item[data-selected="true"] {
+.bn-suggestion-menu .bn-menu-item[data-selected="true"],
+.bn-mantine .mantine-Menu-item:hover,
+.bn-mantine .mantine-Menu-item[aria-selected="true"] {
   background: var(--color-hover-bg) !important;
   border-radius: 6px !important;
 }
 
-.bn-toolbar .bn-button,
-.bn-toolbar .bn-button:hover,
-.bn-toolbar .bn-button[data-selected="true"],
-.bn-toolbar .bn-button[data-selected="true"]:hover {
+.bn-formatting-toolbar .bn-button,
+.bn-formatting-toolbar .bn-button:hover,
+.bn-formatting-toolbar .bn-button[data-selected="true"],
+.bn-formatting-toolbar .bn-button[data-selected="true"]:hover {
   background: transparent !important;
   border: none !important;
   color: var(--color-text-primary) !important;
-  border-radius: 6px !important;
+  border-radius: 8px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  padding: 0 8px !important;
 }
 
-.bn-toolbar .bn-button:hover,
-.bn-toolbar .bn-button[data-selected="true"]:hover {
+.bn-formatting-toolbar > * {
+  margin: 0 1px !important;
+}
+
+.bn-formatting-toolbar button,
+.bn-formatting-toolbar [role="button"] {
+  min-height: 32px !important;
+}
+
+.bn-formatting-toolbar svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.bn-formatting-toolbar .bn-button:hover,
+.bn-formatting-toolbar .bn-button[data-selected="true"]:hover {
   background: var(--color-hover-bg) !important;
 }
 
-.bn-toolbar .bn-button[data-selected="true"] {
+.bn-formatting-toolbar .bn-button[data-selected="true"] {
   background: var(--color-active-bg) !important;
   color: var(--color-accent) !important;
 }
 
 .bn-menu-dropdown .bn-menu-item,
-.bn-suggestion-menu .bn-menu-item {
+.bn-suggestion-menu .bn-menu-item,
+.bn-mantine .mantine-Menu-item,
+.bn-mantine .mantine-Menu-label {
+  background: transparent !important;
   color: var(--color-text-primary) !important;
 }
 

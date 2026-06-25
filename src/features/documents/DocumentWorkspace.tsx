@@ -58,7 +58,7 @@ export function DocumentWorkspace({
   onMoveDocument,
   isDocumentBusy,
 }: DocumentWorkspaceProps) {
-  const sidebarContent = (
+  const sidebarContent = useMemo(() => (
     <DocumentSidebar
       topoDocuments={topoDocuments}
       activeDocumentPath={activeDocumentPath}
@@ -70,7 +70,7 @@ export function DocumentWorkspace({
       onDeleteDocument={onDeleteDocument}
       onMoveDocument={onMoveDocument}
     />
-  )
+  ), [topoDocuments, activeDocumentPath, isDocumentBusy, onSelectDocument, onCreateTopoDocument, onExportTopoDocument, onRenameDocument, onDeleteDocument, onMoveDocument])
 
   return (
     <DocumentEditorHost

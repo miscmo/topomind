@@ -6,6 +6,7 @@ export interface NodeChangeOperationsDeps {
   tabId: string
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
   saveNow: (dirPath: string) => Promise<void>
+  saveLater: (dirPath: string) => Promise<void>
   storeApi: StoreApi<GraphState>
 }
 
@@ -14,6 +15,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     tabId,
     getActiveGraphSession,
     saveNow,
+    saveLater,
     storeApi,
   } = deps
 
@@ -52,7 +54,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
     const shouldSaveNow = changes.some((change) => change.dragging === false)
     if (currentRoomPath && shouldSaveNow) {
-      await saveNow(currentRoomPath)
+      await saveLater(currentRoomPath)
     }
   }
 
@@ -62,7 +64,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     store.removeEdgesByNodeIds(changeIds)
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-    if (currentRoomPath) await saveNow(currentRoomPath)
+    if (currentRoomPath) await saveLater(currentRoomPath)
   }
 
   const applyNodeDimensionChanges = async (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean; origin?: 'auto-size' | 'manual' }>) => {
@@ -141,7 +143,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     if (changed && shouldSave) {
       const graphSession = getActiveGraphSession()
       const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-      if (currentRoomPath) await saveNow(currentRoomPath)
+      if (currentRoomPath) await saveLater(currentRoomPath)
     }
   }
 

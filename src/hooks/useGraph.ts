@@ -86,9 +86,10 @@ export function useGraph(tabId: string) {
     [tabId, getActiveGraphSession, ops.captureSaveSnapshot, ops.saveSnapshot, loadRoom, storeApi]
   )
 
-  const { flushCurrentRoomSave } = useGraphPersistence({
+  const { flushCurrentRoomSave, hasPendingCurrentRoomSave } = useGraphPersistence({
     getActiveGraphSession,
     saveNow: ops.saveNow,
+    hasPendingSave: storageApi.hasPendingGraphSave,
   })
 
   const createEdge = useCallback(async (source: string, target: string) => {
@@ -128,6 +129,7 @@ export function useGraph(tabId: string) {
     updateEdgeRelation: ops.updateEdgeRelation,
     updateEdgeStyle: ops.updateEdgeStyle,
     flushCurrentRoomSave,
+    hasPendingCurrentRoomSave,
     isCreatingRef,
   }), [
     loadRoom,
@@ -157,5 +159,6 @@ export function useGraph(tabId: string) {
     ops.updateEdgeRelation,
     ops.updateEdgeStyle,
     flushCurrentRoomSave,
+    hasPendingCurrentRoomSave,
   ])
 }

@@ -40,8 +40,7 @@ export function useStyleSettingsModel() {
   const graph = useGraphContext()
 
   const selectedEdge = useGraphStore((s) => selectedEdgeId ? s.edgesMap.get(selectedEdgeId) : null)
-  const nodes = useGraphStore((s) => s.nodes)
-  const selectedNodes = useMemo(() => nodes.filter(n => n.selected), [nodes])
+  const selectedNodes = useGraphStore((s) => s.selectedNodes)
   const selectedNode = selectedNodes.length > 0 ? selectedNodes[0] : null
 
   const isMultiSelection = selectedNodes.length > 1

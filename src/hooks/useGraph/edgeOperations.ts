@@ -10,6 +10,7 @@ import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 export interface EdgeOperationsDeps {
   getActiveGraphSession: () => GraphSession | undefined
   saveNow: (dirPath: string) => Promise<void>
+  saveLater: (dirPath: string) => Promise<void>
   storeApi: StoreApi<GraphState>
 }
 
@@ -45,6 +46,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
   const {
     getActiveGraphSession,
     saveNow,
+    saveLater,
     storeApi,
   } = deps
 
@@ -81,7 +83,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
 
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
-    if (currentRoomPath) await saveNow(currentRoomPath)
+    if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('连线:创建', 'graphOperations', { edgeId, source: connection.source, target: connection.target })
   }
 
@@ -90,7 +92,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     store.setEdges(store.edges.filter((e) => e.id !== edgeId))
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
-    if (currentRoomPath) await saveNow(currentRoomPath)
+    if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('连线:删除', 'graphOperations', { edgeId })
   }
 
@@ -114,7 +116,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
           }
         : e
     ))
-    if (currentRoomPath) await saveNow(currentRoomPath)
+    if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('连线:更新关系', 'graphOperations', { edgeId, relation, weight })
   }
 
@@ -174,7 +176,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     })
     if (!changed) return
     store.setEdges(nextEdges)
-    if (currentRoomPath && shouldPersist) await saveNow(currentRoomPath)
+    if (currentRoomPath && shouldPersist) await saveLater(currentRoomPath)
     if (shouldPersist) logAction('连线:更新样式', 'graphOperations', { edgeId, ...style })
   }
 

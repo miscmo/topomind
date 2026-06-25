@@ -54,11 +54,13 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
 
   const flushCurrentRoomSaveRef = useRef(graph.flushCurrentRoomSave)
   flushCurrentRoomSaveRef.current = graph.flushCurrentRoomSave
+  const hasPendingCurrentRoomSaveRef = useRef(graph.hasPendingCurrentRoomSave)
+  hasPendingCurrentRoomSaveRef.current = graph.hasPendingCurrentRoomSave
 
   useEffect(() => {
     return registerTabSaver(tabId, async () => {
       await flushCurrentRoomSaveRef.current()
-    }, () => false)
+    }, () => hasPendingCurrentRoomSaveRef.current())
   }, [tabId])
 
   return { graphSession, graph }

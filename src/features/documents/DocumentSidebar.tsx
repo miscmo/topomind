@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { memo } from 'react'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
 import { useDocumentSidebarModel } from './model/useDocumentSidebarModel'
 import { DocumentNode } from './components/DocumentNode'
@@ -18,7 +18,7 @@ export interface DocumentSidebarProps {
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
 }
 
-export function DocumentSidebar({
+export const DocumentSidebar = memo(function DocumentSidebar({
   nodeId,
   topoDocuments,
   activeDocumentPath,
@@ -138,4 +138,4 @@ export function DocumentSidebar({
       />
     </div>
   )
-}
+})

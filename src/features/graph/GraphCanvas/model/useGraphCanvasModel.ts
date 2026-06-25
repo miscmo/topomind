@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, type Viewport, type NodeChange, type Node, type Edge } from '@xyflow/react'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { useGraphStore, useGraphStoreApi } from '../../../../stores/graphStore'
@@ -28,6 +28,7 @@ export function useGraphCanvasModel({
 }: UseGraphCanvasModelProps) {
   const showGrid = useGraphUiStore((s) => s.showGrid)
   const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
+  const connectingTargetId = useGraphUiStore((s) => s.connectingTargetId)
   const setConnectingTargetId = useGraphUiStore((s) => s.setConnectingTargetId)
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
@@ -40,6 +41,31 @@ export function useGraphCanvasModel({
   const zoomLevelRef = useRef(1)
   const [isShiftPressed, setIsShiftPressed] = useState(false)
   const [isMouseOverCanvas, setIsMouseOverCanvas] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isInputFocused, setIsInputFocused] = useState(false)
+  const pendingConnectionPointRef = useRef<{ x: number; y: number } | null>(null)
+  const connectionFrameRef = useRef<number | null>(null)
+  const connectingTargetIdRef = useRef<string | null>(connectingTargetId)
+
+  useEffect(() => {
+    const checkFocus = () => {
+      const activeElement = document.activeElement
+      const isInput = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA' || activeElement?.getAttribute('contenteditable') === 'true'
+      setIsInputFocused(!!isInput)
+    }
+    
+    const handleFocusIn = () => checkFocus()
+    const handleFocusOut = () => checkFocus()
+
+    checkFocus()
+    window.addEventListener('focusin', handleFocusIn)
+    window.addEventListener('focusout', handleFocusOut)
+
+    return () => {
+      window.removeEventListener('focusin', handleFocusIn)
+      window.removeEventListener('focusout', handleFocusOut)
+    }
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -67,8 +93,38 @@ export function useGraphCanvasModel({
 
   const reactFlow = useReactFlow()
   const graph = useGraphContext()
+  const snapCandidates = useMemo(() => (
+    nodes
+      .filter((node) => node.id !== connectingSourceId)
+      .map((node) => ({
+        id: node.id,
+        rect: getNodeRect(node as Node),
+      }))
+  ), [connectingSourceId, nodes])
   
   const { guideLines, onNodesChangeIntercept, clearGuides } = useSmartGuides(nodes as Node[])
+
+  useEffect(() => {
+    connectingTargetIdRef.current = connectingTargetId
+  }, [connectingTargetId])
+
+  useEffect(() => {
+    return () => {
+      if (connectionFrameRef.current !== null) {
+        cancelAnimationFrame(connectionFrameRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (connectingSourceId) return
+    pendingConnectionPointRef.current = null
+    if (connectionFrameRef.current !== null) {
+      cancelAnimationFrame(connectionFrameRef.current)
+      connectionFrameRef.current = null
+    }
+    connectingTargetIdRef.current = null
+  }, [connectingSourceId])
 
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     const nextChanges = onNodesChangeIntercept(changes)
@@ -83,6 +139,9 @@ export function useGraphCanvasModel({
     if (uiStore.formatPainterStyle !== null) {
       uiStore.setFormatPainterStyle(null)
     }
+    
+    // Close search box if it's open
+    setIsSearchOpen(false)
     
     graph.onPaneClick()
   }, [graph, onCloseContextMenu])
@@ -106,12 +165,20 @@ export function useGraphCanvasModel({
     if (viewportChanged) setStoredViewport(viewport)
   }, [setStoredViewport, storedViewport, updateZoomLevel])
 
+  useShortcut(['Control+f', 'Meta+f'], (event) => {
+    if (activeTabId !== tabId) return
+    event.preventDefault()
+    setIsSearchOpen(true)
+    logAction('快捷键:搜索节点', 'GraphCanvas', { source: 'shortcut' })
+  }, { scope: 'global', preventDefault: true })
+
   useShortcut(['Escape'], (event) => {
     if (activeTabId !== tabId) return
     const uiStore = useGraphUiStore.getState()
     if (uiStore.formatPainterStyle !== null) {
       uiStore.setFormatPainterStyle(null)
     }
+    setIsSearchOpen(false)
   }, { scope: 'canvas', preventDefault: false })
 
   useEffect(() => {
@@ -122,9 +189,9 @@ export function useGraphCanvasModel({
     if (activeTabId !== tabId) return
     event.preventDefault()
     ;(graphStoreApi as any).temporal.getState().undo()
-    const graphSession = useTabStore.getState().tabs.find(t => t.id === tabId)?.graphSession
-    if (graphSession?.roomPath) {
-      void graph.saveNow(graphSession.roomPath)
+    const tab = useTabStore.getState().tabs.find(t => t.id === tabId && t.type === 'kb')
+    if (tab && 'graphSession' in tab && (tab as any).graphSession?.roomPath) {
+      void graph.flushCurrentRoomSave?.()
     }
     logAction('快捷键:撤销', 'GraphCanvas', { source: 'undo' })
   }, { scope: 'canvas', preventDefault: true })
@@ -133,9 +200,9 @@ export function useGraphCanvasModel({
     if (activeTabId !== tabId) return
     event.preventDefault()
     ;(graphStoreApi as any).temporal.getState().redo()
-    const graphSession = useTabStore.getState().tabs.find(t => t.id === tabId)?.graphSession
-    if (graphSession?.roomPath) {
-      void graph.saveNow(graphSession.roomPath)
+    const tab = useTabStore.getState().tabs.find(t => t.id === tabId && t.type === 'kb')
+    if (tab && 'graphSession' in tab && (tab as any).graphSession?.roomPath) {
+      void graph.flushCurrentRoomSave?.()
     }
     logAction('快捷键:重做', 'GraphCanvas', { source: 'redo' })
   }, { scope: 'canvas', preventDefault: true })
@@ -209,27 +276,47 @@ export function useGraphCanvasModel({
     onPaneContextMenu?.(event.clientX, event.clientY)
   }, [onPaneContextMenu])
 
-  const handleConnectionMouseMove = useCallback((event: React.MouseEvent) => {
+  const flushConnectionTargetSearch = useCallback(() => {
     if (!connectingSourceId) return
-    const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    const pendingPoint = pendingConnectionPointRef.current
+    if (!pendingPoint) return
+    const point = reactFlow.screenToFlowPosition(pendingPoint)
     let nextTargetId: string | null = null
     let bestDistance = Infinity
-    for (const node of nodes) {
-      if (node.id === connectingSourceId) continue
-      const distance = distanceToRect(point, getNodeRect(node as Node))
+    for (const candidate of snapCandidates) {
+      const distance = distanceToRect(point, candidate.rect)
       if (distance <= CARD_CONNECT_SNAP_DISTANCE && distance < bestDistance) {
         bestDistance = distance
-        nextTargetId = node.id
+        nextTargetId = candidate.id
       }
     }
-    if (useGraphUiStore.getState().connectingTargetId !== nextTargetId) {
+    if (connectingTargetIdRef.current !== nextTargetId) {
+      connectingTargetIdRef.current = nextTargetId
       setConnectingTargetId(nextTargetId)
     }
-  }, [connectingSourceId, nodes, reactFlow, setConnectingTargetId])
+  }, [connectingSourceId, reactFlow, setConnectingTargetId, snapCandidates])
+
+  const handleConnectionMouseMove = useCallback((event: React.MouseEvent) => {
+    if (!connectingSourceId) return
+    pendingConnectionPointRef.current = { x: event.clientX, y: event.clientY }
+    if (connectionFrameRef.current !== null) return
+    connectionFrameRef.current = requestAnimationFrame(() => {
+      connectionFrameRef.current = null
+      flushConnectionTargetSearch()
+    })
+  }, [connectingSourceId, flushConnectionTargetSearch])
 
   const handleConnectionMouseLeave = useCallback(() => {
     if (!connectingSourceId) return
-    setConnectingTargetId(null)
+    pendingConnectionPointRef.current = null
+    if (connectionFrameRef.current !== null) {
+      cancelAnimationFrame(connectionFrameRef.current)
+      connectionFrameRef.current = null
+    }
+    if (connectingTargetIdRef.current !== null) {
+      connectingTargetIdRef.current = null
+      setConnectingTargetId(null)
+    }
   }, [connectingSourceId, setConnectingTargetId])
 
   const isFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
@@ -256,6 +343,19 @@ export function useGraphCanvasModel({
     }
   }, [isShiftPressed, connectingSourceId, handleConnectionMouseMove])
 
+  const handleSearchSelectNode = useCallback((node: Node) => {
+    graph.selectNode(node.id)
+    setIsSearchOpen(false)
+    const nodeRect = {
+      x: node.position.x,
+      y: node.position.y,
+      width: node.width ?? 120,
+      height: node.height ?? 52
+    }
+    const zoom = reactFlow.getZoom()
+    reactFlow.setCenter(nodeRect.x + nodeRect.width / 2, nodeRect.y + nodeRect.height / 2, { zoom, duration: 300 })
+  }, [graph, reactFlow])
+
   return {
     state: {
       showGrid,
@@ -268,6 +368,8 @@ export function useGraphCanvasModel({
       isFormatPainterActive,
       isShiftPressed,
       isMouseOverCanvas,
+      isSearchOpen,
+      isInputFocused,
     },
     graph,
     actions: {
@@ -284,6 +386,8 @@ export function useGraphCanvasModel({
       handleCanvasMouseEnter,
       handleCanvasMouseLeave,
       handleCanvasMouseMove,
+      setIsSearchOpen,
+      handleSearchSelectNode,
     }
   }
 }

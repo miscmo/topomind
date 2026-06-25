@@ -2,12 +2,15 @@ import { isPlainStructuredDocumentContent, parseStructuredDocumentValue, seriali
 
 export type DocumentContentValue = unknown
 
+const comparableDocumentContentCache = new WeakMap<object, string>()
+
 export function getDocumentContentLength(value: DocumentContentValue): number {
   return serializeStructuredDocumentContent(value).length
 }
 
 export function areDocumentContentsEqual(left: DocumentContentValue, right: DocumentContentValue): boolean {
-  return serializeStructuredDocumentContent(canonicalizeDocumentContent(left)) === serializeStructuredDocumentContent(canonicalizeDocumentContent(right))
+  if (left === right) return true
+  return getComparableDocumentContent(left) === getComparableDocumentContent(right)
 }
 
 export function prepareStructuredDocumentContentForSave(value: DocumentContentValue): Record<string, unknown> | null {
@@ -51,4 +54,15 @@ function canonicalizeDocumentContent(value: DocumentContentValue): DocumentConte
   } catch {
     return value
   }
+}
+
+function getComparableDocumentContent(value: DocumentContentValue): string {
+  if (value && typeof value === 'object') {
+    const cached = comparableDocumentContentCache.get(value as object)
+    if (cached !== undefined) return cached
+    const comparable = serializeStructuredDocumentContent(canonicalizeDocumentContent(value))
+    comparableDocumentContentCache.set(value as object, comparable)
+    return comparable
+  }
+  return serializeStructuredDocumentContent(canonicalizeDocumentContent(value))
 }

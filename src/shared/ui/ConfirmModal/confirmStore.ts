@@ -10,11 +10,22 @@ interface ConfirmState {
   visible: boolean
   title: string
   message: string
+  confirmText?: string
+  cancelText?: string
+  extraButtonText?: string
+  onExtraAction?: () => void
   resolve: ((value: boolean) => void) | null
 }
 
 interface ConfirmActions {
-  open: (options: { title?: string; message?: string }) => Promise<boolean>
+  open: (options: { 
+    title?: string; 
+    message?: string;
+    confirmText?: string;
+    cancelText?: string;
+    extraButtonText?: string;
+    onExtraAction?: () => void;
+  }) => Promise<boolean>
   confirm: () => void
   cancel: () => void
 }
@@ -25,11 +36,15 @@ export const useConfirmStore = create<ConfirmStore>((set, get) => ({
   visible: false,
   title: '确认',
   message: '',
+  confirmText: undefined,
+  cancelText: undefined,
+  extraButtonText: undefined,
+  onExtraAction: undefined,
   resolve: null,
 
-  open: ({ title = '确认', message = '' } = {}) => {
+  open: ({ title = '确认', message = '', confirmText, cancelText, extraButtonText, onExtraAction } = {}) => {
     return new Promise<boolean>((resolve) => {
-      set({ visible: true, title, message, resolve })
+      set({ visible: true, title, message, confirmText, cancelText, extraButtonText, onExtraAction, resolve })
     })
   },
 

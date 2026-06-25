@@ -1,12 +1,13 @@
-import { memo } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { Background, ReactFlow, type BackgroundVariant, type Node, type NodeTypes } from '@xyflow/react'
 import { PaintRoller } from 'lucide-react'
 import type { KnowledgeNode } from '../../../types'
 import KnowledgeCard from './nodes/KnowledgeCard'
 import FloatingEdge from './edges/FloatingEdge'
-import Toolbar from '../../layout/Toolbar/Toolbar'
 import { SmartGuidesRenderer } from './SmartGuidesRenderer'
 import { CardSnappedConnectionLine } from './components/CardSnappedConnectionLine'
+import { CanvasMiniMap } from './components/CanvasMiniMap'
+import { NodeSearchBox } from './components/NodeSearchBox'
 import { useGraphCanvasModel, type UseGraphCanvasModelProps } from './model/useGraphCanvasModel'
 
 const nodeTypes = { knowledgeCard: KnowledgeCard }
@@ -22,6 +23,8 @@ export default memo(function GraphCanvas({
   onPaneContextMenu,
   onCloseContextMenu,
 }: UseGraphCanvasModelProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const { state, graph, actions } = useGraphCanvasModel({
     tabId,
     onNodeContextMenu,
@@ -40,6 +43,7 @@ export default memo(function GraphCanvas({
     guideLines,
     isFormatPainterActive,
     isShiftPressed,
+    isSearchOpen,
   } = state
 
   const {
@@ -53,10 +57,37 @@ export default memo(function GraphCanvas({
     handlePaneContextMenu,
     handleConnectionMouseMove,
     handleConnectionMouseLeave,
+    setIsSearchOpen,
+    handleSearchSelectNode,
   } = actions
+
+  useEffect(() => {
+    const element = containerRef.current
+    if (!element) return
+
+    const updateCanvasSize = () => {
+      setCanvasSize({
+        width: element.clientWidth,
+        height: element.clientHeight,
+      })
+    }
+
+    updateCanvasSize()
+
+    const observer = new ResizeObserver(() => {
+      updateCanvasSize()
+    })
+
+    observer.observe(element)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
 
   return (
     <div
+      ref={containerRef}
       style={{ width: '100%', height: '100%', position: 'relative' }}
       className={isFormatPainterActive ? "format-painter-active" : undefined}
       onMouseEnter={actions.handleCanvasMouseEnter}
@@ -83,7 +114,7 @@ export default memo(function GraphCanvas({
         </>
       )}
 
-      {isShiftPressed && state.isMouseOverCanvas && !isFormatPainterActive && (
+      {isShiftPressed && state.isMouseOverCanvas && !isFormatPainterActive && !state.isInputFocused && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] bg-[var(--color-surface)] text-[var(--color-text)] border border-[var(--color-border-strong)] px-4 py-2.5 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] flex items-center gap-2.5 pointer-events-none transition-all">
           <div className="bg-[var(--color-primary)] text-white p-1 px-2 rounded flex items-center justify-center font-bold text-[12px]">
             Shift
@@ -92,6 +123,14 @@ export default memo(function GraphCanvas({
             按住 Shift 并拖拽鼠标进行多选，多选后可批量移动节点
           </span>
         </div>
+      )}
+
+      {isSearchOpen && (
+        <NodeSearchBox
+          nodes={nodes as Node[]}
+          onSelectNode={handleSearchSelectNode}
+          onClose={() => setIsSearchOpen(false)}
+        />
       )}
 
       <ReactFlow
@@ -146,11 +185,16 @@ export default memo(function GraphCanvas({
         }}
       >
         <SmartGuidesRenderer guideLines={guideLines} />
+        <CanvasMiniMap
+          nodes={nodes as Node[]}
+          edges={edges}
+          zoomLevel={zoomLevel}
+          canvasSize={canvasSize}
+        />
         {showGrid && (
           <Background id={tabId} variant={'dots' as BackgroundVariant} gap={20} size={1} color="var(--color-canvas-grid)" />
         )}
       </ReactFlow>
-      <Toolbar zoomLevel={zoomLevel} />
     </div>
   )
 })
