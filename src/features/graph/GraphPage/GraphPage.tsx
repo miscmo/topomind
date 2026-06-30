@@ -6,6 +6,7 @@ import { memo, useEffect } from 'react'
 import { GraphContextProvider } from '../../../contexts/GraphContext'
 import { useSelectedNodeId } from '../../../stores/graphStore'
 import Breadcrumb from '../../layout/Breadcrumb/Breadcrumb'
+import RoomHistory from '../../layout/RoomHistory/RoomHistory'
 import { useLearningTrackerContextStore } from '../../learning-tracker/model/learningTrackerContextStore'
 import RightPanelContainer from '../../right-panel/RightPanelContainer'
 import GraphCanvas from '../GraphCanvas'
@@ -54,7 +55,10 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
       <div id="graph-page" className="w-full h-full overflow-hidden bg-[var(--color-canvas-bg)] pt-0">
         <div id="app-layout" className="flex w-full h-full relative">
           <div id="graph-panel" className="flex-1 h-full relative overflow-hidden bg-[var(--color-canvas-bg)]">
-            <Breadcrumb tabId={tabId} />
+            <div className="absolute top-3 left-3 z-[11] flex flex-col items-start gap-2 max-w-[min(560px,calc(100%-24px))]">
+              <Breadcrumb tabId={tabId} />
+              <RoomHistory tabId={tabId} />
+            </div>
 
             <GraphCanvas tabId={tabId} {...canvasProps} />
           </div>

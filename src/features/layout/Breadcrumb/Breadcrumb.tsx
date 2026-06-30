@@ -22,7 +22,7 @@ interface BreadcrumbItem {
 
 export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
   const graph = useGraphContext()
-  const tab = useTabStore((s: any) => s.getTabById(tabId))
+  const tab = useTabStore(s => s.getTabById(tabId))
 
   const items = useMemo<BreadcrumbItem[]>(() => {
     if (!tab || tab.type !== 'kb' || !tab.kbPath || !tab.currentRoomPath) return []
@@ -91,7 +91,7 @@ export default memo(function Breadcrumb({ tabId }: BreadcrumbProps) {
   return (
     <div
         id="breadcrumb"
-        className="absolute top-3 left-3 z-[12] flex items-center gap-[5px] max-w-[min(560px,calc(100%-24px))] overflow-hidden whitespace-nowrap rounded-full border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] py-1.5 pl-3 pr-3.5 text-xs text-[var(--color-text-secondary)] shadow-[var(--shadow-md)] backdrop-blur-xl"
+        className="flex items-center gap-[5px] max-w-full overflow-hidden whitespace-nowrap rounded-full border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] py-1.5 pl-3 pr-3.5 text-xs text-[var(--color-text-secondary)] shadow-[var(--shadow-md)] backdrop-blur-xl"
       >
       {items.map((item, index) => {
         const isLast = index === items.length - 1
