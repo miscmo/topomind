@@ -59,7 +59,7 @@ export function useDocumentSidebarModel({
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<{ id: string, position: 'before' | 'inside' | 'after' } | null>(null)
   const inlineInputRef = useRef<HTMLInputElement>(null)
-  const cancelInlineEditOnBlurRef = useRef<boolean | 'saving'>(false)
+  const cancelInlineEditOnBlurRef = useRef(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -165,9 +165,13 @@ export function useDocumentSidebarModel({
   }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, nodeId])
 
   const commitInlineEdit = useCallback(async () => {
-    if (!inlineEdit || isBusy || cancelInlineEditOnBlurRef.current === 'saving') return
+    if (!inlineEdit || isBusy) {
+      cancelInlineEditOnBlurRef.current = false
+      return
+    }
     const nextName = inlineEdit.value.trim()
     if (!nextName) {
+      cancelInlineEditOnBlurRef.current = false
       setInlineEdit(null)
       return
     }
@@ -175,7 +179,6 @@ export function useDocumentSidebarModel({
     // Check for duplicates
     const hasDuplicate = topoDocuments.some(d => d.id !== inlineEdit.targetId && d.title.trim() === nextName)
     if (hasDuplicate) {
-      cancelInlineEditOnBlurRef.current = 'saving'
       const confirm = useConfirmStore.getState().open
       const confirmed = await confirm({
         title: '同名节点确认',
@@ -189,8 +192,8 @@ export function useDocumentSidebarModel({
           }
         }
       })
-      cancelInlineEditOnBlurRef.current = false
       if (!confirmed) {
+        cancelInlineEditOnBlurRef.current = false
         setInlineEdit(null)
         return
       }
@@ -201,14 +204,15 @@ export function useDocumentSidebarModel({
     } else if (inlineEdit.mode === 'createTopoDocument' && inlineEdit.createType) {
       onCreateTopoDocument(inlineEdit.createType, nextName, inlineEdit.parentId)
     }
-    
+
+    cancelInlineEditOnBlurRef.current = false
     setInlineEdit(null)
   }, [inlineEdit, isBusy, onRenameDocument, onCreateTopoDocument, topoDocuments])
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      cancelInlineEditOnBlurRef.current = 'saving'
+      cancelInlineEditOnBlurRef.current = true
       void commitInlineEdit()
     } else if (e.key === 'Escape') {
       e.preventDefault()
@@ -219,9 +223,7 @@ export function useDocumentSidebarModel({
 
   const handleInputBlur = useCallback(() => {
     if (cancelInlineEditOnBlurRef.current) {
-      if (cancelInlineEditOnBlurRef.current !== 'saving') {
-        cancelInlineEditOnBlurRef.current = false
-      }
+      cancelInlineEditOnBlurRef.current = false
       return
     }
     void commitInlineEdit()
