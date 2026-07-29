@@ -92,8 +92,8 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
 
   const saveTimeoutRef = useRef<number | undefined>(undefined)
   useEffect(() => {
-    if (isDirty && saveStatus !== 'saving') {
-      setSaveStatus((current) => current === 'error' ? current : 'dirty')
+    if (isDirty && saveStatus !== 'saving' && saveStatus !== 'error') {
+      setSaveStatus('dirty')
       clearTimeout(saveTimeoutRef.current)
       saveTimeoutRef.current = window.setTimeout(() => {
         void handleSave()

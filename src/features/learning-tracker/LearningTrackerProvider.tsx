@@ -9,17 +9,21 @@ export function LearningTrackerProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!workspacePath) return
 
-    void init()
+    void init().catch((error) => {
+      console.error('Failed to init learning tracker:', error)
+    })
 
     return () => {
-      void shutdown(workspacePath)
+      shutdown(workspacePath).catch((error) => {
+        console.error('Failed to shutdown learning tracker:', error)
+      })
     }
   }, [workspacePath, init, shutdown])
 
   useEffect(() => {
     if (!workspacePath) return
 
-    let throttleTimer: any = null
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null
     const handleActivity = () => {
       if (!throttleTimer) {
         recordActivity()
@@ -36,8 +40,8 @@ export function LearningTrackerProvider({ children }: { children: React.ReactNod
     }
 
     const handleWindowStateChange = (...args: unknown[]) => {
-      const state = args[0]
-      if (state && typeof state === 'object' && 'isFocused' in state && !state.isFocused) {
+      const state = args[0] as { isFocused: boolean } | undefined
+      if (state && !state.isFocused) {
         setIdle()
       }
     }

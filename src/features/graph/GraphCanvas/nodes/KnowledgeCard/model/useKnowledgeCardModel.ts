@@ -23,6 +23,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const titleDraftRef = useRef(data.label)
   const titleSavingRef = useRef(false)
   const resizeHideTimerRef = useRef<number | null>(null)
+  const isUpdatingDimensionsRef = useRef(false)
   
   const defaultNodeStyle = useGraphUiStore((state: any) => state.defaultNodeStyle)
   const defaultNodeSize = useGraphUiStore((state: any) => state.defaultNodeSize)
@@ -56,8 +57,9 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   
   const cardPath = useMemo(() => {
     const parent = typeof data.parent === 'string' ? data.parent : ''
-    return resolveRoomChildRef(parent, id)
-  }, [data.parent, id])
+    const cardRef = typeof data.cardRef === 'string' ? data.cardRef : id
+    return resolveRoomChildRef(parent, cardRef)
+  }, [data.parent, data.cardRef, id])
 
   useEffect(() => {
     if (!titleEditing) titleDraftRef.current = data.label
@@ -129,11 +131,12 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
     }
   }, [])
 
-  const handleDrillDown = useCallback((e: React.MouseEvent) => {
+  const handleDrillDown = useCallback((e: React.MouseEvent | React.PointerEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    console.log('handleDrillDown called', { cardPath, label: data.label, parent: data.parent, cardRef: data.cardRef, id })
     graph.navigateToChildRoom?.(cardPath, data.label)
-  }, [cardPath, data.label, graph])
+  }, [cardPath, data.label, data.parent, data.cardRef, id, graph])
 
   const confirmTitleEdit = useCallback(async (options?: { restoreFocus?: boolean }) => {
     if (titleSavingRef.current) return
@@ -237,11 +240,13 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   useEffect(() => {
     if (titleEditing) return
     if (widthMode !== 'auto' && heightMode !== 'auto') return
+    if (isUpdatingDimensionsRef.current) return
 
     const nextWidth = widthMode === 'auto' ? autoSize.width : nodeWidth
     const nextHeight = heightMode === 'auto' ? autoSize.height : nodeHeight
     if (Math.abs(nextWidth - nodeWidth) < 1 && Math.abs(nextHeight - nodeHeight) < 1) return
 
+    isUpdatingDimensionsRef.current = true
     graph.onNodesChange([{
       id,
       type: 'dimensions',
@@ -249,6 +254,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       resizing: false,
       origin: 'auto-size',
     } as any])
+    isUpdatingDimensionsRef.current = false
   }, [autoSize.height, autoSize.width, graph, heightMode, id, nodeHeight, nodeWidth, titleEditing, widthMode])
 
   const setSizingMode = useCallback(async (nextAuto: boolean) => {

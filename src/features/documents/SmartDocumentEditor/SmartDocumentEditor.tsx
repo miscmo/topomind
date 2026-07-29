@@ -88,32 +88,44 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     const start = scrollContainer.scrollTop
     const startTime = performance.now()
     const duration = 400 // 滚动动画持续时间 400ms
+    let cancelled = false
 
     const animateScroll = (currentTime: number) => {
+      if (cancelled) return
       const elapsed = currentTime - startTime
       const progress = Math.min(elapsed / duration, 1)
-      
+
       // easeOutQuart 缓动函数，实现先快后慢的丝滑减速效果
       const easeProgress = 1 - Math.pow(1 - progress, 4)
-      
-      scrollContainer.scrollTop = start * (1 - easeProgress)
-      
+
+      if (scrollContainer) {
+        scrollContainer.scrollTop = start * (1 - easeProgress)
+      }
+
       if (progress < 1) {
         requestAnimationFrame(animateScroll)
       }
     }
-    
-    requestAnimationFrame(animateScroll)
+
+    const frameId = requestAnimationFrame(animateScroll)
+
+    // Return cleanup function for potential cancellation
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frameId)
+    }
   }, [])
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
     if (!scrollContainer) return
 
+    let scrollTimer: ReturnType<typeof setTimeout> | null = null
+
     if (attachmentInsertTargetKey) {
       const savedScroll = localStorage.getItem(`topomind_scroll_${attachmentInsertTargetKey}`)
       if (savedScroll) {
-        setTimeout(() => {
+        scrollTimer = setTimeout(() => {
           if (scrollContainer) {
             scrollContainer.scrollTop = parseFloat(savedScroll)
           }
@@ -133,7 +145,10 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 
     // Use debounced or passive listener
     scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
-    return () => scrollContainer.removeEventListener('scroll', handleScroll)
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll)
+      if (scrollTimer) clearTimeout(scrollTimer)
+    }
   }, [attachmentInsertTargetKey])
 
   useEffect(() => {
@@ -405,90 +420,93 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
                 .filter(([, count]) => count > 1)
                 .map(([title, count]) => `${title}:${count}`)
 
-              // #region debug-point A:slash-menu-source-items
-              fetch('http://127.0.0.1:7777/event', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  sessionId: 'duplicate-media-key',
-                  runId: 'pre-fix',
-                  hypothesisId: 'A',
-                  location: 'SmartDocumentEditor.tsx:getItems:source',
-                  msg: '[DEBUG] slash menu source items prepared',
-                  data: {
-                    query,
-                    defaultItemCount: defaultItems.length,
-                    defaultMediaTitles: defaultItems
-                      .filter((item: any) => item?.group === 'Media')
-                      .map((item: any) => item?.title ?? '(untitled)'),
-                    mermaidTitle: (mermaidItem as any)?.title ?? '(untitled)',
-                    mermaidGroup: (mermaidItem as any)?.group ?? '(none)',
-                    mathGroup: mathItem.group,
-                    mergedGroupCounts,
-                  },
-                  ts: Date.now(),
-                }),
-              }).catch(() => {})
-              // #endregion
-
-              // #region debug-point B:slash-menu-duplicate-groups
-              fetch('http://127.0.0.1:7777/event', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  sessionId: 'duplicate-media-key',
-                  runId: 'pre-fix',
-                  hypothesisId: 'B',
-                  location: 'SmartDocumentEditor.tsx:getItems:filtered',
-                  msg: '[DEBUG] slash menu filtered items analyzed',
-                  data: {
-                    query,
-                    filteredItemCount: filteredItems.length,
-                    filteredTitles: filteredItems.map((item: any) => item?.title ?? '(untitled)'),
-                    filteredGroups: filteredItems.map((item: any) => item?.group ?? '(none)'),
-                    duplicateMergedGroups,
-                    duplicateFilteredGroups,
-                    duplicateFilteredTitles,
-                  },
-                  ts: Date.now(),
-                }),
-              }).catch(() => {})
-              // #endregion
-
-              // #region debug-point C:slash-menu-media-focus
-              if (
-                duplicateMergedGroups.some((entry) => entry.startsWith('Media:'))
-                || duplicateFilteredGroups.some((entry) => entry.startsWith('Media:'))
-              ) {
+              // Debug logging only in development
+              if (import.meta.env.DEV) {
+                // #region debug-point A:slash-menu-source-items
                 fetch('http://127.0.0.1:7777/event', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     sessionId: 'duplicate-media-key',
                     runId: 'pre-fix',
-                    hypothesisId: 'C',
-                    location: 'SmartDocumentEditor.tsx:getItems:media-focus',
-                    msg: '[DEBUG] media group duplication detected',
+                    hypothesisId: 'A',
+                    location: 'SmartDocumentEditor.tsx:getItems:source',
+                    msg: '[DEBUG] slash menu source items prepared',
                     data: {
                       query,
-                      mergedMediaItems: mergedItems
+                      defaultItemCount: defaultItems.length,
+                      defaultMediaTitles: defaultItems
                         .filter((item: any) => item?.group === 'Media')
-                        .map((item: any) => ({
-                          title: item?.title ?? '(untitled)',
-                          group: item?.group ?? '(none)',
-                        })),
-                      filteredMediaItems: filteredItems
-                        .filter((item: any) => item?.group === 'Media')
-                        .map((item: any) => ({
-                          title: item?.title ?? '(untitled)',
-                          group: item?.group ?? '(none)',
-                        })),
+                        .map((item: any) => item?.title ?? '(untitled)'),
+                      mermaidTitle: (mermaidItem as any)?.title ?? '(untitled)',
+                      mermaidGroup: (mermaidItem as any)?.group ?? '(none)',
+                      mathGroup: mathItem.group,
+                      mergedGroupCounts,
                     },
                     ts: Date.now(),
                   }),
                 }).catch(() => {})
+                // #endregion
+
+                // #region debug-point B:slash-menu-duplicate-groups
+                fetch('http://127.0.0.1:7777/event', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    sessionId: 'duplicate-media-key',
+                    runId: 'pre-fix',
+                    hypothesisId: 'B',
+                    location: 'SmartDocumentEditor.tsx:getItems:filtered',
+                    msg: '[DEBUG] slash menu filtered items analyzed',
+                    data: {
+                      query,
+                      filteredItemCount: filteredItems.length,
+                      filteredTitles: filteredItems.map((item: any) => item?.title ?? '(untitled)'),
+                      filteredGroups: filteredItems.map((item: any) => item?.group ?? '(none)'),
+                      duplicateMergedGroups,
+                      duplicateFilteredGroups,
+                      duplicateFilteredTitles,
+                    },
+                    ts: Date.now(),
+                  }),
+                }).catch(() => {})
+                // #endregion
+
+                // #region debug-point C:slash-menu-media-focus
+                if (
+                  duplicateMergedGroups.some((entry) => entry.startsWith('Media:'))
+                  || duplicateFilteredGroups.some((entry) => entry.startsWith('Media:'))
+                ) {
+                  fetch('http://127.0.0.1:7777/event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      sessionId: 'duplicate-media-key',
+                      runId: 'pre-fix',
+                      hypothesisId: 'C',
+                      location: 'SmartDocumentEditor.tsx:getItems:media-focus',
+                      msg: '[DEBUG] media group duplication detected',
+                      data: {
+                        query,
+                        mergedMediaItems: mergedItems
+                          .filter((item: any) => item?.group === 'Media')
+                          .map((item: any) => ({
+                            title: item?.title ?? '(untitled)',
+                            group: item?.group ?? '(none)',
+                          })),
+                        filteredMediaItems: filteredItems
+                          .filter((item: any) => item?.group === 'Media')
+                          .map((item: any) => ({
+                            title: item?.title ?? '(untitled)',
+                            group: item?.group ?? '(none)',
+                          })),
+                      },
+                      ts: Date.now(),
+                    }),
+                  }).catch(() => {})
+                }
+                // #endregion
               }
-              // #endregion
 
               return filteredItems
             }}

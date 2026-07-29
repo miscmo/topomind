@@ -58,7 +58,8 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   const handleEnterNode = useCallback(async (nodeId: string) => {
     const node = findNodeById(nodeId)
     if (!node) return
-    const absoluteChildPath = resolveRoomChildRef(typeof node.data.parent === 'string' ? node.data.parent : '', node.id)
+    const cardRef = typeof node.data.cardRef === 'string' ? node.data.cardRef : node.id
+    const absoluteChildPath = resolveRoomChildRef(typeof node.data.parent === 'string' ? node.data.parent : '', cardRef)
     logAction('节点:进入', 'useNodeActions', { nodeId, label: node.data.label, source: 'context-menu' })
     await graph.navigateToChildRoom(absoluteChildPath, node.data.label)
     onAction?.()

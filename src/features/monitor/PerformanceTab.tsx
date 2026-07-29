@@ -245,21 +245,25 @@ export default function PerformanceTab() {
   const [entries, setEntries] = useState<LogEntry[]>([])
 
   useEffect(() => {
-    let cancelled = false
-    setEntries([])
+    let isMounted = true
 
     const loadEntries = async () => {
-      const results = await logQuery({
-        dateStr: selectedDate || undefined,
-      }) as LogEntry[]
-      if (cancelled) return
-      setEntries((current) => mergeLogEntries(results, current))
+      try {
+        const results = await logQuery({
+          dateStr: selectedDate || undefined,
+        }) as LogEntry[]
+        if (!isMounted) return
+        setEntries((current) => mergeLogEntries(results, current))
+      } catch (error) {
+        if (!isMounted) return
+        console.error('Failed to load log entries:', error)
+      }
     }
 
     void loadEntries()
 
     return () => {
-      cancelled = true
+      isMounted = false
     }
   }, [selectedDate])
 

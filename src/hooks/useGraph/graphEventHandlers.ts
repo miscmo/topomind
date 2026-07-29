@@ -187,7 +187,10 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     const dirPath = graphSession.roomPath
     const absoluteChildPath = resolveRoomChildRef(dirPath || graphSession.kbPath, childPath)
 
+    console.log('navigateToChildRoom', { childPath, childName, dirPath, kbPath: graphSession.kbPath, absoluteChildPath })
+
     if (!absoluteChildPath || absoluteChildPath === dirPath) {
+      console.log('navigateToChildRoom blocked', { absoluteChildPath, dirPath })
       return
     }
     if (navigationTargetRef.current === absoluteChildPath) {
@@ -202,6 +205,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       const snapshot = dirPath ? ops.captureSaveSnapshot(dirPath) : null
       if (snapshot) await ops.saveSnapshot(snapshot)
 
+      console.log('enterRoomInTab called', { tabId, absoluteChildPath, kbPath: graphSession.kbPath, childName })
       tabStore.getState().enterRoomInTab(tabId, {
         path: absoluteChildPath,
         kbPath: graphSession.kbPath || '',
@@ -209,6 +213,9 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       })
       logAction('房间:钻入', 'useGraph', { roomPath: absoluteChildPath, roomName: childName, fromRoom: dirPath })
     } finally {
+      if (navigationResetTimerRef.current !== null) {
+        window.clearTimeout(navigationResetTimerRef.current)
+      }
       navigationResetTimerRef.current = window.setTimeout(() => {
         if (navigationTargetRef.current === absoluteChildPath) {
           navigationTargetRef.current = ''

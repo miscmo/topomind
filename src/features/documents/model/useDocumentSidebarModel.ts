@@ -63,16 +63,27 @@ export function useDocumentSidebarModel({
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    let focusTimer: ReturnType<typeof setTimeout> | null = null
     if (inlineEdit) {
-      setTimeout(() => {
+      focusTimer = setTimeout(() => {
         inlineInputRef.current?.focus()
         inlineInputRef.current?.select()
       }, 0)
     }
+    return () => {
+      if (focusTimer) clearTimeout(focusTimer)
+    }
   }, [inlineEdit?.mode, inlineEdit?.targetId, inlineEdit?.parentId])
 
+  // Single useEffect to handle both loading and persisting expandedNodes
+  // Avoids race conditions between multiple useEffects
   useEffect(() => {
-    if (!nodeId) return
+    if (!nodeId) {
+      setExpandedNodes(new Set())
+      return
+    }
+
+    // Load from localStorage on mount/nodeId change
     try {
       const saved = localStorage.getItem(`topomind_expanded_nodes_${nodeId}`)
       setExpandedNodes(saved ? new Set(JSON.parse(saved)) : new Set())
@@ -83,6 +94,7 @@ export function useDocumentSidebarModel({
 
   useEffect(() => {
     if (!nodeId) return
+    // Persist to localStorage whenever expandedNodes changes
     localStorage.setItem(`topomind_expanded_nodes_${nodeId}`, JSON.stringify(Array.from(expandedNodes)))
   }, [expandedNodes, nodeId])
 
@@ -164,12 +176,16 @@ export function useDocumentSidebarModel({
     }
   }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, nodeId])
 
+  const inlineEditRef = useRef(inlineEdit)
+  inlineEditRef.current = inlineEdit
+
   const commitInlineEdit = useCallback(async () => {
-    if (!inlineEdit || isBusy) {
+    const currentInlineEdit = inlineEditRef.current
+    if (!currentInlineEdit || isBusy) {
       cancelInlineEditOnBlurRef.current = false
       return
     }
-    const nextName = inlineEdit.value.trim()
+    const nextName = currentInlineEdit.value.trim()
     if (!nextName) {
       cancelInlineEditOnBlurRef.current = false
       setInlineEdit(null)
@@ -177,7 +193,7 @@ export function useDocumentSidebarModel({
     }
 
     // Check for duplicates
-    const hasDuplicate = topoDocuments.some(d => d.id !== inlineEdit.targetId && d.title.trim() === nextName)
+    const hasDuplicate = topoDocuments.some(d => d.id !== currentInlineEdit.targetId && d.title.trim() === nextName)
     if (hasDuplicate) {
       const confirm = useConfirmStore.getState().open
       const confirmed = await confirm({
@@ -186,7 +202,7 @@ export function useDocumentSidebarModel({
         confirmText: '继续创建/重命名',
         extraButtonText: '查看已存在节点',
         onExtraAction: () => {
-          const duplicateDoc = topoDocuments.find(d => d.id !== inlineEdit.targetId && d.title.trim() === nextName)
+          const duplicateDoc = topoDocuments.find(d => d.id !== currentInlineEdit.targetId && d.title.trim() === nextName)
           if (duplicateDoc) {
             onSelectDocument(topoDocumentPath(duplicateDoc.id))
           }
@@ -199,15 +215,15 @@ export function useDocumentSidebarModel({
       }
     }
 
-    if (inlineEdit.mode === 'rename' && inlineEdit.targetId) {
-      onRenameDocument(topoDocumentPath(inlineEdit.targetId), nextName)
-    } else if (inlineEdit.mode === 'createTopoDocument' && inlineEdit.createType) {
-      onCreateTopoDocument(inlineEdit.createType, nextName, inlineEdit.parentId)
+    if (currentInlineEdit.mode === 'rename' && currentInlineEdit.targetId) {
+      onRenameDocument(topoDocumentPath(currentInlineEdit.targetId), nextName)
+    } else if (currentInlineEdit.mode === 'createTopoDocument' && currentInlineEdit.createType) {
+      onCreateTopoDocument(currentInlineEdit.createType, nextName, currentInlineEdit.parentId)
     }
 
     cancelInlineEditOnBlurRef.current = false
     setInlineEdit(null)
-  }, [inlineEdit, isBusy, onRenameDocument, onCreateTopoDocument, topoDocuments])
+  }, [isBusy, onRenameDocument, onCreateTopoDocument, topoDocuments, onSelectDocument])
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {

@@ -116,19 +116,19 @@ const splitSessionAcrossDates = (session: LearningSession): Array<LearningSessio
 }
 
 export const useLearningTrackerStore = create<LearningTrackerState>((set, get) => {
-  let tickInterval: ReturnType<typeof setInterval> | null = null
-  let saveInterval: ReturnType<typeof setInterval> | null = null
+  let tickInterval: ReturnType<typeof window.setInterval> | null = null
+  let saveInterval: ReturnType<typeof window.setInterval> | null = null
   let activeFlush: Promise<void> | null = null
   let activeDateRollover: Promise<void> | null = null
   let queuedFlush = false
 
   const clearTimers = () => {
     if (tickInterval) {
-      clearInterval(tickInterval)
+      window.clearInterval(tickInterval)
       tickInterval = null
     }
     if (saveInterval) {
-      clearInterval(saveInterval)
+      window.clearInterval(saveInterval)
       saveInterval = null
     }
   }

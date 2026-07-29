@@ -12,8 +12,14 @@ import CatalogOrganization from 'simple-mind-map/src/layouts/CatalogOrganization
 import Timeline from 'simple-mind-map/src/layouts/Timeline.js'
 import Fishbone from 'simple-mind-map/src/layouts/Fishbone.js'
 import { useThemeStore, isDarkTheme } from '../../../stores/themeStore'
-import type { MindMapDocumentContent } from './mindMapDocumentTypes'
-import { withMindMapUpdatedAt } from './mindMapDocumentTypes'
+import {
+  MIND_MAP_LAYOUTS,
+  MIND_MAP_THEMES,
+  normalizeMindMapLayout,
+  normalizeMindMapTheme,
+  type MindMapDocumentContent,
+  withMindMapUpdatedAt,
+} from './mindMapDocumentTypes'
 
 // Register plugins and layouts
 MindMap.usePlugin(Export)
@@ -34,17 +40,35 @@ interface MindMapDocumentEditorProps {
   readOnly?: boolean
 }
 
+interface AppliedMindMapValue {
+  root: string
+  layout: string
+  theme: string
+}
+
+function getAppliedValue(value: MindMapDocumentContent): AppliedMindMapValue {
+  return {
+    root: JSON.stringify(value.root),
+    layout: normalizeMindMapLayout(value.layout),
+    theme: normalizeMindMapTheme(value.theme),
+  }
+}
+
 export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value, onChange, readOnly = false }: MindMapDocumentEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mindMapRef = useRef<MindMap | null>(null)
-  const [isReady, setIsReady] = useState(false)
   const valueRef = useRef(value)
-  
+  const isApplyingExternalValueRef = useRef(false)
+  const lastAppliedValueRef = useRef<AppliedMindMapValue>(getAppliedValue(value))
+  const [isReady, setIsReady] = useState(false)
+
   const globalTheme = useThemeStore((s: any) => s.theme)
   const isDark = isDarkTheme(globalTheme)
-  const effectiveTheme = (!value.theme || value.theme === 'default') 
-    ? (isDark ? 'dark2' : 'default') 
-    : value.theme
+  const documentTheme = normalizeMindMapTheme(value.theme)
+  const documentLayout = normalizeMindMapLayout(value.layout)
+  const effectiveTheme = documentTheme === 'default'
+    ? (isDark ? 'dark2' : 'default')
+    : documentTheme
 
   useEffect(() => {
     valueRef.current = value
@@ -68,18 +92,17 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
       readonly: readOnly,
       theme: effectiveTheme,
       themeConfig: {
-        backgroundColor: 'transparent' // 强制覆盖其自带背景色，以便透出外部全局 CSS 变量背景
+        backgroundColor: 'transparent',
       },
-      layout: value.layout || 'logicalStructure',
-      mousewheelAction: 'zoom', // Zoom with mouse wheel
+      layout: documentLayout,
+      mousewheelAction: 'zoom',
     } as any)
 
     mindMapRef.current = mindMap
+    lastAppliedValueRef.current = getAppliedValue(value)
 
-    // Listen for data changes
     mindMap.on('data_change', (data: any) => {
-      if (readOnly) return
-      
+      if (readOnly || isApplyingExternalValueRef.current) return
       onChange({
         ...valueRef.current,
         root: data,
@@ -87,45 +110,66 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
           ...valueRef.current.metadata,
           editor: 'simple-mind-map',
           updatedAt: Date.now(),
-        }
+        },
       })
     })
 
     mindMap.on('view_theme_change', (theme: string) => {
-      if (readOnly) return
+      if (readOnly || isApplyingExternalValueRef.current) return
       onChange({
         ...valueRef.current,
-        theme,
+        theme: normalizeMindMapTheme(theme),
         metadata: {
           ...valueRef.current.metadata,
           updatedAt: Date.now(),
-        }
+        },
       })
     })
 
     mindMap.on('layout_change', (layout: string) => {
-      if (readOnly) return
+      if (readOnly || isApplyingExternalValueRef.current) return
       onChange({
         ...valueRef.current,
-        layout,
+        layout: normalizeMindMapLayout(layout),
         metadata: {
           ...valueRef.current.metadata,
           updatedAt: Date.now(),
-        }
+        },
       })
     })
 
     setIsReady(true)
 
     return () => {
-      if (mindMapRef.current) {
-        mindMapRef.current.destroy()
-        mindMapRef.current = null
-      }
+      mindMap.destroy()
+      mindMapRef.current = null
     }
-  // We intentionally only run this once on mount
+  // The editor instance is intentionally created once and updated through controlled effects.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly])
+  }, [])
+
+  // Apply external content changes without treating them as local edits.
+  useEffect(() => {
+    const mindMap = mindMapRef.current
+    if (!mindMap || !isReady) return
+
+    const nextAppliedValue = getAppliedValue(value)
+    const previousAppliedValue = lastAppliedValueRef.current
+    const rootChanged = nextAppliedValue.root !== previousAppliedValue.root
+    const layoutChanged = nextAppliedValue.layout !== previousAppliedValue.layout
+    const themeChanged = nextAppliedValue.theme !== previousAppliedValue.theme
+    if (!rootChanged && !layoutChanged && !themeChanged) return
+
+    isApplyingExternalValueRef.current = true
+    try {
+      if (rootChanged) mindMap.setData(value.root)
+      if (layoutChanged) mindMap.setLayout(documentLayout)
+      if (themeChanged) mindMap.setTheme(effectiveTheme)
+      lastAppliedValueRef.current = nextAppliedValue
+    } finally {
+      isApplyingExternalValueRef.current = false
+    }
+  }, [value, documentLayout, effectiveTheme, isReady])
 
   // Update readOnly state if it changes
   useEffect(() => {
@@ -134,15 +178,20 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
     }
   }, [readOnly, isReady])
 
-  // Update theme if effectiveTheme changes
+  // Global theme changes should affect the view but must not be persisted as a document theme.
   useEffect(() => {
-    if (mindMapRef.current && isReady) {
+    if (!mindMapRef.current || !isReady) return
+
+    isApplyingExternalValueRef.current = true
+    try {
       mindMapRef.current.setTheme(effectiveTheme)
+    } finally {
+      isApplyingExternalValueRef.current = false
     }
   }, [effectiveTheme, isReady])
 
   return (
-    <div 
+    <div
       className="h-full min-h-0 flex flex-col bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] outline-none"
       data-shortcut-scope="mindmap"
       tabIndex={-1}
@@ -160,56 +209,54 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
         </div>
         {!readOnly && isReady && (
           <div className="flex gap-2">
-            <select 
+            <select
               className="h-9 px-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-text-secondary)] outline-none"
-              value={value.layout || 'logicalStructure'}
-              onChange={(e) => mindMapRef.current?.setLayout(e.target.value)}
+              value={documentLayout}
+              onChange={(event) => mindMapRef.current?.setLayout(event.target.value)}
+              aria-label="思维导图布局"
             >
-              <option value="logicalStructure">逻辑结构图</option>
-              <option value="mindMap">思维导图</option>
-              <option value="organizationStructure">组织架构图</option>
-              <option value="catalogOrganization">目录组织图</option>
-              <option value="timeline">时间轴</option>
-              <option value="fishbone">鱼骨图</option>
+              <option value={MIND_MAP_LAYOUTS[0]}>逻辑结构图</option>
+              <option value={MIND_MAP_LAYOUTS[1]}>思维导图</option>
+              <option value={MIND_MAP_LAYOUTS[2]}>组织架构图</option>
+              <option value={MIND_MAP_LAYOUTS[3]}>目录组织图</option>
+              <option value={MIND_MAP_LAYOUTS[4]}>时间轴</option>
+              <option value={MIND_MAP_LAYOUTS[5]}>鱼骨图</option>
             </select>
-            <select 
+            <select
               className="h-9 px-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-text-secondary)] outline-none"
-              value={value.theme || 'default'}
-              onChange={(e) => mindMapRef.current?.setTheme(e.target.value)}
+              value={documentTheme}
+              onChange={(event) => mindMapRef.current?.setTheme(event.target.value)}
+              aria-label="思维导图主题"
             >
-              <option value="default">默认主题</option>
-              <option value="classic">经典</option>
-              <option value="minions">小黄人</option>
-              <option value="pinkGrapefruit">粉红葡萄柚</option>
-              <option value="mint">薄荷</option>
-              <option value="gold">鎏金</option>
-              <option value="vitalityOrange">活力橙</option>
-              <option value="greenLeaf">绿叶</option>
-              <option value="dark2">暗色</option>
+              <option value={MIND_MAP_THEMES[0]}>默认主题</option>
+              <option value={MIND_MAP_THEMES[1]}>经典</option>
+              <option value={MIND_MAP_THEMES[2]}>小黄人</option>
+              <option value={MIND_MAP_THEMES[3]}>粉红葡萄柚</option>
+              <option value={MIND_MAP_THEMES[4]}>薄荷</option>
+              <option value={MIND_MAP_THEMES[5]}>鎏金</option>
+              <option value={MIND_MAP_THEMES[6]}>活力橙</option>
+              <option value={MIND_MAP_THEMES[7]}>绿叶</option>
+              <option value={MIND_MAP_THEMES[8]}>暗色</option>
             </select>
-            <button 
-              type="button" 
-              className="h-9 px-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] disabled:opacity-40" 
-              onClick={() => {
-                const map = mindMapRef.current as any
-                if (map?.execCommand) map.execCommand('BACK')
-              }}
+            <button
+              type="button"
+              className="h-9 px-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] disabled:opacity-40"
+              onClick={() => mindMapRef.current?.execCommand('BACK')}
+              aria-label="撤销思维导图操作"
             >
               撤销
             </button>
-            <button 
-              type="button" 
-              className="h-9 px-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] disabled:opacity-40" 
-              onClick={() => {
-                const map = mindMapRef.current as any
-                if (map?.execCommand) map.execCommand('FORWARD')
-              }}
+            <button
+              type="button"
+              className="h-9 px-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] disabled:opacity-40"
+              onClick={() => mindMapRef.current?.execCommand('FORWARD')}
+              aria-label="重做思维导图操作"
             >
               重做
             </button>
-            <button 
-              type="button" 
-              className="h-9 px-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] disabled:opacity-40" 
+            <button
+              type="button"
+              className="h-9 px-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] disabled:opacity-40"
               onClick={() => {
                 const map = mindMapRef.current as any
                 if (map?.view?.fit) map.view.fit()

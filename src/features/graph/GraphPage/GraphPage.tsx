@@ -38,7 +38,7 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
     } else {
       collapseRightPanel()
     }
-  }, { scope: 'global', preventDefault: true, enableInInput: true })
+  }, { scope: 'global', preventDefault: true })
 
   useEffect(() => {
     setSelectedNodeIdForTab(tabId, selectedNodeId)

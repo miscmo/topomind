@@ -84,6 +84,8 @@ export interface KnowledgeNodeData {
   label: string
   /** 父节点 ID（顶层 KB 无 parent） */
   parent?: string
+  /** 卡片引用路径 */
+  cardRef?: string
   /** 域颜色 */
   domainColor?: string
   /** 子节点数量（用于徽章显示） */

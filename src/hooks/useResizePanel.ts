@@ -30,6 +30,8 @@ export function useResizePanel(options: UseResizePanelOptions) {
   const dragStartWidthRef = useRef(0)
   const currentWidthRef = useRef(initialWidth)
   const currentRawWidthRef = useRef(initialWidth)
+  const originalUserSelectRef = useRef('')
+  const originalCursorRef = useRef('')
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -40,6 +42,15 @@ export function useResizePanel(options: UseResizePanelOptions) {
     currentRawWidthRef.current = initialWidth
     setIsResizing(true)
   }, [initialWidth])
+
+  const finishResize = useCallback(() => {
+    if (!isResizing) return
+    setIsResizing(false)
+    onResizeEnd?.({
+      width: currentWidthRef.current,
+      rawWidth: currentRawWidthRef.current,
+    })
+  }, [isResizing, onResizeEnd])
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return
@@ -59,25 +70,23 @@ export function useResizePanel(options: UseResizePanelOptions) {
 
   useEffect(() => {
     if (!isResizing) return
+    originalUserSelectRef.current = document.body.style.userSelect
+    originalCursorRef.current = document.body.style.cursor
     document.body.style.userSelect = 'none'
     document.body.style.cursor = 'col-resize'
     const onMove = (e: MouseEvent) => handleMouseMove(e)
-    const onUp = () => {
-      setIsResizing(false)
-      onResizeEnd?.({
-        width: currentWidthRef.current,
-        rawWidth: currentRawWidthRef.current,
-      })
-    }
+    const onUp = () => finishResize()
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
+    window.addEventListener('blur', onUp)
     return () => {
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
+      document.body.style.userSelect = originalUserSelectRef.current
+      document.body.style.cursor = originalCursorRef.current
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('blur', onUp)
     }
-  }, [isResizing, handleMouseMove, onResizeEnd])
+  }, [isResizing, handleMouseMove, finishResize])
 
   return { isResizing, handleMouseDown }
 }

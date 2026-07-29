@@ -145,12 +145,12 @@ export async function buildNodes(
       const hasDetail = storage.listTopoDocuments 
         ? await storage.listTopoDocuments(childPath).then(docs => docs.length > 0).catch(() => false)
         : false
-      return { childCount, hasContent: false, hasDetail }
+      return { childCount, hasDetail }
     }
   )
 
   return normalizedChildren.map(([nodeId, childPath, roomNode], i) => {
-    const { childCount, hasContent, hasDetail } = nodeInfoResults[i]
+    const { childCount, hasDetail } = nodeInfoResults[i]
     const saved = savedPositions[nodeId]
     const isExpanded = roomNode.expanded === true
     const position = roomNode.position ?? saved ?? {
@@ -167,9 +167,10 @@ export async function buildNodes(
       data: {
         label: roomNode.name || basenameRef(childPath),
         parent: dirPath || kbPath || undefined,
+        cardRef: roomNode.cardRef || nodeId,
         domainColor: roomNode.color, // Only use explicitly saved color
         childCount,
-        hasContent,
+        hasContent: false,
         hasDetail,
         nodeStyle: roomNode.style,
         expandedWidth: roomNode.expandedWidth,

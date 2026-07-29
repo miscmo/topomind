@@ -70,6 +70,15 @@ export function useGraphCanvasModel({
   }, [])
 
   useEffect(() => {
+    return () => {
+      if (connectionFrameRef.current !== null) {
+        cancelAnimationFrame(connectionFrameRef.current)
+        connectionFrameRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Shift') {
         setIsShiftPressed(true)

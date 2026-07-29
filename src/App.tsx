@@ -31,7 +31,7 @@ export default memo(function App() {
   const view = useWorkspaceStore((s) => s.view)
   useConfigBootstrap()
 
-  useEffect(() => { initHomeTab() }, [initHomeTab])
+  useEffect(() => { initHomeTab() }, [])
 
   useEffect(() => {
     function onResetSession() { resetClientSession() }

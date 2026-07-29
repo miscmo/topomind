@@ -118,9 +118,10 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   }, [])
 
   useEffect(() => {
+    let emojiTimer: ReturnType<typeof setTimeout> | null = null
     const handleAddEmojiEvent = (e: CustomEvent<{ nodeId: string, position?: { x: number, y: number } }>) => {
       if (e.detail.nodeId === id) {
-        setTimeout(() => {
+        emojiTimer = setTimeout(() => {
           const cardRect = cardRootRef.current?.getBoundingClientRect()
           if (!cardRect) return
           setEmojiPickerPosition(resolvePickerPosition(cardRect, 'node'))
@@ -131,6 +132,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     document.addEventListener('topomind:add-emoji', handleAddEmojiEvent as EventListener)
     return () => {
       document.removeEventListener('topomind:add-emoji', handleAddEmojiEvent as EventListener)
+      if (emojiTimer) clearTimeout(emojiTimer)
     }
   }, [id, resolvePickerPosition])
 
@@ -290,9 +292,15 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             {hasChildBadge && (
               <div
                 className="flex items-center justify-center bg-[var(--color-accent)] text-[var(--color-text-inverse)] cursor-pointer transition-colors duration-75 hover:bg-[var(--color-accent-hover)] font-bold select-none nodrag nowheel"
-                onClick={handleDrillDown}
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDownCapture={(e) => {
+                  e.stopPropagation()
+                }}
+                onClick={(e) => {
+                  console.log('badge onClick')
+                  e.stopPropagation()
+                  e.preventDefault()
+                  handleDrillDown(e)
+                }}
                 title={`点击进入包含 ${data.childCount} 个子节点的画布`}
                 style={badgeStyle}
               >

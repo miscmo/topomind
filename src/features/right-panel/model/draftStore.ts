@@ -76,7 +76,12 @@ const draftPersistStorage: PersistStorage<DraftPersistedState> = {
     if (typeof window === 'undefined') return null
     const rawValue = window.localStorage.getItem(name)
     if (!rawValue) return null
-    return JSON.parse(rawValue) as StorageValue<DraftPersistedState>
+    try {
+      return JSON.parse(rawValue) as StorageValue<DraftPersistedState>
+    } catch {
+      window.localStorage.removeItem(name)
+      return null
+    }
   },
   setItem: (name, value) => {
     scheduleDraftPersist(name, value)

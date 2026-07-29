@@ -54,13 +54,15 @@ export function CollapsibleBlock({
 
   return (
     <div className="border-b border-[var(--color-border-subtle)] last-of-type:border-none">
-      <div
-        className="text-[13px] font-semibold text-[var(--color-text-primary)] m-0 flex items-center justify-between cursor-pointer select-none px-4 py-3 bg-transparent transition-colors duration-75 hover:bg-[var(--color-hover-bg)]"
+      <button
+        type="button"
+        className="w-full text-left text-[13px] font-semibold text-[var(--color-text-primary)] m-0 flex items-center justify-between cursor-pointer select-none px-4 py-3 bg-transparent transition-colors duration-75 hover:bg-[var(--color-hover-bg)]"
         onClick={() => onToggle(expandedKey)}
+        aria-expanded={isExpanded}
       >
         <span>{title}</span>
-        <span className={`text-[10px] leading-none text-[var(--color-text-muted)] transition-all duration-75 inline-flex items-center justify-center self-center w-6 h-6 rounded-md hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-secondary)] ${!isExpanded ? '-rotate-90' : ''}`}>▼</span>
-      </div>
+        <span aria-hidden="true" className={`text-[10px] leading-none text-[var(--color-text-muted)] transition-all duration-75 inline-flex items-center justify-center self-center w-6 h-6 rounded-md hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-secondary)] ${!isExpanded ? '-rotate-90' : ''}`}>▼</span>
+      </button>
       <div className={`px-4 pb-4 min-h-0 ${!isExpanded ? 'hidden' : ''}`}>
         {hint && <div className="text-[12px] text-[var(--color-text-muted)] m-0 mb-4 leading-[1.4] bg-[var(--color-bg)] py-2 px-3 rounded-md border-l-[3px] border-[var(--color-accent)]">{hint}</div>}
         {children}
@@ -79,10 +81,12 @@ export function ColorField({ value, onChange }: { value: string; onChange: (v: s
   }, [value])
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    addColor(e.target.value)
+    const color = e.target.value.trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(color)) addColor(color)
   }
 
   const handleChange = (v: string) => {
+    if (!/^#[0-9a-fA-F]{6}$/.test(v)) return
     onChange(v)
     addColor(v)
   }
@@ -100,7 +104,10 @@ export function ColorField({ value, onChange }: { value: string; onChange: (v: s
     <div className="flex flex-col gap-[6px] w-full">
       <div className="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border-strong)] rounded-md p-[2px] h-8 box-border w-full">
         <div className="w-[26px] h-[26px] rounded border border-black/10 overflow-hidden relative" style={{ backgroundColor: value || '#ffffff' }}>
-          <input className="absolute -top-2.5 -left-2.5 w-[50px] h-[50px] p-0 border-none cursor-pointer opacity-0" type="color"
+          <input
+            aria-label="选择颜色"
+            className="absolute -top-2.5 -left-2.5 w-[50px] h-[50px] p-0 border-none cursor-pointer opacity-0"
+            type="color"
             value={value || '#ffffff'}
             onChange={(e) => handleChange(e.target.value)}
             onBlur={handleBlur}
@@ -123,6 +130,7 @@ export function ColorField({ value, onChange }: { value: string; onChange: (v: s
         <div className="flex items-center flex-wrap gap-1">
           {COLOR_PRESETS.slice(0, 6).map(c => (
             <button
+              type="button"
               key={c}
               className="w-4 h-4 rounded border border-black/10 cursor-pointer p-0 transition-all duration-100 hover:scale-[1.15] hover:shadow-[0_2px_4px_rgba(0,0,0,0.1)]"
               style={{ backgroundColor: c }}
@@ -137,6 +145,7 @@ export function ColorField({ value, onChange }: { value: string; onChange: (v: s
             <div className="flex items-center flex-wrap gap-1">
               {recentColors.slice(0, 6).map(c => (
                 <button
+                  type="button"
                   key={c}
                   className="w-4 h-4 rounded border border-black/10 cursor-pointer p-0 transition-all duration-100 hover:scale-[1.15] hover:shadow-[0_2px_4px_rgba(0,0,0,0.1)]"
                   style={{ backgroundColor: c }}
@@ -173,12 +182,15 @@ export function NumberField({
   placeholder?: string
   className?: string
 }) {
+  const fieldId = `style-number-${label.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}`
+
   return (
     <div className={`flex flex-col gap-[6px] mb-0 ${className}`}>
-      <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">
+      <label htmlFor={fieldId} className="text-[12px] font-medium text-[var(--color-text-secondary)]">
         {label} {unit && <span className="text-[10px] text-[var(--color-text-muted)]">{unit}</span>}
       </label>
       <input
+        id={fieldId}
         className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]"
         type="number"
         min={min}
@@ -205,6 +217,7 @@ export function SegmentedControl({
     <div className="flex bg-[var(--color-bg-muted)] rounded-md p-[2px] w-full box-border">
       {options.map((opt, i) => (
         <button
+          type="button"
           key={i}
           className={`flex-1 border-none py-1 text-[12px] font-medium rounded cursor-pointer transition-all duration-75 text-center ${value === opt.value ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]' : 'bg-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
           onClick={() => onChange(opt.value)}
@@ -229,6 +242,7 @@ export function ToggleGroup({
     <div className="flex gap-2 w-full">
       {options.map((opt, i) => (
         <button
+          type="button"
           key={i}
           className={`flex-1 flex items-center justify-center gap-[6px] h-8 border rounded-md text-[12px] font-medium cursor-pointer transition-all duration-75 ${value === opt.value ? 'bg-[var(--color-selected-bg)] border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]'}`}
           onClick={() => onChange(opt.value)}

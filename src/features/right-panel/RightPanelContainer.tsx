@@ -1,4 +1,5 @@
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
+import type { MouseEvent } from 'react'
 import { useRightPanelStore } from './model/rightPanelStore'
 import { useResizePanel } from '../../hooks/useResizePanel'
 import RightPanelShell from './RightPanelShell'
@@ -19,7 +20,8 @@ export default memo(function RightPanelContainer({ tabId }: RightPanelContainerP
   const setActiveTab = useRightPanelStore((s) => s.setRightPanelTab)
   const collapse = useRightPanelStore((s) => s.collapseRightPanel)
   const [willAutoCollapse, setWillAutoCollapse] = useState(false)
-  const autoCollapseThreshold = Math.floor(width / 2)
+  const dragStartWidthRef = useRef(width)
+  const autoCollapseThreshold = Math.floor(dragStartWidthRef.current / 2)
 
   const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
     initialWidth: width,
@@ -39,10 +41,11 @@ export default memo(function RightPanelContainer({ tabId }: RightPanelContainerP
     },
   })
 
-  const handleResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+  const handleResizeStart = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    dragStartWidthRef.current = width
     setWillAutoCollapse(false)
     handleResizeMouseDown(event)
-  }, [handleResizeMouseDown])
+  }, [handleResizeMouseDown, width])
 
   const handleResizeDoubleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault()

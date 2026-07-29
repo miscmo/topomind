@@ -127,11 +127,12 @@ export function logUnsubscribe(callback: (entry: LogEntry) => void): void {
     _ipcRegistered = false
     const api = _api()
     if (api) {
-      api.send('log:unsubscribe')
+      // Unregister IPC handler first to prevent receiving new entries after unsubscription
       if (_ipcHandler) {
         api.off('log:entry', _ipcHandler)
+        _ipcHandler = null
       }
-      _ipcHandler = null
+      api.send('log:unsubscribe')
     }
   }
 }

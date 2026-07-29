@@ -42,6 +42,8 @@ export function useSmartDocumentEditorModel({
     // instead of forcing a heading or any other structure.
     const blocks = createDefaultBlockNoteBlocks(value.blocks)
     return blocks.length > 0 ? blocks : undefined
+    // Only compute once on mount; value.blocks is intentionally not a dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const editor = useCreateBlockNote({
@@ -171,16 +173,23 @@ export function useSmartDocumentEditorModel({
     )
   }, [clearScheduledStatsAndToc, editor])
 
+  const lastDocumentRef = useRef<any>(null)
+
   const handleChange = useCallback(() => {
     const currentValue = valueRef.current
-    // Only update if the document has actually changed to avoid infinite loops
-    // The editor.document is a proxy, so we check if it's the same array reference or structurally different
-    // Since this is called frequently, we just use a simple check
-    if (editor.document === currentValue.blocks) return
+    const currentDoc = editor.document
+
+    // Fast path: skip expensive JSON.stringify if document reference hasn't changed
+    if (currentDoc === lastDocumentRef.current) return
+
+    const currentDocStr = JSON.stringify(currentDoc)
+    const lastDocStr = JSON.stringify(lastDocumentRef.current)
+    if (currentDocStr === lastDocStr) return
+    lastDocumentRef.current = currentDoc
 
     const nextValue = withSmartDocumentUpdatedAt({
       ...currentValue,
-      blocks: editor.document,
+      blocks: currentDoc,
     })
     onChangeRef.current(nextValue)
     updateStatsAndToc(false)

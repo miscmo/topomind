@@ -9,12 +9,17 @@ type SmartDocumentAttachmentEditor = {
 
 export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachmentEditor, attachmentInsertTargetKey?: string) {
   const lastTargetBlockRef = useRef<any>(null)
+  const updateLastTargetRef = useRef<(() => void) | null>(null)
 
   // 记录编辑器失去焦点前的最后光标/选中位置
   useEffect(() => {
     if (!editor) return
 
     const updateLastTarget = () => {
+      // 只在当前编辑器有焦点时更新，避免多实例同时响应全局事件造成污染
+      const hasFocus = (editor as any).prosemirrorView?.hasFocus?.() ?? true
+      if (!hasFocus) return
+
       let foundBlock = undefined
       try {
         const selection = editor.getSelection()
@@ -40,6 +45,8 @@ export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachment
         lastTargetBlockRef.current = foundBlock
       }
     }
+
+    updateLastTargetRef.current = updateLastTarget
 
     // 监听选区变化、点击、键盘事件，以便在焦点丢失前捕获正确的块
     document.addEventListener('selectionchange', updateLastTarget)

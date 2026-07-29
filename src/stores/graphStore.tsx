@@ -1,6 +1,6 @@
 import { createStore, useStore, type StoreApi } from 'zustand'
 import { temporal } from 'zundo'
-import { createContext, useContext, useRef } from 'react'
+import { createContext, useContext, useRef, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { KnowledgeEdge, KnowledgeNode } from '../types'
 
@@ -186,9 +186,9 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
       edgesMap: buildEdgesMap(nextEdges)
     }
   }),
-}), { 
+}), {
   partialize: (state) => ({ nodes: state.nodes, edges: state.edges }), // Only track nodes and edges for undo/redo
-  limit: 50, // Keep max 50 history steps
+  limit: 20, // Keep max 20 history steps to reduce memory usage
   onSave: (pastState, currentState) => {
     // Optional: hook for when a state is saved to history
   },
@@ -215,7 +215,7 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
 
 // Auto-sync maps when temporal state changes
 export const setupTemporalMapSync = (store: StoreApi<GraphState>) => {
-  store.subscribe((state, prevState) => {
+  return store.subscribe((state, prevState) => {
     if (state.nodes === prevState.nodes && state.edges === prevState.edges) {
       return
     }
@@ -229,10 +229,22 @@ export const GraphStoreContext = createContext<StoreApi<GraphState> | null>(null
 
 export function GraphStoreProvider({ children }: { children: ReactNode }) {
   const storeRef = useRef<StoreApi<GraphState> | null>(null)
+  const unsubscribeRef = useRef<(() => void) | null>(null)
+
   if (!storeRef.current) {
     storeRef.current = createGraphStore()
-    setupTemporalMapSync(storeRef.current)
+    unsubscribeRef.current = setupTemporalMapSync(storeRef.current)
   }
+
+  useEffect(() => {
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current()
+        unsubscribeRef.current = null
+      }
+    }
+  }, [])
+
   return <GraphStoreContext.Provider value={storeRef.current}>{children}</GraphStoreContext.Provider>
 }
 

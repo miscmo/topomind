@@ -28,6 +28,9 @@ export function useDetailDocumentSession({
 }: UseDetailDocumentSessionParams) {
   const storage = useStorage()
   const storeApi = useGraphStoreApi()
+  const hasDraft = useDraftStore((s) => Boolean(
+    currentDocumentKey && Object.prototype.hasOwnProperty.call(s.detailDrafts, currentDocumentKey)
+  ))
   const draftContent = useDraftStore((s) => currentDocumentKey ? (s.detailDrafts[currentDocumentKey] ?? '') : '')
   const setDraftContent = useDraftStore((s) => s.setDetailDraft)
   const detailEntry = useCardContentStore((s) => currentDocumentKey ? s.detailEntries[currentDocumentKey] : undefined)
@@ -40,40 +43,49 @@ export function useDetailDocumentSession({
   const [loadedDocumentKey, setLoadedDocumentKey] = useState(() => (detailEntry ? currentDocumentKey : ''))
   const [isDocumentDirty, setIsDocumentDirty] = useState(false)
   const contentRequestSeqRef = useRef(0)
+  const saveRequestSeqRef = useRef(0)
+  const draftVersionRef = useRef(0)
   const selectionPerfRef = useRef<{ nodeId: string; startedAt: number; logged: boolean } | null>(null)
 
   const handleSave = useCallback(async () => {
     if (!selectedNodeId || !nodePath || !currentDocumentKey) return
+    const saveKey = currentDocumentKey
+    const saveSeq = ++saveRequestSeqRef.current
+    const saveVersion = draftVersionRef.current
+    const contentSnapshot = draftContent
     const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label
     const saveStartedAt = performance.now()
-    let savedContentLength = getDocumentContentLength(draftContent)
+    let savedContentLength = getDocumentContentLength(contentSnapshot)
 
     try {
       if (activeTopoDocumentId) {
         let contentToWrite: unknown
         try {
-          contentToWrite = prepareStructuredDocumentContentForSave(draftContent)
+          contentToWrite = prepareStructuredDocumentContentForSave(contentSnapshot)
         } catch (parseError) {
           throw new Error(`文档内容解析失败，为防止覆盖，已终止保存: ${(parseError as Error).message}`)
         }
-        
-        if (contentToWrite === null) {
-          // Empty content, no need to save for topo document, just return early or proceed to update draft state
-          contentToWrite = {}
-        }
 
+        if (contentToWrite === null) contentToWrite = {}
         await storage.writeTopoDocument(nodePath, activeTopoDocumentId, contentToWrite)
-        setDetailContent(currentDocumentKey, contentToWrite)
-        setDraftContent(currentDocumentKey, contentToWrite)
-        setSavedContentState({ key: currentDocumentKey, content: contentToWrite })
+
+        if (saveRequestSeqRef.current !== saveSeq || draftVersionRef.current !== saveVersion || currentDocumentKey !== saveKey) {
+          return
+        }
+        setDetailContent(saveKey, contentToWrite)
+        setDraftContent(saveKey, contentToWrite)
+        setSavedContentState({ key: saveKey, content: contentToWrite })
         setIsDocumentDirty(false)
         savedContentLength = getDocumentContentLength(contentToWrite)
       } else {
-        setDetailContent(currentDocumentKey, draftContent)
-        setSavedContentState({ key: currentDocumentKey, content: draftContent })
+        if (saveRequestSeqRef.current !== saveSeq || draftVersionRef.current !== saveVersion || currentDocumentKey !== saveKey) {
+          return
+        }
+        setDetailContent(saveKey, contentSnapshot)
+        setSavedContentState({ key: saveKey, content: contentSnapshot })
         setIsDocumentDirty(false)
-        savedContentLength = getDocumentContentLength(draftContent)
+        savedContentLength = getDocumentContentLength(contentSnapshot)
       }
 
       logAction('内容:保存', 'DetailPanel', { nodePath, documentPath: activeDocumentPath, label })
@@ -114,6 +126,8 @@ export function useDetailDocumentSession({
   }, [currentDocumentKey, detailEntry, loadedDocumentKey])
 
   useEffect(() => {
+    saveRequestSeqRef.current += 1
+    draftVersionRef.current = 0
     setSavedContentState({ key: currentDocumentKey, content: '' })
     setIsDocumentDirty(false)
   }, [selectedNodeId, nodePath, currentDocumentKey])
@@ -141,9 +155,14 @@ export function useDetailDocumentSession({
     if (cachedContent !== undefined) {
       setSavedContentState({ key: currentDocumentKey, content: cachedContent })
       setLoadedDocumentKey(currentDocumentKey)
-      setIsDocumentDirty(false)
-      if (useDraftStore.getState().detailDrafts[currentDocumentKey] === undefined) {
+      const cachedDrafts = useDraftStore.getState().detailDrafts
+      const cachedDraft = cachedDrafts[currentDocumentKey]
+      const cachedHasDraft = Object.prototype.hasOwnProperty.call(cachedDrafts, currentDocumentKey)
+      if (!cachedHasDraft) {
         setDraftContent(currentDocumentKey, cachedContent)
+        setIsDocumentDirty(false)
+      } else {
+        setIsDocumentDirty(!areDocumentContentsEqual(cachedDraft, cachedContent))
       }
       const selectionPerf = selectionPerfRef.current
       if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
@@ -175,11 +194,15 @@ export function useDetailDocumentSession({
       setDetailContent(currentDocumentKey, content)
       setSavedContentState({ key: currentDocumentKey, content })
       setLoadedDocumentKey(currentDocumentKey)
-      setIsDocumentDirty(false)
 
       const currentDraft = useDraftStore.getState().detailDrafts[currentDocumentKey]
-      if (currentDraft === undefined || currentDraft === cachedContent || currentDraft === '') {
+      const hasCurrentDraft = Object.prototype.hasOwnProperty.call(useDraftStore.getState().detailDrafts, currentDocumentKey)
+      const draftChangedDuringRead = draftVersionRef.current > 0
+      if (!hasCurrentDraft || (!draftChangedDuringRead && areDocumentContentsEqual(currentDraft, cachedContent))) {
         setDraftContent(currentDocumentKey, content)
+        setIsDocumentDirty(false)
+      } else {
+        setIsDocumentDirty(!areDocumentContentsEqual(currentDraft, content))
       }
       const selectionPerf = selectionPerfRef.current
       if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
@@ -201,10 +224,13 @@ export function useDetailDocumentSession({
         nodePath,
         documentPath: activeDocumentPath,
       }, 'DetailPanel')
-      setDetailContent(currentDocumentKey, '')
-      setSavedContentState({ key: currentDocumentKey, content: '' })
       setLoadedDocumentKey(currentDocumentKey)
-      setIsDocumentDirty(false)
+
+      // Keep a local draft visible and dirty when the remote read fails. Clearing the
+      // saved baseline here would make a failed read look like a successful empty load.
+      if (!hasDraft) {
+        setIsDocumentDirty(false)
+      }
 
       const selectionPerf = selectionPerfRef.current
       if (selectionPerf && selectionPerf.nodeId === selectedNodeId && !selectionPerf.logged) {
@@ -231,8 +257,9 @@ export function useDetailDocumentSession({
 
   const handleDraftChange = useCallback((value: unknown) => {
     if (!currentDocumentKey) return
+    draftVersionRef.current += 1
     setDraftContent(currentDocumentKey, value)
-    setIsDocumentDirty((current) => current || !areDocumentContentsEqual(value, savedContent))
+    setIsDocumentDirty(!areDocumentContentsEqual(value, savedContent))
   }, [currentDocumentKey, savedContent, setDraftContent])
 
   return {
