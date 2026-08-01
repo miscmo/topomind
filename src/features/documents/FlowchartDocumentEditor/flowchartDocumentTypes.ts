@@ -1,3 +1,5 @@
+import type { Cell } from '@antv/x6'
+
 export interface FlowchartViewport {
   zoom: number
   pan: {
@@ -13,8 +15,8 @@ export interface FlowchartCell {
   y?: number
   width?: number
   height?: number
-  attrs?: Record<string, unknown>
-  data?: Record<string, unknown>
+  attrs?: Cell.Properties['attrs']
+  data?: Cell.Properties['data']
   source?: { cell: string }
   target?: { cell: string }
   labels?: Record<string, unknown>[]
@@ -36,6 +38,10 @@ export interface FlowchartDocumentContent {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function normalizeCellAttrs(value: unknown): NonNullable<Cell.Properties['attrs']> {
+  return isRecord(value) ? value as NonNullable<Cell.Properties['attrs']> : {}
 }
 
 function finiteNumber(value: unknown, fallback: number) {
@@ -74,7 +80,7 @@ function normalizeNodeCell(value: unknown, seenIds: Set<string>): FlowchartCell 
     y: boundedNumber(value.y, 0, -100_000, 100_000),
     width: boundedNumber(value.width, shape === 'polygon' ? 160 : 120, 40, 2_000),
     height: boundedNumber(value.height, shape === 'polygon' ? 80 : 60, 30, 2_000),
-    attrs: isRecord(value.attrs) ? value.attrs : {},
+    attrs: normalizeCellAttrs(value.attrs),
     data: isRecord(value.data) ? value.data : {},
   }
 }
@@ -93,7 +99,7 @@ function normalizeEdgeCell(value: unknown, seenIds: Set<string>, nodeIds: Set<st
     shape: 'edge',
     source: { cell: sourceId },
     target: { cell: targetId },
-    attrs: isRecord(value.attrs) ? value.attrs : {},
+    attrs: normalizeCellAttrs(value.attrs),
     data: isRecord(value.data) ? value.data : {},
     labels: Array.isArray(value.labels) ? value.labels.filter(isRecord) : [],
   }
@@ -104,12 +110,12 @@ function normalizeFlowchartCells(value: unknown): FlowchartCell[] {
 
   const seenIds = new Set<string>()
   const nodes = value
-    .filter((cell) => isRecord(cell) && cell.shape !== 'edge')
+    .filter((cell) => isRecord(cell) && cell.shape !== 'edge' && cell.shape !== 'custom-edge')
     .map((cell) => normalizeNodeCell(cell, seenIds))
     .filter((cell): cell is FlowchartCell => cell !== null)
   const nodeIds = new Set(nodes.map((node) => node.id))
   const edges = value
-    .filter((cell) => isRecord(cell) && cell.shape === 'edge')
+    .filter((cell) => isRecord(cell) && (cell.shape === 'edge' || cell.shape === 'custom-edge'))
     .map((cell) => normalizeEdgeCell(cell, seenIds, nodeIds))
     .filter((cell): cell is FlowchartCell => cell !== null)
 

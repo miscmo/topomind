@@ -7,7 +7,7 @@ import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useShortcut } from '../../../../hooks/useShortcut'
 import { logAction } from '../../../../core/log-backend'
 import { useSmartGuides } from '../useSmartGuides'
-import { distanceToRect, getNodeRect } from '../utils/math'
+import { buildRectSpatialIndex, distanceToRect, getNodeRect, queryRectSpatialIndex } from '../utils/math'
 import { CARD_CONNECT_SNAP_DISTANCE, KEYBOARD_NEW_NODE_HORIZONTAL_GAP, KEYBOARD_NEW_NODE_VERTICAL_GAP } from '../constants'
 import type { KnowledgeNode } from '../../../../types'
 
@@ -104,14 +104,12 @@ export function useGraphCanvasModel({
 
   const reactFlow = useReactFlow()
   const graph = useGraphContext()
-  const snapCandidates = useMemo(() => (
-    nodes
+  const snapCandidateIndex = useMemo(() => {
+    const candidates = nodes
       .filter((node) => node.id !== connectingSourceId)
-      .map((node) => ({
-        id: node.id,
-        rect: getNodeRect(node as Node),
-      }))
-  ), [connectingSourceId, nodes])
+      .map((node) => ({ id: node.id, rect: getNodeRect(node as Node) }))
+    return buildRectSpatialIndex(candidates, 256)
+  }, [connectingSourceId, nodes])
   
   const { guideLines, onNodesChangeIntercept, clearGuides } = useSmartGuides(nodes as Node[])
 
@@ -325,7 +323,7 @@ export function useGraphCanvasModel({
     const point = reactFlow.screenToFlowPosition(pendingPoint)
     let nextTargetId: string | null = null
     let bestDistance = Infinity
-    for (const candidate of snapCandidates) {
+    for (const candidate of queryRectSpatialIndex(snapCandidateIndex, point, CARD_CONNECT_SNAP_DISTANCE)) {
       const distance = distanceToRect(point, candidate.rect)
       if (distance <= CARD_CONNECT_SNAP_DISTANCE && distance < bestDistance) {
         bestDistance = distance
@@ -336,7 +334,7 @@ export function useGraphCanvasModel({
       connectingTargetIdRef.current = nextTargetId
       setConnectingTargetId(nextTargetId)
     }
-  }, [connectingSourceId, reactFlow, setConnectingTargetId, snapCandidates])
+  }, [connectingSourceId, reactFlow, setConnectingTargetId, snapCandidateIndex])
 
   const handleConnectionMouseMove = useCallback((event: React.MouseEvent) => {
     if (!connectingSourceId) return

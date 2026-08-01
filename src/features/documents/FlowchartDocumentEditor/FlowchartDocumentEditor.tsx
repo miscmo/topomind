@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Graph, Edge } from '@antv/x6'
+import type { Cell } from '@antv/x6'
 import { Selection } from '@antv/x6-plugin-selection'
 import { Snapline } from '@antv/x6-plugin-snapline'
 import { Keyboard } from '@antv/x6-plugin-keyboard'
@@ -9,6 +10,8 @@ import { Transform } from '@antv/x6-plugin-transform'
 import { Stencil } from '@antv/x6-plugin-stencil'
 import type { FlowchartDocumentContent } from './flowchartDocumentTypes'
 import { withFlowchartUpdatedAt } from './flowchartDocumentTypes'
+import { planFlowchartCellSync } from './flowchartCellSync'
+import { usePromptStore } from '../../../shared/ui/PromptModal/promptStore'
 
 type FlowchartNodeKind = 'start' | 'process' | 'decision' | 'end'
 
@@ -35,6 +38,34 @@ function getAppliedValue(value: FlowchartDocumentContent): AppliedFlowchartValue
     cells: JSON.stringify(value.cells),
     viewport: JSON.stringify(value.viewport),
   }
+}
+
+function applyFlowchartCellPatch(cell: Cell, nextCell: FlowchartDocumentContent['cells'][number], removeKeys: string[]) {
+  for (const key of removeKeys) cell.removeProp(key, { externalSync: true })
+  for (const [key, nextValue] of Object.entries(nextCell)) {
+    if (key === 'id') continue
+    cell.setProp(key, nextValue, { externalSync: true })
+  }
+}
+
+function applyFlowchartCellsIncrementally(graph: Graph, nextCells: FlowchartDocumentContent['cells']) {
+  const currentCells = graph.toJSON().cells as FlowchartDocumentContent['cells']
+  const plan = planFlowchartCellSync(currentCells, nextCells)
+
+  graph.batchUpdate('update', () => {
+    for (const id of plan.removeEdgeIds) graph.removeEdge(id, { externalSync: true })
+    for (const id of plan.removeNodeIds) graph.removeNode(id, { externalSync: true })
+    if (plan.addNodes.length) graph.addNodes(plan.addNodes as Parameters<Graph['addNodes']>[0], { externalSync: true })
+    for (const patch of plan.updateNodes) {
+      const cell = graph.getCellById(patch.id)
+      if (cell) applyFlowchartCellPatch(cell, patch.cell, patch.removeKeys)
+    }
+    if (plan.addEdges.length) graph.addEdges(plan.addEdges as Parameters<Graph['addEdges']>[0], { externalSync: true })
+    for (const patch of plan.updateEdges) {
+      const cell = graph.getCellById(patch.id)
+      if (cell) applyFlowchartCellPatch(cell, patch.cell, patch.removeKeys)
+    }
+  }, { externalSync: true })
 }
 
 function kindMeta(kind: FlowchartNodeKind) {
@@ -76,16 +107,25 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
   const stencilContainerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<Graph | null>(null)
   const valueRef = useRef(value)
+  const readOnlyRef = useRef(readOnly)
   const isApplyingExternalValueRef = useRef(false)
   const lastAppliedValueRef = useRef<AppliedFlowchartValue>(getAppliedValue(value))
+  const pendingLocalValueRef = useRef<AppliedFlowchartValue | null>(null)
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false })
 
   useEffect(() => {
     valueRef.current = value
   }, [value])
 
+  useEffect(() => {
+    readOnlyRef.current = readOnly
+  }, [readOnly])
+
   const updateDocument = useCallback((nextValue: FlowchartDocumentContent) => {
-    onChange(withFlowchartUpdatedAt(nextValue))
+    const updatedValue = withFlowchartUpdatedAt(nextValue)
+    pendingLocalValueRef.current = getAppliedValue(updatedValue)
+    valueRef.current = updatedValue
+    onChange(updatedValue)
   }, [onChange])
 
   const handleTitleChange = useCallback((title: string) => {
@@ -100,7 +140,7 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
     })
   }, [])
 
-  // Initialize X6 Graph. A read-only mode switch recreates plugins with the appropriate interaction settings.
+  // Initialize X6 once. Interaction callbacks and plugin states are toggled in place when readOnly changes.
   useEffect(() => {
     if (!containerRef.current || graphRef.current) return
 
@@ -108,28 +148,62 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
       container: containerRef.current,
       autoResize: true,
       grid: { size: 20, visible: true, type: 'dot', args: { color: 'var(--color-canvas-grid)', thickness: 1 } },
-      panning: { enabled: !readOnly, eventTypes: ['leftMouseDown', 'mouseWheel'] },
+      panning: { enabled: true, eventTypes: ['leftMouseDown', 'mouseWheel'] },
       mousewheel: { enabled: true, modifiers: ['ctrl', 'meta'] },
       connecting: {
         snap: true, allowBlank: false, allowLoop: false, highlight: true,
         createEdge() { return graphRef.current?.createEdge({ shape: 'custom-edge' }) as Edge | undefined | null },
-        validateConnection({ sourceView, targetView }) { return !readOnly && sourceView !== targetView },
+        validateConnection({ sourceView, targetView }) { return !readOnlyRef.current && sourceView !== targetView },
       },
-      interacting: { nodeMovable: !readOnly, edgeMovable: !readOnly },
+      interacting: () => ({
+        nodeMovable: !readOnlyRef.current,
+        edgeMovable: !readOnlyRef.current,
+        edgeLabelMovable: !readOnlyRef.current,
+        arrowheadMovable: !readOnlyRef.current,
+        vertexMovable: !readOnlyRef.current,
+        vertexAddable: !readOnlyRef.current,
+        vertexDeletable: !readOnlyRef.current,
+        magnetConnectable: !readOnlyRef.current,
+      }),
     })
     graphRef.current = graph
 
+    let contentSyncTimer: number | null = null
+    let viewportSyncTimer: number | null = null
+
     const syncToValue = () => {
-      if (readOnly || isApplyingExternalValueRef.current) return
+      if (readOnlyRef.current || isApplyingExternalValueRef.current) return
       const json = graph.toJSON()
-      onChange(withFlowchartUpdatedAt({ ...valueRef.current, cells: json.cells as FlowchartDocumentContent['cells'] }))
+      const updatedValue = withFlowchartUpdatedAt({ ...valueRef.current, cells: json.cells as FlowchartDocumentContent['cells'] })
+      pendingLocalValueRef.current = getAppliedValue(updatedValue)
+      lastAppliedValueRef.current = pendingLocalValueRef.current
+      valueRef.current = updatedValue
+      onChange(updatedValue)
+    }
+    const scheduleContentSync = () => {
+      if (readOnlyRef.current || isApplyingExternalValueRef.current || contentSyncTimer !== null) return
+      contentSyncTimer = window.setTimeout(() => {
+        contentSyncTimer = null
+        syncToValue()
+      }, 80)
     }
     const syncViewport = () => {
-      if (readOnly || isApplyingExternalValueRef.current) return
-      onChange(withFlowchartUpdatedAt({
+      if (readOnlyRef.current || isApplyingExternalValueRef.current) return
+      const updatedValue = withFlowchartUpdatedAt({
         ...valueRef.current,
         viewport: { zoom: graph.zoom(), pan: { x: graph.translate().tx, y: graph.translate().ty } },
-      }))
+      })
+      pendingLocalValueRef.current = getAppliedValue(updatedValue)
+      lastAppliedValueRef.current = pendingLocalValueRef.current
+      valueRef.current = updatedValue
+      onChange(updatedValue)
+    }
+    const scheduleViewportSync = () => {
+      if (readOnlyRef.current || isApplyingExternalValueRef.current || viewportSyncTimer !== null) return
+      viewportSyncTimer = window.setTimeout(() => {
+        viewportSyncTimer = null
+        syncViewport()
+      }, 80)
     }
     const handleHistoryChange = () => {
       refreshHistoryState()
@@ -139,12 +213,15 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
       refreshHistoryState()
     }
 
-    if (!readOnly) {
+    {
       graph.use(new Selection({ enabled: true, multiple: true, rubberband: true, showNodeSelectionBox: true }))
       graph.use(new Snapline({ enabled: true, sharp: true }))
       graph.use(new Keyboard({ enabled: true, global: false }))
       graph.use(new Clipboard({ enabled: true }))
-      graph.use(new History({ enabled: true }))
+      graph.use(new History({
+        enabled: true,
+        beforeAddCommand: (_event, args) => !(args as { options?: { externalSync?: boolean } } | null)?.options?.externalSync,
+      }))
       graph.use(new Transform({ resizing: { enabled: true, minWidth: 40, minHeight: 40 } }))
 
       if (stencilContainerRef.current) {
@@ -180,43 +257,83 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
       isApplyingExternalValueRef.current = false
     }
 
-    graph.on('node:moved', syncToValue)
-    graph.on('node:added', syncToValue)
-    graph.on('node:removed', syncToValue)
-    graph.on('edge:connected', syncToValue)
-    graph.on('edge:removed', syncToValue)
-    graph.on('node:resized', syncToValue)
-    graph.on('translate', syncViewport)
-    graph.on('scale', syncViewport)
+    graph.on('node:moved', scheduleContentSync)
+    graph.on('node:added', scheduleContentSync)
+    graph.on('node:removed', scheduleContentSync)
+    graph.on('edge:connected', scheduleContentSync)
+    graph.on('edge:removed', scheduleContentSync)
+    graph.on('node:resized', scheduleContentSync)
+    graph.on('translate', scheduleViewportSync)
+    graph.on('scale', scheduleViewportSync)
     graph.on('history:change', handleHistoryChange)
     graph.on('history:undo', handleHistoryReplay)
     graph.on('history:redo', handleHistoryReplay)
 
     graph.on('node:dblclick', ({ node }: { node: any }) => {
-      if (readOnly) return
+      if (readOnlyRef.current) return
       const label = node.attr('label/text') as string
-      const newLabel = window.prompt('修改节点名称:', label)
-      if (newLabel !== null && newLabel.trim()) {
-        node.attr('label/text', newLabel.trim())
-        syncToValue()
-      }
+      void usePromptStore.getState().open({ title: '修改节点名称', defaultValue: label }).then((newLabel) => {
+        if (newLabel !== null && newLabel.trim()) {
+          node.attr('label/text', newLabel.trim())
+          syncToValue()
+        }
+      })
     })
     graph.on('edge:dblclick', ({ edge }: { edge: any }) => {
-      if (readOnly) return
+      if (readOnlyRef.current) return
       const currentLabel = edge.getLabels()?.[0]?.attrs?.label?.text || edge.getLabels()?.[0]?.attrs?.text?.text || ''
-      const newLabel = window.prompt('修改连线标签:', currentLabel as string)
-      if (newLabel === null) return
-      edge.setLabels(newLabel.trim() ? [{ attrs: { label: { text: newLabel.trim() }, text: { text: newLabel.trim() }, rect: { fill: 'var(--color-surface)', stroke: 'var(--color-border)', strokeWidth: 1, rx: 4, ry: 4 } } }] : [])
-      syncToValue()
+      void usePromptStore.getState().open({ title: '修改连线标签', defaultValue: currentLabel as string }).then((newLabel) => {
+        if (newLabel === null) return
+        edge.setLabels(newLabel.trim() ? [{ attrs: { label: { text: newLabel.trim() }, text: { text: newLabel.trim() }, rect: { fill: 'var(--color-surface)', stroke: 'var(--color-border)', strokeWidth: 1, rx: 4, ry: 4 } } }] : [])
+        syncToValue()
+      })
     })
     refreshHistoryState()
 
     return () => {
+      const shouldFlushContent = contentSyncTimer !== null
+      const shouldFlushViewport = viewportSyncTimer !== null
+      if (contentSyncTimer !== null) window.clearTimeout(contentSyncTimer)
+      if (viewportSyncTimer !== null) window.clearTimeout(viewportSyncTimer)
+      contentSyncTimer = null
+      viewportSyncTimer = null
+      if (shouldFlushContent) syncToValue()
+      if (shouldFlushViewport) syncViewport()
       graph.dispose()
       if (graphRef.current === graph) graphRef.current = null
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly])
+  }, [])
+
+  useEffect(() => {
+    const graph = graphRef.current
+    if (!graph) return
+
+    const selection = graph.getPlugin<Selection>('selection')
+    const snapline = graph.getPlugin<Snapline>('snapline')
+    const keyboard = graph.getPlugin<Keyboard>('keyboard')
+    const clipboard = graph.getPlugin<Clipboard>('clipboard')
+    const history = graph.getPlugin<History>('history')
+    const transform = graph.getPlugin<Transform>('transform')
+
+    if (readOnly) {
+      selection?.clean()
+      selection?.disable()
+      snapline?.disable()
+      keyboard?.disable()
+      clipboard?.disable()
+      history?.disable()
+      transform?.disable()
+    } else {
+      selection?.enable()
+      snapline?.enable()
+      keyboard?.enable()
+      clipboard?.enable()
+      history?.enable()
+      transform?.enable()
+    }
+    refreshHistoryState()
+  }, [readOnly, refreshHistoryState])
 
   // Apply parent-driven document changes without re-saving them or retaining old undo history.
   useEffect(() => {
@@ -224,14 +341,26 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
     if (!graph) return
 
     const nextAppliedValue = getAppliedValue(value)
+    const pendingLocalValue = pendingLocalValueRef.current
+    if (
+      pendingLocalValue
+      && pendingLocalValue.cells === nextAppliedValue.cells
+      && pendingLocalValue.viewport === nextAppliedValue.viewport
+    ) {
+      pendingLocalValueRef.current = null
+      lastAppliedValueRef.current = nextAppliedValue
+      return
+    }
+
     const previousAppliedValue = lastAppliedValueRef.current
     const cellsChanged = nextAppliedValue.cells !== previousAppliedValue.cells
     const viewportChanged = nextAppliedValue.viewport !== previousAppliedValue.viewport
     if (!cellsChanged && !viewportChanged) return
 
+    pendingLocalValueRef.current = null
     isApplyingExternalValueRef.current = true
     try {
-      if (cellsChanged) graph.fromJSON({ cells: value.cells })
+      if (cellsChanged) applyFlowchartCellsIncrementally(graph, value.cells)
       if (viewportChanged) {
         graph.zoomTo(value.viewport.zoom)
         graph.translate(value.viewport.pan.x, value.viewport.pan.y)
@@ -268,7 +397,9 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
         )}
       </div>
       <div className="flex-1 flex min-h-0 relative">
-        {!readOnly && <div className="w-[200px] border-r border-[var(--color-border)] bg-[var(--color-surface)] relative flex flex-col"><div ref={stencilContainerRef} className="flex-1 relative" /></div>}
+        <div className={readOnly ? 'hidden' : 'w-[200px] border-r border-[var(--color-border)] bg-[var(--color-surface)] relative flex flex-col'} aria-hidden={readOnly}>
+          <div ref={stencilContainerRef} className="flex-1 relative" />
+        </div>
         <div className="flex-1 min-h-0 relative"><div ref={containerRef} className="w-full h-full absolute inset-0 outline-none" tabIndex={0} /></div>
       </div>
     </div>

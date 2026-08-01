@@ -20,7 +20,8 @@ export function SmartDocumentSideMenu(props: SideMenuProps) {
 
   return (
     <SideMenu {...props}>
-      {isEmptyBlock ? <AddBlockButton /> : <DragHandleButton {...props} dragHandleMenu={SmartDocumentDragHandleMenu} />}
+      {isEmptyBlock ? <AddBlockButton /> : null}
+      <DragHandleButton {...props} dragHandleMenu={SmartDocumentDragHandleMenu} />
     </SideMenu>
   )
 }

@@ -17,6 +17,7 @@ export type {
   ConfigStorageBackend,
   GraphLayoutStorageBackend,
   KnowledgeBaseStorageBackend,
+  RoomNodeSummary,
   StorageBackend,
   TopoDocumentCreateInput,
   TopoDocumentExportPayload,
@@ -221,6 +222,9 @@ export function createStore(backend: StorageBackend) {
     },
     readLayout: async (kbPath: string): Promise<GraphMeta> => {
       try { return normalizeGraphMeta(await backend.readLayout(kbPath)) } catch (e) { logger.catch('Store.readLayout', `读取布局失败: ${kbPath}`, e); throw e }
+    },
+    readRoomNodeSummaries: async (roomPaths: string[]) => {
+      try { return await backend.readRoomNodeSummaries(roomPaths) } catch (e) { logger.catch('Store.readRoomNodeSummaries', '批量读取房间节点摘要失败', e); throw e }
     },
     async saveLayout(kbPath: string, meta: GraphMeta) {
       try { await backend.writeLayout(kbPath, normalizeGraphMeta(meta)) } catch (e) { logger.catch('Store.saveLayout', `保存布局失败: ${kbPath}`, e); throw e }

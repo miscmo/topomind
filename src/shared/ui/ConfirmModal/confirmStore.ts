@@ -44,6 +44,8 @@ export const useConfirmStore = create<ConfirmStore>((set, get) => ({
 
   open: ({ title = '确认', message = '', confirmText, cancelText, extraButtonText, onExtraAction } = {}) => {
     return new Promise<boolean>((resolve) => {
+      const previousResolve = get().resolve
+      previousResolve?.(false)
       set({ visible: true, title, message, confirmText, cancelText, extraButtonText, onExtraAction, resolve })
     })
   },

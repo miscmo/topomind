@@ -118,8 +118,12 @@ export function PluginDiagnosticsPanel() {
       return
     }
 
-    await navigator.clipboard.writeText(JSON.stringify(selectedPlugin, null, 2))
-    setActionMessage('已复制诊断快照')
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(selectedPlugin, null, 2))
+      setActionMessage('已复制诊断快照')
+    } catch (error) {
+      setActionMessage(error instanceof Error ? `复制失败：${error.message}` : '复制诊断快照失败')
+    }
   }
 
   return (

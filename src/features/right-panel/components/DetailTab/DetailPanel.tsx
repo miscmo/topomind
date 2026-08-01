@@ -16,9 +16,10 @@ import { DocumentBreadcrumb } from './DocumentBreadcrumb'
 
 interface DetailPanelProps {
   tabId: string
+  isActive?: boolean
 }
 
-const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
+const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: DetailPanelProps) {
   const selectedNodeId = useSelectedNodeId()
   const resolveNodePath = useCallback((nodeId: string) => {
     const graphSession = tabStore.getState().getGraphSession(tabId)
@@ -66,6 +67,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     currentDocumentKey,
     activeDocumentPath,
     activeTopoDocumentId,
+    isActive,
   })
 
   const {
@@ -108,6 +110,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
     : ''
 
   useEffect(() => {
+    if (!isActive) return
     const requestSeq = ++documentListRequestSeqRef.current
 
     if (!selectedNodeId || !nodePath) {
@@ -130,7 +133,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
         setActiveDocumentPathSafe('')
       }
     })
-  }, [selectedNodeId, nodePath, loadDocuments, setTopoDocuments, setTopoDocumentsCardPath, setActiveDocumentPathSafe])
+  }, [isActive, selectedNodeId, nodePath, loadDocuments, setTopoDocuments, setTopoDocumentsCardPath, setActiveDocumentPathSafe])
 
 
 
@@ -151,7 +154,7 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
   return (
     <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shrink-0 overflow-hidden transition-opacity">
       <div className="flex-1 flex min-h-0 overflow-hidden p-0 leading-relaxed text-[13.5px] [&>*]:flex-1 [&>*]:min-h-0 [&>*]:min-w-0">
-        <DocumentWorkspace
+        {isActive ? <DocumentWorkspace
           value={draftContent}
           isDirty={isDocumentDirty}
           isContentLoaded={isContentLoaded}
@@ -225,7 +228,9 @@ const DetailPanel = memo(function DetailPanel({ tabId }: DetailPanelProps) {
           onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
           isDocumentBusy={isDocumentBusy}
           nodeId={selectedNodeId}
-        />
+        /> : (
+          <div className="h-full w-full" aria-hidden="true" />
+        )}
       </div>
     </div>
   )

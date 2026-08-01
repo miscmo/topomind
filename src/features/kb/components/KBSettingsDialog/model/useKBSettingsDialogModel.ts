@@ -70,7 +70,16 @@ export function useKBSettingsDialogModel({ visible, kb, onClose, refreshKBList }
 
   const handlePointerUp = (e: React.PointerEvent) => {
     isDragging.current = false
-    e.currentTarget.releasePointerCapture(e.pointerId)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }
+
+  const handleCoverKeyDown = (e: React.KeyboardEvent) => {
+    if (!coverUrl || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+    e.preventDefault()
+    const delta = e.shiftKey ? 10 : 2
+    setCoverOffset((current) => Math.max(0, Math.min(100, current + (e.key === 'ArrowDown' ? delta : -delta))))
   }
 
   const handleSave = async () => {
@@ -247,6 +256,7 @@ export function useKBSettingsDialogModel({ visible, kb, onClose, refreshKBList }
       handlePointerDown,
       handlePointerMove,
       handlePointerUp,
+      handleCoverKeyDown,
       handleSave,
       handleDelete,
       handleCoverUpload

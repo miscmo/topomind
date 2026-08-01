@@ -4,7 +4,7 @@ import { useCreateBlockNote } from '@blocknote/react'
 import { useThemeStore, isDarkTheme } from '../../../../stores/themeStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../smartDocumentTypes'
-import { getSmartDocumentOutlineAndStats, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
+import { getCodeBlockPlainTextPaste, getSmartDocumentOutlineAndStats, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension } from '../mathSupport'
 import { containsMathDelimiters, containsMarkdownDelimiters, containsStrictMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
@@ -64,6 +64,20 @@ export function useSmartDocumentEditorModel({
       const html = hasHtml ? clipboardData.getData('text/html') : ''
       const markdown = hasExplicitMarkdown ? clipboardData.getData('text/markdown') : ''
       const plainText = clipboardData.getData('text/plain')
+
+      // Keep BlockNote's code-block paste invariant when overriding its default
+      // handler: code nodes accept literal text only. Sending clipboard HTML
+      // through DOM parsing would interpret source such as <Component> or
+      // <xxx>...</xxx> as markup and strip it before it reaches the code block.
+      const isSelectionInCodeBlock = editor.transact(
+        (transaction) => transaction.selection.$from.parent.type.spec.code === true
+          && transaction.selection.$to.parent.type.spec.code === true,
+      )
+      const codeBlockPlainText = getCodeBlockPlainTextPaste(isSelectionInCodeBlock, plainText)
+      if (codeBlockPlainText !== undefined) {
+        editor.pasteText(codeBlockPlainText)
+        return true
+      }
 
       const hasMath = containsMathDelimiters(plainText) || containsMathDelimiters(markdown)
       const hasMarkdown = containsMarkdownDelimiters(plainText) || containsMarkdownDelimiters(markdown)
@@ -179,12 +193,10 @@ export function useSmartDocumentEditorModel({
     const currentValue = valueRef.current
     const currentDoc = editor.document
 
-    // Fast path: skip expensive JSON.stringify if document reference hasn't changed
+    // BlockNote emits change notifications for the same document snapshot in
+    // some compound operations. Reference equality is a cheap and sufficient
+    // guard here; defer structural comparison to the save/session layer.
     if (currentDoc === lastDocumentRef.current) return
-
-    const currentDocStr = JSON.stringify(currentDoc)
-    const lastDocStr = JSON.stringify(lastDocumentRef.current)
-    if (currentDocStr === lastDocStr) return
     lastDocumentRef.current = currentDoc
 
     const nextValue = withSmartDocumentUpdatedAt({

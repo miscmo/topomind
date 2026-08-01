@@ -6,7 +6,7 @@ type BlockWalkerEditor = {
   forEachBlock: (visitor: (block: any) => boolean) => void
 }
 
-export function inlineContentToText(content: unknown): string {
+export function inlineContentToPlainText(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   return content.map((item) => {
@@ -26,7 +26,102 @@ export function inlineContentToText(content: unknown): string {
       return item.props.latex
     }
     return ''
-  }).join('').trim()
+  }).join('')
+}
+
+export function inlineContentToText(content: unknown): string {
+  return inlineContentToPlainText(content).trim()
+}
+
+type SmartDocumentBlockLike = {
+  id?: string
+  type?: string
+  content?: unknown
+  children?: SmartDocumentBlockLike[]
+}
+
+export type SmartDocumentSelectedTextState = {
+  rawText: string
+  latex: string
+  canConvertInlineMath: boolean
+  canConvertBlockMath: boolean
+}
+
+export function cloneSmartDocumentBlockWithoutIds<T extends SmartDocumentBlockLike>(block: T): Omit<T, 'id'> {
+  const clone = JSON.parse(JSON.stringify(block)) as T
+  delete clone.id
+  if (Array.isArray(clone.children)) {
+    clone.children = clone.children.map(cloneSmartDocumentBlockWithoutIds)
+  }
+  return clone
+}
+
+export function getSmartDocumentBlockPlainText(block: SmartDocumentBlockLike): string {
+  const ownText = inlineContentToPlainText(block.content)
+  const childText = Array.isArray(block.children)
+    ? block.children.map(getSmartDocumentBlockPlainText).filter(Boolean).join('\n')
+    : ''
+  return [ownText, childText].filter(Boolean).join('\n')
+}
+
+export function getSmartDocumentMenuTargetBlockIds(
+  menuBlockId: string,
+  selectedBlocks?: SmartDocumentBlockLike[],
+): string[] {
+  if (selectedBlocks?.some((item) => item.id === menuBlockId)) {
+    return selectedBlocks
+      .map((item) => item.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  }
+  return [menuBlockId]
+}
+
+export function getSmartDocumentBlocksClipboardText(
+  blocks: SmartDocumentBlockLike[],
+  fallbackText = '',
+): string {
+  return blocks.map(getSmartDocumentBlockPlainText).filter(Boolean).join('\n') || fallbackText
+}
+
+export async function writeClipboardBeforeMutation(
+  text: string,
+  writeText: (value: string) => Promise<void>,
+  mutation: () => void,
+): Promise<boolean> {
+  try {
+    await writeText(text)
+    mutation()
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function getCodeBlockPlainTextPaste(
+  isSelectionInCodeBlock: boolean,
+  plainText: string,
+): string | undefined {
+  return isSelectionInCodeBlock && plainText.length > 0 ? plainText : undefined
+}
+
+export function getSmartDocumentSelectedTextState(
+  rawText: string,
+  selectedBlocks: SmartDocumentBlockLike[],
+): SmartDocumentSelectedTextState | undefined {
+  const latex = rawText.trim()
+  if (!latex) return undefined
+
+  const allBlocksSupportInlineContent = selectedBlocks.length > 0
+    && selectedBlocks.every((block) => Array.isArray(block.content))
+
+  return {
+    rawText,
+    latex,
+    canConvertInlineMath: allBlocksSupportInlineContent
+      && selectedBlocks.length === 1
+      && !latex.includes('\n'),
+    canConvertBlockMath: allBlocksSupportInlineContent,
+  }
 }
 
 export function getSmartDocumentOutlineAndStats(editor: BlockWalkerEditor): {

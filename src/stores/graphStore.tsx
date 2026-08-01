@@ -41,6 +41,28 @@ function buildEdgesMap(edges: KnowledgeEdge[]) {
   return edgesMap
 }
 
+function reconcileMap<T extends { id: string }>(previousMap: Map<string, T>, entries: T[]) {
+  let nextMap: Map<string, T> | null = null
+  const seenIds = new Set<string>()
+
+  for (const entry of entries) {
+    seenIds.add(entry.id)
+    if (previousMap.get(entry.id) !== entry) {
+      nextMap ??= new Map(previousMap)
+      nextMap.set(entry.id, entry)
+    }
+  }
+
+  for (const id of previousMap.keys()) {
+    if (!seenIds.has(id)) {
+      nextMap ??= new Map(previousMap)
+      nextMap.delete(id)
+    }
+  }
+
+  return nextMap ?? previousMap
+}
+
 function getSelectionState(nodes: KnowledgeNode[], previousState?: Pick<GraphState, 'selectedNodeIds' | 'selectedNodes'>) {
   let selectedNodeCount = 0
   let selectedNodeId: string | null = null
@@ -136,13 +158,13 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
 
   setNodes: (nodes) => set((state) => ({
     nodes,
-    nodesMap: buildNodesMap(nodes),
+    nodesMap: reconcileMap(state.nodesMap, nodes),
     ...getSelectionState(nodes, state),
   })),
 
   setEdges: (edges) => set((state) => ({
     edges,
-    edgesMap: buildEdgesMap(edges),
+    edgesMap: reconcileMap(state.edgesMap, edges),
   })),
 
   setLoading: (loading) => set({ loading }),
@@ -173,7 +195,7 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
     const selectionState = getSelectionState(nextNodes, state)
     return {
       nodes: nextNodes,
-      nodesMap: buildNodesMap(nextNodes),
+      nodesMap: reconcileMap(state.nodesMap, nextNodes),
       ...selectionState,
     }
   }),
@@ -183,7 +205,7 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
     const nextEdges = state.edges.filter(e => !removedSet.has(e.source) && !removedSet.has(e.target))
     return {
       edges: nextEdges,
-      edgesMap: buildEdgesMap(nextEdges)
+      edgesMap: reconcileMap(state.edgesMap, nextEdges)
     }
   }),
 }), {
@@ -220,7 +242,9 @@ export const setupTemporalMapSync = (store: StoreApi<GraphState>) => {
       return
     }
     store.setState({
-      ...buildDerivedGraphState(state.nodes, state.edges, state),
+      nodesMap: reconcileMap(prevState.nodesMap, state.nodes),
+      edgesMap: reconcileMap(prevState.edgesMap, state.edges),
+      ...getSelectionState(state.nodes, state),
     })
   })
 }

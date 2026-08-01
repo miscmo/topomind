@@ -8,7 +8,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 const ALLOWED_CHANNELS = new Set([
   // fs
   'fs:listKBs', 'fs:listTrashKBs', 'fs:restoreTrashKB', 'fs:clearTrashKBs', 'fs:readCardChildren', 'fs:createKbsDir', 'fs:createCardDir', 'fs:deleteKbsDir',
-  'fs:readGraphMeta', 'fs:writeGraphMeta',
+  'fs:readGraphMeta', 'fs:readRoomNodeSummaries', 'fs:writeGraphMeta',
   'fs:renameKB',
   'fs:listAllTrashItems', 'fs:restoreGlobalTrashItem', 'fs:clearAllTrashItems',
   'fs:listTopoDocuments', 'fs:createTopoDocument', 'fs:readTopoDocument', 'fs:writeTopoDocument', 'fs:renameTopoDocument', 'fs:deleteTopoDocument', 'fs:listTrashTopoDocuments', 'fs:restoreTrashTopoDocument', 'fs:clearTrashTopoDocuments', 'fs:repairTopoDocuments', 'fs:exportTopoDocument', 'fs:openTopoDocumentFolder', 'fs:moveTopoDocument',

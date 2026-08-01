@@ -303,9 +303,18 @@ function SmartDocumentAdapter({
     }
   }, [attachmentCardPath, missingAttachmentRefsKey, store])
 
+  const lastBlockCountRef = React.useRef(persistedValue.blocks.length)
   const handleChange = React.useCallback((nextValue: SmartDocumentContent) => {
-    const nextPersistedValue = buildSmartDocumentPersistedValue(nextValue, knownAttachmentNamesRef.current)
-    onChange(nextPersistedValue)
+    // Normal text edits do not change the block count and do not need to walk
+    // the whole block tree just to normalize attachment persistence fields.
+    // Re-run the normalization when blocks are inserted/removed (the usual
+    // attachment insertion path), and the regular save boundary remains the
+    // final safety net for legacy attachment shapes.
+    const blockCountChanged = nextValue.blocks.length !== lastBlockCountRef.current
+    lastBlockCountRef.current = nextValue.blocks.length
+    onChange(blockCountChanged
+      ? buildSmartDocumentPersistedValue(nextValue, knownAttachmentNamesRef.current)
+      : nextValue)
   }, [onChange])
 
   const uploadFile = React.useCallback(async (file: File) => {

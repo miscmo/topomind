@@ -126,10 +126,11 @@ function getTextPreviewLabel(label: string, width: number, fontSize: number) {
   return `${safeLabel.slice(0, maxChars - 1)}…`
 }
 
-function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, Node>): PreviewModel {
+function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, Node>, detailLevel: MiniMapDetailLevel): PreviewModel {
   const markerDefinitionsMap = new Map<string, MarkerDefinition>()
+  const buildEdges = detailLevel !== 'skeleton'
 
-  const previewEdges = edges.flatMap((edge) => {
+  const previewEdges = buildEdges ? edges.flatMap((edge) => {
     const sourceNode = nodeById.get(edge.source)
     const targetNode = nodeById.get(edge.target)
     if (!sourceNode || !targetNode) return []
@@ -202,7 +203,7 @@ function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, N
       opacity,
       markerId,
     }]
-  })
+  }) : []
 
   const previewNodes = nodes.map((node) => {
     const typedNode = node as KnowledgeNode
@@ -548,11 +549,6 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
     return map
   }, [nodes])
 
-  const previewModel = useMemo(
-    () => buildPreviewModel(nodes, edges, nodeById),
-    [edges, nodeById, nodes],
-  )
-
   const miniMapDetailLevel = useMemo<MiniMapDetailLevel>(() => {
     if (
       nodes.length >= MINI_MAP_SKELETON_DETAIL_NODE_THRESHOLD ||
@@ -570,6 +566,11 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
 
     return 'full'
   }, [edges.length, nodes.length])
+
+  const previewModel = useMemo(
+    () => buildPreviewModel(nodes, edges, nodeById, miniMapDetailLevel),
+    [edges, miniMapDetailLevel, nodeById, nodes],
+  )
 
   const handleToggleMiniMap = useCallback(() => {
     const nextVisible = !showMiniMap

@@ -14,34 +14,17 @@ import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph
 import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { buildEdgeView } from './edgeView'
 
-const AUTO_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
-const GRAPH_NODE_IO_CONCURRENCY = 8
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  mapper: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  const results = new Array<R>(items.length)
-  let nextIndex = 0
-  const workerCount = Math.min(limit, items.length)
-  const workers = Array.from({ length: workerCount }, async () => {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex
-      nextIndex += 1
-      results[currentIndex] = await mapper(items[currentIndex], currentIndex)
-    }
-  })
-  await Promise.all(workers)
-  return results
-}
-
 export function generateId(prefix: string): string {
-  let id = prefix
-  for (let i = 0; i < 6; i++) {
-    id += AUTO_ID_CHARS[Math.floor(Math.random() * AUTO_ID_CHARS.length)]
+  const randomUuid = globalThis.crypto?.randomUUID?.()
+  if (randomUuid) return `${prefix}${randomUuid}`
+
+  const randomBytes = new Uint8Array(16)
+  globalThis.crypto?.getRandomValues?.(randomBytes)
+  if (randomBytes.some((byte) => byte !== 0)) {
+    return `${prefix}${Array.from(randomBytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`
   }
-  return id
+
+  return `${prefix}${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
 }
 
 /** Return type — includes highlighted/faded so callers can extend it */
@@ -59,9 +42,10 @@ export interface SerializedEdge {
   faded?: boolean
 }
 
-export interface BuildNodesStorage {
-  countChildren: (cardPath: string) => Promise<number>
-  listTopoDocuments?: (cardPath: string) => Promise<unknown[]>
+export interface BuildNodeSummary {
+  position?: { x: number; y: number }
+  childCount: number
+  hasDetail: boolean
 }
 
 /** Convert nodes+edges to adapter GraphMeta format */
@@ -114,17 +98,13 @@ export function buildMetaFromNodesEdges(
   })
 }
 
-/**
- * Build React Flow nodes from graph metadata.
- * Uses Promise.all for parallel child count reads — eliminates N sequential fs operations.
- */
-export async function buildNodes(
-  storage: BuildNodesStorage,
+/** Build React Flow nodes from graph metadata and preloaded child-room summaries. */
+export function buildNodes(
   dirPath: string,
   meta: GraphMeta,
-  savedPositions: Record<string, { x: number; y: number }>,
+  summaries: Record<string, BuildNodeSummary>,
   kbPath: string
-): Promise<KnowledgeNode[]> {
+): KnowledgeNode[] {
   const roomGraph = graphMetaToRoomGraph(dirPath, meta)
   const normalizedChildren = Object.values(roomGraph.nodes).map((roomNode) => {
     const nodeId = roomNode.id || roomNode.cardRef
@@ -137,21 +117,10 @@ export async function buildNodes(
   const spacingX = Math.max(60, 200 - nodeCount * 5)
   const spacingY = Math.max(50, 120 - nodeCount * 3)
 
-  const nodeInfoResults = await mapWithConcurrency(
-    normalizedChildren,
-    GRAPH_NODE_IO_CONCURRENCY,
-    async ([, childPath]) => {
-      const childCount = await storage.countChildren(childPath).catch(() => 0)
-      const hasDetail = storage.listTopoDocuments 
-        ? await storage.listTopoDocuments(childPath).then(docs => docs.length > 0).catch(() => false)
-        : false
-      return { childCount, hasDetail }
-    }
-  )
-
   return normalizedChildren.map(([nodeId, childPath, roomNode], i) => {
-    const { childCount, hasDetail } = nodeInfoResults[i]
-    const saved = savedPositions[nodeId]
+    const summary = summaries[childPath] ?? { childCount: 0, hasDetail: false }
+    const { childCount, hasDetail } = summary
+    const saved = summary.position
     const isExpanded = roomNode.expanded === true
     const position = roomNode.position ?? saved ?? {
       x: 50 + i * spacingX,

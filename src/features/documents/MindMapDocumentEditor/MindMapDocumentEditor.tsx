@@ -60,6 +60,7 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
   const valueRef = useRef(value)
   const isApplyingExternalValueRef = useRef(false)
   const lastAppliedValueRef = useRef<AppliedMindMapValue>(getAppliedValue(value))
+  const pendingLocalValueRef = useRef<AppliedMindMapValue | null>(null)
   const [isReady, setIsReady] = useState(false)
 
   const globalTheme = useThemeStore((s: any) => s.theme)
@@ -75,7 +76,10 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
   }, [value])
 
   const updateDocument = useCallback((nextValue: MindMapDocumentContent) => {
-    onChange(withMindMapUpdatedAt(nextValue))
+    const updatedValue = withMindMapUpdatedAt(nextValue)
+    pendingLocalValueRef.current = getAppliedValue(updatedValue)
+    valueRef.current = updatedValue
+    onChange(updatedValue)
   }, [onChange])
 
   const handleTitleChange = useCallback((title: string) => {
@@ -101,46 +105,79 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
     mindMapRef.current = mindMap
     lastAppliedValueRef.current = getAppliedValue(value)
 
-    mindMap.on('data_change', (data: any) => {
-      if (readOnly || isApplyingExternalValueRef.current) return
-      onChange({
+    let dataChangeTimer: number | null = null
+    let pendingRoot: any = null
+
+    const flushDataChange = () => {
+      dataChangeTimer = null
+      if (readOnly || isApplyingExternalValueRef.current || pendingRoot === null) return
+      const root = pendingRoot
+      pendingRoot = null
+      const updatedValue: MindMapDocumentContent = {
         ...valueRef.current,
-        root: data,
+        root,
         metadata: {
           ...valueRef.current.metadata,
           editor: 'simple-mind-map',
           updatedAt: Date.now(),
         },
-      })
-    })
+      }
+      pendingLocalValueRef.current = getAppliedValue(updatedValue)
+      lastAppliedValueRef.current = pendingLocalValueRef.current
+      valueRef.current = updatedValue
+      onChange(updatedValue)
+    }
+
+    const scheduleDataChange = (data: any) => {
+      if (readOnly || isApplyingExternalValueRef.current) return
+      pendingRoot = data
+      if (dataChangeTimer !== null) return
+      dataChangeTimer = window.setTimeout(flushDataChange, 80)
+    }
+
+    mindMap.on('data_change', scheduleDataChange)
 
     mindMap.on('view_theme_change', (theme: string) => {
       if (readOnly || isApplyingExternalValueRef.current) return
-      onChange({
+      const updatedValue: MindMapDocumentContent = {
         ...valueRef.current,
         theme: normalizeMindMapTheme(theme),
         metadata: {
           ...valueRef.current.metadata,
           updatedAt: Date.now(),
         },
-      })
+      }
+      pendingLocalValueRef.current = getAppliedValue(updatedValue)
+      lastAppliedValueRef.current = pendingLocalValueRef.current
+      valueRef.current = updatedValue
+      onChange(updatedValue)
     })
 
     mindMap.on('layout_change', (layout: string) => {
       if (readOnly || isApplyingExternalValueRef.current) return
-      onChange({
+      const updatedValue: MindMapDocumentContent = {
         ...valueRef.current,
         layout: normalizeMindMapLayout(layout),
         metadata: {
           ...valueRef.current.metadata,
           updatedAt: Date.now(),
         },
-      })
+      }
+      pendingLocalValueRef.current = getAppliedValue(updatedValue)
+      lastAppliedValueRef.current = pendingLocalValueRef.current
+      valueRef.current = updatedValue
+      onChange(updatedValue)
     })
 
     setIsReady(true)
 
     return () => {
+      if (dataChangeTimer !== null) window.clearTimeout(dataChangeTimer)
+      if (pendingRoot !== null && !readOnly && !isApplyingExternalValueRef.current) {
+        flushDataChange()
+      }
+      dataChangeTimer = null
+      pendingRoot = null
       mindMap.destroy()
       mindMapRef.current = null
     }
@@ -154,15 +191,37 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
     if (!mindMap || !isReady) return
 
     const nextAppliedValue = getAppliedValue(value)
+    const pendingLocalValue = pendingLocalValueRef.current
+    if (
+      pendingLocalValue
+      && pendingLocalValue.root === nextAppliedValue.root
+      && pendingLocalValue.layout === nextAppliedValue.layout
+      && pendingLocalValue.theme === nextAppliedValue.theme
+    ) {
+      pendingLocalValueRef.current = null
+      lastAppliedValueRef.current = nextAppliedValue
+      return
+    }
+
     const previousAppliedValue = lastAppliedValueRef.current
     const rootChanged = nextAppliedValue.root !== previousAppliedValue.root
     const layoutChanged = nextAppliedValue.layout !== previousAppliedValue.layout
     const themeChanged = nextAppliedValue.theme !== previousAppliedValue.theme
     if (!rootChanged && !layoutChanged && !themeChanged) return
 
+    pendingLocalValueRef.current = null
     isApplyingExternalValueRef.current = true
     try {
-      if (rootChanged) mindMap.setData(value.root)
+      if (rootChanged) {
+        mindMap.command.pause()
+        try {
+          mindMap.updateData(value.root)
+        } finally {
+          mindMap.command.clearHistory()
+          mindMap.command.recovery()
+          mindMap.command.originAddHistory()
+        }
+      }
       if (layoutChanged) mindMap.setLayout(documentLayout)
       if (themeChanged) mindMap.setTheme(effectiveTheme)
       lastAppliedValueRef.current = nextAppliedValue

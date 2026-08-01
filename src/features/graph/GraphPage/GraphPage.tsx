@@ -19,9 +19,10 @@ import { useRightPanelStore } from '../../right-panel/model/rightPanelStore'
 
 interface GraphPageProps {
   tabId: string
+  isActive?: boolean
 }
 
-export default memo(function GraphPage({ tabId }: GraphPageProps) {
+export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProps) {
   const { graphSession, graph } = useGraphPageController({ tabId })
   const { canvasProps, contextMenuProps } = useGraphPageActions({ graph })
   const selectedNodeId = useSelectedNodeId()
@@ -60,9 +61,13 @@ export default memo(function GraphPage({ tabId }: GraphPageProps) {
               <RoomHistory tabId={tabId} />
             </div>
 
-            <GraphCanvas tabId={tabId} {...canvasProps} />
+            {isActive ? (
+              <GraphCanvas tabId={tabId} {...canvasProps} />
+            ) : (
+              <div className="h-full w-full bg-[var(--color-canvas-bg)]" aria-hidden="true" />
+            )}
           </div>
-          <RightPanelContainer tabId={tabId} />
+          <RightPanelContainer tabId={tabId} isActive={isActive} />
         </div>
         <GraphPageContextMenu {...contextMenuProps} />
       </div>

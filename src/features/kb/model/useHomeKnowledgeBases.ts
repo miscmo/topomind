@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStorage } from '../../../core/storage'
 import { logAction } from '../../../core/log-backend'
 import { logger } from '../../../core/logger'
@@ -43,8 +43,16 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
   const storage = useStorage()
   const [loading, setLoading] = useState(false)
   const [kbs, setKbs] = useState<KBItem[]>([])
+  const requestSeqRef = useRef(0)
+  const latestKbsRef = useRef<KBItem[]>([])
+  const confirmedOrderRef = useRef<string[]>([])
+  const latestOrderRef = useRef<string[]>([])
+  const reorderSeqRef = useRef(0)
+  const reorderQueueRef = useRef(Promise.resolve())
 
   const loadKBList = useCallback(async () => {
+    const requestSeq = ++requestSeqRef.current
+    const isCurrentRequest = () => requestSeqRef.current === requestSeq
     setLoading(true)
     try {
       const list = await storage.listKBs()
@@ -54,10 +62,12 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
         list: list,
       })
 
-      const kbList = list || []
+      const kbList = [...(list || [])]
       const config = await storage.readConfig()
       const kbCovers = config.kbCovers || {}
       const kbOrder = config.kbOrder || []
+      confirmedOrderRef.current = [...kbOrder]
+      latestOrderRef.current = [...kbOrder]
 
       // Sort according to kbOrder
       const orderMap = new Map(kbOrder.map((name: any, i: any) => [name, i]))
@@ -84,6 +94,8 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
           coverOffset: config.kbCoverOffsets?.[kb.name] ?? 50,
         }
       })
+      if (!isCurrentRequest()) return
+      latestKbsRef.current = initial
       setKbs(initial)
 
       const counts = await mapWithConcurrency(
@@ -102,16 +114,21 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
           }
         }
       )
-      setKbs(initial.map((kb, i) => ({ ...kb, nodeCount: counts[i] })))
+      if (!isCurrentRequest()) return
+      const completed = initial.map((kb, i) => ({ ...kb, nodeCount: counts[i] }))
+      latestKbsRef.current = completed
+      setKbs(completed)
       logAction('HomePage:子节点数量加载完成', 'HomePage', { totalNodes: counts.reduce((a, b) => a + b, 0) })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       logger.catch('HomePage', 'loadKBList', err)
       logAction('HomePage:加载知识库列表异常', 'HomePage', { error: msg })
-      setMessage(msg || '加载知识库列表失败')
-      setMessageError(true)
+      if (isCurrentRequest()) {
+        setMessage(msg || '加载知识库列表失败')
+        setMessageError(true)
+      }
     } finally {
-      setLoading(false)
+      if (isCurrentRequest()) setLoading(false)
     }
   }, [currentWorkDir, setMessage, setMessageError, storage])
 
@@ -129,29 +146,44 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
     await loadKBList()
   }, [loadKBList])
 
-  const reorderKBs = useCallback(async (newOrder: string[]) => {
-    // 1. Update state locally immediately for responsive UI
-    setKbs(prev => {
-      const newKbs = [...prev]
-      newKbs.sort((a, b) => {
-        const orderA = newOrder.indexOf(a.name)
-        const orderB = newOrder.indexOf(b.name)
-        return (orderA !== -1 ? orderA : Infinity) - (orderB !== -1 ? orderB : Infinity)
-      })
-      return newKbs
+  const reorderKBs = useCallback((newOrder: string[]) => {
+    const previous = latestKbsRef.current.length > 0 ? latestKbsRef.current : kbs
+    const requestSeq = ++reorderSeqRef.current
+    const nextOrder = [...newOrder]
+    const reordered = [...previous].sort((a, b) => {
+      const orderA = nextOrder.indexOf(a.name)
+      const orderB = nextOrder.indexOf(b.name)
+      return (orderA !== -1 ? orderA : Infinity) - (orderB !== -1 ? orderB : Infinity)
     })
+    latestOrderRef.current = nextOrder
+    latestKbsRef.current = reordered
+    setKbs(reordered)
 
-    // 2. Persist to _config.json
-    try {
-      const config = await storage.readConfig()
-      config.kbOrder = newOrder
-      await storage.writeConfig(config)
-      logAction('HomePage:知识库排序', 'HomePage', { newOrder })
-    } catch (err) {
-      logger.catch('HomePage', 'reorderKBs', err)
-      // Revert if saving fails? Usually fine to just reload.
-    }
-  }, [storage])
+    reorderQueueRef.current = reorderQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const config = await storage.readConfig()
+        config.kbOrder = latestOrderRef.current
+        await storage.writeConfig(config)
+        confirmedOrderRef.current = [...latestOrderRef.current]
+        logAction('HomePage:知识库排序', 'HomePage', { newOrder: latestOrderRef.current })
+      })
+      .catch((err) => {
+        logger.catch('HomePage', 'reorderKBs', err)
+        if (requestSeq === reorderSeqRef.current) {
+          latestOrderRef.current = [...confirmedOrderRef.current]
+          const restored = [...previous].sort((a, b) => {
+            const orderA = latestOrderRef.current.indexOf(a.name)
+            const orderB = latestOrderRef.current.indexOf(b.name)
+            return (orderA !== -1 ? orderA : Infinity) - (orderB !== -1 ? orderB : Infinity)
+          })
+          latestKbsRef.current = restored
+          setKbs(restored)
+          setMessage('知识库排序保存失败，已恢复原顺序')
+          setMessageError(true)
+        }
+      })
+  }, [kbs, setMessage, setMessageError, storage])
 
   return {
     loading,

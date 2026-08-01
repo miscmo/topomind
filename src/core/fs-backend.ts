@@ -36,6 +36,12 @@ export interface FSBKBInfo {
 /** readCardChildren 返回 _graph.json.children 的原始映射表 */
 export type FSBCardChildren = Record<string, unknown>
 
+export interface FSBRoomNodeSummary {
+  position?: { x: number; y: number }
+  childCount: number
+  hasDetail: boolean
+}
+
 export interface FSBGraphMeta {
   children?: Record<string, FSBKBInfo & {
     x?: number
@@ -101,6 +107,7 @@ export interface FSB {
   deleteKbsDir: (rootDir: string, dirPath: string, options?: { label?: string }) => Promise<unknown>
   renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
   readGraphMeta: (rootDir: string, roomPath: string) => Promise<FSBGraphMeta>
+  readRoomNodeSummaries: (rootDir: string, roomPaths: string[]) => Promise<Record<string, FSBRoomNodeSummary>>
   writeGraphMeta: (rootDir: string, roomPath: string, meta: FSBGraphMeta) => Promise<unknown>
   listTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentManifestItem[]>
   createTopoDocument: (rootDir: string, cardPath: string, input: TopoDocumentCreateInput) => Promise<TopoDocumentManifestItem>
@@ -155,6 +162,8 @@ const FSBImpl: FSB = {
   deleteKbsDir: (rootDir, dirPath, options) => _call('fs:deleteKbsDir', rootDir, dirPath, options),
   renameKB: (rootDir, kbPath, newName) => _call('fs:renameKB', rootDir, kbPath, newName) as Promise<string>,
   readGraphMeta: (rootDir, roomPath) => _call('fs:readGraphMeta', rootDir, roomPath) as Promise<FSBGraphMeta>,
+  readRoomNodeSummaries: (rootDir, roomPaths) =>
+    _call('fs:readRoomNodeSummaries', rootDir, roomPaths) as Promise<Record<string, FSBRoomNodeSummary>>,
   writeGraphMeta: (rootDir, roomPath, meta) => _call('fs:writeGraphMeta', rootDir, roomPath, meta),
 
   listTopoDocuments: (rootDir, cardPath) =>

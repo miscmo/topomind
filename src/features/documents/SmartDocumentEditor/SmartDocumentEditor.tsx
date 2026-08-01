@@ -121,6 +121,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     if (!scrollContainer) return
 
     let scrollTimer: ReturnType<typeof setTimeout> | null = null
+    let persistScrollTimer: ReturnType<typeof setTimeout> | null = null
 
     if (attachmentInsertTargetKey) {
       const savedScroll = localStorage.getItem(`topomind_scroll_${attachmentInsertTargetKey}`)
@@ -135,7 +136,12 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 
     const handleScroll = () => {
       if (attachmentInsertTargetKey) {
-        localStorage.setItem(`topomind_scroll_${attachmentInsertTargetKey}`, scrollContainer.scrollTop.toString())
+        if (persistScrollTimer) clearTimeout(persistScrollTimer)
+        const scrollTop = scrollContainer.scrollTop
+        persistScrollTimer = setTimeout(() => {
+          localStorage.setItem(`topomind_scroll_${attachmentInsertTargetKey}`, scrollTop.toString())
+          persistScrollTimer = null
+        }, 120)
       }
       setShowBackToTop(scrollContainer.scrollTop > 300)
     }
@@ -148,6 +154,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     return () => {
       scrollContainer.removeEventListener('scroll', handleScroll)
       if (scrollTimer) clearTimeout(scrollTimer)
+      if (persistScrollTimer) clearTimeout(persistScrollTimer)
     }
   }, [attachmentInsertTargetKey])
 
@@ -189,13 +196,21 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     const editorRoot = editorRootRef.current
     if (!editorRoot) return
 
+    let positionFrame: number | null = null
     const syncToolbarPosition = (element: HTMLElement) => {
-      const rootRect = editorRoot.getBoundingClientRect()
-      const elementRect = element.getBoundingClientRect()
-      setToolbarPosition({
-        top: elementRect.top - rootRect.top + 8,
-        left: elementRect.left - rootRect.left + 12,
-        width: Math.max(elementRect.width - 24, 120),
+      if (positionFrame !== null) cancelAnimationFrame(positionFrame)
+      positionFrame = requestAnimationFrame(() => {
+        positionFrame = null
+        const rootRect = editorRoot.getBoundingClientRect()
+        const elementRect = element.getBoundingClientRect()
+        setToolbarPosition((previous) => {
+          const next = {
+            top: elementRect.top - rootRect.top + 8,
+            left: elementRect.left - rootRect.left + 12,
+            width: Math.max(elementRect.width - 24, 120),
+          }
+          return previous && previous.top === next.top && previous.left === next.left && previous.width === next.width ? previous : next
+        })
       })
     }
 
@@ -240,21 +255,30 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     return () => {
       editorRoot.removeEventListener('mousemove', handleMouseMove)
       editorRoot.removeEventListener('mouseleave', handleMouseLeave)
+      if (positionFrame !== null) cancelAnimationFrame(positionFrame)
     }
   }, [languageMenuOpen])
 
   useEffect(() => {
     if (!hoveredCodeBlock) return
 
+    let positionFrame: number | null = null
     const syncToolbarPosition = () => {
-      const editorRoot = editorRootRef.current
-      if (!editorRoot) return
-      const rootRect = editorRoot.getBoundingClientRect()
-      const elementRect = hoveredCodeBlock.element.getBoundingClientRect()
-      setToolbarPosition({
-        top: elementRect.top - rootRect.top + 8,
-        left: elementRect.left - rootRect.left + 12,
-        width: Math.max(elementRect.width - 24, 120),
+      if (positionFrame !== null) cancelAnimationFrame(positionFrame)
+      positionFrame = requestAnimationFrame(() => {
+        positionFrame = null
+        const editorRoot = editorRootRef.current
+        if (!editorRoot) return
+        const rootRect = editorRoot.getBoundingClientRect()
+        const elementRect = hoveredCodeBlock.element.getBoundingClientRect()
+        setToolbarPosition((previous) => {
+          const next = {
+            top: elementRect.top - rootRect.top + 8,
+            left: elementRect.left - rootRect.left + 12,
+            width: Math.max(elementRect.width - 24, 120),
+          }
+          return previous && previous.top === next.top && previous.left === next.left && previous.width === next.width ? previous : next
+        })
       })
     }
 
@@ -266,6 +290,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     return () => {
       scrollContainer?.removeEventListener('scroll', syncToolbarPosition)
       window.removeEventListener('resize', syncToolbarPosition)
+      if (positionFrame !== null) cancelAnimationFrame(positionFrame)
     }
   }, [hoveredCodeBlock, languageMenuOpen])
 

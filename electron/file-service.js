@@ -1611,6 +1611,35 @@ const fileService = {
       return graphMetaService.readGraphMeta(rootDir, roomPath);
     },
 
+    readRoomNodeSummaries: function(rootDir, roomPaths) {
+      rootDir = _fs_requireValidWorkDir(rootDir);
+      if (!Array.isArray(roomPaths)) throw new Error('房间路径列表必须是数组');
+      if (roomPaths.length > 20000) throw new Error('单次读取的房间数量过多');
+
+      var summaries = {};
+      Array.from(new Set(roomPaths.map(function(roomPath) { return String(roomPath || ''); })))
+        .forEach(function(roomPath) {
+          try {
+            var meta = graphMetaService.readGraphMeta(rootDir, roomPath);
+            var children = meta && meta.children && typeof meta.children === 'object' && !Array.isArray(meta.children)
+              ? meta.children
+              : {};
+            var pan = meta && meta.pan;
+            var documents = documentService.listTopoDocuments(rootDir, roomPath);
+            summaries[roomPath] = {
+              position: pan && Number.isFinite(pan.x) && Number.isFinite(pan.y)
+                ? { x: pan.x, y: pan.y }
+                : undefined,
+              childCount: Object.keys(children).length,
+              hasDetail: documents.length > 0,
+            };
+          } catch (_) {
+            summaries[roomPath] = { childCount: 0, hasDetail: false };
+          }
+        });
+      return summaries;
+    },
+
     /**
      * @description 写入房间的图元数据，不存在时先创建目录结构
      * @param { string } rootDir: 工作目录路径

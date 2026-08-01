@@ -14,6 +14,7 @@ export function useHomeImportKB({ refreshKBList }: UseHomeImportKBOptions) {
   const [importDir, setImportDir] = useState('')
   const [importLoading, setImportLoading] = useState(false)
   const [importError, setImportError] = useState('')
+  const [selectingImportDir, setSelectingImportDir] = useState(false)
 
   const openImportSheet = () => {
     logAction('点击导入知识库', 'HomePage', {})
@@ -29,14 +30,23 @@ export function useHomeImportKB({ refreshKBList }: UseHomeImportKBOptions) {
   }
 
   const handleSelectImportDir = async () => {
+    if (importLoading || selectingImportDir) return
     logAction('HomePage:点击选择导入文件夹', 'HomePage', {})
-    const res = await platform.selectDirectory()
-    if (res?.valid) {
-      setImportDir(res.nodePath || '')
-      setImportError('')
-      logAction('HomePage:选择导入文件夹完成', 'HomePage', { selectedPath: res.nodePath })
-    } else {
-      logAction('HomePage:选择导入文件夹取消', 'HomePage', {})
+    setSelectingImportDir(true)
+    try {
+      const res = await platform.selectDirectory()
+      if (res?.valid) {
+        setImportDir(res.nodePath || '')
+        setImportError('')
+        logAction('HomePage:选择导入文件夹完成', 'HomePage', { selectedPath: res.nodePath })
+      } else {
+        logAction('HomePage:选择导入文件夹取消', 'HomePage', {})
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setImportError(msg || '选择文件夹失败')
+    } finally {
+      setSelectingImportDir(false)
     }
   }
 
@@ -65,6 +75,7 @@ export function useHomeImportKB({ refreshKBList }: UseHomeImportKBOptions) {
     showImportSheet,
     importDir,
     importLoading,
+    selectingImportDir,
     importError,
     openImportSheet,
     closeImportSheet,

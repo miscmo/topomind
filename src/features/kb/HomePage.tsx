@@ -43,6 +43,7 @@ export default function HomePage() {
     showImportSheet,
     importDir,
     importLoading,
+    selectingImportDir,
     importError,
     openImportSheet,
     closeImportSheet,
@@ -156,6 +157,7 @@ export default function HomePage() {
         visible={showImportSheet}
         dir={importDir}
         loading={importLoading}
+        selectingDir={selectingImportDir}
         error={importError}
         onClose={closeImportSheet}
         onSelectDir={handleSelectImportDir}

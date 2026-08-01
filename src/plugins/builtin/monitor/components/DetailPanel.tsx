@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { formatDate } from '@/shared/observability/logFormatting'
 import { useMonitorStore } from '../model/monitorStore'
 import { LEVEL_COLORS } from '../constants'
@@ -8,7 +8,16 @@ export function DetailPanel() {
   const selectedEntry = useMonitorStore((s) => s.selectedEntry)
   const setSelectedEntry = useMonitorStore((s) => s.setSelectedEntry)
   const [copied, setCopied] = useState(false)
+  const resetCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { log } = useMonitorHost()
+
+  useEffect(() => {
+    return () => {
+      if (resetCopiedTimerRef.current !== null) {
+        clearTimeout(resetCopiedTimerRef.current)
+      }
+    }
+  }, [])
 
   if (!selectedEntry) {
     return (
@@ -20,9 +29,17 @@ export function DetailPanel() {
 
   const handleCopy = () => {
     log.info('copy monitor log entry', { entryId: selectedEntry.id, entryLevel: selectedEntry.level })
-    navigator.clipboard.writeText(JSON.stringify(selectedEntry, null, 2)).then(() => {
+    void navigator.clipboard.writeText(JSON.stringify(selectedEntry, null, 2)).then(() => {
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      if (resetCopiedTimerRef.current !== null) {
+        clearTimeout(resetCopiedTimerRef.current)
+      }
+      resetCopiedTimerRef.current = setTimeout(() => {
+        setCopied(false)
+        resetCopiedTimerRef.current = null
+      }, 2000)
+    }).catch((error) => {
+      log.error('copy monitor log entry failed', { entryId: selectedEntry.id, error: error instanceof Error ? error.message : String(error) })
     })
   }
 

@@ -51,40 +51,9 @@ export interface GraphContextValue {
   flushCurrentRoomSave: () => Promise<void>
 }
 
-// Empty context value for when used outside provider
-const emptyContext: GraphContextValue = {
-  loadRoom: async () => {},
-  navigateBack: async () => {},
-  navigateToRoom: async () => {},
-  navigateToRoot: async () => {},
-  onNodesChange: () => {},
-  onEdgesChange: () => {},
-  onConnect: () => {},
-  onNodeClick: () => {},
-  onEdgeClick: () => {},
-  onPaneClick: () => {},
-  onConnectStart: () => {},
-  onConnectEnd: () => {},
-  navigateToChildRoom: async () => {},
-  onNodeContextMenu: () => {},
-  createChildNode: async () => null as string | null,
-  deleteChildNode: async () => false,
-  renameNode: async () => false,
-  updateNodeStyle: async () => {},
-  updateNodesStyle: async () => {},
-  clearNodesStyle: async () => {},
-  updateNodeSizingMode: async () => {},
-  updateNodeEmojis: async () => {},
-  selectNode: () => {},
-  deselectNode: () => {},
-  createEdge: async () => null,
-  updateEdgeRelation: () => {},
-  updateEdgeStyle: () => {},
-  flushCurrentRoomSave: async () => {},
-}
-
-// Create context with null default — must be provided by GraphPage
-const GraphContext: Context<GraphContextValue> = createContext<GraphContextValue>(emptyContext)
+// A graph context without its provider is a programming error. Keep the
+// default value null so missing providers fail at the consumption boundary.
+const GraphContext: Context<GraphContextValue | null> = createContext<GraphContextValue | null>(null)
 
 type GraphContextSource = Pick<ReturnType<typeof useGraph>, keyof GraphContextValue>
 
@@ -133,5 +102,9 @@ export function GraphContextProvider({ graph, children }: { graph: GraphContextS
 
 /** Hook to consume shared graph state — use instead of useGraph() */
 export function useGraphContext(): GraphContextValue {
-  return useContext(GraphContext)
+  const graph = useContext(GraphContext)
+  if (!graph) {
+    throw new Error('useGraphContext must be used within GraphContextProvider')
+  }
+  return graph
 }

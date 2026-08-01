@@ -16,6 +16,48 @@ export function getRectCenter(rect: { x: number; y: number; width: number; heigh
   }
 }
 
+export interface RectSpatialItem {
+  id: string
+  rect: { x: number; y: number; width: number; height: number }
+}
+
+export function buildRectSpatialIndex(items: RectSpatialItem[], cellSize: number) {
+  const cells = new Map<string, RectSpatialItem[]>()
+  for (const item of items) {
+    const minCellX = Math.floor(item.rect.x / cellSize)
+    const maxCellX = Math.floor((item.rect.x + item.rect.width) / cellSize)
+    const minCellY = Math.floor(item.rect.y / cellSize)
+    const maxCellY = Math.floor((item.rect.y + item.rect.height) / cellSize)
+    for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+      for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
+        const key = `${cellX}:${cellY}`
+        const cell = cells.get(key)
+        if (cell) cell.push(item)
+        else cells.set(key, [item])
+      }
+    }
+  }
+  return { cellSize, cells }
+}
+
+export function queryRectSpatialIndex(
+  index: ReturnType<typeof buildRectSpatialIndex>,
+  point: { x: number; y: number },
+  radius: number
+) {
+  const minCellX = Math.floor((point.x - radius) / index.cellSize)
+  const maxCellX = Math.floor((point.x + radius) / index.cellSize)
+  const minCellY = Math.floor((point.y - radius) / index.cellSize)
+  const maxCellY = Math.floor((point.y + radius) / index.cellSize)
+  const candidates = new Map<string, RectSpatialItem>()
+  for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+    for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
+      for (const item of index.cells.get(`${cellX}:${cellY}`) ?? []) candidates.set(item.id, item)
+    }
+  }
+  return candidates.values()
+}
+
 export function distanceToRect(point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) {
   const dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.width))
   const dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.height))

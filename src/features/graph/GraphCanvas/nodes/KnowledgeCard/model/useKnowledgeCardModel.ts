@@ -134,7 +134,6 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const handleDrillDown = useCallback((e: React.MouseEvent | React.PointerEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    console.log('handleDrillDown called', { cardPath, label: data.label, parent: data.parent, cardRef: data.cardRef, id })
     graph.navigateToChildRoom?.(cardPath, data.label)
   }, [cardPath, data.label, data.parent, data.cardRef, id, graph])
 

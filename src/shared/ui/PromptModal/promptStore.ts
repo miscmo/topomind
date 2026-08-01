@@ -28,6 +28,8 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
 
   open: ({ title = '输入', placeholder = '', defaultValue = '' } = {}) => {
     return new Promise<string | null>((resolve) => {
+      const previousResolve = get().resolve
+      previousResolve?.(null)
       set({ visible: true, title, placeholder, defaultValue, resolve })
     })
   },

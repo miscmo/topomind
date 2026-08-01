@@ -1,10 +1,13 @@
-import { isPlainStructuredDocumentContent, parseStructuredDocumentValue, serializeStructuredDocumentContent } from '../services/structuredDocumentSerialization'
+import { isPlainStructuredDocumentContent, serializeStructuredDocumentContent } from '../services/structuredDocumentSerialization.ts'
 
 export type DocumentContentValue = unknown
 
 const comparableDocumentContentCache = new WeakMap<object, string>()
 
 export function getDocumentContentLength(value: DocumentContentValue): number {
+  if (value && typeof value === 'object') {
+    return getComparableDocumentContent(value).length
+  }
   return serializeStructuredDocumentContent(value).length
 }
 
@@ -18,7 +21,14 @@ export function prepareStructuredDocumentContentForSave(value: DocumentContentVa
     return null
   }
 
-  const parsedContent = parseStructuredDocumentValue(value)
+  let parsedContent: unknown = value
+  if (typeof value === 'string') {
+    try {
+      parsedContent = JSON.parse(value.trim())
+    } catch (error) {
+      throw new Error(`文档内容不是有效的 JSON 格式，为防止覆盖，已终止保存: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
   if (!isPlainStructuredDocumentContent(parsedContent)) {
     throw new Error('文档内容不是有效的对象格式，为防止覆盖，已终止保存')
   }

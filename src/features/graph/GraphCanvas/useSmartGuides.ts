@@ -1,7 +1,44 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { Node, NodeChange } from '@xyflow/react'
 
 const SNAP_THRESHOLD = 8
+const GUIDE_BUCKET_SIZE = SNAP_THRESHOLD * 2
+
+type GuideIndex = Map<number, Set<string>>
+
+function addToGuideIndex(index: GuideIndex, value: number, nodeId: string) {
+  const bucket = Math.floor(value / GUIDE_BUCKET_SIZE)
+  const ids = index.get(bucket)
+  if (ids) ids.add(nodeId)
+  else index.set(bucket, new Set([nodeId]))
+}
+
+function collectNearbyIds(index: GuideIndex, value: number, target: Set<string>) {
+  const start = Math.floor((value - SNAP_THRESHOLD) / GUIDE_BUCKET_SIZE)
+  const end = Math.floor((value + SNAP_THRESHOLD) / GUIDE_BUCKET_SIZE)
+  for (let bucket = start; bucket <= end; bucket += 1) {
+    for (const nodeId of index.get(bucket) ?? []) target.add(nodeId)
+  }
+}
+
+function buildNodeMeta(nodes: Node[]) {
+  const byId = new Map<string, { node: Node; rect: ReturnType<typeof getNodeRect> }>()
+  const xIndex: GuideIndex = new Map()
+  const yIndex: GuideIndex = new Map()
+  const widthIndex: GuideIndex = new Map()
+  const heightIndex: GuideIndex = new Map()
+  let selectedNodeCount = 0
+  for (const node of nodes) {
+    if (node.selected) selectedNodeCount += 1
+    const rect = getNodeRect(node)
+    byId.set(node.id, { node, rect })
+    for (const value of [rect.left, rect.centerX, rect.right]) addToGuideIndex(xIndex, value, node.id)
+    for (const value of [rect.top, rect.centerY, rect.bottom]) addToGuideIndex(yIndex, value, node.id)
+    addToGuideIndex(widthIndex, rect.width, node.id)
+    addToGuideIndex(heightIndex, rect.height, node.id)
+  }
+  return { byId, xIndex, yIndex, widthIndex, heightIndex, selectedNodeCount }
+}
 
 export type GuideLine = {
   id: string
@@ -30,17 +67,7 @@ function getNodeRect(node: Node, pos?: { x?: number, y?: number }, dim?: { width
 
 export function useSmartGuides(nodes: Node[]) {
   const [guideLines, setGuideLines] = useState<GuideLine[]>([])
-  const nodeMeta = useMemo(() => {
-    const byId = new Map<string, { node: Node; rect: ReturnType<typeof getNodeRect> }>()
-    let selectedNodeCount = 0
-    for (const node of nodes) {
-      if (node.selected) {
-        selectedNodeCount += 1
-      }
-      byId.set(node.id, { node, rect: getNodeRect(node) })
-    }
-    return { byId, selectedNodeCount }
-  }, [nodes])
+  const activeNodeMetaRef = useRef<ReturnType<typeof buildNodeMeta> | null>(null)
   
   const onNodesChangeIntercept = useCallback((changes: NodeChange[]) => {
     const nextChanges = [...changes]
@@ -53,15 +80,22 @@ export function useSmartGuides(nodes: Node[]) {
     if (dragChanges.length === 0 && resizeChanges.length === 0) {
       const hasEnd = nextChanges.some(c => (c.type === 'position' && !c.dragging) || (c.type === 'dimensions' && !c.resizing))
       if (hasEnd) {
+        activeNodeMetaRef.current = null
         setGuideLines([])
       }
       return nextChanges
     }
 
+    const nodeMeta = activeNodeMetaRef.current ?? buildNodeMeta(nodes)
+    activeNodeMetaRef.current = nodeMeta
     const change = (dragChanges.length > 0 ? dragChanges[0] : resizeChanges[0]) as any
     const draggedNodeMeta = nodeMeta.byId.get(change.id)
     if (!draggedNodeMeta) return nextChanges
     const draggedNode = draggedNodeMeta.node
+    if (nodeMeta.selectedNodeCount > 1) {
+      setGuideLines([])
+      return nextChanges
+    }
 
     const isResize = change.type === 'dimensions'
     // React Flow usually dispatches a position change along with dimensions when top/left is dragged.
@@ -90,8 +124,21 @@ export function useSmartGuides(nodes: Node[]) {
 
     let bestSnapX: { diff: number, snapX?: number, snapWidth?: number, guide?: GuideLine } | null = null;
     let bestSnapY: { diff: number, snapY?: number, snapHeight?: number, guide?: GuideLine } | null = null;
+    const candidateIds = new Set<string>()
+    for (const value of [dragRect.left, dragRect.centerX, dragRect.right]) {
+      collectNearbyIds(nodeMeta.xIndex, value, candidateIds)
+    }
+    for (const value of [dragRect.top, dragRect.centerY, dragRect.bottom]) {
+      collectNearbyIds(nodeMeta.yIndex, value, candidateIds)
+    }
+    if (isResize) {
+      collectNearbyIds(nodeMeta.widthIndex, dragRect.width, candidateIds)
+      collectNearbyIds(nodeMeta.heightIndex, dragRect.height, candidateIds)
+    }
 
-    for (const otherMeta of nodeMeta.byId.values()) {
+    for (const candidateId of candidateIds) {
+      const otherMeta = nodeMeta.byId.get(candidateId)
+      if (!otherMeta) continue
       const other = otherMeta.node
       if (other.id === draggedNode.id || other.selected) continue
       const oRect = otherMeta.rect
@@ -231,12 +278,6 @@ export function useSmartGuides(nodes: Node[]) {
       }
     }
 
-    // If there are multiple nodes being dragged, ignore alignment guides
-    if (nodeMeta.selectedNodeCount > 1) {
-      bestSnapX = null;
-      bestSnapY = null;
-    }
-
     if (isResize) {
       const dimChange = change as Extract<NodeChange, { type: 'dimensions' }>
       if (bestSnapX?.snapWidth !== undefined && dimChange.dimensions) dimChange.dimensions.width = Math.max(bestSnapX.snapWidth, 10)
@@ -257,9 +298,10 @@ export function useSmartGuides(nodes: Node[]) {
     setGuideLines(newGuideLines)
 
     return nextChanges
-  }, [nodeMeta])
+  }, [nodes])
 
   const clearGuides = useCallback(() => {
+    activeNodeMetaRef.current = null
     setGuideLines([])
   }, [])
 

@@ -16,6 +16,7 @@ interface UseDetailDocumentSessionParams {
   currentDocumentKey: string
   activeDocumentPath: string
   activeTopoDocumentId: string | null
+  isActive?: boolean
 }
 
 export function useDetailDocumentSession({
@@ -25,6 +26,7 @@ export function useDetailDocumentSession({
   currentDocumentKey,
   activeDocumentPath,
   activeTopoDocumentId,
+  isActive = true,
 }: UseDetailDocumentSessionParams) {
   const storage = useStorage()
   const storeApi = useGraphStoreApi()
@@ -148,7 +150,7 @@ export function useDetailDocumentSession({
   useEffect(() => {
     const requestSeq = ++contentRequestSeqRef.current
     setLoadedDocumentKey('')
-    if (!selectedNodeId || !nodePath || !currentDocumentKey) return
+    if (!isActive || !selectedNodeId || !nodePath || !currentDocumentKey) return
     const readStartedAt = performance.now()
 
     const cachedContent = useCardContentStore.getState().detailEntries[currentDocumentKey]?.content
@@ -243,7 +245,7 @@ export function useDetailDocumentSession({
         }, 'DetailPanel')
       }
     })
-  }, [selectedNodeId, nodePath, activeDocumentPath, currentDocumentKey, activeTopoDocumentId, storage, setDraftContent, setDetailContent])
+  }, [isActive, selectedNodeId, nodePath, activeDocumentPath, currentDocumentKey, activeTopoDocumentId, storage, setDraftContent, setDetailContent])
 
   useEffect(() => {
     if (currentDocumentKey && detailEntry) {
@@ -251,9 +253,16 @@ export function useDetailDocumentSession({
     }
   }, [detailEntry, currentDocumentKey])
 
+  const flushDocumentSaveRef = useRef(flushDocumentSave)
+  flushDocumentSaveRef.current = flushDocumentSave
+  const isDocumentDirtyRef = useRef(isDocumentDirty)
+  isDocumentDirtyRef.current = isDocumentDirty
+
   useEffect(() => {
-    return registerTabSaver(tabId, flushDocumentSave, () => isDocumentDirty)
-  }, [tabId, flushDocumentSave, isDocumentDirty])
+    return registerTabSaver(tabId, async () => {
+      await flushDocumentSaveRef.current()
+    }, () => isDocumentDirtyRef.current)
+  }, [tabId])
 
   const handleDraftChange = useCallback((value: unknown) => {
     if (!currentDocumentKey) return

@@ -3,15 +3,17 @@ import type { MouseEvent } from 'react'
 import { useRightPanelStore } from './model/rightPanelStore'
 import { useResizePanel } from '../../hooks/useResizePanel'
 import RightPanelShell from './RightPanelShell'
+import DetailPanel from './components/DetailTab/DetailPanel'
 
 interface RightPanelContainerProps {
   tabId: string
+  isActive?: boolean
 }
 
 const RIGHT_PANEL_MIN_WIDTH = 600
 const RIGHT_PANEL_MAX_WIDTH = 1200
 
-export default memo(function RightPanelContainer({ tabId }: RightPanelContainerProps) {
+export default memo(function RightPanelContainer({ tabId, isActive = true }: RightPanelContainerProps) {
   const collapsed = useRightPanelStore((s) => s.rightPanelCollapsed)
   const maximized = useRightPanelStore((s) => s.rightPanelMaximized)
   const width = useRightPanelStore((s) => s.rightPanelWidth)
@@ -55,7 +57,7 @@ export default memo(function RightPanelContainer({ tabId }: RightPanelContainerP
   }, [collapse])
 
   if (collapsed) {
-    return null
+    return <div className="hidden" aria-hidden="true"><DetailPanel tabId={tabId} isActive={false} /></div>
   }
 
   return (
@@ -84,6 +86,7 @@ export default memo(function RightPanelContainer({ tabId }: RightPanelContainerP
         width={maximized ? '100%' : width}
         onTabChange={setActiveTab}
         onCollapse={collapse}
+        isActive={isActive}
       />
     </div>
   )

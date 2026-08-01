@@ -296,7 +296,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                   e.stopPropagation()
                 }}
                 onClick={(e) => {
-                  console.log('badge onClick')
                   e.stopPropagation()
                   e.preventDefault()
                   handleDrillDown(e)

@@ -268,12 +268,16 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       try {
         const raw = await FSB.readGraphMeta(requireRootDir(), roomPath)
         return convertFSBToGraph(
-          raw as Parameters<typeof convertFSBToGraph>[0], 
+          raw as Parameters<typeof convertFSBToGraph>[0],
           roomPath
         )
       } catch {
         return { nodes: {}, edges: [], viewport: { zoom: 1, pan: { x: 0, y: 0 } } }
       }
+    },
+
+    readRoomNodeSummaries: async (roomPaths) => {
+      return FSB.readRoomNodeSummaries(requireRootDir(), roomPaths)
     },
 
     writeLayout: async (roomPath: string, meta: GraphMeta): Promise<void> => {

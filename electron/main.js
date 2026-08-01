@@ -327,6 +327,9 @@ function registerIPC() {
   ipcMain.handle('fs:deleteKbsDir', function(e, rootDir, p, options) { fileService.deleteKbsDir(requireActiveWorkDir(rootDir), p, options); });
   ipcMain.handle('fs:renameKB', function(e, rootDir, p, n) { return fileService.renameKB(requireActiveWorkDir(rootDir), p, n); });
   ipcMain.handle('fs:readGraphMeta', function(e, rootDir, p) { return fileService.readGraphMeta(requireActiveWorkDir(rootDir), p); });
+  ipcMain.handle('fs:readRoomNodeSummaries', function(e, rootDir, roomPaths) {
+    return fileService.readRoomNodeSummaries(requireActiveWorkDir(rootDir), roomPaths);
+  });
   ipcMain.handle('fs:writeGraphMeta', function(e, rootDir, p, m) { fileService.writeGraphMeta(requireActiveWorkDir(rootDir), p, m); });
   ipcMain.handle('fs:listTopoDocuments', function(e, rootDir, cardPath) {
     return fileService.listTopoDocuments(requireActiveWorkDir(rootDir), cardPath);

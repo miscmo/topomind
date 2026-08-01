@@ -124,14 +124,17 @@ export default memo(function App() {
                 style={{
                   visibility: activeTabId === tab.id ? 'visible' : 'hidden',
                   opacity: activeTabId === tab.id ? 1 : 0,
-                  pointerEvents: activeTabId === tab.id ? 'auto' : 'none',
-                  zIndex: activeTabId === tab.id ? 5 : -1,
+                pointerEvents: activeTabId === tab.id ? 'auto' : 'none',
+                // Keep the tab's React/store state alive, but let Chromium skip
+                // painting and layout work for inactive graph pages.
+                contentVisibility: activeTabId === tab.id ? 'visible' : 'hidden',
+                zIndex: activeTabId === tab.id ? 5 : -1,
                 }}
               >
                 <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)] text-[var(--color-text-muted)] text-[13px]">加载知识库中...</div>}>
                   <ReactFlowProvider>
                     <GraphStoreProvider>
-                      <GraphPage tabId={tab.id} />
+                      <GraphPage tabId={tab.id} isActive={activeTabId === tab.id} />
                     </GraphStoreProvider>
                   </ReactFlowProvider>
                 </Suspense>

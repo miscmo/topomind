@@ -139,8 +139,15 @@ export interface AttachmentStorageBackend {
   readAttachmentDataUrl: (cardPath: string, attachmentRef: string) => Promise<string>
 }
 
+export interface RoomNodeSummary {
+  position?: { x: number; y: number }
+  childCount: number
+  hasDetail: boolean
+}
+
 export interface GraphLayoutStorageBackend {
   readLayout: (roomPath: string) => Promise<GraphMeta>
+  readRoomNodeSummaries: (roomPaths: string[]) => Promise<Record<string, RoomNodeSummary>>
   writeLayout: (roomPath: string, meta: GraphMeta) => Promise<void>
 }
 

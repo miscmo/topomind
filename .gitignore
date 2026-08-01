@@ -12,3 +12,6 @@ test-results/
 .vscode/
 graphify-out/
 stats.html
+/.workbuddy
+/build-validation*
+/outputs

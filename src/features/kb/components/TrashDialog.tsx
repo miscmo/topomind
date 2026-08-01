@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { RotateCcw, Trash2, Book, FileText, Paperclip, AppWindow } from 'lucide-react'
 import type { FSBTrashItem } from '../../../core/fs-backend'
 import { modalOverlayBaseClassName, modalOverlayEnterClassName, modalPanelEnterClassName } from '../../../shared/ui/modal'
@@ -36,21 +37,31 @@ function getItemTypeName(item: FSBTrashItem) {
 
 export function TrashDialog({ visible, onClose, refreshKBList }: TrashDialogProps) {
   const { items, loading, error, handleRestore, handleClear } = useTrashDialogModel(visible, refreshKBList)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!visible) return
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    dialogRef.current?.querySelector<HTMLButtonElement>('button[aria-label="关闭回收站弹窗"]')?.focus()
+    return () => previousFocusRef.current?.focus()
+  }, [visible])
 
   if (!visible) return null
 
   return (
     <div
       className={`${modalOverlayBaseClassName} ${modalOverlayEnterClassName} z-[10000]`}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onKeyDown={(e) => { if (e.key === 'Escape' && !loading) onClose() }}
+      onClick={(e) => { if (!loading && e.target === e.currentTarget) onClose() }}
     >
-      <div className={`w-[560px] max-w-[92%] overflow-hidden rounded-2xl border border-[var(--color-border)] bg-surface shadow-[var(--shadow-lg)] ${modalPanelEnterClassName}`}>
+      <div ref={dialogRef} className={`w-[560px] max-w-[92%] overflow-hidden rounded-2xl border border-[var(--color-border)] bg-surface shadow-[var(--shadow-lg)] ${modalPanelEnterClassName}`} role="dialog" aria-modal="true" aria-labelledby="trash-title" aria-describedby={error ? 'trash-error' : undefined}>
         <div className="p-[18px_24px] bg-[var(--color-bg)] border-b border-[var(--color-border-light)] flex justify-between items-center [&>h3]:text-[var(--color-primary)] [&>h3]:text-[16px] [&>h3]:m-0 [&>h3]:font-bold">
-          <h3>全局回收站</h3>
-          <button className="w-7 h-7 rounded-md border-none bg-[var(--color-hover-bg)] text-[var(--color-text-muted)] cursor-pointer text-[14px] transition-all duration-75 hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)]" onClick={onClose}>✕</button>
+          <h3 id="trash-title">全局回收站</h3>
+          <button type="button" aria-label="关闭回收站弹窗" className="w-7 h-7 rounded-md border-none bg-[var(--color-hover-bg)] text-[var(--color-text-muted)] cursor-pointer text-[14px] transition-all duration-75 hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onClose} disabled={loading}>✕</button>
         </div>
         <div className="p-[20px_24px]">
-          {error && <div className="mb-3 rounded-lg bg-[var(--color-danger-soft)] px-3 py-2 text-[13px] text-[var(--color-danger)]">{error}</div>}
+          {error && <div id="trash-error" className="mb-3 rounded-lg bg-[var(--color-danger-soft)] px-3 py-2 text-[13px] text-[var(--color-danger)]" role="alert">{error}</div>}
           <div className="mb-4 text-[13px] text-[var(--color-text-secondary)]">这里显示所有已删除的知识库、节点、文档和附件。清空操作不可恢复。恢复时如果原名称已存在，会自动添加后缀避免覆盖。</div>
           <div className="max-h-[360px] overflow-y-auto rounded-xl border border-[var(--color-border-light)]">
             {loading && items.length === 0 ? (
@@ -59,7 +70,7 @@ export function TrashDialog({ visible, onClose, refreshKBList }: TrashDialogProp
               <div className="p-8 text-center text-[13px] text-[var(--color-text-muted)]">回收站为空</div>
             ) : (
               items.map((item) => (
-                <div key={item.trashName} className="flex items-center justify-between gap-4 border-b border-[var(--color-border-light)] p-3 last:border-b-0">
+                <div key={`${item.category}:${item.trashName}`} className="flex items-center justify-between gap-4 border-b border-[var(--color-border-light)] p-3 last:border-b-0">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--color-bg-muted)]">
                       {getItemIcon(item)}
@@ -74,9 +85,12 @@ export function TrashDialog({ visible, onClose, refreshKBList }: TrashDialogProp
                         <span>时间：{formatDeletedAt(item.deletedAt)}</span>
                         {item.isImage && item.previewUrl && (
                           <div className="group relative flex items-center">
-                            <span className="cursor-pointer text-[var(--color-primary)] hover:underline">预览图片</span>
-                            <div className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg group-hover:block">
-                              <img src={item.previewUrl} alt="preview" className="h-auto w-full rounded object-contain" />
+                            <button type="button" className="cursor-pointer border-none bg-transparent p-0 text-[var(--color-primary)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]" aria-label={`预览 ${item.businessName || item.originalName}`} onClick={(event) => {
+                              const preview = event.currentTarget.nextElementSibling
+                              preview?.classList.toggle('hidden')
+                            }}>预览图片</button>
+                            <div className="absolute bottom-full left-0 z-50 mb-2 hidden w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg group-focus-within:block group-hover:block">
+                              <img src={item.previewUrl} alt={`${item.businessName || item.originalName}预览`} className="h-auto w-full rounded object-contain" />
                             </div>
                           </div>
                         )}
@@ -101,7 +115,7 @@ export function TrashDialog({ visible, onClose, refreshKBList }: TrashDialogProp
             <Trash2 className="mr-1.5 h-3.5 w-3.5" />
             清空回收站
           </button>
-          <button className="rounded-lg border-none bg-[var(--color-hover-bg)] px-5 py-2 text-[13px] font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)]" onClick={onClose} disabled={loading}>关闭</button>
+          <button type="button" className="rounded-lg border-none bg-[var(--color-hover-bg)] px-5 py-2 text-[13px] font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)]" onClick={onClose} disabled={loading}>关闭</button>
         </div>
       </div>
     </div>
