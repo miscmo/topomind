@@ -104,6 +104,120 @@ export function getCodeBlockPlainTextPaste(
   return isSelectionInCodeBlock && plainText.length > 0 ? plainText : undefined
 }
 
+/**
+ * Recovers literal code text from a clipboard `text/html` payload. Some
+ * clipboard sources (web code blocks, rich-text apps, PDFs) expose only HTML,
+ * and the angle brackets in it are often MIXED: `i < n` may arrive as
+ * `i &lt; n` while `#include<iostream>` and `1<<i` stay raw. Any DOM parse of
+ * that payload treats the raw `<i` as an `<i>` tag and swallows the rest.
+ *
+ * So we never use a DOM parser here: we only remove KNOWN wrapper tags
+ * (pre/code/span/div...) and decode entities. Unescaped `<xxx>`/`<iostream>`
+ * survive because they are not in the wrapper whitelist, while `&lt;`/`&amp;`
+ * decode correctly. This is uniformly correct for raw, partially escaped, and
+ * fully escaped HTML alike. DOM-free, so it also runs in Node for unit tests.
+ */
+
+// Deliberately excludes single-letter tags (i/b/u/s/em/strong/a...) that
+// commonly appear inside code (`1<<i` would match `<i`); only strips wrapper
+// tags that a clipboard HTML serialization would legitimately produce.
+const HTML_WRAPPER_TAGS = [
+  'pre', 'code', 'span', 'div', 'p', 'font',
+  'table', 'tbody', 'thead', 'tfoot', 'tr', 'td', 'th',
+  'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'blockquote', 'section', 'article', 'header', 'footer',
+  'nav', 'main', 'figure', 'figcaption', 'aside',
+  'meta', 'style', 'script', 'title',
+].join('|')
+
+export function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+}
+
+export function stripHtmlWrapperTags(value: string): string {
+  let output = value
+    .replace(new RegExp(`</(?:${HTML_WRAPPER_TAGS})>`, 'gi'), '\n')
+    .replace(new RegExp(`<(?:${HTML_WRAPPER_TAGS})(?:\\s[^>]*)?>`, 'gi'), '')
+    .replace(/<br\s*\/?>/gi, '\n')
+  output = output.replace(/\n{3,}/g, '\n\n')
+  return output.trim()
+}
+
+/**
+ * Recovers literal code text from a clipboard `text/html` payload. Some
+ * clipboard sources (web code blocks, rich-text apps, PDFs) expose only HTML,
+ * and the angle brackets in it are often MIXED: `i < n` may arrive as
+ * `i &lt; n` while `#include<iostream>` and `1<<i` stay raw. Any DOM parse of
+ * that payload treats the raw `<i` as an `<i>` tag and swallows the rest.
+ *
+ * So we never use a DOM parser here: we only remove KNOWN wrapper tags
+ * (pre/code/span/div...) and decode entities. Unescaped `<xxx>`/`<iostream>`
+ * survive because they are not in the wrapper whitelist, while `&lt;`/`&amp;`
+ * decode correctly. This is uniformly correct for raw, partially escaped, and
+ * fully escaped HTML alike. DOM-free, so it also runs in Node for unit tests.
+ */
+export function getCodeBlockPlainTextFromHtml(
+  html: string,
+  extractText?: (html: string) => string,
+): string {
+  if (!html || html.length === 0) return ''
+  const extract = extractText ?? ((value: string) => stripHtmlWrapperTags(decodeHtmlEntities(value)))
+  return extract(html)
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function extractCodeLanguage(html: string): string {
+  // Only trust an explicit data-language or class="language-xxx" marker on a
+  // <pre>/<code> tag — never treat an arbitrary class (e.g. a random
+  // syntax-highlighting span class like `e6vjtes0`) as a language.
+  const dataLang = html.match(/<(?:pre|code)[^>]*\bdata-language="([^"]+)"/i)
+  if (dataLang) return dataLang[1]
+  const classLang = html.match(/<(?:pre|code)[^>]*\bclass="[^"]*\blanguage-([\w+-]+)/i)
+  if (classLang) return classLang[1]
+  return ''
+}
+
+/**
+ * Builds a clean, escaped `<pre><code>` HTML payload from a clipboard
+ * `text/html` that is structured as a code block. BlockNote auto-creates a
+ * codeBlock from `<pre>/<code>` markup; if we handed the raw HTML through,
+ * any DOM parse would interpret `<xxx>`/`1<<i` as markup and strip it. By
+ * recovering the literal text and re-escaping it, the code block is created
+ * with angle brackets intact — regardless of where the cursor was.
+ *
+ * Returns `''` when the payload has no recoverable text.
+ */
+export function getCodeBlockPasteHtml(
+  html: string,
+  extractText?: (html: string) => string,
+): string {
+  if (!html || html.length === 0) return ''
+  // Prefer the first <pre>...</pre> block so surrounding content (headings,
+  // paragraphs) is NOT swallowed into the code block.
+  const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i)
+  const codeSource = preMatch ? preMatch[1] : html
+  const codeText = getCodeBlockPlainTextFromHtml(codeSource, extractText)
+  if (codeText.length === 0) return ''
+  const language = extractCodeLanguage(html)
+  const codeOpen = language
+    ? `<code data-language="${escapeHtml(language)}">`
+    : '<code>'
+  return `<pre>${codeOpen}${escapeHtml(codeText)}</code></pre>`
+}
+
 export function getSmartDocumentSelectedTextState(
   rawText: string,
   selectedBlocks: SmartDocumentBlockLike[],

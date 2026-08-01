@@ -73,6 +73,44 @@ function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;')
 }
 
+// HTML tags that legitimately appear in rendered markdown or rich text. Any
+// other <xxx> is almost certainly literal code/text (e.g. <iostream>,
+// <Component>, <xxx>) and must be escaped before DOM parsing, or the parser
+// strips it as unknown markup.
+const KNOWN_HTML_TAGS = new Set([
+  'a', 'abbr', 'address', 'article', 'aside', 'b', 'blockquote', 'br', 'caption',
+  'cite', 'code', 'col', 'colgroup', 'dd', 'del', 'details', 'dfn', 'div', 'dl',
+  'dt', 'em', 'figcaption', 'figure', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5',
+  'h6', 'header', 'hr', 'i', 'img', 'ins', 'kbd', 'li', 'main', 'mark', 'nav',
+  'ol', 'p', 'pre', 'q', 's', 'samp', 'section', 'small', 'span', 'strong',
+  'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead',
+  'time', 'tr', 'u', 'ul', 'var',
+])
+
+/**
+ * Escapes `<xxx>` sequences that are NOT legitimate HTML tags so DOM parsing
+ * keeps them as literal text instead of stripping them. A sequence is a real
+ * tag only when the tag name is a known HTML tag AND is followed by a valid
+ * delimiter (whitespace, `>`, or `/`). This protects code pasted as markdown
+ * or as partially-escaped rich-text HTML:
+ *   `#include<iostream>` → `#include&lt;iostream&gt;`  (unknown tag)
+ *   `if( s&(1<<i) )`     → `if( s&(1&lt;&lt;i) )`       (`<i` not a tag start)
+ *   `<b>bold</b>`        → unchanged                     (known tag)
+ */
+export function escapeUnknownHtmlTags(html: string): string {
+  return html.replace(
+    /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/g,
+    (match, slash: string, tagName: string, offset: number, full: string) => {
+      const after = full.slice(offset + match.length)
+      const isTagBoundary = after.length === 0 || /^[\s>/]/.test(after)
+      if (isTagBoundary && KNOWN_HTML_TAGS.has(tagName.toLowerCase())) {
+        return match
+      }
+      return `&lt;${slash}${tagName}`
+    },
+  )
+}
+
 export function createInlineMathHtml(latex: string): string {
   return `<span data-inline-content-type="inlineMath" data-latex="${escapeHtml(latex)}"></span>`
 }
@@ -195,7 +233,7 @@ export function convertMarkdownWithMathToHtml(markdown: string): string {
     convertedLines.push(replaceInlineMathInMarkdownLine(line))
   }
 
-  return markdownToHTML(convertedLines.join('\n'))
+  return escapeUnknownHtmlTags(markdownToHTML(convertedLines.join('\n')))
 }
 
 function replaceInlineMathInHtmlDocument(root: ParentNode) {
@@ -435,7 +473,10 @@ function replaceInlineMarkdownInHtmlDocument(root: ParentNode) {
 }
 
 export function convertMixedHtmlToHtml(html: string): string {
-  const sanitizedHtml = sanitizeEditorHtml(html)
+  // Protect literal code angle brackets (<iostream>, <xxx>) from being
+  // stripped by DOMPurify/DOM parsing: escape any tag that is not a known
+  // HTML tag before sanitizing, so it survives as text.
+  const sanitizedHtml = sanitizeEditorHtml(escapeUnknownHtmlTags(html))
   const parser = new DOMParser()
   const doc = parser.parseFromString(sanitizedHtml, 'text/html')
   

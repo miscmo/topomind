@@ -7,16 +7,23 @@ import {
 } from '../src/features/documents/FlowchartDocumentEditor/flowchartDocumentTypes.ts'
 import {
   cloneSmartDocumentBlockWithoutIds,
+  decodeHtmlEntities,
+  getCodeBlockPlainTextFromHtml,
   getCodeBlockPlainTextPaste,
+  getCodeBlockPasteHtml,
   getSmartDocumentBlocksClipboardText,
   getSmartDocumentMenuTargetBlockIds,
   getSmartDocumentSelectedTextState,
+  stripHtmlWrapperTags,
   writeClipboardBeforeMutation,
 } from '../src/features/documents/SmartDocumentEditor/smartDocumentUtils.ts'
 import {
   areDocumentContentsEqual,
   prepareStructuredDocumentContentForSave,
 } from '../src/features/documents/model/documentContentSession.ts'
+import {
+  escapeUnknownHtmlTags,
+} from '../src/features/documents/SmartDocumentEditor/mathPaste.ts'
 import {
   flushTabs,
   getDirtyState,
@@ -190,6 +197,119 @@ const edge = (
   )
   assert.equal(getCodeBlockPlainTextPaste(false, '<xxx>'), undefined)
   assert.equal(getCodeBlockPlainTextPaste(true, ''), undefined)
+}
+
+{
+  // Scenario B: clipboard carries only text/html with an empty text/plain
+  // (web code blocks, some rich-text apps). The handler must recover literal
+  // code from the HTML payload instead of feeding the raw HTML through
+  // pasteHTML where <xxx> would be stripped.
+
+  // B1: unescaped HTML (sources that dump raw code into text/html). No DOM is
+  // needed; the string-level wrapper stripping must survive <iostream>, 1<<i,
+  // and Array<string> literally — the exact cases from the reported C++ bug.
+  assert.equal(
+    getCodeBlockPlainTextFromHtml(
+      '<pre><code>#include<iostream>\nusing namespace std;\nif( s&(1<<i) )\nprintf("%c",str[i]);</code></pre>',
+    ),
+    '#include<iostream>\nusing namespace std;\nif( s&(1<<i) )\nprintf("%c",str[i]);',
+  )
+  assert.equal(
+    getCodeBlockPlainTextFromHtml(
+      '<div class="code">const el = <xxx>hello</xxx>; let ok = a < b && c > d;</div>',
+    ),
+    'const el = <xxx>hello</xxx>; let ok = a < b && c > d;',
+  )
+  assert.equal(
+    getCodeBlockPlainTextFromHtml(
+      '<pre><code>const g: Array<string> = []</code></pre>',
+    ),
+    'const g: Array<string> = []',
+  )
+  // B1b: PARTIALLY escaped HTML — sources escape & as &amp; but leave < > raw
+  // (exactly the reported C++ case: `s&(1<<i)`). Angle brackets must decide the
+  // path, not any entity: a &amp; alone must NOT route to DOM parsing.
+  assert.equal(
+    getCodeBlockPlainTextFromHtml(
+      '<pre><code>#include<iostream>\nusing namespace std;\nif( s&amp;(1<<i) )\nprintf("%c",str[i]);</code></pre>',
+    ),
+    '#include<iostream>\nusing namespace std;\nif( s&(1<<i) )\nprintf("%c",str[i]);',
+  )
+
+  // B2: escaped HTML (standard browser copy). With the unified string path
+  // (no DOMParser), escaped entities are decoded identically in Node.
+  const htmlSamples: Array<[html: string, expected: string]> = [
+    ['<pre><code>#include&lt;iostream&gt;</code></pre>', '#include<iostream>'],
+    ['<pre><code>const el = &lt;xxx&gt;hello&lt;/xxx&gt;</code></pre>', 'const el = <xxx>hello</xxx>'],
+    ['<pre><code>let ok = a &lt; b &amp;&amp; c &gt; d;</code></pre>', 'let ok = a < b && c > d;'],
+    ['<pre><code>const g: Array&lt;string&gt; = []</code></pre>', 'const g: Array<string> = []'],
+    ['<div>line1<br>line2</div>', 'line1\nline2'],
+    ['<pre><code>if( s&amp;(1&lt;&lt;i) )</code></pre>', 'if( s&(1<<i) )'],
+  ]
+  for (const [html, expected] of htmlSamples) {
+    assert.equal(getCodeBlockPlainTextFromHtml(html), expected)
+  }
+  assert.equal(getCodeBlockPlainTextFromHtml('', () => ''), '')
+  assert.equal(getCodeBlockPlainTextFromHtml('<p></p>', () => ''), '')
+  // B3: exported helpers stay stable
+  assert.equal(decodeHtmlEntities('&lt;b&gt;&amp;&quot;x&quot;&#39;'), '<b>&"x"\'')
+  // Consecutive closing wrappers collapse to a single blank line max.
+  assert.equal(stripHtmlWrapperTags('<pre><code>a</code></pre>\n<div>b</div>'), 'a\n\nb')
+
+  // B4: code-block HTML pasted OUTSIDE a code block must be re-emitted as a
+  // clean escaped <pre><code> so BlockNote auto-creates a codeBlock without
+  // stripping <xxx>/1<<i (the reported C++ paste bug). The unified string path
+  // (no DOMParser) makes all of these testable directly in Node.
+  assert.equal(
+    getCodeBlockPasteHtml('<pre><code>#include<iostream>\nusing namespace std;\nif( s&(1<<i) )</code></pre>'),
+    '<pre><code>#include&lt;iostream&gt;\nusing namespace std;\nif( s&amp;(1&lt;&lt;i) )</code></pre>',
+  )
+  assert.equal(
+    getCodeBlockPasteHtml('<pre><code>const el = <xxx>hello</xxx>;</code></pre>'),
+    '<pre><code>const el = &lt;xxx&gt;hello&lt;/xxx&gt;;</code></pre>',
+  )
+  // language hint from class="language-xxx" / data-language on <code>/<pre> only
+  assert.equal(
+    getCodeBlockPasteHtml('<pre><code class="language-cpp">int x &lt; 1;</code></pre>'),
+    '<pre><code data-language="cpp">int x &lt; 1;</code></pre>',
+  )
+  // a random span class (e.g. `e6vjtes0`) must NOT be treated as a language
+  assert.equal(
+    getCodeBlockPasteHtml('<pre><code class="e6vjtes0">int x &lt; 1;</code></pre>'),
+    '<pre><code>int x &lt; 1;</code></pre>',
+  )
+  // partial escaping: &amp; present but < > raw must still survive
+  assert.equal(
+    getCodeBlockPasteHtml('<pre><code>#include<iostream>\nif( s&amp;(1<<i) )</code></pre>'),
+    '<pre><code>#include&lt;iostream&gt;\nif( s&amp;(1&lt;&lt;i) )</code></pre>',
+  )
+  // surrounding content (headings) must NOT be swallowed into the code block
+  assert.equal(
+    getCodeBlockPasteHtml('<h1>三、字符串全排列扩展</h1>\n<pre><code>int x &lt; 1;</code></pre>'),
+    '<pre><code>int x &lt; 1;</code></pre>',
+  )
+  assert.equal(
+    getCodeBlockPasteHtml('<h1>标题</h1><pre><code>#include<iostream>\nreturn 0;</code></pre>'),
+    '<pre><code>#include&lt;iostream&gt;\nreturn 0;</code></pre>',
+  )
+  assert.equal(getCodeBlockPasteHtml(''), '')
+  assert.equal(getCodeBlockPasteHtml('<p>plain text</p>'), '<pre><code>plain text</code></pre>')
+}
+
+{
+  // escapeUnknownHtmlTags: protects literal code angle brackets on the
+  // markdown / rich-HTML paste paths (same root cause as the code-block bug).
+  // Unknown tags are escaped; known HTML tags pass through.
+  assert.equal(escapeUnknownHtmlTags('#include<iostream>'), '#include&lt;iostream>')
+  assert.equal(escapeUnknownHtmlTags('const el = <Component>'), 'const el = &lt;Component>')
+  // `1<<i`: the second `<i` is NOT a tag start (no valid boundary after), so
+  // it must be escaped to survive DOM parsing.
+  assert.equal(escapeUnknownHtmlTags('if( s&(1<<i) )'), 'if( s&(1&lt;&lt;i) )')
+  assert.equal(escapeUnknownHtmlTags('let ok = a < b && c > d'), 'let ok = a < b && c > d')
+  // Known HTML tags pass through unchanged.
+  assert.equal(escapeUnknownHtmlTags('<b>bold</b>'), '<b>bold</b>')
+  assert.equal(escapeUnknownHtmlTags('<div class="x">code <xxx> here</div>'), '<div class="x">code &lt;xxx> here</div>')
+  assert.equal(escapeUnknownHtmlTags('<pre><code>real</code></pre>'), '<pre><code>real</code></pre>')
 }
 
 {

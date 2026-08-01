@@ -4,7 +4,7 @@ import { useCreateBlockNote } from '@blocknote/react'
 import { useThemeStore, isDarkTheme } from '../../../../stores/themeStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../smartDocumentTypes'
-import { getCodeBlockPlainTextPaste, getSmartDocumentOutlineAndStats, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
+import { getCodeBlockPlainTextFromHtml, getCodeBlockPlainTextPaste, getCodeBlockPasteHtml, getSmartDocumentOutlineAndStats, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension } from '../mathSupport'
 import { containsMathDelimiters, containsMarkdownDelimiters, containsStrictMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
@@ -69,14 +69,76 @@ export function useSmartDocumentEditorModel({
       // handler: code nodes accept literal text only. Sending clipboard HTML
       // through DOM parsing would interpret source such as <Component> or
       // <xxx>...</xxx> as markup and strip it before it reaches the code block.
-      const isSelectionInCodeBlock = editor.transact(
-        (transaction) => transaction.selection.$from.parent.type.spec.code === true
-          && transaction.selection.$to.parent.type.spec.code === true,
-      )
+      // Detect a code-block context with several signals: a whole-block
+      // NodeSelection, both selection ends inside a `code` node, or the cursor
+      // block being a codeBlock. Relying only on the parent-node spec fails when
+      // the block is selected as a node or when the resolved parent is not the
+      // code node, which is what let <xxx> slip through to HTML parsing.
+      const isSelectionInCodeBlock =
+        editor.transact(
+          (transaction) => {
+            const selection = transaction.selection as unknown as {
+              node?: { type: { spec: { code?: boolean } } }
+              $from: { parent: { type: { spec: { code?: boolean } } } }
+              $to: { parent: { type: { spec: { code?: boolean } } } }
+            }
+            if (selection.node?.type.spec.code === true) return true
+            return (
+              selection.$from.parent.type.spec.code === true &&
+              selection.$to.parent.type.spec.code === true
+            )
+          },
+        ) ||
+        editor.getTextCursorPosition().block.type === 'codeBlock' ||
+        (event.target instanceof HTMLElement &&
+          !!event.target.closest('[data-content-type="codeBlock"]'))
       const codeBlockPlainText = getCodeBlockPlainTextPaste(isSelectionInCodeBlock, plainText)
       if (codeBlockPlainText !== undefined) {
         editor.pasteText(codeBlockPlainText)
         return true
+      }
+
+      // Fall back when the source exposes no text/plain (e.g. code copied
+      // from certain web pages / rich-text apps). Prefer the raw text/markdown
+      // payload when present: there angle brackets are literal, so <xxx> and
+      // 1<<i survive without any HTML interpretation.
+      if (isSelectionInCodeBlock && markdown.length > 0) {
+        editor.pasteText(markdown)
+        return true
+      }
+
+      // Last resort: recover literal text from the HTML textContent (entities
+      // like &lt;xxx&gt; are decoded by the DOM parser) instead of feeding the
+      // raw HTML through pasteHTML where <xxx> would be stripped as markup.
+      if (isSelectionInCodeBlock && html.length > 0) {
+        const codeBlockHtmlText = getCodeBlockPlainTextFromHtml(html)
+        if (codeBlockHtmlText.length > 0) {
+          editor.pasteText(codeBlockHtmlText)
+          return true
+        }
+      }
+
+      // text/plain itself is a code fence (```lang ... ```): parse it as
+      // Markdown FIRST. The fence maps to a code block with angle brackets
+      // safely escaped by markdown-it, and surrounding content (headings)
+      // stays as separate blocks. This is more faithful than rebuilding
+      // <pre><code> from the HTML, which would swallow or drop the heading.
+      if (/^ {0,3}(`{3,}|~{3,})/m.test(plainText)) {
+        editor.pasteHTML(convertMarkdownWithMathToHtml(plainText))
+        return true
+      }
+
+      // Clipboard HTML structured as a code block (<pre>/<code>) pasted OUTSIDE
+      // a code block: BlockNote would auto-create a codeBlock from it, but the
+      // raw HTML parse strips <xxx>/1<<i before the block is built. Recover the
+      // literal code text and re-emit a clean escaped <pre><code> so the code
+      // block is created with angle brackets intact.
+      if (hasHtml && /<pre[\s>]|<code[\s>]/i.test(html)) {
+        const codeBlockHtml = getCodeBlockPasteHtml(html)
+        if (codeBlockHtml.length > 0) {
+          editor.pasteHTML(codeBlockHtml)
+          return true
+        }
       }
 
       const hasMath = containsMathDelimiters(plainText) || containsMathDelimiters(markdown)
