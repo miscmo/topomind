@@ -98,7 +98,11 @@ const KNOWN_HTML_TAGS = new Set([
  *   `<b>bold</b>`        → unchanged                     (known tag)
  */
 export function escapeUnknownHtmlTags(html: string): string {
-  return html.replace(
+  // Escape a standalone `<` first (e.g. the first character of `<<`). Keep
+  // comparison text such as `a < b` unchanged; HTML parsing preserves that
+  // form, while `<<i` would otherwise let the second `<i` look like a tag.
+  const escapedOperators = html.replace(/<(?![\s/>!?a-zA-Z])/g, '&lt;')
+  return escapedOperators.replace(
     /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/g,
     (match, slash: string, tagName: string, offset: number, full: string) => {
       const after = full.slice(offset + match.length)

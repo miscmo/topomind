@@ -317,6 +317,25 @@ function SmartDocumentAdapter({
       : nextValue)
   }, [onChange])
 
+  const cacheAttachmentRef = React.useCallback(async (attachmentRef: string) => {
+    if (!attachmentCardPath) {
+      throw new Error('当前文档未绑定附件目录，无法保存附件')
+    }
+    const url = await store.getAttachmentAbsoluteUrl(attachmentCardPath, attachmentRef)
+    if (!url) throw new Error('附件写入成功，但无法生成访问地址')
+    const name = getAttachmentFileNameFromRef(attachmentRef)
+    attachmentUrlCacheRef.current.set(attachmentRef, url)
+    knownAttachmentNamesRef.current.add(name)
+    setAttachmentRuntimeVersion((version) => version + 1)
+    return {
+      props: {
+        url: attachmentRef,
+        attachmentRef,
+        name,
+      },
+    }
+  }, [attachmentCardPath, store])
+
   const uploadFile = React.useCallback(async (file: File) => {
     if (!attachmentCardPath) {
       throw new Error('当前文档未绑定附件目录，无法上传文件')
@@ -330,23 +349,28 @@ function SmartDocumentAdapter({
       })
       const base64Data = base64.split(',')[1]
       const attachmentRef = await store.writeAttachmentBase64(attachmentCardPath, file.name, file.type, base64Data)
-      const url = await store.getAttachmentAbsoluteUrl(attachmentCardPath, attachmentRef)
-      if (!url) throw new Error('附件写入成功，但无法生成访问地址')
-      attachmentUrlCacheRef.current.set(attachmentRef, url)
-      knownAttachmentNamesRef.current.add(getAttachmentFileNameFromRef(attachmentRef))
-      setAttachmentRuntimeVersion((version) => version + 1)
-      return {
-        props: {
-          url: attachmentRef,
-          attachmentRef,
-          name: file.name,
-        },
-      }
+      return await cacheAttachmentRef(attachmentRef)
     } catch (e) {
       console.error('Failed to upload file', e)
       throw e
     }
-  }, [attachmentCardPath, store])
+  }, [attachmentCardPath, cacheAttachmentRef, store])
+
+  const importRemoteImage = React.useCallback(async (url: string) => {
+    if (!attachmentCardPath) {
+      throw new Error('当前文档未绑定附件目录，无法保存远程图片')
+    }
+    try {
+      // The main-process downloader validates public HTTP(S), rejects redirects
+      // and non-image MIME types, enforces the attachment size limit, then
+      // writes into _attach/. This avoids renderer CSP/CORS exceptions.
+      const attachmentRef = await store.downloadAttachment(attachmentCardPath, url)
+      return await cacheAttachmentRef(attachmentRef)
+    } catch (e) {
+      console.error('Failed to import remote image', e)
+      throw e
+    }
+  }, [attachmentCardPath, cacheAttachmentRef, store])
 
   const resolveFileUrl = React.useCallback(async (url: string) => {
     if (!url) return url
@@ -374,6 +398,7 @@ function SmartDocumentAdapter({
         onTocChange={onTocChange}
         onTocItemClickReady={onTocItemClickReady}
         uploadFile={uploadFile}
+        importRemoteImage={importRemoteImage}
         resolveFileUrl={resolveFileUrl}
         onWordCountChange={onWordCountChange}
         attachmentInsertTargetKey={attachmentInsertTargetKey}

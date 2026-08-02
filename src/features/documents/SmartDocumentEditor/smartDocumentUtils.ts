@@ -104,6 +104,45 @@ export function getCodeBlockPlainTextPaste(
   return isSelectionInCodeBlock && plainText.length > 0 ? plainText : undefined
 }
 
+export type ClipboardMarkdownImage = {
+  alt: string
+  url: string
+}
+
+/**
+ * Extracts a single Markdown image from clipboard text/plain. Tencent Docs
+ * exposes its original CDN URL as `![图片](https://...)` while text/html may
+ * contain a base64 copy plus editor-specific wrapper markup. The whole
+ * payload must be that image; this prevents discarding surrounding text in a
+ * mixed text + image clipboard selection.
+ */
+export function getClipboardMarkdownImage(text: string): ClipboardMarkdownImage | null {
+  if (!text) return null
+  const match = text.match(/^\s*!\[([^\]]*)\]\(\s*(https?:\/\/[^\s)]+)\s*\)\s*$/i)
+  if (!match) return null
+  return {
+    alt: match[1] || '',
+    url: match[2],
+  }
+}
+
+/** Safely reads a BlockNote-style upload/import result URL. */
+export function getUploadedFileUrl(result: string | Record<string, unknown>): string | null {
+  if (typeof result === 'string') return result || null
+  const props = result.props
+  if (props && typeof props === 'object' && !Array.isArray(props)) {
+    const url = (props as Record<string, unknown>).url
+    if (typeof url === 'string' && url) return url
+  }
+  const url = result.url
+  return typeof url === 'string' && url ? url : null
+}
+
+/** Builds a minimal image payload for BlockNote after remote import. */
+export function buildPastedImageHtml(url: string, alt = ''): string {
+  return `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}">`
+}
+
 /**
  * Recovers literal code text from a clipboard `text/html` payload. Some
  * clipboard sources (web code blocks, rich-text apps, PDFs) expose only HTML,

@@ -4,7 +4,7 @@ import { useCreateBlockNote } from '@blocknote/react'
 import { useThemeStore, isDarkTheme } from '../../../../stores/themeStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../smartDocumentTypes'
-import { getCodeBlockPlainTextFromHtml, getCodeBlockPlainTextPaste, getCodeBlockPasteHtml, getSmartDocumentOutlineAndStats, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
+import { buildPastedImageHtml, getClipboardMarkdownImage, getCodeBlockPlainTextFromHtml, getCodeBlockPlainTextPaste, getCodeBlockPasteHtml, getSmartDocumentOutlineAndStats, getUploadedFileUrl, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension } from '../mathSupport'
 import { containsMathDelimiters, containsMarkdownDelimiters, containsStrictMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
@@ -20,6 +20,7 @@ export function useSmartDocumentEditorModel({
   onWordCountChange,
   onTocItemClickReady,
   uploadFile,
+  importRemoteImage,
   resolveFileUrl,
 }: SmartDocumentEditorProps) {
   const theme = useThemeStore((state: any) => state.theme)
@@ -139,6 +140,28 @@ export function useSmartDocumentEditorModel({
           editor.pasteHTML(codeBlockHtml)
           return true
         }
+      }
+
+      // Tencent Docs and similar editors expose the original image URL in
+      // text/plain as Markdown, but rendering that remote URL directly is
+      // blocked by our CSP and would leave the document dependent on a
+      // third-party CDN. Import it through the main process, which validates
+      // and downloads the image into this document's _attach/ directory.
+      const clipboardImage = getClipboardMarkdownImage(plainText)
+      if (clipboardImage && importRemoteImage) {
+        void importRemoteImage(clipboardImage.url)
+          .then((result) => {
+            const attachmentUrl = getUploadedFileUrl(result)
+            if (!attachmentUrl) throw new Error('图片已下载，但未返回附件引用')
+            editor.pasteHTML(buildPastedImageHtml(attachmentUrl, clipboardImage.alt))
+          })
+          .catch((error) => {
+            console.error('Failed to paste remote clipboard image', error)
+            // Do not insert the CSP-blocked external URL on failure. Preserve
+            // the source as visible text so the user can retry or save it.
+            editor.pasteText(plainText)
+          })
+        return true
       }
 
       const hasMath = containsMathDelimiters(plainText) || containsMathDelimiters(markdown)

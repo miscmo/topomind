@@ -1,6 +1,19 @@
 import nodeFs from 'fs';
 import nodePath from 'path';
 
+const REMOTE_IMAGE_ACCEPT = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
+
+export function getRemoteImageRequestHeaders(parsedUrl) {
+  var headers = {
+    Accept: REMOTE_IMAGE_ACCEPT,
+  };
+  var hostname = String(parsedUrl && parsedUrl.hostname || '').toLowerCase();
+  if (/^docimg\d*\.docs\.qq\.com$/.test(hostname)) {
+    headers.Referer = 'https://docs.qq.com/';
+  }
+  return headers;
+}
+
 export function createAttachmentService(deps) {
   const {
     attachmentDir,
@@ -168,9 +181,13 @@ export function createAttachmentService(deps) {
       var abortController = new AbortController();
       var timeout = setTimeout(function() { abortController.abort(); }, deps.attachmentDownloadTimeoutMs);
       try {
-        var response = await fetch(parsedUrl.href, { redirect: 'error', signal: abortController.signal });
+        var response = await fetch(parsedUrl.href, {
+          redirect: 'error',
+          signal: abortController.signal,
+          headers: getRemoteImageRequestHeaders(parsedUrl),
+        });
         if (!response.ok) {
-          throw new Error('下载失败: ' + response.status);
+          throw new Error('下载失败（HTTP ' + response.status + '）');
         }
         var mimeType = response.headers.get('content-type') || '';
         if (!/^image\//i.test(mimeType)) {

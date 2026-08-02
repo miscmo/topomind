@@ -1,19 +1,23 @@
 import assert from 'node:assert/strict'
 
+import { getRemoteImageRequestHeaders } from '../electron/services/attachment-service.js'
 import { planFlowchartCellSync } from '../src/features/documents/FlowchartDocumentEditor/flowchartCellSync.ts'
 import {
   normalizeFlowchartDocumentContent,
   type FlowchartCell,
 } from '../src/features/documents/FlowchartDocumentEditor/flowchartDocumentTypes.ts'
 import {
+  buildPastedImageHtml,
   cloneSmartDocumentBlockWithoutIds,
   decodeHtmlEntities,
+  getClipboardMarkdownImage,
   getCodeBlockPlainTextFromHtml,
   getCodeBlockPlainTextPaste,
   getCodeBlockPasteHtml,
   getSmartDocumentBlocksClipboardText,
   getSmartDocumentMenuTargetBlockIds,
   getSmartDocumentSelectedTextState,
+  getUploadedFileUrl,
   stripHtmlWrapperTags,
   writeClipboardBeforeMutation,
 } from '../src/features/documents/SmartDocumentEditor/smartDocumentUtils.ts'
@@ -310,6 +314,39 @@ const edge = (
   assert.equal(escapeUnknownHtmlTags('<b>bold</b>'), '<b>bold</b>')
   assert.equal(escapeUnknownHtmlTags('<div class="x">code <xxx> here</div>'), '<div class="x">code &lt;xxx> here</div>')
   assert.equal(escapeUnknownHtmlTags('<pre><code>real</code></pre>'), '<pre><code>real</code></pre>')
+}
+
+{
+  assert.deepEqual(
+    getRemoteImageRequestHeaders(new URL('https://docimg10.docs.qq.com/image/example.gif?w=571&h=279')),
+    {
+      Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      Referer: 'https://docs.qq.com/',
+    },
+  )
+  assert.deepEqual(
+    getRemoteImageRequestHeaders(new URL('https://example.com/image.png')),
+    {
+      Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+    },
+  )
+
+  const source = '![图片](https://docimg3.docs.qq.com/image/AgAAChxmIrvxPOJuJOZM8alTwEXQ70IW.png?w=788&h=373)'
+  assert.deepEqual(getClipboardMarkdownImage(source), {
+    alt: '图片',
+    url: 'https://docimg3.docs.qq.com/image/AgAAChxmIrvxPOJuJOZM8alTwEXQ70IW.png?w=788&h=373',
+  })
+  assert.equal(getClipboardMarkdownImage(`前文\n${source}\n后文`), null)
+  assert.equal(getClipboardMarkdownImage('普通文本'), null)
+  assert.equal(getClipboardMarkdownImage('![图片](data:image/png;base64,abc)'), null)
+  assert.equal(getUploadedFileUrl('_attach/a.png'), '_attach/a.png')
+  assert.equal(getUploadedFileUrl({ props: { url: '_attach/b.gif' } }), '_attach/b.gif')
+  assert.equal(getUploadedFileUrl({ url: '_attach/c.webp' }), '_attach/c.webp')
+  assert.equal(getUploadedFileUrl({ props: {} }), null)
+  assert.equal(
+    buildPastedImageHtml('_attach/x.png', '图"片'),
+    '<img src="_attach/x.png" alt="图&quot;片">',
+  )
 }
 
 {
