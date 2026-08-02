@@ -1,5 +1,6 @@
-import { memo, useMemo, useRef, useEffect, useState, useCallback, type CSSProperties } from 'react'
-import { Check, ChevronDown, ChevronUp, Copy, WrapText } from 'lucide-react'
+import { memo, useMemo, useRef, useEffect, useState, useCallback, type CSSProperties, type WheelEvent as ReactWheelEvent } from 'react'
+import { createPortal } from 'react-dom'
+import { Check, ChevronDown, ChevronUp, Copy, WrapText, X } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
 import { filterSuggestionItems } from '@blocknote/core'
@@ -25,6 +26,21 @@ type CodeToolbarPosition = {
   top: number
   left: number
   width: number
+}
+
+type ImagePreviewState = {
+  src: string
+  alt: string
+}
+
+const IMAGE_PREVIEW_MIN_SCALE = 0.25
+const IMAGE_PREVIEW_MAX_SCALE = 8
+const IMAGE_PREVIEW_SCALE_STEP = 0.15
+
+export function getImagePreviewScale(currentScale: number, deltaY: number) {
+  const direction = deltaY < 0 ? 1 : -1
+  const nextScale = currentScale * (1 + direction * IMAGE_PREVIEW_SCALE_STEP)
+  return Math.min(IMAGE_PREVIEW_MAX_SCALE, Math.max(IMAGE_PREVIEW_MIN_SCALE, nextScale))
 }
 
 const SUPPORTED_CODE_LANGUAGES = Object.entries(customCodeBlockOptions.supportedLanguages ?? {}).map(([value, config]) => ({
@@ -77,7 +93,20 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   const [copiedCodeBlockId, setCopiedCodeBlockId] = useState<string | null>(null)
   const [wrapByBlockId, setWrapByBlockId] = useState<Record<string, boolean>>({})
   const [toolbarPosition, setToolbarPosition] = useState<CodeToolbarPosition | null>(null)
+  const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null)
+  const [imagePreviewScale, setImagePreviewScale] = useState(1)
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const imagePreviewCloseButtonRef = useRef<HTMLButtonElement>(null)
+
+  const closeImagePreview = useCallback(() => {
+    setImagePreview(null)
+    setImagePreviewScale(1)
+  }, [])
+
+  const handleImagePreviewWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setImagePreviewScale((currentScale) => getImagePreviewScale(currentScale, event.deltaY))
+  }, [])
 
   const scrollToTop = useCallback(() => {
     const scrollContainer = scrollContainerRef.current
@@ -157,6 +186,51 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       if (persistScrollTimer) clearTimeout(persistScrollTimer)
     }
   }, [attachmentInsertTargetKey])
+
+  useEffect(() => {
+    const editorRoot = editorRootRef.current
+    if (!editorRoot) return
+
+    const handleImageDoubleClick = (event: MouseEvent) => {
+      if (!(event.target instanceof HTMLImageElement)) return
+      if (!event.target.closest('.bn-block-content[data-content-type="image"]')) return
+
+      const src = event.target.currentSrc || event.target.src
+      if (!src) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      setImagePreview({
+        src,
+        alt: event.target.alt || '文档图片',
+      })
+      setImagePreviewScale(1)
+    }
+
+    editorRoot.addEventListener('dblclick', handleImageDoubleClick)
+    return () => {
+      editorRoot.removeEventListener('dblclick', handleImageDoubleClick)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!imagePreview) return
+
+    const ownerDocument = editorRootRef.current?.ownerDocument ?? document
+    const previousBodyOverflow = ownerDocument.body.style.overflow
+    ownerDocument.body.style.overflow = 'hidden'
+    imagePreviewCloseButtonRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeImagePreview()
+    }
+
+    ownerDocument.addEventListener('keydown', handleKeyDown)
+    return () => {
+      ownerDocument.removeEventListener('keydown', handleKeyDown)
+      ownerDocument.body.style.overflow = previousBodyOverflow
+    }
+  }, [closeImagePreview, imagePreview])
 
   useEffect(() => {
     const ownerDocument = editorRootRef.current?.ownerDocument ?? document
@@ -619,6 +693,41 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       >
         <ChevronUp size={24} />
       </button>
+      {imagePreview && typeof document !== 'undefined' ? createPortal(
+        <div
+          className="tm-image-preview"
+          role="dialog"
+          aria-modal="true"
+          aria-label="图片全屏预览"
+          onClick={closeImagePreview}
+          onWheel={handleImagePreviewWheel}
+        >
+          <button
+            ref={imagePreviewCloseButtonRef}
+            type="button"
+            className="tm-image-preview__close"
+            aria-label="关闭图片预览"
+            title="关闭"
+            onClick={closeImagePreview}
+          >
+            <X size={24} />
+          </button>
+          <div className="tm-image-preview__viewport">
+            <img
+              className="tm-image-preview__image"
+              src={imagePreview.src}
+              alt={imagePreview.alt}
+              draggable={false}
+              style={{ transform: `scale(${imagePreviewScale})` }}
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
+          <div className="tm-image-preview__hint" aria-live="polite">
+            滚轮缩放 · {Math.round(imagePreviewScale * 100)}%
+          </div>
+        </div>,
+        document.body,
+      ) : null}
     </div>
   )
 }, (prevProps, nextProps) => (
