@@ -142,8 +142,7 @@ export function useDocumentSidebarModel({
     }
   }, [contextMenu])
 
-  const toggleExpand = useCallback((e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
+  const toggleExpand = useCallback((id: string) => {
     updateExpandedNodes(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -162,16 +161,22 @@ export function useDocumentSidebarModel({
     setContextMenu({ x: e.clientX, y: e.clientY, targetId })
   }, [onSelectDocument])
 
+  const startRename = useCallback((targetId: string) => {
+    if (isBusy) return
+    const doc = topoDocuments.find(d => d.id === targetId)
+    if (!doc) return
+    setContextMenu(null)
+    setMetaPicker(null)
+    setInlineEdit({ mode: 'rename', targetId, parentId: doc.parentId || null, value: doc.title })
+  }, [isBusy, topoDocuments])
+
   const handleContextMenuAction = useCallback((action: string) => {
     if (!contextMenu) return
     const targetId = contextMenu.targetId
     setContextMenu(null)
 
     if (action === 'rename' && targetId) {
-      const doc = topoDocuments.find(d => d.id === targetId)
-      if (doc) {
-        setInlineEdit({ mode: 'rename', targetId, parentId: doc.parentId || null, value: doc.title })
-      }
+      startRename(targetId)
     } else if ((action === 'change-icon' || action === 'change-color') && targetId) {
       const doc = topoDocuments.find(d => d.id === targetId)
       if (doc) {
@@ -205,7 +210,7 @@ export function useDocumentSidebarModel({
         updateExpandedNodes(prev => new Set(prev).add(targetId))
       }
     }
-  }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, nodeId, updateExpandedNodes])
+  }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, nodeId, startRename, updateExpandedNodes])
 
   const openIconPicker = useCallback((targetId: string, x: number, y: number) => {
     if (isBusy || !onUpdateDocumentMeta) return
@@ -406,6 +411,7 @@ export function useDocumentSidebarModel({
       setActiveSubmenu,
       setMetaPicker,
       toggleExpand,
+      startRename,
       openContextMenu,
       openIconPicker,
       handleContextMenuAction,

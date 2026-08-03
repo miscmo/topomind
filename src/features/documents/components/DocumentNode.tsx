@@ -16,8 +16,9 @@ interface DocumentNodeProps {
   draggedId: string | null
   dragState: { id: string, position: 'before' | 'inside' | 'after' } | null
   onSelectDocument: (path: string) => void
+  onRenameDocument: (id: string) => void
   onOpenIconPicker: (id: string, x: number, y: number) => void
-  onToggleExpand: (e: React.MouseEvent, id: string) => void
+  onToggleExpand: (id: string) => void
   onContextMenu: (e: React.MouseEvent, id: string) => void
   onDragStart: (e: React.DragEvent, id: string) => void
   onDragOver: (e: React.DragEvent, id: string | null) => void
@@ -40,6 +41,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
   draggedId,
   dragState,
   onSelectDocument,
+  onRenameDocument,
   onOpenIconPicker,
   onToggleExpand,
   onContextMenu,
@@ -98,16 +100,45 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
             }
           }}
           onDoubleClick={(e) => {
-            if (hasChildren) {
-              onToggleExpand(e, node.id)
-            }
+            if (e.target !== e.currentTarget && !(e.target as HTMLElement).closest('[data-document-title]')) return
+            e.preventDefault()
+            e.stopPropagation()
+            onRenameDocument(node.id)
           }}
           onContextMenu={(e) => onContextMenu(e, node.id)}
           title={node.title}
         >
-          <span 
-            className={`w-5 h-5 flex items-center justify-center shrink-0 ${hasChildren ? 'hover:bg-black/5 rounded' : ''}`}
-            onClick={(e) => hasChildren ? onToggleExpand(e, node.id) : undefined}
+          <span
+            role={hasChildren ? 'button' : undefined}
+            tabIndex={hasChildren ? 0 : -1}
+            draggable={hasChildren ? false : undefined}
+            aria-label={hasChildren ? `${isExpanded ? '折叠' : '展开'}「${node.title}」` : undefined}
+            className={`w-5 h-5 flex items-center justify-center shrink-0 ${hasChildren ? 'cursor-pointer hover:bg-black/5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]' : ''}`}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+            }}
+            onMouseDown={(e) => {
+              e.stopPropagation()
+            }}
+            onDragStart={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (hasChildren) onToggleExpand(node.id)
+            }}
+            onDoubleClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onKeyDown={(e) => {
+              if (hasChildren && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault()
+                e.stopPropagation()
+                onToggleExpand(node.id)
+              }
+            }}
           >
             {hasChildren ? (
               <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
@@ -155,6 +186,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
             </span>
           </span>
           <span
+            data-document-title
             className="block text-[12px] font-semibold leading-[1.4] whitespace-nowrap overflow-hidden text-ellipsis text-[var(--color-text-primary)]"
             style={node.color ? { color: node.color } : undefined}
           >
@@ -176,6 +208,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           draggedId={draggedId}
           dragState={dragState}
           onSelectDocument={onSelectDocument}
+          onRenameDocument={onRenameDocument}
           onOpenIconPicker={onOpenIconPicker}
           onToggleExpand={onToggleExpand}
           onContextMenu={onContextMenu}

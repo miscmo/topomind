@@ -65,6 +65,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     setActiveSubmenu,
     setMetaPicker,
     toggleExpand,
+    startRename,
     openContextMenu,
     openIconPicker,
     handleContextMenuAction,
@@ -124,6 +125,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
                   draggedId={draggedId}
                   dragState={dragState}
                   onSelectDocument={onSelectDocument}
+                  onRenameDocument={startRename}
                   onOpenIconPicker={openIconPicker}
                   onToggleExpand={toggleExpand}
                   onContextMenu={openContextMenu}
