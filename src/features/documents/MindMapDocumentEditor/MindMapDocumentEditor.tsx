@@ -46,9 +46,20 @@ interface AppliedMindMapValue {
   theme: string
 }
 
+const appliedRootCache = new WeakMap<object, string>()
+
+function getAppliedRoot(root: MindMapDocumentContent['root']) {
+  if (!root || typeof root !== 'object') return JSON.stringify(root)
+  const cached = appliedRootCache.get(root)
+  if (cached !== undefined) return cached
+  const serialized = JSON.stringify(root)
+  appliedRootCache.set(root, serialized)
+  return serialized
+}
+
 function getAppliedValue(value: MindMapDocumentContent): AppliedMindMapValue {
   return {
-    root: JSON.stringify(value.root),
+    root: getAppliedRoot(value.root),
     layout: normalizeMindMapLayout(value.layout),
     theme: normalizeMindMapTheme(value.theme),
   }
@@ -58,6 +69,8 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
   const containerRef = useRef<HTMLDivElement>(null)
   const mindMapRef = useRef<MindMap | null>(null)
   const valueRef = useRef(value)
+  const onChangeRef = useRef(onChange)
+  const readOnlyRef = useRef(readOnly)
   const isApplyingExternalValueRef = useRef(false)
   const lastAppliedValueRef = useRef<AppliedMindMapValue>(getAppliedValue(value))
   const pendingLocalValueRef = useRef<AppliedMindMapValue | null>(null)
@@ -71,9 +84,9 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
     ? (isDark ? 'dark2' : 'default')
     : documentTheme
 
-  useEffect(() => {
-    valueRef.current = value
-  }, [value])
+  valueRef.current = value
+  onChangeRef.current = onChange
+  readOnlyRef.current = readOnly
 
   const updateDocument = useCallback((nextValue: MindMapDocumentContent) => {
     const updatedValue = withMindMapUpdatedAt(nextValue)
@@ -110,7 +123,7 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
 
     const flushDataChange = () => {
       dataChangeTimer = null
-      if (readOnly || isApplyingExternalValueRef.current || pendingRoot === null) return
+      if (readOnlyRef.current || isApplyingExternalValueRef.current || pendingRoot === null) return
       const root = pendingRoot
       pendingRoot = null
       const updatedValue: MindMapDocumentContent = {
@@ -125,11 +138,11 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
       pendingLocalValueRef.current = getAppliedValue(updatedValue)
       lastAppliedValueRef.current = pendingLocalValueRef.current
       valueRef.current = updatedValue
-      onChange(updatedValue)
+      onChangeRef.current(updatedValue)
     }
 
     const scheduleDataChange = (data: any) => {
-      if (readOnly || isApplyingExternalValueRef.current) return
+      if (readOnlyRef.current || isApplyingExternalValueRef.current) return
       pendingRoot = data
       if (dataChangeTimer !== null) return
       dataChangeTimer = window.setTimeout(flushDataChange, 80)
@@ -138,7 +151,7 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
     mindMap.on('data_change', scheduleDataChange)
 
     mindMap.on('view_theme_change', (theme: string) => {
-      if (readOnly || isApplyingExternalValueRef.current) return
+      if (readOnlyRef.current || isApplyingExternalValueRef.current) return
       const updatedValue: MindMapDocumentContent = {
         ...valueRef.current,
         theme: normalizeMindMapTheme(theme),
@@ -150,11 +163,11 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
       pendingLocalValueRef.current = getAppliedValue(updatedValue)
       lastAppliedValueRef.current = pendingLocalValueRef.current
       valueRef.current = updatedValue
-      onChange(updatedValue)
+      onChangeRef.current(updatedValue)
     })
 
     mindMap.on('layout_change', (layout: string) => {
-      if (readOnly || isApplyingExternalValueRef.current) return
+      if (readOnlyRef.current || isApplyingExternalValueRef.current) return
       const updatedValue: MindMapDocumentContent = {
         ...valueRef.current,
         layout: normalizeMindMapLayout(layout),
@@ -166,14 +179,14 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
       pendingLocalValueRef.current = getAppliedValue(updatedValue)
       lastAppliedValueRef.current = pendingLocalValueRef.current
       valueRef.current = updatedValue
-      onChange(updatedValue)
+      onChangeRef.current(updatedValue)
     })
 
     setIsReady(true)
 
     return () => {
       if (dataChangeTimer !== null) window.clearTimeout(dataChangeTimer)
-      if (pendingRoot !== null && !readOnly && !isApplyingExternalValueRef.current) {
+      if (pendingRoot !== null && !readOnlyRef.current && !isApplyingExternalValueRef.current) {
         flushDataChange()
       }
       dataChangeTimer = null

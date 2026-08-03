@@ -46,6 +46,10 @@ export interface TopoDocumentManifestItem {
   createdAt: number
   updatedAt: number
   version: number
+  /** 自定义文档图标（emoji 字符），未设置时按 type 显示默认图标 */
+  icon?: string
+  /** 自定义文档列表标题颜色（hex，如 #e74c3c），未设置时跟随主题 */
+  color?: string
 }
 
 export interface TopoDocumentManifest {
@@ -57,6 +61,12 @@ export interface TopoDocumentCreateInput {
   type: TopoDocumentType
   title: string
   parentId?: string | null
+}
+
+/** 文档元数据可更新字段（图标/标题颜色），支持置空（'' 清除自定义值） */
+export interface TopoDocumentMetaPatch {
+  icon?: string | null
+  color?: string | null
 }
 
 export interface TopoDocumentRepairResult {
@@ -114,6 +124,7 @@ export interface TopoDocumentStorageBackend {
   readTopoDocument: (cardPath: string, documentId: string) => Promise<unknown>
   writeTopoDocument: (cardPath: string, documentId: string, content: unknown) => Promise<void>
   renameTopoDocument: (cardPath: string, documentId: string, title: string) => Promise<TopoDocumentManifestItem>
+  updateTopoDocumentMeta: (cardPath: string, documentId: string, patch: TopoDocumentMetaPatch) => Promise<TopoDocumentManifestItem>
   deleteTopoDocument: (cardPath: string, documentId: string) => Promise<void>
   listTrashTopoDocuments: (cardPath: string) => Promise<FSBTrashTopoDocumentItem[]>
   restoreTrashTopoDocument: (cardPath: string, trashName: string) => Promise<TopoDocumentManifestItem>

@@ -1,4 +1,4 @@
-import { logAction } from '../../core/log-backend'
+import { logAction } from '../../core/log-backend.ts'
 
 export interface SaveCoordinatorOptions<T> {
   delayMs: number
@@ -9,6 +9,8 @@ export interface SaveCoordinatorOptions<T> {
 interface PendingSave<T> {
   timer: ReturnType<typeof setTimeout> | null
   buildValue: () => T
+  version: number
+  inFlight: Promise<void> | null
   onSavedCallbacks: Set<() => void>
   scheduledResolvers: Array<() => void>
 }
@@ -30,6 +32,7 @@ export class SaveCoordinator<T> {
 
     const pending = this.getOrCreatePending(key, buildValue)
     pending.buildValue = buildValue
+    pending.version += 1
     if (onSaved) pending.onSavedCallbacks.add(onSaved)
 
     const scheduled = new Promise<void>((resolve) => {
@@ -38,6 +41,7 @@ export class SaveCoordinator<T> {
 
     if (pending.timer) clearTimeout(pending.timer)
     pending.timer = setTimeout(() => {
+      pending.timer = null
       void this.runPending(key, { swallowErrors: true })
     }, this.delayMs)
 
@@ -49,6 +53,7 @@ export class SaveCoordinator<T> {
 
     const pending = this.getOrCreatePending(key, buildValue)
     pending.buildValue = buildValue
+    pending.version += 1
     if (onSaved) pending.onSavedCallbacks.add(onSaved)
 
     if (pending.timer) {
@@ -56,7 +61,15 @@ export class SaveCoordinator<T> {
       pending.timer = null
     }
 
-    await this.runPending(key, { swallowErrors: false })
+    while (this.pending.has(key)) {
+      const current = this.pending.get(key)
+      if (!current) return
+      if (current.inFlight) {
+        await current.inFlight
+        continue
+      }
+      await this.runPending(key, { swallowErrors: false })
+    }
   }
 
   hasPending(key: string): boolean {
@@ -84,6 +97,8 @@ export class SaveCoordinator<T> {
     const pending: PendingSave<T> = {
       timer: null,
       buildValue,
+      version: 0,
+      inFlight: null,
       onSavedCallbacks: new Set(),
       scheduledResolvers: [],
     }
@@ -94,25 +109,56 @@ export class SaveCoordinator<T> {
   private async runPending(key: string, options: { swallowErrors: boolean }): Promise<void> {
     const pending = this.pending.get(key)
     if (!pending) return
+    if (pending.inFlight) {
+      try {
+        await pending.inFlight
+      } catch (error) {
+        if (!options.swallowErrors) throw error
+      }
+      return
+    }
 
     if (pending.timer) {
       clearTimeout(pending.timer)
       pending.timer = null
     }
 
-    this.pending.delete(key)
+    const version = pending.version
+    const value = pending.buildValue()
+    let savePromise!: Promise<void>
+    savePromise = (async () => {
+      try {
+        await this.save(key, value)
+        if (this.pending.get(key) === pending && pending.version === version) {
+          this.pending.delete(key)
+          const callbacks = Array.from(pending.onSavedCallbacks)
+          pending.onSavedCallbacks.clear()
+          this.resolveScheduled(pending)
+          for (const callback of callbacks) callback()
+        }
+      } catch (error) {
+        this.onError?.(error, key)
+        if (typeof window !== 'undefined') {
+          logAction('SaveCoordinator:保存失败', 'SaveCoordinator', {
+            key,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+        // Keep the entry dirty so close guard or a later schedule can retry it.
+        // Debounced callers are notified that this attempt finished; explicit
+        // flush callers receive the error and can cancel navigation/closing.
+        if (this.pending.get(key) === pending) this.resolveScheduled(pending)
+        throw error
+      } finally {
+        if (pending.inFlight === savePromise) pending.inFlight = null
+      }
+    })()
+    pending.inFlight = savePromise
 
     try {
-      await this.save(key, pending.buildValue())
-      for (const callback of pending.onSavedCallbacks) callback()
+      await savePromise
     } catch (error) {
-      this.onError?.(error, key)
-      logAction('SaveCoordinator:保存失败', 'SaveCoordinator', { key, error: error instanceof Error ? error.message : String(error) })
-      if (!options.swallowErrors) {
-        throw error
-      }
-    } finally {
-      this.resolveScheduled(pending)
+      if (!options.swallowErrors) throw error
     }
   }
 

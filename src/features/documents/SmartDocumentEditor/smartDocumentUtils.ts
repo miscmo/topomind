@@ -2,6 +2,15 @@ import type { TocItem } from '../types/workspaceTypes'
 
 type SmartDocumentStats = { characters: number; words: number; blocks: number }
 
+export type SmartDocumentDerivedBlockCache = Map<string, {
+  content: unknown
+  type: unknown
+  level: unknown
+  text: string
+  characters: number
+  words: number
+}>
+
 type BlockWalkerEditor = {
   forEachBlock: (visitor: (block: any) => boolean) => void
 }
@@ -244,8 +253,10 @@ export function getCodeBlockPasteHtml(
   extractText?: (html: string) => string,
 ): string {
   if (!html || html.length === 0) return ''
-  // Prefer the first <pre>...</pre> block so surrounding content (headings,
-  // paragraphs) is NOT swallowed into the code block.
+  // This helper intentionally extracts one code block. Callers must first use
+  // getStandaloneCodeBlockPasteHtml() when deciding whether it is safe to
+  // replace the entire clipboard payload; otherwise surrounding rich text
+  // would be discarded.
   const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i)
   const codeSource = preMatch ? preMatch[1] : html
   const codeText = getCodeBlockPlainTextFromHtml(codeSource, extractText)
@@ -255,6 +266,29 @@ export function getCodeBlockPasteHtml(
     ? `<code data-language="${escapeHtml(language)}">`
     : '<code>'
   return `<pre>${codeOpen}${escapeHtml(codeText)}</code></pre>`
+}
+
+/**
+ * Returns a protected code-block payload only when the clipboard HTML is a
+ * single <pre> block (optionally wrapped by document-level html/body markup).
+ * Mixed rich text and inline <code> must continue through the normal HTML
+ * paste path so headings, paragraphs, links, and surrounding text survive.
+ */
+export function getStandaloneCodeBlockPasteHtml(
+  html: string,
+  extractText?: (html: string) => string,
+): string {
+  if (!html || html.length === 0) return ''
+  const normalized = html
+    .replace(/^\s*<!doctype[^>]*>/i, '')
+    .replace(/<head\b[^>]*>[\s\S]*?<\/head>/i, '')
+    .replace(/^\s*<html\b[^>]*>/i, '')
+    .replace(/<\/html>\s*$/i, '')
+    .replace(/^\s*<body\b[^>]*>/i, '')
+    .replace(/<\/body>\s*$/i, '')
+    .trim()
+  const match = normalized.match(/^(<pre\b[^>]*>[\s\S]*?<\/pre>)$/i)
+  return match ? getCodeBlockPasteHtml(match[1], extractText) : ''
 }
 
 export function getSmartDocumentSelectedTextState(
@@ -277,11 +311,15 @@ export function getSmartDocumentSelectedTextState(
   }
 }
 
-export function getSmartDocumentOutlineAndStats(editor: BlockWalkerEditor): {
+export function getSmartDocumentOutlineAndStats(
+  editor: BlockWalkerEditor,
+  cache?: SmartDocumentDerivedBlockCache,
+): {
   toc: TocItem[]
   stats: SmartDocumentStats
 } {
   const items: TocItem[] = []
+  const visitedBlockIds = cache ? new Set<string>() : null
   let characters = 0
   let words = 0
   let blocks = 0
@@ -289,18 +327,44 @@ export function getSmartDocumentOutlineAndStats(editor: BlockWalkerEditor): {
   editor.forEachBlock((block: any) => {
     blocks++
 
-    const text = block.content ? inlineContentToText(block.content) : ''
-    if (text) {
-      const trimmed = text.trim()
-      characters += trimmed.replace(/\s/g, '').length
-      const tokens = trimmed.match(/[a-zA-Z0-9]+|[\u4e00-\u9fa5]|\S/g)
-      if (tokens) {
-        words += tokens.length
+    const blockId = typeof block?.id === 'string' ? block.id : ''
+    const rawLevel = block?.props?.level
+    const cached = blockId ? cache?.get(blockId) : undefined
+    const canReuseCachedValue = Boolean(
+      cached
+      && cached.content === block.content
+      && cached.type === block.type
+      && cached.level === rawLevel,
+    )
+    const text = canReuseCachedValue
+      ? cached!.text
+      : block.content ? inlineContentToText(block.content) : ''
+    const trimmed = text.trim()
+    const blockCharacters = canReuseCachedValue
+      ? cached!.characters
+      : trimmed.replace(/\s/g, '').length
+    const blockWords = canReuseCachedValue
+      ? cached!.words
+      : trimmed.match(/[a-zA-Z0-9]+|[\u4e00-\u9fa5]|\S/g)?.length ?? 0
+
+    characters += blockCharacters
+    words += blockWords
+
+    if (blockId && cache) {
+      visitedBlockIds?.add(blockId)
+      if (!canReuseCachedValue) {
+        cache.set(blockId, {
+          content: block.content,
+          type: block.type,
+          level: rawLevel,
+          text,
+          characters: blockCharacters,
+          words: blockWords,
+        })
       }
     }
 
     if (block?.type === 'heading' && text) {
-      const rawLevel = block.props?.level
       const level = typeof rawLevel === 'number' && Number.isFinite(rawLevel)
         ? Math.min(Math.max(rawLevel, 1), 6)
         : 1
@@ -314,6 +378,12 @@ export function getSmartDocumentOutlineAndStats(editor: BlockWalkerEditor): {
 
     return true
   })
+
+  if (cache && visitedBlockIds) {
+    for (const blockId of cache.keys()) {
+      if (!visitedBlockIds.has(blockId)) cache.delete(blockId)
+    }
+  }
 
   return {
     toc: items,

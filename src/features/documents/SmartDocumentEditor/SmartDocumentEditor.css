@@ -113,6 +113,10 @@
   padding: 0.6em 0.75em 0.6em 1em;
   margin-top: var(--topomind-smart-block-spacing, 6px);
   margin-bottom: var(--topomind-smart-block-spacing, 6px);
+  /* 引用块撑满整行内容宽度：.bn-block-content 是 flex 行容器，默认 blockquote
+     会收缩到文字宽度，导致背景/左边线的视觉效果只和文字一样长 */
+  width: 100%;
+  box-sizing: border-box;
 }
 .smart-document-content [data-content-type="divider"] hr,
 .smart-document-content [data-content-type="pageBreak"] > div {

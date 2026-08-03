@@ -12,7 +12,7 @@ export const TOPO_DOCUMENT_TYPE_DEFINITIONS: Record<TopoDocumentType, DocumentTy
   smart: {
     type: 'smart',
     label: '智能文档',
-    icon: '✨',
+    icon: '📄',
     defaultTitle: '智能文档',
     createLogName: '多类型文档:创建智能文档',
   },

@@ -26,6 +26,18 @@ interface AppliedFlowchartValue {
   viewport: string
 }
 
+const appliedCellsCache = new WeakMap<object, string>()
+const appliedViewportCache = new WeakMap<object, string>()
+
+function stringifyCached(value: unknown, cache: WeakMap<object, string>) {
+  if (!value || typeof value !== 'object') return JSON.stringify(value)
+  const cached = cache.get(value)
+  if (cached !== undefined) return cached
+  const serialized = JSON.stringify(value)
+  cache.set(value, serialized)
+  return serialized
+}
+
 const FLOWCHART_KIND_OPTIONS: { kind: FlowchartNodeKind; label: string }[] = [
   { kind: 'start', label: '开始' },
   { kind: 'process', label: '流程' },
@@ -35,8 +47,8 @@ const FLOWCHART_KIND_OPTIONS: { kind: FlowchartNodeKind; label: string }[] = [
 
 function getAppliedValue(value: FlowchartDocumentContent): AppliedFlowchartValue {
   return {
-    cells: JSON.stringify(value.cells),
-    viewport: JSON.stringify(value.viewport),
+    cells: stringifyCached(value.cells, appliedCellsCache),
+    viewport: stringifyCached(value.viewport, appliedViewportCache),
   }
 }
 
@@ -48,8 +60,11 @@ function applyFlowchartCellPatch(cell: Cell, nextCell: FlowchartDocumentContent[
   }
 }
 
-function applyFlowchartCellsIncrementally(graph: Graph, nextCells: FlowchartDocumentContent['cells']) {
-  const currentCells = graph.toJSON().cells as FlowchartDocumentContent['cells']
+function applyFlowchartCellsIncrementally(
+  graph: Graph,
+  currentCells: FlowchartDocumentContent['cells'],
+  nextCells: FlowchartDocumentContent['cells'],
+) {
   const plan = planFlowchartCellSync(currentCells, nextCells)
 
   graph.batchUpdate('update', () => {
@@ -107,15 +122,22 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
   const stencilContainerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<Graph | null>(null)
   const valueRef = useRef(value)
+  const onChangeRef = useRef(onChange)
   const readOnlyRef = useRef(readOnly)
   const isApplyingExternalValueRef = useRef(false)
   const lastAppliedValueRef = useRef<AppliedFlowchartValue>(getAppliedValue(value))
   const pendingLocalValueRef = useRef<AppliedFlowchartValue | null>(null)
+  const appliedCellsRef = useRef<FlowchartDocumentContent['cells']>(value.cells)
+  const dirtyCellIdsRef = useRef<Set<string>>(new Set())
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false })
 
   useEffect(() => {
     valueRef.current = value
   }, [value])
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
 
   useEffect(() => {
     readOnlyRef.current = readOnly
@@ -125,8 +147,8 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
     const updatedValue = withFlowchartUpdatedAt(nextValue)
     pendingLocalValueRef.current = getAppliedValue(updatedValue)
     valueRef.current = updatedValue
-    onChange(updatedValue)
-  }, [onChange])
+    onChangeRef.current(updatedValue)
+  }, [])
 
   const handleTitleChange = useCallback((title: string) => {
     updateDocument({ ...value, title })
@@ -173,14 +195,39 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
 
     const syncToValue = () => {
       if (readOnlyRef.current || isApplyingExternalValueRef.current) return
-      const json = graph.toJSON()
-      const updatedValue = withFlowchartUpdatedAt({ ...valueRef.current, cells: json.cells as FlowchartDocumentContent['cells'] })
+      const dirtyCellIds = dirtyCellIdsRef.current
+      if (dirtyCellIds.size === 0) return
+
+      const previousCells = appliedCellsRef.current
+      const nextCellsById = new Map(previousCells.map((cell) => [cell.id, cell]))
+      for (const cellId of dirtyCellIds) {
+        const cell = graph.getCellById(cellId)
+        if (cell) {
+          nextCellsById.set(cellId, cell.toJSON() as FlowchartDocumentContent['cells'][number])
+        } else {
+          nextCellsById.delete(cellId)
+        }
+      }
+      dirtyCellIds.clear()
+
+      const nextCells = previousCells
+        .filter((cell) => nextCellsById.has(cell.id))
+        .map((cell) => nextCellsById.get(cell.id)!)
+      const knownIds = new Set(nextCells.map((cell) => cell.id))
+      for (const [cellId, cell] of nextCellsById) {
+        if (!knownIds.has(cellId)) nextCells.push(cell)
+      }
+
+      const updatedValue = withFlowchartUpdatedAt({ ...valueRef.current, cells: nextCells })
+      appliedCellsRef.current = nextCells
       pendingLocalValueRef.current = getAppliedValue(updatedValue)
       lastAppliedValueRef.current = pendingLocalValueRef.current
       valueRef.current = updatedValue
-      onChange(updatedValue)
+      onChangeRef.current(updatedValue)
     }
-    const scheduleContentSync = () => {
+    const scheduleContentSync = ({ cell, node, edge }: { cell?: Cell; node?: Cell; edge?: Cell } = {}) => {
+      const changedCell = cell ?? node ?? edge
+      if (changedCell) dirtyCellIdsRef.current.add(changedCell.id)
       if (readOnlyRef.current || isApplyingExternalValueRef.current || contentSyncTimer !== null) return
       contentSyncTimer = window.setTimeout(() => {
         contentSyncTimer = null
@@ -196,7 +243,7 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
       pendingLocalValueRef.current = getAppliedValue(updatedValue)
       lastAppliedValueRef.current = pendingLocalValueRef.current
       valueRef.current = updatedValue
-      onChange(updatedValue)
+      onChangeRef.current(updatedValue)
     }
     const scheduleViewportSync = () => {
       if (readOnlyRef.current || isApplyingExternalValueRef.current || viewportSyncTimer !== null) return
@@ -208,7 +255,12 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
     const handleHistoryChange = () => {
       refreshHistoryState()
     }
+    const markAllCellsDirty = () => {
+      for (const cell of graph.getCells()) dirtyCellIdsRef.current.add(cell.id)
+      for (const cell of appliedCellsRef.current) dirtyCellIdsRef.current.add(cell.id)
+    }
     const handleHistoryReplay = () => {
+      markAllCellsDirty()
       syncToValue()
       refreshHistoryState()
     }
@@ -249,6 +301,7 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
     isApplyingExternalValueRef.current = true
     try {
       graph.fromJSON({ cells: value.cells as any })
+      appliedCellsRef.current = value.cells
       graph.zoomTo(value.viewport.zoom)
       graph.translate(value.viewport.pan.x, value.viewport.pan.y)
       graph.cleanHistory?.()
@@ -275,6 +328,7 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
       void usePromptStore.getState().open({ title: '修改节点名称', defaultValue: label }).then((newLabel) => {
         if (newLabel !== null && newLabel.trim()) {
           node.attr('label/text', newLabel.trim())
+          dirtyCellIdsRef.current.add(node.id)
           syncToValue()
         }
       })
@@ -285,6 +339,7 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
       void usePromptStore.getState().open({ title: '修改连线标签', defaultValue: currentLabel as string }).then((newLabel) => {
         if (newLabel === null) return
         edge.setLabels(newLabel.trim() ? [{ attrs: { label: { text: newLabel.trim() }, text: { text: newLabel.trim() }, rect: { fill: 'var(--color-surface)', stroke: 'var(--color-border)', strokeWidth: 1, rx: 4, ry: 4 } } }] : [])
+        dirtyCellIdsRef.current.add(edge.id)
         syncToValue()
       })
     })
@@ -360,7 +415,10 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
     pendingLocalValueRef.current = null
     isApplyingExternalValueRef.current = true
     try {
-      if (cellsChanged) applyFlowchartCellsIncrementally(graph, value.cells)
+      if (cellsChanged) {
+        applyFlowchartCellsIncrementally(graph, appliedCellsRef.current, value.cells)
+        appliedCellsRef.current = value.cells
+      }
       if (viewportChanged) {
         graph.zoomTo(value.viewport.zoom)
         graph.translate(value.viewport.pan.x, value.viewport.pan.y)

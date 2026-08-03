@@ -5,7 +5,7 @@
 import { logger } from './logger'
 import type { ElectronAPI } from '../types/electron-api'
 import type { EdgeRelation, EdgeWeight } from '../types'
-import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentRepairResult } from './storage/service'
+import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentRepairResult } from './storage/service'
 import type { TopoDocumentType } from './topoDocumentTypes'
 
 const getApi = (): ElectronAPI | null => {
@@ -114,6 +114,7 @@ export interface FSB {
   readTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<unknown>
   writeTopoDocument: (rootDir: string, cardPath: string, documentId: string, content: unknown) => Promise<void>
   renameTopoDocument: (rootDir: string, cardPath: string, documentId: string, title: string) => Promise<TopoDocumentManifestItem>
+  updateTopoDocumentMeta: (rootDir: string, cardPath: string, documentId: string, patch: TopoDocumentMetaPatch) => Promise<TopoDocumentManifestItem>
   deleteTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<void>
   listTrashTopoDocuments: (rootDir: string, cardPath: string) => Promise<FSBTrashTopoDocumentItem[]>
   restoreTrashTopoDocument: (rootDir: string, cardPath: string, trashName: string) => Promise<TopoDocumentManifestItem>
@@ -176,6 +177,8 @@ const FSBImpl: FSB = {
     _call('fs:writeTopoDocument', rootDir, cardPath, documentId, content) as Promise<void>,
   renameTopoDocument: (rootDir, cardPath, documentId, title) =>
     _call('fs:renameTopoDocument', rootDir, cardPath, documentId, title) as Promise<TopoDocumentManifestItem>,
+  updateTopoDocumentMeta: (rootDir, cardPath, documentId, patch) =>
+    _call('fs:updateTopoDocumentMeta', rootDir, cardPath, documentId, patch) as Promise<TopoDocumentManifestItem>,
   deleteTopoDocument: (rootDir, cardPath, documentId) =>
     _call('fs:deleteTopoDocument', rootDir, cardPath, documentId) as Promise<void>,
   listTrashTopoDocuments: (rootDir, cardPath) =>

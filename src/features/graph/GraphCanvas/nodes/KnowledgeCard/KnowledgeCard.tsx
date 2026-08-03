@@ -4,12 +4,22 @@
  *
  * @file components/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx
  */
-import { memo, useMemo, useState, useEffect, useRef, useCallback } from 'react'
+import { memo, useMemo, useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
-import Picker from '@emoji-mart/react'
-import emojiData from '@emoji-mart/data'
-import emojiI18nZh from '@emoji-mart/data/i18n/zh.json'
+const LazyEmojiPicker = lazy(async () => {
+  const [pickerModule, dataModule, i18nModule] = await Promise.all([
+    import('@emoji-mart/react'),
+    import('@emoji-mart/data'),
+    import('@emoji-mart/data/i18n/zh.json'),
+  ])
+  return {
+    default: (props: Record<string, unknown>) => {
+      const Picker = pickerModule.default
+      return <Picker {...props} data={dataModule.default} i18n={i18nModule.default} />
+    },
+  }
+})
 import type { KnowledgeNode } from '../../../../../types'
 import { cn } from '@/lib/utils'
 import { useKnowledgeCardModel } from './model/useKnowledgeCardModel'
@@ -333,9 +343,8 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
               </button>
             </div>
           )}
-          <Picker 
-            data={emojiData} 
-            i18n={emojiI18nZh}
+          <Suspense fallback={<div className="w-[352px] h-[360px] grid place-items-center text-sm text-[var(--color-text-muted)]">正在加载表情选择器…</div>}>
+          <LazyEmojiPicker
             onEmojiSelect={(emoji: any) => {
               const currentEmojis = data.emojis || []
               let newEmojis = [...currentEmojis]
@@ -356,6 +365,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             }}
             theme="auto"
           />
+          </Suspense>
         </div>,
         document.body
       )}

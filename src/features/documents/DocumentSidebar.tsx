@@ -4,6 +4,7 @@ import { useDocumentSidebarModel } from './model/useDocumentSidebarModel'
 import { DocumentNode } from './components/DocumentNode'
 import { DocumentInlineEdit } from './components/DocumentInlineEdit'
 import { DocumentContextMenu } from './components/DocumentContextMenu'
+import { DocumentMetaPicker } from './components/DocumentMetaPicker'
 
 export interface DocumentSidebarProps {
   nodeId?: string
@@ -16,6 +17,7 @@ export interface DocumentSidebarProps {
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
+  onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
 }
 
 export const DocumentSidebar = memo(function DocumentSidebar({
@@ -29,6 +31,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
   onRenameDocument,
   onDeleteDocument,
   onMoveDocument,
+  onUpdateDocumentMeta,
 }: DocumentSidebarProps) {
   const { state, refs, actions } = useDocumentSidebarModel({
     nodeId,
@@ -40,6 +43,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     onRenameDocument,
     onDeleteDocument,
     onMoveDocument,
+    onUpdateDocumentMeta,
   })
 
   const {
@@ -48,25 +52,30 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     contextMenu,
     activeSubmenu,
     inlineEdit,
+    metaPicker,
     expandedNodes,
     draggedId,
     dragState,
   } = state
 
-  const { inlineInputRef, menuRef } = refs
+  const { inlineInputRef, menuRef, scrollContainerRef } = refs
 
   const {
     setInlineEdit,
     setActiveSubmenu,
+    setMetaPicker,
     toggleExpand,
     openContextMenu,
+    openIconPicker,
     handleContextMenuAction,
+    handleApplyMeta,
     handleInputKeyDown,
     handleInputBlur,
     handleDragStart,
     handleDragOver,
     handleDragLeave,
     handleDrop,
+    handleSidebarScroll,
   } = actions
 
   return (
@@ -76,8 +85,12 @@ export const DocumentSidebar = memo(function DocumentSidebar({
       onDragOver={(e) => handleDragOver(e, null)}
       onDrop={(e) => handleDrop(e, null)}
     >
-      <div className={`flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full ${dragState?.id === 'root' ? 'bg-[var(--color-hover-bg)] ring-[1.5px] ring-inset ring-[var(--color-primary)]' : ''}`}>
-        <div className="flex flex-col gap-0.5 relative">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleSidebarScroll}
+        className={`flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full ${dragState?.id === 'root' ? 'bg-[var(--color-hover-bg)] ring-[1.5px] ring-inset ring-[var(--color-primary)]' : ''}`}
+      >
+        <div role="tree" aria-label="文档列表" className="flex flex-col gap-0.5 relative">
           {rootItems.length === 0 && !inlineEdit ? (
             <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">
               <div className="mb-2 text-[24px]">📄</div>
@@ -111,6 +124,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
                   draggedId={draggedId}
                   dragState={dragState}
                   onSelectDocument={onSelectDocument}
+                  onOpenIconPicker={openIconPicker}
                   onToggleExpand={toggleExpand}
                   onContextMenu={openContextMenu}
                   onDragStart={handleDragStart}
@@ -135,6 +149,12 @@ export const DocumentSidebar = memo(function DocumentSidebar({
         onMouseEnterSubmenu={setActiveSubmenu}
         onMouseLeaveSubmenu={() => setActiveSubmenu(null)}
         onAction={handleContextMenuAction}
+      />
+
+      <DocumentMetaPicker
+        picker={metaPicker}
+        onClose={() => setMetaPicker(null)}
+        onApply={handleApplyMeta}
       />
     </div>
   )

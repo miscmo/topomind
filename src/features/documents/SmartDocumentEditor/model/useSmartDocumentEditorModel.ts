@@ -4,13 +4,15 @@ import { useCreateBlockNote } from '@blocknote/react'
 import { useThemeStore, isDarkTheme } from '../../../../stores/themeStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../smartDocumentTypes'
-import { buildPastedImageHtml, getClipboardMarkdownImage, getCodeBlockPlainTextFromHtml, getCodeBlockPlainTextPaste, getCodeBlockPasteHtml, getSmartDocumentOutlineAndStats, getUploadedFileUrl, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
-import { inlineMathInputRuleExtension, mathBlockShortcutExtension } from '../mathSupport'
-import { containsMathDelimiters, containsMarkdownDelimiters, containsStrictMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml } from '../mathPaste'
+import { buildPastedImageHtml, getClipboardMarkdownImage, getCodeBlockPlainTextFromHtml, getCodeBlockPlainTextPaste, getSmartDocumentOutlineAndStats, getStandaloneCodeBlockPasteHtml, getUploadedFileUrl, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
+import { containsMarkdownFence } from '../fenceNormalize'
+import { inlineMathInputRuleExtension, mathBlockShortcutExtension, quoteEnterExtension } from '../mathSupport'
+import { containsMathDelimiters, containsMarkdownDelimiters, containsStrictMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml, hasMeaningfulHtmlStructure, stripClipboardHtmlNoise } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
 import { currentBlockHighlightExtension } from '../currentBlockHighlightExtension'
 import type { SmartDocumentEditorProps } from '../types'
 import type { TocItem } from '../../types/workspaceTypes'
+import type { SmartDocumentDerivedBlockCache } from '../smartDocumentUtils'
 import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
 
 export function useSmartDocumentEditorModel({
@@ -31,6 +33,14 @@ export function useSmartDocumentEditorModel({
   const onTocChangeRef = useRef(onTocChange)
   const onWordCountChangeRef = useRef(onWordCountChange)
   const onTocItemClickReadyRef = useRef(onTocItemClickReady)
+  const editorSessionActiveRef = useRef(true)
+
+  useEffect(() => {
+    editorSessionActiveRef.current = true
+    return () => {
+      editorSessionActiveRef.current = false
+    }
+  }, [])
 
   valueRef.current = value
   onChangeRef.current = onChange
@@ -119,23 +129,23 @@ export function useSmartDocumentEditorModel({
         }
       }
 
-      // text/plain itself is a code fence (```lang ... ```): parse it as
-      // Markdown FIRST. The fence maps to a code block with angle brackets
-      // safely escaped by markdown-it, and surrounding content (headings)
-      // stays as separate blocks. This is more faithful than rebuilding
-      // <pre><code> from the HTML, which would swallow or drop the heading.
-      if (/^ {0,3}(`{3,}|~{3,})/m.test(plainText)) {
+      // text/plain itself contains a code fence (including the 4+ space
+      // indentation produced when a fenced block is nested under a list item):
+      // parse it as Markdown FIRST. normalizeFenceIndentation() will lift the
+      // nested fence to a top-level block before markdown-it runs. Limiting
+      // this check to 0-3 spaces bypassed that normalization when both the
+      // opening and closing fences were indented.
+      if (containsMarkdownFence(plainText)) {
         editor.pasteHTML(convertMarkdownWithMathToHtml(plainText))
         return true
       }
 
-      // Clipboard HTML structured as a code block (<pre>/<code>) pasted OUTSIDE
-      // a code block: BlockNote would auto-create a codeBlock from it, but the
-      // raw HTML parse strips <xxx>/1<<i before the block is built. Recover the
-      // literal code text and re-emit a clean escaped <pre><code> so the code
-      // block is created with angle brackets intact.
-      if (hasHtml && /<pre[\s>]|<code[\s>]/i.test(html)) {
-        const codeBlockHtml = getCodeBlockPasteHtml(html)
+      // A standalone <pre> pasted OUTSIDE a code block should still create a
+      // codeBlock with literal angle brackets intact. Do not take over mixed
+      // rich text or inline <code>: replacing those payloads with one <pre>
+      // would discard headings/paragraphs or promote inline code to a block.
+      if (hasHtml) {
+        const codeBlockHtml = getStandaloneCodeBlockPasteHtml(html)
         if (codeBlockHtml.length > 0) {
           editor.pasteHTML(codeBlockHtml)
           return true
@@ -151,11 +161,13 @@ export function useSmartDocumentEditorModel({
       if (clipboardImage && importRemoteImage) {
         void importRemoteImage(clipboardImage.url)
           .then((result) => {
+            if (!editorSessionActiveRef.current) return
             const attachmentUrl = getUploadedFileUrl(result)
             if (!attachmentUrl) throw new Error('图片已下载，但未返回附件引用')
             editor.pasteHTML(buildPastedImageHtml(attachmentUrl, clipboardImage.alt))
           })
           .catch((error) => {
+            if (!editorSessionActiveRef.current) return
             console.error('Failed to paste remote clipboard image', error)
             // Do not insert the CSP-blocked external URL on failure. Preserve
             // the source as visible text so the user can retry or save it.
@@ -184,6 +196,23 @@ export function useSmartDocumentEditorModel({
       // 3. 常规富文本 (如网页、Word、Excel 等)
       // 优先信任并保留 HTML 格式，防止丢失图片、表格和排版。同时扫描并转换其中的数学公式和夹杂的 Markdown 语法。
       if (hasHtml) {
+        // Tencent Docs / WeChat copies wrap inline-only text in a full
+        // <html><body> document plus <sc-clipboard> metadata; the real content
+        // is duplicated in text/plain. Prefer that clean text whenever the
+        // HTML carries no real structure (even without markdown delimiters):
+        // convertMixedHtmlToHtml would run inline-markdown replacement on the
+        // text and misread lone `*` as italics (e.g. "100W * 50 B"). When
+        // text/plain itself carries the wrapper noise, strip it first.
+        if (!hasMeaningfulHtmlStructure(html)) {
+          const cleanPlain = /<html[\s>]/i.test(plainText) || /<sc-clipboard\b/i.test(plainText)
+            ? stripClipboardHtmlNoise(plainText)
+            : plainText
+          if (cleanPlain.length > 0) {
+            editor.pasteHTML(convertMarkdownWithMathToHtml(cleanPlain))
+            return true
+          }
+        }
+
         // 使用混合模式解析，处理 HTML 内部的 Markdown 和公式，修复残缺的代码块等
         editor.pasteHTML(convertMixedHtmlToHtml(html))
         return true
@@ -197,7 +226,7 @@ export function useSmartDocumentEditorModel({
 
       return defaultPasteHandler()
     },
-    extensions: [mathBlockShortcutExtension(), currentBlockHighlightExtension()],
+    extensions: [mathBlockShortcutExtension(), currentBlockHighlightExtension(), quoteEnterExtension()],
     _tiptapOptions: {
       extensions: [inlineMathInputRuleExtension],
     },
@@ -207,6 +236,7 @@ export function useSmartDocumentEditorModel({
   const idleUpdateStatsAndTocRef = useRef<number | null>(null)
   const lastPublishedTocRef = useRef<TocItem[] | null>(null)
   const lastPublishedStatsRef = useRef<{ characters: number; words: number; blocks: number } | null>(null)
+  const derivedBlockCacheRef = useRef<SmartDocumentDerivedBlockCache>(new Map())
 
   const clearScheduledStatsAndToc = useCallback(() => {
     if (updateStatsAndTocRef.current !== null) {
@@ -231,7 +261,10 @@ export function useSmartDocumentEditorModel({
     clearScheduledStatsAndToc()
 
     const runDerivedCalculation = () => {
-      const { toc, stats } = getSmartDocumentOutlineAndStats(editor)
+      const { toc, stats } = getSmartDocumentOutlineAndStats(
+        editor,
+        derivedBlockCacheRef.current,
+      )
 
       if (!isSameSmartDocumentToc(lastPublishedTocRef.current, toc)) {
         lastPublishedTocRef.current = toc

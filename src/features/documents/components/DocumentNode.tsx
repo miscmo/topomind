@@ -16,6 +16,7 @@ interface DocumentNodeProps {
   draggedId: string | null
   dragState: { id: string, position: 'before' | 'inside' | 'after' } | null
   onSelectDocument: (path: string) => void
+  onOpenIconPicker: (id: string, x: number, y: number) => void
   onToggleExpand: (e: React.MouseEvent, id: string) => void
   onContextMenu: (e: React.MouseEvent, id: string) => void
   onDragStart: (e: React.DragEvent, id: string) => void
@@ -39,6 +40,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
   draggedId,
   dragState,
   onSelectDocument,
+  onOpenIconPicker,
   onToggleExpand,
   onContextMenu,
   onDragStart,
@@ -74,8 +76,12 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           onKeyDown={onInlineEditKeyDown}
         />
       ) : (
-        <button
-          type="button"
+        <div
+          role="treeitem"
+          tabIndex={0}
+          aria-level={level + 1}
+          aria-selected={isActive}
+          aria-expanded={hasChildren ? isExpanded : undefined}
           draggable={!isEditing}
           onDragStart={(e) => onDragStart(e, node.id)}
           onDragOver={(e) => onDragOver(e, node.id)}
@@ -84,6 +90,13 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           className={`group w-full flex items-center mb-[2px] py-[7px] pr-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[var(--color-hover-bg)] ${isActive ? '!bg-[var(--color-selected-bg)]' : ''} ${dragClass} ${draggedId === node.id ? 'opacity-50' : ''}`}
           style={{ paddingLeft: `${level * 16 + 4}px` }}
           onClick={() => onSelectDocument(topoDocumentPath(node.id))}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onSelectDocument(topoDocumentPath(node.id))
+            }
+          }}
           onDoubleClick={(e) => {
             if (hasChildren) {
               onToggleExpand(e, node.id)
@@ -102,13 +115,52 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
               </svg>
             ) : <span className="w-1" />}
           </span>
-          <span className="w-5 h-5 flex items-center justify-center shrink-0 text-sm mr-1">
-            {topoDocumentTypeIcon(node.type)}
+          <span className="w-5 h-5 flex items-center justify-center shrink-0 mr-1">
+            <span
+              role="button"
+              tabIndex={isBusy ? -1 : 0}
+              draggable={false}
+              aria-label={`更换「${node.title}」的图标`}
+              aria-disabled={isBusy || undefined}
+              className={`w-5 h-5 flex items-center justify-center rounded-md text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${isBusy ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-black/5'}`}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation()
+              }}
+              onDragStart={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (isBusy) return
+                const rect = e.currentTarget.getBoundingClientRect()
+                onOpenIconPicker(node.id, rect.left, rect.bottom)
+              }}
+              onKeyDown={(e) => {
+                if (!isBusy && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  onOpenIconPicker(node.id, rect.left, rect.bottom)
+                }
+              }}
+            >
+              {node.icon || topoDocumentTypeIcon(node.type)}
+            </span>
           </span>
-          <span className={`block text-[12px] font-semibold leading-[1.4] whitespace-nowrap overflow-hidden text-ellipsis text-[var(--color-text-primary)]`}>
+          <span
+            className="block text-[12px] font-semibold leading-[1.4] whitespace-nowrap overflow-hidden text-ellipsis text-[var(--color-text-primary)]"
+            style={node.color ? { color: node.color } : undefined}
+          >
             {node.title}
           </span>
-        </button>
+        </div>
       )}
       {isExpanded && children.map(child => (
         <DocumentNode
@@ -124,6 +176,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           draggedId={draggedId}
           dragState={dragState}
           onSelectDocument={onSelectDocument}
+          onOpenIconPicker={onOpenIconPicker}
           onToggleExpand={onToggleExpand}
           onContextMenu={onContextMenu}
           onDragStart={onDragStart}

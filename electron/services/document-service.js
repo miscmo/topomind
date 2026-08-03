@@ -10,6 +10,7 @@ export function createDocumentService(deps) {
     openTopoDocumentFolder,
     readTopoDocument,
     renameTopoDocument,
+    updateTopoDocumentMeta,
     repairTopoDocuments,
     restoreTrashTopoDocument,
     writeTopoDocument,
@@ -34,6 +35,10 @@ export function createDocumentService(deps) {
 
     renameTopoDocument(rootDir, cardPath, documentId, title) {
       return renameTopoDocument(rootDir, cardPath, documentId, title);
+    },
+
+    updateTopoDocumentMeta(rootDir, cardPath, documentId, patch) {
+      return updateTopoDocumentMeta(rootDir, cardPath, documentId, patch);
     },
 
     deleteTopoDocument(rootDir, cardPath, documentId) {

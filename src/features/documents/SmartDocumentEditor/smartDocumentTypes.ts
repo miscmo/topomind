@@ -40,7 +40,8 @@ const NEWLINE_SPLITTABLE_BLOCK_TYPES = new Set([
   'bulletListItem',
   'numberedListItem',
   'checkListItem',
-  'quote',
+  // 注意：quote 不在其中。BlockNote 的多行引用就是一个 quote 块内文本含 \n
+  // （pre-wrap 渲染换行）。若按 \n 拆分，每次打开文档都会被拆成多个引用块。
 ])
 
 function shouldSplitBlockTextByNewlines(block: BlockNoteBlock): boolean {

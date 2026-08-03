@@ -10,6 +10,7 @@ type SmartDocumentAttachmentEditor = {
 export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachmentEditor, attachmentInsertTargetKey?: string) {
   const lastTargetBlockRef = useRef<any>(null)
   const updateLastTargetRef = useRef<(() => void) | null>(null)
+  const updateFrameRef = useRef<number | null>(null)
 
   // 记录编辑器失去焦点前的最后光标/选中位置
   useEffect(() => {
@@ -46,17 +47,28 @@ export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachment
       }
     }
 
+    const scheduleUpdateLastTarget = () => {
+      if (updateFrameRef.current !== null) return
+      updateFrameRef.current = window.requestAnimationFrame(() => {
+        updateFrameRef.current = null
+        updateLastTarget()
+      })
+    }
     updateLastTargetRef.current = updateLastTarget
 
-    // 监听选区变化、点击、键盘事件，以便在焦点丢失前捕获正确的块
-    document.addEventListener('selectionchange', updateLastTarget)
-    document.addEventListener('click', updateLastTarget, true)
-    document.addEventListener('keyup', updateLastTarget, true)
+    // Coalesce global selection/click/key events into at most one editor query per frame.
+    document.addEventListener('selectionchange', scheduleUpdateLastTarget)
+    document.addEventListener('click', scheduleUpdateLastTarget, true)
+    document.addEventListener('keyup', scheduleUpdateLastTarget, true)
 
     return () => {
-      document.removeEventListener('selectionchange', updateLastTarget)
-      document.removeEventListener('click', updateLastTarget, true)
-      document.removeEventListener('keyup', updateLastTarget, true)
+      document.removeEventListener('selectionchange', scheduleUpdateLastTarget)
+      document.removeEventListener('click', scheduleUpdateLastTarget, true)
+      document.removeEventListener('keyup', scheduleUpdateLastTarget, true)
+      if (updateFrameRef.current !== null) {
+        window.cancelAnimationFrame(updateFrameRef.current)
+        updateFrameRef.current = null
+      }
     }
   }, [editor])
 

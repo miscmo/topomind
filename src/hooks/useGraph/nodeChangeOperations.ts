@@ -46,8 +46,8 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       }
     }
 
-    if (changed || isDragEnd) {
-      store.setNodes(changed ? nextNodes : store.nodes)
+    if (changed) {
+      store.setNodesPreservingSelection(nextNodes)
     }
 
     const graphSession = getActiveGraphSession()
@@ -138,7 +138,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       }
     }
 
-    if (changed) store.setNodes(nextNodes)
+    if (changed) store.setNodesPreservingSelection(nextNodes)
     
     if (changed && shouldSave) {
       const graphSession = getActiveGraphSession()

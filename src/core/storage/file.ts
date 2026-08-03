@@ -1,5 +1,5 @@
 import { FSB } from '../fs-backend'
-import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem } from './service'
+import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem, TopoDocumentMetaPatch } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import type { EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
@@ -302,6 +302,10 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
 
     renameTopoDocument: async (cardPath: string, documentId: string, title: string): Promise<TopoDocumentManifestItem> => {
       return FSB.renameTopoDocument(requireRootDir(), cardPath, documentId, title)
+    },
+
+    updateTopoDocumentMeta: async (cardPath: string, documentId: string, patch: TopoDocumentMetaPatch): Promise<TopoDocumentManifestItem> => {
+      return FSB.updateTopoDocumentMeta(requireRootDir(), cardPath, documentId, patch)
     },
 
     deleteTopoDocument: async (cardPath: string, documentId: string): Promise<void> => {

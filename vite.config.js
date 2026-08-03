@@ -38,8 +38,9 @@ export default defineConfig({
           if (process.env.VSCODE_DEBUG) {
             console.log('[startup] Electron App')
           } else {
-            startup(['.', '--no-sandbox']).then(() => {
-            }).catch(() => {})
+            startup(['.', '--no-sandbox']).catch((error) => {
+              console.error('[startup] Electron 启动失败', error)
+            })
           }
         },
       },

@@ -1,5 +1,6 @@
 import { markdownToHTML } from '@blocknote/core'
 import DOMPurify from 'dompurify'
+import { normalizeFenceIndentation } from './fenceNormalize.ts'
 
 const SANITIZE_OPTIONS = {
   ALLOWED_TAGS: [
@@ -77,14 +78,21 @@ function escapeHtml(value: string): string {
 // other <xxx> is almost certainly literal code/text (e.g. <iostream>,
 // <Component>, <xxx>) and must be escaped before DOM parsing, or the parser
 // strips it as unknown markup.
+//
+// html/head/body/meta/style/script/link/title are document-structure tags that
+// clipboard serializers (Tencent Docs, Word, web pages) wrap content in. They
+// must stay REAL tags here so the later DOMPurify pass can strip them; escaping
+// them into literal text is what previously leaked "<html> <body> ..." noise
+// into pasted documents.
 const KNOWN_HTML_TAGS = new Set([
-  'a', 'abbr', 'address', 'article', 'aside', 'b', 'blockquote', 'br', 'caption',
+  'a', 'abbr', 'address', 'article', 'aside', 'b', 'blockquote', 'br', 'body', 'caption',
   'cite', 'code', 'col', 'colgroup', 'dd', 'del', 'details', 'dfn', 'div', 'dl',
   'dt', 'em', 'figcaption', 'figure', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5',
-  'h6', 'header', 'hr', 'i', 'img', 'ins', 'kbd', 'li', 'main', 'mark', 'nav',
-  'ol', 'p', 'pre', 'q', 's', 'samp', 'section', 'small', 'span', 'strong',
-  'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead',
-  'time', 'tr', 'u', 'ul', 'var',
+  'h6', 'head', 'header', 'hr', 'html', 'i', 'img', 'ins', 'kbd', 'li', 'link',
+  'main', 'mark', 'meta', 'nav', 'ol', 'p', 'pre', 'q', 's', 'samp', 'script',
+  'section', 'small', 'span', 'strong', 'style', 'sub', 'summary', 'sup',
+  'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'time', 'title', 'tr', 'u',
+  'ul', 'var',
 ])
 
 /**
@@ -113,6 +121,59 @@ export function escapeUnknownHtmlTags(html: string): string {
       return `&lt;${slash}${tagName}`
     },
   )
+}
+
+/**
+ * True when the HTML carries real rich-text structure (blocks, lists, tables,
+ * images, math). Tencent Docs / WeChat copies are the opposite: a full
+ * `<html><body>` document whose body is only inline text plus an internal
+ * `<sc-clipboard>` metadata block. For those we prefer text/plain (markdown)
+ * over the wrapper HTML, so links and paragraphs paste cleanly instead of
+ * leaking document-structure noise.
+ */
+export function hasMeaningfulHtmlStructure(html: string): boolean {
+  if (!html) return false
+  const stripped = stripClipboardMetaTags(html)
+  return /<(?:p|div|h[1-6]|ul|ol|li|table|tr|td|th|blockquote|pre|img|hr|br|strong|b|em|i|u|s|del|a|code|mark|sub|sup|span)\b/i.test(stripped)
+}
+
+/**
+ * Removes Tencent Docs' internal `<sc-clipboard ...>...</sc-clipboard>` blocks
+ * from clipboard HTML. Their `block-data` attribute repeats the copied text as
+ * JSON, so keeping them leaks duplicated raw text (and attribute noise) into
+ * the document. The real content is already serialized as normal nodes in the
+ * same HTML body, so the block can be dropped entirely.
+ *
+ * Handles both self-closing and paired forms and matches on a full tag-name
+ * boundary (`<sc-clipboard>` vs the hypothetical `<sc-clipboardX>`).
+ */
+export function stripClipboardMetaTags(html: string): string {
+  if (!html) return html
+  const selfClosing = html.replace(/<sc-clipboard\b[^>]*\/>/gi, '')
+  return selfClosing.replace(/<sc-clipboard\b[^>]*>[\s\S]*?<\/sc-clipboard\s*>/gi, '')
+}
+
+/**
+ * Recovers user-facing text from clipboard HTML whose only real content is
+ * text (typical for Tencent Docs / WeChat copies): strips document-structure
+ * wrappers (`<html>/<body>`...) and internal meta tags (`<sc-clipboard>`),
+ * then falls back to plain text. Used when the renderer must NOT trust
+ * `text/html` (no real formatting) and `text/plain` may itself carry the
+ * wrapper noise.
+ */
+export function stripClipboardHtmlNoise(html: string): string {
+  if (!html) return ''
+  const withoutMeta = stripClipboardMetaTags(html)
+    .replace(/<(?:br\s*\/?)>/gi, '\n')
+    .replace(/<\/?(?:p|div|li|blockquote|h[1-6])\b[^>]*>/gi, '\n')
+    .replace(/<\/?(?:html|head|body|meta|style|script|link|title|font)\b[^>]*>/gi, '')
+  return withoutMeta
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .filter((line, index, lines) => line.length > 0 || (index > 0 && index < lines.length - 1))
+    .join('\n')
+    .trim()
 }
 
 export function createInlineMathHtml(latex: string): string {
@@ -180,9 +241,42 @@ export function containsStrictMarkdownDelimiters(text: string): boolean {
   )
 }
 
+function splitPlainTextLinesIntoBlocks(lines: string[]): string[] {
+  const result: string[] = []
+  let previousKind: 'plain' | 'quote' | 'list' | 'block' | 'blank' = 'blank'
+  let inFence = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})/)
+    if (fence) inFence = !inFence
+
+    const kind: 'plain' | 'quote' | 'list' | 'block' | 'blank' = !trimmed
+      ? 'blank'
+      : inFence || fence
+        ? 'block'
+        : /^ {0,3}>/.test(line)
+          ? 'quote'
+          : /^(?: {0,3})(?:[-+*]|\d+[.)])\s+/.test(line) || /^\s{2,}\S/.test(line)
+            ? 'list'
+            : /^<(?:div|p|hr)\b/i.test(trimmed)
+              ? 'block'
+              : 'plain'
+
+    if (kind === 'plain' && previousKind === 'plain' && result[result.length - 1] !== '') {
+      result.push('')
+    }
+    result.push(line)
+    previousKind = kind
+  }
+
+  return result
+}
+
 export function convertMarkdownWithMathToHtml(markdown: string): string {
-  const normalized = markdown.replace(/\r\n?/g, '\n')
-  const lines = normalized.split('\n')
+  const normalizedInput = normalizeFenceIndentation(markdown)
+  const normalized = normalizedInput.replace(/\r\n?/g, '\n')
+  const lines = splitPlainTextLinesIntoBlocks(normalized.split('\n'))
   const convertedLines: string[] = []
   let inCodeFence = false
   let activeFence = ''
@@ -477,10 +571,15 @@ function replaceInlineMarkdownInHtmlDocument(root: ParentNode) {
 }
 
 export function convertMixedHtmlToHtml(html: string): string {
+  // Drop Tencent Docs' <sc-clipboard> metadata BEFORE escaping: its block-data
+  // JSON contains the copied text again, and its attribute braces/quotes would
+  // otherwise survive as literal noise in the pasted document.
+  const strippedHtml = stripClipboardMetaTags(html)
+
   // Protect literal code angle brackets (<iostream>, <xxx>) from being
   // stripped by DOMPurify/DOM parsing: escape any tag that is not a known
   // HTML tag before sanitizing, so it survives as text.
-  const sanitizedHtml = sanitizeEditorHtml(escapeUnknownHtmlTags(html))
+  const sanitizedHtml = sanitizeEditorHtml(escapeUnknownHtmlTags(strippedHtml))
   const parser = new DOMParser()
   const doc = parser.parseFromString(sanitizedHtml, 'text/html')
   

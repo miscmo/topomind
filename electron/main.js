@@ -349,6 +349,9 @@ function registerIPC() {
   ipcMain.handle('fs:renameTopoDocument', function(e, rootDir, cardPath, documentId, title) {
     return fileService.renameTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId, title);
   });
+  ipcMain.handle('fs:updateTopoDocumentMeta', function(e, rootDir, cardPath, documentId, patch) {
+    return fileService.updateTopoDocumentMeta(requireActiveWorkDir(rootDir), cardPath, documentId, patch);
+  });
   ipcMain.handle('fs:deleteTopoDocument', function(e, rootDir, cardPath, documentId) {
     return fileService.deleteTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId);
   });

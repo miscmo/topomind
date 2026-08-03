@@ -44,6 +44,7 @@ export default memo(function GraphCanvas({
     isFormatPainterActive,
     isShiftPressed,
     isSearchOpen,
+    isNodeInteractionActive,
   } = state
 
   const {
@@ -191,6 +192,7 @@ export default memo(function GraphCanvas({
           edges={edges}
           zoomLevel={zoomLevel}
           canvasSize={canvasSize}
+          interactionActive={isNodeInteractionActive}
         />
         {showGrid && (
           <Background id={tabId} variant={'dots' as BackgroundVariant} gap={20} size={1} color="var(--color-canvas-grid)" />

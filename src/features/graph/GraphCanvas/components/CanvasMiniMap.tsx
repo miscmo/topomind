@@ -71,6 +71,12 @@ interface PreviewModel {
   markerDefinitions: MarkerDefinition[]
 }
 
+interface MiniMapDerivedModel {
+  graphBounds: RectLike
+  nodeById: Map<string, Node>
+  previewModel: PreviewModel
+}
+
 type MiniMapDetailLevel = 'full' | 'compact' | 'skeleton'
 
 function getRectBoundaryPoint(rect: RectLike, target: { x: number; y: number }) {
@@ -466,6 +472,7 @@ interface CanvasMiniMapProps {
     width: number
     height: number
   }
+  interactionActive?: boolean
 }
 
 export const CanvasMiniMap = memo(function CanvasMiniMap({
@@ -473,6 +480,7 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
   edges,
   zoomLevel,
   canvasSize,
+  interactionActive = false,
 }: CanvasMiniMapProps) {
   const reactFlow = useReactFlow()
   const showMiniMap = useGraphUiStore((s) => s.showMiniMap)
@@ -485,17 +493,42 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
   const pendingFocusPointRef = useRef<{ clientX: number; clientY: number } | null>(null)
   const [isDraggingPreview, setIsDraggingPreview] = useState(false)
 
-  const graphBounds = useMemo(() => {
-    if (nodes.length === 0) {
-      return { x: 0, y: 0, width: 0, height: 0 }
+  const miniMapDetailLevel = useMemo<MiniMapDetailLevel>(() => {
+    if (
+      nodes.length >= MINI_MAP_SKELETON_DETAIL_NODE_THRESHOLD ||
+      edges.length >= MINI_MAP_SKELETON_DETAIL_EDGE_THRESHOLD
+    ) {
+      return 'skeleton'
     }
 
+    if (
+      nodes.length >= MINI_MAP_COMPACT_DETAIL_NODE_THRESHOLD ||
+      edges.length >= MINI_MAP_COMPACT_DETAIL_EDGE_THRESHOLD
+    ) {
+      return 'compact'
+    }
+
+    return 'full'
+  }, [edges.length, nodes.length])
+
+  const derivedModelRef = useRef<MiniMapDerivedModel | null>(null)
+  const derivedModel = useMemo(() => {
+    if (
+      interactionActive
+      && nodes.length >= MINI_MAP_COMPACT_DETAIL_NODE_THRESHOLD
+      && derivedModelRef.current
+    ) {
+      return derivedModelRef.current
+    }
+
+    const nodeById = new Map<string, Node>()
     let minX = Infinity
     let minY = Infinity
     let maxX = -Infinity
     let maxY = -Infinity
 
     for (const node of nodes) {
+      nodeById.set(node.id, node)
       const rect = getNodeRect(node)
       minX = Math.min(minX, rect.x)
       minY = Math.min(minY, rect.y)
@@ -503,13 +536,23 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
       maxY = Math.max(maxY, rect.y + rect.height)
     }
 
-    return {
-      x: minX,
-      y: minY,
-      width: Math.max(0, maxX - minX),
-      height: Math.max(0, maxY - minY),
+    const graphBounds = nodes.length === 0
+      ? { x: 0, y: 0, width: 0, height: 0 }
+      : {
+          x: minX,
+          y: minY,
+          width: Math.max(0, maxX - minX),
+          height: Math.max(0, maxY - minY),
+        }
+    const nextModel = {
+      graphBounds,
+      nodeById,
+      previewModel: buildPreviewModel(nodes, edges, nodeById, miniMapDetailLevel),
     }
-  }, [nodes])
+    derivedModelRef.current = nextModel
+    return nextModel
+  }, [edges, interactionActive, miniMapDetailLevel, nodes])
+  const { graphBounds, previewModel } = derivedModel
 
   const previewBounds = useMemo(() => {
     const width = Math.max(graphBounds.width, 240)
@@ -540,37 +583,6 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
   const isMiniMapVisible = showMiniMap && isCanvasLarge
 
   const edgeMarkerSize = useMemo(() => Math.max(6, Math.round(Math.min(previewBounds.width, previewBounds.height) * 0.015)), [previewBounds.height, previewBounds.width])
-
-  const nodeById = useMemo(() => {
-    const map = new Map<string, Node>()
-    for (const node of nodes) {
-      map.set(node.id, node)
-    }
-    return map
-  }, [nodes])
-
-  const miniMapDetailLevel = useMemo<MiniMapDetailLevel>(() => {
-    if (
-      nodes.length >= MINI_MAP_SKELETON_DETAIL_NODE_THRESHOLD ||
-      edges.length >= MINI_MAP_SKELETON_DETAIL_EDGE_THRESHOLD
-    ) {
-      return 'skeleton'
-    }
-
-    if (
-      nodes.length >= MINI_MAP_COMPACT_DETAIL_NODE_THRESHOLD ||
-      edges.length >= MINI_MAP_COMPACT_DETAIL_EDGE_THRESHOLD
-    ) {
-      return 'compact'
-    }
-
-    return 'full'
-  }, [edges.length, nodes.length])
-
-  const previewModel = useMemo(
-    () => buildPreviewModel(nodes, edges, nodeById, miniMapDetailLevel),
-    [edges, miniMapDetailLevel, nodeById, nodes],
-  )
 
   const handleToggleMiniMap = useCallback(() => {
     const nextVisible = !showMiniMap
@@ -780,7 +792,7 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
                   detailLevel={miniMapDetailLevel}
                   onNodeClick={(nodeId, event) => {
                     event.stopPropagation()
-                    const fullNode = nodeById.get(nodeId)
+                    const fullNode = derivedModel.nodeById.get(nodeId)
                     if (fullNode) {
                       handleMiniMapNodeClick(event as unknown as React.MouseEvent, fullNode)
                     }

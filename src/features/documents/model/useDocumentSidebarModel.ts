@@ -4,6 +4,13 @@ import { topoDocumentPath, buildDocumentTree } from '../types/documentTypes'
 import { TOPO_DOCUMENT_TYPES } from '../services/documentTypeRegistry'
 import { useGraphStoreApi } from '../../../stores/graphStore'
 import { useConfirmStore } from '../../../shared/ui/ConfirmModal/confirmStore'
+import type { DocumentMetaPickerState } from '../components/DocumentMetaPicker'
+import {
+  loadDocumentSidebarScrollTop,
+  loadExpandedDocumentNodeIds,
+  saveDocumentSidebarScrollTop,
+  saveExpandedDocumentNodeIds,
+} from './documentSidebarState'
 
 export interface DocumentContextMenuState {
   x: number
@@ -29,6 +36,7 @@ export interface UseDocumentSidebarModelProps {
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
+  onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
 }
 
 export function useDocumentSidebarModel({
@@ -41,26 +49,24 @@ export function useDocumentSidebarModel({
   onRenameDocument,
   onDeleteDocument,
   onMoveDocument,
+  onUpdateDocumentMeta,
 }: UseDocumentSidebarModelProps) {
   const graphStoreApi = useGraphStoreApi()
   const { rootItems, childrenMap } = useMemo(() => buildDocumentTree(topoDocuments), [topoDocuments])
   const [contextMenu, setContextMenu] = useState<DocumentContextMenuState | null>(null)
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
   const [inlineEdit, setInlineEdit] = useState<DocumentInlineEditState | null>(null)
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
-    if (!nodeId) return new Set()
-    try {
-      const saved = localStorage.getItem(`topomind_expanded_nodes_${nodeId}`)
-      return saved ? new Set(JSON.parse(saved)) : new Set()
-    } catch (e) {
-      return new Set()
-    }
-  })
+  const [metaPicker, setMetaPicker] = useState<DocumentMetaPickerState | null>(null)
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => (
+    loadExpandedDocumentNodeIds(localStorage, nodeId)
+  ))
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<{ id: string, position: 'before' | 'inside' | 'after' } | null>(null)
   const inlineInputRef = useRef<HTMLInputElement>(null)
   const cancelInlineEditOnBlurRef = useRef(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const lastScrollTopRef = useRef(loadDocumentSidebarScrollTop(localStorage, nodeId))
 
   useEffect(() => {
     let focusTimer: ReturnType<typeof setTimeout> | null = null
@@ -75,28 +81,41 @@ export function useDocumentSidebarModel({
     }
   }, [inlineEdit?.mode, inlineEdit?.targetId, inlineEdit?.parentId])
 
-  // Single useEffect to handle both loading and persisting expandedNodes
-  // Avoids race conditions between multiple useEffects
   useEffect(() => {
-    if (!nodeId) {
-      setExpandedNodes(new Set())
-      return
-    }
+    setExpandedNodes(loadExpandedDocumentNodeIds(localStorage, nodeId))
+  }, [nodeId])
 
-    // Load from localStorage on mount/nodeId change
-    try {
-      const saved = localStorage.getItem(`topomind_expanded_nodes_${nodeId}`)
-      setExpandedNodes(saved ? new Set(JSON.parse(saved)) : new Set())
-    } catch (e) {
-      setExpandedNodes(new Set())
-    }
+  const updateExpandedNodes = useCallback((updater: (previous: Set<string>) => Set<string>) => {
+    setExpandedNodes((previous) => {
+      const next = updater(previous)
+      saveExpandedDocumentNodeIds(localStorage, nodeId, next)
+      return next
+    })
   }, [nodeId])
 
   useEffect(() => {
+    if (!nodeId || rootItems.length === 0) return
+    const savedScrollTop = loadDocumentSidebarScrollTop(localStorage, nodeId)
+    lastScrollTopRef.current = savedScrollTop
+    const frame = requestAnimationFrame(() => {
+      const container = scrollContainerRef.current
+      if (container) {
+        container.scrollTop = savedScrollTop
+      }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [nodeId, rootItems.length])
+
+  const handleSidebarScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     if (!nodeId) return
-    // Persist to localStorage whenever expandedNodes changes
-    localStorage.setItem(`topomind_expanded_nodes_${nodeId}`, JSON.stringify(Array.from(expandedNodes)))
-  }, [expandedNodes, nodeId])
+    const scrollTop = event.currentTarget.scrollTop
+    lastScrollTopRef.current = scrollTop
+    saveDocumentSidebarScrollTop(localStorage, nodeId, scrollTop)
+  }, [nodeId])
+
+  useEffect(() => () => {
+    saveDocumentSidebarScrollTop(localStorage, nodeId, lastScrollTopRef.current)
+  }, [nodeId])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -125,13 +144,13 @@ export function useDocumentSidebarModel({
 
   const toggleExpand = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    setExpandedNodes(prev => {
+    updateExpandedNodes(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }, [])
+  }, [updateExpandedNodes])
 
   const openContextMenu = useCallback((e: React.MouseEvent, targetId: string | null) => {
     e.preventDefault()
@@ -153,6 +172,18 @@ export function useDocumentSidebarModel({
       if (doc) {
         setInlineEdit({ mode: 'rename', targetId, parentId: doc.parentId || null, value: doc.title })
       }
+    } else if ((action === 'change-icon' || action === 'change-color') && targetId) {
+      const doc = topoDocuments.find(d => d.id === targetId)
+      if (doc) {
+        setMetaPicker({
+          mode: action === 'change-icon' ? 'icon' : 'color',
+          x: contextMenu.x,
+          y: contextMenu.y,
+          targetId,
+          currentIcon: doc.icon,
+          currentColor: doc.color,
+        })
+      }
     } else if (action === 'delete' && targetId) {
       onDeleteDocument(topoDocumentPath(targetId))
     } else if (action === 'export' && targetId) {
@@ -171,10 +202,35 @@ export function useDocumentSidebarModel({
 
       setInlineEdit({ mode: 'createTopoDocument', createType, targetId: null, parentId: targetId || null, value: initialValue })
       if (targetId) {
-        setExpandedNodes(prev => new Set(prev).add(targetId))
+        updateExpandedNodes(prev => new Set(prev).add(targetId))
       }
     }
-  }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, nodeId])
+  }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, nodeId, updateExpandedNodes])
+
+  const openIconPicker = useCallback((targetId: string, x: number, y: number) => {
+    if (isBusy || !onUpdateDocumentMeta) return
+    const doc = topoDocuments.find(d => d.id === targetId)
+    if (!doc) return
+    setContextMenu(null)
+    setMetaPicker({
+      mode: 'icon',
+      x,
+      y,
+      targetId,
+      currentIcon: doc.icon,
+      currentColor: doc.color,
+    })
+  }, [isBusy, onUpdateDocumentMeta, topoDocuments])
+
+  const handleApplyMeta = useCallback((mode: 'icon' | 'color', targetId: string, value: string | null) => {
+    if (!onUpdateDocumentMeta) return
+    setMetaPicker(null)
+    const doc = topoDocuments.find(d => d.id === targetId)
+    if (!doc) return
+    onUpdateDocumentMeta(topoDocumentPath(targetId), mode === 'icon'
+      ? { icon: value }
+      : { color: value })
+  }, [onUpdateDocumentMeta, topoDocuments])
 
   const inlineEditRef = useRef(inlineEdit)
   inlineEditRef.current = inlineEdit
@@ -305,7 +361,7 @@ export function useDocumentSidebarModel({
           ? Math.max(...targetChildren.map(c => c.sortOrder)) + 1 
           : 0
         onMoveDocument(draggedId, targetId, newSortOrder)
-        if (targetId) setExpandedNodes(prev => new Set(prev).add(targetId))
+        if (targetId) updateExpandedNodes(prev => new Set(prev).add(targetId))
       } else {
         const targetDoc = topoDocuments.find(d => d.id === targetId)
         if (targetDoc) {
@@ -326,7 +382,7 @@ export function useDocumentSidebarModel({
     
     setDragState(null)
     setDraggedId(null)
-  }, [draggedId, dragState, onMoveDocument, childrenMap, rootItems, topoDocuments])
+  }, [draggedId, dragState, onMoveDocument, childrenMap, rootItems, topoDocuments, updateExpandedNodes])
 
   return {
     state: {
@@ -335,6 +391,7 @@ export function useDocumentSidebarModel({
       contextMenu,
       activeSubmenu,
       inlineEdit,
+      metaPicker,
       expandedNodes,
       draggedId,
       dragState,
@@ -342,19 +399,24 @@ export function useDocumentSidebarModel({
     refs: {
       inlineInputRef,
       menuRef,
+      scrollContainerRef,
     },
     actions: {
       setInlineEdit,
       setActiveSubmenu,
+      setMetaPicker,
       toggleExpand,
       openContextMenu,
+      openIconPicker,
       handleContextMenuAction,
+      handleApplyMeta,
       handleInputKeyDown,
       handleInputBlur,
       handleDragStart,
       handleDragOver,
       handleDragLeave,
       handleDrop,
+      handleSidebarScroll,
     }
   }
 }

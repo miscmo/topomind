@@ -1,4 +1,4 @@
-import { createHighlighterCore } from 'shiki/core'
+import { createBundledHighlighter } from 'shiki/core'
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
 
 const supportedLanguages: Record<string, { name: string; aliases: string[] }> = {
@@ -22,62 +22,46 @@ const supportedLanguages: Record<string, { name: string; aliases: string[] }> = 
   yaml: { name: 'YAML', aliases: ['yml'] },
 }
 
-async function createSmartDocumentHighlighter() {
-  const [
-    githubLight,
-    githubDark,
-    langJs,
-    langTs,
-    langTsx,
-    langJsx,
-    langJson,
-    langHtml,
-    langCss,
-    langMarkdown,
-    langPython,
-    langJava,
-    langC,
-    langCpp,
-    langRust,
-    langGo,
-    langShell,
-    langSql,
-    langYaml,
-  ] = await Promise.all([
-    import('shiki/themes/github-light.mjs').then((module) => module.default),
-    import('shiki/themes/github-dark.mjs').then((module) => module.default),
-    import('shiki/langs/javascript.mjs').then((module) => module.default),
-    import('shiki/langs/typescript.mjs').then((module) => module.default),
-    import('shiki/langs/tsx.mjs').then((module) => module.default),
-    import('shiki/langs/jsx.mjs').then((module) => module.default),
-    import('shiki/langs/json.mjs').then((module) => module.default),
-    import('shiki/langs/html.mjs').then((module) => module.default),
-    import('shiki/langs/css.mjs').then((module) => module.default),
-    import('shiki/langs/markdown.mjs').then((module) => module.default),
-    import('shiki/langs/python.mjs').then((module) => module.default),
-    import('shiki/langs/java.mjs').then((module) => module.default),
-    import('shiki/langs/c.mjs').then((module) => module.default),
-    import('shiki/langs/cpp.mjs').then((module) => module.default),
-    import('shiki/langs/rust.mjs').then((module) => module.default),
-    import('shiki/langs/go.mjs').then((module) => module.default),
-    import('shiki/langs/shellscript.mjs').then((module) => module.default),
-    import('shiki/langs/sql.mjs').then((module) => module.default),
-    import('shiki/langs/yaml.mjs').then((module) => module.default),
-  ])
+const createSmartDocumentHighlighter = createBundledHighlighter({
+  themes: {
+    'github-light': () => import('shiki/themes/github-light.mjs'),
+    'github-dark': () => import('shiki/themes/github-dark.mjs'),
+  },
+  langs: {
+    javascript: () => import('shiki/langs/javascript.mjs'),
+    typescript: () => import('shiki/langs/typescript.mjs'),
+    tsx: () => import('shiki/langs/tsx.mjs'),
+    jsx: () => import('shiki/langs/jsx.mjs'),
+    json: () => import('shiki/langs/json.mjs'),
+    html: () => import('shiki/langs/html.mjs'),
+    css: () => import('shiki/langs/css.mjs'),
+    markdown: () => import('shiki/langs/markdown.mjs'),
+    python: () => import('shiki/langs/python.mjs'),
+    java: () => import('shiki/langs/java.mjs'),
+    c: () => import('shiki/langs/c.mjs'),
+    cpp: () => import('shiki/langs/cpp.mjs'),
+    rust: () => import('shiki/langs/rust.mjs'),
+    go: () => import('shiki/langs/go.mjs'),
+    shellscript: () => import('shiki/langs/shellscript.mjs'),
+    sql: () => import('shiki/langs/sql.mjs'),
+    yaml: () => import('shiki/langs/yaml.mjs'),
+  },
+  engine: createJavaScriptRegexEngine,
+})
 
-  return createHighlighterCore({
-    themes: [githubLight, githubDark],
-    langs: [
-      langJs, langTs, langTsx, langJsx, langJson, langHtml, langCss,
-      langMarkdown, langPython, langJava, langC, langCpp, langRust, langGo, langShell, langSql, langYaml,
-    ],
-    engine: createJavaScriptRegexEngine(),
+let highlighterPromise: ReturnType<typeof createSmartDocumentHighlighter> | null = null
+
+function getSmartDocumentHighlighter() {
+  highlighterPromise ??= createSmartDocumentHighlighter({
+    themes: ['github-light', 'github-dark'],
+    langs: [],
   })
+  return highlighterPromise
 }
 
 // Keep the language list intentionally bounded and defer grammars until the first code block is highlighted.
 export const customCodeBlockOptions = {
   defaultLanguage: 'javascript',
   supportedLanguages,
-  createHighlighter: createSmartDocumentHighlighter,
+  createHighlighter: getSmartDocumentHighlighter,
 }

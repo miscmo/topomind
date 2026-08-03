@@ -33,6 +33,10 @@ export function LearningTrackerProvider({ children }: { children: React.ReactNod
       }
     }
 
+    const handleScrollActivity = () => {
+      if (document.visibilityState === 'visible') handleActivity()
+    }
+
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') {
         setIdle()
@@ -53,7 +57,7 @@ export function LearningTrackerProvider({ children }: { children: React.ReactNod
     window.addEventListener('mousemove', handleActivity)
     window.addEventListener('mousedown', handleActivity)
     window.addEventListener('keydown', handleActivity)
-    window.addEventListener('scroll', handleActivity, true)
+    window.addEventListener('scroll', handleScrollActivity, true)
     window.addEventListener('blur', handleWindowBlur)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.electronAPI?.on('app:window-state-change', handleWindowStateChange)
@@ -62,7 +66,7 @@ export function LearningTrackerProvider({ children }: { children: React.ReactNod
       window.removeEventListener('mousemove', handleActivity)
       window.removeEventListener('mousedown', handleActivity)
       window.removeEventListener('keydown', handleActivity)
-      window.removeEventListener('scroll', handleActivity, true)
+      window.removeEventListener('scroll', handleScrollActivity, true)
       window.removeEventListener('blur', handleWindowBlur)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.electronAPI?.off('app:window-state-change', handleWindowStateChange)

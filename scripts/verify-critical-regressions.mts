@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict'
 
 import { getRemoteImageRequestHeaders } from '../electron/services/attachment-service.js'
+import { getImagePreviewScale } from '../src/features/documents/SmartDocumentEditor/imagePreview.ts'
+import { quoteEnterPayload, shouldHandleQuoteEnter } from '../src/features/documents/SmartDocumentEditor/quoteEnter.ts'
+import { containsMarkdownFence, normalizeFenceIndentation } from '../src/features/documents/SmartDocumentEditor/fenceNormalize.ts'
+import { isValidHexColor, resolveDocumentIcon } from '../src/features/documents/components/documentMeta.ts'
+import {
+  getDocumentSidebarScrollStorageKey,
+  getExpandedDocumentNodesStorageKey,
+  loadDocumentSidebarScrollTop,
+  loadExpandedDocumentNodeIds,
+  parseExpandedDocumentNodeIds,
+  saveDocumentSidebarScrollTop,
+  saveExpandedDocumentNodeIds,
+} from '../src/features/documents/model/documentSidebarState.ts'
 import { planFlowchartCellSync } from '../src/features/documents/FlowchartDocumentEditor/flowchartCellSync.ts'
 import {
   normalizeFlowchartDocumentContent,
@@ -14,8 +27,10 @@ import {
   getCodeBlockPlainTextFromHtml,
   getCodeBlockPlainTextPaste,
   getCodeBlockPasteHtml,
+  getStandaloneCodeBlockPasteHtml,
   getSmartDocumentBlocksClipboardText,
   getSmartDocumentMenuTargetBlockIds,
+  getSmartDocumentOutlineAndStats,
   getSmartDocumentSelectedTextState,
   getUploadedFileUrl,
   stripHtmlWrapperTags,
@@ -25,9 +40,16 @@ import {
   areDocumentContentsEqual,
   prepareStructuredDocumentContentForSave,
 } from '../src/features/documents/model/documentContentSession.ts'
+import { normalizeSmartDocumentContent } from '../src/features/documents/SmartDocumentEditor/smartDocumentTypes.ts'
 import {
+  containsMarkdownDelimiters,
   escapeUnknownHtmlTags,
+  hasMeaningfulHtmlStructure,
+  stripClipboardHtmlNoise,
+  stripClipboardMetaTags,
+  convertMarkdownWithMathToHtml,
 } from '../src/features/documents/SmartDocumentEditor/mathPaste.ts'
+import { SaveCoordinator } from '../src/domain/persistence/saveCoordinator.ts'
 import {
   flushTabs,
   getDirtyState,
@@ -287,17 +309,23 @@ const edge = (
     getCodeBlockPasteHtml('<pre><code>#include<iostream>\nif( s&amp;(1<<i) )</code></pre>'),
     '<pre><code>#include&lt;iostream&gt;\nif( s&amp;(1&lt;&lt;i) )</code></pre>',
   )
-  // surrounding content (headings) must NOT be swallowed into the code block
+  // The paste handler may replace the whole payload only when it is a single
+  // standalone <pre>. Mixed rich text and inline code must stay on the normal
+  // HTML path so surrounding content is never discarded/promoted.
   assert.equal(
-    getCodeBlockPasteHtml('<h1>三、字符串全排列扩展</h1>\n<pre><code>int x &lt; 1;</code></pre>'),
+    getStandaloneCodeBlockPasteHtml('<pre><code>#include<iostream>\nreturn 0;</code></pre>'),
+    '<pre><code>#include&lt;iostream&gt;\nreturn 0;</code></pre>',
+  )
+  assert.equal(
+    getStandaloneCodeBlockPasteHtml('<html><body><pre><code>int x &lt; 1;</code></pre></body></html>'),
     '<pre><code>int x &lt; 1;</code></pre>',
   )
   assert.equal(
-    getCodeBlockPasteHtml('<h1>标题</h1><pre><code>#include<iostream>\nreturn 0;</code></pre>'),
-    '<pre><code>#include&lt;iostream&gt;\nreturn 0;</code></pre>',
+    getStandaloneCodeBlockPasteHtml('<h1>标题</h1><p>前文</p><pre><code>int x &lt; 1;</code></pre><p>后文</p>'),
+    '',
   )
+  assert.equal(getStandaloneCodeBlockPasteHtml('<p>运行 <code>npm install</code> 后继续</p>'), '')
   assert.equal(getCodeBlockPasteHtml(''), '')
-  assert.equal(getCodeBlockPasteHtml('<p>plain text</p>'), '<pre><code>plain text</code></pre>')
 }
 
 {
@@ -314,6 +342,33 @@ const edge = (
   assert.equal(escapeUnknownHtmlTags('<b>bold</b>'), '<b>bold</b>')
   assert.equal(escapeUnknownHtmlTags('<div class="x">code <xxx> here</div>'), '<div class="x">code &lt;xxx> here</div>')
   assert.equal(escapeUnknownHtmlTags('<pre><code>real</code></pre>'), '<pre><code>real</code></pre>')
+  // Document-structure tags must survive as REAL tags so DOMPurify can strip
+  // them; escaping them is what leaked "<html> <body> ..." noise into pastes.
+  assert.equal(
+    escapeUnknownHtmlTags('<html><head></head><body>[link](https://a.b/)</body></html>'),
+    '<html><head></head><body>[link](https://a.b/)</body></html>',
+  )
+}
+
+{
+  // 腾讯文档/微信剪贴板：<sc-clipboard> 元数据必须整体移除，正文保留。
+  const clipboardHtml =
+    '<html><head></head><body>\n[226.翻转二叉树](https://leetcode-cn.com/problems/invert-binary-tree/)\n\n[题解](https://leetcode-cn.com/problems/invert-binary-tree/solution/fan-zhuan-er-cha-shu-by-leetcode-solution/)\n<sc-clipboard block-data="{&quot;data&quot;:[{&quot;text&quot;:&quot;duplicated&quot;}]}"></sc-clipboard>\n</body></html>'
+  const stripped = stripClipboardMetaTags(clipboardHtml)
+  assert.equal(stripped.includes('sc-clipboard'), false)
+  assert.equal(stripped.includes('duplicated'), false)
+  assert.equal(stripped.includes('[226.翻转二叉树]'), true)
+  assert.equal(stripClipboardMetaTags('<sc-clipboard block-data="x"/>[a](b)'), '[a](b)')
+  assert.equal(hasMeaningfulHtmlStructure(clipboardHtml), false)
+  assert.equal(hasMeaningfulHtmlStructure('<html><body><p>real <strong>text</strong></p></body></html>'), true)
+  assert.equal(hasMeaningfulHtmlStructure('<strong>加粗</strong>'), true)
+  assert.equal(hasMeaningfulHtmlStructure('<em>斜体</em>'), true)
+  assert.equal(hasMeaningfulHtmlStructure('<a href="https://example.com">链接</a>'), true)
+  assert.equal(hasMeaningfulHtmlStructure('<img src="_attach/a.png">'), true)
+  assert.equal(
+    stripClipboardHtmlNoise('<html><head></head><body><sc-clipboard block-data="x">dup</sc-clipboard>标题 内容</body></html>'),
+    '标题 内容',
+  )
 }
 
 {
@@ -347,6 +402,26 @@ const edge = (
     buildPastedImageHtml('_attach/x.png', '图"片'),
     '<img src="_attach/x.png" alt="图&quot;片">',
   )
+}
+
+{
+  // 图片全屏预览缩放：向上滚放大、向下滚缩小，并限制在 25% ~ 800% 之间。
+  assert.equal(getImagePreviewScale(1, -100), 1.15)
+  assert.equal(getImagePreviewScale(1, 100), 0.85)
+  assert.equal(getImagePreviewScale(0.25, 100), 0.25)
+  assert.equal(getImagePreviewScale(0.29, 100), 0.25)
+  assert.equal(getImagePreviewScale(8, -100), 8)
+  assert.equal(getImagePreviewScale(7.5, -100), 8)
+}
+
+{
+  // 腾讯文档纯文本包裹（<html><body> + <sc-clipboard multi-text-data>）无真实结构：
+  // 应走纯文本 markdown 路径，防止 convertMixedHtmlToHtml 把单个 * 当斜体转 <em>。
+  assert.equal(hasMeaningfulHtmlStructure('<html><body>100W * 50 B = 50 * 10^6 B = 50M<sc-clipboard multi-text-data="{}"></sc-clipboard></body></html>'), false)
+  assert.equal(stripClipboardMetaTags('<html><body>a<sc-clipboard multi-text-data="[{&quot;x&quot;:1}]">dup</sc-clipboard>b</body></html>'), '<html><body>ab</body></html>')
+  // 单个 * 不是 markdown 分隔符（成对 **/__ 或链接才是），因此旧逻辑会漏判走 HTML 分支。
+  assert.equal(containsMarkdownDelimiters('100W * 50 B = 50 * 10^6 B = 50M'), false)
+  assert.equal(containsMarkdownDelimiters('**加粗** 和 [链接](https://a.b)'), true)
 }
 
 {
@@ -397,6 +472,202 @@ const edge = (
 }
 
 {
+  // 多行引用必须在打开文档时保持为单个 quote 块（文本内含 \n，pre-wrap 渲染换行）；
+  // 若按 \n 拆分，下次打开会变成多个独立的引用块。
+  const multiLineQuote = normalizeSmartDocumentContent({
+    version: 1,
+    title: '多行引用',
+    blocks: [
+      {
+        id: 'q1',
+        type: 'quote',
+        content: [{ type: 'text', text: '第一行\n第二行\n第三行', styles: {} }],
+      },
+    ],
+  }, 'fallback')
+  assert.equal(multiLineQuote.blocks.length, 1)
+  assert.equal(multiLineQuote.blocks[0].type, 'quote')
+  assert.deepEqual(
+    (multiLineQuote.blocks[0].content as Array<{ type: string; text: string }>).map((item) => item.text),
+    ['第一行\n第二行\n第三行'],
+  )
+
+  // 段落仍保持按换行拆分的行为（防巨型单块）。
+  const multiLineParagraph = normalizeSmartDocumentContent({
+    version: 1,
+    title: '多行段落',
+    blocks: [
+      {
+        id: 'p1',
+        type: 'paragraph',
+        content: [{ type: 'text', text: '第一行\n第二行', styles: {} }],
+      },
+    ],
+  }, 'fallback')
+  assert.equal(multiLineParagraph.blocks.length, 2)
+  assert.equal(multiLineParagraph.blocks[0].type, 'paragraph')
+}
+
+{
+  // 引用内回车：仅 quote 块拦截为行内换行，其他块类型放行。
+  assert.equal(shouldHandleQuoteEnter('quote'), true)
+  assert.equal(shouldHandleQuoteEnter('paragraph'), false)
+  assert.equal(shouldHandleQuoteEnter('heading'), false)
+  assert.equal(shouldHandleQuoteEnter(undefined), false)
+  assert.equal(quoteEnterPayload(), '\n')
+}
+
+{
+  // 列表项内缩进的代码围栏必须归一化为顶层围栏，否则 markdown-it 不识别：
+  // 开围栏被吞进列表、代码变普通文字、闭围栏被误认为新的空代码块。
+  const source = '1. 逐个处理临时文件：\n    ```python\n    x = 1\n    y = 2\n```\n1. 内存控制：\n    - 关键点 A'
+  assert.equal(containsMarkdownFence(source), true)
+  // 双端缩进是此前漏掉的关键路径：粘贴分支也必须识别它，才能进入归一化。
+  const bothIndented = '1. 代码：\n    ```python\n    x = 1\n    ```\n1. 后文'
+  assert.equal(containsMarkdownFence(bothIndented), true)
+  assert.equal(
+    normalizeFenceIndentation(bothIndented),
+    '1. 代码：\n```python\nx = 1\n```\n1. 后文',
+  )
+  const normalized = normalizeFenceIndentation(source)
+  assert.equal(
+    normalized,
+    '1. 逐个处理临时文件：\n```python\nx = 1\ny = 2\n```\n1. 内存控制：\n    - 关键点 A',
+  )
+  // 结束围栏也缩进的情况同样归一化。
+  assert.equal(
+    normalizeFenceIndentation('    ```js\n    const a = 1\n    ```'),
+    '```js\nconst a = 1\n```',
+  )
+  // 顶层围栏（0-3 空格）不受影响。
+  assert.equal(
+    normalizeFenceIndentation('```py\nx = 1\n```\n后文'),
+    '```py\nx = 1\n```\n后文',
+  )
+  // 较短 fence 和带尾随内容的 fence 都不能关闭当前代码块。
+  assert.equal(
+    normalizeFenceIndentation('    ````js\n    const marker = "```"\n    ```\n    after\n    ````'),
+    '````js\nconst marker = "```"\n```\nafter\n````',
+  )
+  assert.equal(
+    normalizeFenceIndentation('    ```js\n    code\n    ```not-close\n    tail\n    ```'),
+    '```js\ncode\n```not-close\ntail\n```',
+  )
+  // 无闭合围栏的悬空开围栏保持原样，不做猜测。
+  const dangling = '    ```py\nx = 1'
+  assert.equal(normalizeFenceIndentation(dangling), dangling)
+}
+
+{
+  // 文档自定义图标/颜色：hex 颜色校验与图标回退逻辑（用于"修改字体颜色/更换图标"）。
+  assert.equal(isValidHexColor('#e74c3c'), true)
+  assert.equal(isValidHexColor('#abc'), true)
+  assert.equal(isValidHexColor('#abcd'), true)
+  assert.equal(isValidHexColor('#aabbccdd'), true)
+  assert.equal(isValidHexColor('#12345'), false)
+  assert.equal(isValidHexColor('#1234567'), false)
+  assert.equal(isValidHexColor('e74c3c'), false)
+  assert.equal(isValidHexColor('#gggggg'), false)
+  assert.equal(isValidHexColor(''), false)
+  assert.equal(resolveDocumentIcon(undefined, '✨'), '✨')
+  assert.equal(resolveDocumentIcon('  🚀  ', '✨'), '🚀')
+  assert.equal(resolveDocumentIcon('', '✨'), '✨')
+}
+
+{
+  const values = new Map<string, string>()
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value) },
+  }
+
+  assert.equal(getExpandedDocumentNodesStorageKey('node-1'), 'topomind_expanded_nodes_node-1')
+  assert.deepEqual(parseExpandedDocumentNodeIds(null), [])
+  assert.deepEqual(parseExpandedDocumentNodeIds('not-json'), [])
+  assert.deepEqual(parseExpandedDocumentNodeIds('{"id":"doc-1"}'), [])
+  assert.deepEqual(parseExpandedDocumentNodeIds('["doc-1","",2,"doc-1","doc-2"]'), ['doc-1', 'doc-2'])
+
+  saveExpandedDocumentNodeIds(storage, 'node-1', ['doc-1', 'doc-2'])
+  saveExpandedDocumentNodeIds(storage, 'node-2', ['doc-3'])
+  assert.deepEqual(Array.from(loadExpandedDocumentNodeIds(storage, 'node-1')), ['doc-1', 'doc-2'])
+  assert.deepEqual(Array.from(loadExpandedDocumentNodeIds(storage, 'node-2')), ['doc-3'])
+  assert.deepEqual(Array.from(loadExpandedDocumentNodeIds(storage, undefined)), [])
+
+  assert.equal(getDocumentSidebarScrollStorageKey('node-1'), 'topomind_document_sidebar_scroll_node-1')
+  assert.equal(loadDocumentSidebarScrollTop(storage, 'node-1'), 0)
+  saveDocumentSidebarScrollTop(storage, 'node-1', 268.5)
+  saveDocumentSidebarScrollTop(storage, 'node-2', 32)
+  assert.equal(loadDocumentSidebarScrollTop(storage, 'node-1'), 268.5)
+  assert.equal(loadDocumentSidebarScrollTop(storage, 'node-2'), 32)
+  saveDocumentSidebarScrollTop(storage, 'node-1', -10)
+  assert.equal(loadDocumentSidebarScrollTop(storage, 'node-1'), 0)
+  values.set(getDocumentSidebarScrollStorageKey('node-1'), 'invalid')
+  assert.equal(loadDocumentSidebarScrollTop(storage, 'node-1'), 0)
+
+  const fsSync = await import('node:fs')
+  const workspaceSource = fsSync.readFileSync(new URL('../src/features/documents/DocumentWorkspace.tsx', import.meta.url), 'utf-8')
+  assert.ok(workspaceSource.includes('nodeId={nodeId}'), 'DocumentWorkspace 必须把 nodeId 传给 DocumentSidebar，否则展开状态无法按节点持久化')
+  assert.ok(workspaceSource.includes("key={nodeId ?? 'document-sidebar'}"), '节点切换时应重新挂载 DocumentSidebar，避免展开状态串到其他节点')
+  const sidebarSource = fsSync.readFileSync(new URL('../src/features/documents/DocumentSidebar.tsx', import.meta.url), 'utf-8')
+  assert.ok(sidebarSource.includes('ref={scrollContainerRef}'), '文档列表滚动容器应绑定持久化 ref')
+  assert.ok(sidebarSource.includes('onScroll={handleSidebarScroll}'), '文档列表滚动时应保存当前位置')
+  const sidebarModelSource = fsSync.readFileSync(new URL('../src/features/documents/model/useDocumentSidebarModel.ts', import.meta.url), 'utf-8')
+  assert.ok(sidebarModelSource.includes('lastScrollTopRef.current = scrollTop'), '滚动时应同步记录最后位置，供卸载保存使用')
+  assert.ok(sidebarModelSource.includes('saveDocumentSidebarScrollTop(localStorage, nodeId, lastScrollTopRef.current)'), '卸载时应保存最后记录的位置')
+  assert.equal(sidebarModelSource.includes('scrollContainerRef.current?.scrollTop ?? 0'), false, '卸载时不能读取已被 React 清空的 DOM ref，否则会用 0 覆盖滚动位置')
+
+  const smartEditorSource = fsSync.readFileSync(new URL('../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx', import.meta.url), 'utf-8')
+  assert.ok(smartEditorSource.includes('persistScrollTop()'), '智能文档滚动 debounce 在卸载时必须同步 flush 最后位置')
+
+  const rightPanelSource = fsSync.readFileSync(new URL('../src/features/right-panel/RightPanelContainer.tsx', import.meta.url), 'utf-8')
+  assert.equal(rightPanelSource.includes('<DetailPanel tabId={tabId} isActive={false}'), false, '折叠时不能替换 DetailPanel 实例，否则 dirty close guard 会被重置')
+  assert.ok(rightPanelSource.includes("${collapsed ? 'hidden' : 'flex'}"), '折叠应仅隐藏同一组件树并保留文档保存 session')
+
+  const mindMapSource = fsSync.readFileSync(new URL('../src/features/documents/MindMapDocumentEditor/MindMapDocumentEditor.tsx', import.meta.url), 'utf-8')
+  assert.ok(mindMapSource.includes('const readOnlyRef = useRef(readOnly)'), '思维导图事件回调必须读取最新 readOnly')
+  assert.ok(mindMapSource.includes('onChangeRef.current(updatedValue)'), '思维导图事件回调必须调用最新 onChange')
+
+  const pasteModelSource = fsSync.readFileSync(new URL('../src/features/documents/SmartDocumentEditor/model/useSmartDocumentEditorModel.ts', import.meta.url), 'utf-8')
+  assert.ok(pasteModelSource.includes('if (!editorSessionActiveRef.current) return'), '异步远程图片回调必须忽略已卸载 editor session')
+}
+
+{
+  // 文档自定义 icon/color 持久化链路（纯 Node 无法加载 electron 依赖，改用源码断言验证关键实现存在）：
+  // 1. manifest 归一化保留 icon/color（否则重启丢失）；
+  // 2. 提供 _fs_updateTopoDocumentMeta 更新函数；
+  // 3. IPC 通道已注册并加入 preload 白名单。
+  const fsSync = await import('node:fs')
+  const fileServiceSource = fsSync.readFileSync(new URL('../electron/file-service.js', import.meta.url), 'utf-8')
+  assert.ok(fileServiceSource.includes("if (typeof item.icon === 'string' && item.icon.trim()) documents[id].icon = item.icon.slice(0, 32);"), 'manifest 归一化应保留 icon')
+  assert.ok(fileServiceSource.includes("if (typeof item.color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(item.color)) documents[id].color = item.color;"), 'manifest 归一化应只保留合法 CSS hex color')
+  assert.ok(fileServiceSource.includes('function _fs_updateTopoDocumentMeta('), '应提供 _fs_updateTopoDocumentMeta')
+  assert.ok(fileServiceSource.includes('updateTopoDocumentMeta: _fs_updateTopoDocumentMeta'), 'documentService 应挂载 updateTopoDocumentMeta')
+  // fileService 是显式转发对象，漏转发会导致运行时 "fileService.updateTopoDocumentMeta is not a function"
+  assert.ok(fileServiceSource.includes('updateTopoDocumentMeta: function(rootDir, cardPath, documentId, patch)'), 'fileService 应转发 updateTopoDocumentMeta 到 documentService')
+  assert.ok(fileServiceSource.includes('return documentService.updateTopoDocumentMeta(rootDir, cardPath, documentId, patch);'), 'fileService 转发应调用 documentService.updateTopoDocumentMeta')
+
+  const mainSource = fsSync.readFileSync(new URL('../electron/main.js', import.meta.url), 'utf-8')
+  assert.ok(mainSource.includes("ipcMain.handle('fs:updateTopoDocumentMeta'"), 'main.js 应注册 fs:updateTopoDocumentMeta IPC')
+
+  const preloadSource = fsSync.readFileSync(new URL('../electron/preload.js', import.meta.url), 'utf-8')
+  assert.ok(preloadSource.includes("'fs:updateTopoDocumentMeta'"), 'preload.js 白名单应包含 fs:updateTopoDocumentMeta')
+
+  // 2. 前端 hex 颜色校验与图标回退逻辑。
+  assert.equal(isValidHexColor('#e74c3c'), true)
+  assert.equal(isValidHexColor('#abc'), true)
+  assert.equal(isValidHexColor('#abcd'), true)
+  assert.equal(isValidHexColor('#aabbccdd'), true)
+  assert.equal(isValidHexColor('#12345'), false)
+  assert.equal(isValidHexColor('#1234567'), false)
+  assert.equal(isValidHexColor('e74c3c'), false)
+  assert.equal(isValidHexColor('#gggggg'), false)
+  assert.equal(isValidHexColor(''), false)
+  assert.equal(resolveDocumentIcon(undefined, '✨'), '✨')
+  assert.equal(resolveDocumentIcon('  🚀  ', '✨'), '🚀')
+  assert.equal(resolveDocumentIcon('', '✨'), '✨')
+}
+
+{
   const events: string[] = []
   let dirty = true
   const unregister = registerTabSaver('regression-tab', async () => {
@@ -421,6 +692,53 @@ const edge = (
   assert.equal(result.failedTabId, 'failed-tab')
   assert.equal(mutationCount, 1)
   unregister()
+}
+
+{
+  const attempts: string[] = []
+  let shouldFail = true
+  const coordinator = new SaveCoordinator<string>({
+    delayMs: 5,
+    save: async (_key, value) => {
+      attempts.push(value)
+      if (shouldFail) throw new Error('coordinator save failed')
+    },
+  })
+  void coordinator.schedule('retry-key', () => 'draft-v1')
+  await new Promise((resolve) => setTimeout(resolve, 15))
+  assert.equal(coordinator.hasPending('retry-key'), true)
+  shouldFail = false
+  await coordinator.flush('retry-key', () => 'draft-v1')
+  assert.deepEqual(attempts, ['draft-v1', 'draft-v1'])
+  assert.equal(coordinator.hasPending('retry-key'), false)
+}
+
+{
+  const html = convertMarkdownWithMathToHtml('第一行\n第二行\n第三行')
+  assert.equal((html.match(/<p>/g) ?? []).length, 3)
+  const quoteHtml = convertMarkdownWithMathToHtml('> 第一行\n> 第二行')
+  assert.equal((quoteHtml.match(/<blockquote>/g) ?? []).length, 1)
+}
+
+{
+  const firstBlock = { id: 'p1', type: 'paragraph', content: [{ type: 'text', text: 'Hello 世界' }] }
+  const heading = { id: 'h1', type: 'heading', props: { level: 2 }, content: [{ type: 'text', text: '标题' }] }
+  let blocks = [firstBlock, heading]
+  const editor = {
+    forEachBlock(visitor: (block: unknown) => boolean) {
+      for (const block of blocks) visitor(block)
+    },
+  }
+  const cache = new Map()
+  const first = getSmartDocumentOutlineAndStats(editor, cache)
+  assert.deepEqual(first.stats, { characters: 9, words: 5, blocks: 2 })
+  const cachedParagraph = cache.get('p1')
+  getSmartDocumentOutlineAndStats(editor, cache)
+  assert.equal(cache.get('p1'), cachedParagraph)
+  blocks = [heading]
+  const next = getSmartDocumentOutlineAndStats(editor, cache)
+  assert.equal(next.stats.blocks, 1)
+  assert.equal(cache.has('p1'), false)
 }
 
 console.log('Critical regression checks verified')

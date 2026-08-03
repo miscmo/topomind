@@ -24,7 +24,10 @@ let pendingPersistName: string | null = null
 let pendingPersistValue: StorageValue<DraftPersistedState> | null = null
 let pendingPersistRemove = false
 let persistListenersRegistered = false
+let persistFailureCount = 0
 let lastPersistedValue: StorageValue<DraftPersistedState> | null = null
+const pendingDirtyDetailPaths = new Set<string>()
+const pendingDirtyCardPaths = new Set<string>()
 
 type DraftStorageIndex = {
   version: 3
@@ -107,16 +110,18 @@ function readDraftEntries(entries: Record<string, string>) {
   }))
 }
 
-function flushPendingDraftPersist() {
-  if (typeof window === 'undefined' || pendingPersistName === null) return
+export function flushPendingDraftPersist(): boolean {
+  if (typeof window === 'undefined' || pendingPersistName === null) return true
 
+  const name = pendingPersistName
+  const value = pendingPersistValue
+  const remove = pendingPersistRemove
   try {
-    const name = pendingPersistName
     const previousIndex = readDraftStorageIndex(name)
     const previousDetailEntries = getIndexedEntries(name, 'detail', previousIndex)
     const previousCardEntries = getIndexedEntries(name, 'card', previousIndex)
 
-    if (pendingPersistRemove) {
+    if (remove) {
       for (const storageKey of Object.values(previousDetailEntries)) {
         window.localStorage.removeItem(storageKey)
       }
@@ -126,36 +131,40 @@ function flushPendingDraftPersist() {
       window.localStorage.removeItem(`${name}:index`)
       window.localStorage.removeItem(name)
       lastPersistedValue = null
-    } else if (pendingPersistValue !== null) {
-      const nextState = pendingPersistValue.state
-      const previousState = lastPersistedValue?.state
+      pendingDirtyDetailPaths.clear()
+      pendingDirtyCardPaths.clear()
+    } else if (value !== null) {
+      const nextState = value.state
       const detailDrafts = nextState.detailDrafts ?? {}
       const cardDrafts = nextState.cardDrafts ?? {}
-      const previousDetailDrafts = previousState?.detailDrafts ?? {}
-      const previousCardDrafts = previousState?.cardDrafts ?? {}
       const revision = previousIndex?.version === 3 ? previousIndex.revision + 1 : 1
-      const detailEntries: Record<string, string> = {}
-      const cardEntries: Record<string, string> = {}
+      const detailEntries: Record<string, string> = { ...previousDetailEntries }
+      const cardEntries: Record<string, string> = { ...previousCardEntries }
+      const staleStorageKeys: string[] = []
 
-      for (const [path, draft] of Object.entries(detailDrafts)) {
+      for (const path of pendingDirtyDetailPaths) {
         const previousKey = previousDetailEntries[path]
-        if (previousKey && draft === previousDetailDrafts[path]) {
-          detailEntries[path] = previousKey
-        } else {
-          const storageKey = getDraftStorageKey(name, 'detail', path, revision)
-          window.localStorage.setItem(storageKey, JSON.stringify(draft))
-          detailEntries[path] = storageKey
+        if (!(path in detailDrafts)) {
+          delete detailEntries[path]
+          if (previousKey) staleStorageKeys.push(previousKey)
+          continue
         }
+        const storageKey = getDraftStorageKey(name, 'detail', path, revision)
+        window.localStorage.setItem(storageKey, JSON.stringify(detailDrafts[path]))
+        detailEntries[path] = storageKey
+        if (previousKey && previousKey !== storageKey) staleStorageKeys.push(previousKey)
       }
-      for (const [path, draft] of Object.entries(cardDrafts)) {
+      for (const path of pendingDirtyCardPaths) {
         const previousKey = previousCardEntries[path]
-        if (previousKey && draft === previousCardDrafts[path]) {
-          cardEntries[path] = previousKey
-        } else {
-          const storageKey = getDraftStorageKey(name, 'card', path, revision)
-          window.localStorage.setItem(storageKey, JSON.stringify(draft))
-          cardEntries[path] = storageKey
+        if (!(path in cardDrafts)) {
+          delete cardEntries[path]
+          if (previousKey) staleStorageKeys.push(previousKey)
+          continue
         }
+        const storageKey = getDraftStorageKey(name, 'card', path, revision)
+        window.localStorage.setItem(storageKey, JSON.stringify(cardDrafts[path]))
+        cardEntries[path] = storageKey
+        if (previousKey && previousKey !== storageKey) staleStorageKeys.push(previousKey)
       }
 
       const nextIndex: DraftStorageIndex = {
@@ -166,16 +175,15 @@ function flushPendingDraftPersist() {
       }
       window.localStorage.setItem(`${name}:index`, JSON.stringify(nextIndex))
 
-      const activeKeys = new Set([...Object.values(detailEntries), ...Object.values(cardEntries)])
-      for (const storageKey of [...Object.values(previousDetailEntries), ...Object.values(previousCardEntries)]) {
-        if (!activeKeys.has(storageKey)) {
-          window.localStorage.removeItem(storageKey)
-        }
+      for (const storageKey of new Set(staleStorageKeys)) {
+        window.localStorage.removeItem(storageKey)
       }
       window.localStorage.removeItem(name)
-      lastPersistedValue = pendingPersistValue
+      lastPersistedValue = value
+      pendingDirtyDetailPaths.clear()
+      pendingDirtyCardPaths.clear()
     }
-  } finally {
+    persistFailureCount = 0
     pendingPersistName = null
     pendingPersistValue = null
     pendingPersistRemove = false
@@ -183,6 +191,22 @@ function flushPendingDraftPersist() {
       window.clearTimeout(persistTimer)
       persistTimer = null
     }
+    return true
+  } catch (error) {
+    persistFailureCount += 1
+    // Keep the snapshot for a later retry. Do not clear it in a finally block:
+    // quota/security failures must not silently lose the user's local draft.
+    if (persistTimer !== null) {
+      window.clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    if (persistFailureCount <= 3) {
+      persistTimer = window.setTimeout(() => {
+        flushPendingDraftPersist()
+      }, DRAFT_STORAGE_WRITE_DELAY_MS * persistFailureCount)
+    }
+    console.warn('[draftStore] 本地草稿持久化失败，已保留待重试快照', error)
+    return false
   }
 }
 
@@ -191,6 +215,40 @@ function scheduleDraftPersist(
   value: StorageValue<DraftPersistedState> | null,
   remove = false,
 ) {
+  if (!remove && value !== null) {
+    const nextState = value.state
+    const previousState = lastPersistedValue?.state
+    const nextDetailDrafts = nextState.detailDrafts ?? {}
+    const previousDetailDrafts = previousState?.detailDrafts ?? {}
+    const nextCardDrafts = nextState.cardDrafts ?? {}
+    const previousCardDrafts = previousState?.cardDrafts ?? {}
+
+    for (const path of new Set([
+      ...Object.keys(nextDetailDrafts),
+      ...Object.keys(previousDetailDrafts),
+    ])) {
+      if (nextDetailDrafts[path] !== previousDetailDrafts[path]) {
+        pendingDirtyDetailPaths.add(path)
+      }
+    }
+    for (const path of new Set([
+      ...Object.keys(nextCardDrafts),
+      ...Object.keys(previousCardDrafts),
+    ])) {
+      if (nextCardDrafts[path] !== previousCardDrafts[path]) {
+        pendingDirtyCardPaths.add(path)
+      }
+    }
+
+    if (
+      lastPersistedValue
+      && pendingDirtyDetailPaths.size === 0
+      && pendingDirtyCardPaths.size === 0
+    ) {
+      return
+    }
+  }
+
   pendingPersistName = name
   pendingPersistValue = value
   pendingPersistRemove = remove
@@ -252,7 +310,11 @@ export const useDraftStore = create<DraftState>()(
     (set) => ({
       detailDrafts: {},
       detailEditModes: {},
-      setDetailDraft: (path, draft) => set((state) => ({ detailDrafts: { ...state.detailDrafts, [path]: draft } })),
+      setDetailDraft: (path, draft) => set((state) => (
+        state.detailDrafts[path] === draft
+          ? state
+          : { detailDrafts: { ...state.detailDrafts, [path]: draft } }
+      )),
       setDetailEditMode: (path, editMode) => set((state) => ({ detailEditModes: { ...state.detailEditModes, [path]: editMode } })),
       clearDetailDraft: (path) => set((state) => {
         const { [path]: _, ...restDrafts } = state.detailDrafts
@@ -262,7 +324,11 @@ export const useDraftStore = create<DraftState>()(
 
       cardDrafts: {},
       cardEditModes: {},
-      setCardDraft: (path, draft) => set((state) => ({ cardDrafts: { ...state.cardDrafts, [path]: draft } })),
+      setCardDraft: (path, draft) => set((state) => (
+        state.cardDrafts[path] === draft
+          ? state
+          : { cardDrafts: { ...state.cardDrafts, [path]: draft } }
+      )),
       setCardEditMode: (path, editMode) => set((state) => ({ cardEditModes: { ...state.cardEditModes, [path]: editMode } })),
       clearCardDraft: (path) => set((state) => {
         const { [path]: _, ...restDrafts } = state.cardDrafts

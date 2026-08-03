@@ -20,6 +20,7 @@ export interface GraphState {
 
   setGraph: (nodes: KnowledgeNode[], edges: KnowledgeEdge[], viewport?: { x: number; y: number; zoom: number }) => void
   setNodes: (nodes: KnowledgeNode[]) => void
+  setNodesPreservingSelection: (nodes: KnowledgeNode[]) => void
   setEdges: (edges: KnowledgeEdge[]) => void
   setLoading: (loading: boolean) => void
   setViewport: (viewport: { x: number; y: number; zoom: number }) => void
@@ -161,6 +162,20 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
     nodesMap: reconcileMap(state.nodesMap, nodes),
     ...getSelectionState(nodes, state),
   })),
+
+  // Position/dimension updates already carry selection state from the current nodes.
+  // Avoid rescanning every node just to derive the same selection arrays on the drag hot path.
+  setNodesPreservingSelection: (nodes) => set((state) => {
+    const nodesMap = reconcileMap(state.nodesMap, nodes)
+    const selectedNodes = state.selectedNodeIds
+      .map((id) => nodesMap.get(id))
+      .filter((node): node is KnowledgeNode => Boolean(node))
+    return {
+      nodes,
+      nodesMap,
+      selectedNodes: selectedNodes.length === state.selectedNodes.length ? selectedNodes : state.selectedNodes,
+    }
+  }),
 
   setEdges: (edges) => set((state) => ({
     edges,

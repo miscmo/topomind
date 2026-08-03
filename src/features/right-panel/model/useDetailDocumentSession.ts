@@ -47,6 +47,7 @@ export function useDetailDocumentSession({
   const contentRequestSeqRef = useRef(0)
   const saveRequestSeqRef = useRef(0)
   const draftVersionRef = useRef(0)
+  const savedDraftVersionRef = useRef(0)
   const selectionPerfRef = useRef<{ nodeId: string; startedAt: number; logged: boolean } | null>(null)
 
   const handleSave = useCallback(async () => {
@@ -78,6 +79,7 @@ export function useDetailDocumentSession({
         setDetailContent(saveKey, contentToWrite)
         setDraftContent(saveKey, contentToWrite)
         setSavedContentState({ key: saveKey, content: contentToWrite })
+        savedDraftVersionRef.current = draftVersionRef.current
         setIsDocumentDirty(false)
         savedContentLength = getDocumentContentLength(contentToWrite)
       } else {
@@ -86,6 +88,7 @@ export function useDetailDocumentSession({
         }
         setDetailContent(saveKey, contentSnapshot)
         setSavedContentState({ key: saveKey, content: contentSnapshot })
+        savedDraftVersionRef.current = draftVersionRef.current
         setIsDocumentDirty(false)
         savedContentLength = getDocumentContentLength(contentSnapshot)
       }
@@ -115,8 +118,13 @@ export function useDetailDocumentSession({
   const flushDocumentSave = useCallback(async () => {
     if (!selectedNodeId || !nodePath || !currentDocumentKey) return
     if (!isDocumentDirty) return
+    if (draftVersionRef.current === savedDraftVersionRef.current) {
+      setIsDocumentDirty(false)
+      return
+    }
     if (areDocumentContentsEqual(draftContent, savedContent)) {
       setIsDocumentDirty(false)
+      savedDraftVersionRef.current = draftVersionRef.current
       return
     }
     await handleSave()
@@ -130,6 +138,7 @@ export function useDetailDocumentSession({
   useEffect(() => {
     saveRequestSeqRef.current += 1
     draftVersionRef.current = 0
+    savedDraftVersionRef.current = 0
     setSavedContentState({ key: currentDocumentKey, content: '' })
     setIsDocumentDirty(false)
   }, [selectedNodeId, nodePath, currentDocumentKey])
@@ -162,6 +171,7 @@ export function useDetailDocumentSession({
       const cachedHasDraft = Object.prototype.hasOwnProperty.call(cachedDrafts, currentDocumentKey)
       if (!cachedHasDraft) {
         setDraftContent(currentDocumentKey, cachedContent)
+        savedDraftVersionRef.current = draftVersionRef.current
         setIsDocumentDirty(false)
       } else {
         setIsDocumentDirty(!areDocumentContentsEqual(cachedDraft, cachedContent))
@@ -202,6 +212,7 @@ export function useDetailDocumentSession({
       const draftChangedDuringRead = draftVersionRef.current > 0
       if (!hasCurrentDraft || (!draftChangedDuringRead && areDocumentContentsEqual(currentDraft, cachedContent))) {
         setDraftContent(currentDocumentKey, content)
+        savedDraftVersionRef.current = draftVersionRef.current
         setIsDocumentDirty(false)
       } else {
         setIsDocumentDirty(!areDocumentContentsEqual(currentDraft, content))
@@ -253,6 +264,15 @@ export function useDetailDocumentSession({
     }
   }, [detailEntry, currentDocumentKey])
 
+  // The previous session's cleanup closes over its own document key and draft
+  // snapshot. Flush it before React switches this hook to another node/document
+  // so a rapid selection change cannot silently discard the old dirty draft.
+  useEffect(() => {
+    return () => {
+      void flushDocumentSave()
+    }
+  }, [currentDocumentKey])
+
   const flushDocumentSaveRef = useRef(flushDocumentSave)
   flushDocumentSaveRef.current = flushDocumentSave
   const isDocumentDirtyRef = useRef(isDocumentDirty)
@@ -268,8 +288,8 @@ export function useDetailDocumentSession({
     if (!currentDocumentKey) return
     draftVersionRef.current += 1
     setDraftContent(currentDocumentKey, value)
-    setIsDocumentDirty(!areDocumentContentsEqual(value, savedContent))
-  }, [currentDocumentKey, savedContent, setDraftContent])
+    setIsDocumentDirty(true)
+  }, [currentDocumentKey, setDraftContent])
 
   return {
     draftContent,

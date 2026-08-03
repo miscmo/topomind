@@ -85,6 +85,7 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
     handleRenameDocument,
     handleDeleteDocument,
     handleMoveDocument,
+    handleUpdateDocumentMeta,
     handleExportTopoDocument,
     handleOpenCurrentDocumentFolder,
   } = useDetailDocuments({
@@ -203,6 +204,7 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
                         onRenameDocument={(path, name) => { void handleRenameDocument(path, name) }}
                         onDeleteDocument={(path) => { void handleDeleteDocument(path) }}
                         onExportDocument={(path) => { void handleExportTopoDocument(path) }}
+                        onUpdateDocumentMeta={(path, patch) => { void handleUpdateDocumentMeta(path, patch) }}
                       />
                     )}
                   </div>
@@ -226,6 +228,7 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
           onRenameDocument={(documentPath: string, name: string) => { void handleRenameDocument(documentPath, name) }}
           onDeleteDocument={(documentPath: string) => { void handleDeleteDocument(documentPath) }}
           onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
+          onUpdateDocumentMeta={(documentPath: string, patch: { icon?: string | null; color?: string | null }) => { void handleUpdateDocumentMeta(documentPath, patch) }}
           isDocumentBusy={isDocumentBusy}
           nodeId={selectedNodeId}
         /> : (

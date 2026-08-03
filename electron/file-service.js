@@ -769,6 +769,8 @@ function _fs_normalizeTopoDocumentManifest(raw) {
             updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : Date.now(),
             version: Number.isFinite(item.version) ? item.version : 1
           };
+          if (typeof item.icon === 'string' && item.icon.trim()) documents[id].icon = item.icon.slice(0, 32);
+          if (typeof item.color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(item.color)) documents[id].color = item.color;
           if (item.originalParentId) documents[id].originalParentId = String(item.originalParentId);
           if (item.originalDocumentId) documents[id].originalDocumentId = String(item.originalDocumentId);
         } catch (e) {}
@@ -793,6 +795,8 @@ function _fs_normalizeTopoDocumentManifest(raw) {
             updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : Date.now(),
             version: Number.isFinite(item.version) ? item.version : 1
           };
+          if (typeof item.icon === 'string' && item.icon.trim()) documents[id].icon = item.icon.slice(0, 32);
+          if (typeof item.color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(item.color)) documents[id].color = item.color;
           if (item.originalParentId) documents[id].originalParentId = String(item.originalParentId);
           if (item.originalDocumentId) documents[id].originalDocumentId = String(item.originalDocumentId);
         } catch (e) {}
@@ -849,6 +853,8 @@ function _fs_scanTopoDocumentFiles(rootDir, cardPath, previousManifest) {
         updatedAt: previous ? Math.max(previous.updatedAt, stat.mtimeMs) : stat.mtimeMs,
         version: previous ? previous.version : 1
       };
+      if (previous && typeof previous.icon === 'string' && previous.icon) documents[id].icon = previous.icon;
+      if (previous && typeof previous.color === 'string' && previous.color) documents[id].color = previous.color;
     });
   return documents;
 }
@@ -1150,6 +1156,32 @@ function _fs_renameTopoDocument(rootDir, cardPath, documentId, title) {
   return found.item;
 }
 
+function _fs_updateTopoDocumentMeta(rootDir, cardPath, documentId, patch) {
+  var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
+  if (!_fs_isPlainObject(patch)) throw new Error('元数据参数不合法');
+  var now = Date.now();
+  if (Object.prototype.hasOwnProperty.call(patch, 'icon')) {
+    var nextIcon = patch.icon === null ? '' : String(patch.icon || '');
+    if (nextIcon.trim()) {
+      found.item.icon = nextIcon.trim().slice(0, 32);
+    } else {
+      delete found.item.icon;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'color')) {
+    var nextColor = patch.color === null ? '' : String(patch.color || '');
+    if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(nextColor)) {
+      found.item.color = nextColor;
+    } else {
+      delete found.item.color;
+    }
+  }
+  found.item.updatedAt = now;
+  found.manifest.documents[found.item.id] = found.item;
+  _fs_writeTopoDocumentManifest(rootDir, cardPath, found.manifest);
+  return found.item;
+}
+
 function _fs_deleteTopoDocument(rootDir, cardPath, documentId) {
   var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
   
@@ -1267,6 +1299,8 @@ function _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName) {
     updatedAt: Date.now(),
     version: Number.isFinite(topoItem.version) ? topoItem.version : 1,
   };
+  if (typeof topoItem.icon === 'string' && topoItem.icon.trim()) restoredItem.icon = topoItem.icon.slice(0, 32);
+  if (typeof topoItem.color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(topoItem.color)) restoredItem.color = topoItem.color;
   if (originalDocumentId && nextId !== originalDocumentId) {
     restoredItem.originalDocumentId = originalDocumentId;
   }
@@ -1402,6 +1436,7 @@ const documentService = createDocumentService({
   openTopoDocumentFolder: _fs_openTopoDocumentFolder,
   readTopoDocument: _fs_readTopoDocument,
   renameTopoDocument: _fs_renameTopoDocument,
+  updateTopoDocumentMeta: _fs_updateTopoDocumentMeta,
   repairTopoDocuments: _fs_repairTopoDocuments,
   restoreTrashTopoDocument: _fs_restoreTrashTopoDocument,
   writeTopoDocument: _fs_writeTopoDocument,
@@ -1703,6 +1738,10 @@ const fileService = {
 
     renameTopoDocument: function(rootDir, cardPath, documentId, title) {
       return documentService.renameTopoDocument(rootDir, cardPath, documentId, title);
+    },
+
+    updateTopoDocumentMeta: function(rootDir, cardPath, documentId, patch) {
+      return documentService.updateTopoDocumentMeta(rootDir, cardPath, documentId, patch);
     },
 
     deleteTopoDocument: function(rootDir, cardPath, documentId) {

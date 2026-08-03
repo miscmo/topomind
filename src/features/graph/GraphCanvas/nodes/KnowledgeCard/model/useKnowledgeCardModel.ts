@@ -13,7 +13,9 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
   const reactFlow = useReactFlow()
-  const selectedNodeCount = useGraphStore((state) => state.selectedNodeCount)
+  const showQuickToolbarForNode = useGraphStore((state) => (
+    state.selectedNodeCount === 1 && state.selectedNodeId === id
+  ))
   
   const [isHovered, setIsHovered] = useState<boolean>(false)
   const [titleEditing, setTitleEditing] = useState(false)
@@ -309,7 +311,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       cardPath,
       widthMode,
       heightMode,
-      showQuickToolbar: selected && selectedNodeCount === 1 && !titleEditing && !isFormatPainterActive && !isConnecting,
+      showQuickToolbar: showQuickToolbarForNode && !titleEditing && !isFormatPainterActive && !isConnecting,
       accessoryWidth,
       isFormatPainterActive,
     },

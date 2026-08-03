@@ -29,6 +29,7 @@ interface DocumentWorkspaceProps {
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
+  onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
   isDocumentBusy?: boolean
 }
 
@@ -56,10 +57,13 @@ export function DocumentWorkspace({
   onRenameDocument,
   onDeleteDocument,
   onMoveDocument,
+  onUpdateDocumentMeta,
   isDocumentBusy,
 }: DocumentWorkspaceProps) {
   const sidebarContent = useMemo(() => (
     <DocumentSidebar
+      key={nodeId ?? 'document-sidebar'}
+      nodeId={nodeId}
       topoDocuments={topoDocuments}
       activeDocumentPath={activeDocumentPath}
       isBusy={isDocumentBusy}
@@ -69,8 +73,9 @@ export function DocumentWorkspace({
       onRenameDocument={onRenameDocument}
       onDeleteDocument={onDeleteDocument}
       onMoveDocument={onMoveDocument}
+      onUpdateDocumentMeta={onUpdateDocumentMeta}
     />
-  ), [topoDocuments, activeDocumentPath, isDocumentBusy, onSelectDocument, onCreateTopoDocument, onExportTopoDocument, onRenameDocument, onDeleteDocument, onMoveDocument])
+  ), [nodeId, topoDocuments, activeDocumentPath, isDocumentBusy, onSelectDocument, onCreateTopoDocument, onExportTopoDocument, onRenameDocument, onDeleteDocument, onMoveDocument, onUpdateDocumentMeta])
 
   return (
     <DocumentEditorHost

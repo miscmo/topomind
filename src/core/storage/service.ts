@@ -9,7 +9,7 @@ import { SaveCoordinator } from '../../domain/persistence/saveCoordinator'
 import { normalizeGraphMeta } from '../../domain/graph/normalizeGraphMeta'
 import { isTopoDocumentType, type TopoDocumentType } from '../topoDocumentTypes'
 import { normalizeConfig } from './normalizeConfig'
-import type { StorageBackend, TopoDocumentCreateInput, VaultConfig } from './types'
+import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentMetaPatch, VaultConfig } from './types'
 export type {
   AttachmentItem,
   AttachmentStorageBackend,
@@ -23,6 +23,7 @@ export type {
   TopoDocumentExportPayload,
   TopoDocumentManifest,
   TopoDocumentManifestItem,
+  TopoDocumentMetaPatch,
   TopoDocumentRepairResult,
   TopoDocumentStorageBackend,
   VaultConfig,
@@ -156,6 +157,9 @@ export function createStore(backend: StorageBackend) {
     async renameTopoDocument(cardPath: string, documentId: string, title: unknown) {
       const safeTitle = ensureValidName(title, '文档名称')
       try { return await backend.renameTopoDocument(cardPath, documentId, safeTitle) } catch (e) { logger.catch('Store.renameTopoDocument', `重命名多类型文档失败: ${cardPath}/${documentId} -> ${safeTitle}`, e); throw e }
+    },
+    async updateTopoDocumentMeta(cardPath: string, documentId: string, patch: TopoDocumentMetaPatch) {
+      try { return await backend.updateTopoDocumentMeta(cardPath, documentId, patch) } catch (e) { logger.catch('Store.updateTopoDocumentMeta', `更新多类型文档元数据失败: ${cardPath}/${documentId}`, e); throw e }
     },
     async deleteTopoDocument(cardPath: string, documentId: string) {
       try { await backend.deleteTopoDocument(cardPath, documentId) } catch (e) { logger.catch('Store.deleteTopoDocument', `删除多类型文档失败: ${cardPath}/${documentId}`, e); throw e }

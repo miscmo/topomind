@@ -198,6 +198,9 @@ export function useDetailDocuments({
     if (!confirmed) return
     setIsDocumentBusy(true)
     try {
+      if (documentPath === activeDocumentPath) {
+        await flushDocumentSave()
+      }
       const documentKey = joinRefs(nodePath, documentPath)
       if (documentPath === activeDocumentPath) {
         setActiveDocumentPath('')
@@ -221,12 +224,15 @@ export function useDetailDocuments({
     } finally {
       setIsDocumentBusy(false)
     }
-  }, [activeDocumentPath, clearDetailDraft, clearDetailContent, confirm, topoDocuments, loadDocuments, nodePath, selectedNodeId, storeApi, storage, setActiveDocumentPath])
+  }, [activeDocumentPath, clearDetailDraft, clearDetailContent, confirm, topoDocuments, loadDocuments, nodePath, selectedNodeId, storeApi, storage, setActiveDocumentPath, flushDocumentSave])
 
   const handleMoveDocument = useCallback(async (documentId: string, newParentId: string | null, newSortOrder: number) => {
     if (!nodePath) return
     setIsDocumentBusy(true)
     try {
+      if (topoDocumentPath(documentId) === activeDocumentPath) {
+        await flushDocumentSave()
+      }
       await storage.moveTopoDocument(nodePath, documentId, newParentId, newSortOrder)
       await loadDocuments(nodePath)
       logAction('文档:移动', 'DetailPanel', { nodePath, documentId, newParentId, newSortOrder })
@@ -235,7 +241,38 @@ export function useDetailDocuments({
     } finally {
       setIsDocumentBusy(false)
     }
-  }, [nodePath, storage, loadDocuments])
+  }, [activeDocumentPath, flushDocumentSave, nodePath, storage, loadDocuments])
+
+  const handleUpdateDocumentMeta = useCallback(async (documentPath: string, patch: { icon?: string | null; color?: string | null }) => {
+    if (!nodePath || documentPath === '') return
+    const documentId = topoDocumentIdFromPath(documentPath)
+    if (!documentId) return
+    const targetDocument = topoDocuments.find((item) => topoDocumentPath(item.id) === documentPath)
+    if (!targetDocument) return
+    // 仅当 patch 中所有字段都无实际变化时才跳过；组合 patch 中一个
+    // 字段相同不能阻止另一个已变化字段写盘。
+    const iconChanged = patch.icon !== undefined
+      && (patch.icon?.trim() || '') !== (targetDocument.icon ?? '')
+    const colorChanged = patch.color !== undefined
+      && (patch.color || '') !== (targetDocument.color ?? '')
+    if (!iconChanged && !colorChanged) return
+    setIsDocumentBusy(true)
+    try {
+      if (documentPath === activeDocumentPath) {
+        await flushDocumentSave()
+      }
+      await storage.updateTopoDocumentMeta(nodePath, documentId, patch)
+      await loadDocuments(nodePath)
+      logAction('文档:修改图标/颜色', 'DetailPanel', { nodePath, documentPath, patch })
+    } catch (e) {
+      // 排查提示：若主进程未重启（旧 IPC 处理器缺失），此处会捕获
+      // "No handler registered for 'fs:updateTopoDocumentMeta'" 之类的错误。
+      console.warn('[DocumentMeta] 更新文档图标/颜色失败（请确认应用已完全重启，主进程需加载最新代码）', e)
+      logger.catch('DetailPanel', 'handleUpdateDocumentMeta', e)
+    } finally {
+      setIsDocumentBusy(false)
+    }
+  }, [nodePath, topoDocuments, activeDocumentPath, flushDocumentSave, storage, loadDocuments])
 
   const handleExportTopoDocument = useCallback(async (documentPath: string) => {
     if (!nodePath) return
@@ -297,6 +334,7 @@ export function useDetailDocuments({
     handleRenameDocument,
     handleDeleteDocument,
     handleMoveDocument,
+    handleUpdateDocumentMeta,
     handleExportTopoDocument,
     handleOpenCurrentDocumentFolder,
   }

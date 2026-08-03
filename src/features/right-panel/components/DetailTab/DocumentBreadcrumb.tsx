@@ -4,6 +4,7 @@ import { topoDocumentPath, buildDocumentTree, topoDocumentTypeIcon } from '../..
 import type { TopoDocumentType } from '../../../../core/storage'
 import { ChevronRight, File } from 'lucide-react'
 import { DocumentContextMenu } from '../../../../features/documents/components/DocumentContextMenu'
+import { DocumentMetaPicker, type DocumentMetaPickerState } from '../../../../features/documents/components/DocumentMetaPicker'
 import { usePromptStore } from '../../../../shared/ui/PromptModal/promptStore'
 
 interface DocumentBreadcrumbProps {
@@ -15,6 +16,7 @@ interface DocumentBreadcrumbProps {
   onRenameDocument?: (documentPath: string, name: string) => void
   onDeleteDocument?: (documentPath: string) => void
   onExportDocument?: (documentPath: string) => void
+  onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
 }
 
 export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
@@ -25,13 +27,15 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
   onCreateDocument,
   onRenameDocument,
   onDeleteDocument,
-  onExportDocument
+  onExportDocument,
+  onUpdateDocumentMeta
 }) => {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
   const breadcrumbRef = useRef<HTMLDivElement>(null)
 
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, targetId: string | null } | null>(null)
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
+  const [metaPicker, setMetaPicker] = useState<DocumentMetaPickerState | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Handle click outside to close dropdown and context menu
@@ -127,6 +131,18 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
       onDeleteDocument(topoDocumentPath(targetId))
     } else if (action === 'export' && targetId && onExportDocument) {
       onExportDocument(topoDocumentPath(targetId))
+    } else if ((action === 'change-icon' || action === 'change-color') && targetId) {
+      const doc = topoDocuments.find(d => d.id === targetId)
+      if (doc) {
+        setMetaPicker({
+          mode: action === 'change-icon' ? 'icon' : 'color',
+          x: contextMenu.x,
+          y: contextMenu.y,
+          targetId,
+          currentIcon: doc.icon,
+          currentColor: doc.color,
+        })
+      }
     } else if (action.startsWith('create:') && onCreateDocument) {
       const createType = action.slice('create:'.length) as TopoDocumentType
       const newName = await usePromptStore.getState().open({
@@ -155,11 +171,12 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
     return (
       <div className="absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[300px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col">
         {children.map(child => {
-          const Icon = topoDocumentTypeIcon(child.type) || File
+          const Icon = child.icon || topoDocumentTypeIcon(child.type) || File
           return (
             <button
               key={child.id}
               className={`flex items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-[var(--color-hover-bg)] w-full truncate ${child.id === activeTopoDocumentId ? 'text-[var(--color-primary)] font-medium bg-[var(--color-primary-soft)]' : 'text-[var(--color-text)]'}`}
+              style={child.color && child.id !== activeTopoDocumentId ? { color: child.color } : undefined}
               onClick={(e) => {
                 e.stopPropagation()
                 handleSelect(child.id)
@@ -187,13 +204,14 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
           <div key={item.id} className="flex items-center relative">
             <button
               className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-[var(--color-hover-bg)] transition-colors max-w-[120px] ${isOpen ? 'bg-[var(--color-hover-bg)] text-[var(--color-text)]' : ''} ${isLast ? 'text-[var(--color-text)]' : ''}`}
+              style={!isLast && item.item?.color ? { color: item.item.color } : undefined}
               onClick={() => setOpenDropdownId(isOpen ? null : item.id)}
               onContextMenu={(e) => handleContextMenu(e, item.isRoot ? null : item.id)}
             >
               {!item.isRoot && item.item && (
                 <div className="w-3.5 h-3.5 opacity-60 flex items-center justify-center shrink-0">
                   {(() => {
-                    const Icon = topoDocumentTypeIcon(item.item.type) || File
+                    const Icon = item.item!.icon || topoDocumentTypeIcon(item.item!.type) || File
                     return typeof Icon === 'function' ? <Icon size={12} /> : Icon
                   })()}
                 </div>
@@ -218,6 +236,17 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
         onMouseEnterSubmenu={setActiveSubmenu}
         onMouseLeaveSubmenu={() => setActiveSubmenu(null)}
         onAction={(action) => void handleContextMenuAction(action)}
+      />
+
+      <DocumentMetaPicker
+        picker={metaPicker}
+        onClose={() => setMetaPicker(null)}
+        onApply={(mode, targetId, value) => {
+          setMetaPicker(null)
+          if (onUpdateDocumentMeta) {
+            onUpdateDocumentMeta(topoDocumentPath(targetId), mode === 'icon' ? { icon: value } : { color: value })
+          }
+        }}
       />
     </div>
   )

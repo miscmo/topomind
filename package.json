@@ -17,10 +17,10 @@
     "verify:plugins": "node ./scripts/verify-plugins.mjs",
     "verify:critical": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-critical-regressions.mts",
     "clean": "node -e \"const fs=require('fs');['dist','dist-electron'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",
-    "build": "npm run clean; vite build",
-    "build:mac": "npm run build; electron-builder --mac",
-    "build:win": "npm run build; electron-builder --win",
-    "build:linux": "npm run build; electron-builder --linux",
+    "build": "node ./scripts/build.mjs",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:win": "npm run build && electron-builder --win",
+    "build:linux": "npm run build && electron-builder --linux",
     "preview": "vite preview"
   },
   "build": {

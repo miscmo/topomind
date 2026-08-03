@@ -4,6 +4,7 @@ import { createReactBlockSpec, createReactInlineContentSpec } from '@blocknote/r
 import { Extension, InputRule } from '@tiptap/core'
 import katex from 'katex'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { quoteEnterPayload, shouldHandleQuoteEnter } from './quoteEnter'
 
 type InlineMathRenderProps = {
   inlineContent: {
@@ -303,6 +304,19 @@ export const mathBlockShortcutExtension = createExtension(({ editor }) => ({
           autoEdit: true,
         },
       })
+      return true
+    },
+  },
+}))
+export const quoteEnterExtension = createExtension(({ editor }) => ({
+  key: 'topomind-quote-enter',
+  keyboardShortcuts: {
+    Enter: () => {
+      const currentBlock = editor.getTextCursorPosition().block as BlockIdentifier & { type?: string }
+      if (!shouldHandleQuoteEnter(currentBlock?.type)) return false
+      // Stay inside the quote: insert a line break instead of letting the
+      // default handler split the block (which exits the quote).
+      editor.insertInlineContent(quoteEnterPayload())
       return true
     },
   },

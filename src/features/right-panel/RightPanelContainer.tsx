@@ -3,7 +3,6 @@ import type { MouseEvent } from 'react'
 import { useRightPanelStore } from './model/rightPanelStore'
 import { useResizePanel } from '../../hooks/useResizePanel'
 import RightPanelShell from './RightPanelShell'
-import DetailPanel from './components/DetailTab/DetailPanel'
 
 interface RightPanelContainerProps {
   tabId: string
@@ -56,12 +55,11 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
     collapse()
   }, [collapse])
 
-  if (collapsed) {
-    return <div className="hidden" aria-hidden="true"><DetailPanel tabId={tabId} isActive={false} /></div>
-  }
-
   return (
-    <div className={`flex h-full shrink-0 right-panel-container ${maximized ? 'absolute inset-0 z-[100] bg-[var(--color-canvas-bg)] w-full' : 'relative'}`}>
+    <div
+      className={`${collapsed ? 'hidden' : 'flex'} h-full shrink-0 right-panel-container ${maximized ? 'absolute inset-0 z-[100] bg-[var(--color-canvas-bg)] w-full' : 'relative'}`}
+      aria-hidden={collapsed}
+    >
       {!maximized && willAutoCollapse && isResizing && (
         <>
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 z-[22] w-[3px] bg-[var(--color-danger)] shadow-[-10px_0_20px_rgba(239,68,68,0.15)] transition-all" />
@@ -86,7 +84,7 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
         width={maximized ? '100%' : width}
         onTabChange={setActiveTab}
         onCollapse={collapse}
-        isActive={isActive}
+        isActive={isActive && !collapsed}
       />
     </div>
   )

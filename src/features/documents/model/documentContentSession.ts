@@ -16,6 +16,7 @@ export function areDocumentContentsEqual(left: DocumentContentValue, right: Docu
   return getComparableDocumentContent(left) === getComparableDocumentContent(right)
 }
 
+
 export function prepareStructuredDocumentContentForSave(value: DocumentContentValue): Record<string, unknown> | null {
   if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
     return null

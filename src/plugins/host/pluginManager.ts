@@ -251,11 +251,12 @@ export class PluginManager {
       throw new Error(`Unknown plugin: ${pluginId}`)
     }
 
+    let context: PluginContext | null = null
     try {
       assertActivationAllowed(descriptor.manifest, activationReason)
       this.lifecycle.setState(pluginId, 'activating', { activationReason })
       const module = await descriptor.loadModule()
-      const context = createPluginContext({
+      context = createPluginContext({
         manifest: descriptor.manifest,
         activationReason,
         registry: this.registry,
@@ -271,7 +272,10 @@ export class PluginManager {
       })
       this.lifecycle.setState(pluginId, 'running', { activationReason })
     } catch (error) {
+      // Clear registry bindings first so failed contribution records are
+      // snapshotted before their disposables transition them to pending.
       this.registry.clearRuntimeBindings(pluginId, { preserveFailedRecords: true })
+      if (context) disposeAll(context.subscriptions)
       this.lifecycle.setState(pluginId, 'failed', { activationReason, error })
       throw error
     }
