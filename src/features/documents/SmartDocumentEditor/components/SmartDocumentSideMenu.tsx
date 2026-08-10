@@ -8,10 +8,22 @@ export function SmartDocumentDragHandleMenu({ children }: { children?: React.Rea
 
 export function SmartDocumentSideMenu(props: SideMenuProps) {
   const editor = useBlockNoteEditor<any, any, any>()
-  const block = useExtensionState(SideMenuExtension, {
+  const sideMenuState = useExtensionState(SideMenuExtension, {
     editor,
-    selector: (state) => state?.block,
+    selector: (state) => state ? {
+      block: state.block,
+      referenceX: state.referencePos.x,
+    } : undefined,
   })
+  const block = sideMenuState?.block
+  const blockElement = block
+    ? editor.domElement?.querySelector<HTMLElement>(
+      `[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"]`,
+    )
+    : undefined
+  const blockIndent = blockElement && sideMenuState
+    ? Math.max(0, blockElement.getBoundingClientRect().x - sideMenuState.referenceX)
+    : 0
   const isEmptyBlock = Array.isArray(block?.content) && block.content.length === 0
 
   if (!block) {
@@ -19,9 +31,15 @@ export function SmartDocumentSideMenu(props: SideMenuProps) {
   }
 
   return (
-    <SideMenu {...props}>
-      {isEmptyBlock ? <AddBlockButton /> : null}
-      <DragHandleButton {...props} dragHandleMenu={SmartDocumentDragHandleMenu} />
-    </SideMenu>
+    <div
+      className="tm-smart-side-menu-hit-area"
+      data-smart-document-side-menu
+      style={{ paddingRight: `${blockIndent}px` }}
+    >
+      <SideMenu {...props}>
+        {isEmptyBlock ? <AddBlockButton /> : null}
+        <DragHandleButton {...props} dragHandleMenu={SmartDocumentDragHandleMenu} />
+      </SideMenu>
+    </div>
   )
 }

@@ -9,7 +9,7 @@
 import { createContext, useContext, useMemo, type Context } from 'react'
 import { useGraph } from '../hooks/useGraph'
 import type { KnowledgeNodeData, KnowledgeNodeStyle, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, NodeSizingMode } from '../types'
-import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
+import type { Node, Edge, NodeChange, EdgeChange, Connection, FinalConnectionState } from '@xyflow/react'
 
 export interface GraphContextValue {
   // Room lifecycle
@@ -26,7 +26,7 @@ export interface GraphContextValue {
   onEdgeClick: (event: React.MouseEvent, edge: Edge) => void
   onPaneClick: () => void
   onConnectStart: (event: unknown, params: { nodeId?: string | null }) => void
-  onConnectEnd: () => void
+  onConnectEnd: (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => void
   navigateToChildRoom: (childPath: string, childName: string) => Promise<void>
   onNodeContextMenu: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
 

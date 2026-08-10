@@ -53,6 +53,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     activeSubmenu,
     inlineEdit,
     metaPicker,
+    stickyAncestorRows,
     expandedNodes,
     draggedId,
     dragState,
@@ -65,6 +66,8 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     setActiveSubmenu,
     setMetaPicker,
     toggleExpand,
+    selectStickyAncestor,
+    registerDocumentRow,
     startRename,
     openContextMenu,
     openIconPicker,
@@ -80,7 +83,8 @@ export const DocumentSidebar = memo(function DocumentSidebar({
   } = actions
 
   return (
-    <div 
+    <div
+      data-document-sidebar-root
       className="flex-1 min-h-0 flex flex-col relative"
       onContextMenu={(e) => openContextMenu(e, null)}
       onDragOver={(e) => handleDragOver(e, null)}
@@ -91,6 +95,45 @@ export const DocumentSidebar = memo(function DocumentSidebar({
         onScroll={handleSidebarScroll}
         className={`flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full ${dragState?.id === 'root' ? 'bg-[var(--color-hover-bg)] ring-[1.5px] ring-inset ring-[var(--color-primary)]' : ''}`}
       >
+        {stickyAncestorRows.length > 0 && (
+          <div className="sticky top-0 z-20 h-0">
+            <div
+              role="tree"
+              aria-label="当前文档层级路径"
+              className="absolute inset-x-0 top-[-8px] flex flex-col gap-0.5 overflow-hidden bg-[var(--color-surface)] after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-[var(--color-border)]"
+            >
+              {stickyAncestorRows.map(({ node, level }) => (
+                <DocumentNode
+                  key={`sticky-${node.id}`}
+                  node={node}
+                  level={level}
+                  activeDocumentPath={activeDocumentPath}
+                  childrenMap={childrenMap}
+                  expandedNodes={expandedNodes}
+                  inlineEdit={null}
+                  inlineInputRef={inlineInputRef}
+                  isBusy={isBusy}
+                  draggedId={draggedId}
+                  dragState={null}
+                  onSelectDocument={selectStickyAncestor}
+                  onRenameDocument={startRename}
+                  onOpenIconPicker={openIconPicker}
+                  onToggleExpand={toggleExpand}
+                  onContextMenu={openContextMenu}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onInlineEditChange={() => undefined}
+                  onInlineEditBlur={() => undefined}
+                  onInlineEditKeyDown={() => undefined}
+                  renderChildren={false}
+                  sticky
+                />
+              ))}
+            </div>
+          </div>
+        )}
         <div role="tree" aria-label="文档列表" className="flex flex-col gap-0.5 relative">
           {rootItems.length === 0 && !inlineEdit ? (
             <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">
@@ -100,17 +143,6 @@ export const DocumentSidebar = memo(function DocumentSidebar({
             </div>
           ) : (
             <>
-              {inlineEdit?.mode !== 'rename' && !inlineEdit?.parentId && inlineEdit && (
-                <DocumentInlineEdit
-                  level={0}
-                  inlineEdit={inlineEdit}
-                  inlineInputRef={inlineInputRef}
-                  isBusy={isBusy}
-                  onChange={(value) => setInlineEdit({ ...inlineEdit, value })}
-                  onBlur={handleInputBlur}
-                  onKeyDown={handleInputKeyDown}
-                />
-              )}
               {rootItems.map(node => (
                 <DocumentNode
                   key={node.id}
@@ -136,8 +168,20 @@ export const DocumentSidebar = memo(function DocumentSidebar({
                   onInlineEditChange={(value) => setInlineEdit(prev => prev ? { ...prev, value } : null)}
                   onInlineEditBlur={handleInputBlur}
                   onInlineEditKeyDown={handleInputKeyDown}
+                  onRowElement={registerDocumentRow}
                 />
               ))}
+              {inlineEdit?.mode !== 'rename' && !inlineEdit?.parentId && inlineEdit && (
+                <DocumentInlineEdit
+                  level={0}
+                  inlineEdit={inlineEdit}
+                  inlineInputRef={inlineInputRef}
+                  isBusy={isBusy}
+                  onChange={(value) => setInlineEdit({ ...inlineEdit, value })}
+                  onBlur={handleInputBlur}
+                  onKeyDown={handleInputKeyDown}
+                />
+              )}
             </>
           )}
         </div>

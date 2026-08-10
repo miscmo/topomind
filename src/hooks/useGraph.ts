@@ -95,8 +95,8 @@ export function useGraph(tabId: string) {
   const createEdge = useCallback(async (source: string, target: string) => {
     if (!source || !target || source === target) return null
     const edgeId = generateId('e-')
-    await ops.addEdge({ source, target, sourceHandle: null, targetHandle: null }, edgeId, defaultEdgeStyle)
-    return edgeId
+    const created = await ops.addEdge({ source, target, sourceHandle: null, targetHandle: null }, edgeId, defaultEdgeStyle)
+    return created ? edgeId : null
   }, [defaultEdgeStyle, ops])
 
   // ===== Public API =====

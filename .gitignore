@@ -15,3 +15,8 @@ stats.html
 /.workbuddy
 /build-validation*
 /outputs
+/build-document*
+/build-fix*
+/build-format*
+/build-*
+/.graph-store-test-*

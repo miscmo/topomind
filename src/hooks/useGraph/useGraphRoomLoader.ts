@@ -5,7 +5,7 @@ import { logAction } from '../../core/log-backend'
 import { logPerformanceMetric, PERFORMANCE_METRICS } from '../../core/performance-log'
 import { loadRoomGraph } from './roomLoader'
 import type { GraphSession } from '../../stores/tabs/tabStore'
-import type { GraphState } from '../../stores/graphStore'
+import { replaceGraphSession, type GraphState, type GraphStoreApi } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 
 interface UseGraphRoomLoaderOptions {
@@ -71,7 +71,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
               }
             })
           : loaded.nodes
-        store.setGraph(nextNodes, loaded.edges, {
+        replaceGraphSession(storeApi as GraphStoreApi, nextNodes, loaded.edges, {
           x: loaded.meta.viewport.pan.x,
           y: loaded.meta.viewport.pan.y,
           zoom: loaded.meta.viewport.zoom,

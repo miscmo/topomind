@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
+import type { Connection, Edge, EdgeChange, FinalConnectionState, Node, NodeChange } from '@xyflow/react'
 import { tabStore } from '../../stores/tabs/tabStore'
 import { logAction } from '../../core/log-backend'
 import { markPerformanceMetricStart, PERFORMANCE_METRICS } from '../../core/performance-log'
@@ -138,17 +138,18 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     (connection: Connection) => {
       const graphUi = useGraphUiStore.getState()
       const source = connection.source ?? graphUi.connectingSourceId
-      const target = graphUi.connectingTargetId
+      const target = connection.target ?? graphUi.connectingTargetId
       if (!source || !target || source === target) return
       
       ops.deselectNode()
       ops.setSelectedEdgeInGraph(null)
 
       const edgeId = generateId('e-')
-      ops.addEdge({ ...connection, source, target, targetHandle: null }, edgeId, defaultEdgeStyle).then(() => {
+      ops.addEdge({ ...connection, source, target }, edgeId, defaultEdgeStyle).then((created) => {
+        if (!created) return
         ops.setSelectedEdgeInGraph(edgeId)
+        setSelectedEdgeId(edgeId)
       })
-      setSelectedEdgeId(edgeId)
     },
     [ops, defaultEdgeStyle, setSelectedEdgeId]
   )
@@ -237,11 +238,13 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     graphUi.setConnectingTargetId(null)
   }, [])
 
-  const onConnectEnd = useCallback(() => {
+  const onConnectEnd = useCallback((_: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
     const graphUi = useGraphUiStore.getState()
     const source = graphUi.connectingSourceId
     const target = graphUi.connectingTargetId
-    if (source && target && source !== target) {
+    // React Flow already invokes onConnect for a valid handle-to-handle connection.
+    // Only synthesize a connection when our card-level snap target handled an otherwise invalid drop.
+    if (!connectionState.isValid && source && target && source !== target) {
       onConnect({ source, target, sourceHandle: null, targetHandle: null })
     }
     resetConnectTargetHighlight()

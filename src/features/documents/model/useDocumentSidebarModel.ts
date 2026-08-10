@@ -1,10 +1,15 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
-import { topoDocumentPath, buildDocumentTree } from '../types/documentTypes'
+import { topoDocumentIdFromPath, topoDocumentPath, buildDocumentTree } from '../types/documentTypes'
 import { TOPO_DOCUMENT_TYPES } from '../services/documentTypeRegistry'
 import { useGraphStoreApi } from '../../../stores/graphStore'
 import { useConfirmStore } from '../../../shared/ui/ConfirmModal/confirmStore'
 import type { DocumentMetaPickerState } from '../components/DocumentMetaPicker'
+import {
+  flattenVisibleDocumentTree,
+  resolveStickyDocumentAncestorIds,
+  type DocumentTreeRowLayout,
+} from './documentStickyAncestors'
 import {
   loadDocumentSidebarScrollTop,
   loadExpandedDocumentNodeIds,
@@ -60,20 +65,103 @@ export function useDocumentSidebarModel({
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => (
     loadExpandedDocumentNodeIds(localStorage, nodeId)
   ))
+  const visibleTreeRows = useMemo(
+    () => flattenVisibleDocumentTree(rootItems, childrenMap, expandedNodes),
+    [childrenMap, expandedNodes, rootItems],
+  )
+  const visibleTreeRowById = useMemo(
+    () => new Map(visibleTreeRows.map((row) => [row.node.id, row])),
+    [visibleTreeRows],
+  )
+  const [stickyAncestorIds, setStickyAncestorIds] = useState<string[]>([])
+  const stickyAncestorRows = useMemo(
+    () => stickyAncestorIds.flatMap((id) => {
+      const row = visibleTreeRowById.get(id)
+      return row ? [row] : []
+    }),
+    [stickyAncestorIds, visibleTreeRowById],
+  )
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<{ id: string, position: 'before' | 'inside' | 'after' } | null>(null)
   const inlineInputRef = useRef<HTMLInputElement>(null)
   const cancelInlineEditOnBlurRef = useRef(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const rowElementsRef = useRef(new Map<string, HTMLDivElement>())
+  const rowLayoutsRef = useRef<DocumentTreeRowLayout[]>([])
+  const rowLayoutByIdRef = useRef(new Map<string, DocumentTreeRowLayout>())
+  const stickySyncFrameRef = useRef<number | null>(null)
+  const scrollPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastScrollTopRef = useRef(loadDocumentSidebarScrollTop(localStorage, nodeId))
+
+  const registerDocumentRow = useCallback((id: string, element: HTMLDivElement | null) => {
+    if (element) rowElementsRef.current.set(id, element)
+    else rowElementsRef.current.delete(id)
+  }, [])
+
+  const syncStickyAncestors = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const nextIds = resolveStickyDocumentAncestorIds(
+      rowLayoutsRef.current,
+      container.scrollTop,
+      rowLayoutByIdRef.current,
+    )
+    setStickyAncestorIds((previous) => (
+      previous.length === nextIds.length && previous.every((id, index) => id === nextIds[index])
+        ? previous
+        : nextIds
+    ))
+  }, [])
+
+  const scheduleStickyAncestorSync = useCallback(() => {
+    if (stickySyncFrameRef.current !== null) return
+    stickySyncFrameRef.current = requestAnimationFrame(() => {
+      stickySyncFrameRef.current = null
+      syncStickyAncestors()
+    })
+  }, [syncStickyAncestors])
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const containerRect = container.getBoundingClientRect()
+    const measuredLayouts = visibleTreeRows.flatMap((row) => {
+      const element = rowElementsRef.current.get(row.node.id)
+      if (!element) return []
+      const rect = element.getBoundingClientRect()
+      const top = container.scrollTop + rect.top - containerRect.top
+      return [{
+        row,
+        top,
+        bottom: top + rect.height,
+      }]
+    })
+    const layouts = measuredLayouts.map((layout, index) => ({
+      ...layout,
+      stackHeight: Math.max(
+        0,
+        measuredLayouts[index + 1]?.top - layout.top || layout.bottom - layout.top,
+      ),
+    }))
+    rowLayoutsRef.current = layouts
+    rowLayoutByIdRef.current = new Map(layouts.map((layout) => [layout.row.node.id, layout]))
+    syncStickyAncestors()
+  }, [inlineEdit, syncStickyAncestors, visibleTreeRows])
+
+  useEffect(() => () => {
+    if (stickySyncFrameRef.current !== null) cancelAnimationFrame(stickySyncFrameRef.current)
+    if (scrollPersistTimerRef.current !== null) clearTimeout(scrollPersistTimerRef.current)
+  }, [])
 
   useEffect(() => {
     let focusTimer: ReturnType<typeof setTimeout> | null = null
     if (inlineEdit) {
       focusTimer = setTimeout(() => {
-        inlineInputRef.current?.focus()
-        inlineInputRef.current?.select()
+        const input = inlineInputRef.current
+        input?.scrollIntoView({ block: 'nearest' })
+        input?.focus()
+        input?.select()
       }, 0)
     }
     return () => {
@@ -83,6 +171,10 @@ export function useDocumentSidebarModel({
 
   useEffect(() => {
     setExpandedNodes(loadExpandedDocumentNodeIds(localStorage, nodeId))
+    setStickyAncestorIds([])
+    rowElementsRef.current.clear()
+    rowLayoutsRef.current = []
+    rowLayoutByIdRef.current.clear()
   }, [nodeId])
 
   const updateExpandedNodes = useCallback((updater: (previous: Set<string>) => Set<string>) => {
@@ -101,17 +193,23 @@ export function useDocumentSidebarModel({
       const container = scrollContainerRef.current
       if (container) {
         container.scrollTop = savedScrollTop
+        syncStickyAncestors()
       }
     })
     return () => cancelAnimationFrame(frame)
-  }, [nodeId, rootItems.length])
+  }, [nodeId, rootItems.length, syncStickyAncestors])
 
   const handleSidebarScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    if (!nodeId) return
     const scrollTop = event.currentTarget.scrollTop
     lastScrollTopRef.current = scrollTop
-    saveDocumentSidebarScrollTop(localStorage, nodeId, scrollTop)
-  }, [nodeId])
+    scheduleStickyAncestorSync()
+
+    if (scrollPersistTimerRef.current !== null) clearTimeout(scrollPersistTimerRef.current)
+    scrollPersistTimerRef.current = setTimeout(() => {
+      scrollPersistTimerRef.current = null
+      saveDocumentSidebarScrollTop(localStorage, nodeId, lastScrollTopRef.current)
+    }, 180)
+  }, [nodeId, scheduleStickyAncestorSync])
 
   useEffect(() => () => {
     saveDocumentSidebarScrollTop(localStorage, nodeId, lastScrollTopRef.current)
@@ -143,6 +241,7 @@ export function useDocumentSidebarModel({
   }, [contextMenu])
 
   const toggleExpand = useCallback((id: string) => {
+    setStickyAncestorIds([])
     updateExpandedNodes(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -151,15 +250,22 @@ export function useDocumentSidebarModel({
     })
   }, [updateExpandedNodes])
 
+  const selectStickyAncestor = useCallback((documentPath: string) => {
+    const id = topoDocumentIdFromPath(documentPath)
+    onSelectDocument(documentPath)
+    if (!id) return
+    const container = scrollContainerRef.current
+    const element = rowElementsRef.current.get(id)
+    if (!container || !element) return
+    container.scrollTo({ top: Math.max(0, element.offsetTop - 8), behavior: 'smooth' })
+  }, [onSelectDocument])
+
   const openContextMenu = useCallback((e: React.MouseEvent, targetId: string | null) => {
     e.preventDefault()
     e.stopPropagation()
-    if (targetId) {
-      onSelectDocument(topoDocumentPath(targetId))
-    }
     setActiveSubmenu(null)
     setContextMenu({ x: e.clientX, y: e.clientY, targetId })
-  }, [onSelectDocument])
+  }, [])
 
   const startRename = useCallback((targetId: string) => {
     if (isBusy) return
@@ -398,6 +504,7 @@ export function useDocumentSidebarModel({
       inlineEdit,
       metaPicker,
       expandedNodes,
+      stickyAncestorRows,
       draggedId,
       dragState,
     },
@@ -411,6 +518,8 @@ export function useDocumentSidebarModel({
       setActiveSubmenu,
       setMetaPicker,
       toggleExpand,
+      selectStickyAncestor,
+      registerDocumentRow,
       startRename,
       openContextMenu,
       openIconPicker,

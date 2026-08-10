@@ -79,12 +79,20 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     }
 
     const store = storeApi.getState()
+    const alreadyExists = store.edges.some((edge) => (
+      edge.source === connection.source
+      && edge.target === connection.target
+      && (edge.sourceHandle ?? null) === (connection.sourceHandle ?? null)
+      && (edge.targetHandle ?? null) === (connection.targetHandle ?? null)
+    ))
+    if (alreadyExists) return false
     store.setEdges([...store.edges, newEdge])
 
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('连线:创建', 'graphOperations', { edgeId, source: connection.source, target: connection.target })
+    return true
   }
 
   const deleteEdge = async (edgeId: string) => {

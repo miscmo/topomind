@@ -1,5 +1,5 @@
 import { createStore, useStore, type StoreApi } from 'zustand'
-import { temporal } from 'zundo'
+import { temporal, type TemporalState } from 'zundo'
 import { createContext, useContext, useRef, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { KnowledgeEdge, KnowledgeNode } from '../types'
@@ -17,8 +17,13 @@ export interface GraphState {
   // Derived O(1) maps, automatically kept in sync
   nodesMap: Map<string, KnowledgeNode>
   edgesMap: Map<string, KnowledgeEdge>
+  // References used to distinguish normal setter updates from temporal restore.
+  // These are excluded from undo history and only guard the derived-state sync.
+  derivedNodesRef: KnowledgeNode[]
+  derivedEdgesRef: KnowledgeEdge[]
+  historyRevision: number
 
-  setGraph: (nodes: KnowledgeNode[], edges: KnowledgeEdge[], viewport?: { x: number; y: number; zoom: number }) => void
+  replaceGraph: (nodes: KnowledgeNode[], edges: KnowledgeEdge[], viewport?: { x: number; y: number; zoom: number }) => void
   setNodes: (nodes: KnowledgeNode[]) => void
   setNodesPreservingSelection: (nodes: KnowledgeNode[]) => void
   setEdges: (edges: KnowledgeEdge[]) => void
@@ -108,37 +113,103 @@ function buildDerivedGraphState(
   }
 }
 
+const NODE_RUNTIME_DATA_KEYS = new Set(['selected', 'hovered', 'connectTarget', 'titleEditRequested'])
+const EDGE_RUNTIME_DATA_KEYS = new Set(['selected', 'highlighted', 'faded'])
+
+function areBusinessDataEqual(
+  dataA: Record<string, unknown> | undefined,
+  dataB: Record<string, unknown> | undefined,
+  runtimeKeys: Set<string>
+) {
+  if (dataA === dataB) return true
+  const keysA = Object.keys(dataA ?? {}).filter((key) => !runtimeKeys.has(key))
+  const keysB = Object.keys(dataB ?? {}).filter((key) => !runtimeKeys.has(key))
+  if (keysA.length !== keysB.length) return false
+  return keysA.every((key) => Object.is(dataA?.[key], dataB?.[key]))
+}
+
 function areNodesEqual(nodeA: KnowledgeNode, nodeB: KnowledgeNode) {
   return (
-    nodeA === nodeB
-    || (
-      nodeA.id === nodeB.id
-      && nodeA.type === nodeB.type
-      && nodeA.position?.x === nodeB.position?.x
-      && nodeA.position?.y === nodeB.position?.y
-      && nodeA.width === nodeB.width
-      && nodeA.height === nodeB.height
-      && nodeA.selected === nodeB.selected
-      && nodeA.data === nodeB.data
-    )
+    nodeA.id === nodeB.id
+    && nodeA.type === nodeB.type
+    && nodeA.position?.x === nodeB.position?.x
+    && nodeA.position?.y === nodeB.position?.y
+    && nodeA.width === nodeB.width
+    && nodeA.height === nodeB.height
+    && areBusinessDataEqual(nodeA.data, nodeB.data, NODE_RUNTIME_DATA_KEYS)
   )
 }
 
 function areEdgesEqual(edgeA: KnowledgeEdge, edgeB: KnowledgeEdge) {
   return (
-    edgeA === edgeB
-    || (
-      edgeA.id === edgeB.id
-      && edgeA.type === edgeB.type
-      && edgeA.source === edgeB.source
-      && edgeA.target === edgeB.target
-      && edgeA.selected === edgeB.selected
-      && edgeA.data === edgeB.data
-    )
+    edgeA.id === edgeB.id
+    && edgeA.type === edgeB.type
+    && edgeA.source === edgeB.source
+    && edgeA.target === edgeB.target
+    && edgeA.sourceHandle === edgeB.sourceHandle
+    && edgeA.targetHandle === edgeB.targetHandle
+    && areBusinessDataEqual(edgeA.data, edgeB.data, EDGE_RUNTIME_DATA_KEYS)
   )
 }
 
-export const createGraphStore = () => createStore<GraphState>()(temporal((set) => ({
+export interface GraphHistorySnapshot {
+  nodes: KnowledgeNode[]
+  edges: KnowledgeEdge[]
+  historyRevision: number
+}
+
+export type GraphStoreApi = StoreApi<GraphState> & {
+  temporal: StoreApi<TemporalState<GraphHistorySnapshot>>
+}
+
+function areGraphHistorySnapshotsEqual(a: GraphHistorySnapshot, b: GraphHistorySnapshot) {
+  if (a.historyRevision !== b.historyRevision) return false
+  if (a.nodes.length !== b.nodes.length || a.edges.length !== b.edges.length) return false
+  for (let i = 0; i < a.nodes.length; i += 1) {
+    if (!areNodesEqual(a.nodes[i], b.nodes[i])) return false
+  }
+  for (let i = 0; i < a.edges.length; i += 1) {
+    if (!areEdgesEqual(a.edges[i], b.edges[i])) return false
+  }
+  return true
+}
+
+export function captureGraphHistorySnapshot(state: GraphState): GraphHistorySnapshot {
+  return {
+    nodes: state.nodes,
+    edges: state.edges,
+    historyRevision: state.historyRevision,
+  }
+}
+
+export function commitGraphHistorySnapshot(store: GraphStoreApi, pastState: GraphHistorySnapshot) {
+  const currentState = captureGraphHistorySnapshot(store.getState())
+  if (areGraphHistorySnapshotsEqual(pastState, currentState)) return false
+
+  store.temporal.setState((temporalState) => ({
+    pastStates: [...temporalState.pastStates.slice(-19), pastState],
+    futureStates: [],
+  }))
+  return true
+}
+
+export function replaceGraphSession(
+  store: GraphStoreApi,
+  nodes: KnowledgeNode[],
+  edges: KnowledgeEdge[],
+  viewport?: { x: number; y: number; zoom: number }
+) {
+  const temporalState = store.temporal.getState()
+  temporalState.pause()
+  try {
+    store.getState().replaceGraph(nodes, edges, viewport)
+    temporalState.clear()
+  } finally {
+    temporalState.resume()
+  }
+}
+
+export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(temporal((set) => ({
   nodes: [],
   edges: [],
   loading: false,
@@ -149,18 +220,25 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
   selectedNodes: [],
   nodesMap: new Map(),
   edgesMap: new Map(),
+  derivedNodesRef: [],
+  derivedEdgesRef: [],
+  historyRevision: 0,
 
-  setGraph: (nodes, edges, viewport) => set((state) => ({
+  replaceGraph: (nodes, edges, viewport) => set((state) => ({
     nodes,
     edges,
     viewport: viewport ?? state.viewport,
     ...buildDerivedGraphState(nodes, edges, state),
+    derivedNodesRef: nodes,
+    derivedEdgesRef: edges,
+    historyRevision: state.historyRevision + 1,
   })),
 
   setNodes: (nodes) => set((state) => ({
     nodes,
     nodesMap: reconcileMap(state.nodesMap, nodes),
     ...getSelectionState(nodes, state),
+    derivedNodesRef: nodes,
   })),
 
   // Position/dimension updates already carry selection state from the current nodes.
@@ -174,12 +252,14 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
       nodes,
       nodesMap,
       selectedNodes: selectedNodes.length === state.selectedNodes.length ? selectedNodes : state.selectedNodes,
+      derivedNodesRef: nodes,
     }
   }),
 
   setEdges: (edges) => set((state) => ({
     edges,
     edgesMap: reconcileMap(state.edgesMap, edges),
+    derivedEdgesRef: edges,
   })),
 
   setLoading: (loading) => set({ loading }),
@@ -201,6 +281,7 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
       nodes: nextNodes,
       nodesMap: nextNodesMap,
       ...selectionState,
+      derivedNodesRef: nextNodes,
     }
   }),
 
@@ -212,6 +293,7 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
       nodes: nextNodes,
       nodesMap: reconcileMap(state.nodesMap, nextNodes),
       ...selectionState,
+      derivedNodesRef: nextNodes,
     }
   }),
 
@@ -220,47 +302,39 @@ export const createGraphStore = () => createStore<GraphState>()(temporal((set) =
     const nextEdges = state.edges.filter(e => !removedSet.has(e.source) && !removedSet.has(e.target))
     return {
       edges: nextEdges,
-      edgesMap: reconcileMap(state.edgesMap, nextEdges)
+      edgesMap: reconcileMap(state.edgesMap, nextEdges),
+      derivedEdgesRef: nextEdges,
     }
   }),
 }), {
-  partialize: (state) => ({ nodes: state.nodes, edges: state.edges }), // Only track nodes and edges for undo/redo
+  partialize: (state) => ({ nodes: state.nodes, edges: state.edges, historyRevision: state.historyRevision }),
   limit: 20, // Keep max 20 history steps to reduce memory usage
   onSave: (pastState, currentState) => {
     // Optional: hook for when a state is saved to history
   },
-  equality: (a, b) => {
-    // Only add to history if actual data changes, ignore selection state changes
-    if (a.nodes.length !== b.nodes.length || a.edges.length !== b.edges.length) return false;
-    
-    // Reference and key-field comparison keeps history checks off the JSON.stringify hot path.
-    for (let i = 0; i < a.nodes.length; i++) {
-      const nodeA = a.nodes[i];
-      const nodeB = b.nodes[i];
-      if (!areNodesEqual(nodeA, nodeB)) return false;
-    }
+  equality: areGraphHistorySnapshotsEqual
+})) as GraphStoreApi
 
-    for (let i = 0; i < a.edges.length; i++) {
-      const edgeA = a.edges[i];
-      const edgeB = b.edges[i];
-      if (!areEdgesEqual(edgeA, edgeB)) return false;
-    }
-    
-    return true;
-  }
-}))
-
-// Auto-sync maps when temporal state changes
+// Temporal undo/redo restores only nodes and edges. Normal setters update the
+// derived refs in the same transaction, so this subscription only handles
+// temporal restores. Mutate derived fields during the same notification instead
+// of calling store.setState again, which would notify every subscriber twice.
 export const setupTemporalMapSync = (store: StoreApi<GraphState>) => {
-  return store.subscribe((state, prevState) => {
-    if (state.nodes === prevState.nodes && state.edges === prevState.edges) {
-      return
+  return store.subscribe((state) => {
+    const nodesNeedSync = state.nodes !== state.derivedNodesRef
+    const edgesNeedSync = state.edges !== state.derivedEdgesRef
+    if (!nodesNeedSync && !edgesNeedSync) return
+
+    if (nodesNeedSync) {
+      state.nodesMap = reconcileMap(state.nodesMap, state.nodes)
+      Object.assign(state, getSelectionState(state.nodes, state))
+      state.derivedNodesRef = state.nodes
     }
-    store.setState({
-      nodesMap: reconcileMap(prevState.nodesMap, state.nodes),
-      edgesMap: reconcileMap(prevState.edgesMap, state.edges),
-      ...getSelectionState(state.nodes, state),
-    })
+
+    if (edgesNeedSync) {
+      state.edgesMap = reconcileMap(state.edgesMap, state.edges)
+      state.derivedEdgesRef = state.edges
+    }
   })
 }
 

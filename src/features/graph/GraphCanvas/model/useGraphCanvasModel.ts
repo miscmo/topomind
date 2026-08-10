@@ -106,6 +106,7 @@ export function useGraphCanvasModel({
   const reactFlow = useReactFlow()
   const graph = useGraphContext()
   const snapCandidateIndex = useMemo(() => {
+    if (!connectingSourceId) return null
     const candidates = nodes
       .filter((node) => node.id !== connectingSourceId)
       .map((node) => ({ id: node.id, rect: getNodeRect(node as Node) }))
@@ -328,7 +329,7 @@ export function useGraphCanvasModel({
   }, [onPaneContextMenu])
 
   const flushConnectionTargetSearch = useCallback(() => {
-    if (!connectingSourceId) return
+    if (!connectingSourceId || !snapCandidateIndex) return
     const pendingPoint = pendingConnectionPointRef.current
     if (!pendingPoint) return
     const point = reactFlow.screenToFlowPosition(pendingPoint)

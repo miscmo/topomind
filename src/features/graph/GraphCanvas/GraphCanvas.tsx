@@ -139,6 +139,7 @@ export default memo(function GraphCanvas({
         id={tabId}
         nodes={nodes as Node[]}
         edges={edges}
+        onlyRenderVisibleElements
         nodeTypes={nodeTypes as NodeTypes}
         edgeTypes={edgeTypes}
 

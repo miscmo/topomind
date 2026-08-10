@@ -4,6 +4,7 @@ import { Check, ChevronDown, ChevronUp, Copy, WrapText, X } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
 import { filterSuggestionItems } from '@blocknote/core'
+import { SideMenuExtension } from '@blocknote/core/extensions'
 import { insertMermaid } from 'blocknote-mermaid'
 
 import type { SmartDocumentEditorProps } from './types'
@@ -185,6 +186,22 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       persistScrollTop()
     }
   }, [attachmentInsertTargetKey])
+
+  useEffect(() => {
+    const editorRoot = editorRootRef.current
+    if (!editorRoot) return
+
+    const ownerDocument = editorRoot.ownerDocument
+    const hideSideMenuOverDocumentSidebar = (event: MouseEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-document-sidebar-root]')) return
+      editor.getExtension(SideMenuExtension)?.hideMenuIfNotFrozen()
+    }
+
+    ownerDocument.addEventListener('mousemove', hideSideMenuOverDocumentSidebar)
+    return () => {
+      ownerDocument.removeEventListener('mousemove', hideSideMenuOverDocumentSidebar)
+    }
+  }, [editor])
 
   useEffect(() => {
     const editorRoot = editorRootRef.current
@@ -497,7 +514,14 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
             getItems={getSlashMenuItems}
           />
           <FormattingToolbarController formattingToolbar={SmartDocumentFormattingToolbar} portalElement={null} />
-          <SideMenuController sideMenu={SmartDocumentSideMenu} portalElement={null} />
+          <SideMenuController
+            sideMenu={SmartDocumentSideMenu}
+            floatingUIOptions={{
+              elementProps: {
+                className: 'tm-smart-side-menu-popover',
+              },
+            }}
+          />
         </BlockNoteView>
         {hoveredCodeBlock && toolbarPosition ? (
           <div

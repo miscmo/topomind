@@ -9,6 +9,33 @@ import { logAction } from '../../../../../../core/log-backend'
 import { calculateKnowledgeCardAutoSize, getKnowledgeCardAccessoryWidth } from './autoSize'
 import { useConfirmStore } from '../../../../../../shared/ui/ConfirmModal/confirmStore'
 
+const activeResizePointerListeners = new Set<() => void>()
+let resizePointerEventsAttached = false
+
+function dispatchResizePointerRelease() {
+  for (const listener of activeResizePointerListeners) {
+    listener()
+  }
+}
+
+function subscribeToResizePointerRelease(listener: () => void) {
+  activeResizePointerListeners.add(listener)
+  if (!resizePointerEventsAttached && typeof window !== 'undefined') {
+    window.addEventListener('pointerup', dispatchResizePointerRelease)
+    window.addEventListener('pointercancel', dispatchResizePointerRelease)
+    resizePointerEventsAttached = true
+  }
+
+  return () => {
+    activeResizePointerListeners.delete(listener)
+    if (activeResizePointerListeners.size === 0 && resizePointerEventsAttached && typeof window !== 'undefined') {
+      window.removeEventListener('pointerup', dispatchResizePointerRelease)
+      window.removeEventListener('pointercancel', dispatchResizePointerRelease)
+      resizePointerEventsAttached = false
+    }
+  }
+}
+
 export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], selected: boolean, width?: number, height?: number, resizing?: boolean) {
   const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
@@ -114,7 +141,9 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   }, [updateResizePreview])
 
   useEffect(() => {
-    const handlePointerUp = () => {
+    if (!resizing) return
+
+    const handlePointerRelease = () => {
       setResizePreviewSize((current) => {
         if (current !== null && resizeHideTimerRef.current === null) {
           resizeHideTimerRef.current = window.setTimeout(() => {
@@ -125,13 +154,9 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
         return current
       })
     }
-    window.addEventListener('pointerup', handlePointerUp)
-    window.addEventListener('pointercancel', handlePointerUp)
-    return () => {
-      window.removeEventListener('pointerup', handlePointerUp)
-      window.removeEventListener('pointercancel', handlePointerUp)
-    }
-  }, [])
+
+    return subscribeToResizePointerRelease(handlePointerRelease)
+  }, [resizing])
 
   const handleDrillDown = useCallback((e: React.MouseEvent | React.PointerEvent) => {
     e.preventDefault()

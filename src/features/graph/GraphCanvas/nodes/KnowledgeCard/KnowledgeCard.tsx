@@ -31,6 +31,33 @@ interface KnowledgeCardProps extends NodeProps<KnowledgeNode> {
   resizing?: boolean
 }
 
+type AddEmojiEvent = CustomEvent<{ nodeId: string; position?: { x: number; y: number } }>
+type AddEmojiListener = (event: AddEmojiEvent) => void
+
+const addEmojiListeners = new Map<string, AddEmojiListener>()
+
+function dispatchAddEmojiEvent(event: Event) {
+  const customEvent = event as AddEmojiEvent
+  const nodeId = customEvent.detail?.nodeId
+  if (!nodeId) return
+  addEmojiListeners.get(nodeId)?.(customEvent)
+}
+
+function subscribeToAddEmoji(nodeId: string, listener: AddEmojiListener) {
+  addEmojiListeners.set(nodeId, listener)
+  if (addEmojiListeners.size === 1 && typeof document !== 'undefined') {
+    document.addEventListener('topomind:add-emoji', dispatchAddEmojiEvent)
+  }
+
+  return () => {
+    if (addEmojiListeners.get(nodeId) !== listener) return
+    addEmojiListeners.delete(nodeId)
+    if (addEmojiListeners.size === 0 && typeof document !== 'undefined') {
+      document.removeEventListener('topomind:add-emoji', dispatchAddEmojiEvent)
+    }
+  }
+}
+
 function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }: KnowledgeCardProps) {
   const { state, actions, refs } = useKnowledgeCardModel(id, data, selected, width, height, resizing)
   const {
@@ -129,19 +156,17 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
 
   useEffect(() => {
     let emojiTimer: ReturnType<typeof setTimeout> | null = null
-    const handleAddEmojiEvent = (e: CustomEvent<{ nodeId: string, position?: { x: number, y: number } }>) => {
-      if (e.detail.nodeId === id) {
-        emojiTimer = setTimeout(() => {
-          const cardRect = cardRootRef.current?.getBoundingClientRect()
-          if (!cardRect) return
-          setEmojiPickerPosition(resolvePickerPosition(cardRect, 'node'))
-          setEditingEmojiIndex(null) // null means append new emoji
-        }, 10)
-      }
+    const handleAddEmojiEvent: AddEmojiListener = (e) => {
+      emojiTimer = setTimeout(() => {
+        const cardRect = cardRootRef.current?.getBoundingClientRect()
+        if (!cardRect) return
+        setEmojiPickerPosition(resolvePickerPosition(cardRect, 'node'))
+        setEditingEmojiIndex(null) // null means append new emoji
+      }, 10)
     }
-    document.addEventListener('topomind:add-emoji', handleAddEmojiEvent as EventListener)
+    const unsubscribe = subscribeToAddEmoji(id, handleAddEmojiEvent)
     return () => {
-      document.removeEventListener('topomind:add-emoji', handleAddEmojiEvent as EventListener)
+      unsubscribe()
       if (emojiTimer) clearTimeout(emojiTimer)
     }
   }, [id, resolvePickerPosition])

@@ -1,5 +1,11 @@
 import type { KnowledgeEdge, KnowledgeNode } from '../../types'
-import type { GraphState } from '../../stores/graphStore'
+import {
+  captureGraphHistorySnapshot,
+  commitGraphHistorySnapshot,
+  type GraphHistorySnapshot,
+  type GraphState,
+  type GraphStoreApi,
+} from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 
 export interface NodeChangeOperationsDeps {
@@ -19,6 +25,29 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     storeApi,
   } = deps
 
+  const graphStoreApi = storeApi as GraphStoreApi
+  let dragHistoryBaseline: GraphHistorySnapshot | null = null
+  let resizeHistoryBaseline: GraphHistorySnapshot | null = null
+
+  const beginInteractionHistory = (kind: 'drag' | 'resize') => {
+    const baseline = kind === 'drag' ? dragHistoryBaseline : resizeHistoryBaseline
+    if (baseline) return
+    const nextBaseline = captureGraphHistorySnapshot(storeApi.getState())
+    if (kind === 'drag') dragHistoryBaseline = nextBaseline
+    else resizeHistoryBaseline = nextBaseline
+    graphStoreApi.temporal.getState().pause()
+  }
+
+  const finishInteractionHistory = (kind: 'drag' | 'resize') => {
+    const baseline = kind === 'drag' ? dragHistoryBaseline : resizeHistoryBaseline
+    if (!baseline) return
+    if (kind === 'drag') dragHistoryBaseline = null
+    else resizeHistoryBaseline = null
+    const otherInteractionActive = kind === 'drag' ? resizeHistoryBaseline !== null : dragHistoryBaseline !== null
+    if (!otherInteractionActive) graphStoreApi.temporal.getState().resume()
+    commitGraphHistorySnapshot(graphStoreApi, baseline)
+  }
+
   const applyNodePositionChanges = async (changes: Array<{ id: string; position?: { x: number; y: number }; dragging?: boolean }>) => {
     let changed = false
     const store = storeApi.getState()
@@ -36,19 +65,13 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     const isDragging = changes.some((change) => change.dragging === true)
     const isDragEnd = changes.some((change) => change.dragging === false)
     
-    const temporalState = (storeApi as any).temporal?.getState?.()
-    
-    if (temporalState) {
-      if (isDragging && !isDragEnd) {
-        temporalState.pause()
-      } else {
-        temporalState.resume()
-      }
-    }
+    if (isDragging) beginInteractionHistory('drag')
 
     if (changed) {
       store.setNodesPreservingSelection(nextNodes)
     }
+
+    if (isDragEnd) finishInteractionHistory('drag')
 
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
@@ -128,19 +151,13 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     })
     
     const isResizing = changes.some((change) => change.resizing === true)
-    const temporalState = (storeApi as any).temporal?.getState?.()
-    
-    if (temporalState) {
-      if (isResizing) {
-        temporalState.pause()
-      } else {
-        temporalState.resume()
-      }
-    }
+    const isResizeEnd = changes.some((change) => change.resizing === false)
+    if (isResizing) beginInteractionHistory('resize')
 
     if (changed) store.setNodesPreservingSelection(nextNodes)
+    if (isResizeEnd) finishInteractionHistory('resize')
     
-    if (changed && shouldSave) {
+    if (shouldSave) {
       const graphSession = getActiveGraphSession()
       const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
       if (currentRoomPath) await saveLater(currentRoomPath)

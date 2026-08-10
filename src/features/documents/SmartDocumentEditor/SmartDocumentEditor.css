@@ -1,5 +1,6 @@
 /* --- BlockNote Global UI Overrides --- */
 .bn-formatting-toolbar,
+.bn-formatting-toolbar .bn-select,
 .bn-menu-dropdown,
 .bn-suggestion-menu,
 .bn-mantine .mantine-Popover-dropdown,
@@ -21,15 +22,30 @@
 .bn-formatting-toolbar {
   gap: 4px !important;
   max-width: min(760px, calc(100vw - 24px));
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  overscroll-behavior-x: contain;
+  flex-wrap: wrap !important;
+  overflow: visible !important;
 }
 
 .bn-menu-dropdown:not(.tm-smart-block-menu),
-.bn-mantine .mantine-Menu-dropdown {
+.bn-mantine .mantine-Menu-dropdown,
+.bn-formatting-toolbar .bn-select {
   padding: 4px !important;
+}
+
+/* Formatting toolbar menus are rendered in the editor portal and may not
+   retain the .bn-mantine ancestor. Keep every state local to the toolbar. */
+.bn-formatting-toolbar .mantine-Menu-dropdown,
+.bn-formatting-toolbar .bn-select,
+.bn-formatting-toolbar + .mantine-Menu-dropdown,
+.bn-formatting-toolbar + .bn-menu-dropdown,
+.bn-formatting-toolbar .bn-menu-dropdown,
+.bn-formatting-toolbar .bn-form-popover,
+.bn-formatting-toolbar .bn-popover-content {
+  background: var(--color-surface-elevated) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-popover) !important;
+  color: var(--color-text-primary) !important;
 }
 
 .bn-menu-dropdown .bn-menu-item:hover,
@@ -37,9 +53,14 @@
 .bn-suggestion-menu .bn-menu-item:hover,
 .bn-suggestion-menu .bn-menu-item[data-selected="true"],
 .bn-mantine .mantine-Menu-item:hover,
-.bn-mantine .mantine-Menu-item[aria-selected="true"] {
+.bn-mantine .mantine-Menu-item[aria-selected="true"],
+.bn-formatting-toolbar .mantine-Menu-item:hover,
+.bn-formatting-toolbar .mantine-Menu-item[aria-selected="true"],
+.bn-formatting-toolbar .bn-menu-item:hover,
+.bn-formatting-toolbar .bn-menu-item[data-selected="true"] {
   background: var(--color-hover-bg) !important;
   border-radius: 6px !important;
+  color: var(--color-text-primary) !important;
 }
 
 .bn-formatting-toolbar .bn-button,
@@ -70,21 +91,159 @@
 }
 
 .bn-formatting-toolbar .bn-button:hover,
-.bn-formatting-toolbar .bn-button[data-selected="true"]:hover {
+.bn-formatting-toolbar .bn-button[data-selected="true"]:hover,
+.bn-formatting-toolbar .mantine-Button-root:hover,
+.bn-formatting-toolbar .mantine-ActionIcon-root:hover {
   background: var(--color-hover-bg) !important;
 }
 
-.bn-formatting-toolbar .bn-button[data-selected="true"] {
-  background: var(--color-active-bg) !important;
+.bn-formatting-toolbar .bn-button[data-selected="true"],
+.bn-formatting-toolbar .mantine-Button-root[data-selected],
+.bn-formatting-toolbar .mantine-ActionIcon-root[data-selected],
+.bn-formatting-toolbar .mantine-Button-root[aria-pressed="true"],
+.bn-formatting-toolbar .mantine-ActionIcon-root[aria-pressed="true"] {
+  background: var(--color-selected-bg) !important;
   color: var(--color-accent) !important;
+}
+
+.bn-formatting-toolbar .bn-button:focus-visible,
+.bn-formatting-toolbar button:focus-visible,
+.bn-formatting-toolbar [role="button"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 58%, transparent) !important;
+  outline-offset: 1px;
+}
+
+.bn-formatting-toolbar .bn-button:disabled,
+.bn-formatting-toolbar button:disabled,
+.bn-formatting-toolbar [aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.45 !important;
 }
 
 .bn-menu-dropdown .bn-menu-item,
 .bn-suggestion-menu .bn-menu-item,
 .bn-mantine .mantine-Menu-item,
-.bn-mantine .mantine-Menu-label {
+.bn-mantine .mantine-Menu-label,
+.bn-formatting-toolbar .mantine-Menu-item,
+.bn-formatting-toolbar .mantine-Menu-label,
+.bn-formatting-toolbar .bn-menu-item {
   background: transparent !important;
   color: var(--color-text-primary) !important;
+}
+
+.bn-formatting-toolbar .mantine-Menu-item[aria-selected="true"],
+.bn-formatting-toolbar .mantine-Menu-item[data-checked="true"],
+.bn-formatting-toolbar .bn-menu-item[data-selected="true"],
+.bn-formatting-toolbar .mantine-Menu-item:has(.bn-tick-icon) {
+  background: var(--color-selected-bg) !important;
+  color: var(--color-accent) !important;
+}
+
+.bn-formatting-toolbar .mantine-Menu-item:has(.bn-tick-icon) .bn-tick-icon {
+  color: var(--color-accent) !important;
+}
+
+.bn-formatting-toolbar .mantine-Menu-label,
+.bn-color-picker-dropdown .mantine-Menu-label {
+  color: var(--color-text-secondary) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+  padding: 6px 8px 4px !important;
+}
+
+/* Mantine's base stylesheet intentionally makes this wrapper transparent;
+   for the toolbar tooltip that leaves an empty floating layer in this app. */
+.bn-formatting-toolbar .mantine-Tooltip-tooltip,
+.bn-formatting-toolbar .bn-tooltip,
+.mantine-Tooltip-tooltip:has(.bn-tooltip) {
+  background: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 7px !important;
+  box-shadow: var(--shadow-popover) !important;
+  color: var(--color-surface-elevated) !important;
+  padding: 5px 9px !important;
+  max-width: min(320px, calc(100vw - 24px));
+}
+
+.mantine-Tooltip-tooltip:has(.bn-tooltip) .bn-tooltip,
+.bn-formatting-toolbar .bn-tooltip {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  padding: 0 !important;
+}
+
+.mantine-Tooltip-tooltip:has(.bn-tooltip) .mantine-Text-root {
+  color: inherit !important;
+}
+
+/* The toolbar's color picker and link form are portal-safe even when their
+   wrapper is no longer underneath .bn-mantine. */
+.bn-color-picker-dropdown,
+.bn-form-popover,
+.bn-popover-content {
+  background: var(--color-surface-elevated) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.bn-color-picker-dropdown .mantine-Menu-item,
+.bn-form-popover .mantine-Menu-item {
+  color: var(--color-text-primary) !important;
+}
+
+.bn-color-picker-dropdown .mantine-Menu-item:hover,
+.bn-color-picker-dropdown .mantine-Menu-item[aria-selected="true"],
+.bn-color-picker-dropdown .mantine-Menu-item[data-checked="true"],
+.bn-color-picker-dropdown .mantine-Menu-item:has(.mantine-CheckIcon-root) {
+  background: var(--color-hover-bg) !important;
+}
+
+.bn-form-popover {
+  min-width: min(320px, calc(100vw - 24px)) !important;
+  padding: 6px !important;
+}
+
+.bn-form-popover .mantine-TextInput-root,
+.bn-form-popover .mantine-TextInput-wrapper {
+  width: 100% !important;
+}
+
+.bn-form-popover .mantine-TextInput-input {
+  background: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 7px !important;
+  color: var(--color-text-primary) !important;
+  min-height: 34px !important;
+}
+
+.bn-form-popover .mantine-TextInput-input::placeholder {
+  color: var(--color-text-muted) !important;
+}
+
+.bn-form-popover .mantine-TextInput-input:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 22%, transparent) !important;
+  outline: none !important;
+}
+
+.bn-formatting-toolbar .mantine-Menu-divider,
+.bn-color-picker-dropdown .mantine-Menu-divider {
+  border-color: var(--color-border-subtle) !important;
+}
+
+.tm-smart-side-menu-popover {
+  pointer-events: none;
+}
+
+.tm-smart-side-menu-hit-area {
+  display: flex;
+  pointer-events: auto;
+}
+
+.tm-smart-side-menu-hit-area .bn-side-menu {
+  flex: none;
 }
 
 .smart-document-content .bn-default-styles {

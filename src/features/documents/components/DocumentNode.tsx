@@ -27,6 +27,9 @@ interface DocumentNodeProps {
   onInlineEditChange: (value: string) => void
   onInlineEditBlur: () => void
   onInlineEditKeyDown: (e: React.KeyboardEvent) => void
+  onRowElement?: (id: string, element: HTMLDivElement | null) => void
+  renderChildren?: boolean
+  sticky?: boolean
 }
 
 export const DocumentNode: React.FC<DocumentNodeProps> = ({
@@ -52,8 +55,14 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
   onInlineEditChange,
   onInlineEditBlur,
   onInlineEditKeyDown,
+  onRowElement,
+  renderChildren = true,
+  sticky = false,
 }) => {
   const isEditing = inlineEdit?.mode === 'rename' && inlineEdit.targetId === node.id
+  const setRowElement = React.useCallback((element: HTMLDivElement | null) => {
+    onRowElement?.(node.id, element)
+  }, [node.id, onRowElement])
   const children = childrenMap[node.id] || []
   const isExpanded = expandedNodes.has(node.id)
   const hasChildren = children.length > 0
@@ -79,16 +88,19 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
         />
       ) : (
         <div
+          ref={sticky ? undefined : setRowElement}
+          data-document-node-id={node.id}
+          data-document-sticky={sticky ? 'true' : undefined}
           role="treeitem"
           tabIndex={0}
           aria-level={level + 1}
           aria-selected={isActive}
           aria-expanded={hasChildren ? isExpanded : undefined}
-          draggable={!isEditing}
-          onDragStart={(e) => onDragStart(e, node.id)}
-          onDragOver={(e) => onDragOver(e, node.id)}
-          onDragLeave={onDragLeave}
-          onDrop={(e) => onDrop(e, node.id)}
+          draggable={!isEditing && !sticky}
+          onDragStart={sticky ? undefined : (e) => onDragStart(e, node.id)}
+          onDragOver={sticky ? undefined : (e) => onDragOver(e, node.id)}
+          onDragLeave={sticky ? undefined : onDragLeave}
+          onDrop={sticky ? undefined : (e) => onDrop(e, node.id)}
           className={`group w-full flex items-center mb-[2px] py-[7px] pr-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[var(--color-hover-bg)] ${isActive ? '!bg-[var(--color-selected-bg)]' : ''} ${dragClass} ${draggedId === node.id ? 'opacity-50' : ''}`}
           style={{ paddingLeft: `${level * 16 + 4}px` }}
           onClick={() => onSelectDocument(topoDocumentPath(node.id))}
@@ -194,7 +206,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           </span>
         </div>
       )}
-      {isExpanded && children.map(child => (
+      {renderChildren && isExpanded && children.map(child => (
         <DocumentNode
           key={child.id}
           node={child}
@@ -219,9 +231,10 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           onInlineEditChange={onInlineEditChange}
           onInlineEditBlur={onInlineEditBlur}
           onInlineEditKeyDown={onInlineEditKeyDown}
+          onRowElement={onRowElement}
         />
       ))}
-      {isExpanded && inlineEdit?.mode !== 'rename' && inlineEdit?.parentId === node.id && (
+      {renderChildren && isExpanded && inlineEdit?.mode !== 'rename' && inlineEdit?.parentId === node.id && (
         <DocumentInlineEdit
           level={level + 1}
           inlineEdit={inlineEdit}
