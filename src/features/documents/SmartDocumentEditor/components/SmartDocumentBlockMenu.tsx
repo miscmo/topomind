@@ -75,15 +75,28 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
     </>
   )
 
-  const renderQuickAction = (action: SmartDocumentBlockMenuAction) => (
-    <Components.Generic.Menu.Item
-      key={action.key}
-      className="tm-smart-block-menu__tile"
-      onClick={() => applyToCurrentBlock(action)}
-    >
-      {renderActionIcon(action)}
-    </Components.Generic.Menu.Item>
-  )
+  // Highlight the quick tile that matches the current block's format, so the
+  // drag-handle menu reflects which block type the block already is.
+  const isBlockFormatActive = (action: SmartDocumentBlockMenuAction): boolean => {
+    if (action.type !== block.type) return false
+    if (action.type === 'heading') {
+      return (action.props?.level ?? 1) === (block.props?.level ?? 1)
+    }
+    return true
+  }
+
+  const renderQuickAction = (action: SmartDocumentBlockMenuAction) => {
+    const active = isBlockFormatActive(action)
+    return (
+      <Components.Generic.Menu.Item
+        key={action.key}
+        className={`tm-smart-block-menu__tile${active ? ' tm-smart-block-menu__tile--active' : ''}`}
+        onClick={() => applyToCurrentBlock(action)}
+      >
+        <span className="tm-smart-block-menu__tile-fill">{renderActionIcon(action)}</span>
+      </Components.Generic.Menu.Item>
+    )
+  }
 
   const renderInsertRow = (action: SmartDocumentBlockMenuAction) => (
     <Components.Generic.Menu.Item

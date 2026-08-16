@@ -38,7 +38,12 @@ export default defineConfig({
           if (process.env.VSCODE_DEBUG) {
             console.log('[startup] Electron App')
           } else {
-            startup(['.', '--no-sandbox']).catch((error) => {
+            // Strip ELECTRON_RUN_AS_NODE if present: when set, Electron launches as
+            // a plain Node process and never loads its built-in modules (app,
+            // BrowserWindow, ...), so the main window never appears. The var can be
+            // inherited from a parent terminal/IDE and is invisible otherwise.
+            const cleanEnv = { ...process.env, ELECTRON_RUN_AS_NODE: undefined }
+            startup(['.', '--no-sandbox'], { env: cleanEnv }).catch((error) => {
               console.error('[startup] Electron 启动失败', error)
             })
           }
@@ -74,6 +79,12 @@ export default defineConfig({
     postcss: './postcss.config.js',
   },
   optimizeDeps: {
+    // Restrict the dependency scanner to the real app entry. By default Vite
+    // globs every *.html under the project root as a scan entry, which makes
+    // esbuild crawl dozens of stale build artifacts (build-*/index.html,
+    // outputs/*.html, release/..., stats.html) — each a full dist tree — and
+    // blows up memory / kills the scan service on startup.
+    entries: ['index.html'],
     include: ['react', 'react-dom', 'zustand'],
   },
   build: {

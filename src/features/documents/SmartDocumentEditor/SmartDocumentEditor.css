@@ -540,33 +540,60 @@
   padding: 14px 18px 12px;
 }
 .tm-smart-block-menu__tile {
-  width: 32px;
-  height: 28px;
-  min-height: 28px;
   border: none;
-  border-radius: 4px;
   background: transparent;
-  color: var(--color-text-primary);
-  font-size: 17px;
-  line-height: 1;
+  padding: 0 !important;
   cursor: pointer;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  padding: 0 !important;
+}
+/* The visible 32x28 box lives on our OWN span, not on BlockNote's
+   `.bn-menu-item`, so Mantine/BlockNote's menu-item styles can never override
+   the selected highlight or the tile sizing. */
+.tm-smart-block-menu__tile-fill {
+  width: 32px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-primary);
+  /* Keep the glyph at the menu's default text size (14px). This span is NOT a
+     `.bn-menu-item`, so BlockNote/Mantine's menu-item font-size no longer
+     overrides ours -- if we set 17px here it would actually render at 17px and
+     look noticeably bigger than the rest of the menu. */
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   white-space: nowrap;
   text-align: center;
   transition: background-color 80ms ease, color 80ms ease;
 }
-.tm-smart-block-menu__tile sub,
+.tm-smart-block-menu__tile-fill sub {
+  color: var(--color-primary);
+  font-size: 0.6em;
+  line-height: 1;
+}
 .tm-smart-block-menu__subitem sub {
   color: var(--color-primary);
   font-size: 0.6em;
   line-height: 1;
 }
-.tm-smart-block-menu__tile:hover,
-.tm-smart-block-menu__tile--more {
+.tm-smart-block-menu__tile:hover .tm-smart-block-menu__tile-fill {
   background: var(--color-hover-bg);
+}
+/* Current block's format is reflected as a *selected* tile (filled accent
+   background + white glyph), not a checkmark. This is on our own span, so it
+   is unaffected by BlockNote/Mantine's menu-item styling. */
+.tm-smart-block-menu__tile--active .tm-smart-block-menu__tile-fill,
+.tm-smart-block-menu__tile--active:hover .tm-smart-block-menu__tile-fill {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+.tm-smart-block-menu__tile--active .tm-smart-block-menu__tile-fill sub {
+  color: #ffffff;
 }
 .tm-smart-block-menu__section {
   padding: 8px 0;

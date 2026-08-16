@@ -15,7 +15,7 @@ interface DraftState {
   clearCardDraft: (path: string) => void
 }
 
-type DraftPersistedState = Pick<DraftState, 'detailDrafts' | 'cardDrafts'>
+type DraftPersistedState = Pick<DraftState, 'cardDrafts'>
 
 const DRAFT_STORAGE_WRITE_DELAY_MS = 300
 
@@ -26,7 +26,6 @@ let pendingPersistRemove = false
 let persistListenersRegistered = false
 let persistFailureCount = 0
 let lastPersistedValue: StorageValue<DraftPersistedState> | null = null
-const pendingDirtyDetailPaths = new Set<string>()
 const pendingDirtyCardPaths = new Set<string>()
 
 type DraftStorageIndex = {
@@ -118,42 +117,23 @@ export function flushPendingDraftPersist(): boolean {
   const remove = pendingPersistRemove
   try {
     const previousIndex = readDraftStorageIndex(name)
-    const previousDetailEntries = getIndexedEntries(name, 'detail', previousIndex)
     const previousCardEntries = getIndexedEntries(name, 'card', previousIndex)
 
     if (remove) {
-      for (const storageKey of Object.values(previousDetailEntries)) {
-        window.localStorage.removeItem(storageKey)
-      }
       for (const storageKey of Object.values(previousCardEntries)) {
         window.localStorage.removeItem(storageKey)
       }
       window.localStorage.removeItem(`${name}:index`)
       window.localStorage.removeItem(name)
       lastPersistedValue = null
-      pendingDirtyDetailPaths.clear()
       pendingDirtyCardPaths.clear()
     } else if (value !== null) {
       const nextState = value.state
-      const detailDrafts = nextState.detailDrafts ?? {}
       const cardDrafts = nextState.cardDrafts ?? {}
       const revision = previousIndex?.version === 3 ? previousIndex.revision + 1 : 1
-      const detailEntries: Record<string, string> = { ...previousDetailEntries }
       const cardEntries: Record<string, string> = { ...previousCardEntries }
       const staleStorageKeys: string[] = []
 
-      for (const path of pendingDirtyDetailPaths) {
-        const previousKey = previousDetailEntries[path]
-        if (!(path in detailDrafts)) {
-          delete detailEntries[path]
-          if (previousKey) staleStorageKeys.push(previousKey)
-          continue
-        }
-        const storageKey = getDraftStorageKey(name, 'detail', path, revision)
-        window.localStorage.setItem(storageKey, JSON.stringify(detailDrafts[path]))
-        detailEntries[path] = storageKey
-        if (previousKey && previousKey !== storageKey) staleStorageKeys.push(previousKey)
-      }
       for (const path of pendingDirtyCardPaths) {
         const previousKey = previousCardEntries[path]
         if (!(path in cardDrafts)) {
@@ -170,7 +150,7 @@ export function flushPendingDraftPersist(): boolean {
       const nextIndex: DraftStorageIndex = {
         version: 3,
         revision,
-        detailEntries,
+        detailEntries: {},
         cardEntries,
       }
       window.localStorage.setItem(`${name}:index`, JSON.stringify(nextIndex))
@@ -180,7 +160,6 @@ export function flushPendingDraftPersist(): boolean {
       }
       window.localStorage.removeItem(name)
       lastPersistedValue = value
-      pendingDirtyDetailPaths.clear()
       pendingDirtyCardPaths.clear()
     }
     persistFailureCount = 0
@@ -218,19 +197,9 @@ function scheduleDraftPersist(
   if (!remove && value !== null) {
     const nextState = value.state
     const previousState = lastPersistedValue?.state
-    const nextDetailDrafts = nextState.detailDrafts ?? {}
-    const previousDetailDrafts = previousState?.detailDrafts ?? {}
     const nextCardDrafts = nextState.cardDrafts ?? {}
     const previousCardDrafts = previousState?.cardDrafts ?? {}
 
-    for (const path of new Set([
-      ...Object.keys(nextDetailDrafts),
-      ...Object.keys(previousDetailDrafts),
-    ])) {
-      if (nextDetailDrafts[path] !== previousDetailDrafts[path]) {
-        pendingDirtyDetailPaths.add(path)
-      }
-    }
     for (const path of new Set([
       ...Object.keys(nextCardDrafts),
       ...Object.keys(previousCardDrafts),
@@ -242,7 +211,6 @@ function scheduleDraftPersist(
 
     if (
       lastPersistedValue
-      && pendingDirtyDetailPaths.size === 0
       && pendingDirtyCardPaths.size === 0
     ) {
       return
@@ -270,14 +238,46 @@ if (typeof window !== 'undefined' && !persistListenersRegistered) {
   persistListenersRegistered = true
 }
 
+// Older builds persisted full document bodies as detail drafts in localStorage.
+// That is unbounded (documents can embed base64 images) and is what made the app
+// freeze on startup once enough had accumulated. Detail drafts are now kept in
+// memory only and re-seeded from the authoritative topo copy, so drop the legacy
+// blobs here. Idempotent and safe: the saved content always lives in topo, and
+// the close-guard flushes any dirty draft to topo before the app quits.
+function cleanupLegacyDetailDrafts(name: string) {
+  if (typeof window === 'undefined') return
+  const detailPrefix = `${name}:detail:`
+  const toRemove: string[] = []
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i)
+    if (!key) continue
+    if (key.startsWith(detailPrefix) || key === name) {
+      toRemove.push(key)
+    }
+  }
+  for (const key of toRemove) window.localStorage.removeItem(key)
+  const indexRaw = window.localStorage.getItem(`${name}:index`)
+  if (indexRaw) {
+    try {
+      const index = JSON.parse(indexRaw) as AnyDraftStorageIndex
+      if (index && index.version === 3) {
+        const cleaned: DraftStorageIndex = { ...index, detailEntries: {} }
+        window.localStorage.setItem(`${name}:index`, JSON.stringify(cleaned))
+      }
+    } catch {
+      // ignore malformed index
+    }
+  }
+}
+
 const draftPersistStorage: PersistStorage<DraftPersistedState> = {
   getItem: (name) => {
     if (typeof window === 'undefined') return null
+    cleanupLegacyDetailDrafts(name)
     const index = readDraftStorageIndex(name)
     if (index) {
       const value = {
         state: {
-          detailDrafts: readDraftEntries(getIndexedEntries(name, 'detail', index)),
           cardDrafts: readDraftEntries(getIndexedEntries(name, 'card', index)),
         },
         version: 0,
@@ -339,9 +339,12 @@ export const useDraftStore = create<DraftState>()(
     {
       name: 'topomind-draft-storage',
       storage: draftPersistStorage,
-      // We only want to persist the drafts themselves, not the edit mode UI states
+      // We only want to persist the drafts themselves, not the edit mode UI states.
+      // Detail drafts are intentionally NOT persisted: they are full document bodies
+      // (which may embed base64 images) and would unboundedly bloat localStorage,
+      // freezing startup. They live in memory and are re-seeded from the authoritative
+      // topo copy on open; card drafts are small text snippets and safe to persist.
       partialize: (state) => ({
-        detailDrafts: state.detailDrafts,
         cardDrafts: state.cardDrafts,
       }),
     }
