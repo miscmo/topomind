@@ -15,6 +15,12 @@
 - 拖拽手柄菜单顶部"快捷块格式"tile 的可见方块放在内层 `<span class="tm-smart-block-menu__tile-fill">`（框架碰不到，Mantine/BlockNote 的菜单项高亮覆盖打不到它）。选中态 = accent 填充 + 白字，不是对号（不要加 `checked`）。
 - **字号坑**：`.bn-menu-item`/`.mantine-Menu-item` 自带约 14px 字号，会覆盖写在菜单项类上的 `font-size`。把方块移到内层 span 后该覆盖失效，span 上写的字号会真实生效——所以 tile 方块曾因 `font-size:17px` 突然变大。方块字号务必写 `14px`（对齐菜单默认），不要写 17px（2026-08-15 修过一次）。
 
+## DocumentMetaPicker 图标选择器（emoji-mart 宽度坑）
+- `DocumentMetaPicker.tsx` 是文档列表项右键"更换图标 / 修改字体颜色"的弹层。图标用 `@emoji-mart/react` 动态加载的 `Picker`。
+- **emoji-mart v5.6.0 的 `Picker` 是 Web Component（Shadow DOM），宽度写死在 Shadow DOM（约 350px），根本不认 `width` 这个 prop**（`props.width` 在 `emoji-mart/dist/browser.js` 里不存在，也没有 width 默认值）。给它传 `width={...}` 会被静默忽略。
+- 因此弹层**不能用固定窄宽度（如 280）+ `overflow-hidden` 去包 picker**——picker 仍是 350px 会被裁掉右侧一截图标。正确做法：弹层去掉固定 `width`，用 `boxSizing:'content-box'`（避免 1px 边框吃掉 2px 内容）让面板按 picker 自然宽度自适应；视口钳制用估算值（panelWidth=360, panelHeight=560 icon/320 color）。`max-w-[95vw]` 兜底防止超宽。
+- 对照：`previewPosition` / `searchPosition` / `emojiSize` / `maxSearchResults` / `theme` 都是**真实生效**的 prop（与 `width` 不同）。要搜图标就把 `searchPosition` 设 `"static"` 或 `"sticky"`（默认 `"sticky"`，`"none"` 会关掉搜索栏）。
+
 ## 验证手段
 - `node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
 - `node --experimental-strip-types scripts/verify-critical-regressions.mts`（末尾 "Critical regression checks verified" 即通过；日志里的 "save failed" 是预期测试分支，可忽略）

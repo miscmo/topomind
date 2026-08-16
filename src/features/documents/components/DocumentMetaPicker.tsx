@@ -50,10 +50,13 @@ export const DocumentMetaPicker: React.FC<DocumentMetaPickerProps> = ({ picker, 
   }, [picker?.mode])
 
   // 面板打开时定位：优先放在菜单附近，超出视口则自动向内收缩
+  // 注意：emoji-mart Picker 是 Web Component，宽度写死在 Shadow DOM（约 350px），
+  // 不认 width 属性，因此面板宽度改为自适应 picker 自然宽度（见下方 style），
+  // 这里只用估算值做视口钳制，避免弹出时超出屏幕。
   useEffect(() => {
     if (!picker) return
-    const panelWidth = 280
-    const panelHeight = picker.mode === 'icon' ? 320 : 260
+    const panelWidth = 360
+    const panelHeight = picker.mode === 'icon' ? 560 : 320
     const margin = 8
     setPickerPosition({
       x: Math.max(margin, Math.min(picker.x, window.innerWidth - panelWidth - margin)),
@@ -87,8 +90,8 @@ export const DocumentMetaPicker: React.FC<DocumentMetaPickerProps> = ({ picker, 
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[1300] bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 flex flex-col"
-      style={{ left: pickerPosition.x, top: pickerPosition.y, width: 280 }}
+      className="fixed z-[1300] bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 flex flex-col max-w-[95vw]"
+      style={{ left: pickerPosition.x, top: pickerPosition.y, boxSizing: 'content-box' }}
     >
       <div className="flex items-center justify-between px-3 h-9 border-b border-[var(--color-border-subtle)] shrink-0">
         <span className="text-[12px] font-semibold text-[var(--color-text-primary)]">
@@ -119,7 +122,7 @@ export const DocumentMetaPicker: React.FC<DocumentMetaPickerProps> = ({ picker, 
                 data={emojiPicker.data}
                 theme="auto"
                 previewPosition="none"
-                searchPosition="none"
+                searchPosition="static"
                 emojiSize={20}
                 maxSearchResults={40}
                 onEmojiSelect={(emoji: { native?: string; id?: string }) => {
