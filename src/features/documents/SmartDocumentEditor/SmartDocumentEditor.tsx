@@ -14,6 +14,7 @@ import { SmartDocumentFormattingToolbar } from './components/SmartDocumentFormat
 import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
 import { getImagePreviewScale } from './imagePreview'
+import { setEditorLinkClickHandler, shouldInterceptLink, isNavigableHref } from './editorLinkInterceptor'
 
 import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
@@ -60,6 +61,17 @@ function getCodeBlockText(element: HTMLElement): string {
   return code?.textContent ?? ''
 }
 
+// 在 Electron 中通过主进程安全打开外部链接（shell.openExternal），
+// 非 Electron（web）环境回退到 window.open，避免直接在当前页面内导航
+function openExternalLink(href: string) {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined
+  if (api) {
+    void api.invoke('app:openExternal', href)
+  } else {
+    window.open(href, '_blank', 'noopener,noreferrer')
+  }
+}
+
 export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: SmartDocumentEditorProps) {
   const { readOnly = false, attachmentInsertTargetKey } = props
   const { editor, handleChange, customTheme, defaultEditorStyle } = useSmartDocumentEditorModel(props)
@@ -87,6 +99,9 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   const [toolbarPosition, setToolbarPosition] = useState<CodeToolbarPosition | null>(null)
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null)
   const [imagePreviewScale, setImagePreviewScale] = useState(1)
+  const [linkMenu, setLinkMenu] = useState<{ href: string; top: number; left: number } | null>(null)
+  const linkMenuRef = useRef<HTMLDivElement>(null)
+  const lastLinkMenuOpenRef = useRef<{ t: number; href: string } | null>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const imagePreviewCloseButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -94,6 +109,35 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     setImagePreview(null)
     setImagePreviewScale(1)
   }, [])
+
+  // 统一的链接菜单打开入口：供 DOM 捕获监听（只读/兜底）与 links.onClick（可编辑）
+  // 共用，避免两套机制重复弹出。带极短去抖，防止同一次点击被两个路径各触发一次。
+  const openLinkMenu = useCallback((href: string, rect: DOMRect) => {
+    const now = Date.now()
+    const last = lastLinkMenuOpenRef.current
+    if (last && last.href === href && now - last.t < 200) return
+    lastLinkMenuOpenRef.current = { t: now, href }
+
+    const menuWidth = 300
+    const menuHeight = 96
+    const margin = 8
+    let top = rect.bottom + 4
+    let left = rect.left
+    if (top + menuHeight + margin > window.innerHeight) {
+      top = rect.top - menuHeight - 4
+    }
+    if (left + menuWidth + margin > window.innerWidth) {
+      left = window.innerWidth - menuWidth - margin
+    }
+    left = Math.max(margin, left)
+    setLinkMenu({ href, top, left })
+  }, [])
+
+  // 把“打开链接菜单”的能力注册给编辑器模型层的 links.onClick（可编辑模式下的可靠拦截点）
+  useEffect(() => {
+    setEditorLinkClickHandler(({ href, rect }) => openLinkMenu(href, rect))
+    return () => setEditorLinkClickHandler(null)
+  }, [openLinkMenu])
 
   const handleImagePreviewWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -228,6 +272,60 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       editorRoot.removeEventListener('dblclick', handleImageDoubleClick)
     }
   }, [])
+
+  useEffect(() => {
+    const editorRoot = editorRootRef.current
+    if (!editorRoot) return
+
+    // 兜底拦截：只读模式下 BlockNote 的 handleClick 会提前 return false（不调用
+    // links.onClick），浏览器会对 <a href> 走默认跳转；可编辑模式下若 links.onClick
+    // 因故未生效，此处也能兜住。命中链接则阻止默认跳转并弹出菜单。
+    const handleLinkClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      const anchor = target.closest('a[href]')
+      if (!anchor || !editorRoot.contains(anchor)) return
+
+      const href = anchor.getAttribute('href') ?? ''
+      if (!shouldInterceptLink(href)) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      openLinkMenu(href, anchor.getBoundingClientRect())
+    }
+
+    editorRoot.addEventListener('click', handleLinkClick, true)
+    return () => {
+      editorRoot.removeEventListener('click', handleLinkClick, true)
+    }
+  }, [openLinkMenu])
+
+  useEffect(() => {
+    if (!linkMenu) return
+
+    const ownerDocument = editorRootRef.current?.ownerDocument ?? document
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return
+      if (event.target.closest('.tm-link-menu')) return
+      setLinkMenu(null)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLinkMenu(null)
+    }
+    const scrollContainer = scrollContainerRef.current
+    const handleScroll = () => setLinkMenu(null)
+
+    ownerDocument.addEventListener('mousedown', handlePointerDown, true)
+    ownerDocument.addEventListener('keydown', handleKeyDown)
+    scrollContainer?.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      ownerDocument.removeEventListener('mousedown', handlePointerDown, true)
+      ownerDocument.removeEventListener('keydown', handleKeyDown)
+      scrollContainer?.removeEventListener('scroll', handleScroll)
+    }
+  }, [linkMenu])
 
   useEffect(() => {
     if (!imagePreview) return
@@ -634,6 +732,45 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
           </div>
           <div className="tm-image-preview__hint" aria-live="polite">
             滚轮缩放 · {Math.round(imagePreviewScale * 100)}%
+          </div>
+        </div>,
+        document.body,
+      ) : null}
+      {linkMenu && typeof document !== 'undefined' ? createPortal(
+        <div
+          ref={linkMenuRef}
+          className="tm-link-menu fixed z-[1400] min-w-[260px] max-w-[320px] rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-xl p-2 flex flex-col gap-2"
+          style={{ top: linkMenu.top, left: linkMenu.left }}
+          role="menu"
+          aria-label="链接操作"
+        >
+          <div
+            className="text-[12px] leading-[1.4] text-[var(--color-text-secondary)] break-all max-h-[3em] overflow-hidden"
+            title={linkMenu.href}
+          >
+            {linkMenu.href}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex-1 h-8 rounded-md bg-[var(--color-primary)] text-white text-[12px] font-medium cursor-pointer border-none transition-colors hover:opacity-90"
+              onClick={() => {
+                openExternalLink(linkMenu.href)
+                setLinkMenu(null)
+              }}
+            >
+              打开链接
+            </button>
+            <button
+              type="button"
+              className="flex-1 h-8 rounded-md border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)] text-[12px] cursor-pointer transition-colors hover:bg-[var(--color-hover-bg)]"
+              onClick={() => {
+                void navigator.clipboard.writeText(linkMenu.href)
+                setLinkMenu(null)
+              }}
+            >
+              复制链接
+            </button>
           </div>
         </div>,
         document.body,

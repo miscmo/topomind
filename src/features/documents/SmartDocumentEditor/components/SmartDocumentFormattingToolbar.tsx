@@ -143,6 +143,7 @@ export function SmartDocumentFormattingToolbar() {
       <BasicTextStyleButton basicTextStyle="italic" key="italicStyleButton" />
       <BasicTextStyleButton basicTextStyle="underline" key="underlineStyleButton" />
       <BasicTextStyleButton basicTextStyle="strike" key="strikeStyleButton" />
+      <BasicTextStyleButton basicTextStyle="code" key="codeStyleButton" />
       {selectionState ? <CopySelectionButton key="copySelectionButton" state={selectionState} /> : null}
       {selectionState ? <SelectionMathButton key="inlineMathButton" mode="inline" state={selectionState} /> : null}
       {selectionState ? <SelectionMathButton key="blockMathButton" mode="block" state={selectionState} /> : null}

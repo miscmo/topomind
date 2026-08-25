@@ -11,6 +11,7 @@ import { topoDocumentPath, topoDocumentIdFromPath } from '../../../../features/d
 import { useDetailDocuments } from '../../model/useDetailDocuments'
 import { useDetailDocumentSession } from '../../model/useDetailDocumentSession'
 import { useDetailPanelStore } from '../../model/detailPanelStore'
+import { useDetailLockStore } from '../../model/detailLockStore'
 import type { DetailSidebarTab } from '../../../../features/documents/types/workspaceTypes'
 import { DocumentBreadcrumb } from './DocumentBreadcrumb'
 
@@ -20,7 +21,11 @@ interface DetailPanelProps {
 }
 
 const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: DetailPanelProps) {
-  const selectedNodeId = useSelectedNodeId()
+  const rawSelectedNodeId = useSelectedNodeId()
+  // 锁定：若已锁定某个节点，右栏内容固定展示该锁定节点，不受选中节点变化影响；
+  // 未锁定时保持现有逻辑，与当前选中节点一致。
+  const lockedNodeId = useDetailLockStore((s) => s.lockedNodeId)
+  const selectedNodeId = lockedNodeId ?? rawSelectedNodeId
   const resolveNodePath = useCallback((nodeId: string) => {
     const graphSession = tabStore.getState().getGraphSession(tabId)
     return resolveRoomChildRef(graphSession.roomPath || graphSession.kbPath, nodeId)

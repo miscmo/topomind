@@ -21,6 +21,22 @@
 - 因此弹层**不能用固定窄宽度（如 280）+ `overflow-hidden` 去包 picker**——picker 仍是 350px 会被裁掉右侧一截图标。正确做法：弹层去掉固定 `width`，用 `boxSizing:'content-box'`（避免 1px 边框吃掉 2px 内容）让面板按 picker 自然宽度自适应；视口钳制用估算值（panelWidth=360, panelHeight=560 icon/320 color）。`max-w-[95vw]` 兜底防止超宽。
 - 对照：`previewPosition` / `searchPosition` / `emojiSize` / `maxSearchResults` / `theme` 都是**真实生效**的 prop（与 `width` 不同）。要搜图标就把 `searchPosition` 设 `"static"` 或 `"sticky"`（默认 `"sticky"`，`"none"` 会关掉搜索栏）。
 
+## 编辑器内链接点击拦截（不直接跳转）
+- **两层拦截**（2026-08-18 修正：单靠 DOM 捕获在可编辑模式不可靠）：
+  1. **可编辑模式（可靠入口）**：在 `useCreateBlockNote` 的编辑器配置里注册 `links: { onClick }` 钩子。BlockNote 的 Link 扩展 `handleClick` 在 `editable` 时会**直接 `window.open`**；`onClick` 运行于 `handleClick` 内部、早于 `window.open`，返回 `true` 即表示已处理、不再跳转。钩子里 `event.preventDefault()` + 把 `{href, rect}` 通过模块级桥（`editorLinkInterceptor.ts` 的 `emitEditorLinkClick`/`setEditorLinkClickHandler`）转交给组件弹菜单。**务必走这个钩子，不要只靠 DOM 捕获**。
+  2. **只读模式兜底**：只读时 `handleClick` 提前 `return false`（不调 `onClick`），浏览器对 `<a href>` 走默认跳转。`SmartDocumentEditor.tsx` 在 `editorRoot` 捕获阶段 `click` 拦截 `<a[href]>`（`preventDefault`+`stopPropagation`）兜底；桥接 handler 与 DOM 监听都调用同一个 `openLinkMenu`，并带 200ms 去抖防止同一次点击被两路各触发一次。
+- 桥接层 `editorLinkInterceptor.ts`：`setEditorLinkClickHandler` / `emitEditorLinkClick`（组件挂载时注册、卸载注销；模型层只持模块级引用，调用时读最新值）、`isNavigableHref`（http/https/mailto/ftp）、`shouldInterceptLink`（广义：排除 `#` 与 `javascript:`）。
+- 仅拦截外部/导航链接，不影响文档内相对锚点。
+- 外部打开走 Electron 安全通道：`window.electronAPI?.invoke('app:openExternal', href)`（preload 白名单 `app:openExternal`）；非 Electron 环境回退 `window.open(href,'_blank','noopener,noreferrer')`。
+- 菜单关闭：点菜单外 / Esc / 编辑器滚动（scrollContainer scroll）均关闭；视口边缘自动上翻/左移钳制。
+
+## 编辑器"同一行多块 / 分栏"能力评估（2026-08-25）
+- 现状：BlockNote 0.51.4（已装）核心是块级垂直流，**默认一行一块**，无并排。
+- 官方方案：`@blocknote/xl-multi-column`（最新 0.54.0，未装），引入 `columnList`+`column` 块，配 `multiColumnDropCursor` 支持把块拖到另一块侧边变并排（腾讯文档/Notion 式分栏）。
+- **硬性约束**：① 版本必须配对——xl-multi-column 0.54 要配 `@blocknote/core`/`react` 0.54.x，现 0.51.4 基本得整体升级 BlockNote，有 breaking-change 风险；② **License：`GPL-3.0 OR Proprietary`**——闭源/商用需订阅，仅开源可在 GPL 下免费。商用产品直接集成有合规风险，需先确认许可证。
+- 第三方 `blocknote-layout` 也提供拖拽分栏，但 peer 依赖 `@blocknote/core 0.47.1`（比现版旧），API 兼容性未验证，不作主路径。
+- 自研 ProseMirror 横向容器块 + 重写 drop cursor 可行但工作量大、需长期维护，不划算。
+
 ## 验证手段
 - `node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
 - `node --experimental-strip-types scripts/verify-critical-regressions.mts`（末尾 "Critical regression checks verified" 即通过；日志里的 "save failed" 是预期测试分支，可忽略）

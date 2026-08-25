@@ -4,6 +4,8 @@ import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../../../hooks/useResizePanel'
 import { logAction } from '../../../../core/log-backend'
 import { useRightPanelStore } from '../../../right-panel/model/rightPanelStore'
+import { useDetailLockStore } from '../../../right-panel/model/detailLockStore'
+import { useGraphStore, useSelectedNodeId } from '../../../../stores/graphStore'
 
 export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   isDirty,
@@ -47,6 +49,13 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
 
   const isMaximized = useRightPanelStore((s) => s.rightPanelMaximized)
   const toggleMaximized = useRightPanelStore((s) => s.toggleRightPanelMaximized)
+
+  // 锁定：读取当前选中节点与锁定状态，用于锁定/解锁按钮
+  const selectedNodeIdRaw = useSelectedNodeId()
+  const lockedNodeId = useDetailLockStore((s) => s.lockedNodeId)
+  const toggleLock = useDetailLockStore((s) => s.toggleLock)
+  const isLocked = lockedNodeId !== null
+  const lockedNodeLabel = useGraphStore((s) => (lockedNodeId ? s.nodesMap.get(lockedNodeId)?.data.label ?? '' : ''))
 
   const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
     initialWidth: detailSidebarWidth,
@@ -139,6 +148,24 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
               ) : (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              )}
+            </button>
+            <button
+              type="button"
+              className={`w-7 h-7 rounded-lg border border-transparent cursor-pointer transition-colors flex items-center justify-center ${
+                isLocked
+                  ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]'
+                  : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'
+              }`}
+              onClick={() => toggleLock(selectedNodeIdRaw)}
+              disabled={!isLocked && !selectedNodeIdRaw}
+              title={isLocked ? `已锁定节点${lockedNodeLabel ? `：${lockedNodeLabel}` : ''}（点击解锁）` : '锁定当前节点（固定显示该节点内容，不受选中变化影响）'}
+              aria-label={isLocked ? '解锁节点' : '锁定当前节点'}
+            >
+              {isLocked ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
               )}
             </button>
             <div className="w-5 h-px bg-[var(--color-border-light)] my-0.5" />

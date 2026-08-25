@@ -10,6 +10,7 @@ import { inlineMathInputRuleExtension, mathBlockShortcutExtension, quoteEnterExt
 import { containsMathDelimiters, containsMarkdownDelimiters, containsStrictMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml, hasMeaningfulHtmlStructure, stripClipboardHtmlNoise } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
 import { currentBlockHighlightExtension } from '../currentBlockHighlightExtension'
+import { emitEditorLinkClick, isNavigableHref } from '../editorLinkInterceptor'
 import type { SmartDocumentEditorProps } from '../types'
 import type { TocItem } from '../../types/workspaceTypes'
 import type { SmartDocumentDerivedBlockCache } from '../smartDocumentUtils'
@@ -229,6 +230,23 @@ export function useSmartDocumentEditorModel({
     extensions: [mathBlockShortcutExtension(), currentBlockHighlightExtension(), quoteEnterExtension()],
     _tiptapOptions: {
       extensions: [inlineMathInputRuleExtension],
+    },
+    // 链接点击：默认 BlockNote 在可编辑模式下会直接 window.open 跳转。
+    // 通过 links.onClick 钩子在跳转前拦截，转交给编辑器组件弹出“打开/复制”菜单。
+    // 返回 true 表示已处理，BlockNote 不再执行默认跳转。
+    links: {
+      onClick: (event: MouseEvent) => {
+        const target = event.target
+        if (!(target instanceof Element)) return true
+        const anchor = target.closest('a[href]')
+        if (!anchor) return true
+        const href = anchor.getAttribute('href') ?? ''
+        if (!isNavigableHref(href)) return true
+        event.preventDefault()
+        const rect = anchor.getBoundingClientRect()
+        emitEditorLinkClick({ href, rect })
+        return true
+      },
     },
   })
 
