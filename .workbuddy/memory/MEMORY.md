@@ -37,6 +37,18 @@
 - 第三方 `blocknote-layout` 也提供拖拽分栏，但 peer 依赖 `@blocknote/core 0.47.1`（比现版旧），API 兼容性未验证，不作主路径。
 - 自研 ProseMirror 横向容器块 + 重写 drop cursor 可行但工作量大、需长期维护，不划算。
 
+## xl-multi-column 集成的两个必踩坑（2026-08-25 修复）
+- **字典未合并导致编辑器整体崩溃**：`withMultiColumn(schema)` 只往 schema 加 `column`/`columnList` 块，**不会**把多语言字典并进编辑器；`useCreateBlockNote` 也**不会**像 `<BlockNote>` 组件那样做 `locale`/`dict` 合并。结果 `editor.dictionary.multi_column` 缺失，创建时 `getMultiColumnSlashMenuItems(editor)` 抛 `Multi-column dictionary not found`（React 报错 `<SmartDocumentEditor2> 渲染失败`）。修复：在 `useSmartDocumentEditorModel.ts` 的 `useCreateBlockNote` 选项里手动传入合并后的 `dictionary`：
+  ```ts
+  import { en as defaultEditorDictionary } from '@blocknote/core/locales'
+  import { multiColumnDropCursor, locales as multiColumnLocales } from '@blocknote/xl-multi-column'
+  // ...
+  dictionary: { ...defaultEditorDictionary, multi_column: multiColumnLocales.en }
+  ```
+  - `@blocknote/core/locales` 的 `en` 与内部默认 `Pe` 是同一对象，spread 后其余 UI 仍是英文、零行为变化；`multiColumnLocales.en` 经 getter 解析为 `{ slash_menu: { two_columns, three_columns } }`，正好是 `getMultiColumnDictionary` 要的结构。
+  - 若想让整个编辑器中文化，把 base 换成 `zh`（从 `@blocknote/core/locales` 导入）并把 `multi_column` 也改成 `multiColumnLocales.zh` 即可，但那是单独的本地化改动，不属于本 bug 修复范围。
+- **安装坑**（见 2026-08-25 旧记录）：该包与 `@blocknote/core` 版本须精确配对（0.51.4 ↔ 0.51.4），不要顺手升级 BlockNote；安装曾因 peer-dep / Windows 安全删除 / EPERM / 沙箱 / npm 缓存锁连环失败，最终用 `--no-save` + 新 `--cache` 目录 + 关沙箱装好，且 `package.json` 是手动加 `"@blocknote/xl-multi-column": "0.51.4"`（因为用了 `--no-save`）。
+
 ## 验证手段
 - `node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
 - `node --experimental-strip-types scripts/verify-critical-regressions.mts`（末尾 "Critical regression checks verified" 即通过；日志里的 "save failed" 是预期测试分支，可忽略）

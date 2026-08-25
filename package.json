@@ -75,6 +75,7 @@
     "@blocknote/core": "^0.51.4",
     "@blocknote/mantine": "^0.51.4",
     "@blocknote/react": "^0.51.4",
+    "@blocknote/xl-multi-column": "^0.51.4",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@fontsource/inter": "^5.2.8",

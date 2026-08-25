@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Check, ChevronDown, ChevronUp, Copy, WrapText, X } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
+import { getMultiColumnSlashMenuItems } from '@blocknote/xl-multi-column'
 import { filterSuggestionItems } from '@blocknote/core'
 import { SideMenuExtension } from '@blocknote/core/extensions'
 import { insertMermaid } from 'blocknote-mermaid'
@@ -578,6 +579,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 
     return [
       ...getDefaultReactSlashMenuItems(editor),
+      ...getMultiColumnSlashMenuItems(editor),
       insertMermaid(),
       mathItem,
     ]
