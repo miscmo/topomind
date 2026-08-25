@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { lightDefaultTheme, darkDefaultTheme } from '@blocknote/mantine'
 import { useCreateBlockNote } from '@blocknote/react'
-import { en as defaultEditorDictionary } from '@blocknote/core/locales'
+import { zh as defaultEditorDictionary } from '@blocknote/core/locales'
 import { multiColumnDropCursor, locales as multiColumnLocales } from '@blocknote/xl-multi-column'
 import { useThemeStore, isDarkTheme } from '../../../../stores/themeStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
@@ -64,12 +64,12 @@ export function useSmartDocumentEditorModel({
     schema: smartDocumentSchema,
     // xl-multi-column 的 slash 菜单项会读取 editor.dictionary.multi_column，
     // 但 withMultiColumn 不会自动把多语言字典并入编辑器字典（useCreateBlockNote
-    // 也不会像 <BlockNote> 组件那样做 locale/dict 合并）。必须手动把默认的
-    // 英文词典与多栏词典合并后通过 dictionary 传入，否则会在创建时抛
-    // "Multi-column dictionary not found" 导致编辑器整体渲染失败。
+    // 也不会像 <BlockNote> 组件那样做 locale/dict 合并）。必须手动把中文
+    // 词典（@blocknote/core/locales 的 zh）与多栏中文词典合并后通过 dictionary
+    // 传入，否则会在创建时抛 "Multi-column dictionary not found" 导致编辑器整体渲染失败。
     dictionary: {
       ...defaultEditorDictionary,
-      multi_column: multiColumnLocales.en,
+      multi_column: multiColumnLocales.zh,
     },
     // 启用多栏拖放指示：拖动块到另一块侧边时显示垂直光标，落成一排（分栏）。
     dropCursor: multiColumnDropCursor,

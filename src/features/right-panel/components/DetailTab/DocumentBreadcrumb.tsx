@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 import type { TopoDocumentManifestItem } from '../../../../core/storage'
 import { topoDocumentPath, buildDocumentTree, topoDocumentTypeIcon } from '../../../../features/documents/types/documentTypes'
 import type { TopoDocumentType } from '../../../../core/storage'
-import { ChevronRight, File } from 'lucide-react'
+import { ChevronRight, File, Folder } from 'lucide-react'
 import { DocumentContextMenu } from '../../../../features/documents/components/DocumentContextMenu'
 import { DocumentMetaPicker, type DocumentMetaPickerState } from '../../../../features/documents/components/DocumentMetaPicker'
 import { usePromptStore } from '../../../../shared/ui/PromptModal/promptStore'
@@ -172,6 +172,7 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
       <div className="absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[300px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col">
         {children.map(child => {
           const Icon = child.icon || topoDocumentTypeIcon(child.type) || File
+          const IconComp = typeof Icon === 'string' ? null : (Icon as React.ComponentType<{ size?: number }>)
           return (
             <button
               key={child.id}
@@ -184,7 +185,7 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
               onContextMenu={(e) => handleContextMenu(e, child.id)}
             >
               <div className="w-4 h-4 shrink-0 flex items-center justify-center opacity-70">
-                {typeof Icon === 'function' ? <Icon size={14} /> : Icon}
+                {IconComp ? <IconComp size={14} /> : (typeof Icon === 'string' ? Icon : null)}
               </div>
               <span className="truncate">{child.title || '未命名'}</span>
             </button>
@@ -208,14 +209,27 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
               onClick={() => setOpenDropdownId(isOpen ? null : item.id)}
               onContextMenu={(e) => handleContextMenu(e, item.isRoot ? null : item.id)}
             >
-              {!item.isRoot && item.item && (
-                <div className="w-3.5 h-3.5 opacity-60 flex items-center justify-center shrink-0">
-                  {(() => {
-                    const Icon = item.item!.icon || topoDocumentTypeIcon(item.item!.type) || File
-                    return typeof Icon === 'function' ? <Icon size={12} /> : Icon
-                  })()}
-                </div>
-              )}
+              {(() => {
+                const childCount = item.isRoot ? rootItems.length : (childrenMap[item.id]?.length ?? 0)
+                const Icon = item.isRoot ? Folder : (item.item ? (item.item.icon || topoDocumentTypeIcon(item.item.type) || File) : null)
+                if (!Icon) return null
+                const IconComp = typeof Icon === 'string' ? null : (Icon as React.ComponentType<{ size?: number }>)
+                return (
+                  <div
+                    className="relative w-3.5 h-3.5 flex items-center justify-center shrink-0"
+                    title={childCount > 0 ? `${childCount} 个子文档` : undefined}
+                  >
+                    <div className="opacity-60 flex items-center justify-center w-full h-full">
+                      {IconComp ? <IconComp size={12} /> : (typeof Icon === 'string' ? Icon : null)}
+                    </div>
+                    {childCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--color-primary)] text-white text-[9px] font-semibold leading-none ring-1 ring-[var(--color-surface)]">
+                        {childCount}
+                      </span>
+                    )}
+                  </div>
+                )
+              })()}
               <span className="truncate">{item.title}</span>
             </button>
             

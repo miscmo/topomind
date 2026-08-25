@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useEffect, useState, useCallback, type CSSProperties, type WheelEvent as ReactWheelEvent } from 'react'
+import { memo, useMemo, useRef, useEffect, useState, useCallback, type CSSProperties, type WheelEvent as ReactWheelEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, ChevronUp, Copy, WrapText, X } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
@@ -100,6 +100,10 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   const [toolbarPosition, setToolbarPosition] = useState<CodeToolbarPosition | null>(null)
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null)
   const [imagePreviewScale, setImagePreviewScale] = useState(1)
+  const [imagePreviewOffset, setImagePreviewOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [imagePreviewDragging, setImagePreviewDragging] = useState(false)
+  const imageDragStartRef = useRef<{ mouseX: number; mouseY: number; offsetX: number; offsetY: number } | null>(null)
+  const imageDidDragRef = useRef(false)
   const [linkMenu, setLinkMenu] = useState<{ href: string; top: number; left: number } | null>(null)
   const linkMenuRef = useRef<HTMLDivElement>(null)
   const lastLinkMenuOpenRef = useRef<{ t: number; href: string } | null>(null)
@@ -109,7 +113,48 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   const closeImagePreview = useCallback(() => {
     setImagePreview(null)
     setImagePreviewScale(1)
+    setImagePreviewOffset({ x: 0, y: 0 })
+    setImagePreviewDragging(false)
+    imageDragStartRef.current = null
+    imageDidDragRef.current = false
   }, [])
+
+  // 图片预览：拖拽平移（pan）。仅在放大（scale>1）时可拖动，缩放回到 1 时复位偏移。
+  const handleImagePreviewMouseDown = useCallback((event: ReactMouseEvent<HTMLImageElement>) => {
+    if (event.button !== 0 || imagePreviewScale <= 1) return
+    event.preventDefault()
+    imageDragStartRef.current = {
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+      offsetX: imagePreviewOffset.x,
+      offsetY: imagePreviewOffset.y,
+    }
+    imageDidDragRef.current = false
+    setImagePreviewDragging(true)
+  }, [imagePreviewScale, imagePreviewOffset])
+
+  const handleImagePreviewMouseMove = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const start = imageDragStartRef.current
+    if (!start) return
+    const dx = event.clientX - start.mouseX
+    const dy = event.clientY - start.mouseY
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) imageDidDragRef.current = true
+    setImagePreviewOffset({ x: start.offsetX + dx, y: start.offsetY + dy })
+  }, [])
+
+  const handleImagePreviewMouseUp = useCallback(() => {
+    imageDragStartRef.current = null
+    setImagePreviewDragging(false)
+  }, [])
+
+  // 点击遮罩关闭，但拖拽结束后不触发关闭（避免“拖动查看”被误判为点击关闭）。
+  const handleImagePreviewOverlayClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (imageDidDragRef.current) {
+      imageDidDragRef.current = false
+      return
+    }
+    closeImagePreview()
+  }, [closeImagePreview])
 
   // 统一的链接菜单打开入口：供 DOM 捕获监听（只读/兜底）与 links.onClick（可编辑）
   // 共用，避免两套机制重复弹出。带极短去抖，防止同一次点击被两个路径各触发一次。
@@ -142,7 +187,12 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 
   const handleImagePreviewWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
     event.preventDefault()
-    setImagePreviewScale((currentScale) => getImagePreviewScale(currentScale, event.deltaY))
+    setImagePreviewScale((currentScale) => {
+      const next = getImagePreviewScale(currentScale, event.deltaY)
+      // 缩放回 1（未放大）时清除平移偏移，避免残留位移把图片推偏
+      if (next <= 1) setImagePreviewOffset({ x: 0, y: 0 })
+      return next
+    })
   }, [])
 
   const scrollToTop = useCallback(() => {
@@ -266,6 +316,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
         alt: event.target.alt || '文档图片',
       })
       setImagePreviewScale(1)
+      setImagePreviewOffset({ x: 0, y: 0 })
     }
 
     editorRoot.addEventListener('dblclick', handleImageDoubleClick)
@@ -709,8 +760,11 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
           role="dialog"
           aria-modal="true"
           aria-label="图片全屏预览"
-          onClick={closeImagePreview}
+          onClick={handleImagePreviewOverlayClick}
           onWheel={handleImagePreviewWheel}
+          onMouseMove={handleImagePreviewMouseMove}
+          onMouseUp={handleImagePreviewMouseUp}
+          onMouseLeave={handleImagePreviewMouseUp}
         >
           <button
             ref={imagePreviewCloseButtonRef}
@@ -728,12 +782,17 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
               src={imagePreview.src}
               alt={imagePreview.alt}
               draggable={false}
-              style={{ transform: `scale(${imagePreviewScale})` }}
-              onClick={(event) => event.stopPropagation()}
+              style={{
+                transform: `translate(${imagePreviewOffset.x}px, ${imagePreviewOffset.y}px) scale(${imagePreviewScale})`,
+                cursor: imagePreviewDragging ? 'grabbing' : imagePreviewScale > 1 ? 'grab' : 'default',
+                transition: imagePreviewDragging ? 'none' : undefined,
+              }}
+              onMouseDown={handleImagePreviewMouseDown}
+              onClick={(event) => { event.stopPropagation(); imageDidDragRef.current = false }}
             />
           </div>
           <div className="tm-image-preview__hint" aria-live="polite">
-            滚轮缩放 · {Math.round(imagePreviewScale * 100)}%
+            滚轮缩放 · {Math.round(imagePreviewScale * 100)}%{imagePreviewScale > 1 ? ' · 拖拽平移' : ''}
           </div>
         </div>,
         document.body,
