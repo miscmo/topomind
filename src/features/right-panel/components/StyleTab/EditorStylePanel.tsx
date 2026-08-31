@@ -2,7 +2,7 @@ import { memo } from 'react'
 import type { DefaultEditorStyle } from '../../../../types/uiStoreTypes'
 import { EDITOR_STYLE_NUMBER_LIMITS } from '../../../../domain/style/styleConstraints'
 import { resolveEditorFontChoice } from '../../../../domain/style/styleDefaults'
-import { CollapsibleBlock, ColorField, NumberField, PresetButtonGrid, SegmentedControl, StyleCard } from './StyleControls'
+import { CollapsibleBlock, ColorField, NumberField, PaperBackgroundGrid, PresetButtonGrid, SegmentedControl, StyleCard } from './StyleControls'
 import { EditorStylePreview } from './StylePreviews'
 import { EDITOR_STYLE_PRESETS } from '../../model/stylePresets'
 
@@ -139,6 +139,13 @@ export const EditorStylePanel = memo(function EditorStylePanel({
               <ColorField
                 value={defaultEditorStyle.backgroundColor || ''}
                 onChange={(v) => onUpdateDefaultEditorStyle({ backgroundColor: v })}
+              />
+            </div>
+            <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+              <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">纸张背景</label>
+              <PaperBackgroundGrid
+                value={defaultEditorStyle.paperBackground ?? 'plain'}
+                onChange={(v) => onUpdateDefaultEditorStyle({ paperBackground: v })}
               />
             </div>
           </div>

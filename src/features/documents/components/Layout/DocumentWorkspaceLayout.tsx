@@ -172,6 +172,9 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   const toggleLock = useDetailLockStore((s) => s.toggleLock)
   const isLocked = lockedNodeId !== null
   const lockedNodeLabel = useGraphStore((s) => (lockedNodeId ? s.nodesMap.get(lockedNodeId)?.data.label ?? '' : ''))
+  const selectedNodeLabel = useGraphStore((s) => (selectedNodeIdRaw ? s.nodesMap.get(selectedNodeIdRaw)?.data.label ?? '' : ''))
+  // 详情区当前展示的节点标题：锁定时取锁定节点，否则取当前选中节点
+  const detailNodeTitle = isLocked ? lockedNodeLabel : selectedNodeLabel
 
   const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
     initialWidth: detailSidebarWidth,
@@ -309,22 +312,22 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
         )}
         {documentType === 'detail' && (
           <aside
-            className={`w-[180px] shrink-0 flex flex-col border-r border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] ${
+            className={`w-[180px] shrink-0 flex flex-col bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] ${
               effectiveFloating 
                 ? 'absolute left-[12px] top-[42px] bottom-[16px] z-30 shadow-[0_12px_40px_rgba(15,23,42,0.16)] border border-[var(--color-border-strong)] rounded-[12px] overflow-hidden'
                 : detailSidebarCollapsed 
-                  ? '!w-0 !border-r-0 !bg-transparent overflow-hidden' 
+                  ? '!w-0 !bg-transparent overflow-hidden' 
                   : ''
             }`}
             style={!showSidebarContent ? undefined : { width: detailSidebarWidth }}
             onMouseEnter={() => onSidebarHoverChange?.(true)}
             onMouseLeave={() => onSidebarHoverChange?.(false)}
           >
-            <div className="flex items-center justify-start gap-2 min-h-[58px] p-2.5 px-3 pb-2 border-b border-[var(--color-border-subtle)] bg-gradient-to-b from-[color-mix(in_srgb,var(--color-surface)_98%,transparent)] to-[var(--color-bg)] box-border">
+            <div className="flex items-center justify-center gap-2 min-h-[58px] p-2.5 px-3 pb-2 border-b border-[var(--color-border-subtle)] bg-gradient-to-b from-[color-mix(in_srgb,var(--color-surface)_98%,transparent)] to-[var(--color-bg)] box-border">
               {showSidebarContent ? (
-                <div className="w-full min-w-0 flex items-center h-[30px]">
-                  <span className="text-[14px] font-bold text-[var(--color-text-primary)]">
-                    {detailSidebarTab === 'documents' ? '文档' : '附件'}
+                <div className="w-full min-w-0 flex items-center justify-center h-[30px] text-center">
+                  <span className="text-[14px] font-bold text-[var(--color-text-primary)] truncate">
+                    {detailSidebarTab === 'documents' ? (detailNodeTitle || '文档') : '附件'}
                   </span>
                 </div>
               ) : (
@@ -350,7 +353,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
         )}
         {documentType === 'detail' && showSidebarContent && !effectiveFloating && (
           <div
-            className={`w-[6px] h-full cursor-col-resize shrink-0 bg-transparent relative select-none transition-colors duration-75 before:content-[""] before:absolute before:top-0 before:bottom-0 before:left-1/2 before:-translate-x-1/2 before:w-px before:bg-[#e6ebf1] before:transition-all before:duration-75 hover:before:bg-[#7aa2cc] hover:before:shadow-[0_0_0_1px_rgba(122,162,204,0.12)] ${isSidebarResizing ? 'before:!bg-[#7aa2cc] before:!shadow-[0_0_0_1px_rgba(122,162,204,0.12)]' : ''}`}
+            className={`w-[6px] h-full cursor-col-resize shrink-0 bg-[var(--color-bg)] relative select-none transition-colors duration-75 before:content-[""] before:absolute before:top-0 before:bottom-0 before:right-0 before:w-px before:bg-[var(--color-border-light)] before:transition-all before:duration-75 hover:before:bg-[var(--color-primary)] ${isSidebarResizing ? 'before:!bg-[var(--color-primary)]' : ''}`}
             onMouseDown={handleSidebarResizeMouseDown}
             title="拖拽调整侧栏宽度"
           />

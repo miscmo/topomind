@@ -1,6 +1,8 @@
-import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, StyleConfigDefaults } from './styleTypes'
+import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeSize, DefaultNodeStyle, EditorPaperBackground, NodeSizeLimits, StyleConfigDefaults } from './styleTypes'
 import { STYLE_CONFIG_DEFAULTS } from './styleDefaults.ts'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, EDITOR_STYLE_NUMBER_LIMITS, NODE_BADGE_SIZE_LIMIT, NODE_STYLE_NUMBER_LIMITS, clampNumber, finiteNumber } from './styleConstraints.ts'
+
+const PAPER_BACKGROUND_VALUES: EditorPaperBackground[] = ['plain', 'ruled', 'dot-grid', 'grid', 'kraft', 'manuscript']
 
 type RecordLike = Record<string, unknown>
 
@@ -84,6 +86,7 @@ export function normalizeDefaultEditorStyle(raw: unknown): DefaultEditorStyle {
     headingSpacingRatio: clampNumber(finiteNumber(style.headingSpacingRatio, defaults.headingSpacingRatio), EDITOR_STYLE_NUMBER_LIMITS.headingSpacingRatio.min, EDITOR_STYLE_NUMBER_LIMITS.headingSpacingRatio.max),
     letterSpacing: clampNumber(finiteNumber(style.letterSpacing, defaults.letterSpacing), EDITOR_STYLE_NUMBER_LIMITS.letterSpacing.min, EDITOR_STYLE_NUMBER_LIMITS.letterSpacing.max),
     fontWeight: clampNumber(finiteNumber(style.fontWeight, defaults.fontWeight), EDITOR_STYLE_NUMBER_LIMITS.fontWeight.min, EDITOR_STYLE_NUMBER_LIMITS.fontWeight.max),
+    paperBackground: PAPER_BACKGROUND_VALUES.includes(style.paperBackground as EditorPaperBackground) ? (style.paperBackground as EditorPaperBackground) : defaults.paperBackground,
   }
 }
 

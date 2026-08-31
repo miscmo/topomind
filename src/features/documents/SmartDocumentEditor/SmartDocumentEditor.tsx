@@ -634,6 +634,44 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     }
   }, [languageMenuOpen])
 
+  // 正文拖选进行中临时禁用块侧边菜单的指针事件：拖选时鼠标若精确压到块编辑按钮，
+  // ProseMirror 坐标反查会命中按钮 DOM（不在可编辑内容树），回退到文档开头，
+  // 表现为“选中上方所有行”。仅在正文内 mousedown 触发的拖选期间禁用按钮指针事件，
+  // 拖选经过按钮时坐标落到下方正文、反查到当前块开头；点击/拖拽按钮本身不受影响。
+  useEffect(() => {
+    const editorRoot = editorRootRef.current
+    if (!editorRoot) return
+    const ownerDocument = editorRoot.ownerDocument ?? document
+    const body = ownerDocument.body
+
+    const clear = () => body.classList.remove('tm-text-selecting')
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+      // 每次按下先清掉“正文拖选”状态，避免任何边界下残留卡死导致按钮 permanently 不可点
+      clear()
+      // 命中区（按钮/侧菜单）内的按下＝点按钮或拖块，不触发拖选禁用
+      if (target.closest('.tm-smart-side-menu-hit-area')) return
+      // 只在可编辑正文内按下才算正文拖选
+      if (!target.closest('.bn-editor') && !target.closest('.ProseMirror')) return
+      body.classList.add('tm-text-selecting')
+    }
+
+    ownerDocument.addEventListener('mousedown', handleMouseDown, true)
+    ownerDocument.addEventListener('mouseup', clear, true)
+    ownerDocument.addEventListener('dragend', clear, true)
+    window.addEventListener('blur', clear)
+    return () => {
+      ownerDocument.removeEventListener('mousedown', handleMouseDown, true)
+      ownerDocument.removeEventListener('mouseup', clear, true)
+      ownerDocument.removeEventListener('dragend', clear, true)
+      window.removeEventListener('blur', clear)
+      body.classList.remove('tm-text-selecting')
+    }
+  }, [])
+
   useEffect(() => {
     const editorRoot = editorRootRef.current
     if (!editorRoot) return
@@ -723,7 +761,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 
   return (
     <div className="relative h-full w-full min-h-0">
-      <div ref={scrollContainerRef} className="h-full min-h-0 overflow-y-auto bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]" spellCheck={false}>
+      <div ref={scrollContainerRef} data-paper-bg={defaultEditorStyle.paperBackground ?? 'plain'} className="h-full min-h-0 overflow-y-auto bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] tm-smart-editor-scroll" spellCheck={false}>
         <div
           ref={editorRootRef}
         className="smart-document-content relative min-h-full [&_.bn-container]:!bg-transparent [&_.bn-container]:!pl-8 [&_.bn-container]:!pr-4 [&_.bn-container]:!py-0 [&_.bn-container]:!mx-auto [&_.bn-container]:!w-full [&_.bn-editor]:!min-h-0 [&_.bn-editor]:!px-0 [&_.bn-editor]:!py-4 [&_.bn-editor]:!w-full [&_.bn-side-menu]:!gap-0 [&_.bn-editor]:!bg-transparent"

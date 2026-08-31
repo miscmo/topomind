@@ -14,5 +14,6 @@ export type {
   DefaultEditorStyle,
   DefaultNodeSize,
   DefaultNodeStyle,
+  EditorPaperBackground,
   NodeSizeLimits,
 } from '../domain/style/styleTypes'

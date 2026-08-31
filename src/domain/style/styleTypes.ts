@@ -32,6 +32,9 @@ export interface DefaultNodeSize {
   height: number
 }
 
+/** 编辑器纸张背景样式：plain=无（沿用原有渐变），其余为纸张纹理效果 */
+export type EditorPaperBackground = 'plain' | 'ruled' | 'dot-grid' | 'grid' | 'kraft' | 'manuscript'
+
 export interface DefaultEditorStyle {
   fontSize: number
   fontFamily: string
@@ -43,6 +46,8 @@ export interface DefaultEditorStyle {
   headingSpacingRatio: number
   letterSpacing: number
   fontWeight: number
+  /** 纸张背景样式（在“样式”面板中切换） */
+  paperBackground: EditorPaperBackground
 }
 
 export interface NodeSizeLimits {

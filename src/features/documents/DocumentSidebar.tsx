@@ -57,6 +57,8 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     expandedNodes,
     draggedId,
     dragState,
+    scrollMetrics,
+    scrollbarActive,
   } = state
 
   const { inlineInputRef, menuRef, scrollContainerRef } = refs
@@ -93,7 +95,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
       <div
         ref={scrollContainerRef}
         onScroll={handleSidebarScroll}
-        className={`flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full ${dragState?.id === 'root' ? 'bg-[var(--color-hover-bg)] ring-[1.5px] ring-inset ring-[var(--color-primary)]' : ''}`}
+        className={`flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${dragState?.id === 'root' ? 'bg-[var(--color-hover-bg)] ring-[1.5px] ring-inset ring-[var(--color-primary)]' : ''}`}
       >
         {stickyAncestorRows.length > 0 && (
           <div className="sticky top-0 z-20 h-0">
@@ -186,6 +188,20 @@ export const DocumentSidebar = memo(function DocumentSidebar({
           )}
         </div>
       </div>
+
+      {/* 文档列表滚动进度条：滚动时出现、停手后淡出；贴右侧（最靠近分隔线） */}
+      {scrollMetrics && (
+        <div
+          aria-hidden
+          className="absolute right-0 inset-y-0 w-[3px] z-10 pointer-events-none transition-opacity duration-300 ease-out"
+          style={{ opacity: scrollbarActive ? 1 : 0 }}
+        >
+          <div
+            className="absolute right-0 left-0 mx-auto rounded-full bg-[#94a3b857]"
+            style={{ top: scrollMetrics.thumbTop, height: scrollMetrics.thumbHeight }}
+          />
+        </div>
+      )}
 
       <DocumentContextMenu
         contextMenu={contextMenu}

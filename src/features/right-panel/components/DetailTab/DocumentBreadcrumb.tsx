@@ -168,15 +168,15 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
       )
     }
 
-    return (
-      <div className="absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[300px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col">
+        return (
+          <div className="absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[280px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col [scrollbar-width:thin] [scrollbar-color:#94a3b857_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
         {children.map(child => {
           const Icon = child.icon || topoDocumentTypeIcon(child.type) || File
           const IconComp = typeof Icon === 'string' ? null : (Icon as React.ComponentType<{ size?: number }>)
           return (
             <button
               key={child.id}
-              className={`flex items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-[var(--color-hover-bg)] w-full truncate ${child.id === activeTopoDocumentId ? 'text-[var(--color-primary)] font-medium bg-[var(--color-primary-soft)]' : 'text-[var(--color-text)]'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-[var(--color-hover-bg)] w-full shrink-0 truncate ${child.id === activeTopoDocumentId ? 'text-[var(--color-primary)] font-medium bg-[var(--color-primary-soft)]' : 'text-[var(--color-text)]'}`}
               style={child.color && child.id !== activeTopoDocumentId ? { color: child.color } : undefined}
               onClick={(e) => {
                 e.stopPropagation()
@@ -206,7 +206,13 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
             <button
               className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-[var(--color-hover-bg)] transition-colors max-w-[120px] ${isOpen ? 'bg-[var(--color-hover-bg)] text-[var(--color-text)]' : ''} ${isLast ? 'text-[var(--color-text)]' : ''}`}
               style={!isLast && item.item?.color ? { color: item.item.color } : undefined}
+              title={item.isRoot ? '单击展开子文档' : '单击展开子文档，双击进入此文档'}
               onClick={() => setOpenDropdownId(isOpen ? null : item.id)}
+              onDoubleClick={(e) => {
+                // 双击面包屑项：直接进入（打开）该文档本身
+                e.preventDefault()
+                if (!item.isRoot) handleSelect(item.id)
+              }}
               onContextMenu={(e) => handleContextMenu(e, item.isRoot ? null : item.id)}
             >
               {(() => {

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
+import type { EditorPaperBackground } from '../../../../types/uiStoreTypes'
 
 const COLOR_PRESETS = ['#7f8c8d', '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6']
 
@@ -290,6 +291,43 @@ export function PresetButtonGrid<T extends { label: string }>({
           <button key={preset.label} type="button" className="h-8 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]" onClick={() => onApply(preset)}>{preset.label}</button>
         ))}
       </div>
+    </div>
+  )
+}
+
+export const PAPER_BACKGROUND_OPTIONS: Array<{ label: string; value: EditorPaperBackground }> = [
+  { label: '无', value: 'plain' },
+  { label: '横线', value: 'ruled' },
+  { label: '点阵', value: 'dot-grid' },
+  { label: '方格', value: 'grid' },
+  { label: '牛皮', value: 'kraft' },
+  { label: '手稿', value: 'manuscript' },
+]
+
+export function PaperBackgroundGrid({
+  value,
+  onChange,
+}: {
+  value: EditorPaperBackground
+  onChange: (v: EditorPaperBackground) => void
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {PAPER_BACKGROUND_OPTIONS.map((opt) => {
+        const active = value === opt.value
+        return (
+          <button
+            type="button"
+            key={opt.value}
+            className={`flex flex-col gap-1.5 rounded-md border p-1.5 cursor-pointer transition-all duration-75 ${active ? 'border-[var(--color-accent)] bg-[var(--color-selected-bg)]' : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] hover:bg-[var(--color-hover-bg)]'}`}
+            onClick={() => onChange(opt.value)}
+            aria-pressed={active}
+          >
+            <span className={`block h-9 w-full tm-paper-thumb tm-paper-thumb--${opt.value}`} />
+            <span className={`text-[11px] text-center ${active ? 'text-[var(--color-accent)] font-medium' : 'text-[var(--color-text-secondary)]'}`}>{opt.label}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }

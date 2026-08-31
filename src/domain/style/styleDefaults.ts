@@ -95,6 +95,7 @@ export const STYLE_CONFIG_DEFAULTS: StyleConfigDefaults = {
     headingSpacingRatio: 1.5,
     letterSpacing: -0.003,
     fontWeight: 400,
+    paperBackground: 'plain',
   },
   nodeSizeLimits: NODE_SIZE_LIMIT_DEFAULTS,
   nodeBadgeSize: 14,

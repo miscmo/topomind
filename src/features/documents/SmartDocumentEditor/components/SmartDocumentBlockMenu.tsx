@@ -10,6 +10,7 @@ import {
   getSmartDocumentBlockPlainText,
   writeClipboardBeforeMutation,
 } from '../smartDocumentUtils'
+import { SmartSubMenu, SmartSubMenuDropdown, SmartSubMenuTrigger } from './SmartBlockNoteMenu'
 
 function createTableBlock() {
   return {
@@ -189,11 +190,11 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
 
       {mode === 'edit' ? (
         <div className="tm-smart-block-menu__section">
-          <Components.Generic.Menu.Root position="right" sub>
-            <Components.Generic.Menu.Trigger sub>
+          <SmartSubMenu position="right">
+            <SmartSubMenuTrigger>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__row" subTrigger><span>缩进和对齐</span><span>›</span></Components.Generic.Menu.Item>
-            </Components.Generic.Menu.Trigger>
-            <Components.Generic.Menu.Dropdown sub className="bn-menu-dropdown tm-smart-block-menu__sub">
+            </SmartSubMenuTrigger>
+            <SmartSubMenuDropdown className="bn-menu-dropdown tm-smart-block-menu__sub">
               <Components.Generic.Menu.Item
                 className="tm-smart-block-menu__subitem"
                 {...disabledItemProps(!canUnnestTargetBlock)}
@@ -207,20 +208,20 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
               <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextAlignment)} checked={block.props?.textAlignment === 'left'} onClick={() => supportsTextAlignment && setAlignment('left')}><span>左对齐</span></Components.Generic.Menu.Item>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextAlignment)} checked={block.props?.textAlignment === 'center'} onClick={() => supportsTextAlignment && setAlignment('center')}><span>居中</span></Components.Generic.Menu.Item>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextAlignment)} checked={block.props?.textAlignment === 'right'} onClick={() => supportsTextAlignment && setAlignment('right')}><span>右对齐</span></Components.Generic.Menu.Item>
-            </Components.Generic.Menu.Dropdown>
-          </Components.Generic.Menu.Root>
-          <Components.Generic.Menu.Root position="right" sub>
-            <Components.Generic.Menu.Trigger sub>
+            </SmartSubMenuDropdown>
+          </SmartSubMenu>
+          <SmartSubMenu position="right">
+            <SmartSubMenuTrigger>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__row" subTrigger><span>颜色</span><span>›</span></Components.Generic.Menu.Item>
-            </Components.Generic.Menu.Trigger>
-            <Components.Generic.Menu.Dropdown sub className="bn-menu-dropdown tm-smart-block-menu__sub">
+            </SmartSubMenuTrigger>
+            <SmartSubMenuDropdown className="bn-menu-dropdown tm-smart-block-menu__sub">
               <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextColor)} checked={block.props?.textColor === 'default'} onClick={() => supportsTextColor && setTextColor('default')}><span>默认文字</span></Components.Generic.Menu.Item>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextColor)} checked={block.props?.textColor === 'red'} onClick={() => supportsTextColor && setTextColor('red')}><span>红色文字</span></Components.Generic.Menu.Item>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextColor)} checked={block.props?.textColor === 'blue'} onClick={() => supportsTextColor && setTextColor('blue')}><span>蓝色文字</span></Components.Generic.Menu.Item>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsBackgroundColor)} checked={block.props?.backgroundColor === 'yellow'} onClick={() => supportsBackgroundColor && setBackgroundColor('yellow')}><span>黄色背景</span></Components.Generic.Menu.Item>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsBackgroundColor)} checked={block.props?.backgroundColor === 'default'} onClick={() => supportsBackgroundColor && setBackgroundColor('default')}><span>清除背景</span></Components.Generic.Menu.Item>
-            </Components.Generic.Menu.Dropdown>
-          </Components.Generic.Menu.Root>
+            </SmartSubMenuDropdown>
+          </SmartSubMenu>
         </div>
       ) : null}
 
@@ -236,18 +237,18 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
 
       <div className="tm-smart-block-menu__section">
         {mode === 'edit' ? (
-          <Components.Generic.Menu.Root position="right" sub>
-            <Components.Generic.Menu.Trigger sub>
+          <SmartSubMenu position="right">
+            <SmartSubMenuTrigger>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__row" subTrigger><span>在下方插入</span><span>›</span></Components.Generic.Menu.Item>
-            </Components.Generic.Menu.Trigger>
-            <Components.Generic.Menu.Dropdown sub className="bn-menu-dropdown tm-smart-block-menu__sub">
+            </SmartSubMenuTrigger>
+            <SmartSubMenuDropdown className="bn-menu-dropdown tm-smart-block-menu__sub">
               {[...SMART_DOCUMENT_TEXT_ACTIONS, ...SMART_DOCUMENT_MEDIA_ACTIONS].map((action) => (
                 <Components.Generic.Menu.Item key={action.key} className="tm-smart-block-menu__subitem" onClick={() => insertBelow(action)}>
                   <span>{action.label}</span>
                 </Components.Generic.Menu.Item>
               ))}
-            </Components.Generic.Menu.Dropdown>
-          </Components.Generic.Menu.Root>
+            </SmartSubMenuDropdown>
+          </SmartSubMenu>
         ) : (
           <>
             <div className="tm-smart-block-menu__label tm-smart-block-menu__label--section">常用</div>

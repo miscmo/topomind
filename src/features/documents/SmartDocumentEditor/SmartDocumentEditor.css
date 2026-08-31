@@ -239,11 +239,30 @@
 
 .tm-smart-side-menu-hit-area {
   display: flex;
-  pointer-events: auto;
+  /* 常态必须可交互（!important 覆盖 BlockNote 默认给 .bn-side-menu 设的 pointer-events:none）。
+     块编辑菜单 withinPortal={false}，渲染在命中区内部，命中区若 none 菜单项会穿透下方 UI、
+     按钮也会彻底点不动。拖选期间的临时禁用由 body.tm-text-selecting 规则（同样 !important）负责。 */
+  pointer-events: auto !important;
 }
 
 .tm-smart-side-menu-hit-area .bn-side-menu {
   flex: none;
+  pointer-events: auto !important;
+}
+
+.tm-smart-side-menu-hit-area .bn-button {
+  pointer-events: auto !important;
+}
+
+/* 正文拖选进行中（body.tm-text-selecting，由 SmartDocumentEditor.tsx 在正文 mousedown
+   触发的拖选期间添加）：临时让命中区/侧菜单/按钮整体不参与指针事件，拖选经过左槽空白
+   或块编辑按钮时坐标落到下方正文、反查到“当前块开头”，避免误选“上方所有行”。
+   点击/拖拽按钮本身的 mousedown 不走此禁用路径（先 clear() 该状态），故菜单常态可点可交互；
+   此规则与上方常态规则都带 !important，靠更高特异性（多一个 .tm-text-selecting 类）在拖选时胜出。 */
+body.tm-text-selecting .tm-smart-side-menu-hit-area,
+body.tm-text-selecting .tm-smart-side-menu-hit-area .bn-side-menu,
+body.tm-text-selecting .tm-smart-side-menu-hit-area .bn-button {
+  pointer-events: none !important;
 }
 
 /* 侧边菜单（＋新建块 / ⠿ 拖拽手柄＝块编辑）按钮的交互反馈。
@@ -562,6 +581,32 @@
   color: inherit !important;
 }
 
+/* --- 代码块语法高亮：双主题 CSS 变量，浅色/深色自动切换 ---
+   Shiki 以 dual themes + defaultColor:false 输出（见 components/CustomCodeBlock.tsx），
+   token 的行内样式只写 CSS 变量 --shiki-light / --shiki-dark（以及对应的 font-* 变体），
+   不写死 color。这里按 html.dark 决定实际取用哪一组；深色用 github-dark-high-contrast，
+   配 #202a37 的代码块底色全部 token 对比度都在 6.8:1 以上。主题切换无需重新解析代码。
+
+   两个必要的防御：
+   1) `!important` —— token 行内样式有时会写死 color（例如 HMR 后仍是旧的「单主题」
+      highlighter 实例，parser 输出 color:#24292E），行内样式会压过普通 CSS 规则，
+      导致深色模式出现「深色背景 + 深色文字」的隐形代码。加 !important 才能覆盖。
+   2) var() 兜底 —— 变量缺失时回退到正文色，最差也只是「没有语法着色」而不是看不见。 */
+.bn-block-content[data-content-type="codeBlock"] .shiki {
+  color: var(--shiki-light, var(--color-text-primary)) !important;
+  font-style: var(--shiki-light-font-style, inherit);
+  font-weight: var(--shiki-light-font-weight, inherit);
+  text-decoration: var(--shiki-light-text-decoration, none);
+}
+
+html.dark .bn-block-content[data-content-type="codeBlock"] .shiki,
+html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki {
+  color: var(--shiki-dark, var(--color-text-primary)) !important;
+  font-style: var(--shiki-dark-font-style, inherit);
+  font-weight: var(--shiki-dark-font-weight, inherit);
+  text-decoration: var(--shiki-dark-text-decoration, none);
+}
+
 .smart-document-content .bn-editor [data-content-type="table"] th,
 .smart-document-content .bn-editor [data-content-type="table"] td {
   border-color: var(--color-border);
@@ -585,6 +630,12 @@
   box-shadow: var(--shadow-popover) !important;
   overflow-y: auto;
   color: var(--color-text-primary);
+  /* BlockNote 的 Mantine 菜单 withinPortal={false}，内联在编辑器 DOM 内，
+     z-index 走 Mantine 默认 popover 值（~300），远低于 CustomTitleBar 的
+     z-[3000]。在最上面的块点开时菜单贴着标题栏下沿，会被标题栏盖住上沿。
+     这里把菜单抬到标题栏之上。编辑器容器 .smart-document-content 是 relative
+     但不建新 stacking context，所以此 z-index 能直接与标题栏比较并胜出。 */
+  z-index: 4000 !important;
 }
 .tm-smart-block-menu__label {
   padding: 16px 18px 6px;
@@ -717,6 +768,8 @@
   backdrop-filter: blur(24px) !important;
   -webkit-backdrop-filter: blur(24px) !important;
   box-shadow: var(--shadow-popover) !important;
+  /* 子菜单跟随父菜单浮在标题栏之上（高于 4000 的父级、高于标题栏 3000） */
+  z-index: 4001 !important;
 }
 .tm-smart-block-menu__subitem {
   width: 100%;
@@ -1113,4 +1166,126 @@
 .smart-document-content .bn-block-content[data-content-type="checkListItem"] {
   margin-top: 4px;
   margin-bottom: 4px;
+}
+
+/* =========================================================================
+   编辑器纸张背景（Paper Background）
+   在“样式”面板中选择，写入 defaultEditorStyle.paperBackground，
+   由 SmartDocumentEditor 在滚动容器上挂 data-paper-bg 触发。
+   设计：纸张纹理直接铺满整个编辑器滚动区域（整页满铺，不再做居中卡片），
+   滚动容器即“纸面”，.bn-container/.bn-editor 保持透明，纹理在其后整片显示。
+   所有线条/网点颜色走 CSS 变量，浅色与深色主题分别定义，自动适配。
+   ========================================================================= */
+:root {
+  --paper-bg: #fdfcfa;
+  --paper-line: rgba(99, 115, 135, 0.16);
+  --paper-grid: rgba(99, 115, 135, 0.10);
+  --paper-dot: rgba(99, 115, 135, 0.30);
+  --paper-margin: rgba(214, 69, 59, 0.55);
+  --paper-kraft-bg: #ecdfc4;
+}
+.dark {
+  --paper-bg: #21242c;
+  --paper-line: rgba(255, 255, 255, 0.07);
+  --paper-grid: rgba(255, 255, 255, 0.045);
+  --paper-dot: rgba(255, 255, 255, 0.12);
+  --paper-margin: rgba(239, 108, 99, 0.45);
+  --paper-kraft-bg: #2f2a20;
+}
+
+/* 非 plain：纸张铺满整个编辑器滚动区域（整页满铺，覆盖原渐变桌面） */
+[data-paper-bg]:not([data-paper-bg="plain"]).tm-smart-editor-scroll {
+  background-color: var(--paper-bg) !important;
+  background-repeat: repeat !important;
+  background-attachment: local !important;
+}
+
+/* 横线笔记本：行距跟随正文行高 */
+[data-paper-bg="ruled"].tm-smart-editor-scroll {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--topomind-smart-line-height) * var(--topomind-smart-body-font-size) - 1px),
+    var(--paper-line) calc(var(--topomind-smart-line-height) * var(--topomind-smart-body-font-size))
+  ) !important;
+  background-position: 0 16px !important;
+}
+
+/* 点阵方格 */
+[data-paper-bg="dot-grid"].tm-smart-editor-scroll {
+  background-image: radial-gradient(var(--paper-dot) 1.1px, transparent 1.3px) !important;
+  background-size: 26px 26px !important;
+  background-position: 0 16px !important;
+}
+
+/* 矩阵方格 */
+[data-paper-bg="grid"].tm-smart-editor-scroll {
+  background-image:
+    repeating-linear-gradient(to right, transparent 0, transparent 25px, var(--paper-grid) 25px, var(--paper-grid) 26px),
+    repeating-linear-gradient(to bottom, transparent 0, transparent 25px, var(--paper-grid) 25px, var(--paper-grid) 26px) !important;
+  background-position: 0 16px !important;
+}
+
+/* 牛皮纸：暖色 + 极淡纤维纹理 */
+[data-paper-bg="kraft"].tm-smart-editor-scroll {
+  background-color: var(--paper-kraft-bg) !important;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(120, 90, 50, 0.04) 0, rgba(120, 90, 50, 0.04) 1px, transparent 1px, transparent 3px),
+    radial-gradient(circle at 25% 15%, rgba(255, 255, 255, 0.05), transparent 55%),
+    radial-gradient(circle at 80% 85%, rgba(0, 0, 0, 0.04), transparent 55%) !important;
+}
+
+/* 手稿纸：横线 + 左侧红色装订线（贴近编辑器左缘的正文起始列） */
+[data-paper-bg="manuscript"].tm-smart-editor-scroll {
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(var(--topomind-smart-line-height) * var(--topomind-smart-body-font-size) - 1px),
+      var(--paper-line) calc(var(--topomind-smart-line-height) * var(--topomind-smart-body-font-size))
+    ),
+    linear-gradient(
+      to right,
+      transparent 39px,
+      var(--paper-margin) 40px,
+      var(--paper-margin) 41px,
+      transparent 42px
+    ) !important;
+  background-position: 0 16px !important;
+}
+
+/* --- 样式面板中的纸张缩略图（与编辑器共用同一组 CSS 变量，自动适配主题） --- */
+.tm-paper-thumb {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-subtle);
+  box-sizing: border-box;
+}
+.tm-paper-thumb--plain {
+  background: linear-gradient(180deg, var(--color-surface), var(--color-bg));
+}
+.tm-paper-thumb--ruled {
+  background-color: var(--paper-bg);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 9px, var(--paper-line) 9px 10px);
+}
+.tm-paper-thumb--dot-grid {
+  background-color: var(--paper-bg);
+  background-image: radial-gradient(var(--paper-dot) 1px, transparent 1.4px);
+  background-size: 9px 9px;
+}
+.tm-paper-thumb--grid {
+  background-color: var(--paper-bg);
+  background-image:
+    repeating-linear-gradient(to right, transparent 0 8px, var(--paper-grid) 8px 9px),
+    repeating-linear-gradient(to bottom, transparent 0 8px, var(--paper-grid) 8px 9px);
+}
+.tm-paper-thumb--kraft {
+  background-color: var(--paper-kraft-bg);
+}
+.tm-paper-thumb--manuscript {
+  background-color: var(--paper-bg);
+  background-image:
+    repeating-linear-gradient(to bottom, transparent 0 9px, var(--paper-line) 9px 10px),
+    linear-gradient(to right, transparent 13px, var(--paper-margin) 13px 14px, transparent 14px);
 }

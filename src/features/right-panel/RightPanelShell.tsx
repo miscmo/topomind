@@ -18,11 +18,9 @@ export default memo(function RightPanelShell({ tabId, rightPanelTab, width, isAc
       <div className={rightPanelTab === 'detail' ? 'flex flex-1 min-h-0 flex-col overflow-hidden' : 'hidden'} aria-hidden={rightPanelTab !== 'detail'}>
         <DetailPanel tabId={tabId} isActive={isActive && rightPanelTab === 'detail'} />
       </div>
-      {rightPanelTab === 'style' && (
-        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-          <StyleSection />
-        </div>
-      )}
+      <div className={rightPanelTab === 'style' ? 'flex flex-1 min-h-0 flex-col overflow-hidden' : 'hidden'} aria-hidden={rightPanelTab !== 'style'}>
+        <StyleSection />
+      </div>
     </div>
   )
 })

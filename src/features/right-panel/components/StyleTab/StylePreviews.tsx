@@ -123,7 +123,10 @@ export function EdgeStylePreview({ style }: { style: DefaultEdgeStyle }) {
 export function EditorStylePreview({ style }: { style: DefaultEditorStyle }) {
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-3 shadow-[var(--shadow-sm)]">
-      <div className="text-[12px] font-semibold text-[var(--color-text-secondary)] mb-2">智能文档预览</div>
+      <div className="text-[12px] font-semibold text-[var(--color-text-secondary)] mb-2 flex items-center justify-between">
+        <span>智能文档预览</span>
+        <span className={`block h-5 w-9 tm-paper-thumb tm-paper-thumb--${style.paperBackground ?? 'plain'}`} />
+      </div>
       <div
         className="rounded-lg border border-[var(--color-border-subtle)] p-4 min-h-[132px]"
         style={{

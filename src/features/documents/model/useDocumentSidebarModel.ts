@@ -93,6 +93,10 @@ export function useDocumentSidebarModel({
   const stickySyncFrameRef = useRef<number | null>(null)
   const scrollPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastScrollTopRef = useRef(loadDocumentSidebarScrollTop(localStorage, nodeId))
+  // 文档列表滚动进度条（自动显隐）：度量 + 显隐状态
+  const [scrollMetrics, setScrollMetrics] = useState<{ trackHeight: number; thumbHeight: number; thumbTop: number } | null>(null)
+  const [scrollbarActive, setScrollbarActive] = useState(false)
+  const scrollbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const registerDocumentRow = useCallback((id: string, element: HTMLDivElement | null) => {
     if (element) rowElementsRef.current.set(id, element)
@@ -122,6 +126,24 @@ export function useDocumentSidebarModel({
     })
   }, [syncStickyAncestors])
 
+  // 计算文档列表滚动进度条度量（thumb 高度/位置）；无溢出则清空
+  const updateScrollMetrics = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const { scrollTop, clientHeight, scrollHeight } = container
+    if (scrollHeight <= clientHeight) {
+      setScrollMetrics(null)
+      return
+    }
+    const trackHeight = clientHeight
+    const thumbHeight = Math.max(24, (clientHeight * clientHeight) / scrollHeight)
+    const maxScroll = scrollHeight - clientHeight
+    const thumbTop = maxScroll > 0
+      ? (scrollTop / maxScroll) * (trackHeight - thumbHeight)
+      : 0
+    setScrollMetrics({ trackHeight, thumbHeight, thumbTop })
+  }, [])
+
   useLayoutEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
@@ -147,11 +169,13 @@ export function useDocumentSidebarModel({
     rowLayoutsRef.current = layouts
     rowLayoutByIdRef.current = new Map(layouts.map((layout) => [layout.row.node.id, layout]))
     syncStickyAncestors()
-  }, [inlineEdit, syncStickyAncestors, visibleTreeRows])
+    updateScrollMetrics()
+  }, [inlineEdit, syncStickyAncestors, updateScrollMetrics, visibleTreeRows])
 
   useEffect(() => () => {
     if (stickySyncFrameRef.current !== null) cancelAnimationFrame(stickySyncFrameRef.current)
     if (scrollPersistTimerRef.current !== null) clearTimeout(scrollPersistTimerRef.current)
+    if (scrollbarHideTimerRef.current !== null) clearTimeout(scrollbarHideTimerRef.current)
   }, [])
 
   useEffect(() => {
@@ -194,6 +218,7 @@ export function useDocumentSidebarModel({
       if (container) {
         container.scrollTop = savedScrollTop
         syncStickyAncestors()
+        updateScrollMetrics()
       }
     })
     return () => cancelAnimationFrame(frame)
@@ -209,7 +234,22 @@ export function useDocumentSidebarModel({
       scrollPersistTimerRef.current = null
       saveDocumentSidebarScrollTop(localStorage, nodeId, lastScrollTopRef.current)
     }, 180)
-  }, [nodeId, scheduleStickyAncestorSync])
+
+    // 进度条：有滚动即显示，停手后逐渐隐藏
+    updateScrollMetrics()
+    setScrollbarActive(true)
+    if (scrollbarHideTimerRef.current !== null) clearTimeout(scrollbarHideTimerRef.current)
+    scrollbarHideTimerRef.current = setTimeout(() => {
+      scrollbarHideTimerRef.current = null
+      setScrollbarActive(false)
+    }, 900)
+  }, [nodeId, scheduleStickyAncestorSync, updateScrollMetrics])
+
+  useEffect(() => {
+    const onResize = () => updateScrollMetrics()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [updateScrollMetrics])
 
   useEffect(() => () => {
     saveDocumentSidebarScrollTop(localStorage, nodeId, lastScrollTopRef.current)
@@ -506,6 +546,8 @@ export function useDocumentSidebarModel({
       stickyAncestorRows,
       draggedId,
       dragState,
+      scrollMetrics,
+      scrollbarActive,
     },
     refs: {
       inlineInputRef,
