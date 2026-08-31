@@ -86,7 +86,11 @@ export function buildMetaFromNodesEdges(
     lineMode: e.data?.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode,
     lineStyle: e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle,
     color: e.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color,
+    lineWidth: e.data?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth,
     arrow: e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow,
+    arrowSize: e.data?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize,
+    arrowShape: e.data?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape,
+    arrowPosition: e.data?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition,
     highlighted: e.data?.highlighted ?? false,
     faded: e.data?.faded ?? false,
   }))
@@ -161,20 +165,28 @@ export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
     const lineMode = e.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
     const lineStyle = e.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
     const color = e.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
+    const lineWidth = e.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth
     const arrow = e.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
+    const arrowSize = e.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize
+    const arrowShape = e.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape
+    const arrowPosition = e.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition
 
     return {
       id: e.id,
       source: e.sourceRef,
       target: e.targetRef,
-      ...buildEdgeView({ lineMode, lineStyle, color, arrow, weight: e.weight }),
+      ...buildEdgeView({ lineMode, lineStyle, color, lineWidth, arrow, arrowSize, arrowShape, arrowPosition, weight: e.weight }),
       data: {
         relation: e.relation,
         weight: e.weight,
         lineMode,
         lineStyle,
         color,
+        lineWidth,
         arrow,
+        arrowSize,
+        arrowShape,
+        arrowPosition,
         highlighted: e.highlighted ?? false,
         faded: e.faded ?? false,
       },

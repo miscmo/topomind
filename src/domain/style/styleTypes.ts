@@ -1,8 +1,18 @@
+import type { EdgeArrowPosition, EdgeArrowShape } from '../../types/graph'
+
 export interface DefaultEdgeStyle {
   lineMode: 'smoothstep' | 'straight'
   lineStyle: 'solid' | 'dashed'
   color: string
+  /** 线条粗细（px）；主线在此基础上按比例加粗 */
+  lineWidth: number
   arrow: boolean
+  /** 箭头长度（px） */
+  arrowSize: number
+  /** 箭头形状：实心三角 / 空心 V 形 */
+  arrowShape: EdgeArrowShape
+  /** 箭头位置：仅终点 / 仅起点 / 两端都有 */
+  arrowPosition: EdgeArrowPosition
 }
 
 export interface DefaultNodeStyle {

@@ -1,4 +1,3 @@
-import type { KnowledgeNode } from '../../types'
 import { logAction } from '../../core/log-backend'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
@@ -10,7 +9,6 @@ export interface SelectionOpsDeps {
 
 export function buildSelectionOperations(deps: SelectionOpsDeps) {
   const {
-    tabId,
     storeApi,
   } = deps
 

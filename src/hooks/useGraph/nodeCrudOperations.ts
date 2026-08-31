@@ -1,4 +1,4 @@
-import type { KnowledgeEdge, KnowledgeNode, KnowledgeNodeStyle, NodeSizingMode } from '../../types'
+import type { KnowledgeNodeStyle, NodeSizingMode } from '../../types'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
 import { generateId } from './graphBuilder'
@@ -12,7 +12,6 @@ import {
 import type { StorageApi } from './graphOperations'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
-import { tabStore } from '../../stores/tabs/tabStore'
 import { NODE_STYLE_NUMBER_LIMITS, clampNumber } from '../../domain/style/styleConstraints'
 
 function normalizeNodeStylePatch(style: KnowledgeNodeStyle): KnowledgeNodeStyle {
@@ -42,7 +41,6 @@ export interface NodeCrudOperationsDeps {
 
 export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
   const {
-    tabId,
     storage,
     getActiveGraphSession,
     loadRoom,

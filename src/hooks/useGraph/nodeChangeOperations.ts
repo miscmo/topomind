@@ -1,4 +1,3 @@
-import type { KnowledgeEdge, KnowledgeNode } from '../../types'
 import {
   captureGraphHistorySnapshot,
   commitGraphHistorySnapshot,
@@ -18,9 +17,7 @@ export interface NodeChangeOperationsDeps {
 
 export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
   const {
-    tabId,
     getActiveGraphSession,
-    saveNow,
     saveLater,
     storeApi,
   } = deps

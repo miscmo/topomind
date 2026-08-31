@@ -23,20 +23,41 @@ useThemeStore.getState().initializeTheme()
 bootstrapCommandRegistry()
 bootstrapPlugins()
 
-// Suppress harmless ResizeObserver loop limit exceeded error
+// Suppress harmless ResizeObserver loop warning.
+// It is emitted by the browser when a ResizeObserver callback resizes an observed
+// element within the same frame (e.g. dragging the right-panel resizer resizes the
+// BlockNote editor container, whose internal ResizeObserver re-fires). It has no
+// functional impact, so we keep it out of the console to avoid noise.
 const suppressResizeObserverError = () => {
+  const RO_LOOP = 'ResizeObserver loop'
+  const isRoLoop = (...args: any[]): boolean =>
+    args.some(
+      (a) =>
+        (typeof a === 'string' && a.includes(RO_LOOP)) ||
+        (a instanceof Error && typeof a.message === 'string' && a.message.includes(RO_LOOP)),
+    )
+
   const originalError = console.error
   console.error = (...args: any[]) => {
-    if (args[0] && typeof args[0] === 'string' && args[0].includes('ResizeObserver loop')) {
-      return
-    }
+    if (isRoLoop(...args)) return
     originalError.apply(console, args)
   }
-  window.addEventListener('error', (e) => {
-    if (e.message === 'ResizeObserver loop completed with undelivered notifications.' || e.message === 'ResizeObserver loop limit exceeded') {
+  const originalWarn = console.warn
+  console.warn = (...args: any[]) => {
+    if (isRoLoop(...args)) return
+    originalWarn.apply(console, args)
+  }
+
+  const onError = (e: ErrorEvent) => {
+    if (e?.message && e.message.includes(RO_LOOP)) {
+      // preventDefault cancels the browser's native console print for this error;
+      // stopImmediatePropagation prevents other listeners reacting to it.
+      e.preventDefault()
       e.stopImmediatePropagation()
     }
-  })
+  }
+  // capture phase so we run before any other listener
+  window.addEventListener('error', onError as EventListener, true)
 }
 suppressResizeObserverError()
 

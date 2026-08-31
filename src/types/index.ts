@@ -4,8 +4,8 @@
  * 对应 Vue 版本的数据结构，保证旧数据完全兼容。
  */
 export type { AppView } from './graph'
-export type { GraphChild, GraphEdge, GraphMeta } from './graph'
-export type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle } from './graph'
+export type { GraphChild, GraphEdge, GraphMeta, EdgeStylePatch } from './graph'
+export type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition } from './graph'
 export type {
   KnowledgeNodeData,
   KnowledgeNodeStyle,

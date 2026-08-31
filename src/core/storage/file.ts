@@ -1,7 +1,7 @@
 import { FSB } from '../fs-backend'
 import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem, TopoDocumentMetaPatch } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
-import type { EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
+import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle } from '../../types'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
 
 interface FSBGraphChild {
@@ -28,7 +28,11 @@ interface FSBGraphEdge {
   lineMode?: 'smoothstep' | 'straight'
   lineStyle?: 'solid' | 'dashed'
   color?: string
+  lineWidth?: number
   arrow?: boolean
+  arrowSize?: number
+  arrowShape?: EdgeArrowShape
+  arrowPosition?: EdgeArrowPosition
   highlighted?: boolean
   faded?: boolean
 }
@@ -73,7 +77,7 @@ async function updateCardName(rootDir: string, cardPath: string, newName: string
   }
 }
 
-export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
+export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
   const children = raw.children ?? {}
 
   const nodes: GraphMeta['nodes'] = {}
@@ -100,7 +104,8 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
   const edges: Array<{
     id: string; source: CardInfo; target: CardInfo; relation: EdgeRelation; weight: EdgeWeight
     lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'
-    color?: string; arrow?: boolean; highlighted?: boolean; faded?: boolean
+    color?: string; lineWidth?: number; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
+    highlighted?: boolean; faded?: boolean
   }> = (raw.edges ?? []).map(e => ({
     id: e.id,
     source: { ref: normalizeRef(e.source), name: '', updatedAt: undefined },
@@ -110,7 +115,11 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
     lineMode: e.lineMode,
     lineStyle: e.lineStyle,
     color: e.color,
+    lineWidth: e.lineWidth,
     arrow: e.arrow,
+    arrowSize: e.arrowSize,
+    arrowShape: e.arrowShape,
+    arrowPosition: e.arrowPosition,
     highlighted: e.highlighted,
     faded: e.faded,
   }))
@@ -127,12 +136,13 @@ export function convertFSBToGraph(raw: FSBGraphLike, roomRef = ''): GraphMeta {
   }
 }
 
-export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
+export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
   children?: Record<string, FSBGraphChild>
   edges?: Array<{
     id: string; source: string; target: string; relation: EdgeRelation; weight: EdgeWeight
     lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'
-    color?: string; arrow?: boolean; highlighted?: boolean; faded?: boolean
+    color?: string; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
+    highlighted?: boolean; faded?: boolean
   }>
   zoom?: number; pan?: { x: number; y: number }
 } {
@@ -167,7 +177,11 @@ export function convertGraphToFSB(meta: GraphMeta, roomRef = ''): {
       lineMode: e.lineMode,
       lineStyle: e.lineStyle,
       color: e.color,
+      lineWidth: e.lineWidth,
       arrow: e.arrow,
+      arrowSize: e.arrowSize,
+      arrowShape: e.arrowShape,
+      arrowPosition: e.arrowPosition,
       highlighted: e.highlighted,
       faded: e.faded,
     })),

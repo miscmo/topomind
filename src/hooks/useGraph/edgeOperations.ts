@@ -1,11 +1,12 @@
 import type { Connection } from '@xyflow/react'
-import type { EdgeLineMode, EdgeLineStyle, EdgeRelation, EdgeWeight, KnowledgeEdge, KnowledgeNode } from '../../types'
+import type { EdgeRelation, EdgeStylePatch, EdgeWeight, KnowledgeEdge } from '../../types'
 import { logAction } from '../../core/log-backend'
 import { buildEdgeView } from './edgeView'
 import type { GraphSession } from '../../stores/tabs/tabStore'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
+import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../../domain/style/styleConstraints'
 
 export interface EdgeOperationsDeps {
   getActiveGraphSession: () => GraphSession | undefined
@@ -17,7 +18,11 @@ export interface EdgeOperationsDeps {
 function withEdgeSelection(edge: KnowledgeEdge, selected: boolean): KnowledgeEdge {
   const color = edge.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
   const lineStyle = edge.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
+  const lineWidth = edge.data?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth
   const arrow = edge.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
+  const arrowSize = edge.data?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize
+  const arrowShape = edge.data?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape
+  const arrowPosition = edge.data?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition
   const weight = edge.data?.weight ?? 'minor'
 
   return {
@@ -26,7 +31,11 @@ function withEdgeSelection(edge: KnowledgeEdge, selected: boolean): KnowledgeEdg
       lineMode: edge.data?.lineMode,
       lineStyle,
       color,
+      lineWidth,
       arrow,
+      arrowSize,
+      arrowShape,
+      arrowPosition,
       weight,
       selected,
     }),
@@ -36,7 +45,11 @@ function withEdgeSelection(edge: KnowledgeEdge, selected: boolean): KnowledgeEdg
       weight,
       color,
       lineStyle,
+      lineWidth,
       arrow,
+      arrowSize,
+      arrowShape,
+      arrowPosition,
       selected,
     },
   } as KnowledgeEdge
@@ -45,7 +58,6 @@ function withEdgeSelection(edge: KnowledgeEdge, selected: boolean): KnowledgeEdg
 export function buildEdgeOperations(deps: EdgeOperationsDeps) {
   const {
     getActiveGraphSession,
-    saveNow,
     saveLater,
     storeApi,
   } = deps
@@ -53,26 +65,34 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
   const addEdge = async (
     connection: Connection,
     edgeId: string,
-    defaultStyle?: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean }
+    defaultStyle?: EdgeStylePatch
   ) => {
     const lineMode = defaultStyle?.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
     const lineStyle = defaultStyle?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
     const color = defaultStyle?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
+    const lineWidth = defaultStyle?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth
     const arrow = defaultStyle?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
+    const arrowSize = defaultStyle?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize
+    const arrowShape = defaultStyle?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape
+    const arrowPosition = defaultStyle?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition
     const newEdge: KnowledgeEdge = {
       id: edgeId,
       source: connection.source,
       target: connection.target,
       sourceHandle: connection.sourceHandle,
       targetHandle: connection.targetHandle,
-      ...buildEdgeView({ lineMode, lineStyle, color, arrow }),
+      ...buildEdgeView({ lineMode, lineStyle, color, lineWidth, arrow, arrowSize, arrowShape, arrowPosition }),
       data: {
         relation: '相关',
         weight: 'minor',
         lineMode,
         lineStyle,
         color,
+        lineWidth,
         arrow,
+        arrowSize,
+        arrowShape,
+        arrowPosition,
         highlighted: false,
         faded: false,
       },
@@ -116,7 +136,11 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
               lineMode: e.data?.lineMode,
               lineStyle: e.data?.lineStyle,
               color: e.data?.color,
+              lineWidth: e.data?.lineWidth,
               arrow: e.data?.arrow,
+              arrowSize: e.data?.arrowSize,
+              arrowShape: e.data?.arrowShape,
+              arrowPosition: e.data?.arrowPosition,
               weight,
               selected: e.data?.selected,
             }),
@@ -130,7 +154,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
 
   const updateEdgeStyle = async (
     edgeId: string,
-    style: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean; selected?: boolean }
+    style: EdgeStylePatch & { selected?: boolean }
   ) => {
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
@@ -139,7 +163,11 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       style.lineMode !== undefined ||
       style.lineStyle !== undefined ||
       style.color !== undefined ||
-      style.arrow !== undefined
+      style.lineWidth !== undefined ||
+      style.arrow !== undefined ||
+      style.arrowSize !== undefined ||
+      style.arrowShape !== undefined ||
+      style.arrowPosition !== undefined
     let changed = false
     const nextEdges = store.edges.map((e) => {
       if (e.id !== edgeId) return e
@@ -148,6 +176,18 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       const nextLineStyle = style.lineStyle ?? e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
       const nextLineMode = style.lineMode ?? e.data?.lineMode
       const nextArrow = style.arrow ?? e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
+      const nextLineWidth = clampNumber(
+        style.lineWidth ?? e.data?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth,
+        EDGE_LINE_WIDTH_LIMIT.min,
+        EDGE_LINE_WIDTH_LIMIT.max
+      )
+      const nextArrowSize = clampNumber(
+        style.arrowSize ?? e.data?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize,
+        EDGE_ARROW_SIZE_LIMIT.min,
+        EDGE_ARROW_SIZE_LIMIT.max
+      )
+      const nextArrowShape = style.arrowShape ?? e.data?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape
+      const nextArrowPosition = style.arrowPosition ?? e.data?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition
       const nextWeight = e.data?.weight ?? 'minor'
       const nextSelected = style.selected ?? currentSelected
       if (
@@ -155,6 +195,10 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
         nextLineStyle === (e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle) &&
         nextColor === (e.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color) &&
         nextArrow === (e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow) &&
+        nextLineWidth === (e.data?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth) &&
+        nextArrowSize === (e.data?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize) &&
+        nextArrowShape === (e.data?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape) &&
+        nextArrowPosition === (e.data?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition) &&
         nextSelected === currentSelected
       ) {
         return e
@@ -166,7 +210,11 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
           lineMode: nextLineMode,
           lineStyle: nextLineStyle,
           color: nextColor,
+          lineWidth: nextLineWidth,
           arrow: nextArrow,
+          arrowSize: nextArrowSize,
+          arrowShape: nextArrowShape,
+          arrowPosition: nextArrowPosition,
           weight: nextWeight,
           selected: nextSelected,
         }),
@@ -178,6 +226,11 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
           color: nextColor,
           lineStyle: nextLineStyle,
           arrow: nextArrow,
+          // 放在 ...style 之后，确保存进去的是 clamp/兜底后的值
+          lineWidth: nextLineWidth,
+          arrowSize: nextArrowSize,
+          arrowShape: nextArrowShape,
+          arrowPosition: nextArrowPosition,
           selected: nextSelected,
         },
       } as KnowledgeEdge

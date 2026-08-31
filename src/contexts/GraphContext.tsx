@@ -8,7 +8,7 @@
  */
 import { createContext, useContext, useMemo, type Context } from 'react'
 import { useGraph } from '../hooks/useGraph'
-import type { KnowledgeNodeData, KnowledgeNodeStyle, EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, NodeSizingMode } from '../types'
+import type { KnowledgeNodeData, KnowledgeNodeStyle, EdgeRelation, EdgeWeight, EdgeStylePatch, NodeSizingMode } from '../types'
 import type { Node, Edge, NodeChange, EdgeChange, Connection, FinalConnectionState } from '@xyflow/react'
 
 export interface GraphContextValue {
@@ -24,6 +24,7 @@ export interface GraphContextValue {
   onConnect: (connection: Connection) => void
   onNodeClick: (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => void
   onEdgeClick: (event: React.MouseEvent, edge: Edge) => void
+  selectEdge: (edgeId: string) => void
   onPaneClick: () => void
   onConnectStart: (event: unknown, params: { nodeId?: string | null }) => void
   onConnectEnd: (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => void
@@ -45,7 +46,7 @@ export interface GraphContextValue {
 
   // Edge operations
   updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => void
-  updateEdgeStyle: (edgeId: string, style: { lineMode?: EdgeLineMode; lineStyle?: EdgeLineStyle; color?: string; arrow?: boolean; selected?: boolean }) => void
+  updateEdgeStyle: (edgeId: string, style: EdgeStylePatch & { selected?: boolean }) => void
 
   // Persistence
   flushCurrentRoomSave: () => Promise<void>
@@ -68,6 +69,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     onConnect: graph.onConnect,
     onNodeClick: graph.onNodeClick as GraphContextValue['onNodeClick'],
     onEdgeClick: graph.onEdgeClick as GraphContextValue['onEdgeClick'],
+    selectEdge: graph.selectEdge,
     onPaneClick: graph.onPaneClick,
     onConnectStart: graph.onConnectStart,
     onConnectEnd: graph.onConnectEnd,

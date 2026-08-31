@@ -11,7 +11,6 @@
  * - room navigation
  */
 import { useCallback, useMemo, useRef } from 'react'
-import type { KnowledgeNode, KnowledgeEdge } from '../types'
 import { useGraphUiStore } from '../stores/graphUiStore'
 import { tabStore } from '../stores/tabs/tabStore'
 import { useStorage, type Store } from '../core/storage'
@@ -22,9 +21,8 @@ import { useGraphRoomLoader } from './useGraph/useGraphRoomLoader'
 import { useGraphStorageApi } from './useGraph/useGraphStorageApi'
 import { useGraphPersistence } from './useGraph/useGraphPersistence'
 import { useGraphStoreApi } from '../stores/graphStore'
-import type { GraphState } from './useGraph/types'
-import { generateId } from './useGraph/graphBuilder'
 
+import { generateId } from './useGraph/graphBuilder'
 export function useGraph(tabId: string) {
   const storeApi = useGraphStoreApi()
   const storage = useStorage() as Store
@@ -113,6 +111,7 @@ export function useGraph(tabId: string) {
     onConnectEnd: graphEvents.onConnectEnd,
     onNodeClick: graphEvents.onNodeClick,
     onEdgeClick: graphEvents.onEdgeClick,
+    selectEdge: graphEvents.selectEdge,
     onPaneClick: graphEvents.onPaneClick,
     navigateToChildRoom: graphEvents.navigateToChildRoom,
     onNodeContextMenu: graphEvents.onNodeContextMenu,
@@ -144,6 +143,7 @@ export function useGraph(tabId: string) {
     graphEvents.onConnectEnd,
     graphEvents.onNodeClick,
     graphEvents.onEdgeClick,
+    graphEvents.selectEdge,
     graphEvents.onPaneClick,
     graphEvents.navigateToChildRoom,
     graphEvents.onNodeContextMenu,

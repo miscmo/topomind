@@ -6,7 +6,16 @@ import type { TopoDocumentType } from '../topoDocumentTypes'
 
 export interface VaultConfig {
   edgeDefaultsVersion?: number
-  defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
+  defaultEdgeStyle?: {
+    lineMode?: 'smoothstep' | 'straight'
+    lineStyle?: 'solid' | 'dashed'
+    color?: string
+    lineWidth?: number
+    arrow?: boolean
+    arrowSize?: number
+    arrowShape?: 'solid' | 'hollow'
+    arrowPosition?: 'end' | 'start' | 'both'
+  }
   defaultNodeStyle?: {
     headerFontSize?: number
     bodyFontSize?: number

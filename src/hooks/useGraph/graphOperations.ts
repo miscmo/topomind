@@ -4,7 +4,6 @@
  * Extracted from useGraph.ts to keep the hook focused on coordination.
  * All functions here deal with pure state transformations and storage I/O.
  */
-import type { KnowledgeNode, KnowledgeEdge } from '../../types'
 import type { GraphMeta } from '../../core/storage'
 import { buildMetaFromNodesEdges } from './graphBuilder'
 import { buildNodeCrudOperations } from './nodeCrudOperations'

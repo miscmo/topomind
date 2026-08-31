@@ -1,4 +1,4 @@
-import type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, KnowledgeNodeStyle, NodeSizingMode } from '../../types'
+import type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, NodeSizingMode } from '../../types'
 
 export interface CardInfo {
   ref: string
@@ -41,7 +41,13 @@ export interface RoomGraphEdge {
   lineMode?: EdgeLineMode
   lineStyle?: EdgeLineStyle
   color?: string
+  /** 线条粗细（px） */
+  lineWidth?: number
   arrow?: boolean
+  /** 箭头长度（px） */
+  arrowSize?: number
+  arrowShape?: EdgeArrowShape
+  arrowPosition?: EdgeArrowPosition
   highlighted?: boolean
   faded?: boolean
 }
@@ -76,7 +82,13 @@ export interface KBEdge {
   lineMode?: EdgeLineMode
   lineStyle?: EdgeLineStyle
   color?: string
+  /** 线条粗细（px） */
+  lineWidth?: number
   arrow?: boolean
+  /** 箭头长度（px） */
+  arrowSize?: number
+  arrowShape?: EdgeArrowShape
+  arrowPosition?: EdgeArrowPosition
   highlighted?: boolean
   faded?: boolean
 }

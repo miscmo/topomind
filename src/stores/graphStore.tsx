@@ -309,7 +309,7 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
 }), {
   partialize: (state) => ({ nodes: state.nodes, edges: state.edges, historyRevision: state.historyRevision }),
   limit: 20, // Keep max 20 history steps to reduce memory usage
-  onSave: (pastState, currentState) => {
+  onSave: (_pastState, _currentState) => {
     // Optional: hook for when a state is saved to history
   },
   equality: areGraphHistorySnapshotsEqual

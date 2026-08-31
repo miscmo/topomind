@@ -31,7 +31,7 @@ function _toServiceLevel(level: string): 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' {
   return map[level] ?? 'INFO'
 }
 
-function _extractMessage(module: string, level: string, ...args: unknown[]) {
+function _extractMessage(_module: string, _level: string, ...args: unknown[]) {
   const parts = args.map((a) => {
     if (a === undefined) return 'undefined'
     if (a === null) return 'null'

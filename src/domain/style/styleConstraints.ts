@@ -16,6 +16,18 @@ export const NODE_SIZE_LIMIT_DEFAULTS: NodeSizeLimits = {
 
 export const NODE_BADGE_SIZE_LIMIT = { min: 8, max: 28 }
 
+/** 连线箭头长度（px）取值范围 */
+export const EDGE_ARROW_SIZE_LIMIT = { min: 6, max: 36, step: 1 }
+
+/** 连线线条粗细（px）取值范围 */
+export const EDGE_LINE_WIDTH_LIMIT = { min: 0.5, max: 8, step: 0.1 }
+
+/**
+ * 主线（weight=main）相对基础线宽的加粗倍率。
+ * 默认 1.2 × 1.25 = 1.5，与改造前主线硬编码的 1.5 一致。
+ */
+export const MAIN_EDGE_WIDTH_RATIO = 1.25
+
 export const EDITOR_STYLE_NUMBER_LIMITS: Record<keyof Pick<DefaultEditorStyle, 'fontSize' | 'lineHeight' | 'contentWidth' | 'blockSpacing' | 'headingSpacingRatio' | 'letterSpacing' | 'fontWeight'>, { min: number; max: number; step?: number }> = {
   fontSize: { min: 10, max: 36 },
   lineHeight: { min: 1, max: 3, step: 0.1 },

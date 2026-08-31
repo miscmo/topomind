@@ -1,5 +1,6 @@
 import type { CardInfo, GraphMeta, KBEdge } from './model'
-import type { EdgeLineMode, EdgeLineStyle, EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
+import type { EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
+import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../style/styleConstraints.ts'
 
 const DEFAULT_VIEWPORT = { zoom: 1, pan: { x: 0, y: 0 } }
 const DEFAULT_NODE_SIZE = { width: 120, height: 52 }
@@ -39,6 +40,24 @@ function normalizeLineMode(value: unknown): EdgeLineMode | undefined {
 
 function normalizeLineStyle(value: unknown): EdgeLineStyle | undefined {
   return value === 'solid' || value === 'dashed' ? value : undefined
+}
+
+function normalizeArrowShape(value: unknown): EdgeArrowShape | undefined {
+  return value === 'solid' || value === 'hollow' ? value : undefined
+}
+
+function normalizeArrowPosition(value: unknown): EdgeArrowPosition | undefined {
+  return value === 'end' || value === 'start' || value === 'both' ? value : undefined
+}
+
+function normalizeLineWidth(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return clampNumber(value, EDGE_LINE_WIDTH_LIMIT.min, EDGE_LINE_WIDTH_LIMIT.max)
+}
+
+function normalizeArrowSize(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return clampNumber(value, EDGE_ARROW_SIZE_LIMIT.min, EDGE_ARROW_SIZE_LIMIT.max)
 }
 
 function normalizeCard(value: unknown, fallbackRef: string): CardInfo {
@@ -118,6 +137,10 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       lineStyle: normalizeLineStyle(rawEdge.lineStyle),
       color: typeof rawEdge.color === 'string' ? rawEdge.color : undefined,
       arrow: typeof rawEdge.arrow === 'boolean' ? rawEdge.arrow : undefined,
+      lineWidth: normalizeLineWidth(rawEdge.lineWidth),
+      arrowSize: normalizeArrowSize(rawEdge.arrowSize),
+      arrowShape: normalizeArrowShape(rawEdge.arrowShape),
+      arrowPosition: normalizeArrowPosition(rawEdge.arrowPosition),
       highlighted: typeof rawEdge.highlighted === 'boolean' ? rawEdge.highlighted : undefined,
       faded: typeof rawEdge.faded === 'boolean' ? rawEdge.faded : undefined,
     })

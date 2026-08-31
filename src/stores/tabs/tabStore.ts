@@ -1,6 +1,5 @@
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { create } from 'zustand'
-import type { StoreApi } from 'zustand'
 import {
   createTabLifecycleActions,
   createTabRoomActions,

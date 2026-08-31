@@ -1,5 +1,5 @@
 import type { StyleConfigDefaults } from './styleTypes'
-import { NODE_SIZE_LIMIT_DEFAULTS } from './styleConstraints'
+import { NODE_SIZE_LIMIT_DEFAULTS } from './styleConstraints.ts'
 
 export const EDITOR_FONT_FAMILIES = {
   documentSans: '"Inter", "SF Pro Display", "PingFang SC", "Helvetica Neue", "Microsoft YaHei", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
@@ -60,7 +60,14 @@ export const STYLE_CONFIG_DEFAULTS: StyleConfigDefaults = {
     lineMode: 'straight',
     lineStyle: 'solid',
     color: '#7f8c8d',
+    // 基础线宽；主线按 1.25 倍加粗 → 次线 1.2 / 主线 1.5，与改造前完全一致
+    lineWidth: 1.2,
     arrow: true,
+    // 形状/位置默认值沿用改造前 FloatingEdge 的硬编码表现（空心箭头、仅终点），
+    // 保证已有图谱外观不因本次改动而变化。
+    arrowSize: 12,
+    arrowShape: 'hollow',
+    arrowPosition: 'end',
   },
   defaultNodeStyle: {
     headerFontSize: 11,

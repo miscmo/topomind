@@ -12,19 +12,7 @@ import { PERFORMANCE_METRIC_DEFINITIONS, extractPerformanceSamples } from '@/sha
 import { PluginManager } from './host/pluginManager'
 import type { PluginDiagnostics as HostPluginDiagnostics, RuntimeBindingRecord } from './host/pluginTypes'
 import { getDefaultSecondaryViewTabId, getLegacySecondaryView } from './secondaryViews'
-import type {
-  LearningDailyRecord,
-  LearningSessionContextSnapshot,
-  LearningSessionSnapshot,
-  LearningStateSnapshot,
-  LearningStatsMetaSnapshot,
-  LogEntrySnapshot,
-  LogQueryInput,
-  PerformanceMetricDefinition,
-  PerformanceSample,
-  PluginDiagnosticsSnapshot,
-  PluginRuntimeRecordSnapshot,
-} from './public/api'
+import type { LearningDailyRecord, LearningSessionContextSnapshot, LearningSessionSnapshot, LearningStateSnapshot, LearningStatsMetaSnapshot, LogEntrySnapshot, PerformanceMetricDefinition, PerformanceSample, PluginDiagnosticsSnapshot, PluginRuntimeRecordSnapshot } from './public/api'
 import { useTabStore } from '@/stores/tabs/tabStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 

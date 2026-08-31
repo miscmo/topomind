@@ -4,7 +4,6 @@ import { tabStore } from '../../stores/tabs/tabStore'
 import { logAction } from '../../core/log-backend'
 import { markPerformanceMetricStart, PERFORMANCE_METRICS } from '../../core/performance-log'
 import type { KnowledgeNodeData } from '../../types'
-import type { RightPanelTab } from '../../types/uiStoreTypes'
 import { generateId } from './graphBuilder'
 import type { GraphOperations } from './graphOperations'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
@@ -176,6 +175,18 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     [setSelectedEdgeId, ops]
   )
 
+  // 程序化选中某条连线（与 onEdgeClick 等价），供右键菜单"连线样式"等入口复用：
+  // 取消节点选中、在画布高亮该连线、并把 selectedEdgeId 写入 UI store，
+  // 右侧面板的样式设置模型会据此自动切到"连线"Tab 并展开"当前连线样式"。
+  const selectEdge = useCallback(
+    (edgeId: string) => {
+      ops.deselectNode()
+      ops.setSelectedEdgeInGraph(edgeId)
+      setSelectedEdgeId(edgeId)
+    },
+    [ops, setSelectedEdgeId]
+  )
+
   const onPaneClick = useCallback(() => {
     ops.deselectNode()
     resetConnectTargetHighlight()
@@ -258,6 +269,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     onConnectEnd,
     onNodeClick,
     onEdgeClick,
+    selectEdge,
     onPaneClick,
     navigateToChildRoom,
     onNodeContextMenu,

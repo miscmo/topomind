@@ -61,6 +61,12 @@ import {
   getDirtyState,
   registerTabSaver,
 } from '../src/core/close-guard.ts'
+import { normalizeDefaultEdgeStyle } from '../src/domain/style/normalizeStyleConfig.ts'
+import { normalizeGraphMeta } from '../src/domain/graph/normalizeGraphMeta.ts'
+import { STYLE_CONFIG_DEFAULTS } from '../src/domain/style/styleDefaults.ts'
+import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, MAIN_EDGE_WIDTH_RATIO } from '../src/domain/style/styleConstraints.ts'
+import { buildEdgeView } from '../src/hooks/useGraph/edgeView.ts'
+import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../src/stores/themeStore.ts'
 
 const node = (id: string, overrides: Partial<FlowchartCell> = {}): FlowchartCell => ({
   id,
@@ -859,6 +865,111 @@ const edge = (
   const next = getSmartDocumentOutlineAndStats(editor, cache)
   assert.equal(next.stats.blocks, 1)
   assert.equal(cache.has('p1'), false)
+}
+
+// 连线箭头配置：旧存档兼容 + 取值收敛 + 视图映射
+{
+  // 1) 旧配置没有箭头字段时，必须回落到默认值（不改变既有图谱外观）
+  const legacy = normalizeDefaultEdgeStyle({ lineMode: 'straight', lineStyle: 'solid', color: '#7f8c8d', arrow: true }, 2)
+  assert.deepEqual(legacy, {
+    lineMode: 'straight',
+    lineStyle: 'solid',
+    color: '#7f8c8d',
+    lineWidth: STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth,
+    arrow: true,
+    arrowSize: STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize,
+    arrowShape: STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape,
+    arrowPosition: STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition,
+  })
+
+  // 2) 非法/越界取值要被收敛，不能穿透到渲染层
+  const sanitized = normalizeDefaultEdgeStyle({ arrowSize: 9999, arrowShape: 'star', arrowPosition: 'middle' })
+  assert.equal(sanitized.arrowSize, EDGE_ARROW_SIZE_LIMIT.max)
+  assert.equal(sanitized.arrowShape, STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape)
+  assert.equal(sanitized.arrowPosition, STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition)
+
+  // 3) 存档里的箭头配置要能被读回，且越界值被 clamp
+  const meta = normalizeGraphMeta({
+    nodes: {},
+    edges: [
+      { id: 'e1', source: { ref: 'a' }, target: { ref: 'b' }, arrow: true, arrowSize: 24, arrowShape: 'solid', arrowPosition: 'both' },
+      { id: 'e2', source: { ref: 'a' }, target: { ref: 'c' }, arrowSize: 1, arrowShape: 'bogus', arrowPosition: 'sideways' },
+    ],
+    viewport: {},
+  })
+  assert.equal(meta.edges[0].arrowSize, 24)
+  assert.equal(meta.edges[0].arrowShape, 'solid')
+  assert.equal(meta.edges[0].arrowPosition, 'both')
+  assert.equal(meta.edges[1].arrowSize, EDGE_ARROW_SIZE_LIMIT.min)
+  assert.equal(meta.edges[1].arrowShape, undefined)
+  assert.equal(meta.edges[1].arrowPosition, undefined)
+
+  // 4) 视图映射：形状->marker 类型、位置->markerStart/markerEnd
+  const solidEnd = buildEdgeView({ arrow: true, arrowShape: 'solid', arrowPosition: 'end', arrowSize: 20 })
+  assert.equal(solidEnd.markerEnd?.type, 'arrowclosed')
+  assert.equal(solidEnd.markerStart, undefined)
+  assert.equal(solidEnd.markerEnd?.width, 20)
+
+  const hollowBoth = buildEdgeView({ arrow: true, arrowShape: 'hollow', arrowPosition: 'both' })
+  assert.equal(hollowBoth.markerEnd?.type, 'arrow')
+  assert.equal(hollowBoth.markerStart?.type, 'arrow')
+
+  const noArrow = buildEdgeView({ arrow: false, arrowPosition: 'both' })
+  assert.equal(noArrow.markerEnd, undefined)
+  assert.equal(noArrow.markerStart, undefined)
+}
+
+// 连线线条粗细：旧存档兼容 + 主线加粗比例 + 边界收敛
+{
+  // 1) 旧配置没有 lineWidth 时回落默认，且次线 1.2 / 主线 1.5 与改造前硬编码值一致
+  const legacy = normalizeDefaultEdgeStyle({ lineMode: 'straight', lineStyle: 'solid', color: '#7f8c8d', arrow: true }, 2)
+  assert.equal(legacy.lineWidth, 1.2)
+  assert.equal(buildEdgeView({ lineWidth: legacy.lineWidth, weight: 'minor' }).style?.strokeWidth, 1.2)
+  assert.equal(buildEdgeView({ lineWidth: legacy.lineWidth, weight: 'main' }).style?.strokeWidth, 1.5)
+
+  // 2) 越界取值收敛到边界
+  assert.equal(normalizeDefaultEdgeStyle({ lineWidth: 999 }).lineWidth, EDGE_LINE_WIDTH_LIMIT.max)
+  assert.equal(normalizeDefaultEdgeStyle({ lineWidth: -3 }).lineWidth, EDGE_LINE_WIDTH_LIMIT.min)
+
+  // 3) 主线始终比次线粗，且随用户设定等比放大
+  const thick = { minor: buildEdgeView({ lineWidth: 4, weight: 'minor' }).style?.strokeWidth, main: buildEdgeView({ lineWidth: 4, weight: 'main' }).style?.strokeWidth }
+  assert.equal(thick.minor, 4)
+  assert.equal(thick.main, 4 * MAIN_EDGE_WIDTH_RATIO)
+  assert.ok((thick.main as number) > (thick.minor as number))
+
+  // 4) 存档读回保留线宽，越界值被 clamp
+  const meta = normalizeGraphMeta({
+    nodes: {},
+    edges: [
+      { id: 'e1', source: { ref: 'a' }, target: { ref: 'b' }, lineWidth: 3 },
+      { id: 'e2', source: { ref: 'a' }, target: { ref: 'c' }, lineWidth: 0.01 },
+    ],
+    viewport: {},
+  })
+  assert.equal(meta.edges[0].lineWidth, 3)
+  assert.equal(meta.edges[1].lineWidth, EDGE_LINE_WIDTH_LIMIT.min)
+}
+
+// 主题收归为浅色/深色两套：已下线主题必须迁移到正确的一套，否则菜单勾选会悬空
+{
+  assert.equal(LIGHT_THEME, 'github-light')
+  assert.equal(DARK_THEME, 'dark')
+  assert.equal(isDarkTheme(DARK_THEME), true)
+  assert.equal(isDarkTheme(LIGHT_THEME), false)
+
+  for (const retired of ['light', 'notion-light', 'linear-light', 'nord-light', 'rose-pine-dawn', 'catppuccin-latte', 'solarized-light']) {
+    assert.equal(migrateRetiredTheme(retired), LIGHT_THEME, `${retired} 应迁移到浅色`)
+  }
+  for (const retired of ['dracula', 'monokai', 'github-dark', 'solarized-dark', 'one-dark-pro', 'tokyo-night', 'catppuccin-mocha']) {
+    assert.equal(migrateRetiredTheme(retired), DARK_THEME, `${retired} 应迁移到深色`)
+  }
+
+  // 迁移结果必须仍属于当前支持的两套，且当前主题本身不应被当成已下线主题
+  assert.equal(migrateRetiredTheme('tokyo-night'), DARK_THEME)
+  assert.equal(migrateRetiredTheme('notion-light'), LIGHT_THEME)
+  assert.equal(migrateRetiredTheme(LIGHT_THEME), null)
+  assert.equal(migrateRetiredTheme(DARK_THEME), null)
+  assert.equal(migrateRetiredTheme('unknown-theme'), null)
 }
 
 console.log('Critical regression checks verified')

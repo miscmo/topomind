@@ -38,6 +38,23 @@ export type NodeSizingMode = 'auto' | 'manual'
  */
 export type EdgeLineMode = 'smoothstep' | 'straight'
 export type EdgeLineStyle = 'solid' | 'dashed'
+/** 箭头形状：实心三角 / 空心 V 形 */
+export type EdgeArrowShape = 'solid' | 'hollow'
+/** 箭头位置：仅终点 / 仅起点 / 两端都有 */
+export type EdgeArrowPosition = 'end' | 'start' | 'both'
+
+/** 连线可编辑的样式字段：新建连线与更新连线样式共用 */
+export interface EdgeStylePatch {
+  lineMode?: EdgeLineMode
+  lineStyle?: EdgeLineStyle
+  color?: string
+  /** 线条粗细（px），主线会在此基础上按比例加粗 */
+  lineWidth?: number
+  arrow?: boolean
+  arrowSize?: number
+  arrowShape?: EdgeArrowShape
+  arrowPosition?: EdgeArrowPosition
+}
 
 export interface GraphEdge {
   id: string
@@ -48,7 +65,13 @@ export interface GraphEdge {
   lineMode?: EdgeLineMode
   lineStyle?: EdgeLineStyle
   color?: string
+  /** 线条粗细（px） */
+  lineWidth?: number
   arrow?: boolean
+  /** 箭头长度（px） */
+  arrowSize?: number
+  arrowShape?: EdgeArrowShape
+  arrowPosition?: EdgeArrowPosition
   /** 高亮状态（搜索/选中连线时置 true） */
   highlighted?: boolean
   /** 淡化状态（其他连线淡化时置 true） */
@@ -141,7 +164,13 @@ export type KnowledgeEdge = Edge<{
   lineMode?: EdgeLineMode
   lineStyle?: EdgeLineStyle
   color?: string
+  /** 线条粗细（px） */
+  lineWidth?: number
   arrow?: boolean
+  /** 箭头长度（px） */
+  arrowSize?: number
+  arrowShape?: EdgeArrowShape
+  arrowPosition?: EdgeArrowPosition
   highlighted?: boolean
   faded?: boolean
   /** 选中状态（运行时状态，不持久化） */

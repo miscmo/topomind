@@ -1,4 +1,4 @@
-import type { KBTab, RoomSnapshot, RoomTarget, Tab } from './tabTypes'
+import type { KBTab, RoomSnapshot, RoomTarget } from './tabTypes'
 
 export function restoreRoomState(tab: KBTab, roomState: RoomSnapshot): KBTab {
   return {

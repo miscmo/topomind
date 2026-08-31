@@ -1,6 +1,6 @@
 import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, StyleConfigDefaults } from './styleTypes'
-import { STYLE_CONFIG_DEFAULTS } from './styleDefaults'
-import { EDITOR_STYLE_NUMBER_LIMITS, NODE_BADGE_SIZE_LIMIT, NODE_STYLE_NUMBER_LIMITS, clampNumber, finiteNumber } from './styleConstraints'
+import { STYLE_CONFIG_DEFAULTS } from './styleDefaults.ts'
+import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, EDITOR_STYLE_NUMBER_LIMITS, NODE_BADGE_SIZE_LIMIT, NODE_STYLE_NUMBER_LIMITS, clampNumber, finiteNumber } from './styleConstraints.ts'
 
 type RecordLike = Record<string, unknown>
 
@@ -16,6 +16,22 @@ export function normalizeDefaultEdgeStyle(raw: unknown, edgeDefaultsVersion?: nu
     lineStyle: style.lineStyle === 'dashed' ? 'dashed' : defaults.lineStyle,
     color: typeof style.color === 'string' ? style.color : defaults.color,
     arrow: edgeDefaultsVersion === 2 && typeof style.arrow === 'boolean' ? style.arrow : defaults.arrow,
+    // 线宽与箭头三个字段都是后加的，旧存档里没有，统一回落默认值后参与 clamp。
+    lineWidth: clampNumber(
+      finiteNumber(style.lineWidth, defaults.lineWidth),
+      EDGE_LINE_WIDTH_LIMIT.min,
+      EDGE_LINE_WIDTH_LIMIT.max
+    ),
+    arrowSize: clampNumber(
+      finiteNumber(style.arrowSize, defaults.arrowSize),
+      EDGE_ARROW_SIZE_LIMIT.min,
+      EDGE_ARROW_SIZE_LIMIT.max
+    ),
+    arrowShape: style.arrowShape === 'solid' || style.arrowShape === 'hollow' ? style.arrowShape : defaults.arrowShape,
+    arrowPosition:
+      style.arrowPosition === 'end' || style.arrowPosition === 'start' || style.arrowPosition === 'both'
+        ? style.arrowPosition
+        : defaults.arrowPosition,
   }
 }
 

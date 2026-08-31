@@ -86,3 +86,9 @@ body{display:flex;flex-direction:column}
 #root{width:100%;height:100%;display:flex;flex-direction:column}
 .react-flow__pane{cursor:default!important}
 .react-flow__pane.dragging{cursor:grabbing!important}
+
+/* 画布视口常驻 GPU 合成层：平移/缩放只做合成、不做 layout+paint，
+   避免“刚开始拖动”那一下浏览器首帧 layout+paint 大量可见节点导致的拖拽漂移/不跟手 */
+.react-flow__viewport{
+  will-change:transform;
+}
