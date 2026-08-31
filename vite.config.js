@@ -97,9 +97,51 @@ export default defineConfig({
           brotliSize: true,
         }),
       ],
-      // Use default Vite chunking
-      output: {},
+      // Split heavy, independently-cacheable libraries into their own chunks so
+      // the initial/main chunk stays smaller and the editor bundle can be cached
+      // separately. Each module is assigned to exactly one chunk (function form),
+      // which avoids circular-chunk build errors.
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (
+            id.includes('@blocknote') ||
+            id.includes('prosemirror') ||
+            id.includes('@tiptap') ||
+            id.includes('@codemirror') ||
+            id.includes('@lezer')
+          ) {
+            return 'editor'
+          }
+          if (id.includes('@mantine') || id.includes('@tabler') || id.includes('@emotion')) {
+            return 'mantine'
+          }
+          if (
+            id.includes('/react/') ||
+            id.includes('react-dom') ||
+            id.includes('react-router') ||
+            id.includes('reactflow') ||
+            id.includes('@xyflow') ||
+            id.includes('/scheduler/')
+          ) {
+            return 'react-vendor'
+          }
+          // Remaining vendor libraries: one chunk per top-level package. This is
+          // the canonical safe manualChunks pattern — every module lands in a
+          // single chunk, so no circular-chunk errors — and it gives fine-grained
+          // caching plus parallel loading instead of one monolithic vendor blob.
+          const m = id.match(/[\\/]node_modules[\\/]((?:@[^\\/]+[\\/])?[^\\/]+)/)
+          if (m) {
+            return 'lib-' + m[1].replace('@', '').replace(/[\\/]/g, '-')
+          }
+          return 'vendor'
+        },
+      },
     },
-    chunkSizeWarningLimit: 1000,
+    // The remaining >1 MB chunks (editor, mermaid, elkjs, shikijs-langs) are
+    // single, inherently large third-party packages that are already isolated
+    // into their own chunks — there is no actionable further split, so raise
+    // the warning threshold to keep the build output clean.
+    chunkSizeWarningLimit: 2000,
   },
 })
