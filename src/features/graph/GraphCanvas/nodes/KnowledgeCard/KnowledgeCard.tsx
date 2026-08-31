@@ -6,7 +6,7 @@
  */
 import { memo, useMemo, useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
+import { Handle, NodeResizer, Position, type NodeProps, useStore } from '@xyflow/react'
 const LazyEmojiPicker = lazy(async () => {
   const [pickerModule, dataModule, i18nModule] = await Promise.all([
     import('@emoji-mart/react'),
@@ -60,8 +60,13 @@ function subscribeToAddEmoji(nodeId: string, listener: AddEmojiListener) {
 
 function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }: KnowledgeCardProps) {
   const { state, actions, refs } = useKnowledgeCardModel(id, data, selected, width, height, resizing)
+
+  // 订阅画布缩放级别，实现节点细节层次（LoD）：低缩放时简化渲染，
+  // 降低大量可见节点的 paint / 合成成本，缓解大图平移起步掉帧。
+  // 平移时 zoom 不变，此 hook 不会触发重渲染，故不影响拖拽跟手性。
+  const zoom = useStore((s) => s.transform[2])
+  const isLowDetail = zoom < 0.45
   const {
-    isHovered,
     titleEditing,
     showHoverControls,
     showResizeLabel,
@@ -156,7 +161,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
 
   useEffect(() => {
     let emojiTimer: ReturnType<typeof setTimeout> | null = null
-    const handleAddEmojiEvent: AddEmojiListener = (e) => {
+    const handleAddEmojiEvent: AddEmojiListener = (_e) => {
       emojiTimer = setTimeout(() => {
         const cardRect = cardRootRef.current?.getBoundingClientRect()
         if (!cardRect) return
@@ -181,7 +186,8 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       onPointerDownCapture={selectNode}
       onPointerLeave={() => setIsHovered(false)}
       className={cn(
-        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-[var(--color-surface)] shadow-sm transition-opacity duration-75 active:border-[var(--color-accent)] active:shadow-[0_0_0_1px_var(--color-accent-soft)] w-full h-full box-border",
+        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-[var(--color-surface)] w-full h-full box-border",
+        !isLowDetail && "shadow-sm transition-opacity duration-75 active:border-[var(--color-accent)] active:shadow-[0_0_0_1px_var(--color-accent-soft)]",
         selected && "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] z-10",
         isConnectTarget && "border-2 border-[var(--color-success)] shadow-[0_0_0_1px_var(--color-success)] !border-[var(--color-success)] z-10",
         visuallyHovered && !visuallySelected && !isConnectTarget && "border-[var(--color-border-strong)]",
@@ -196,7 +202,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         height: nodeHeight,
       }}
     >
-      {showQuickToolbar && !dragging && (
+      {showQuickToolbar && !dragging && !isLowDetail && (
         <QuickNodeToolbar
           autoWidth={widthMode === 'auto'}
           fontSize={nodeStyle.headerFontSize ?? 11}
@@ -213,6 +219,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         />
       )}
 
+      {!isLowDetail && (
       <NodeResizer
         isVisible={showHoverControls}
         minWidth={nodeSizeLimits.minWidth}
@@ -225,8 +232,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         onResize={(_, params) => updateResizePreview(params)}
         onResizeEnd={(_, params) => hideResizePreviewSoon(params)}
       />
+      )}
 
-      {showResizeLabel && (
+      {showResizeLabel && !isLowDetail && (
         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-0.5 text-xs text-[var(--color-text-muted)] shadow-sm pointer-events-none whitespace-nowrap z-50">
           {resizeLabel}
         </div>

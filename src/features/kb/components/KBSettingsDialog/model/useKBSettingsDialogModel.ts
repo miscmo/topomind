@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useStorage } from '../../../../../core/storage'
 import { usePromptStore } from '../../../../../shared/ui/PromptModal/promptStore'
 import { tabStore } from '../../../../../stores/tabs/tabStore'

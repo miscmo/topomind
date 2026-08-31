@@ -5,7 +5,6 @@ import { resolveRoomChildRef } from '../../../../../../domain/graph/path-utils'
 import { useGraphUiStore } from '../../../../../../stores/graphUiStore'
 import { useGraphStore, useGraphStoreApi } from '../../../../../../stores/graphStore'
 import { useGraphContext } from '../../../../../../contexts/GraphContext'
-import { logAction } from '../../../../../../core/log-backend'
 import { calculateKnowledgeCardAutoSize, getKnowledgeCardAccessoryWidth } from './autoSize'
 import { useConfirmStore } from '../../../../../../shared/ui/ConfirmModal/confirmStore'
 

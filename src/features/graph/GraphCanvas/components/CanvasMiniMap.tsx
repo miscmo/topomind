@@ -403,7 +403,6 @@ const MiniMapStaticSvg = memo(function MiniMapStaticSvg({
 })
 
 const MiniMapViewportOverlay = memo(function MiniMapViewportOverlay({
-  previewBounds,
   canvasSize,
 }: {
   previewBounds: RectLike

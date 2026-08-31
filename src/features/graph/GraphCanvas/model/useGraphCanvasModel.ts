@@ -113,7 +113,7 @@ export function useGraphCanvasModel({
     return buildRectSpatialIndex(candidates, 256)
   }, [connectingSourceId, nodes])
   
-  const { guideLines, onNodesChangeIntercept, clearGuides } = useSmartGuides(nodes as Node[])
+  const { guideLines, onNodesChangeIntercept } = useSmartGuides(nodes as Node[])
 
   useEffect(() => {
     connectingTargetIdRef.current = connectingTargetId
@@ -224,7 +224,7 @@ export function useGraphCanvasModel({
     logAction('快捷键:搜索节点', 'GraphCanvas', { source: 'shortcut' })
   }, { scope: 'global', preventDefault: true })
 
-  useShortcut(['Escape'], (event) => {
+  useShortcut(['Escape'], (_event) => {
     if (activeTabId !== tabId) return
     const uiStore = useGraphUiStore.getState()
     if (uiStore.formatPainterStyle !== null) {
@@ -261,7 +261,6 @@ export function useGraphCanvasModel({
 
   useShortcut(['Enter', 'NumpadEnter', 'Tab'], (event) => {
     if (activeTabId !== tabId) return
-    const isEnter = event.key === 'Enter' || event.key === 'NumpadEnter'
     const isTab = event.key === 'Tab'
 
     const selectedNode = nodes.find((node) => node.selected)

@@ -1,7 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { Background, ReactFlow, type BackgroundVariant, type Node, type NodeTypes } from '@xyflow/react'
 import { PaintRoller } from 'lucide-react'
-import type { KnowledgeNode } from '../../../types'
 import KnowledgeCard from './nodes/KnowledgeCard'
 import FloatingEdge from './edges/FloatingEdge'
 import { SmartGuidesRenderer } from './SmartGuidesRenderer'
@@ -35,7 +34,6 @@ export default memo(function GraphCanvas({
 
   const {
     showGrid,
-    connectingSourceId,
     nodes,
     edges,
     storedViewport,
@@ -56,8 +54,6 @@ export default memo(function GraphCanvas({
     handleEdgeClick,
     handleEdgeContextMenu,
     handlePaneContextMenu,
-    handleConnectionMouseMove,
-    handleConnectionMouseLeave,
     setIsSearchOpen,
     handleSearchSelectNode,
   } = actions

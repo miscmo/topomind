@@ -1,11 +1,10 @@
 import { useCallback } from 'react'
 import { useReactFlow } from '@xyflow/react'
-import { usePromptStore } from '../../../../shared/ui/PromptModal/promptStore'
 import { logAction } from '../../../../core/log-backend'
 import type { KnowledgeEdge } from '../../../../types'
 import type { GraphContextValue } from '../../../../contexts/GraphContext'
 import { useGraphStoreApi } from '../../../../stores/graphStore'
-import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
+import { useRightPanelStore } from '../../../right-panel/model/rightPanelStore'
 
 export interface UseEdgeActionsOptions {
   onAction?: () => void
@@ -16,7 +15,6 @@ export function useEdgeActions(options: UseEdgeActionsOptions) {
   const storeApi = useGraphStoreApi()
   const { onAction, graph } = options
   const { deleteElements } = useReactFlow()
-  const prompt = usePromptStore((s) => s.open)
 
   const findEdgeById = useCallback((edgeId: string): KnowledgeEdge | undefined => {
     return storeApi.getState().edgesMap.get(edgeId)
@@ -29,30 +27,20 @@ export function useEdgeActions(options: UseEdgeActionsOptions) {
     onAction?.()
   }, [findEdgeById, deleteElements, onAction])
 
-  const handleEdgeStyle = useCallback(async (edgeId: string) => {
+  // 右键菜单"连线样式"：不再弹出 JSON 编辑框，而是展开右侧面板、切到"样式"Tab
+  // 与"连线"子 Tab，并选中该连线，引导用户在面板里编辑样式。
+  // 这里显式设置各层状态，而不是依赖"选中后自动切换"的副作用——
+  // 面板折叠时 StyleSection 不会走挂载副作用，重复选中同一条连线时也不会重新触发。
+  const handleEdgeStyle = useCallback((edgeId: string) => {
     const edge = findEdgeById(edgeId)
     if (!edge) return
-    const current = (edge.data ?? {}) as KnowledgeEdge['data']
-    const raw = await prompt({
-      title: '编辑连线样式',
-      placeholder: '输入 JSON，例如 {"lineMode":"straight","lineStyle":"dashed","color":"#e74c3c","arrow":true}',
-      defaultValue: JSON.stringify({
-        lineMode: current?.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode,
-        lineStyle: current?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle,
-        color: current?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color,
-        arrow: current?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow,
-      }),
-    })
-    if (!raw?.trim()) return
-    let parsed: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      return
-    }
-    graph.updateEdgeStyle(edgeId, parsed)
+    logAction('连线:样式(面板)', 'useEdgeActions', { edgeId, edgeSource: edge.source, edgeTarget: edge.target, trigger: 'context-menu' })
+    useRightPanelStore.getState().expandRightPanel()
+    useRightPanelStore.getState().setRightPanelTab('style')
+    useRightPanelStore.getState().setStylePanelTab('edges')
+    graph.selectEdge(edgeId)
     onAction?.()
-  }, [findEdgeById, graph, prompt, onAction])
+  }, [findEdgeById, graph, onAction])
 
   return {
     handleEdgeDelete,

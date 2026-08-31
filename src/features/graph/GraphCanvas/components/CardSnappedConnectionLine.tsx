@@ -1,4 +1,4 @@
-import React from 'react'
+
 import { getSmoothStepPath, getStraightPath, type ConnectionLineComponentProps, type Node } from '@xyflow/react'
 import { useTabStore } from '../../../../stores/tabs/tabStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'

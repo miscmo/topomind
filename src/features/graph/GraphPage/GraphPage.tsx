@@ -23,7 +23,7 @@ interface GraphPageProps {
 }
 
 export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProps) {
-  const { graphSession, graph } = useGraphPageController({ tabId })
+  const { graph } = useGraphPageController({ tabId })
   const { canvasProps, contextMenuProps } = useGraphPageActions({ graph })
   const selectedNodeId = useSelectedNodeId()
   const setSelectedNodeIdForTab = useLearningTrackerContextStore((s) => s.setSelectedNodeIdForTab)
