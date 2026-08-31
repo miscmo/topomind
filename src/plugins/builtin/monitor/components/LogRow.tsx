@@ -1,4 +1,4 @@
-import React from 'react'
+
 import { formatTimestamp, highlightText } from '@/shared/observability/logFormatting'
 import { LEVEL_COLORS } from '../constants'
 

@@ -1,5 +1,6 @@
-import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeSize, DefaultNodeStyle } from '../../../../types/uiStoreTypes'
+import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeStyle } from '../../../../types/uiStoreTypes'
 import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
+import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT } from '../../../../domain/style/styleConstraints'
 
 const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max)
 
@@ -66,15 +67,41 @@ export function NodeStylePreview({
 export function EdgeStylePreview({ style }: { style: DefaultEdgeStyle }) {
   const dashArray = style.lineStyle === 'dashed' ? '6 4' : undefined
   const path = style.lineMode === 'smoothstep' ? 'M18 58 C58 18, 122 98, 162 58' : 'M18 58 L162 58'
+  const arrowSize = clamp(style.arrowSize ?? 12, EDGE_ARROW_SIZE_LIMIT.min, EDGE_ARROW_SIZE_LIMIT.max)
+  // 预览画的是次线（weight=minor），直接用基础线宽，与画布上非主线连线一致
+  const lineWidth = clamp(style.lineWidth ?? 1.2, EDGE_LINE_WIDTH_LIMIT.min, EDGE_LINE_WIDTH_LIMIT.max)
+  const isSolid = style.arrowShape === 'solid'
+  const showStart = style.arrow && (style.arrowPosition === 'start' || style.arrowPosition === 'both')
+  const showEnd = style.arrow && (style.arrowPosition === 'end' || style.arrowPosition === 'both')
+  // 与画布 FloatingEdge 保持同一套箭头几何：12x12 viewBox，尖端在 (12,6)
+  const arrowPath = 'M 0 0 L 12 6 L 0 12'
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-3 shadow-[var(--shadow-sm)]">
       <div className="text-[12px] font-semibold text-[var(--color-text-secondary)] mb-2">连线预览</div>
       <div className="h-[116px] rounded-lg bg-[var(--color-bg-muted)] border border-[var(--color-border-subtle)] flex items-center justify-center">
         <svg width="180" height="116" viewBox="0 0 180 116" aria-hidden="true">
           <defs>
-            <marker id="style-preview-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L8,4 L0,8 Z" fill={style.color} />
-            </marker>
+            {style.arrow && (
+              <marker
+                id="style-preview-arrow"
+                viewBox="0 0 12 12"
+                markerWidth={arrowSize}
+                markerHeight={arrowSize}
+                refX="12"
+                refY="6"
+                orient="auto-start-reverse"
+                markerUnits="userSpaceOnUse"
+              >
+                <path
+                  d={isSolid ? `${arrowPath} Z` : arrowPath}
+                  fill={isSolid ? style.color : 'none'}
+                  stroke={style.color}
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              </marker>
+            )}
           </defs>
           <circle cx="18" cy="58" r="8" fill="var(--color-surface)" stroke="var(--color-border-strong)" />
           <circle cx="162" cy="58" r="8" fill="var(--color-surface)" stroke="var(--color-border-strong)" />
@@ -82,9 +109,10 @@ export function EdgeStylePreview({ style }: { style: DefaultEdgeStyle }) {
             d={path}
             fill="none"
             stroke={style.color}
-            strokeWidth="2.5"
+            strokeWidth={lineWidth}
             strokeDasharray={dashArray}
-            markerEnd={style.arrow ? 'url(#style-preview-arrow)' : undefined}
+            markerStart={showStart ? 'url(#style-preview-arrow)' : undefined}
+            markerEnd={showEnd ? 'url(#style-preview-arrow)' : undefined}
           />
         </svg>
       </div>

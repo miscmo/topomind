@@ -74,6 +74,19 @@ export const useDetailPanelStore = create<DetailPanelStore>()(
     {
       name: 'topomind-detail-panel-storage',
       storage: createJSONStorage(() => localStorage),
+      version: 1,
+      // 旧版本把节点侧栏标签持久化为 'toc'（目录）。该 tab 已被移除，
+      // 升级时把残留的 'toc' 归一成 'documents'，避免打开侧栏显示异常。
+      migrate: (persisted: unknown) => {
+        const data = persisted as { state?: { detailSidebarTabsByNodeId?: Record<string, string> } } | undefined
+        const tabs = data?.state?.detailSidebarTabsByNodeId
+        if (tabs) {
+          for (const key of Object.keys(tabs)) {
+            if (tabs[key] === 'toc') tabs[key] = 'documents'
+          }
+        }
+        return persisted as never
+      },
       partialize: (state) => ({
         activeDocumentPathsByNodeId: state.activeDocumentPathsByNodeId,
         detailSidebarTabsByNodeId: state.detailSidebarTabsByNodeId,

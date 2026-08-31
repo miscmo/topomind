@@ -1,8 +1,9 @@
 import type { DefaultEdgeStyle } from '../../../../types/uiStoreTypes'
 import type { KnowledgeEdge } from '../../../../types'
-import { CollapsibleBlock, ColorField, PresetButtonGrid, SegmentedControl, StyleCard, ToggleGroup } from './StyleControls'
+import { CollapsibleBlock, ColorField, NumberField, PresetButtonGrid, SegmentedControl, StyleCard, ToggleGroup } from './StyleControls'
 import { EdgeStylePreview } from './StylePreviews'
 import { EDGE_STYLE_PRESETS } from '../../model/stylePresets'
+import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT } from '../../../../domain/style/styleConstraints'
 
 type EdgeStylePreset = typeof EDGE_STYLE_PRESETS[number]
 
@@ -10,6 +11,10 @@ interface EdgeStylePanelProps {
   currentEdgeStyle: DefaultEdgeStyle
   defaultEdgeStyle: DefaultEdgeStyle
   selectedEdge: KnowledgeEdge | null
+  /** 连线起点的节点标题（非内部 id） */
+  sourceLabel: string
+  /** 连线终点的节点标题（非内部 id） */
+  targetLabel: string
   expandedBlocks: Record<string, boolean>
   onToggleBlock: (key: string) => void
   onApplyEdgePreset: (preset: EdgeStylePreset) => void
@@ -21,6 +26,8 @@ export function EdgeStylePanel({
   currentEdgeStyle,
   defaultEdgeStyle,
   selectedEdge,
+  sourceLabel,
+  targetLabel,
   expandedBlocks,
   onToggleBlock,
   onApplyEdgePreset,
@@ -62,6 +69,16 @@ export function EdgeStylePanel({
                 onChange={(v) => onUpdateDefaultStyle({ lineStyle: v as 'solid' | 'dashed' })}
               />
             </div>
+            <NumberField
+              label="线条粗细"
+              unit="px"
+              value={defaultEdgeStyle.lineWidth ?? 1.2}
+              min={EDGE_LINE_WIDTH_LIMIT.min}
+              max={EDGE_LINE_WIDTH_LIMIT.max}
+              step={EDGE_LINE_WIDTH_LIMIT.step}
+              className="col-span-full"
+              onChange={(v) => onUpdateDefaultStyle({ lineWidth: Number(v) })}
+            />
             <div className="flex flex-row items-center justify-between gap-[6px] mb-0 col-span-full">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">显示箭头</label>
               <ToggleGroup
@@ -80,6 +97,44 @@ export function EdgeStylePanel({
                 onChange={(v) => onUpdateDefaultStyle({ color: v })}
               />
             </div>
+            {/* 关闭箭头后这些设置不再生效，隐藏避免展示无意义的控件 */}
+            {defaultEdgeStyle.arrow !== false && (
+              <>
+                <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                  <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">箭头样式</label>
+                  <SegmentedControl
+                    options={[
+                      { label: '实心', value: 'solid' },
+                      { label: '空心', value: 'hollow' }
+                    ]}
+                    value={defaultEdgeStyle.arrowShape || 'hollow'}
+                    onChange={(v) => onUpdateDefaultStyle({ arrowShape: v as 'solid' | 'hollow' })}
+                  />
+                </div>
+                <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                  <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">箭头位置</label>
+                  <SegmentedControl
+                    options={[
+                      { label: '终点', value: 'end' },
+                      { label: '起点', value: 'start' },
+                      { label: '两端', value: 'both' }
+                    ]}
+                    value={defaultEdgeStyle.arrowPosition || 'end'}
+                    onChange={(v) => onUpdateDefaultStyle({ arrowPosition: v as 'end' | 'start' | 'both' })}
+                  />
+                </div>
+                <NumberField
+                  label="箭头大小"
+                  unit="px"
+                  value={defaultEdgeStyle.arrowSize ?? 12}
+                  min={EDGE_ARROW_SIZE_LIMIT.min}
+                  max={EDGE_ARROW_SIZE_LIMIT.max}
+                  step={EDGE_ARROW_SIZE_LIMIT.step}
+                  className="col-span-full"
+                  onChange={(v) => onUpdateDefaultStyle({ arrowSize: Number(v) })}
+                />
+              </>
+            )}
           </div>
         </CollapsibleBlock>
 
@@ -92,7 +147,7 @@ export function EdgeStylePanel({
         >
           {selectedEdge ? (
             <>
-              <div className="text-[12px] text-[var(--color-text-muted)] m-0 mb-4 leading-[1.4] bg-[var(--color-bg)] py-2 px-3 rounded-md border-l-[3px] border-[var(--color-accent)]">{selectedEdge.source} → {selectedEdge.target}</div>
+              <div className="text-[12px] text-[var(--color-text-muted)] m-0 mb-4 leading-[1.4] bg-[var(--color-bg)] py-2 px-3 rounded-md border-l-[3px] border-[var(--color-accent)] break-words">{sourceLabel} → {targetLabel}</div>
               <div className="grid grid-cols-2 gap-y-3 gap-x-4">
                 <div className="flex flex-col gap-[6px] mb-0 col-span-full">
                   <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">线型</label>
@@ -116,6 +171,16 @@ export function EdgeStylePanel({
                     onChange={(v) => onApplyToSelectedEdge({ lineStyle: v as 'solid' | 'dashed' })}
                   />
                 </div>
+                <NumberField
+                  label="线条粗细"
+                  unit="px"
+                  value={currentEdgeStyle.lineWidth ?? 1.2}
+                  min={EDGE_LINE_WIDTH_LIMIT.min}
+                  max={EDGE_LINE_WIDTH_LIMIT.max}
+                  step={EDGE_LINE_WIDTH_LIMIT.step}
+                  className="col-span-full"
+                  onChange={(v) => onApplyToSelectedEdge({ lineWidth: Number(v) })}
+                />
                 <div className="flex flex-row items-center justify-between gap-[6px] mb-0 col-span-full">
                   <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">显示箭头</label>
                   <ToggleGroup
@@ -134,6 +199,44 @@ export function EdgeStylePanel({
                     onChange={(v) => onApplyToSelectedEdge({ color: v })}
                   />
                 </div>
+                {/* 关闭箭头后这些设置不再生效，隐藏避免展示无意义的控件 */}
+                {currentEdgeStyle.arrow !== false && (
+                  <>
+                    <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                      <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">箭头样式</label>
+                      <SegmentedControl
+                        options={[
+                          { label: '实心', value: 'solid' },
+                          { label: '空心', value: 'hollow' }
+                        ]}
+                        value={currentEdgeStyle.arrowShape || 'hollow'}
+                        onChange={(v) => onApplyToSelectedEdge({ arrowShape: v as 'solid' | 'hollow' })}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+                      <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">箭头位置</label>
+                      <SegmentedControl
+                        options={[
+                          { label: '终点', value: 'end' },
+                          { label: '起点', value: 'start' },
+                          { label: '两端', value: 'both' }
+                        ]}
+                        value={currentEdgeStyle.arrowPosition || 'end'}
+                        onChange={(v) => onApplyToSelectedEdge({ arrowPosition: v as 'end' | 'start' | 'both' })}
+                      />
+                    </div>
+                    <NumberField
+                      label="箭头大小"
+                      unit="px"
+                      value={currentEdgeStyle.arrowSize ?? 12}
+                      min={EDGE_ARROW_SIZE_LIMIT.min}
+                      max={EDGE_ARROW_SIZE_LIMIT.max}
+                      step={EDGE_ARROW_SIZE_LIMIT.step}
+                      className="col-span-full"
+                      onChange={(v) => onApplyToSelectedEdge({ arrowSize: Number(v) })}
+                    />
+                  </>
+                )}
               </div>
             </>
           ) : (

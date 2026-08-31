@@ -5,7 +5,7 @@
 import { useEffect, useState, memo, useCallback } from 'react'
 import { useGraphStore, useSelectedNodeId } from '../../../../stores/graphStore'
 import { DocumentWorkspace } from '../../../../features/documents/DocumentWorkspace'
-import { tabStore } from '../../../../stores/tabs/tabStore'
+import { tabStore, useGraphSession } from '../../../../stores/tabs/tabStore'
 import { joinRefs, resolveRoomChildRef } from '../../../../domain/graph/path-utils'
 import { topoDocumentPath, topoDocumentIdFromPath } from '../../../../features/documents/types/documentTypes'
 import { useDetailDocuments } from '../../model/useDetailDocuments'
@@ -22,9 +22,11 @@ interface DetailPanelProps {
 
 const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: DetailPanelProps) {
   const rawSelectedNodeId = useSelectedNodeId()
-  // 锁定：若已锁定某个节点，右栏内容固定展示该锁定节点，不受选中节点变化影响；
-  // 未锁定时保持现有逻辑，与当前选中节点一致。
-  const lockedNodeId = useDetailLockStore((s) => s.lockedNodeId)
+  // 锁定按知识库(kbPath)维度隔离：只取当前知识库自己的锁定节点，
+  // 切到其它知识库时取不到该库的锁定 -> 右栏跟随当前库选中节点，互不串扰。
+  const graphSession = useGraphSession(tabId)
+  const kbPath = graphSession.kbPath
+  const lockedNodeId = useDetailLockStore((s) => (kbPath ? (s.lockedByKb[kbPath] ?? null) : null))
   const selectedNodeId = lockedNodeId ?? rawSelectedNodeId
   const resolveNodePath = useCallback((nodeId: string) => {
     const graphSession = tabStore.getState().getGraphSession(tabId)

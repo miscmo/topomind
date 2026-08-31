@@ -15,6 +15,8 @@ export default memo(function StyleSection() {
     selectedNodes,
     isMultiSelection,
     selectedEdge,
+    selectedEdgeSourceLabel,
+    selectedEdgeTargetLabel,
     defaultNodeStyle,
     defaultNodeSize,
     nodeSizeLimits,
@@ -112,6 +114,8 @@ export default memo(function StyleSection() {
             currentEdgeStyle={currentEdgeStyle}
             defaultEdgeStyle={defaultEdgeStyle}
             selectedEdge={selectedEdge ?? null}
+            sourceLabel={selectedEdgeSourceLabel}
+            targetLabel={selectedEdgeTargetLabel}
             expandedBlocks={expandedBlocks}
             onToggleBlock={toggleBlock}
             onApplyEdgePreset={applyEdgePreset}

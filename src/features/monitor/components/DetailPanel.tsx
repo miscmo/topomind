@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { formatDate } from '@/shared/observability/logFormatting'
 import { useMonitorStore } from '../model/monitorStore'
 import { logAction } from '../../../core/log-backend'

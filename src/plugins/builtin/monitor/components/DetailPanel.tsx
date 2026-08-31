@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatDate } from '@/shared/observability/logFormatting'
 import { useMonitorStore } from '../model/monitorStore'
 import { LEVEL_COLORS } from '../constants'

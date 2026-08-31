@@ -51,8 +51,10 @@ export const NODE_STYLE_PRESETS: Array<{ label: string; style: DefaultNodeStyle;
 
 export const EDGE_STYLE_PRESETS: Array<{ label: string; style: DefaultEdgeStyle }> = [
   { label: '默认', style: STYLE_CONFIG_DEFAULTS.defaultEdgeStyle },
-  { label: '柔和', style: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#60a5fa', arrow: true } },
-  { label: '虚线', style: { lineMode: 'smoothstep', lineStyle: 'dashed', color: '#94a3b8', arrow: false } },
+  { label: '柔和', style: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#60a5fa', lineWidth: 1.2, arrow: true, arrowSize: 12, arrowShape: 'hollow', arrowPosition: 'end' } },
+  { label: '虚线', style: { lineMode: 'smoothstep', lineStyle: 'dashed', color: '#94a3b8', lineWidth: 1.2, arrow: false, arrowSize: 12, arrowShape: 'hollow', arrowPosition: 'end' } },
+  { label: '强调', style: { lineMode: 'straight', lineStyle: 'solid', color: '#e74c3c', lineWidth: 2.4, arrow: true, arrowSize: 18, arrowShape: 'solid', arrowPosition: 'end' } },
+  { label: '双向', style: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#8b5cf6', lineWidth: 1.6, arrow: true, arrowSize: 12, arrowShape: 'solid', arrowPosition: 'both' } },
 ]
 
 export const EDITOR_STYLE_PRESETS: Array<{ label: string; style: DefaultEditorStyle }> = [

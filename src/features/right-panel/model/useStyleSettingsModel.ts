@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
+import { useRightPanelStore } from './rightPanelStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { useGraphStore } from '../../../stores/graphStore'
 import { useStorage } from '../../../core/storage'
@@ -40,6 +41,18 @@ export function useStyleSettingsModel() {
   const graph = useGraphContext()
 
   const selectedEdge = useGraphStore((s) => selectedEdgeId ? s.edgesMap.get(selectedEdgeId) : null)
+  // 连线两端要展示节点标题而不是内部 id —— UI 上只呈现用户能理解的内容。
+  // 节点缺失或标题为空时回退为"未命名节点"，不回退成 id。
+  const selectedEdgeSourceLabel = useGraphStore((s) => {
+    const id = selectedEdge?.source
+    if (!id) return ''
+    return s.nodesMap.get(id)?.data.label?.trim() || '未命名节点'
+  })
+  const selectedEdgeTargetLabel = useGraphStore((s) => {
+    const id = selectedEdge?.target
+    if (!id) return ''
+    return s.nodesMap.get(id)?.data.label?.trim() || '未命名节点'
+  })
   const selectedNodes = useGraphStore((s) => s.selectedNodes)
   const selectedNode = selectedNodes.length > 0 ? selectedNodes[0] : null
 
@@ -49,7 +62,11 @@ export function useStyleSettingsModel() {
         lineMode: selectedEdge.data.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode,
         lineStyle: selectedEdge.data.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle,
         color: selectedEdge.data.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color,
+        lineWidth: selectedEdge.data.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth,
         arrow: selectedEdge.data.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow,
+        arrowSize: selectedEdge.data.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize,
+        arrowShape: selectedEdge.data.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape,
+        arrowPosition: selectedEdge.data.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition,
       }
     : defaultEdgeStyle
   const currentNodeStyle = {
@@ -63,7 +80,11 @@ export function useStyleSettingsModel() {
   const selectedNodeNumberStyleValue = (key: NodeStyleNumberKey) => getSelectedNodeNumberStyleValue(selectedNodes, defaultNodeStyle, currentNodeStyle, key)
   const selectedNodeColorStyleValue = (key: 'headerColor' | 'headerBackgroundColor' | 'borderColor') => getSelectedNodeColorStyleValue(selectedNodes, defaultNodeStyle, currentNodeStyle, key)
 
-  const [activeTab, setActiveTab] = useState<'nodes' | 'edges' | 'editor'>('nodes')
+  // 样式面板的小 Tab 放在 store 中（而非本组件局部 state）：
+  // 右键菜单"连线样式"等外部入口需要在面板未挂载/折叠时也能确定性地切到连线 Tab，
+  // 仅靠选中事件触发的副作用在"重复选中同一条连线"时不会重新执行。
+  const activeTab = useRightPanelStore((s) => s.stylePanelTab)
+  const setActiveTab = useRightPanelStore((s) => s.setStylePanelTab)
   const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>({})
   const [saveError, setSaveError] = useState('')
 
@@ -236,6 +257,8 @@ export function useStyleSettingsModel() {
       selectedNodes,
       isMultiSelection,
       selectedEdge,
+      selectedEdgeSourceLabel,
+      selectedEdgeTargetLabel,
       defaultNodeStyle,
       defaultNodeSize,
       nodeSizeLimits,

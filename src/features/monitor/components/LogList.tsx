@@ -1,4 +1,4 @@
-import React from 'react'
+
 import { toDateStr } from '@/shared/observability/logFormatting'
 
 import { useMonitorStore } from '../model/monitorStore'
