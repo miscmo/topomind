@@ -1,4 +1,5 @@
 import React, { Suspense, lazy } from 'react'
+import { ErrorBoundary } from '../../layout/ErrorBoundary'
 import type { TopoDocumentType } from '../../../core/storage'
 import type { TocItem } from '../types/workspaceTypes'
 import { normalizeSmartDocumentContent } from '../SmartDocumentEditor/smartDocumentTypes'
@@ -216,6 +217,7 @@ export interface DocumentEditorAdapterProps {
   attachmentInsertTargetKey: string
   onTocChange: (items: TocItem[]) => void
   onTocItemClickReady: (handler: ((item: TocItem) => void) | null) => void
+  onTocActiveChange?: (id: string | null) => void
   onWordCountChange: (stats: { characters: number; words: number; blocks: number } | null) => void
 }
 
@@ -232,6 +234,7 @@ function SmartDocumentAdapter({
   onChange,
   onTocChange,
   onTocItemClickReady,
+  onTocActiveChange,
   attachmentCardPath,
   attachmentInsertTargetKey,
   onWordCountChange,
@@ -391,18 +394,22 @@ function SmartDocumentAdapter({
 
   return (
     <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-muted-foreground">加载编辑器...</div>}>
-      <SmartDocumentEditor
-        key={documentInstanceKey}
-        value={runtimeValue}
-        onChange={handleChange}
-        onTocChange={onTocChange}
-        onTocItemClickReady={onTocItemClickReady}
-        uploadFile={uploadFile}
-        importRemoteImage={importRemoteImage}
-        resolveFileUrl={resolveFileUrl}
-        onWordCountChange={onWordCountChange}
-        attachmentInsertTargetKey={attachmentInsertTargetKey}
-      />
+      {/* 编辑器是崩过的高风险组件：单独隔离，切到别的文档时（documentInstanceKey 变化）自动恢复 */}
+      <ErrorBoundary label="智能文档编辑器" resetKeys={[documentInstanceKey]}>
+        <SmartDocumentEditor
+          key={documentInstanceKey}
+          value={runtimeValue}
+          onChange={handleChange}
+          onTocChange={onTocChange}
+          onTocItemClickReady={onTocItemClickReady}
+          onTocActiveChange={onTocActiveChange}
+          uploadFile={uploadFile}
+          importRemoteImage={importRemoteImage}
+          resolveFileUrl={resolveFileUrl}
+          onWordCountChange={onWordCountChange}
+          attachmentInsertTargetKey={attachmentInsertTargetKey}
+        />
+      </ErrorBoundary>
     </Suspense>
   )
 }
@@ -419,7 +426,9 @@ function MindMapDocumentAdapter({ value, title, onChange, onTocChange, onTocItem
 
   return (
     <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-muted-foreground">加载编辑器...</div>}>
-      <MindMapDocumentEditor key={documentInstanceKey} value={objectValue} onChange={handleChange} />
+      <ErrorBoundary label="思维导图编辑器" resetKeys={[documentInstanceKey]}>
+        <MindMapDocumentEditor key={documentInstanceKey} value={objectValue} onChange={handleChange} />
+      </ErrorBoundary>
     </Suspense>
   )
 }
@@ -436,7 +445,9 @@ function FlowchartDocumentAdapter({ value, title, onChange, onTocChange, onTocIt
 
   return (
     <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-muted-foreground">加载编辑器...</div>}>
-      <FlowchartDocumentEditor key={documentInstanceKey} value={objectValue} onChange={handleChange} />
+      <ErrorBoundary label="流程图编辑器" resetKeys={[documentInstanceKey]}>
+        <FlowchartDocumentEditor key={documentInstanceKey} value={objectValue} onChange={handleChange} />
+      </ErrorBoundary>
     </Suspense>
   )
 }
