@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { executeCommand } from '../../../application/commands'
-import { useThemeStore } from '../../../stores/themeStore'
+import { useThemeStore, DARK_THEME, LIGHT_THEME } from '../../../stores/themeStore'
 import { PluginWidgetSlot } from '../../../plugins'
 import { useRightPanelStore } from '../../right-panel/model/rightPanelStore'
 import { useShortcut } from '../../../hooks/useShortcut'
@@ -119,29 +119,10 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     ],
     view: [
       { 
-        label: '浅色主题', 
+        label: '主题', 
         submenu: [
-          { label: '经典浅色 (Light)', checked: theme === 'light', action: () => runCommand('theme.set', { theme: 'light' }) },
-          { label: 'Notion Light', checked: theme === 'notion-light', action: () => runCommand('theme.set', { theme: 'notion-light' }) },
-          { label: 'Linear Light', checked: theme === 'linear-light', action: () => runCommand('theme.set', { theme: 'linear-light' }) },
-          { label: 'Nord Light', checked: theme === 'nord-light', action: () => runCommand('theme.set', { theme: 'nord-light' }) },
-          { label: 'Rose Pine Dawn', checked: theme === 'rose-pine-dawn', action: () => runCommand('theme.set', { theme: 'rose-pine-dawn' }) },
-          { label: 'Catppuccin Latte', checked: theme === 'catppuccin-latte', action: () => runCommand('theme.set', { theme: 'catppuccin-latte' }) },
-          { label: 'GitHub Light', checked: theme === 'github-light', action: () => runCommand('theme.set', { theme: 'github-light' }) },
-          { label: 'Solarized Light', checked: theme === 'solarized-light', action: () => runCommand('theme.set', { theme: 'solarized-light' }) },
-        ]
-      },
-      { 
-        label: '深色主题', 
-        submenu: [
-          { label: '经典深色 (Dark)', checked: theme === 'dark', action: () => runCommand('theme.set', { theme: 'dark' }) },
-          { label: 'Tokyo Night', checked: theme === 'tokyo-night', action: () => runCommand('theme.set', { theme: 'tokyo-night' }) },
-          { label: 'Catppuccin Mocha', checked: theme === 'catppuccin-mocha', action: () => runCommand('theme.set', { theme: 'catppuccin-mocha' }) },
-          { label: 'One Dark Pro', checked: theme === 'one-dark-pro', action: () => runCommand('theme.set', { theme: 'one-dark-pro' }) },
-          { label: 'Dracula', checked: theme === 'dracula', action: () => runCommand('theme.set', { theme: 'dracula' }) },
-          { label: 'Monokai', checked: theme === 'monokai', action: () => runCommand('theme.set', { theme: 'monokai' }) },
-          { label: 'GitHub Dark', checked: theme === 'github-dark', action: () => runCommand('theme.set', { theme: 'github-dark' }) },
-          { label: 'Solarized Dark', checked: theme === 'solarized-dark', action: () => runCommand('theme.set', { theme: 'solarized-dark' }) },
+          { label: '浅色', checked: theme === LIGHT_THEME, action: () => runCommand('theme.set', { theme: LIGHT_THEME }) },
+          { label: '深色', checked: theme === DARK_THEME, action: () => runCommand('theme.set', { theme: DARK_THEME }) },
         ]
       },
       { label: '系统日志', action: () => runCommand('monitor.open') },

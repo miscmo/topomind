@@ -246,6 +246,68 @@
   flex: none;
 }
 
+/* 侧边菜单（＋新建块 / ⠿ 拖拽手柄＝块编辑）按钮的交互反馈。
+   BlockNote 的 style.css 与 @blocknote/mantine 都没有给 .bn-side-menu 内的
+   .bn-button 定义 hover / 按下 / 展开 状态，项目此前也只给格式化工具栏的
+   .bn-button 写了样式，导致点这些按钮时看不出任何反应。
+   要点：按钮(26px)必须明显大于图标(20px)，否则背景色被图标填满、hover 看不出变化。 */
+.smart-document-content .bn-side-menu .bn-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  padding: 0 !important;
+  border-radius: 7px !important;
+  color: var(--color-text-muted) !important;
+  background: transparent !important;
+  transition: background-color 110ms ease, color 110ms ease, transform 90ms ease, box-shadow 110ms ease !important;
+}
+
+/* 图标小于按钮，让 hover 的底色能在图标周围形成可见的一圈 */
+.smart-document-content .bn-side-menu .bn-button svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.smart-document-content .bn-side-menu .bn-button:hover {
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent) !important;
+  color: var(--color-accent) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, transparent) !important;
+}
+
+/* 按下：更深底色 + 明显缩放，给出确定的"按到了"手感 */
+.smart-document-content .bn-side-menu .bn-button:active {
+  background: color-mix(in srgb, var(--color-accent) 38%, transparent) !important;
+  color: var(--color-accent) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 55%, transparent) !important;
+  transform: scale(0.86) !important;
+}
+
+/* 菜单已展开：Mantine Menu.Target 会在触发器上写入 aria-expanded / data-expanded，
+   给按钮一个持续可见的"已激活"外观，点击后不会毫无痕迹。 */
+.smart-document-content .bn-side-menu .bn-button[aria-expanded="true"],
+.smart-document-content .bn-side-menu .bn-button[data-expanded] {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent) !important;
+  color: var(--color-accent) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent) !important;
+}
+
+.smart-document-content .bn-side-menu .bn-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 58%, transparent) !important;
+  outline-offset: 1px;
+}
+
+/* 只有拖拽手柄是 draggable，光标区分开，避免误以为＋ 也能拖 */
+.smart-document-content .bn-side-menu .bn-button[draggable="true"] {
+  cursor: grab;
+}
+.smart-document-content .bn-side-menu .bn-button[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .smart-document-content .bn-default-styles {
   font-family: var(--topomind-smart-font-family) !important;
   font-size: var(--topomind-smart-body-font-size) !important;
@@ -983,7 +1045,7 @@
 
 /* Heading level 1 */
 .smart-document-content .bn-block-content[data-content-type="heading"][data-level="1"] {
-  font-size: 1.35em !important; /* ~21.6px if base is 16px */
+  font-size: 1.25em !important; /* ~20px if base is 16px */
   line-height: 1.3 !important;
   padding-top: calc(1.8em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
   padding-bottom: calc(0.5em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
@@ -993,7 +1055,7 @@
 
 /* Heading level 2 */
 .smart-document-content .bn-block-content[data-content-type="heading"][data-level="2"] {
-  font-size: 1.24em !important; /* ~19.8px */
+  font-size: 1.20em !important; /* ~19.2px, kept clearly below H1(1.25) and above H3(1.14) */
   line-height: 1.35 !important;
   padding-top: calc(1.5em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
   padding-bottom: calc(0.4em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
