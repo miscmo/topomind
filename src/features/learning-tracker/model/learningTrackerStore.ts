@@ -1,22 +1,16 @@
 import { create } from 'zustand'
 import { FSB } from '../../../core/fs-backend'
 import { useWorkspaceStore } from '../../../stores/workspaceStore'
-import { deriveSummaryFromDailyRecords } from './learningTrackerAnalytics'
-import { resolveLearningSessionContext, type LearningSessionContext } from './learningTrackerContextStore'
+import {
+  deriveSummaryFromDailyRecords,
+  type DailyRecord,
+  type LearningSession,
+} from '../../../shared/utils/learningAnalytics'
+import { resolveLearningSessionContext } from './learningTrackerContextStore'
 
-export interface LearningSession {
-  id: string
-  startTime: number
-  endTime: number
-  duration: number
-  context?: LearningSessionContext
-}
-
-export interface DailyRecord {
-  date: string
-  totalDuration: number
-  sessions: LearningSession[]
-}
+// 学习统计的分析算法已收敛到 shared/utils，供本引擎与学习统计插件共用。
+// 这里转出类型，保持既有引用方（以及本文件内部）不变。
+export type { DailyRecord, LearningSession }
 
 export interface LearningStatsMeta {
   version: "1.0"

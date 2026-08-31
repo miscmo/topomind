@@ -146,6 +146,17 @@ function checkSpecifier(
     return null
   }
 
+  // 相对形式指向 src/shared 时，按与 "@/shared/*" 别名相同的白名单处理
+  // （二者语义等价；别名在原生 Node 下无法解析，而部分 verify 脚本不走 Vite）。
+  if (isInsideDirectory(resolved, sharedRoot)) {
+    const relativeToShared = normalizePath(path.relative(sharedRoot, resolved))
+    const domain = relativeToShared.split('/')[0]
+    if (domain && (ALLOWED_SHARED_DOMAINS as readonly string[]).includes(domain)) {
+      return null
+    }
+    return `shared import outside whitelist "${specifier}" in ${normalizePath(sourceFile)}`
+  }
+
   return `relative import escapes plugin boundary: "${specifier}" in ${normalizePath(sourceFile)}`
 }
 

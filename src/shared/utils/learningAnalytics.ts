@@ -1,5 +1,49 @@
-import type { DailyRecord, LearningSession } from './learningTrackerStore'
-import type { LearningPageType } from './learningTrackerContextStore'
+/**
+ * 学习统计的纯分析函数（日期换算、汇总派生、趋势/分布计算）。
+ *
+ * 位于 shared/utils 是因为插件边界禁止插件直接引用 features/、stores/ 等目录
+ * （见 scripts/verify-plugin-boundaries.mts），而学习统计的旧引擎（计时 store）
+ * 与新版插件界面都需要这套算法。放在这里两边都能合法引用，避免同一份逻辑维护两份。
+ *
+ * 类型在此自包含定义，不依赖任何 store 或插件 API，
+ * 与 src/plugins/public/api.ts 的 LearningSessionSnapshot 等结构一致。
+ */
+
+export type LearningPageType =
+  | 'home'
+  | 'kb'
+  | 'graph'
+  | 'document'
+  | 'monitor'
+  | 'statistics'
+  | 'secondary-view'
+  | 'setup'
+
+export interface LearningSessionContext {
+  pageType: LearningPageType
+  tabId?: string
+  tabType?: string
+  kbPath?: string
+  roomPath?: string
+  documentId?: string
+  selectedNodeId?: string
+  rightPanelTab?: string
+}
+
+export interface LearningSession {
+  id: string
+  startTime: number
+  endTime: number
+  duration: number
+  context?: LearningSessionContext
+}
+
+export interface DailyRecord {
+  date: string
+  totalDuration: number
+  sessions: LearningSession[]
+}
+
 
 export const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
 
