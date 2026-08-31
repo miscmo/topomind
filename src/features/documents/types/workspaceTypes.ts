@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
-import type { TopoDocumentManifestItem } from '../../../core/storage'
 
 export type DocumentType = 'detail' | 'card' | 'canvas'
-export type DetailSidebarTab = 'documents' | 'toc' | 'attachments'
+export type DetailSidebarTab = 'documents' | 'attachments'
 export type DocumentSaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
 export interface TocItem {
@@ -43,6 +42,8 @@ export interface DocumentWorkspaceLayoutProps {
   onDetailSidebarTabChange?: (tab: DetailSidebarTab) => void
   tocItems?: TocItem[]
   onTocItemClick?: (item: TocItem) => void
+  // 当前滚动位置所在的标题 block id，用于目录选中态高亮（scroll-spy）
+  activeTocId?: string | null
   editorContent?: ReactNode
   statusBarContent?: ReactNode
   renderStatusBar?: (state: { saveStatus: DocumentSaveStatus; lastSavedAt: number | null; saveError: string | null }) => ReactNode

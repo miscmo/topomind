@@ -60,6 +60,7 @@ export function DocumentEditorHost({
   const shouldRenderNoDocument = !activeTopoDocument
   const [smartTocItems, setSmartTocItems] = React.useState<TocItem[]>([])
   const [smartTocItemClick, setSmartTocItemClick] = React.useState<((item: TocItem) => void) | null>(null)
+  const [smartActiveTocId, setSmartActiveTocId] = React.useState<string | null>(null)
   const [documentStats, setDocumentStats] = React.useState<{ characters: number; words: number; blocks: number } | null>(null)
 
   const handleSmartTocItemClickReady = React.useCallback((handler: ((item: TocItem) => void) | null) => {
@@ -136,6 +137,7 @@ export function DocumentEditorHost({
     attachmentInsertTargetKey: activeDetailDocumentPath,
     onTocChange: setSmartTocItems,
     onTocItemClickReady: handleSmartTocItemClickReady,
+    onTocActiveChange: setSmartActiveTocId,
     onWordCountChange: setDocumentStats,
   })
 
@@ -157,6 +159,7 @@ export function DocumentEditorHost({
       onDetailSidebarTabChange={onDetailSidebarTabChange}
       tocItems={adapter.hasToc ? smartTocItems : undefined}
       onTocItemClick={adapter.hasToc ? smartTocItemClick ?? undefined : undefined}
+      activeTocId={adapter.hasToc ? smartActiveTocId : undefined}
       editorContent={editorContent}
       renderStatusBar={({ saveStatus, lastSavedAt, saveError }) => (
         <DocumentStatusBar

@@ -15,7 +15,7 @@ import { SmartDocumentFormattingToolbar } from './components/SmartDocumentFormat
 import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
 import { getImagePreviewScale } from './imagePreview'
-import { setEditorLinkClickHandler, shouldInterceptLink, isNavigableHref } from './editorLinkInterceptor'
+import { setEditorLinkClickHandler, shouldInterceptLink } from './editorLinkInterceptor'
 
 import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
@@ -74,7 +74,7 @@ function openExternalLink(href: string) {
 }
 
 export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: SmartDocumentEditorProps) {
-  const { readOnly = false, attachmentInsertTargetKey } = props
+  const { readOnly = false, attachmentInsertTargetKey, onTocActiveChange } = props
   const { editor, handleChange, customTheme, defaultEditorStyle } = useSmartDocumentEditorModel(props)
 
   useSmartDocumentAttachmentInsert(editor as any, attachmentInsertTargetKey)
@@ -107,6 +107,9 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   const [linkMenu, setLinkMenu] = useState<{ href: string; top: number; left: number } | null>(null)
   const linkMenuRef = useRef<HTMLDivElement>(null)
   const lastLinkMenuOpenRef = useRef<{ t: number; href: string } | null>(null)
+  // 滚动联动（scroll-spy）：把当前所在标题的 block id 上抛给目录高亮
+  const onTocActiveChangeRef = useRef(onTocActiveChange)
+  onTocActiveChangeRef.current = onTocActiveChange
   const toolbarRef = useRef<HTMLDivElement>(null)
   const imagePreviewCloseButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -148,7 +151,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   }, [])
 
   // 点击遮罩关闭，但拖拽结束后不触发关闭（避免“拖动查看”被误判为点击关闭）。
-  const handleImagePreviewOverlayClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+  const handleImagePreviewOverlayClick = useCallback((_event: ReactMouseEvent<HTMLDivElement>) => {
     if (imageDidDragRef.current) {
       imageDidDragRef.current = false
       return
@@ -281,6 +284,84 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       persistScrollTop()
     }
   }, [attachmentInsertTargetKey])
+
+  // 滚动联动（scroll-spy）：根据滚动位置计算“当前所在标题”，把其 block id 上抛，
+  // 供右上角浮动目录高亮选中态。用 requestAnimationFrame 节流，避免滚动时频繁重排。
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    let frame: number | null = null
+    let lastActiveId: string | null | undefined = undefined
+
+    const computeActiveTocId = (): string | null => {
+      const editorRoot = editorRootRef.current
+      if (!editorRoot) return null
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const headingEls = Array.from(
+        editorRoot.querySelectorAll<HTMLElement>('.bn-block-content[data-content-type="heading"]'),
+      )
+      if (headingEls.length === 0) return null
+
+      // 阈值线放在容器“内容区顶部”：点击跳转（block:'start' / 直接设置 scrollTop）
+      // 会把标题块对齐到这里，所以点击后 scroll-spy 算出的 id 与点击项一致，
+      // 不会回退到上一个标题。用容器 paddingTop 动态计算，避免被顶部留白抬高而“差一点不达标”。
+      const padTop = parseFloat(getComputedStyle(scrollContainer).paddingTop) || 0
+      const OFFSET = padTop + 10
+
+      // 滚到文档底部时，最后一个标题必然是“当前所在”，即使它还没滚到顶部阈值
+      const atBottom =
+        scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 2
+      if (atBottom) {
+        const lastEl = headingEls[headingEls.length - 1]
+        return lastEl.closest('[data-id]')?.getAttribute('data-id') ?? null
+      }
+
+      let activeId: string | null = null
+      for (const el of headingEls) {
+        // 测量块元素（data-id）而非内部 content：跳转对齐的是块本身，二者差一个块内上边距
+        const blockEl = (el.closest('[data-id]') as HTMLElement | null) ?? el
+        const rect = blockEl.getBoundingClientRect()
+        if (rect.top - containerRect.top <= OFFSET) {
+          activeId = blockEl.getAttribute('data-id') ?? activeId
+        } else {
+          break
+        }
+      }
+      // 没有任何标题越过阈值线（还停在第一个标题之前）时，默认高亮第一个标题，避免“谁都不亮”
+      if (activeId === null) {
+        activeId = (headingEls[0].closest('[data-id]') as HTMLElement | null)?.getAttribute('data-id') ?? null
+      }
+      return activeId
+    }
+
+    const runCompute = () => {
+      frame = null
+      const activeId = computeActiveTocId()
+      if (activeId !== lastActiveId) {
+        lastActiveId = activeId
+        onTocActiveChangeRef.current?.(activeId)
+      }
+    }
+
+    const scheduleCompute = () => {
+      if (frame !== null) return
+      frame = requestAnimationFrame(runCompute)
+    }
+
+    // 初始计算（编辑器内容可能异步布局，延迟一次兜底）
+    scheduleCompute()
+    const initTimer = window.setTimeout(scheduleCompute, 80)
+
+    scrollContainer.addEventListener('scroll', scheduleCompute, { passive: true })
+    window.addEventListener('resize', scheduleCompute)
+    return () => {
+      scrollContainer.removeEventListener('scroll', scheduleCompute)
+      window.removeEventListener('resize', scheduleCompute)
+      if (frame !== null) cancelAnimationFrame(frame)
+      window.clearTimeout(initTimer)
+    }
+  }, [])
 
   useEffect(() => {
     const editorRoot = editorRootRef.current

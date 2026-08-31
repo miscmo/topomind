@@ -433,7 +433,6 @@ export function useDocumentSidebarModel({
     const y = e.clientY - rect.top
     let position: 'before' | 'inside' | 'after' = 'inside'
     
-    const doc = topoDocuments.find(d => d.id === id)
     if (y < rect.height * 0.25) position = 'before'
     else if (y > rect.height * 0.75) position = 'after'
     
@@ -453,7 +452,7 @@ export function useDocumentSidebarModel({
     setDragState(null)
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent, id: string | null) => {
+  const handleDrop = useCallback((e: React.DragEvent, _id: string | null) => {
     e.preventDefault()
     e.stopPropagation()
     if (!draggedId || !dragState) {

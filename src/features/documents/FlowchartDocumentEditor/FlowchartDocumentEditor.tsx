@@ -38,12 +38,6 @@ function stringifyCached(value: unknown, cache: WeakMap<object, string>) {
   return serialized
 }
 
-const FLOWCHART_KIND_OPTIONS: { kind: FlowchartNodeKind; label: string }[] = [
-  { kind: 'start', label: '开始' },
-  { kind: 'process', label: '流程' },
-  { kind: 'decision', label: '判断' },
-  { kind: 'end', label: '结束' },
-]
 
 function getAppliedValue(value: FlowchartDocumentContent): AppliedFlowchartValue {
   return {

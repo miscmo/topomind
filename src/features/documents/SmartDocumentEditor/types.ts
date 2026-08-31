@@ -17,6 +17,8 @@ export interface SmartDocumentEditorProps {
   onChange: (value: SmartDocumentContent) => void
   onTocChange?: (items: TocItem[]) => void
   onTocItemClickReady?: (handler: ((item: TocItem) => void) | null) => void
+  // 滚动联动：编辑器滚动时把“当前所在标题”的 block id 上抛，供目录高亮选中态
+  onTocActiveChange?: (id: string | null) => void
   readOnly?: boolean
   uploadFile?: (file: File) => Promise<string | Record<string, unknown>>
   importRemoteImage?: (url: string) => Promise<string | Record<string, unknown>>

@@ -1,4 +1,4 @@
-import React, { memo } from 'react'
+import { memo } from 'react'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
 import { useDocumentSidebarModel } from './model/useDocumentSidebarModel'
 import { DocumentNode } from './components/DocumentNode'

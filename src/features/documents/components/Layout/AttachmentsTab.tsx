@@ -149,8 +149,8 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
   const storage = useStorage()
   const confirm = useConfirmStore(s => s.open)
   const [attachments, setAttachments] = useState<AttachmentItem[]>([])
-  const [trashAttachments, setTrashAttachments] = useState<FSBTrashItem[]>([])
-  const [viewMode, setViewMode] = useState<'active' | 'trash'>('active')
+  const [] = useState<FSBTrashItem[]>([])
+  const [] = useState<'active' | 'trash'>('active')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 

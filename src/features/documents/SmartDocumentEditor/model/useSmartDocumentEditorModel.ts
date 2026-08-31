@@ -9,7 +9,7 @@ import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../sma
 import { buildPastedImageHtml, getClipboardMarkdownImage, getCodeBlockPlainTextFromHtml, getCodeBlockPlainTextPaste, getSmartDocumentOutlineAndStats, getStandaloneCodeBlockPasteHtml, getUploadedFileUrl, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
 import { containsMarkdownFence } from '../fenceNormalize'
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension, quoteEnterExtension } from '../mathSupport'
-import { containsMathDelimiters, containsMarkdownDelimiters, containsStrictMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml, hasMeaningfulHtmlStructure, stripClipboardHtmlNoise } from '../mathPaste'
+import { containsMathDelimiters, containsMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml, hasMeaningfulHtmlStructure, stripClipboardHtmlNoise } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
 import { currentBlockHighlightExtension } from '../currentBlockHighlightExtension'
 import { emitEditorLinkClick, isNavigableHref } from '../editorLinkInterceptor'
@@ -192,7 +192,6 @@ export function useSmartDocumentEditorModel({
 
       const hasMath = containsMathDelimiters(plainText) || containsMathDelimiters(markdown)
       const hasMarkdown = containsMarkdownDelimiters(plainText) || containsMarkdownDelimiters(markdown)
-      const hasStrictMarkdown = containsStrictMarkdownDelimiters(plainText)
 
       // 1. 显式 Markdown 格式 (如从 Typora、Obsidian 等专门 MD 编辑器复制)
       if (hasExplicitMarkdown && (hasMath || hasMarkdown)) {
@@ -356,15 +355,61 @@ export function useSmartDocumentEditorModel({
     updateStatsAndToc(false)
   }, [editor, updateStatsAndToc])
 
+  // 找到标题所在、真正可滚动的祖先容器（即 scroll-spy 监听的那个 overflow 容器），
+  // 这样点击跳转与滚动联动操作的是同一个容器，二者算出的 active id 才能一致。
+  const findScrollParent = (node: HTMLElement): HTMLElement | null => {
+    let el: HTMLElement | null = node
+    while (el) {
+      const style = getComputedStyle(el)
+      const overflowY = style.overflowY
+      if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+        return el
+      }
+      el = el.parentElement
+    }
+    return null
+  }
+
   const handleTocItemClick = useCallback((item: TocItem) => {
+    // 设置光标位置（编辑上下文），失败不致命
     try {
       editor.setTextCursorPosition(item.id, 'start')
-      editor.prosemirrorView.dispatch(editor.prosemirrorView.state.tr.scrollIntoView())
+    } catch {
+      /* 光标定位失败不影响跳转滚动 */
+    }
+
+    // 直接把标题块对齐到滚动容器的内容区顶部：与 scroll-spy 的阈值线（容器 paddingTop 处）
+    // 完全一致，点击后滚动联动算出的 active id 即为此项，不会回退到上一个标题。
+    // 直接设置 scrollTop 比 scrollIntoView 更可靠——后者可能滚动到错误的祖先容器，
+    // 导致 scroll-spy 监听的容器没动、判定不一致。
+    let tries = 0
+    const scrollToHeading = () => {
+      const root = editor.domElement
+      const el = root?.querySelector<HTMLElement>(`[data-id="${CSS.escape(item.id)}"]`)
+      if (!el) {
+        // dom 尚未挂载或元素未就绪：下一帧重试，最多约 20 帧
+        if (tries++ < 20) requestAnimationFrame(scrollToHeading)
+        return
+      }
+      const scroller = findScrollParent(el)
+      if (scroller) {
+        const scRect = scroller.getBoundingClientRect()
+        const elRect = el.getBoundingClientRect()
+        const padTop = parseFloat(getComputedStyle(scroller).paddingTop) || 0
+        const targetTop = scroller.scrollTop + (elRect.top - scRect.top) - padTop
+        scroller.scrollTo({ top: targetTop, behavior: 'auto' })
+      } else {
+        el.scrollIntoView({ behavior: 'auto', block: 'start' })
+      }
+    }
+    requestAnimationFrame(scrollToHeading)
+
+    try {
       editor.focus()
     } catch {
-      updateStatsAndToc(true)
+      /* focus 失败不影响跳转滚动 */
     }
-  }, [editor, updateStatsAndToc])
+  }, [editor])
 
   useEffect(() => {
     updateStatsAndToc(true)

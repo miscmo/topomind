@@ -1,4 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { DetailSidebarTab, DocumentSaveStatus, DocumentWorkspaceLayoutProps, TocItem } from '../../types/workspaceTypes'
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../../../hooks/useResizePanel'
@@ -6,10 +7,10 @@ import { logAction } from '../../../../core/log-backend'
 import { useRightPanelStore } from '../../../right-panel/model/rightPanelStore'
 import { useDetailLockStore } from '../../../right-panel/model/detailLockStore'
 import { useGraphStore, useSelectedNodeId } from '../../../../stores/graphStore'
+import { useTabStore, useGraphSession } from '../../../../stores/tabs/tabStore'
 
 export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   isDirty,
-  onChange,
   onSave,
   attachmentCardPath,
   documentType,
@@ -24,6 +25,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   onSidebarHoverChange,
   tocItems: providedTocItems,
   onTocItemClick,
+  activeTocId,
   editorContent,
   statusBarContent,
   renderStatusBar
@@ -37,6 +39,118 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     return saved ? parseInt(saved, 10) : 180
   })
   const [internalDetailSidebarTab, setInternalDetailSidebarTab] = useState<DetailSidebarTab>('documents')
+  const [tocCollapsed, setTocCollapsed] = useState(false)
+  // 点击目录项时锁定高亮，屏蔽滚动联动的覆写，直到 scroll-spy 追上一致 / 用户手动滚动 / 超时
+  const [manualActiveId, setManualActiveId] = useState<string | null>(null)
+  // 目录浮层可拖动，位置记忆到 localStorage
+  const TOC_POS_KEY = 'topomind_toc_panel_position'
+  const [tocPos, setTocPos] = useState<{ top: number; right: number }>(() => {
+    try {
+      const raw = localStorage.getItem(TOC_POS_KEY)
+      if (raw) {
+        const p = JSON.parse(raw)
+        if (p && typeof p.top === 'number' && typeof p.right === 'number') return p
+      }
+    } catch { /* ignore corrupt value */ }
+    return { top: 12, right: 12 }
+  })
+  const [tocDragging, setTocDragging] = useState(false)
+  const tocNavRef = useRef<HTMLElement>(null)
+  const tocListRef = useRef<HTMLDivElement>(null)
+  const tocPosRef = useRef(tocPos)
+  const tocDragStartRef = useRef<{ mx: number; my: number; top: number; right: number } | null>(null)
+
+  const handleTocDragMouseDown = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    tocPosRef.current = tocPos
+    tocDragStartRef.current = { mx: e.clientX, my: e.clientY, top: tocPos.top, right: tocPos.right }
+    setTocDragging(true)
+  }, [tocPos])
+
+  useEffect(() => {
+    tocPosRef.current = tocPos
+  }, [tocPos])
+
+  // 有效的当前标题 = 点击锁定的 id 优先，否则跟随滚动联动算出的 activeTocId
+  const effectiveActiveId = manualActiveId ?? activeTocId
+
+  // 点击锁定释放：scroll-spy 已追上到同一标题、或用户手动滚动（滚轮/方向键/空格/PageUp-Down/Home-End）时，解除锁定。
+  // 注意：不再用固定 2s 超时无条件释放——否则当 scroll-spy 尚未追上（或算出不同 id）时会回退到错误的高亮项。
+  useEffect(() => {
+    if (!manualActiveId) return
+    if (activeTocId === manualActiveId) {
+      setManualActiveId(null)
+      return
+    }
+    const release = () => setManualActiveId(null)
+    const onUserScrollIntent = (e: Event) => {
+      if (e.type === 'wheel') {
+        release()
+        return
+      }
+      if (e.type === 'keydown') {
+        const k = (e as KeyboardEvent).key
+        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(k)) release()
+      }
+    }
+    window.addEventListener('wheel', onUserScrollIntent, { passive: true })
+    window.addEventListener('keydown', onUserScrollIntent)
+    return () => {
+      window.removeEventListener('wheel', onUserScrollIntent)
+      window.removeEventListener('keydown', onUserScrollIntent)
+    }
+  }, [manualActiveId, activeTocId])
+
+  // 滚动联动：当前所在标题在目录列表内自动滚动到可见区域（仅当展开时）
+  useEffect(() => {
+    if (!effectiveActiveId || tocCollapsed || !tocListRef.current) return
+    const activeEl = tocListRef.current.querySelector<HTMLElement>(`[data-toc-id="${CSS.escape(effectiveActiveId)}"]`)
+    activeEl?.scrollIntoView({ block: 'nearest' })
+  }, [effectiveActiveId, tocCollapsed])
+
+  useEffect(() => {
+    if (!tocDragging) return
+    const onMove = (e: MouseEvent) => {
+      const s = tocDragStartRef.current
+      if (!s) return
+      const dx = e.clientX - s.mx
+      const dy = e.clientY - s.my
+      const parent = tocNavRef.current?.offsetParent as HTMLElement | null
+      const navEl = tocNavRef.current
+      const navW = navEl?.offsetWidth ?? 240
+      const navH = navEl?.offsetHeight ?? 30
+      let newRight = s.right - dx
+      let newTop = s.top + dy
+      if (parent) {
+        // 用浮层自身真实宽高做边界约束，保证左/上/下边都不越过编辑器容器，
+        // 不会滑入左侧边栏功能区，也不会溢出编辑器底部。
+        const maxRight = Math.max(4, parent.clientWidth - navW - 4)
+        const maxTop = Math.max(4, parent.clientHeight - navH - 4)
+        newRight = Math.min(Math.max(newRight, 4), maxRight)
+        newTop = Math.min(Math.max(newTop, 4), maxTop)
+      } else {
+        newRight = Math.max(newRight, 4)
+        newTop = Math.max(newTop, 4)
+      }
+      const next = { top: newTop, right: newRight }
+      tocPosRef.current = next
+      setTocPos(next)
+    }
+    const onUp = () => {
+      setTocDragging(false)
+      tocDragStartRef.current = null
+      try { localStorage.setItem(TOC_POS_KEY, JSON.stringify(tocPosRef.current)) } catch { /* ignore */ }
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [tocDragging])
   const containerRef = useRef<HTMLDivElement>(null)
   
   const tocItems = providedTocItems ?? []
@@ -50,9 +164,11 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   const isMaximized = useRightPanelStore((s) => s.rightPanelMaximized)
   const toggleMaximized = useRightPanelStore((s) => s.toggleRightPanelMaximized)
 
-  // 锁定：读取当前选中节点与锁定状态，用于锁定/解锁按钮
+  // 锁定按知识库(kbPath)维度隔离：只取当前知识库自己的锁定状态，避免切库后串扰
   const selectedNodeIdRaw = useSelectedNodeId()
-  const lockedNodeId = useDetailLockStore((s) => s.lockedNodeId)
+  const activeTabId = useTabStore((s) => s.activeTabId)
+  const kbPath = useGraphSession(activeTabId).kbPath
+  const lockedNodeId = useDetailLockStore((s) => (kbPath ? (s.lockedByKb[kbPath] ?? null) : null))
   const toggleLock = useDetailLockStore((s) => s.toggleLock)
   const isLocked = lockedNodeId !== null
   const lockedNodeLabel = useGraphStore((s) => (lockedNodeId ? s.nodesMap.get(lockedNodeId)?.data.label ?? '' : ''))
@@ -115,6 +231,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   }, [handleSave, isDirty, lastSavedAt, saveStatus])
 
   const handleTocJump = useCallback((item: TocItem) => {
+    setManualActiveId(item.id)
     if (onTocItemClick) {
       onTocItemClick(item)
     }
@@ -157,7 +274,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                   ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]'
                   : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'
               }`}
-              onClick={() => toggleLock(selectedNodeIdRaw)}
+              onClick={() => toggleLock(kbPath, selectedNodeIdRaw)}
               disabled={!isLocked && !selectedNodeIdRaw}
               title={isLocked ? `已锁定节点${lockedNodeLabel ? `：${lockedNodeLabel}` : ''}（点击解锁）` : '锁定当前节点（固定显示该节点内容，不受选中变化影响）'}
               aria-label={isLocked ? '解锁节点' : '锁定当前节点'}
@@ -177,15 +294,6 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               aria-label="文档"
             >
               文
-            </button>
-            <button
-              type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'toc' ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'}`}
-              onClick={() => handleRailTabClick('toc')}
-              title="目录"
-              aria-label="目录"
-            >
-              目
             </button>
             <button
               type="button"
@@ -216,7 +324,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               {showSidebarContent ? (
                 <div className="w-full min-w-0 flex items-center h-[30px]">
                   <span className="text-[14px] font-bold text-[var(--color-text-primary)]">
-                    {detailSidebarTab === 'documents' ? '文档' : detailSidebarTab === 'toc' ? '目录' : '附件'}
+                    {detailSidebarTab === 'documents' ? '文档' : '附件'}
                   </span>
                 </div>
               ) : (
@@ -227,26 +335,6 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               <>
                 <div className={`flex-1 min-h-0 flex flex-col ${detailSidebarTab === 'documents' ? '' : 'hidden'}`}>
                   {documentsTabContent}
-                </div>
-                <div className={`flex-1 min-h-0 flex flex-col ${detailSidebarTab === 'toc' ? '' : 'hidden'}`}>
-                  {tocItems.length > 0 ? (
-                    <div className="flex-1 overflow-y-auto p-2 pb-2.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
-                      {tocItems.map(item => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className="w-full min-h-[30px] block mb-1 py-1.5 pr-2.5 border-none rounded-lg bg-transparent text-[#475569] !text-[var(--color-text-muted)] text-left text-[12px] leading-[1.45] cursor-pointer transition-colors duration-75 whitespace-nowrap overflow-hidden text-ellipsis hover:bg-[#edf4fb] hover:!bg-[var(--color-selected-bg)] hover:text-[#0f172a] hover:!text-[var(--color-primary)]"
-                          style={{ paddingLeft: `${12 + (item.level - 1) * 14}px` }}
-                          onClick={() => handleTocJump(item)}
-                          title={item.text}
-                        >
-                          {item.text}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-8 px-4 text-center text-[#94a3b8] !text-[var(--color-text-muted)] text-[13px] leading-[1.6]">当前文档暂无目录</div>
-                  )}
                 </div>
                 <div className={`flex-1 min-h-0 flex flex-col ${detailSidebarTab === 'attachments' ? '' : 'hidden'}`} style={{ padding: 0 }}>
                   {attachmentCardPath && (
@@ -280,6 +368,76 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
                 {editorContent}
               </div>
+            )}
+
+            {/* 浮在文档右上角的常驻目录：半透明、绝对定位，不占文档布局宽度；
+                仅在文档有标题时显示，点击跳转到对应标题；可折叠成小条。 */}
+            {tocItems.length > 0 && (
+              <nav
+                ref={tocNavRef}
+                aria-label="文档目录"
+                className="absolute z-20 max-w-[240px] rounded-xl border border-[var(--color-border-light)] bg-[color-mix(in_srgb,var(--color-surface)_82%,transparent)] backdrop-blur-[2px] shadow-[0_10px_30px_rgba(15,23,42,0.12)]"
+                style={{ top: tocPos.top, right: tocPos.right }}
+              >
+                <div className="flex items-center justify-between w-full gap-2 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] rounded-xl">
+                  <div
+                    onMouseDown={handleTocDragMouseDown}
+                    className="flex-1 text-center select-none hover:text-[var(--color-text-secondary)]"
+                    style={{ cursor: tocDragging ? 'grabbing' : 'move' }}
+                    title="拖动以移动目录"
+                  >
+                    目录
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTocCollapsed(v => !v)}
+                    aria-expanded={!tocCollapsed}
+                    className="shrink-0 flex items-center justify-center w-4 h-4 rounded text-[var(--color-text-muted)] hover:text-[var(--color-primary)] cursor-pointer"
+                    title={tocCollapsed ? '展开目录' : '折叠目录'}
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="transition-transform duration-150"
+                      style={{ transform: tocCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                      aria-hidden="true"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </div>
+                {!tocCollapsed && (
+                  <div ref={tocListRef} className="max-h-[calc(58vh-2.5rem)] overflow-y-auto px-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
+                    {tocItems.map(item => {
+                      const isActive = item.id === effectiveActiveId
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          data-toc-id={item.id}
+                          aria-current={isActive ? 'true' : undefined}
+                          className={`block w-full text-left text-[12px] leading-[1.5] py-1 px-1.5 rounded-md border-none bg-transparent cursor-pointer transition-colors duration-75 truncate ${
+                            isActive
+                              ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] font-semibold'
+                              : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-selected-bg)] hover:text-[var(--color-primary)]'
+                          }`}
+                          style={{ paddingLeft: `${10 + (item.level - 1) * 12}px` }}
+                          onClick={() => handleTocJump(item)}
+                          title={item.text}
+                        >
+                          {item.text}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </nav>
             )}
           </div>
 
