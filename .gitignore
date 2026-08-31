@@ -20,3 +20,4 @@ stats.html
 /build-format*
 /build-*
 /.graph-store-test-*
+/.verify-build-tmp
