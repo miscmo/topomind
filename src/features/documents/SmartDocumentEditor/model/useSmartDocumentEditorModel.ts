@@ -12,17 +12,45 @@ import { inlineMathInputRuleExtension, mathBlockShortcutExtension, quoteEnterExt
 import { containsMathDelimiters, containsMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml, hasMeaningfulHtmlStructure, stripClipboardHtmlNoise } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
 import { currentBlockHighlightExtension } from '../currentBlockHighlightExtension'
+import { blockLastModifiedExtension } from '../blockLastModifiedExtension'
+import { resolveBlockLastModified } from '../blockLastModifiedTime'
 import { emitEditorLinkClick, isNavigableHref } from '../editorLinkInterceptor'
 import type { SmartDocumentEditorProps } from '../types'
 import type { TocItem } from '../../types/workspaceTypes'
 import type { SmartDocumentDerivedBlockCache } from '../smartDocumentUtils'
 import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
 
+/**
+ * 读取「当前选中块」的最后修改时间。
+ * 优先用 getSelection()（对图片等节点块选区同样有效），失败再退回文本光标位置；
+ * 都没有（例如刚失焦、空文档）时返回 null。
+ */
+function readCurrentBlockLastModified(editor: any): number | null {
+  let block: any = null
+  try {
+    block = editor.getSelection()?.blocks?.[0] ?? null
+  } catch {
+    block = null
+  }
+  if (!block) {
+    try {
+      block = editor.getTextCursorPosition()?.block ?? null
+    } catch {
+      block = null
+    }
+  }
+  if (!block) {
+    return null
+  }
+  return resolveBlockLastModified((block.props as Record<string, unknown> | undefined)?.lastModified)
+}
+
 export function useSmartDocumentEditorModel({
   value,
   onChange,
   onTocChange,
   onWordCountChange,
+  onBlockLastModifiedChange,
   onTocItemClickReady,
   uploadFile,
   importRemoteImage,
@@ -35,6 +63,7 @@ export function useSmartDocumentEditorModel({
   const onChangeRef = useRef(onChange)
   const onTocChangeRef = useRef(onTocChange)
   const onWordCountChangeRef = useRef(onWordCountChange)
+  const onBlockLastModifiedChangeRef = useRef(onBlockLastModifiedChange)
   const onTocItemClickReadyRef = useRef(onTocItemClickReady)
   const editorSessionActiveRef = useRef(true)
 
@@ -49,6 +78,7 @@ export function useSmartDocumentEditorModel({
   onChangeRef.current = onChange
   onTocChangeRef.current = onTocChange
   onWordCountChangeRef.current = onWordCountChange
+  onBlockLastModifiedChangeRef.current = onBlockLastModifiedChange
   onTocItemClickReadyRef.current = onTocItemClickReady
 
   const initialContent = useMemo(() => {
@@ -239,7 +269,12 @@ export function useSmartDocumentEditorModel({
 
       return defaultPasteHandler()
     },
-    extensions: [mathBlockShortcutExtension(), currentBlockHighlightExtension(), quoteEnterExtension()],
+    extensions: [
+      mathBlockShortcutExtension(),
+      currentBlockHighlightExtension(),
+      quoteEnterExtension(),
+      blockLastModifiedExtension(),
+    ],
     _tiptapOptions: {
       extensions: [inlineMathInputRuleExtension],
     },
@@ -419,6 +454,31 @@ export function useSmartDocumentEditorModel({
       onTocItemClickReadyRef.current?.(null)
     }
   }, [clearScheduledStatsAndToc, editor, handleTocItemClick, updateStatsAndToc])
+
+  // 当前选中块的「最后修改时间」：随光标移动 / 文档变化同步给底部状态栏展示。
+  // 只从块属性里读取、不做任何 DOM 操作，因此不会干扰编辑、光标与输入法。
+  useEffect(() => {
+    let lastPublished: number | null | undefined
+
+    const publish = () => {
+      const next = readCurrentBlockLastModified(editor)
+      // 值没变就不上抛，避免无谓的父组件更新
+      if (next === lastPublished) {
+        return
+      }
+      lastPublished = next
+      onBlockLastModifiedChangeRef.current?.(next)
+    }
+
+    publish()
+    const unsubscribeSelection = editor.onSelectionChange(publish)
+    const unsubscribeChange = editor.onChange(publish)
+    return () => {
+      unsubscribeSelection?.()
+      unsubscribeChange?.()
+      onBlockLastModifiedChangeRef.current?.(null)
+    }
+  }, [editor])
 
   const customTheme = useMemo(() => {
     const baseTheme = isDarkTheme(theme) ? darkDefaultTheme : lightDefaultTheme

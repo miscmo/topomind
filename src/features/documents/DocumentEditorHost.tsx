@@ -62,6 +62,8 @@ export function DocumentEditorHost({
   const [smartTocItemClick, setSmartTocItemClick] = React.useState<((item: TocItem) => void) | null>(null)
   const [smartActiveTocId, setSmartActiveTocId] = React.useState<string | null>(null)
   const [documentStats, setDocumentStats] = React.useState<{ characters: number; words: number; blocks: number } | null>(null)
+  // 当前选中块的「最后修改时间」(epoch 毫秒)，由智能文档编辑器上抛，状态栏展示
+  const [blockLastModified, setBlockLastModified] = React.useState<number | null>(null)
 
   const handleSmartTocItemClickReady = React.useCallback((handler: ((item: TocItem) => void) | null) => {
     setSmartTocItemClick(() => handler)
@@ -139,6 +141,7 @@ export function DocumentEditorHost({
     onTocItemClickReady: handleSmartTocItemClickReady,
     onTocActiveChange: setSmartActiveTocId,
     onWordCountChange: setDocumentStats,
+    onBlockLastModifiedChange: setBlockLastModified,
   })
 
   return (
@@ -164,6 +167,7 @@ export function DocumentEditorHost({
       renderStatusBar={({ saveStatus, lastSavedAt, saveError }) => (
         <DocumentStatusBar
           stats={adapter.hasStats ? documentStats : null}
+          blockLastModified={adapter.hasStats ? blockLastModified : null}
           saveStatus={saveStatus}
           saveError={saveError}
           lastSavedAt={lastSavedAt}

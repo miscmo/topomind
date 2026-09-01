@@ -51,7 +51,7 @@ function QuickNodeToolbar({
 
   return (
     <div
-      className="absolute left-1/2 -top-[60px] z-[60] flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 px-1.5 py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12),0_4px_10px_rgba(0,0,0,0.06)] backdrop-blur-xl pointer-events-auto nodrag nowheel transition-all"
+      className="absolute left-1/2 -top-[60px] z-[60] flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12),0_4px_10px_rgba(0,0,0,0.06)] pointer-events-auto nodrag nowheel transition-all"
       onPointerDown={stopEvent}
       onMouseDown={stopEvent}
       onDoubleClick={stopEvent}

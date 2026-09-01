@@ -24,6 +24,9 @@ export interface SmartDocumentEditorProps {
   importRemoteImage?: (url: string) => Promise<string | Record<string, unknown>>
   resolveFileUrl?: (url: string) => Promise<string>
   onWordCountChange?: (stats: { characters: number; words: number; blocks: number }) => void
+  // 当前选中块的「最后修改时间」(epoch 毫秒)；没有选中块时为 null。
+  // 由底部状态栏展示，避免在块内插入标签干扰布局与光标。
+  onBlockLastModifiedChange?: (timestamp: number | null) => void
   attachmentInsertTargetKey?: string
 }
 

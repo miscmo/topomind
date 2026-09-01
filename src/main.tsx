@@ -1,6 +1,10 @@
 /**
  * TopoMind React 入口点
  */
+// 必须最先执行：给 BlockNote 默认块规格注入 lastModified 属性。
+// @blocknote/react 在自身模块加载时就把 defaultBlockSpecs 的 propSchema 捕获进渲染闭包，
+// 若注入晚于它，core 会写入 lastModified 而渲染层不认识 → 渲染崩溃。
+import './features/documents/SmartDocumentEditor/patchBlockSpecs'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'

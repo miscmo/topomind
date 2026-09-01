@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import type { DocumentSaveStatus } from '../../types/workspaceTypes'
+import { formatBlockLastModified } from '../../SmartDocumentEditor/blockLastModifiedTime'
 
 interface DocumentStatusBarProps {
   stats: {
@@ -7,6 +8,8 @@ interface DocumentStatusBarProps {
     words: number
     blocks: number
   } | null
+  // 当前选中块的「最后修改时间」(epoch 毫秒)；null 表示无选中块 / 当前文档类型不支持
+  blockLastModified?: number | null
   lastSavedAt?: number | null
   saveStatus?: DocumentSaveStatus
   saveError?: string | null
@@ -14,6 +17,7 @@ interface DocumentStatusBarProps {
 
 export const DocumentStatusBar = memo(function DocumentStatusBar({
   stats,
+  blockLastModified = null,
   lastSavedAt,
   saveStatus = 'idle',
   saveError
@@ -38,24 +42,39 @@ export const DocumentStatusBar = memo(function DocumentStatusBar({
         </div>
       </div>
 
-      {/* 右侧区域：文档统计 */}
+      {/* 右侧区域：当前块最后修改时间 → 文档统计 */}
       <div className="flex items-center gap-4">
-        {stats && (
+        {(blockLastModified != null || stats) && (
           <div className="flex items-center gap-4 opacity-90 transition-opacity hover:opacity-100">
-            <div className="flex items-center gap-1.5" title="文档块数量">
-              <span className="font-medium text-[var(--color-text-secondary)]">{stats.blocks}</span>
-              <span className="scale-90">块</span>
-            </div>
-            <div className="w-px h-3 bg-[var(--color-border)] opacity-60" />
-            <div className="flex items-center gap-1.5" title="单词数 (中文按字，英文按词)">
-              <span className="font-medium text-[var(--color-text-secondary)]">{stats.words}</span>
-              <span className="scale-90">词</span>
-            </div>
-            <div className="w-px h-3 bg-[var(--color-border)] opacity-60" />
-            <div className="flex items-center gap-1.5" title="字符数 (不含空格)">
-              <span className="font-medium text-[var(--color-text-secondary)]">{stats.characters}</span>
-              <span className="scale-90">字符</span>
-            </div>
+            {blockLastModified != null && (
+              <div className="flex items-center gap-1.5" title="当前选中块的最后修改时间">
+                <span className="scale-90">最后修改时间：</span>
+                <span className="font-medium text-[var(--color-text-secondary)] tabular-nums">
+                  {formatBlockLastModified(blockLastModified)}
+                </span>
+              </div>
+            )}
+            {blockLastModified != null && stats && (
+              <div className="w-px h-3 bg-[var(--color-border)] opacity-60" />
+            )}
+            {stats && (
+              <>
+                <div className="flex items-center gap-1.5" title="文档块数量">
+                  <span className="font-medium text-[var(--color-text-secondary)]">{stats.blocks}</span>
+                  <span className="scale-90">块</span>
+                </div>
+                <div className="w-px h-3 bg-[var(--color-border)] opacity-60" />
+                <div className="flex items-center gap-1.5" title="单词数 (中文按字，英文按词)">
+                  <span className="font-medium text-[var(--color-text-secondary)]">{stats.words}</span>
+                  <span className="scale-90">词</span>
+                </div>
+                <div className="w-px h-3 bg-[var(--color-border)] opacity-60" />
+                <div className="flex items-center gap-1.5" title="字符数 (不含空格)">
+                  <span className="font-medium text-[var(--color-text-secondary)]">{stats.characters}</span>
+                  <span className="scale-90">字符</span>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

@@ -219,6 +219,8 @@ export interface DocumentEditorAdapterProps {
   onTocItemClickReady: (handler: ((item: TocItem) => void) | null) => void
   onTocActiveChange?: (id: string | null) => void
   onWordCountChange: (stats: { characters: number; words: number; blocks: number } | null) => void
+  // 当前选中块的「最后修改时间」(epoch 毫秒)，无选中块时为 null；由底部状态栏展示
+  onBlockLastModifiedChange?: (timestamp: number | null) => void
 }
 
 interface DocumentEditorTypeAdapter {
@@ -238,6 +240,7 @@ function SmartDocumentAdapter({
   attachmentCardPath,
   attachmentInsertTargetKey,
   onWordCountChange,
+  onBlockLastModifiedChange,
 }: DocumentEditorAdapterProps) {
   const store = useStorage()
   const persistedValue = React.useMemo(
@@ -407,6 +410,7 @@ function SmartDocumentAdapter({
           importRemoteImage={importRemoteImage}
           resolveFileUrl={resolveFileUrl}
           onWordCountChange={onWordCountChange}
+          onBlockLastModifiedChange={onBlockLastModifiedChange}
           attachmentInsertTargetKey={attachmentInsertTargetKey}
         />
       </ErrorBoundary>
