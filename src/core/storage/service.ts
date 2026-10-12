@@ -25,6 +25,7 @@ export type {
   TopoDocumentManifestItem,
   TopoDocumentMetaPatch,
   TopoDocumentRepairResult,
+  MoveTopoDocumentToCardResult,
   TopoDocumentStorageBackend,
   VaultConfig,
   VaultStorageBackend,
@@ -175,6 +176,9 @@ export function createStore(backend: StorageBackend) {
     },
     async moveTopoDocument(cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) {
       try { return await backend.moveTopoDocument(cardPath, documentId, newParentId, newSortOrder) } catch (e) { logger.catch('Store.moveTopoDocument', `移动多类型文档失败: ${cardPath}/${documentId}`, e); throw e }
+    },
+    async moveTopoDocumentToCard(cardPath: string, documentId: string, targetCardPath: string) {
+      try { return await backend.moveTopoDocumentToCard(cardPath, documentId, targetCardPath) } catch (e) { logger.catch('Store.moveTopoDocumentToCard', `跨节点移动文档失败: ${cardPath}/${documentId} -> ${targetCardPath}`, e); throw e }
     },
     async repairTopoDocuments(cardPath: string) {
       try { return await backend.repairTopoDocuments(cardPath) } catch (e) { logger.catch('Store.repairTopoDocuments', `修复多类型文档失败: ${cardPath}`, e); throw e }

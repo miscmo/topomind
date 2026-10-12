@@ -10,6 +10,7 @@ import { joinRefs } from '../../../domain/graph/path-utils'
 import { topoDocumentIdFromPath, topoDocumentPath } from '../../../features/documents/types/documentTypes'
 import { getTopoDocumentTypeDefinition } from '../../../features/documents/services/documentTypeRegistry'
 import { useDetailPanelStore } from './detailPanelStore'
+import { toast } from '../../../stores/toastStore'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
 
 export function useDetailDocuments({
@@ -243,6 +244,61 @@ export function useDetailDocuments({
     }
   }, [activeDocumentPath, flushDocumentSave, nodePath, storage, loadDocuments])
 
+  const handleMoveDocumentToCard = useCallback(async (documentId: string, targetCardPath: string) => {
+    if (!nodePath) return
+    setIsDocumentBusy(true)
+    try {
+      if (topoDocumentPath(documentId) === activeDocumentPath) {
+        await flushDocumentSave()
+      }
+      const result = await storage.moveTopoDocumentToCard(nodePath, documentId, targetCardPath)
+
+      // 刷新源节点文档列表；被移动的文档已不在当前节点，清理/重置激活项
+      const nextDocs = await loadDocuments(nodePath)
+      if (topoDocumentPath(documentId) === activeDocumentPath) {
+        setActiveDocumentPath(nextDocs.length > 0 ? topoDocumentPath(nextDocs[0].id) : '')
+      }
+
+      const targetLabel = targetCardPath === '__ROOT__'
+        ? '根节点'
+        : (storeApi.getState().nodesMap.get(targetCardPath)?.data.label ?? targetCardPath)
+
+      // 撤销：删除目标节点上的副本（进回收站）+ 从源节点回收站恢复原文档（含子文档）
+      const undo = async () => {
+        try {
+          if (result.moved[0]) {
+            await storage.deleteTopoDocument(targetCardPath, result.moved[0].id)
+          }
+          const trash = await storage.listTrashTopoDocuments(nodePath)
+          const trashItem = trash.find((t) => t.documentId === documentId)
+          if (trashItem) {
+            const restored = await storage.restoreTrashTopoDocument(nodePath, trashItem.trashName)
+            setActiveDocumentPath(topoDocumentPath(restored.id))
+          }
+          await loadDocuments(nodePath)
+          logAction('文档:跨节点移动-撤销', 'DetailPanel', { nodePath, documentId, targetCardPath })
+        } catch (e) {
+          logger.catch('DetailPanel', 'undoMoveDocumentToCard', e)
+          toast({ level: 'error', title: '撤销失败', message: (e as Error)?.message || String(e), duration: 6000 })
+        }
+      }
+
+      toast({
+        level: 'info',
+        title: `已移动到「${targetLabel}」`,
+        message: `移动 ${result.movedCount} 篇文档${result.attachmentCount > 0 ? `，${result.attachmentCount} 个附件随文档迁移` : ''}${result.attachmentCleaned > 0 ? `，源节点清理 ${result.attachmentCleaned} 个孤儿附件` : ''}`,
+        duration: 6000,
+        action: { label: '撤销', onClick: () => void undo() },
+      })
+      logAction('文档:跨节点移动', 'DetailPanel', { nodePath, documentId, targetCardPath, movedCount: result.movedCount, attachmentCount: result.attachmentCount, attachmentCleaned: result.attachmentCleaned })
+    } catch (e) {
+      logger.catch('DetailPanel', 'handleMoveDocumentToCard', e)
+      toast({ level: 'error', title: '移动失败', message: (e as Error)?.message || String(e), duration: 6000 })
+    } finally {
+      setIsDocumentBusy(false)
+    }
+  }, [activeDocumentPath, flushDocumentSave, nodePath, storage, loadDocuments, storeApi, topoDocuments])
+
   const handleUpdateDocumentMeta = useCallback(async (documentPath: string, patch: { icon?: string | null; color?: string | null }) => {
     if (!nodePath || documentPath === '') return
     const documentId = topoDocumentIdFromPath(documentPath)
@@ -334,6 +390,7 @@ export function useDetailDocuments({
     handleRenameDocument,
     handleDeleteDocument,
     handleMoveDocument,
+    handleMoveDocumentToCard,
     handleUpdateDocumentMeta,
     handleExportTopoDocument,
     handleOpenCurrentDocumentFolder,

@@ -7,6 +7,7 @@ export function createDocumentService(deps) {
     listTopoDocuments,
     listTrashTopoDocuments,
     moveTopoDocument,
+    moveTopoDocumentToCard,
     openTopoDocumentFolder,
     readTopoDocument,
     renameTopoDocument,
@@ -59,6 +60,10 @@ export function createDocumentService(deps) {
 
     moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder) {
       return moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder);
+    },
+
+    moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetCardPath) {
+      return moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetCardPath);
     },
 
     repairTopoDocuments(rootDir, cardPath) {

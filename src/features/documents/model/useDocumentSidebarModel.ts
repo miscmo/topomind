@@ -41,6 +41,7 @@ export interface UseDocumentSidebarModelProps {
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
+  onMoveDocumentToCard?: (documentId: string) => void
   onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
 }
 
@@ -54,6 +55,7 @@ export function useDocumentSidebarModel({
   onRenameDocument,
   onDeleteDocument,
   onMoveDocument,
+  onMoveDocumentToCard,
   onUpdateDocumentMeta,
 }: UseDocumentSidebarModelProps) {
   const graphStoreApi = useGraphStoreApi()
@@ -339,6 +341,8 @@ export function useDocumentSidebarModel({
       onDeleteDocument(topoDocumentPath(targetId))
     } else if (action === 'export' && targetId) {
       onExportTopoDocument(topoDocumentPath(targetId))
+    } else if (action === 'move-to-node' && targetId) {
+      if (onMoveDocumentToCard) onMoveDocumentToCard(targetId)
     } else if (action.startsWith('create:')) {
       const createType = action.slice('create:'.length) as TopoDocumentType
       if (!TOPO_DOCUMENT_TYPES.includes(createType)) return
@@ -356,7 +360,7 @@ export function useDocumentSidebarModel({
         updateExpandedNodes(prev => new Set(prev).add(targetId))
       }
     }
-  }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, nodeId, startRename, updateExpandedNodes])
+  }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, onMoveDocumentToCard, nodeId, startRename, updateExpandedNodes])
 
   const openIconPicker = useCallback((targetId: string, x: number, y: number) => {
     if (isBusy || !onUpdateDocumentMeta) return

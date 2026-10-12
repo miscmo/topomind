@@ -17,6 +17,7 @@ export interface DocumentSidebarProps {
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
+  onMoveDocumentToCard?: (documentId: string) => void
   onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
 }
 
@@ -31,6 +32,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
   onRenameDocument,
   onDeleteDocument,
   onMoveDocument,
+  onMoveDocumentToCard,
   onUpdateDocumentMeta,
 }: DocumentSidebarProps) {
   const { state, refs, actions } = useDocumentSidebarModel({
@@ -43,6 +45,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     onRenameDocument,
     onDeleteDocument,
     onMoveDocument,
+    onMoveDocumentToCard,
     onUpdateDocumentMeta,
   })
 

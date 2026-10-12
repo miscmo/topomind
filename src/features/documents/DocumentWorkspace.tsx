@@ -29,6 +29,7 @@ interface DocumentWorkspaceProps {
   onRenameDocument: (documentPath: string, name: string) => void
   onDeleteDocument: (documentPath: string) => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
+  onMoveDocumentToCard?: (documentId: string) => void
   onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
   isDocumentBusy?: boolean
 }
@@ -57,6 +58,7 @@ export function DocumentWorkspace({
   onRenameDocument,
   onDeleteDocument,
   onMoveDocument,
+  onMoveDocumentToCard,
   onUpdateDocumentMeta,
   isDocumentBusy,
 }: DocumentWorkspaceProps) {
@@ -73,9 +75,10 @@ export function DocumentWorkspace({
       onRenameDocument={onRenameDocument}
       onDeleteDocument={onDeleteDocument}
       onMoveDocument={onMoveDocument}
+      onMoveDocumentToCard={onMoveDocumentToCard}
       onUpdateDocumentMeta={onUpdateDocumentMeta}
     />
-  ), [nodeId, topoDocuments, activeDocumentPath, isDocumentBusy, onSelectDocument, onCreateTopoDocument, onExportTopoDocument, onRenameDocument, onDeleteDocument, onMoveDocument, onUpdateDocumentMeta])
+  ), [nodeId, topoDocuments, activeDocumentPath, isDocumentBusy, onSelectDocument, onCreateTopoDocument, onExportTopoDocument, onRenameDocument, onDeleteDocument, onMoveDocument, onMoveDocumentToCard, onUpdateDocumentMeta])
 
   return (
     <DocumentEditorHost

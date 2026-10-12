@@ -14,6 +14,7 @@ import { useDetailPanelStore } from '../../model/detailPanelStore'
 import { useDetailLockStore } from '../../model/detailLockStore'
 import type { DetailSidebarTab } from '../../../../features/documents/types/workspaceTypes'
 import { DocumentBreadcrumb } from './DocumentBreadcrumb'
+import { DocumentMoveToNodeDialog } from '../../../documents/components/DocumentMoveToNodeDialog'
 
 interface DetailPanelProps {
   tabId: string
@@ -92,6 +93,7 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
     handleRenameDocument,
     handleDeleteDocument,
     handleMoveDocument,
+    handleMoveDocumentToCard,
     handleUpdateDocumentMeta,
     handleExportTopoDocument,
     handleOpenCurrentDocumentFolder,
@@ -107,6 +109,7 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
     const saved = localStorage.getItem('topomind_detail_sidebar_collapsed')
     return saved ? saved === 'true' : true
   })
+  const [moveToNode, setMoveToNode] = useState<{ documentId: string } | null>(null)
 
   const currentTopoDocuments = nodePath && topoDocumentsCardPath === nodePath ? topoDocuments : []
   const activeTopoDocument = activeTopoDocumentId
@@ -235,6 +238,7 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
           onRenameDocument={(documentPath: string, name: string) => { void handleRenameDocument(documentPath, name) }}
           onDeleteDocument={(documentPath: string) => { void handleDeleteDocument(documentPath) }}
           onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
+          onMoveDocumentToCard={(documentId: string) => { setMoveToNode({ documentId }) }}
           onUpdateDocumentMeta={(documentPath: string, patch: { icon?: string | null; color?: string | null }) => { void handleUpdateDocumentMeta(documentPath, patch) }}
           isDocumentBusy={isDocumentBusy}
           nodeId={selectedNodeId}
@@ -242,6 +246,18 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
           <div className="h-full w-full" aria-hidden="true" />
         )}
       </div>
+      {moveToNode && (
+        <DocumentMoveToNodeDialog
+          sourceNodePath={nodePath ?? ''}
+          resolveNodePath={resolveNodePath}
+          sourceTitle={topoDocuments.find((d) => d.id === moveToNode.documentId)?.title}
+          onConfirm={(targetCardPath: string) => {
+            setMoveToNode(null)
+            void handleMoveDocumentToCard(moveToNode.documentId, targetCardPath)
+          }}
+          onClose={() => setMoveToNode(null)}
+        />
+      )}
     </div>
   )
 })

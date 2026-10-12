@@ -1348,6 +1348,200 @@ function _fs_moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSor
   return found.item;
 }
 
+// ===== 跨节点移动文档（含整棵子文档子树与附件） =====
+
+// 从文档内容（任意结构化对象）中提取所有 `_attach/<name>` 引用，去重返回。
+// 采用 JSON 序列化后扫描，确保覆盖所有块类型（image/file/video/audio 等）
+// 以及富文本内联引用，避免漏改导致图裂。
+function _fs_extractAttachmentRefs(content) {
+  var refs = {};
+  var text;
+  try {
+    text = JSON.stringify(content == null ? '' : content);
+  } catch (e) {
+    return [];
+  }
+  var re = /_attach\/[^"'\\\s]+/g;
+  var m;
+  while ((m = re.exec(text)) !== null) {
+    refs[m[0]] = true;
+  }
+  return Object.keys(refs);
+}
+
+// 用 { 旧ref: 新ref } 映射表重写内容中的 `_attach` 引用。
+// 按 JSON 引号边界替换（"_attach/foo.png" -> "_attach/foo-1.png"），
+// 避免把更长文件名的前缀误伤成另一个引用。
+function _fs_rewriteAttachmentRefsInContent(content, refMap) {
+  if (!refMap || !Object.keys(refMap).length) return content;
+  var text;
+  try {
+    text = JSON.stringify(content == null ? '' : content);
+  } catch (e) {
+    return content;
+  }
+  Object.keys(refMap).forEach(function(oldRef) {
+    var newRef = refMap[oldRef];
+    if (!newRef || newRef === oldRef) return;
+    var quotedOld = JSON.stringify(oldRef);
+    var quotedNew = JSON.stringify(newRef);
+    text = text.split(quotedOld).join(quotedNew);
+  });
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return content;
+  }
+}
+
+// 将一篇文档的附件从源节点复制到目标节点，返回 { 旧ref: 新ref } 映射。
+// 源附件缺失时跳过改写（避免图裂），复制/导入失败也跳过（不阻断移动主流程）。
+function _fs_copyDocumentAttachmentsToCard(rootDir, sourceCardPath, targetCardPath, content) {
+  var refMap = {};
+  var refs = _fs_extractAttachmentRefs(content);
+  refs.forEach(function(ref) {
+    if (refMap[ref]) return;
+    var sourcePath;
+    try {
+      sourcePath = _fs_attachmentRefToPath(rootDir, sourceCardPath, ref);
+    } catch (e) {
+      return;
+    }
+    if (!nodeFs.existsSync(sourcePath)) return;
+    var fileName = nodePath.basename(sourcePath);
+    var newRef;
+    try {
+      newRef = _fs_importAttachment(rootDir, targetCardPath, sourcePath, fileName);
+    } catch (e) {
+      return;
+    }
+    if (newRef) refMap[ref] = newRef;
+  });
+  return refMap;
+}
+
+// 跨节点移动一篇文档及其全部子文档，并迁移对应附件。
+// 返回 { moved: [...], targetCardPath, movedCount, attachmentCount, attachmentCleaned }。
+// 策略：先把整棵子树（含附件）写入目标节点，再删除源（进回收站）。
+// 写入失败不影响源数据；删除失败也不影响已写入的目标。
+// 删除源后，再清理源节点中「被移动文档引用、且其他活动文档不再引用」的孤儿附件（进附件回收站，可撤销）。
+function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetCardPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  if (!targetCardPath || !String(targetCardPath).trim()) {
+    throw new Error('目标节点不能为空');
+  }
+  var sourceManifest = _fs_readTopoDocumentManifest(rootDir, sourceCardPath);
+  var sourceKey = String(documentId || '');
+  var sourceItem = sourceManifest.documents[sourceKey];
+  if (!sourceItem) throw new Error('源文档不存在: ' + documentId);
+
+  // 同节点内移动：直接复用既有 reparent 逻辑（不产生副本、不动附件）。
+  if (String(sourceCardPath) === String(targetCardPath)) {
+    return _fs_moveTopoDocument(rootDir, sourceCardPath, documentId, null, 0);
+  }
+
+  // 提前校验目标节点目录合法（不存在则抛错，避免写到无效位置）。
+  var targetCardDir = targetCardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, targetCardPath);
+
+  // 收集整棵子树（深度优先，含自身）。
+  var subtreeIds = [];
+  (function collect(id) {
+    subtreeIds.push(id);
+    Object.keys(sourceManifest.documents).forEach(function(did) {
+      if (sourceManifest.documents[did].parentId === id) collect(did);
+    });
+  })(sourceKey);
+
+  // 为子树每个文档分配新 id（避免与目标节点已有 id 冲突），并保持父子映射。
+  var idRemap = {};
+  subtreeIds.forEach(function(id) {
+    idRemap[id] = 'doc_' + randomUUID().replace(/-/g, '');
+  });
+
+  var targetManifest = _fs_readTopoDocumentManifest(rootDir, targetCardPath);
+  var targetDocsDir = _fs_topoDocumentsDir(rootDir, targetCardPath);
+  _fs_ensureDir(targetDocsDir);
+  var maxSortOrder = 0;
+  Object.keys(targetManifest.documents).forEach(function(did) {
+    if (targetManifest.documents[did].sortOrder > maxSortOrder) maxSortOrder = targetManifest.documents[did].sortOrder;
+  });
+
+  var movedItems = [];
+  var attachmentCount = 0;
+  var movedAttachmentRefs = {};
+
+  subtreeIds.forEach(function(oldId) {
+    var item = sourceManifest.documents[oldId];
+    var content = _fs_readTopoDocument(rootDir, sourceCardPath, oldId);
+    var refMap = _fs_copyDocumentAttachmentsToCard(rootDir, sourceCardPath, targetCardPath, content);
+    attachmentCount += Object.keys(refMap).length;
+    Object.keys(refMap).forEach(function(r) { movedAttachmentRefs[r] = true; });
+    if (Object.keys(refMap).length) {
+      content = _fs_rewriteAttachmentRefsInContent(content, refMap);
+    }
+    // 根文档在目标节点置为顶层（parentId=null）；子文档的 parentId 指向
+    // 同子树中已被移动文档的新 id。
+    var newParentId = (oldId === sourceKey)
+      ? null
+      : (item.parentId && idRemap[item.parentId] ? idRemap[item.parentId] : null);
+    var newId = idRemap[oldId];
+    var fileName = newId + TOPO_DOCUMENT_EXTENSIONS[item.type];
+    var filePath = nodePath.join(targetDocsDir, fileName);
+    _fs_writeTopoDocumentContent(filePath, item.type, content);
+    var now = Date.now();
+    var newItem = {
+      id: newId,
+      type: item.type,
+      title: item.title,
+      path: fileName,
+      parentId: newParentId,
+      sortOrder: ++maxSortOrder,
+      createdAt: item.createdAt || now,
+      updatedAt: now,
+      version: item.version || 1,
+    };
+    if (typeof item.icon === 'string' && item.icon) newItem.icon = item.icon;
+    if (typeof item.color === 'string' && item.color) newItem.color = item.color;
+    targetManifest.documents[newId] = newItem;
+    movedItems.push(newItem);
+  });
+
+  // 先提交目标清单，再删除源子树（进回收站，便于撤销/恢复）。
+  _fs_writeTopoDocumentManifest(rootDir, targetCardPath, targetManifest);
+  _fs_deleteTopoDocument(rootDir, sourceCardPath, documentId);
+
+  // 清理源节点孤儿附件：被移动文档引用、且源节点其他活动文档不再引用的附件，
+  // 移入附件回收站（与文档回收站一致，可撤销）。被共用的附件保留不动。
+  var attachmentCleaned = 0;
+  if (movedAttachmentRefs && Object.keys(movedAttachmentRefs).length) {
+    var stillReferenced = {};
+    try {
+      var remainingManifest = _fs_readTopoDocumentManifest(rootDir, sourceCardPath);
+      Object.keys(remainingManifest.documents).forEach(function(rid) {
+        try {
+          var c = _fs_readTopoDocument(rootDir, sourceCardPath, rid);
+          _fs_extractAttachmentRefs(c).forEach(function(r) { stillReferenced[r] = true; });
+        } catch (e) {}
+      });
+    } catch (e) {}
+    Object.keys(movedAttachmentRefs).forEach(function(ref) {
+      if (stillReferenced[ref]) return; // 仍被源节点其他文档引用，保留
+      try {
+        _fs_deleteAttachment(rootDir, sourceCardPath, ref);
+        attachmentCleaned += 1;
+      } catch (e) {}
+    });
+  }
+
+  return {
+    moved: movedItems,
+    targetCardPath: targetCardPath,
+    movedCount: movedItems.length,
+    attachmentCount: attachmentCount,
+    attachmentCleaned: attachmentCleaned,
+  };
+}
+
 const trashService = createTrashService({
   clearTrashItems: _fs_clearTrashItems,
   deleteTrashItem: _fs_deleteTrashItem,
@@ -1433,6 +1627,7 @@ const documentService = createDocumentService({
   listTopoDocuments: _fs_listTopoDocuments,
   listTrashTopoDocuments: _fs_listTrashTopoDocuments,
   moveTopoDocument: _fs_moveTopoDocument,
+  moveTopoDocumentToCard: _fs_moveTopoDocumentToCard,
   openTopoDocumentFolder: _fs_openTopoDocumentFolder,
   readTopoDocument: _fs_readTopoDocument,
   renameTopoDocument: _fs_renameTopoDocument,
@@ -1762,6 +1957,10 @@ const fileService = {
 
     moveTopoDocument: function(rootDir, cardPath, documentId, newParentId, newSortOrder) {
       return documentService.moveTopoDocument(rootDir, cardPath, documentId, newParentId, newSortOrder);
+    },
+
+    moveTopoDocumentToCard: function(rootDir, sourceCardPath, documentId, targetCardPath) {
+      return documentService.moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetCardPath);
     },
 
     repairTopoDocuments: function(rootDir, cardPath) {

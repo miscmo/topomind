@@ -340,6 +340,9 @@ function registerIPC() {
   ipcMain.handle('fs:moveTopoDocument', function(e, rootDir, cardPath, documentId, newParentId, newSortOrder) {
     return fileService.moveTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId, newParentId, newSortOrder);
   });
+  ipcMain.handle('fs:moveTopoDocumentToCard', function(e, rootDir, sourceCardPath, documentId, targetCardPath) {
+    return fileService.moveTopoDocumentToCard(requireActiveWorkDir(rootDir), sourceCardPath, documentId, targetCardPath);
+  });
   ipcMain.handle('fs:readTopoDocument', function(e, rootDir, cardPath, documentId) {
     return fileService.readTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId);
   });

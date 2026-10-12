@@ -7,13 +7,15 @@ export interface ToastItem {
   level: ToastLevel
   title: string
   message?: string
+  /** 可选的右上角操作按钮（如「撤销」）。 */
+  action?: { label: string; onClick: () => void }
   /** 自动关闭时长（ms）；0 表示常驻，需手动关闭。 */
   duration: number
 }
 
 interface ToastState {
   toasts: ToastItem[]
-  pushToast: (toast: { level?: ToastLevel; title: string; message?: string; duration?: number }) => string
+  pushToast: (toast: { level?: ToastLevel; title: string; message?: string; action?: { label: string; onClick: () => void }; duration?: number }) => string
   dismissToast: (id: string) => void
 }
 
@@ -30,6 +32,6 @@ export const useToastStore = create<ToastState>((set) => ({
 }))
 
 /** 命令式入口，供非组件代码（如 model hook）调用。 */
-export function toast(input: { level?: ToastLevel; title: string; message?: string; duration?: number }): string {
+export function toast(input: { level?: ToastLevel; title: string; message?: string; action?: { label: string; onClick: () => void }; duration?: number }): string {
   return useToastStore.getState().pushToast(input)
 }

@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { FilePlus, Download, PenLine, Trash2, ChevronRight, Smile, Palette } from 'lucide-react'
+import { FilePlus, Download, PenLine, Trash2, ChevronRight, Smile, Palette, FolderInput } from 'lucide-react'
 import type { DocumentContextMenuState } from '../model/useDocumentSidebarModel'
 import { getTopoDocumentTypeDefinition, TOPO_DOCUMENT_TYPES } from '../services/documentTypeRegistry'
 
@@ -115,6 +115,17 @@ export const DocumentContextMenu: React.FC<DocumentContextMenuProps> = ({
         >
           <span className="flex items-center justify-center text-[var(--color-text-muted)]"><Palette className="w-4 h-4" /></span>
           修改字体颜色
+        </button>
+      )}
+      {contextMenu.targetId && (
+        <button
+          type="button"
+          className="flex items-center gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={() => onAction('move-to-node')}
+          disabled={isBusy}
+        >
+          <span className="flex items-center justify-center text-[var(--color-text-muted)]"><FolderInput className="w-4 h-4" /></span>
+          移动到节点…
         </button>
       )}
       {contextMenu.targetId && (

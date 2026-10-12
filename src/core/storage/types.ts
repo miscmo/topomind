@@ -93,6 +93,16 @@ export interface TopoDocumentExportPayload {
   content: string
 }
 
+/** 跨节点移动文档的返回结果（含子文档与附件统计）。 */
+export interface MoveTopoDocumentToCardResult {
+  moved: TopoDocumentManifestItem[]
+  targetCardPath: string
+  movedCount: number
+  attachmentCount: number
+  /** 源节点中被清理的孤儿附件数量（被移动文档引用、且其他活动文档不再引用） */
+  attachmentCleaned: number
+}
+
 export interface AttachmentItem {
   name: string
   path: string
@@ -139,6 +149,7 @@ export interface TopoDocumentStorageBackend {
   restoreTrashTopoDocument: (cardPath: string, trashName: string) => Promise<TopoDocumentManifestItem>
   clearTrashTopoDocuments: (cardPath: string) => Promise<void>
   moveTopoDocument: (cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
+  moveTopoDocumentToCard: (cardPath: string, documentId: string, targetCardPath: string) => Promise<MoveTopoDocumentToCardResult>
   repairTopoDocuments: (cardPath: string) => Promise<TopoDocumentRepairResult>
   exportTopoDocument: (cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
   openTopoDocumentFolder: (cardPath: string, documentId: string) => Promise<boolean>

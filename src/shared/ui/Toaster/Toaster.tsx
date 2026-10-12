@@ -38,6 +38,18 @@ function ToastCard({ item }: { item: ToastItem }) {
             {item.message}
           </div>
         )}
+        {item.action && (
+          <button
+            type="button"
+            onClick={() => {
+              item.action?.onClick()
+              dismiss(item.id)
+            }}
+            className="mt-2 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-soft)]"
+          >
+            {item.action.label}
+          </button>
+        )}
       </div>
       <button
         type="button"

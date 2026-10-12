@@ -5,7 +5,7 @@
 import { logger } from './logger'
 import type { ElectronAPI } from '../types/electron-api'
 import type { EdgeRelation, EdgeWeight } from '../types'
-import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentRepairResult } from './storage/service'
+import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentRepairResult, MoveTopoDocumentToCardResult } from './storage/service'
 import type { TopoDocumentType } from './topoDocumentTypes'
 
 const getApi = (): ElectronAPI | null => {
@@ -120,6 +120,7 @@ export interface FSB {
   restoreTrashTopoDocument: (rootDir: string, cardPath: string, trashName: string) => Promise<TopoDocumentManifestItem>
   clearTrashTopoDocuments: (rootDir: string, cardPath: string) => Promise<void>
   moveTopoDocument: (rootDir: string, cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
+  moveTopoDocumentToCard: (rootDir: string, sourceCardPath: string, documentId: string, targetCardPath: string) => Promise<MoveTopoDocumentToCardResult>
   repairTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentRepairResult>
   exportTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
   openTopoDocumentFolder: (rootDir: string, cardPath: string, documentId: string) => Promise<boolean>
@@ -189,6 +190,8 @@ const FSBImpl: FSB = {
     _call('fs:clearTrashTopoDocuments', rootDir, cardPath) as Promise<void>,
   moveTopoDocument: (rootDir, cardPath, documentId, newParentId, newSortOrder) =>
     _call('fs:moveTopoDocument', rootDir, cardPath, documentId, newParentId, newSortOrder) as Promise<TopoDocumentManifestItem>,
+  moveTopoDocumentToCard: (rootDir, sourceCardPath, documentId, targetCardPath) =>
+    _call('fs:moveTopoDocumentToCard', rootDir, sourceCardPath, documentId, targetCardPath) as Promise<MoveTopoDocumentToCardResult>,
   repairTopoDocuments: (rootDir, cardPath) =>
     _call('fs:repairTopoDocuments', rootDir, cardPath) as Promise<TopoDocumentRepairResult>,
   exportTopoDocument: (rootDir, cardPath, documentId) =>
