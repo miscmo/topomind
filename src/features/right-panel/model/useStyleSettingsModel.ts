@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
-import { useRightPanelStore } from './rightPanelStore'
+import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { useGraphStore } from '../../../stores/graphStore'
 import { useStorage } from '../../../core/storage'

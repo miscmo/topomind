@@ -19,6 +19,7 @@ import { PluginViewHost } from './plugins'
 import { useConfigBootstrap } from './application/config'
 import { LearningTrackerProvider } from './features/learning-tracker/LearningTrackerProvider'
 import { ErrorBoundary } from './features/layout/ErrorBoundary'
+import { Toaster } from './shared/ui/Toaster/Toaster'
 
 const HomePage = lazy(() => import('./features/kb/HomePage'))
 const GraphPage = lazy(() => import('./features/graph/GraphPage'))
@@ -70,6 +71,7 @@ export default memo(function App() {
             <ConfirmModal />
             <PromptModal />
           </Suspense>
+          <Toaster />
           {isSetup ? (
             <Suspense fallback={null}>
               <CustomTitleBar mode="setup" />

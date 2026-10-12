@@ -143,7 +143,16 @@ export class PluginManager {
       .filter((manifest) => manifest.activationEvents.includes(activationEvent))
       .map((manifest) => manifest.id)
 
-    await Promise.all(pluginIds.map((pluginId) => this.ensureActivated(pluginId, activationReason)))
+    await Promise.all(
+      pluginIds.map((pluginId) =>
+        this.ensureActivated(pluginId, activationReason).catch((error) => {
+          // Isolate activation failures: one plugin throwing must not abort the
+          // whole batch or leave the rest unactivated. The failed plugin is
+          // already recorded in lifecycle state by activateOnce.
+          console.error(`[plugin] activation failed for "${pluginId}" (${activationEvent}):`, error)
+        }),
+      ),
+    )
   }
 
   async ensureActivated(pluginId: string, activationReason: ActivationReason): Promise<void> {

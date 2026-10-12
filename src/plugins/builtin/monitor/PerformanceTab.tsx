@@ -14,7 +14,7 @@ import type {
   PerformanceSample,
 } from '../../public'
 import { useMonitorHost } from './hostContext'
-import { useMonitorStore } from './model/monitorStore'
+import { useMonitorStore } from '@/stores/monitorStore'
 
 type MetricSummary = {
   id: PerformanceMetricId

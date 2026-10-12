@@ -20,9 +20,12 @@
     "verify:graph-store": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-graph-store.mts",
     "clean": "node -e \"const fs=require('fs');['dist','dist-electron'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",
     "build": "node ./scripts/build.mjs",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:win": "npm run build && electron-builder --win",
-    "build:linux": "npm run build && electron-builder --linux",
+    "prebuild:mac": "npm run build",
+    "build:mac": "electron-builder --mac",
+    "prebuild:win": "npm run build",
+    "build:win": "node ./scripts/build-win.mjs",
+    "prebuild:linux": "npm run build",
+    "build:linux": "electron-builder --linux",
     "preview": "vite preview"
   },
   "build": {

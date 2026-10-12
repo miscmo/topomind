@@ -732,7 +732,6 @@ if (process.env.TOPOMIND_PROFILE && process.env.TOPOMIND_PROFILE !== 'prod') {
 
 function createWindow() {
   const preloadPath = nodePath.join(DIST_ELECTRON_DIR, 'preload.js');
-  const rendererIndexPath = nodePath.join(DIST_RENDERER_DIR, 'index.html');
 
   win = new BrowserWindow({
     width: SETUP_WINDOW_WIDTH, height: SETUP_WINDOW_HEIGHT,
@@ -749,18 +748,24 @@ function createWindow() {
       preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
+      // 开启渲染进程 OS 级沙箱：即使渲染进程出现 XSS，也无法借 preload 暴露的
+      // fs:* IPC 越权读写本地文件。preload 仅使用 contextBridge/ipcRenderer，
+      // 二者在沙箱内可用，故不影响现有 IPC 桥。若启动白屏请移除此项回滚。
+      sandbox: true,
     },
   });
   if (IS_DEV) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    win.loadFile(rendererIndexPath);
+    // 用自定义特权协议加载，规避 file:// 下 ES module (crossorigin) 被 CORS 拦截导致的白屏。
+    win.loadURL(`${RENDERER_SCHEME}://./index.html`);
   }
   win.webContents.on('console-message', ({ level, message, lineNumber, sourceId }) => {
     console.log(`[Browser Console] ${level} ${message} (${sourceId}:${lineNumber})`);
   });
-  // Open the DevTools.
-  // win.webContents.openDevTools()
+  // Open the DevTools. 临时诊断：若重新安装后仍白屏，开发者工具会自动打开，
+  // 请把 Console 红色报错发我。确认修复后我会移除此行。
+  if (!IS_DEV) win.webContents.openDevTools();
   win.webContents.on('did-fail-load', function(e, errorCode, errorDescription, validatedURL, isMainFrame) {
     console.error('[window:did-fail-load]', errorCode, errorDescription, validatedURL, isMainFrame);
   });
@@ -903,8 +908,78 @@ function buildMenu(isSetupView) {
 
 // App ready
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local-file', privileges: { standard: true, supportFetchAPI: true, secure: true, stream: true } }
+  { scheme: 'local-file', privileges: { standard: true, supportFetchAPI: true, secure: true, stream: true } },
+  // 渲染进程主协议：用自定义特权协议提供 dist/，规避 file:// 下 ES module (crossorigin)
+  // 被 CORS 拦截导致白屏（dev 用 http://localhost 无此问题）。standard+secure 让模块按同源加载。
+  { scheme: 'topomind', privileges: { standard: true, supportFetchAPI: true, secure: true, stream: true, bypassCSP: false } },
 ]);
+
+const RENDERER_SCHEME = 'topomind';
+
+function mimeFromPath(p) {
+  const ext = nodePath.extname(p).toLowerCase();
+  const map = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
+    '.cjs': 'text/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.ico': 'image/x-icon',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.eot': 'application/vnd.ms-fontobject',
+    '.map': 'application/json; charset=utf-8',
+    '.wasm': 'application/wasm',
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
+function handleRendererSchemeRequest(request) {
+  try {
+    const url = new URL(request.url);
+    let rel = url.pathname || '';
+    // 去掉开头的一个或多个斜杠；保留 './' 形式（loadURL 用 topomind://./index.html）
+    rel = rel.replace(/^\/+/, '');
+    if (rel.startsWith('./')) rel = rel.slice(2);
+    if (!rel) rel = 'index.html';
+    const target = nodePath.join(DIST_RENDERER_DIR, rel);
+    const resolvedTarget = nodePath.normalize(target);
+    const resolvedRoot = nodePath.resolve(DIST_RENDERER_DIR);
+    // 防御路径穿越
+    if (resolvedTarget !== resolvedRoot && !resolvedTarget.startsWith(resolvedRoot + nodePath.sep)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    if (!nodeFs.existsSync(resolvedTarget) || !nodeFs.statSync(resolvedTarget).isFile()) {
+      return new Response('Not found', { status: 404 });
+    }
+    // nodeFs 支持 asar，打包后也能读到 app.asar/dist 下的资源。
+    const data = nodeFs.readFileSync(resolvedTarget);
+    // 关键修复：Node 对 <8KB 小文件（恰是 index.html 与若干小 chunk）的
+    // readFileSync 会复用内部 Buffer 内存池（byteOffset≠0，buffer 远大于内容）。
+    // 直接把 Buffer 当 Response body 交给 protocol.handle 跨进程序列化时，
+    // Chromium 按整个 pool buffer 取字节而非视图范围，导致 body 错乱/为空 → 白屏。
+    // 用 new Uint8Array(data) 拷贝成独立 ArrayBuffer（offset 0、长度精确）即可稳定。
+    return new Response(new Uint8Array(data), {
+      status: 200,
+      headers: {
+        'Content-Type': mimeFromPath(resolvedTarget),
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'no-cache',
+      },
+    });
+  } catch (err) {
+    console.error('[topomind protocol] error', err);
+    return new Response('Not found', { status: 404 });
+  }
+}
 
 app.whenReady().then(function() {
   protocol.handle('local-file', async (request) => {
@@ -927,6 +1002,9 @@ app.whenReady().then(function() {
       return new Response('Not found', { status: 404 });
     }
   });
+
+  // 渲染进程主协议：以 topomind:// 提供 dist/ 资源（同源、按标准 web origin 加载 ES module）。
+  protocol.handle(RENDERER_SCHEME, (request) => handleRendererSchemeRequest(request));
 
   registerIPC();
   buildMenu(true);

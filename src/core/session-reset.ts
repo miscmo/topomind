@@ -1,7 +1,7 @@
 import { tabStore } from '../stores/tabs/tabStore'
-import { useMonitorStore } from '../features/monitor/model/monitorStore'
+import { useMonitorStore } from '../stores/monitorStore'
 import { useGraphUiStore } from '../stores/graphUiStore'
-import { useRightPanelStore } from '../features/right-panel/model/rightPanelStore'
+import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 
 export function resetClientSession() {

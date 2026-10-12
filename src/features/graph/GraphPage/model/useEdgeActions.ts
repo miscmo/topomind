@@ -4,7 +4,7 @@ import { logAction } from '../../../../core/log-backend'
 import type { KnowledgeEdge } from '../../../../types'
 import type { GraphContextValue } from '../../../../contexts/GraphContext'
 import { useGraphStoreApi } from '../../../../stores/graphStore'
-import { useRightPanelStore } from '../../../right-panel/model/rightPanelStore'
+import { useRightPanelStore } from '@/stores/rightPanelStore'
 
 export interface UseEdgeActionsOptions {
   onAction?: () => void

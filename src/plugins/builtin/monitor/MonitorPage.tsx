@@ -7,7 +7,7 @@ import { FilterBar } from './components/FilterBar'
 import { LogList } from './components/LogList'
 import { DetailPanel } from './components/DetailPanel'
 import { PluginDiagnosticsPanel } from './components/PluginDiagnosticsPanel'
-import { useMonitorStore } from './model/monitorStore'
+import { useMonitorStore } from '@/stores/monitorStore'
 import { initializeMonitorPage, subscribeMonitorDiagnostics, subscribeMonitorLogs } from './runtime'
 
 export default function MonitorPage({

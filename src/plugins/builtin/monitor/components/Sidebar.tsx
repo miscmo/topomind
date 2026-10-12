@@ -1,5 +1,5 @@
 
-import { useMonitorStore } from '../model/monitorStore'
+import { useMonitorStore } from '@/stores/monitorStore'
 import { useMonitorHost } from '../hostContext'
 
 export function Sidebar() {

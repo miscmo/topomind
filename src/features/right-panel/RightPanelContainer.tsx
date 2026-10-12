@@ -1,6 +1,6 @@
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
-import { useRightPanelStore } from './model/rightPanelStore'
+import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useResizePanel } from '../../hooks/useResizePanel'
 import RightPanelShell from './RightPanelShell'
 
@@ -9,8 +9,17 @@ interface RightPanelContainerProps {
   isActive?: boolean
 }
 
-const RIGHT_PANEL_MIN_WIDTH = 600
-const RIGHT_PANEL_MAX_WIDTH = 1200
+const RIGHT_PANEL_MIN_RATIO = 0.2
+const RIGHT_PANEL_MAX_RATIO = 0.8
+const RIGHT_PANEL_WIDTH_FLOOR = 280
+
+/** 按「整个应用（窗口）宽度」的百分比计算可拖拽的 [min, max] 范围。 */
+function getRightPanelBounds() {
+  const appWidth = typeof window !== 'undefined' ? window.innerWidth : 1280
+  const min = Math.max(RIGHT_PANEL_WIDTH_FLOOR, Math.round(appWidth * RIGHT_PANEL_MIN_RATIO))
+  const max = Math.round(appWidth * RIGHT_PANEL_MAX_RATIO)
+  return { min, max }
+}
 
 export default memo(function RightPanelContainer({ tabId, isActive = true }: RightPanelContainerProps) {
   const collapsed = useRightPanelStore((s) => s.rightPanelCollapsed)
@@ -21,8 +30,11 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
   const setActiveTab = useRightPanelStore((s) => s.setRightPanelTab)
   const collapse = useRightPanelStore((s) => s.collapseRightPanel)
   const [willAutoCollapse, setWillAutoCollapse] = useState(false)
+  const { min: RIGHT_PANEL_MIN_WIDTH, max: RIGHT_PANEL_MAX_WIDTH } = getRightPanelBounds()
   const dragStartWidthRef = useRef(width)
   const autoCollapseThreshold = Math.floor(dragStartWidthRef.current / 2)
+  const widthRef = useRef(width)
+  widthRef.current = width
 
   const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
     initialWidth: width,
@@ -41,6 +53,18 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
       setWidth(nextWidth)
     },
   })
+
+  // 窗口尺寸变化时，把已保存宽度重新夹回 [20%, 80%]，避免面板超出可用空间。
+  useEffect(() => {
+    const handleWindowResize = () => {
+      const { min, max } = getRightPanelBounds()
+      const next = Math.max(min, Math.min(max, widthRef.current))
+      if (next !== widthRef.current) setWidth(next)
+    }
+    window.addEventListener('resize', handleWindowResize)
+    handleWindowResize()
+    return () => window.removeEventListener('resize', handleWindowResize)
+  }, [setWidth])
 
   const handleResizeStart = useCallback((event: MouseEvent<HTMLDivElement>) => {
     dragStartWidthRef.current = width

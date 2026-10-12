@@ -4,7 +4,7 @@ import type { DetailSidebarTab, DocumentSaveStatus, DocumentWorkspaceLayoutProps
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../../../hooks/useResizePanel'
 import { logAction } from '../../../../core/log-backend'
-import { useRightPanelStore } from '../../../right-panel/model/rightPanelStore'
+import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useDetailLockStore } from '../../../right-panel/model/detailLockStore'
 import { useGraphStore, useSelectedNodeId } from '../../../../stores/graphStore'
 import { useTabStore, useGraphSession } from '../../../../stores/tabs/tabStore'

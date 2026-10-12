@@ -1,7 +1,7 @@
 
 import { toDateStr } from '@/shared/observability/logFormatting'
 
-import { useMonitorStore } from '../model/monitorStore'
+import { useMonitorStore } from '@/stores/monitorStore'
 import { LEVEL_ORDER } from '../constants'
 import { LogRow } from './LogRow'
 

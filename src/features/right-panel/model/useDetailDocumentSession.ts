@@ -7,6 +7,7 @@ import { logPerformanceMetric, PERFORMANCE_METRICS, takePerformanceMetricStart }
 import { useCardContentStore } from './cardContentStore'
 import { useDraftStore } from './draftStore'
 import { useGraphStoreApi } from '../../../stores/graphStore'
+import { toast } from '../../../stores/toastStore'
 import { areDocumentContentsEqual, getDocumentContentLength, prepareStructuredDocumentContentForSave } from '../../../features/documents/model/documentContentSession'
 
 interface UseDetailDocumentSessionParams {
@@ -127,7 +128,15 @@ export function useDetailDocumentSession({
       savedDraftVersionRef.current = draftVersionRef.current
       return
     }
-    await handleSave()
+    try {
+      await handleSave()
+    } catch (e) {
+      // 切换文档 / 关闭标签时 flush 是 fire-and-forget，失败若继续上抛会变成
+      // unhandled rejection，用户完全无感知。这里吞掉并显式告警。
+      // 保留 isDocumentDirty=true，使数据不会在不知情下丢失，下次 flush/关闭时仍会重试。
+      const message = e instanceof Error ? e.message : String(e)
+      toast({ level: 'error', title: '文档保存失败', message })
+    }
   }, [selectedNodeId, nodePath, currentDocumentKey, isDocumentDirty, draftContent, savedContent, handleSave])
 
   const isContentLoaded = useMemo(() => {

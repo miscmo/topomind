@@ -6,7 +6,7 @@ import type {
   PluginDiagnosticsSnapshot,
   PluginsApi,
 } from '../../public'
-import { normalizeLogEntry, type LogEntry } from './model/monitorStore.ts'
+import { normalizeLogEntry, type LogEntry } from '@/stores/monitorStore'
 
 export interface LoadedMonitorPageData {
   entries: LogEntry[]

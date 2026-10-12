@@ -216,28 +216,34 @@ function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, N
     }]
   }) : []
 
+  // skeleton 下渲染层不显示文字与角标（见 MiniMapStaticSvg 的 showLabels / showDecorations），
+  // 这里直接跳过文本截断等昂贵计算。同时忽略选中态高亮：节点在小地图上只有数像素宽，
+  // accent 边框无法辨识，但把它计入输出会让每次点击选中都触发万级节点的全量重建。
+  const showNodeText = detailLevel !== 'skeleton'
+  const applySelectionHighlight = detailLevel !== 'skeleton'
+
   const previewNodes = nodes.map((node) => {
     const typedNode = node as KnowledgeNode
     const rect = getNodeRect(node)
     const nodeStyle = typedNode.data?.nodeStyle ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle
     const headerBackgroundColor = nodeStyle.headerBackgroundColor ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.headerBackgroundColor
     const headerColor = nodeStyle.headerColor ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.headerColor
-    const borderColor = typedNode.selected
+    const borderColor = applySelectionHighlight && typedNode.selected
       ? 'var(--color-accent)'
       : typedNode.data?.domainColor ?? nodeStyle.borderColor ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderColor
-    const borderWidth = typedNode.selected
+    const borderWidth = applySelectionHighlight && typedNode.selected
       ? Math.max(1.5, (nodeStyle.borderWidth ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderWidth) + 0.5)
       : nodeStyle.borderWidth ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderWidth
     const borderRadius = nodeStyle.borderRadius ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderRadius
     const fontSize = nodeStyle.headerFontSize ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.headerFontSize
     const childCount = typeof typedNode.data?.childCount === 'number' ? typedNode.data.childCount : 0
     const badgeSize = Math.min(Math.max(rect.width * 0.16, 10), 18)
-    const label = String(typedNode.data?.label ?? '')
+    const label = showNodeText ? String(typedNode.data?.label ?? '') : ''
 
     return {
       id: node.id,
       label,
-      truncatedLabel: getTextPreviewLabel(label, rect.width, fontSize),
+      truncatedLabel: showNodeText ? getTextPreviewLabel(label, rect.width, fontSize) : '',
       hasDetail: typedNode.data?.hasDetail === true,
       childCount,
       x: rect.x,
@@ -261,6 +267,49 @@ function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, N
     previewNodes,
     markerDefinitions: Array.from(markerDefinitionsMap.values()),
   }
+}
+
+/**
+ * skeleton 模式下「真正影响预览输出」的字段签名，用于缓存判定。
+ *
+ * 背景：nodes 数组在每次选中、拖拽或任何属性变更时都会换成新引用，若直接以 nodes 为
+ * 依赖重建预览，点击一个节点就要重新构造上万个预览对象（万级节点图的卡顿来源）。
+ * 这里用一次 O(n) 的廉价数值哈希替代 O(n) 的对象构造，签名未变则复用上一次结果。
+ *
+ * 字段必须与 buildPreviewModel 在 skeleton 下的输出严格对应
+ * （x / y / width / height / fill / borderColor / borderWidth / borderRadius），
+ * 并刻意**不含选中态**——skeleton 下预览不渲染选中高亮。
+ */
+function computeSkeletonSignature(nodes: Node[]): string {
+  let hash = 2166136261
+  const mixNumber = (value: number) => {
+    hash ^= Math.round(value * 100) | 0
+    hash = Math.imul(hash, 16777619)
+  }
+  const mixString = (value: string) => {
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index)
+      hash = Math.imul(hash, 16777619)
+    }
+  }
+
+  mixNumber(nodes.length)
+  for (const node of nodes) {
+    const typedNode = node as KnowledgeNode
+    const rect = getNodeRect(node)
+    const nodeStyle = typedNode.data?.nodeStyle ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle
+    mixString(node.id)
+    mixNumber(rect.x)
+    mixNumber(rect.y)
+    mixNumber(rect.width)
+    mixNumber(rect.height)
+    mixString(String(nodeStyle.headerBackgroundColor ?? ''))
+    mixString(String(nodeStyle.borderColor ?? ''))
+    mixNumber(nodeStyle.borderWidth ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderWidth)
+    mixNumber(nodeStyle.borderRadius ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderRadius)
+    mixString(String(typedNode.data?.domainColor ?? ''))
+  }
+  return String(hash)
 }
 
 const MiniMapStaticSvg = memo(function MiniMapStaticSvg({
@@ -563,17 +612,27 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
   }, [canvasSize.height, canvasSize.width, graphBounds.height, graphBounds.width, zoomLevel])
 
   const isMiniMapVisible = showMiniMap && isCanvasLarge
-  const derivedModelRef = useRef<MiniMapDerivedModel | null>(null)
+  // 万级节点（skeleton）下改用签名判定是否需要重建预览：点击选中等操作不改变签名，
+  // 可直接复用上一次结果，避免每次选中都重新构造上万个预览对象。
+  const skeletonSignature = useMemo(
+    () => (miniMapDetailLevel === 'skeleton' ? computeSkeletonSignature(nodes) : ''),
+    [miniMapDetailLevel, nodes],
+  )
+  const derivedModelRef = useRef<{ signature: string; model: MiniMapDerivedModel } | null>(null)
   const derivedModel = useMemo<MiniMapDerivedModel>(() => {
     if (!isMiniMapVisible) {
       return { nodeById: new Map(), previewModel: EMPTY_PREVIEW_MODEL }
     }
+    const cached = derivedModelRef.current
+    if (miniMapDetailLevel === 'skeleton' && cached && cached.signature === skeletonSignature) {
+      return cached.model
+    }
     if (
       interactionActive
       && nodes.length >= MINI_MAP_COMPACT_DETAIL_NODE_THRESHOLD
-      && derivedModelRef.current
+      && cached
     ) {
-      return derivedModelRef.current
+      return cached.model
     }
 
     const nodeById = new Map(nodes.map((node) => [node.id, node]))
@@ -581,9 +640,9 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
       nodeById,
       previewModel: buildPreviewModel(nodes, edges, nodeById, miniMapDetailLevel),
     }
-    derivedModelRef.current = nextModel
+    derivedModelRef.current = { signature: skeletonSignature, model: nextModel }
     return nextModel
-  }, [edges, interactionActive, isMiniMapVisible, miniMapDetailLevel, nodes])
+  }, [edges, interactionActive, isMiniMapVisible, miniMapDetailLevel, nodes, skeletonSignature])
   const { previewModel } = derivedModel
 
   const edgeMarkerSize = useMemo(() => Math.max(6, Math.round(Math.min(previewBounds.width, previewBounds.height) * 0.015)), [previewBounds.height, previewBounds.width])

@@ -59,6 +59,9 @@ export default defineConfig({
               fileName: () => 'preload.js',
             },
             rollupOptions: {
+              // 沙箱模式下 preload 仍需在运行时解析 'electron'（contextBridge/ipcRenderer），
+              // 绝不能把 electron 打进 bundle，故显式 external。
+              external: ['electron'],
               output: {
                 inlineDynamicImports: true,
                 entryFileNames: 'preload.js',

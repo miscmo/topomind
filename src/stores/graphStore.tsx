@@ -251,7 +251,10 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
     return {
       nodes,
       nodesMap,
-      selectedNodes: selectedNodes.length === state.selectedNodes.length ? selectedNodes : state.selectedNodes,
+      // Always use the freshly derived list: a removed selected node would have
+      // been filtered out here, so reusing the stale previous array would leave
+      // a dangling reference to a node that no longer exists.
+      selectedNodes,
       derivedNodesRef: nodes,
     }
   }),

@@ -5,7 +5,7 @@ import { useWorkspaceStore } from '../../../stores/workspaceStore'
 import type { RightPanelTab } from '../../../types/uiStoreTypes'
 import { topoDocumentIdFromPath } from '../../documents/types/documentTypes'
 import { useDetailPanelStore } from '../../right-panel/model/detailPanelStore'
-import { useRightPanelStore } from '../../right-panel/model/rightPanelStore'
+import { useRightPanelStore } from '@/stores/rightPanelStore'
 
 export type LearningPageType =
   | 'home'

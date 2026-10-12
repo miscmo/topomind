@@ -294,7 +294,7 @@ export const useLearningTrackerStore = create<LearningTrackerState>((set, get) =
           isActive: true,
           lastActiveTime: now,
           currentSession: {
-            id: Date.now().toString(),
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
             startTime: now,
             endTime: now,
             duration: 0,

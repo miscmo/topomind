@@ -78,14 +78,26 @@ export const useDetailPanelStore = create<DetailPanelStore>()(
       // 旧版本把节点侧栏标签持久化为 'toc'（目录）。该 tab 已被移除，
       // 升级时把残留的 'toc' 归一成 'documents'，避免打开侧栏显示异常。
       migrate: (persisted: unknown) => {
-        const data = persisted as { state?: { detailSidebarTabsByNodeId?: Record<string, string> } } | undefined
-        const tabs = data?.state?.detailSidebarTabsByNodeId
-        if (tabs) {
-          for (const key of Object.keys(tabs)) {
-            if (tabs[key] === 'toc') tabs[key] = 'documents'
+        type PersistedShape = {
+          state: {
+            activeDocumentPathsByNodeId: Record<string, string>
+            detailSidebarTabsByNodeId: Record<string, string>
           }
+          version: number
         }
-        return persisted as never
+        if (!persisted || typeof persisted !== 'object') {
+          return persisted as PersistedShape
+        }
+        const data = persisted as { state?: { detailSidebarTabsByNodeId?: Record<string, string> } }
+        const tabs = data.state?.detailSidebarTabsByNodeId
+        if (tabs && typeof tabs === 'object') {
+          const nextTabs: Record<string, string> = { ...tabs }
+          for (const key of Object.keys(nextTabs)) {
+            if (nextTabs[key] === 'toc') nextTabs[key] = 'documents'
+          }
+          data.state = { ...data.state, detailSidebarTabsByNodeId: nextTabs }
+        }
+        return persisted as PersistedShape
       },
       partialize: (state) => ({
         activeDocumentPathsByNodeId: state.activeDocumentPathsByNodeId,

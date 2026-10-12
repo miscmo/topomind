@@ -15,7 +15,7 @@ import { useGraphPageController } from './model/useGraphPageController'
 import { useGraphPageActions } from './model/useGraphPageActions'
 import { useShortcut } from '../../../hooks/useShortcut'
 import { useTabStore } from '../../../stores/tabs/tabStore'
-import { useRightPanelStore } from '../../right-panel/model/rightPanelStore'
+import { useRightPanelStore } from '@/stores/rightPanelStore'
 
 interface GraphPageProps {
   tabId: string

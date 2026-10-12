@@ -1,4 +1,4 @@
-import { useRightPanelStore } from '@/features/right-panel/model/rightPanelStore'
+import { useRightPanelStore } from '@/stores/rightPanelStore'
 import type { StaticContributionRecord } from '@/plugins'
 import { toDisposable } from '@/plugins/public/disposables.ts'
 import type { Disposable } from '@/plugins/public/disposables'

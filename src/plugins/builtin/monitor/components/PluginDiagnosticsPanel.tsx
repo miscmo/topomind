@@ -7,7 +7,7 @@ import type {
   PluginStateSnapshot as PluginState,
 } from '../../../public'
 import { useMonitorHost } from '../hostContext'
-import { useMonitorStore } from '../model/monitorStore'
+import { useMonitorStore } from '@/stores/monitorStore'
 
 function stateTone(state: PluginState): string {
   if (state === 'failed') {

@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { useMonitorStore, type LogEntry } from '../model/monitorStore'
+import { useMonitorStore, type LogEntry } from '@/stores/monitorStore'
 
 import { LEVELS, LEVEL_COLORS } from '../constants'
 import { useMonitorHost } from '../hostContext'

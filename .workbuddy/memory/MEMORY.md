@@ -49,6 +49,12 @@
   - 若想让整个编辑器中文化，把 base 换成 `zh`（从 `@blocknote/core/locales` 导入）并把 `multi_column` 也改成 `multiColumnLocales.zh` 即可，但那是单独的本地化改动，不属于本 bug 修复范围。
 - **安装坑**（见 2026-08-25 旧记录）：该包与 `@blocknote/core` 版本须精确配对（0.51.4 ↔ 0.51.4），不要顺手升级 BlockNote；安装曾因 peer-dep / Windows 安全删除 / EPERM / 沙箱 / npm 缓存锁连环失败，最终用 `--no-save` + 新 `--cache` 目录 + 关沙箱装好，且 `package.json` 是手动加 `"@blocknote/xl-multi-column": "0.51.4"`（因为用了 `--no-save`）。
 
+## 编辑器 ProseMirror 插件：不要在输入过程中改文档（2026-09-03）
+- **铁律**：不要在 `appendTransaction` 里对每个字符的改动同步 `setNodeMarkup`/改 doc。`setNodeMarkup` 用 ReplaceStep 替换块内容节点 → BlockNote 重建该块 nodeView DOM → 连续输入时反复重建会偶发打断浏览器输入状态与光标，导致 **markdown 输入规则（`- ` → 列表等）偶发失效**。
+- 正确做法：`appendTransaction` 只把「脏块 id」记进 pending 集合并 **return null**；用 `new Plugin({ view(editorView) })` 保存 `EditorView`（不要依赖私有 `_tiptapEditor`），在停止输入 ~1s 后 / blur / plugin `destroy` 时统一 flush 批量写入。
+- 延迟写入必须按**块 id** 定位（`blockContainer.attrs.id`），位置在延迟期间会漂移；事务仍要 `addToHistory:false` + pluginKey meta 防递归。
+- IME：`view.composing` 为真时 Tiptap input rule 直接跳过（`@tiptap/core/dist/index.js` 的 `run()`），属原生行为；中文标点模式下 `-` 输出全角 `－`，不匹配 `/^\s?[-+*]\s$/`。这类"不触发"不是代码 bug，先让用户自查输入法中英文标点与是否在块首输入。
+
 ## 验证手段
 - `node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
 - `node --experimental-strip-types scripts/verify-critical-regressions.mts`（末尾 "Critical regression checks verified" 即通过；日志里的 "save failed" 是预期测试分支，可忽略）
