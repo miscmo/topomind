@@ -10,5 +10,7 @@ export {
   type TopoDocumentCreateInput,
   type TopoDocumentRepairResult,
   type TopoDocumentExportPayload,
+  type MoveTopoDocumentToCardResult,
+  type MoveTopoNodesToRoomResult,
 } from './service'
 export { StorageProvider, useStorage } from './context'

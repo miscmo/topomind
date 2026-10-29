@@ -103,6 +103,20 @@ export interface MoveTopoDocumentToCardResult {
   attachmentCleaned: number
 }
 
+/** 跨房间移动节点的返回结果。 */
+export interface MoveTopoNodesToRoomResult {
+  /** 移动后在目标房间中的节点 basename 列表（含自动改名后的新名） */
+  moved: string[]
+  /** 随节点保留并迁入目标房间的内部连线数量（两端都在被移动集合中） */
+  keptEdges: number
+  /** 因跨越边界被丢弃的连线数量（一端在被移动集合、一端在源房间其余节点） */
+  droppedEdges: number
+  targetRoomPath: string
+  sourceRoomPath: string
+  /** 旧 basename → 新 basename 的改名映射（目标房间同名冲突时产生） */
+  renamed: Record<string, string>
+}
+
 export interface AttachmentItem {
   name: string
   path: string
@@ -182,6 +196,15 @@ export interface GraphLayoutStorageBackend {
   writeLayout: (roomPath: string, meta: GraphMeta) => Promise<void>
 }
 
+/** 跨房间移动节点（批量），由后端原子操作完成物理 relocate 与连线重分配。 */
+export interface NodeMoveStorageBackend {
+  moveTopoNodesToRoom: (
+    sourceRoomPath: string,
+    nodeIds: string[],
+    targetRoomPath: string
+  ) => Promise<MoveTopoNodesToRoomResult>
+}
+
 export interface ConfigStorageBackend {
   readConfig: () => Promise<unknown>
   writeConfig: (content: unknown) => Promise<void>
@@ -194,4 +217,5 @@ export interface StorageBackend extends
   TopoDocumentStorageBackend,
   AttachmentStorageBackend,
   GraphLayoutStorageBackend,
+  NodeMoveStorageBackend,
   ConfigStorageBackend {}

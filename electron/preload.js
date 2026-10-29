@@ -11,7 +11,7 @@ const ALLOWED_CHANNELS = new Set([
   'fs:readGraphMeta', 'fs:readRoomNodeSummaries', 'fs:writeGraphMeta',
   'fs:renameKB',
   'fs:listAllTrashItems', 'fs:restoreGlobalTrashItem', 'fs:clearAllTrashItems',
-  'fs:listTopoDocuments', 'fs:createTopoDocument', 'fs:readTopoDocument', 'fs:writeTopoDocument', 'fs:renameTopoDocument', 'fs:updateTopoDocumentMeta', 'fs:deleteTopoDocument', 'fs:listTrashTopoDocuments', 'fs:restoreTrashTopoDocument', 'fs:clearTrashTopoDocuments', 'fs:repairTopoDocuments', 'fs:exportTopoDocument', 'fs:openTopoDocumentFolder', 'fs:moveTopoDocument', 'fs:moveTopoDocumentToCard',
+  'fs:listTopoDocuments', 'fs:createTopoDocument', 'fs:readTopoDocument', 'fs:writeTopoDocument', 'fs:renameTopoDocument', 'fs:updateTopoDocumentMeta', 'fs:deleteTopoDocument', 'fs:listTrashTopoDocuments', 'fs:restoreTrashTopoDocument', 'fs:clearTrashTopoDocuments', 'fs:repairTopoDocuments', 'fs:exportTopoDocument', 'fs:openTopoDocumentFolder', 'fs:moveTopoDocument', 'fs:moveTopoDocumentToCard', 'fs:moveTopoNodesToRoom',
   'fs:writeAttachmentBase64', 'fs:downloadAttachment', 'fs:readAttachmentDataUrl', 'fs:listAttachments', 'fs:importAttachment', 'fs:deleteAttachment', 'fs:listTrashAttachments', 'fs:restoreTrashAttachment', 'fs:clearTrashAttachments', 'fs:openAttachment', 'fs:showAttachmentInFolder', 'fs:getAttachmentAbsoluteUrl',
   'fs:readAppConfig', 'fs:writeAppConfig', 'fs:readLearningStatsData', 'fs:readAllLearningStatsData', 'fs:writeLearningStatsData', 'fs:readLearningStatsSummary',
   'fs:isValidWorkDir', 'fs:selectDirectory', 'fs:createWorkDir', 'fs:importKB',

@@ -597,6 +597,8 @@ body.tm-text-selecting .tm-smart-side-menu-hit-area .bn-button {
   font-style: var(--shiki-light-font-style, inherit);
   font-weight: var(--shiki-light-font-weight, inherit);
   text-decoration: var(--shiki-light-text-decoration, none);
+  /* 每个代码块独立计数（.line 是 shiki 逐行包裹的 span） */
+  counter-reset: line;
 }
 
 html.dark .bn-block-content[data-content-type="codeBlock"] .shiki,
@@ -605,6 +607,22 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   font-style: var(--shiki-dark-font-style, inherit);
   font-weight: var(--shiki-dark-font-weight, inherit);
   text-decoration: var(--shiki-dark-text-decoration, none);
+}
+
+/* 代码块行号：用 CSS 计数器在每行 shiki `.line` 前插入序号。
+   行号是 ::before 伪元素，不参与 innerText / textContent，复制代码时不会带上行号。
+   固定 3ch 宽（支持到 999 行），右对齐、与代码内容留 1.25ch 间隔。 */
+.bn-block-content[data-content-type="codeBlock"] .shiki .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 3ch;
+  margin-right: 1.25ch;
+  text-align: right;
+  color: var(--color-text-muted);
+  opacity: 0.65;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .smart-document-content .bn-editor [data-content-type="table"] th,

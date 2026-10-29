@@ -11,6 +11,7 @@ import { useLearningTrackerContextStore } from '../../learning-tracker/model/lea
 import RightPanelContainer from '../../right-panel/RightPanelContainer'
 import GraphCanvas from '../GraphCanvas'
 import GraphPageContextMenu from './components/GraphPageContextMenu'
+import { NodeMoveToRoomDialog } from './components/NodeMoveToRoomDialog'
 import { useGraphPageController } from './model/useGraphPageController'
 import { useGraphPageActions } from './model/useGraphPageActions'
 import { useShortcut } from '../../../hooks/useShortcut'
@@ -24,7 +25,7 @@ interface GraphPageProps {
 
 export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProps) {
   const { graph } = useGraphPageController({ tabId })
-  const { canvasProps, contextMenuProps } = useGraphPageActions({ graph })
+  const { canvasProps, contextMenuProps, moveDialogProps } = useGraphPageActions({ graph })
   const selectedNodeId = useSelectedNodeId()
   const setSelectedNodeIdForTab = useLearningTrackerContextStore((s) => s.setSelectedNodeIdForTab)
   const clearTabContext = useLearningTrackerContextStore((s) => s.clearTabContext)
@@ -70,6 +71,15 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
           <RightPanelContainer tabId={tabId} isActive={isActive} />
         </div>
         <GraphPageContextMenu {...contextMenuProps} />
+        {moveDialogProps.moveState && (
+          <NodeMoveToRoomDialog
+            nodeIds={moveDialogProps.moveState.nodeIds}
+            sourceRoomPath={moveDialogProps.moveState.sourceRoomPath}
+            kbPath={moveDialogProps.moveState.kbPath}
+            onConfirm={moveDialogProps.handleMoveNodesToRoom}
+            onClose={moveDialogProps.closeMoveToRoom}
+          />
+        )}
       </div>
     </GraphContextProvider>
   )

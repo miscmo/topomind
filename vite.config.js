@@ -125,7 +125,17 @@ export default defineConfig({
             id.includes('react-router') ||
             id.includes('reactflow') ||
             id.includes('@xyflow') ||
-            id.includes('/scheduler/')
+            id.includes('/scheduler/') ||
+            // Keep the React-internals-touching ecosystem in ONE chunk. These
+            // packages call into React's module factory at top-level init; if they
+            // live in a separate chunk a cross-chunk circular init makes React's
+            // export object (`Ae`) still `undefined` when it's first dereferenced,
+            // throwing "Cannot set properties of undefined (setting 'Activity')"
+            // and white-screening the production build. (Repro: use-sync-external-store
+            // ← @xyflow/react, which sits in react-vendor.)
+            id.includes('use-sync-external-store') ||
+            id.includes('/zustand/') ||
+            id.includes('zustand')
           ) {
             return 'react-vendor'
           }

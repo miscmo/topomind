@@ -343,6 +343,9 @@ function registerIPC() {
   ipcMain.handle('fs:moveTopoDocumentToCard', function(e, rootDir, sourceCardPath, documentId, targetCardPath) {
     return fileService.moveTopoDocumentToCard(requireActiveWorkDir(rootDir), sourceCardPath, documentId, targetCardPath);
   });
+  ipcMain.handle('fs:moveTopoNodesToRoom', function(e, rootDir, sourceRoomPath, nodeIds, targetRoomPath) {
+    return fileService.moveTopoNodesToRoom(requireActiveWorkDir(rootDir), sourceRoomPath, nodeIds, targetRoomPath);
+  });
   ipcMain.handle('fs:readTopoDocument', function(e, rootDir, cardPath, documentId) {
     return fileService.readTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId);
   });
@@ -766,9 +769,6 @@ function createWindow() {
   win.webContents.on('console-message', ({ level, message, lineNumber, sourceId }) => {
     console.log(`[Browser Console] ${level} ${message} (${sourceId}:${lineNumber})`);
   });
-  // Open the DevTools. 临时诊断：若重新安装后仍白屏，开发者工具会自动打开，
-  // 请把 Console 红色报错发我。确认修复后我会移除此行。
-  if (!IS_DEV) win.webContents.openDevTools();
   win.webContents.on('did-fail-load', function(e, errorCode, errorDescription, validatedURL, isMainFrame) {
     console.error('[window:did-fail-load]', errorCode, errorDescription, validatedURL, isMainFrame);
   });

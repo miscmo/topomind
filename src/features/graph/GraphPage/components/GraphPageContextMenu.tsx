@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Palette, Trash2, Maximize2, SmilePlus } from 'lucide-react'
+import { Plus, Palette, Trash2, Maximize2, SmilePlus, FolderInput } from 'lucide-react'
 
 interface MenuItem {
   label: string
@@ -35,6 +35,7 @@ interface GraphPageContextMenuProps {
   onEdgeDelete: (edgeId: string) => void
   onEdgeStyle: (edgeId: string) => void
   onAddEmoji: (nodeId: string, position: { x: number, y: number }) => void
+  onMoveToRoom: (nodeId: string) => void
   onClose: () => void
 }
 
@@ -50,6 +51,7 @@ export default memo(function GraphPageContextMenu({
   onEdgeDelete,
   onEdgeStyle,
   onAddEmoji,
+  onMoveToRoom,
   onClose,
 }: GraphPageContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -108,6 +110,14 @@ export default memo(function GraphPageContextMenu({
             icon: <SmilePlus className="w-4 h-4" />,
             action: async () => {
               if (targetId) await onAddEmoji(targetId, { x, y })
+              onClose()
+            },
+          },
+          {
+            label: '移动到房间…',
+            icon: <FolderInput className="w-4 h-4" />,
+            action: async () => {
+              if (targetId) await onMoveToRoom(targetId)
               onClose()
             },
           },

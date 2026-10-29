@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useReactFlow } from '@xyflow/react'
 import { useNodeActions } from './useNodeActions'
+import { useNodeMoveToRoom } from './useNodeMoveToRoom'
 import { logAction } from '../../../../core/log-backend'
 import type { ContextMenuState } from '../../../../types/uiStoreTypes'
 import type { GraphContextValue } from '../../../../contexts/GraphContext'
@@ -25,6 +26,7 @@ export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
     handleEdgeDelete,
     handleEdgeStyle,
   } = useNodeActions({ graph })
+  const { moveState, openMoveToRoom, closeMoveToRoom, handleMoveNodesToRoom } = useNodeMoveToRoom({ graph })
 
   const closeContextMenu = useCallback(() => {
     setContextMenu((current) => {
@@ -104,7 +106,9 @@ export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
           document.dispatchEvent(new CustomEvent('topomind:add-emoji', { detail: { nodeId, position } }))
         }, 50)
       },
+      onMoveToRoom: openMoveToRoom,
       onClose: closeContextMenu,
     },
+    moveDialogProps: { moveState, closeMoveToRoom, handleMoveNodesToRoom },
   }
 }

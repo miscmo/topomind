@@ -1542,6 +1542,162 @@ function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetC
   };
 }
 
+// 跨房间移动一批节点（含其整棵子目录树：子房间/文档/附件），并重分配房间级连线。
+// 磁盘 _graph.json 真实格式：{ children: { [basename]: {...} }, edges: [{ id, source, target, ... }], zoom, pan }。
+// 节点 key 与 edge 的 source/target 均为 room 相对 basename。
+// 规则：
+//  - 移动 = 从源房间 children 移除 + 整个节点目录树物理 relocate 到目标房间目录 + 写入目标 children。
+//  - 连线边界集合运算：两端都在被移动集合内 → 保留并随迁入目标房间（内部连线，含改名后引用）；
+//    一端在集合内、一端在源房间其余节点 → 丢弃（与源房间的连线不保留）；两端都不在集合内 → 留源房间。
+//  - 目标房间同名节点自动重命名（foo → foo-1），并同步改写 intra-batch 连线引用。
+//  - 防环：目标房间不能等于任一被移动节点路径，也不能是其后代子房间。
+// 返回 { moved:[新basename], keptEdges, droppedEdges, targetRoomPath, sourceRoomPath, renamed:{old:new} }。
+function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var norm = function (ref) {
+    return String(ref || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+  };
+  var joinp = function (a, b) {
+    var na = norm(a); var nb = norm(b);
+    if (!nb) return na;
+    if (!na) return nb;
+    if (nb === na || nb.indexOf(na + '/') === 0) return nb;
+    return na + '/' + nb;
+  };
+  sourceRoomPath = norm(sourceRoomPath);
+  targetRoomPath = norm(targetRoomPath);
+  if (!sourceRoomPath) throw new Error('源房间不能为空');
+  if (!targetRoomPath) throw new Error('目标房间不能为空');
+  if (!Array.isArray(nodeIds) || nodeIds.length === 0) throw new Error('未选择要移动的节点');
+  if (targetRoomPath === sourceRoomPath) throw new Error('目标房间不能与源房间相同');
+
+  var sourceDir = _fs_resolveKbsPath(rootDir, sourceRoomPath);
+  var targetDir = _fs_resolveKbsPath(rootDir, targetRoomPath);
+  if (!nodeFs.existsSync(sourceDir)) throw new Error('源房间不存在: ' + sourceRoomPath);
+  if (!nodeFs.existsSync(targetDir)) throw new Error('目标房间不存在: ' + targetRoomPath);
+
+  var graphFileOf = function (roomDir) { return nodePath.join(roomDir, '_graph.json'); };
+  var sourceMeta = _fs_readJsonFile(graphFileOf(sourceDir));
+  var sourceChildren = (sourceMeta && sourceMeta.children && typeof sourceMeta.children === 'object' && !Array.isArray(sourceMeta.children)) ? sourceMeta.children : {};
+  var sourceEdges = Array.isArray(sourceMeta && sourceMeta.edges) ? sourceMeta.edges : [];
+
+  // 被移动集合（仅保留源房间中真实存在的节点）
+  var movedSet = {};
+  var movedList = [];
+  nodeIds.map(norm).forEach(function (id) {
+    if (!id || movedSet[id] || !sourceChildren[id]) return;
+    movedSet[id] = true;
+    movedList.push(id);
+  });
+  if (movedList.length === 0) throw new Error('所选节点均不在源房间中');
+
+  // 防环：目标不能等于任一被移动节点路径，也不能是其后代
+  for (var c = 0; c < movedList.length; c += 1) {
+    var movedPath = joinp(sourceRoomPath, movedList[c]);
+    if (targetRoomPath === movedPath) throw new Error('不能把节点移动到其自身内部');
+    if (targetRoomPath.indexOf(movedPath + '/') === 0) throw new Error('不能把节点移动到其自身的子房间内');
+  }
+
+  var targetMetaRaw = _fs_readJsonFile(graphFileOf(targetDir));
+  var targetChildren = (targetMetaRaw && targetMetaRaw.children && typeof targetMetaRaw.children === 'object' && !Array.isArray(targetMetaRaw.children)) ? targetMetaRaw.children : {};
+  var targetEdges = Array.isArray(targetMetaRaw && targetMetaRaw.edges) ? targetMetaRaw.edges : [];
+
+  // 同名冲突 → 自动重命名，并建立 old→new 映射
+  function uniqueChildKey(base) {
+    var candidate = base; var n = 1;
+    while (targetChildren[candidate] || newChildren[candidate]) { candidate = base + '-' + n; n += 1; }
+    return candidate;
+  }
+  var renameMap = {};
+  var newChildren = {};
+  movedList.forEach(function (oldId) {
+    var newId = uniqueChildKey(oldId);
+    renameMap[oldId] = newId;
+    newChildren[newId] = Object.assign({}, sourceChildren[oldId]);
+  });
+
+  // 物理 relocate：源目录 → 目标目录（使用新 basename）。
+  // 若某被移动节点是另一被移动节点的后代，其目录已随祖先一起搬走（srcNodeDir 不存在），
+  // 此时跳过 rename 但仍计入 movedBasenames（它已作为子树的一部分迁移）。
+  var movedBasenames = [];
+  movedList.forEach(function (oldId) {
+    var newId = renameMap[oldId];
+    var srcNodeDir = nodePath.join(sourceDir, oldId);
+    var dstNodeDir = nodePath.join(targetDir, newId);
+    if (nodeFs.existsSync(srcNodeDir)) {
+      _fs_ensureDir(targetDir);
+      nodeFs.renameSync(srcNodeDir, dstNodeDir);
+    }
+    movedBasenames.push(newId);
+  });
+  if (movedBasenames.length === 0) throw new Error('没有可移动的节点目录');
+
+  function uniqueEdgeId(existing, preferred) {
+    if (!existing.some(function (e) { return e && e.id === preferred; })) return preferred;
+    var i = 1;
+    while (existing.some(function (e) { return e && e.id === preferred + '-' + i; })) i += 1;
+    return preferred + '-' + i;
+  }
+
+  function applyRename(ref) {
+    var key = norm(ref);
+    return renameMap[key] || key;
+  }
+
+  var keptEdges = [];
+  var droppedEdges = 0;
+  var newSourceEdges = [];
+  sourceEdges.forEach(function (edge) {
+    var s = norm(edge.source);
+    var t = norm(edge.target);
+    var sIn = !!movedSet[s];
+    var tIn = !!movedSet[t];
+    if (sIn && tIn) {
+      var ne = Object.assign({}, edge);
+      ne.source = applyRename(s);
+      ne.target = applyRename(t);
+      ne.id = uniqueEdgeId(targetEdges.concat(keptEdges), edge.id);
+      keptEdges.push(ne);
+    } else if (sIn || tIn) {
+      droppedEdges += 1; // 跨边界 → 丢弃
+    } else {
+      newSourceEdges.push(edge); // 与移动无关 → 留源
+    }
+  });
+
+  var newSourceChildren = {};
+  Object.keys(sourceChildren).forEach(function (k) { if (!movedSet[k]) newSourceChildren[k] = sourceChildren[k]; });
+  var newTargetChildren = Object.assign({}, targetChildren, newChildren);
+  var newTargetEdges = targetEdges.concat(keptEdges);
+
+  var newSourceMeta = Object.assign({}, sourceMeta, { children: newSourceChildren, edges: newSourceEdges });
+  var newTargetMeta = Object.assign({}, targetMetaRaw, { children: newTargetChildren, edges: newTargetEdges });
+
+  // 先写目标，再写源；任一步失败尽量回滚（恢复旧 meta + 搬回目录）
+  try {
+    _fs_writeJsonFile(graphFileOf(targetDir), newTargetMeta);
+    _fs_writeJsonFile(graphFileOf(sourceDir), newSourceMeta);
+  } catch (e) {
+    try { _fs_writeJsonFile(graphFileOf(targetDir), targetMetaRaw); } catch (_) {}
+    try { _fs_writeJsonFile(graphFileOf(sourceDir), sourceMeta); } catch (_) {}
+    movedBasenames.forEach(function (newId) {
+      var oldId = null;
+      Object.keys(renameMap).forEach(function (k) { if (renameMap[k] === newId) oldId = k; });
+      try { nodeFs.renameSync(nodePath.join(targetDir, newId), nodePath.join(sourceDir, oldId)); } catch (_) {}
+    });
+    throw e;
+  }
+
+  return {
+    moved: movedBasenames,
+    keptEdges: keptEdges.length,
+    droppedEdges: droppedEdges,
+    targetRoomPath: targetRoomPath,
+    sourceRoomPath: sourceRoomPath,
+    renamed: renameMap,
+  };
+}
+
 const trashService = createTrashService({
   clearTrashItems: _fs_clearTrashItems,
   deleteTrashItem: _fs_deleteTrashItem,
@@ -1961,6 +2117,10 @@ const fileService = {
 
     moveTopoDocumentToCard: function(rootDir, sourceCardPath, documentId, targetCardPath) {
       return documentService.moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetCardPath);
+    },
+
+    moveTopoNodesToRoom: function(rootDir, sourceRoomPath, nodeIds, targetRoomPath) {
+      return _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPath);
     },
 
     repairTopoDocuments: function(rootDir, cardPath) {

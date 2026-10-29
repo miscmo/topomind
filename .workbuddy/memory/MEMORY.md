@@ -58,3 +58,9 @@
 ## 验证手段
 - `node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
 - `node --experimental-strip-types scripts/verify-critical-regressions.mts`（末尾 "Critical regression checks verified" 即通过；日志里的 "save failed" 是预期测试分支，可忽略）
+
+## GraphContextProvider 架构约束（2026-10-12 踩坑）
+- `GraphPage.tsx` 在**返回 JSX 之前**（第 28 行）就调用 `useGraphPageActions({ graph })`，而 `<GraphContextProvider>` 包的是返回的 JSX（第 56 行起）。所以 `useGraphPageActions` 及其内部所有 hook 都运行在 Provider **之外**。
+- **铁律**：任何在 `useGraphPageActions` 调用链里的 hook（含 `useNodeActions`、`useNodeMoveToRoom` 等）**绝不能**直接调用 `useGraphContext()`，否则渲染即抛 `useGraphContext must be used within GraphContextProvider`，整棵「知识库标签页」ErrorBoundary 兜底 → 表现为「知识库标签加载失败」+ 右侧笔记打不开（笔记在 GraphPage 内，同子树崩溃）。
+- 需要 `graph` 时，由 `useGraphPageActions` 把已持有的 `graph` 作为**参数传入**子 hook（如 `useNodeMoveToRoom({ graph })`），不要用 `useGraphContext()` 自取。
+- 该崩溃会级联成多个看似独立的报错（控制台 `useGraphContext` 错 + 「知识库标签加载失败」+ 「打开笔记报错」），定位时认准单一根因即可。

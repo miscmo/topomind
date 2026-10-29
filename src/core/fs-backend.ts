@@ -5,7 +5,7 @@
 import { logger } from './logger'
 import type { ElectronAPI } from '../types/electron-api'
 import type { EdgeRelation, EdgeWeight } from '../types'
-import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentRepairResult, MoveTopoDocumentToCardResult } from './storage/service'
+import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentRepairResult, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './storage/service'
 import type { TopoDocumentType } from './topoDocumentTypes'
 
 const getApi = (): ElectronAPI | null => {
@@ -121,6 +121,7 @@ export interface FSB {
   clearTrashTopoDocuments: (rootDir: string, cardPath: string) => Promise<void>
   moveTopoDocument: (rootDir: string, cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   moveTopoDocumentToCard: (rootDir: string, sourceCardPath: string, documentId: string, targetCardPath: string) => Promise<MoveTopoDocumentToCardResult>
+  moveTopoNodesToRoom: (rootDir: string, sourceRoomPath: string, nodeIds: string[], targetRoomPath: string) => Promise<MoveTopoNodesToRoomResult>
   repairTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentRepairResult>
   exportTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
   openTopoDocumentFolder: (rootDir: string, cardPath: string, documentId: string) => Promise<boolean>
@@ -192,6 +193,8 @@ const FSBImpl: FSB = {
     _call('fs:moveTopoDocument', rootDir, cardPath, documentId, newParentId, newSortOrder) as Promise<TopoDocumentManifestItem>,
   moveTopoDocumentToCard: (rootDir, sourceCardPath, documentId, targetCardPath) =>
     _call('fs:moveTopoDocumentToCard', rootDir, sourceCardPath, documentId, targetCardPath) as Promise<MoveTopoDocumentToCardResult>,
+  moveTopoNodesToRoom: (rootDir, sourceRoomPath, nodeIds, targetRoomPath) =>
+    _call('fs:moveTopoNodesToRoom', rootDir, sourceRoomPath, nodeIds, targetRoomPath) as Promise<MoveTopoNodesToRoomResult>,
   repairTopoDocuments: (rootDir, cardPath) =>
     _call('fs:repairTopoDocuments', rootDir, cardPath) as Promise<TopoDocumentRepairResult>,
   exportTopoDocument: (rootDir, cardPath, documentId) =>
