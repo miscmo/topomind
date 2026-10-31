@@ -15,6 +15,49 @@ export interface NodeChangeOperationsDeps {
   storeApi: StoreApi<GraphState>
 }
 
+type GNode = GraphState['nodes'][number]
+
+// Build the next nodes array incrementally: only entries present in `changesById`
+// get a fresh object (via `apply`); every other node keeps its original reference,
+// so React Flow's memoized node components skip re-rendering. Early-returns null when
+// nothing actually changed, letting callers skip the store update entirely.
+//
+// The id->index map is built from `nodes` on every call (O(n) Map build, no per-node
+// object allocation). This deliberately avoids relying on a store-level `nodeIndexById`,
+// which can be stale or empty (e.g. right after load / undo) and would make every change
+// silently skipped — leaving dragged nodes stuck in place. The per-frame cost stays
+// dominated by O(changed) for the actual node updates, which is what matters as the
+// graph grows into the thousands.
+function computeIncrementalNodes<T>(
+  nodes: GNode[],
+  changesById: Map<string, T>,
+  apply: (node: GNode, change: T) => { changed: boolean; node: GNode },
+): { nextNodes: GNode[]; changedIds: string[] } | null {
+  const nodeIndexById = new Map<string, number>()
+  for (let i = 0; i < nodes.length; i++) {
+    nodeIndexById.set(nodes[i].id, i)
+  }
+
+  const changedIds: string[] = []
+  const nextById = new Map<string, GNode>()
+  for (const [id, change] of changesById) {
+    const idx = nodeIndexById.get(id)
+    if (idx === undefined) continue
+    const result = apply(nodes[idx], change)
+    if (result.changed) {
+      nextById.set(id, result.node)
+      changedIds.push(id)
+    }
+  }
+  if (changedIds.length === 0) return null
+  const nextNodes = nodes.slice()
+  for (const id of changedIds) {
+    const idx = nodeIndexById.get(id)!
+    nextNodes[idx] = nextById.get(id)!
+  }
+  return { nextNodes, changedIds }
+}
+
 export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
   const {
     getActiveGraphSession,
@@ -46,28 +89,19 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
   }
 
   const applyNodePositionChanges = async (changes: Array<{ id: string; position?: { x: number; y: number }; dragging?: boolean }>) => {
-    let changed = false
     const store = storeApi.getState()
     const changesById = new Map(changes.map((change) => [change.id, change]))
-    const nextNodes = store.nodes.map((n) => {
-      const change = changesById.get(n.id)
-      if (change && change.position) {
-        if (n.position.x === change.position.x && n.position.y === change.position.y) return n
-        changed = true
-        return { ...n, position: change.position }
-      }
-      return n
+    const result = computeIncrementalNodes(store.nodes, changesById, (node, change) => {
+      const cp = change.position
+      if (!cp) return { changed: false, node }
+      if (node.position.x === cp.x && node.position.y === cp.y) return { changed: false, node }
+      return { changed: true, node: { ...node, position: cp } }
     })
-    
+
     const isDragging = changes.some((change) => change.dragging === true)
     const isDragEnd = changes.some((change) => change.dragging === false)
-    
+
     if (isDragging) beginInteractionHistory('drag')
-
-    if (changed) {
-      store.setNodesPreservingSelection(nextNodes)
-    }
-
     if (isDragEnd) finishInteractionHistory('drag')
 
     const graphSession = getActiveGraphSession()
@@ -75,6 +109,10 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     const shouldSaveNow = changes.some((change) => change.dragging === false)
     if (currentRoomPath && shouldSaveNow) {
       await saveLater(currentRoomPath)
+    }
+
+    if (result) {
+      store.setNodesPreservingSelection(result.nextNodes, result.changedIds)
     }
   }
 
@@ -89,24 +127,23 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
 
   const applyNodeDimensionChanges = async (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean; origin?: 'auto-size' | 'manual' }>) => {
     let shouldSave = false
-    let changed = false
     const store = storeApi.getState()
     const changesById = new Map(changes.map((change) => [change.id, change]))
-    const nextNodes = store.nodes.map((n) => {
-      const change = changesById.get(n.id)
-      if (!change) return n
-      const nextWidth = change.dimensions?.width ?? n.width ?? n.initialWidth ?? n.measured?.width ?? 120
-      const nextHeight = change.dimensions?.height ?? n.height ?? n.initialHeight ?? n.measured?.height ?? 52
-      const nextMeasured = change.dimensions === undefined ? n.measured : (change.dimensions || undefined)
-      if (n.width === nextWidth && n.height === nextHeight && n.measured === nextMeasured) return n
-      if (change.dimensions && !change.resizing) {
+    const result = computeIncrementalNodes(store.nodes, changesById, (node, change) => {
+      const dims = change.dimensions
+      const nextWidth = dims?.width ?? node.width ?? node.initialWidth ?? node.measured?.width ?? 120
+      const nextHeight = dims?.height ?? node.height ?? node.initialHeight ?? node.measured?.height ?? 52
+      const nextMeasured = dims === undefined ? node.measured : (dims || undefined)
+      if (node.width === nextWidth && node.height === nextHeight && node.measured === nextMeasured) {
+        return { changed: false, node }
+      }
+      if (dims && !change.resizing) {
         shouldSave = true
       }
-      changed = true
 
       const isExpanded = nextWidth >= 160 && nextHeight >= 96
-      const wasExpanded = (n.width ?? 0) >= 160 && (n.height ?? 0) >= 96
-      
+      const wasExpanded = (node.width ?? 0) >= 160 && (node.height ?? 0) >= 96
+
       const expandedDimensions: Record<string, number> = {}
       if (isExpanded) {
         expandedDimensions.expandedWidth = nextWidth
@@ -115,45 +152,48 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
         expandedDimensions.collapsedWidth = nextWidth
         expandedDimensions.collapsedHeight = nextHeight
       }
-      
+
       // If transitioning from expanded to collapsed, save the previous expanded dimensions
-      if (!isExpanded && wasExpanded && n.width !== undefined && n.height !== undefined) {
-        expandedDimensions.expandedWidth = n.width
-        expandedDimensions.expandedHeight = n.height
+      if (!isExpanded && wasExpanded && node.width !== undefined && node.height !== undefined) {
+        expandedDimensions.expandedWidth = node.width
+        expandedDimensions.expandedHeight = node.height
       }
-      
+
       // If transitioning from collapsed to expanded, save the previous collapsed dimensions
-      if (isExpanded && !wasExpanded && n.width !== undefined && n.height !== undefined) {
-        expandedDimensions.collapsedWidth = n.width
-        expandedDimensions.collapsedHeight = n.height
+      if (isExpanded && !wasExpanded && node.width !== undefined && node.height !== undefined) {
+        expandedDimensions.collapsedWidth = node.width
+        expandedDimensions.collapsedHeight = node.height
       }
 
       const isAutoSizeChange = change.origin === 'auto-size'
-      const prevWidth = n.width ?? n.initialWidth ?? n.measured?.width ?? 120
-      const prevHeight = n.height ?? n.initialHeight ?? n.measured?.height ?? 52
+      const prevWidth = node.width ?? node.initialWidth ?? node.measured?.width ?? 120
+      const prevHeight = node.height ?? node.initialHeight ?? node.measured?.height ?? 52
       const widthChanged = Math.abs(prevWidth - nextWidth) > 0.5
       const heightChanged = Math.abs(prevHeight - nextHeight) > 0.5
       const shouldSwitchToManual = !isAutoSizeChange && (widthChanged || heightChanged)
       return {
-        ...n,
-        width: nextWidth,
-        height: nextHeight,
-        measured: nextMeasured,
-        data: {
-          ...n.data,
-          ...expandedDimensions,
-          ...(shouldSwitchToManual ? { widthMode: 'manual' as const, heightMode: 'manual' as const } : {}),
-        }
+        changed: true,
+        node: {
+          ...node,
+          width: nextWidth,
+          height: nextHeight,
+          measured: nextMeasured,
+          data: {
+            ...node.data,
+            ...expandedDimensions,
+            ...(shouldSwitchToManual ? { widthMode: 'manual' as const, heightMode: 'manual' as const } : {}),
+          },
+        },
       }
     })
-    
+
     const isResizing = changes.some((change) => change.resizing === true)
     const isResizeEnd = changes.some((change) => change.resizing === false)
     if (isResizing) beginInteractionHistory('resize')
 
-    if (changed) store.setNodesPreservingSelection(nextNodes)
+    if (result) store.setNodesPreservingSelection(result.nextNodes, result.changedIds)
     if (isResizeEnd) finishInteractionHistory('resize')
-    
+
     if (shouldSave) {
       const graphSession = getActiveGraphSession()
       const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
@@ -162,20 +202,15 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
   }
 
   const applyNodeSelectionChanges = (changes: Array<{ id: string; selected: boolean }>) => {
-    let changed = false
     const store = storeApi.getState()
     const changesById = new Map(changes.map((change) => [change.id, change]))
-    const nextNodes = store.nodes.map((n) => {
-      const change = changesById.get(n.id)
-      if (change && n.selected !== change.selected) {
-        changed = true
-        return { ...n, selected: change.selected }
-      }
-      return n
+    const result = computeIncrementalNodes(store.nodes, changesById, (node, change) => {
+      if (node.selected === change.selected) return { changed: false, node }
+      return { changed: true, node: { ...node, selected: change.selected } }
     })
-    
-    if (changed) {
-      store.setNodes(nextNodes)
+
+    if (result) {
+      store.setNodes(result.nextNodes)
     }
   }
 
