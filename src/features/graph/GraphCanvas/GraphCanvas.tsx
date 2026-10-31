@@ -102,7 +102,7 @@ export default memo(function GraphCanvas({
             }
           `}</style>
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] bg-[var(--color-surface)] text-[var(--color-text)] border border-[var(--color-border-strong)] px-4 py-2.5 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] flex items-center gap-2.5 pointer-events-none transition-all">
-            <div className="bg-[var(--color-accent)] text-white p-1 rounded-full flex items-center justify-center">
+            <div className="bg-[var(--color-accent)] text-[var(--color-text-inverse)] p-1 rounded-full flex items-center justify-center">
               <PaintRoller className="w-3.5 h-3.5" />
             </div>
             <span className="text-[13px] font-medium tracking-wide">
@@ -114,7 +114,7 @@ export default memo(function GraphCanvas({
 
       {isShiftPressed && state.isMouseOverCanvas && !isFormatPainterActive && !state.isInputFocused && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] bg-[var(--color-surface)] text-[var(--color-text)] border border-[var(--color-border-strong)] px-4 py-2.5 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] flex items-center gap-2.5 pointer-events-none transition-all">
-          <div className="bg-[var(--color-primary)] text-white p-1 px-2 rounded flex items-center justify-center font-bold text-[12px]">
+          <div className="bg-[var(--color-primary)] text-[var(--color-text-inverse)] p-1 px-2 rounded flex items-center justify-center font-bold text-[12px]">
             Shift
           </div>
           <span className="text-[13px] font-medium tracking-wide">

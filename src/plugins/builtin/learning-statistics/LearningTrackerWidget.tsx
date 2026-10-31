@@ -75,7 +75,7 @@ export const LearningTrackerWidget = memo(function LearningTrackerWidget({
         type="button"
         className={`flex items-center gap-1.5 px-2 h-[24px] rounded-md text-[12px] transition-colors border select-none
           ${isActive
-            ? 'bg-[var(--color-primary-subtle)] text-[var(--color-primary)] border-[var(--color-primary-alpha)] hover:bg-[var(--color-primary-alpha)]'
+            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] border-[var(--color-accent-soft)] hover:bg-[var(--color-selected-bg)]'
             : 'bg-[var(--color-bg-muted)] text-[var(--color-text-muted)] border-transparent hover:bg-[var(--color-hover-bg)]'
           }`}
         onClick={() => {
@@ -85,7 +85,7 @@ export const LearningTrackerWidget = memo(function LearningTrackerWidget({
         title={isActive ? '正在学习中' : '休息中'}
       >
         <span className="relative flex h-2 w-2">
-          <span className={`relative inline-flex rounded-full h-2 w-2 ${isActive ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-text-muted)]'}`} />
+          <span className={`relative inline-flex rounded-full h-2 w-2 ${isActive ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-text-muted)]'}`} />
         </span>
         <span className="font-medium font-mono tracking-tight">{formatDuration(todayDuration)}</span>
       </button>

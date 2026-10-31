@@ -196,7 +196,7 @@ export const NodeMoveToRoomDialog = memo(function NodeMoveToRoomDialog({
                   <button
                     type="button"
                     onClick={() => onConfirm(r.path)}
-                    className="text-[12px] px-2 py-1 rounded bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-white"
+                    className="text-[12px] px-2 py-1 rounded bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-inverse)]"
                   >
                     移动到此
                   </button>
@@ -221,7 +221,7 @@ export const NodeMoveToRoomDialog = memo(function NodeMoveToRoomDialog({
               type="button"
               disabled={navDisabled}
               onClick={() => onConfirm(navPath)}
-              className="px-3 py-1.5 rounded-md text-[13px] font-medium bg-[var(--color-accent)] text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 rounded-md text-[13px] font-medium bg-[var(--color-accent)] text-[var(--color-text-inverse)] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               移动到「{navPath.split('/').pop()}」
             </button>

@@ -103,18 +103,18 @@ export const LearningOverviewPanel = memo(function LearningOverviewPanel({
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="rounded-2xl border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-primary)_7%,var(--color-surface))] p-5">
+      <section className="rounded-2xl border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-accent)_7%,var(--color-surface))] p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-muted)]">Now Learning</div>
-            <div className="mt-2 text-[30px] leading-none font-semibold text-[var(--color-primary)]">
+            <div className="mt-2 text-[30px] leading-none font-semibold text-[var(--color-accent)]">
               {formatDuration(todayDuration)}
             </div>
             <div className="mt-2 text-[13px] text-[var(--color-text-muted)]">
               {isActive ? '当前正在学习中，时长会持续累加。' : '当前处于暂停状态，等待新的应用内操作。'}
             </div>
           </div>
-          <div className="rounded-full border border-[var(--color-primary-alpha)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-primary)]">
+          <div className="rounded-full border border-[var(--color-accent-soft)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-accent)]">
             {isActive ? '学习中' : '已暂停'}
           </div>
         </div>
@@ -123,27 +123,27 @@ export const LearningOverviewPanel = memo(function LearningOverviewPanel({
       <section className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="text-[12px] text-[var(--color-text-muted)]">今日学习时长</div>
-          <div className="mt-2 text-[18px] font-semibold text-[var(--color-primary)]">{formatDuration(todayDuration)}</div>
+          <div className="mt-2 text-[18px] font-semibold text-[var(--color-accent)]">{formatDuration(todayDuration)}</div>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="text-[12px] text-[var(--color-text-muted)]">最近 7 天</div>
-          <div className="mt-2 text-[18px] font-semibold text-[var(--color-primary)]">{formatDuration(recentWeekDuration)}</div>
+          <div className="mt-2 text-[18px] font-semibold text-[var(--color-accent)]">{formatDuration(recentWeekDuration)}</div>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="text-[12px] text-[var(--color-text-muted)]">最近 30 天</div>
-          <div className="mt-2 text-[18px] font-semibold text-[var(--color-primary)]">{formatDuration(recentMonthDuration)}</div>
+          <div className="mt-2 text-[18px] font-semibold text-[var(--color-accent)]">{formatDuration(recentMonthDuration)}</div>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="text-[12px] text-[var(--color-text-muted)]">总累计</div>
-          <div className="mt-2 text-[18px] font-semibold text-[var(--color-primary)]">{formatDuration(totalDuration)}</div>
+          <div className="mt-2 text-[18px] font-semibold text-[var(--color-accent)]">{formatDuration(totalDuration)}</div>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="text-[12px] text-[var(--color-text-muted)]">当前连续天数</div>
-          <div className="mt-2 text-[18px] font-semibold text-[var(--color-primary)]">{meta?.summary.currentStreak || 0} 天</div>
+          <div className="mt-2 text-[18px] font-semibold text-[var(--color-accent)]">{meta?.summary.currentStreak || 0} 天</div>
         </div>
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="text-[12px] text-[var(--color-text-muted)]">最长连续天数</div>
-          <div className="mt-2 text-[18px] font-semibold text-[var(--color-primary)]">{meta?.summary.longestStreak || 0} 天</div>
+          <div className="mt-2 text-[18px] font-semibold text-[var(--color-accent)]">{meta?.summary.longestStreak || 0} 天</div>
         </div>
       </section>
 
@@ -205,7 +205,7 @@ export const LearningOverviewPanel = memo(function LearningOverviewPanel({
                       className={`w-[12px] h-[12px] rounded-[3px] transition-colors ${
                         inRange ? getHeatColorClass(duration, dailyGoal) : 'bg-transparent'
                       } ${
-                        selectedDate === date ? 'ring-2 ring-[var(--color-primary)] ring-offset-1 ring-offset-[var(--color-surface)]' : ''
+                        selectedDate === date ? 'ring-2 ring-[var(--color-accent)] ring-offset-1 ring-offset-[var(--color-surface)]' : ''
                       }`}
                       onMouseEnter={() => {
                         if (!inRange) return
@@ -303,7 +303,7 @@ export const LearningOverviewPanel = memo(function LearningOverviewPanel({
             return (
               <div key={point.key} className="flex min-w-[18px] flex-1 flex-col items-center gap-2">
                 <div
-                  className="w-full rounded-t-md bg-[color-mix(in_srgb,var(--color-primary)_78%,transparent)]"
+                  className="w-full rounded-t-md bg-[color-mix(in_srgb,var(--color-accent)_78%,transparent)]"
                   style={{ height }}
                   title={`${point.label}: ${formatDuration(point.duration)}`}
                 />
@@ -385,7 +385,7 @@ export const LearningOverviewPanel = memo(function LearningOverviewPanel({
                   <div className="text-[12px] text-[var(--color-text-muted)]">{item.label}</div>
                   <div className="h-2 rounded-full bg-[var(--color-border-subtle)] overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-[var(--color-primary)]"
+                      className="h-full rounded-full bg-[var(--color-accent)]"
                       style={{ width: `${Math.max(item.duration > 0 ? 8 : 0, Math.round((item.duration / maxWeekdayDuration) * 100))}%` }}
                     />
                   </div>
@@ -405,7 +405,7 @@ export const LearningOverviewPanel = memo(function LearningOverviewPanel({
                   <div className="text-[12px] text-[var(--color-text-muted)]">{String(item.hour).padStart(2, '0')}:00</div>
                   <div className="h-2 rounded-full bg-[var(--color-border-subtle)] overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-[color-mix(in_srgb,var(--color-primary)_70%,transparent)]"
+                      className="h-full rounded-full bg-[color-mix(in_srgb,var(--color-accent)_70%,transparent)]"
                       style={{ width: `${Math.max(item.duration > 0 ? 8 : 0, Math.round((item.duration / maxHourDuration) * 100))}%` }}
                     />
                   </div>
@@ -488,7 +488,7 @@ export const LearningOverviewPanel = memo(function LearningOverviewPanel({
             </div>
             <div className="mt-4 h-2 rounded-full bg-[var(--color-border-subtle)] overflow-hidden">
               <div
-                className="h-full rounded-full bg-[var(--color-primary)]"
+                className="h-full rounded-full bg-[var(--color-accent)]"
                 style={{ width: `${Math.min(100, Math.max(0, weekGoalRate))}%` }}
               />
             </div>

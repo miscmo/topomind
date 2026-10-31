@@ -61,7 +61,7 @@ export default memo(function StyleSection() {
           {(['nodes', 'edges', 'editor'] as const).map(tab => (
             <button
               key={tab}
-              className={`flex-1 py-1.5 text-[12px] font-medium rounded-[6px] cursor-pointer transition-all duration-200 text-center select-none border-none ${activeTab === tab ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-bg)]'}`}
+              className={`flex-1 py-1.5 text-[12px] font-medium rounded-[6px] cursor-pointer transition-all duration-200 text-center select-none border-none ${activeTab === tab ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-bg)]'}`}
               onClick={() => setActiveTab(tab)}
             >
               {tab === 'nodes' ? '节点卡片' : tab === 'edges' ? '连线样式' : '文档编辑器'}

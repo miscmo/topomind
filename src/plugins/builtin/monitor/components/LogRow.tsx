@@ -15,7 +15,7 @@ export function LogRow({ entry, selected, onClick, keyword }: LogRowProps) {
 
   return (
     <div
-      className={`flex items-center px-3 py-1 border-b border-[var(--color-border-subtle)] cursor-pointer transition-colors duration-80 min-w-0 gap-0 hover:bg-[var(--color-hover-bg)] ${selected ? '!bg-[var(--color-selected-bg)] border-l-2 border-l-[var(--color-primary)] !pl-[10px]' : ''} ${
+      className={`flex items-center px-3 py-1 border-b border-[var(--color-border-subtle)] cursor-pointer transition-colors duration-80 min-w-0 gap-0 hover:bg-[var(--color-hover-bg)] ${selected ? '!bg-[var(--color-selected-bg)] border-l-2 border-l-[var(--color-accent)] !pl-[10px]' : ''} ${
         level === 'ERROR' ? 'bg-[var(--color-danger-soft)] hover:!bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)]' : level === 'WARN' ? 'bg-[var(--color-warning-soft)] hover:!bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)]' : ''
       }`}
       onClick={onClick}

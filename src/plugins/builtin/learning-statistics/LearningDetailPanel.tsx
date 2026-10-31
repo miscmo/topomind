@@ -40,7 +40,7 @@ interface LearningDetailPanelProps {
 const DetailMetricCard = ({ label, value, hint }: { label: string; value: string; hint?: string }) => (
   <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
     <div className="text-[12px] text-[var(--color-text-muted)]">{label}</div>
-    <div className="mt-2 text-[18px] font-semibold text-[var(--color-primary)]">{value}</div>
+    <div className="mt-2 text-[18px] font-semibold text-[var(--color-accent)]">{value}</div>
     {hint ? <div className="mt-2 text-[12px] text-[var(--color-text-muted)]">{hint}</div> : null}
   </div>
 )
@@ -80,7 +80,7 @@ const ContextDistributionCard = ({
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-[var(--color-border-subtle)] overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-[var(--color-primary)]"
+                    className="h-full rounded-full bg-[var(--color-accent)]"
                     style={{ width: `${Math.max(item.duration > 0 ? 8 : 0, Math.round((item.duration / maxDuration) * 100))}%` }}
                   />
                 </div>
@@ -222,7 +222,7 @@ export const LearningDetailPanel = memo(function LearningDetailPanel({
             </div>
             <div className="mt-3 h-2 rounded-full bg-[var(--color-border-subtle)] overflow-hidden">
               <div
-                className="h-full rounded-full bg-[var(--color-primary)]"
+                className="h-full rounded-full bg-[var(--color-accent)]"
                 style={{ width: `${Math.min(100, Math.max(0, currentWeekGoalRate))}%` }}
               />
             </div>
@@ -349,7 +349,7 @@ export const LearningDetailPanel = memo(function LearningDetailPanel({
 
         <div className="mt-4 h-2 rounded-full bg-[var(--color-border-subtle)] overflow-hidden">
           <div
-            className="h-full rounded-full bg-[var(--color-primary)]"
+            className="h-full rounded-full bg-[var(--color-accent)]"
             style={{ width: `${Math.min(100, Math.max(0, Math.round((selectedDayDuration / Math.max(dailyGoal, 1)) * 100)))}%` }}
           />
         </div>
@@ -434,7 +434,7 @@ export const LearningDetailPanel = memo(function LearningDetailPanel({
                         {isRunning ? '进行中 session' : '已完成 session'}
                       </div>
                     </div>
-                    <div className="text-[14px] font-semibold text-[var(--color-primary)]">
+                    <div className="text-[14px] font-semibold text-[var(--color-accent)]">
                       {formatDurationCompact(session.duration)}
                     </div>
                   </div>
@@ -466,7 +466,7 @@ export const LearningDetailPanel = memo(function LearningDetailPanel({
               <div className="text-[11px] text-[var(--color-text-muted)]">{String(hour).padStart(2, '0')}:00</div>
               <div className="mt-3 h-2 rounded-full bg-[var(--color-border-subtle)] overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-[var(--color-primary)]"
+                  className="h-full rounded-full bg-[var(--color-accent)]"
                   style={{ width: `${Math.max(duration > 0 ? 8 : 0, Math.round((duration / maxDayHourDuration) * 100))}%` }}
                 />
               </div>

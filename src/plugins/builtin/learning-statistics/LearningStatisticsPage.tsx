@@ -240,7 +240,7 @@ export const LearningStatisticsPage = memo(function LearningStatisticsPage({
                   onClick={() => setSelectedRange(option.key)}
                   className={`h-9 px-4 rounded-lg text-[13px] transition-colors ${
                     selectedRange === option.key
-                      ? 'bg-[var(--color-bg-muted)] text-[var(--color-primary)]'
+                      ? 'bg-[var(--color-bg-muted)] text-[var(--color-accent)]'
                       : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                   }`}
                 >
@@ -295,7 +295,7 @@ export const LearningStatisticsPage = memo(function LearningStatisticsPage({
                   onClick={() => setContextFilter((filter) => ({ ...filter, pageType: 'all' }))}
                   className={`h-8 px-3 rounded-full border text-[12px] transition-colors ${
                     contextFilter.pageType === 'all'
-                      ? 'border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_10%,var(--color-surface))] text-[var(--color-primary)]'
+                      ? 'border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,var(--color-surface))] text-[var(--color-accent)]'
                       : 'border-[var(--color-border)] bg-[var(--color-bg-muted)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                   }`}
                 >
@@ -308,7 +308,7 @@ export const LearningStatisticsPage = memo(function LearningStatisticsPage({
                     onClick={() => setContextFilter((filter) => ({ ...filter, pageType }))}
                     className={`h-8 px-3 rounded-full border text-[12px] transition-colors ${
                       contextFilter.pageType === pageType
-                        ? 'border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_10%,var(--color-surface))] text-[var(--color-primary)]'
+                        ? 'border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,var(--color-surface))] text-[var(--color-accent)]'
                         : 'border-[var(--color-border)] bg-[var(--color-bg-muted)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                     }`}
                   >

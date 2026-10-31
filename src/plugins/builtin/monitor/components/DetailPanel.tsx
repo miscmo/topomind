@@ -56,10 +56,10 @@ export function DetailPanel() {
           {selectedEntry.action || selectedEntry.module || '日志条目'}
         </span>
         <div className="flex gap-1 shrink-0">
-          <button className="h-6 px-2 border border-[#e0e4ea] rounded bg-white text-[11px] cursor-pointer text-[#555] transition-all duration-120 hover:bg-[#f0f2f5]" onClick={handleCopy}>
+          <button className="h-6 px-2 border border-[var(--color-border)] rounded bg-[var(--color-surface)] text-[11px] cursor-pointer text-[var(--color-text-secondary)] transition-all duration-120 hover:bg-[var(--color-hover-bg)]" onClick={handleCopy}>
             {copied ? '已复制!' : '复制'}
           </button>
-          <button className="h-6 px-2 border border-[#e0e4ea] rounded bg-white text-[11px] cursor-pointer text-[#555] transition-all duration-120 hover:bg-[#f0f2f5]" onClick={() => {
+          <button className="h-6 px-2 border border-[var(--color-border)] rounded bg-[var(--color-surface)] text-[11px] cursor-pointer text-[var(--color-text-secondary)] transition-all duration-120 hover:bg-[var(--color-hover-bg)]" onClick={() => {
             log.info('close monitor detail entry', { closedEntryId: selectedEntry.id })
             setSelectedEntry(null)
           }}>

@@ -168,7 +168,7 @@ export const DocumentMetaPicker: React.FC<DocumentMetaPickerProps> = ({ picker, 
             />
             <button
               type="button"
-              className="h-8 px-3 rounded-md border-none bg-[var(--color-primary)] text-white text-[12px] font-medium cursor-pointer disabled:opacity-40"
+              className="h-8 px-3 rounded-md border-none bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[12px] font-medium cursor-pointer disabled:opacity-40"
               disabled={!isValidHexColor(hexInput.trim())}
               onClick={() => onApply('color', picker.targetId, hexInput.trim())}
             >

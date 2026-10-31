@@ -44,7 +44,7 @@ function mergePerformanceSamples(entries: PerformanceSample[], incoming: Perform
 
 function PerformanceHeroCard({ title, value, hint, accent }: { title: string; value: string; hint: string; accent: string }) {
   return (
-    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-white px-4 py-3 shadow-sm min-w-0">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-4 py-3 shadow-sm min-w-0">
       <div className="text-[11px] font-semibold uppercase tracking-[0.4px] text-[var(--color-text-muted)]">{title}</div>
       <div className="mt-2 text-[26px] font-bold leading-none" style={{ color: accent }}>{value}</div>
       <div className="mt-2 text-[12px] text-[var(--color-text-secondary)]">{hint}</div>
@@ -57,7 +57,7 @@ function MetricCard({ summary, active, onClick }: { summary: MetricSummary; acti
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border px-4 py-3 text-left transition-all duration-75 bg-white shadow-sm hover:border-[var(--metric-color)] hover:shadow-md ${active ? 'ring-2 ring-[var(--metric-color)]/20 border-[var(--metric-color)]' : 'border-[var(--color-border-subtle)]'}`}
+      className={`rounded-xl border px-4 py-3 text-left transition-all duration-75 bg-[var(--color-surface)] shadow-sm hover:border-[var(--metric-color)] hover:shadow-md ${active ? 'ring-2 ring-[var(--metric-color)]/20 border-[var(--metric-color)]' : 'border-[var(--color-border-subtle)]'}`}
       style={{ ['--metric-color' as string]: summary.color }}
     >
       <div className="flex items-center justify-between gap-3">
@@ -100,7 +100,7 @@ function TrendChart({ samples, color }: { samples: PerformanceSample[]; color: s
   const areaPath = `M ${points[0].x} 88 L ${points.map((point) => `${point.x} ${point.y}`).join(' L ')} L ${points[points.length - 1].x} 88 Z`
 
   return (
-    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">最近样本趋势</div>
@@ -130,14 +130,14 @@ function TrendChart({ samples, color }: { samples: PerformanceSample[]; color: s
 function DistributionChart({ summaries }: { summaries: MetricSummary[] }) {
   const visible = summaries.filter((summary) => summary.count > 0)
   if (visible.length === 0) {
-    return <div className="rounded-xl border border-[var(--color-border-subtle)] bg-white p-4 shadow-sm text-[12px] text-[var(--color-text-muted)]">暂无分布数据</div>
+    return <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-4 shadow-sm text-[12px] text-[var(--color-text-muted)]">暂无分布数据</div>
   }
   const maxValue = Math.max(...visible.flatMap((summary) => [summary.p50Ms, summary.p95Ms]), 1)
   const slotWidth = 100 / visible.length
   const barWidth = Math.min(10, slotWidth * 0.24)
 
   return (
-    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-4 shadow-sm">
       <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">P50 / P95 分布</div>
       <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">用于快速识别哪条链路尾延迟最高</div>
       <svg viewBox="0 0 100 78" className="mt-4 h-[220px] w-full">
@@ -168,11 +168,11 @@ function DistributionChart({ summaries }: { summaries: MetricSummary[] }) {
 function SuccessRatePanel({ summaries }: { summaries: MetricSummary[] }) {
   const visible = summaries.filter((summary) => summary.count > 0)
   if (visible.length === 0) {
-    return <div className="rounded-xl border border-[var(--color-border-subtle)] bg-white p-4 shadow-sm text-[12px] text-[var(--color-text-muted)]">暂无成功率数据</div>
+    return <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-4 shadow-sm text-[12px] text-[var(--color-text-muted)]">暂无成功率数据</div>
   }
 
   return (
-    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-4 shadow-sm">
       <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">成功率与慢操作占比</div>
       <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">慢操作定义为超过该指标阈值的成功样本</div>
       <div className="mt-4 space-y-4">
@@ -208,7 +208,7 @@ function formatSampleContext(sample: PerformanceSample): string {
 function RecentSamplesPanel({ samples }: { samples: PerformanceSample[] }) {
   const slowest = [...samples].sort((a, b) => b.durationMs - a.durationMs).slice(0, 8)
   return (
-    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">最慢样本</div>
@@ -396,7 +396,7 @@ export default function PerformanceTab() {
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <TrendChart samples={activeSamples} color={metricDefinitionMap[activeMetric]?.color ?? '#3b82f6'} />
-        <div className="rounded-xl border border-[var(--color-border-subtle)] bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-4 shadow-sm">
           <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">当前指标摘要</div>
           <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">{metricDefinitionMap[activeMetric]?.label ?? activeMetric}</div>
           {(() => {

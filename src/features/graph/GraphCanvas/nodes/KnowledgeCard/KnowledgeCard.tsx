@@ -361,9 +361,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
           onDoubleClick={e => e.stopPropagation()}
         >
           {editingEmojiIndex !== null && (
-            <div className="w-full p-2 border-b border-[var(--color-border-light)] bg-[var(--color-surface-hover)] relative z-10">
+            <div className="w-full p-2 border-b border-[var(--color-border-light)] bg-[var(--color-hover-bg)] relative z-10">
               <button
-                className="w-full py-1.5 text-sm text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                className="w-full py-1.5 text-sm text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
                 onClick={() => {
                   const newEmojis = [...(data.emojis || [])]
                   newEmojis.splice(editingEmojiIndex, 1)

@@ -98,7 +98,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
       <div
         ref={scrollContainerRef}
         onScroll={handleSidebarScroll}
-        className={`flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${dragState?.id === 'root' ? 'bg-[var(--color-hover-bg)] ring-[1.5px] ring-inset ring-[var(--color-primary)]' : ''}`}
+        className={`flex-1 overflow-y-auto px-1.5 py-2 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${dragState?.id === 'root' ? 'bg-[var(--color-hover-bg)] ring-[1.5px] ring-inset ring-[var(--color-accent)]' : ''}`}
       >
         {stickyAncestorRows.length > 0 && (
           <div className="sticky top-0 z-20 h-0">

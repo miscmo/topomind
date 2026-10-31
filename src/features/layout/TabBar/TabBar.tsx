@@ -156,7 +156,7 @@ export default memo(function TabBar() {
           {tabs.map((tab) => (
             <div
               key={tab.id}
-              className={`group flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] ${tab.id === activeTabId ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-primary)]'}`}
+              className={`group flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] ${tab.id === activeTabId ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-primary)]'}`}
               onClick={() => handleTabClick(tab)}
               onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleTabClick(tab) } }}
               role="menuitem"
@@ -165,7 +165,7 @@ export default memo(function TabBar() {
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <span className="shrink-0 w-[16px] flex items-center justify-center">
                   {tab.id === activeTabId && (
-                    <span className="text-[var(--color-primary)] font-bold">✓</span>
+                    <span className="text-[var(--color-accent)] font-bold">✓</span>
                   )}
                 </span>
                 <span className="truncate" title={tab.label}>{tab.label}</span>
@@ -174,7 +174,7 @@ export default memo(function TabBar() {
               {tab.id !== 'home' && (
                 <button
                   type="button"
-                  className="shrink-0 w-[20px] h-[20px] rounded-md border-none bg-transparent flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 hover:!bg-[var(--color-danger)] hover:!text-white transition-all"
+                  className="shrink-0 w-[20px] h-[20px] rounded-md border-none bg-transparent flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 hover:!bg-[var(--color-danger)] hover:!text-[var(--color-text-inverse)] transition-all"
                     onClick={(e) => { void handleCloseTab(e, tab.id) }}
                   disabled={closingTabId !== null}
                   aria-label={`关闭 ${tab.label}`}

@@ -76,13 +76,13 @@ export const LearningQuickPreview = memo(function LearningQuickPreview({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[12px] text-[var(--color-text-muted)]">今日学习</div>
-          <div className="mt-1 text-[22px] leading-none font-semibold font-mono text-[var(--color-primary)]">
+          <div className="mt-1 text-[22px] leading-none font-semibold font-mono text-[var(--color-accent)]">
             {Math.floor(todayDuration / 3600)}h {Math.floor((todayDuration % 3600) / 60)}m
           </div>
         </div>
         <div className="text-right">
           <div className="text-[12px] text-[var(--color-text-muted)]">状态</div>
-          <div className={`mt-1 text-[12px] font-medium ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`}>
+          <div className={`mt-1 text-[12px] font-medium ${isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}`}>
             {isActive ? '学习中' : '已暂停'}
           </div>
         </div>
@@ -91,11 +91,11 @@ export const LearningQuickPreview = memo(function LearningQuickPreview({
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
           <div className="text-[11px] text-[var(--color-text-muted)]">连续天数</div>
-          <div className="mt-1 text-[16px] font-semibold font-mono text-[var(--color-primary)]">{streak} 天</div>
+          <div className="mt-1 text-[16px] font-semibold font-mono text-[var(--color-accent)]">{streak} 天</div>
         </div>
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
           <div className="text-[11px] text-[var(--color-text-muted)]">累计时长</div>
-          <div className="mt-1 text-[16px] font-semibold font-mono text-[var(--color-primary)]">{formatDuration(totalDuration)}</div>
+          <div className="mt-1 text-[16px] font-semibold font-mono text-[var(--color-accent)]">{formatDuration(totalDuration)}</div>
         </div>
       </div>
 

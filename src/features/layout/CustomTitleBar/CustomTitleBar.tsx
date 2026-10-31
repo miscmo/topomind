@@ -249,14 +249,14 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
               <div className="flex items-center h-[24px] bg-[var(--color-bg-muted)] shadow-inner rounded-md p-[2px]">
                 <button
                   type="button"
-                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-all duration-200 border-none ${rightPanelTab === 'detail' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--color-hover-bg)]'}`}
+                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-all duration-200 border-none ${rightPanelTab === 'detail' ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--color-hover-bg)]'}`}
                   onClick={() => runCommand('rightPanel.reveal', { tab: 'detail' })}
                 >
                   详情
                 </button>
                 <button
                   type="button"
-                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-all duration-200 border-none ${rightPanelTab === 'style' ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--color-hover-bg)]'}`}
+                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-all duration-200 border-none ${rightPanelTab === 'style' ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--color-hover-bg)]'}`}
                   onClick={() => runCommand('rightPanel.reveal', { tab: 'style' })}
                 >
                   样式
@@ -284,7 +284,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
               </svg>
             )}
           </button>
-          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:!bg-[var(--color-danger)] hover:!text-white transition-colors" onClick={() => runCommand('window.close')} aria-label="关闭窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:!bg-[var(--color-danger)] hover:!text-[var(--color-text-inverse)] transition-colors" onClick={() => runCommand('window.close')} aria-label="关闭窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1"/>
             </svg>

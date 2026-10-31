@@ -19,7 +19,7 @@ function stateTone(state: PluginState): string {
   }
 
   if (state === 'running') {
-    return 'text-[var(--color-primary)] bg-[var(--color-primary-soft)] border-[var(--color-primary)]'
+    return 'text-[var(--color-accent)] bg-[var(--color-accent-soft)] border-[var(--color-accent)]'
   }
 
   return 'text-[var(--color-text-secondary)] bg-[var(--color-bg-muted)] border-[var(--color-border)]'
@@ -150,7 +150,7 @@ export function PluginDiagnosticsPanel() {
                 type="button"
                 className={`w-full text-left rounded-xl border px-3 py-3 transition-colors ${
                   selectedPlugin?.pluginId === item.pluginId
-                    ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)]'
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
                     : 'border-[var(--color-border-subtle)] bg-[var(--color-surface)] hover:bg-[var(--color-hover-bg)]'
                 }`}
                 onClick={() => setSelectedPluginId(item.pluginId)}

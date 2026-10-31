@@ -493,7 +493,7 @@ const MiniMapViewportOverlay = memo(function MiniMapViewportOverlay({
         width={visibleFlowBounds.width}
         height={visibleFlowBounds.height}
         fill="none"
-        stroke="var(--color-primary)"
+        stroke="var(--color-accent)"
         strokeWidth="2.5"
         rx="3"
         ry="3"
@@ -507,7 +507,7 @@ const MiniMapViewportOverlay = memo(function MiniMapViewportOverlay({
           `M${visibleFlowBounds.x + cornerSize},${visibleFlowBounds.y + visibleFlowBounds.height} L${visibleFlowBounds.x},${visibleFlowBounds.y + visibleFlowBounds.height} L${visibleFlowBounds.x},${visibleFlowBounds.y + visibleFlowBounds.height - cornerSize}`,
         ].join(' ')}
         fill="none"
-        stroke="var(--color-primary)"
+        stroke="var(--color-accent)"
         strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"

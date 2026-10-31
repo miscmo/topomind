@@ -146,7 +146,7 @@ export const DocumentMoveToNodeDialog = memo(function DocumentMoveToNodeDialog({
             type="button"
             onClick={() => selected && onConfirm(selected)}
             disabled={!selected}
-            className="px-3 py-1.5 rounded-md text-[13px] font-medium bg-[var(--color-accent)] text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 rounded-md text-[13px] font-medium bg-[var(--color-accent)] text-[var(--color-text-inverse)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             移动
           </button>

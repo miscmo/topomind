@@ -933,7 +933,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
           <div className="flex gap-2">
             <button
               type="button"
-              className="flex-1 h-8 rounded-md bg-[var(--color-primary)] text-white text-[12px] font-medium cursor-pointer border-none transition-colors hover:opacity-90"
+              className="flex-1 h-8 rounded-md bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[12px] font-medium cursor-pointer border-none transition-colors hover:opacity-90"
               onClick={() => {
                 openExternalLink(linkMenu.href)
                 setLinkMenu(null)

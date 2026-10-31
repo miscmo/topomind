@@ -136,8 +136,8 @@ const RoomHistoryItem = memo(function RoomHistoryItem({ item, active, onActivate
       tabIndex={0}
       className={`flex items-center gap-2 w-full px-2 py-1.5 text-left text-xs rounded-md transition-colors cursor-pointer border-none bg-transparent group ${
         active
-          ? 'text-[var(--color-primary)] bg-[var(--color-hover-bg)] font-semibold'
-          : 'text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-hover-bg)]'
+          ? 'text-[var(--color-accent)] bg-[var(--color-hover-bg)] font-semibold'
+          : 'text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-hover-bg)]'
       }`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

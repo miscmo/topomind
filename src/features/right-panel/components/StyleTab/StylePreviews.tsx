@@ -49,7 +49,7 @@ export function NodeStylePreview({
             {title}
           </span>
           <span
-            className="absolute -right-1.5 -top-1.5 flex items-center justify-center rounded-full bg-[var(--color-primary)] text-white"
+            className="absolute -right-1.5 -top-1.5 flex items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-text-inverse)]"
             style={{
               minWidth: nodeBadgeSize,
               height: nodeBadgeSize,

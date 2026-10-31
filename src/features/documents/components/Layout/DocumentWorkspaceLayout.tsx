@@ -259,7 +259,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
           <div className="w-9 shrink-0 border-r border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] flex flex-col items-center gap-1 py-2 z-10">
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[14px] font-semibold cursor-pointer transition-colors bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] flex items-center justify-center`}
+              className={`w-7 h-7 rounded-lg border border-transparent text-[14px] font-semibold cursor-pointer transition-colors bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] flex items-center justify-center`}
               onClick={toggleMaximized}
               title={isMaximized ? "还原面板" : "最大化面板"}
               aria-label={isMaximized ? "还原面板" : "最大化面板"}
@@ -274,8 +274,8 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               type="button"
               className={`w-7 h-7 rounded-lg border border-transparent cursor-pointer transition-colors flex items-center justify-center ${
                 isLocked
-                  ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]'
-                  : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'
+                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]'
+                  : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'
               }`}
               onClick={() => toggleLock(kbPath, selectedNodeIdRaw)}
               disabled={!isLocked && !selectedNodeIdRaw}
@@ -291,7 +291,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             <div className="w-5 h-px bg-[var(--color-border-light)] my-0.5" />
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'documents' ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'}`}
+              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'documents' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
               onClick={() => handleRailTabClick('documents')}
               title="文档"
               aria-label="文档"
@@ -300,7 +300,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             </button>
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${!detailSidebarCollapsed && detailSidebarTab === 'attachments' ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)]'}`}
+              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${!detailSidebarCollapsed && detailSidebarTab === 'attachments' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
               onClick={() => handleRailTabClick('attachments')}
               disabled={!attachmentCardPath}
               title={!attachmentCardPath ? '当前环境暂不支持附件' : '附件'}
@@ -427,8 +427,8 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                           aria-current={isActive ? 'true' : undefined}
                           className={`block w-full text-left text-[12px] leading-[1.5] py-1 px-1.5 rounded-md border-none bg-transparent cursor-pointer transition-colors duration-75 truncate ${
                             isActive
-                              ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] font-semibold'
-                              : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-selected-bg)] hover:text-[var(--color-primary)]'
+                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] font-semibold'
+                              : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-selected-bg)] hover:text-[var(--color-accent)]'
                           }`}
                           style={{ paddingLeft: `${10 + (item.level - 1) * 12}px` }}
                           onClick={() => handleTocJump(item)}

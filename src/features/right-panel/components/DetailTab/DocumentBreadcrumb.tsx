@@ -176,7 +176,7 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
           return (
             <button
               key={child.id}
-              className={`flex items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-[var(--color-hover-bg)] w-full shrink-0 truncate ${child.id === activeTopoDocumentId ? 'text-[var(--color-primary)] font-medium bg-[var(--color-primary-soft)]' : 'text-[var(--color-text)]'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-[var(--color-hover-bg)] w-full shrink-0 truncate ${child.id === activeTopoDocumentId ? 'text-[var(--color-accent)] font-medium bg-[var(--color-accent-soft)]' : 'text-[var(--color-text)]'}`}
               style={child.color && child.id !== activeTopoDocumentId ? { color: child.color } : undefined}
               onClick={(e) => {
                 e.stopPropagation()
@@ -229,7 +229,7 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
                       {IconComp ? <IconComp size={12} /> : (typeof Icon === 'string' ? Icon : null)}
                     </div>
                     {childCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--color-primary)] text-white text-[9px] font-semibold leading-none ring-1 ring-[var(--color-surface)]">
+                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[9px] font-semibold leading-none ring-1 ring-[var(--color-surface)]">
                         {childCount}
                       </span>
                     )}

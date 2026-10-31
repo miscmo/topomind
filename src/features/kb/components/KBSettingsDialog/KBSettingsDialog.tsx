@@ -143,8 +143,8 @@ export function KBSettingsDialog(props: KBSettingsDialogProps) {
 
           <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-75 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[0_0_0_2px_var(--color-accent-soft)] [&>input::placeholder]:text-[var(--color-text-muted)]">
             <label>基础信息</label>
-            <div className="text-[#666] text-[13px] py-2.5 px-3.5 bg-[#f8f9fa] rounded-lg border border-[#eee]">
-              节点数量：<span className="font-semibold text-[#333]">{currentKb.nodeCount ?? '未知'}</span>
+            <div className="text-[var(--color-text-secondary)] text-[13px] py-2.5 px-3.5 bg-[var(--color-bg-muted)] rounded-lg border border-[var(--color-border-subtle)]">
+              节点数量：<span className="font-semibold text-[var(--color-text-primary)]">{currentKb.nodeCount ?? '未知'}</span>
             </div>
           </div>
 
@@ -156,7 +156,7 @@ export function KBSettingsDialog(props: KBSettingsDialogProps) {
               <button type="button" className="bg-[var(--color-hover-bg)] text-[var(--color-text-secondary)] border-none p-[8px_20px] rounded-lg text-[14px] font-medium cursor-pointer transition-all duration-75 hover:bg-[var(--color-bg-muted)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onClose} disabled={loading}>
                 取消
               </button>
-              <button type="button" className="bg-[var(--color-accent)] text-white border-none p-[8px_24px] rounded-lg text-[14px] font-semibold cursor-pointer transition-all duration-75 hover:bg-[var(--color-accent-hover)] disabled:opacity-60 disabled:cursor-not-allowed" onClick={handleSave} disabled={loading || !name.trim() || (name.trim() === currentKb.name && !coverRef && coverOffset === initialCoverOffset)}>
+              <button type="button" className="bg-[var(--color-accent)] text-[var(--color-text-inverse)] border-none p-[8px_24px] rounded-lg text-[14px] font-semibold cursor-pointer transition-all duration-75 hover:bg-[var(--color-accent-hover)] disabled:opacity-60 disabled:cursor-not-allowed" onClick={handleSave} disabled={loading || !name.trim() || (name.trim() === currentKb.name && !coverRef && coverOffset === initialCoverOffset)}>
                 保存设置
               </button>
             </div>

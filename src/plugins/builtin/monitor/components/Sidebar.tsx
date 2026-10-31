@@ -24,7 +24,7 @@ export function Sidebar() {
       </div>
       <nav className="flex flex-col py-2 gap-0.5">
         <button
-          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-75 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'log' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
+          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-75 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'log' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-accent)] font-semibold' : ''}`}
           onClick={() => handleTabClick('log')}
         >
           <span className="text-[14px] w-5 text-center shrink-0">&#9776;</span>
@@ -36,7 +36,7 @@ export function Sidebar() {
           )}
         </button>
         <button
-          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-75 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'performance' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
+          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-75 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'performance' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-accent)] font-semibold' : ''}`}
           onClick={() => handleTabClick('performance')}
         >
           <span className="text-[14px] w-5 text-center shrink-0">&#9651;</span>
@@ -44,7 +44,7 @@ export function Sidebar() {
           <span className="ml-auto w-[18px]" />
         </button>
         <button
-          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-75 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'plugins' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-primary)] font-semibold' : ''}`}
+          className={`flex items-center gap-2 py-2 px-4 bg-transparent border-none text-[var(--color-text-secondary)] text-[13px] cursor-pointer text-left transition-all duration-75 rounded-md h-auto w-[calc(100%-16px)] mx-2 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)] ${activeTab === 'plugins' ? '!bg-[var(--color-selected-bg)] !text-[var(--color-accent)] font-semibold' : ''}`}
           onClick={() => handleTabClick('plugins')}
         >
           <span className="text-[14px] w-5 text-center shrink-0">&#9881;</span>

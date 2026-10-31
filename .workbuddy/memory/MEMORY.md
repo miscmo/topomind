@@ -64,3 +64,11 @@
 - **铁律**：任何在 `useGraphPageActions` 调用链里的 hook（含 `useNodeActions`、`useNodeMoveToRoom` 等）**绝不能**直接调用 `useGraphContext()`，否则渲染即抛 `useGraphContext must be used within GraphContextProvider`，整棵「知识库标签页」ErrorBoundary 兜底 → 表现为「知识库标签加载失败」+ 右侧笔记打不开（笔记在 GraphPage 内，同子树崩溃）。
 - 需要 `graph` 时，由 `useGraphPageActions` 把已持有的 `graph` 作为**参数传入**子 hook（如 `useNodeMoveToRoom({ graph })`），不要用 `useGraphContext()` 自取。
 - 该崩溃会级联成多个看似独立的报错（控制台 `useGraphContext` 错 + 「知识库标签加载失败」+ 「打开笔记报错」），定位时认准单一根因即可。
+
+## 编辑器视觉样式约定（SmartDocumentEditor.css，2026-10-30 起）
+- **交互/高亮统一走 `--color-accent`，不要用 `--color-primary` 给"非链接"元素上色**：行内代码、行内数学 chip、数学编辑输入框、复选框 `accent-color`、当前块高亮底色均已改为 accent；`--color-primary` 仅留给真正的超链接文字。否则代码/数学会和链接撞色。
+- **行内代码/数学用 accent 极淡 tint 背景 + 等宽字体 + 0.25em 圆角、无边框**：背景用 `color-mix(accent 10~12%, transparent)`，去掉中性灰底（用户嫌灰）；跨主题/纸张背景都和谐。大面积容器（引用块、表头、数学块）的灰底已统一改为 accent 蓝调：引用块 `accent 7%`+左边框 `35%`、表头 `accent 9%`、数学块 `accent 7%`+边框 `18%`，实现"整体蓝调"（编辑器 UI 控件背景仍保留中性 `bg-muted`）。
+- **标题阶梯**：H1 1.5em / H2 1.28em / H3 1.14em / H4 1.05em / H5 1.0em / H6 0.95em，靠字号+字重拉层级，避免 H1/H2 过平或 H5/H6 小于正文。
+- **代码块字号用相对值 `0.9em`**（勿写死 px），随正文 `--topomind-smart-body-font-size` 缩放；行号靠 CSS 计数器伪元素，不参与复制。
+- **原生代码块 `<select>` 语言下拉是死 DOM**：被 `.bn-block-content[data-content-type="codeBlock"] > div:first-child { display:none }` 整块隐藏，CustomCodeBlock 仅 `querySelector('select')` 程序读语言值。相关 select 样式已清理，勿再为它加样式。
+- **纸张深色变量必须双写选择器** `html[data-theme='dark'], .dark`（与 `tokens.css:135` 一致），否则只用 `data-theme` 切主题的入口会拿到浅色纸张。

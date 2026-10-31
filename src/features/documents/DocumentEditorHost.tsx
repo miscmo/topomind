@@ -99,7 +99,7 @@ export function DocumentEditorHost({
                       key={type}
                       type="button"
                       className={index === 0
-                        ? 'h-8 px-3 rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)] text-white text-[12px] font-semibold cursor-pointer disabled:opacity-50'
+                        ? 'h-8 px-3 rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[12px] font-semibold cursor-pointer disabled:opacity-50'
                         : 'h-8 px-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] font-semibold cursor-pointer disabled:opacity-50 hover:bg-[var(--color-hover-bg)]'}
                       onClick={() => {
                         let initialValue = definition.defaultTitle
