@@ -152,20 +152,27 @@
   padding: 6px 8px 4px !important;
 }
 
-/* Mantine's base stylesheet intentionally makes this wrapper transparent;
-   for the toolbar tooltip that leaves an empty floating layer in this app. */
+/* Toolbar button tooltips.
+   BlockNote renders the bubble via Mantine's Tooltip; its inner text is a
+   MantineText size="sm" (14px) which looks oversized for a tooltip.
+   Style the bubble like the app's other popovers (color picker / link form):
+   a theme-aware elevated surface with primary text, and shrink the text. */
 .bn-formatting-toolbar .mantine-Tooltip-tooltip,
-.bn-formatting-toolbar .bn-tooltip,
 .mantine-Tooltip-tooltip:has(.bn-tooltip) {
-  background: var(--color-text-primary) !important;
+  background: var(--color-surface-elevated) !important;
   border: 1px solid var(--color-border) !important;
-  border-radius: 7px !important;
+  border-radius: var(--radius-md) !important;
   box-shadow: var(--shadow-popover) !important;
-  color: var(--color-surface-elevated) !important;
+  color: var(--color-text-primary) !important;
   padding: 5px 9px !important;
   max-width: min(320px, calc(100vw - 24px));
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+  text-align: left !important;
 }
 
+/* Neutralize BlockNote's own inner .bn-tooltip bubble so only the outer
+   Mantine bubble (styled above) is visible. */
 .mantine-Tooltip-tooltip:has(.bn-tooltip) .bn-tooltip,
 .bn-formatting-toolbar .bn-tooltip {
   background: transparent !important;
@@ -175,8 +182,12 @@
   padding: 0 !important;
 }
 
-.mantine-Tooltip-tooltip:has(.bn-tooltip) .mantine-Text-root {
+/* Override the MantineText size="sm" (14px) used by TooltipContent. */
+.mantine-Tooltip-tooltip:has(.bn-tooltip) .bn-tooltip .mantine-Text-root,
+.bn-formatting-toolbar .bn-tooltip .mantine-Text-root {
   color: inherit !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
 }
 
 /* The toolbar's color picker and link form are portal-safe even when their
@@ -359,7 +370,9 @@ body.tm-text-selecting .tm-smart-side-menu-hit-area .bn-button {
 .smart-document-content [data-content-type="quote"] blockquote {
   border-left-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
   color: var(--color-text-secondary);
-  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+  /* 不透明的 accent 蓝调底：用 surface 混合（alpha=1），纸张点阵/网格不再透出；
+     当前块高亮已改为 inset box-shadow，不会覆盖此背景。 */
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
   border-radius: 0 8px 8px 0;
   padding: 0.6em 0.75em 0.6em 1em;
   margin-top: var(--topomind-smart-block-spacing, 6px);
@@ -619,7 +632,7 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   border-color: var(--color-border);
 }
 .smart-document-content .bn-editor [data-content-type="table"] th {
-  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
   color: var(--color-text-primary);
 }
 .smart-document-content .bn-block-content[data-content-type="checkListItem"] > div > input {
@@ -979,9 +992,10 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--color-accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 28%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+  /* 不透明的 accent 蓝调底：用 surface 混合（alpha=1），纸张不再透出 */
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
 }
 
 .smart-document-content .tm-math-block-preview {
@@ -1049,10 +1063,20 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
 }
 
 /* Current block highlight */
+/* 用 inset box-shadow 做高亮，而不是 background：
+   原写法 background 简写 + 高特异性 + !important 会覆盖「在 .bn-block-content 上自绘不透明背景」的块类型
+   （典型如代码块），把代码块的不透明灰底覆盖成半透明，导致纸张纹理透出（选中后背景透出）。
+   box-shadow inset 只叠加在元素自身 background 之上，不抢占 background-color，对所有块类型通用、彻底根治。 */
 .smart-document-content .bn-block-outer[data-current-block="true"] > .bn-block > .bn-block-content {
   border-radius: 6px;
-  background: color-mix(in srgb, var(--color-accent) 7%, transparent) !important;
-  transition: background-color 0.15s ease;
+  box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--color-accent) 7%, transparent) !important;
+  transition: box-shadow 0.15s ease;
+}
+
+/* 代码块被选中：保留不透明灰底（已由上方 inset 高亮叠加，不再覆盖 background）+ 补回它本来的极淡外阴影，
+   避免选中态丢失立体感。特异性 (0,6,0) 高于上方通用规则 (0,5,0)。 */
+.smart-document-content .bn-block-outer[data-current-block="true"] > .bn-block > .bn-block-content[data-content-type="codeBlock"] {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), inset 0 0 0 9999px color-mix(in srgb, var(--color-accent) 7%, transparent) !important;
 }
 
 /* Headings */
@@ -1189,6 +1213,7 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   --paper-line: rgba(99, 115, 135, 0.16);
   --paper-grid: rgba(99, 115, 135, 0.10);
   --paper-dot: rgba(99, 115, 135, 0.30);
+  --paper-guide: rgba(99, 115, 135, 0.22);
   --paper-margin: rgba(214, 69, 59, 0.55);
   --paper-kraft-bg: #ecdfc4;
 }
@@ -1197,26 +1222,38 @@ html[data-theme='dark'], .dark {
   --paper-line: rgba(255, 255, 255, 0.07);
   --paper-grid: rgba(255, 255, 255, 0.045);
   --paper-dot: rgba(255, 255, 255, 0.12);
+  --paper-guide: rgba(255, 255, 255, 0.13);
   --paper-margin: rgba(239, 108, 99, 0.45);
   --paper-kraft-bg: #2f2a20;
 }
 
-/* 非 plain：纸张铺满整个编辑器滚动区域（整页满铺，覆盖原渐变桌面） */
-[data-paper-bg]:not([data-paper-bg="plain"]).tm-smart-editor-scroll {
-  background-color: var(--paper-bg) !important;
-  background-repeat: repeat !important;
-  background-attachment: local !important;
+/* 所有纸张背景统一由 CSS 控制（plain + 非 plain 都在这里），
+   滚动容器不再挂 Tailwind 渐变，避免机制冗余与浅/深色下不一致。 */
+
+/* plain：纯色渐变桌面（与样式面板缩略图 plain 一致）。 */
+[data-paper-bg="plain"].tm-smart-editor-scroll {
+  background-color: var(--color-bg) !important;
+  background-image: linear-gradient(180deg, var(--color-surface), var(--color-bg)) !important;
+  background-attachment: scroll !important;
 }
 
-/* 横线笔记本：行距跟随正文行高 */
-[data-paper-bg="ruled"].tm-smart-editor-scroll {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent calc(var(--topomind-smart-line-height) * var(--topomind-smart-body-font-size) - 1px),
-    var(--paper-line) calc(var(--topomind-smart-line-height) * var(--topomind-smart-body-font-size))
-  ) !important;
-  background-position: 0 16px !important;
+/* 非 plain：纸张铺满整个编辑器滚动区域（整页满铺）。
+   dot-grid/grid/kraft 自带 !important 的 background-image，会稳定压过这里的 image:none。 */
+[data-paper-bg]:not([data-paper-bg="plain"]).tm-smart-editor-scroll {
+  background-color: var(--paper-bg) !important;
+  background-image: none !important;
+  background-repeat: repeat !important;
+  /* scroll: 背景相对滚动容器自身固定、不随内容滚动，形成“固定纸面”效果；
+     不要用 local（背景会跟随内容一起上下移动）。 */
+  background-attachment: scroll !important;
+}
+
+/* 横线笔记本 → 改为“左侧书写参考线”：去掉横线，仅保留一条贴着正文起始列的淡参考线。
+   参考 Moleskine/Leuchtturm 净面笔记本 + Word/LibreOffice 的“文本边界线”，更干净易读、不再与文字打架。
+   参考线挂在正文容器 .bn-container 左缘，随写作列对齐（任意窗口宽度都贴在文字左侧，不随视口错位）。 */
+[data-paper-bg="ruled"] .smart-document-content .bn-container {
+  box-sizing: border-box;
+  border-left: 1.5px solid var(--paper-guide) !important;
 }
 
 /* 点阵方格 */
@@ -1243,23 +1280,11 @@ html[data-theme='dark'], .dark {
     radial-gradient(circle at 80% 85%, rgba(0, 0, 0, 0.04), transparent 55%) !important;
 }
 
-/* 手稿纸：横线 + 左侧红色装订线（贴近编辑器左缘的正文起始列） */
-[data-paper-bg="manuscript"].tm-smart-editor-scroll {
-  background-image:
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent calc(var(--topomind-smart-line-height) * var(--topomind-smart-body-font-size) - 1px),
-      var(--paper-line) calc(var(--topomind-smart-line-height) * var(--topomind-smart-body-font-size))
-    ),
-    linear-gradient(
-      to right,
-      transparent 39px,
-      var(--paper-margin) 40px,
-      var(--paper-margin) 41px,
-      transparent 42px
-    ) !important;
-  background-position: 0 16px !important;
+/* 手稿纸 → 去掉横线，仅保留经典红色装订线（贴正文起始列）。
+   红色装订线是手稿/投稿纸的标志性元素，比横线更聚焦、易读。 */
+[data-paper-bg="manuscript"] .smart-document-content .bn-container {
+  box-sizing: border-box;
+  border-left: 2px solid var(--paper-margin) !important;
 }
 
 /* --- 样式面板中的纸张缩略图（与编辑器共用同一组 CSS 变量，自动适配主题） --- */
@@ -1275,7 +1300,8 @@ html[data-theme='dark'], .dark {
 }
 .tm-paper-thumb--ruled {
   background-color: var(--paper-bg);
-  background-image: repeating-linear-gradient(to bottom, transparent 0 9px, var(--paper-line) 9px 10px);
+  /* 左侧一条淡参考线，对应编辑器内的左侧书写参考线 */
+  background-image: linear-gradient(to right, transparent 0 11px, var(--paper-guide) 11px 12.5px, transparent 12.5px);
 }
 .tm-paper-thumb--dot-grid {
   background-color: var(--paper-bg);
@@ -1293,7 +1319,6 @@ html[data-theme='dark'], .dark {
 }
 .tm-paper-thumb--manuscript {
   background-color: var(--paper-bg);
-  background-image:
-    repeating-linear-gradient(to bottom, transparent 0 9px, var(--paper-line) 9px 10px),
-    linear-gradient(to right, transparent 13px, var(--paper-margin) 13px 14px, transparent 14px);
+  /* 左侧一条红装订线，对应编辑器内的红色装订线 */
+  background-image: linear-gradient(to right, transparent 0 11px, var(--paper-margin) 11px 12.5px, transparent 12.5px);
 }

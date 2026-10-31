@@ -297,11 +297,11 @@ export function PresetButtonGrid<T extends { label: string }>({
 
 export const PAPER_BACKGROUND_OPTIONS: Array<{ label: string; value: EditorPaperBackground }> = [
   { label: '无', value: 'plain' },
-  { label: '横线', value: 'ruled' },
+  { label: '参考线', value: 'ruled' },
   { label: '点阵', value: 'dot-grid' },
   { label: '方格', value: 'grid' },
   { label: '牛皮', value: 'kraft' },
-  { label: '手稿', value: 'manuscript' },
+  { label: '红装订线', value: 'manuscript' },
 ]
 
 export function PaperBackgroundGrid({

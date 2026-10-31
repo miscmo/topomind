@@ -1,26 +1,19 @@
 import { useCallback, useState } from 'react'
-import { Check, Copy, Sigma, SquareSigma } from 'lucide-react'
+import { Check, Copy, Sigma } from 'lucide-react'
 import {
   BasicTextStyleButton,
-  BlockTypeSelect,
   ColorStyleButton,
   CreateLinkButton,
   FormattingToolbar,
-  NestBlockButton,
-  TextAlignButton,
-  UnnestBlockButton,
   useBlockNoteEditor,
   useComponentsContext,
   useEditorState,
 } from '@blocknote/react'
 
-import { createBlockMathHtml } from '../mathPaste'
 import {
   getSmartDocumentSelectedTextState,
   type SmartDocumentSelectedTextState,
 } from '../smartDocumentUtils'
-
-type MathButtonMode = 'inline' | 'block'
 
 function useSelectedTextState(): SmartDocumentSelectedTextState | undefined {
   const editor = useBlockNoteEditor<any, any, any>()
@@ -81,44 +74,33 @@ function CopySelectionButton({ state }: { state: SmartDocumentSelectedTextState 
   )
 }
 
-function SelectionMathButton({ mode, state }: { mode: MathButtonMode, state: SmartDocumentSelectedTextState }) {
+function SelectionMathButton({ state }: { state: SmartDocumentSelectedTextState }) {
   const Components = useComponentsContext()
   const editor = useBlockNoteEditor<any, any, any>()
-  const canConvert = mode === 'inline' ? state.canConvertInlineMath : state.canConvertBlockMath
+  const canConvert = state.canConvertInlineMath
 
   const handleClick = useCallback(() => {
     if (!canConvert) return
 
     editor.focus()
-
-    if (mode === 'inline') {
-      editor.insertInlineContent([
-        {
-          type: 'inlineMath',
-          props: {
-            latex: state.latex,
-          },
+    editor.insertInlineContent([
+      {
+        type: 'inlineMath',
+        props: {
+          latex: state.latex,
         },
-      ] as any)
-      return
-    }
-
-    editor.pasteHTML(createBlockMathHtml(state.latex))
-  }, [canConvert, editor, mode, state.latex])
+      },
+    ] as any)
+  }, [canConvert, editor, state.latex])
 
   if (!Components) {
     return null
   }
 
-  const isInline = mode === 'inline'
-  const label = isInline ? '转为行内公式' : '转为行间公式'
+  const label = '转为行内公式'
   const tooltip = canConvert
-    ? isInline
-      ? '将选中文字替换为行内 LaTeX 公式'
-      : '将选中文字替换为块级 LaTeX 公式'
-    : isInline
-      ? '行内公式仅支持单个文本块内的单行选择'
-      : '所选内容包含不能转换为公式的块'
+    ? '将选中文字替换为行内 LaTeX 公式'
+    : '行内公式仅支持单个文本块内的单行选择'
 
   return (
     <Components.FormattingToolbar.Button
@@ -128,7 +110,7 @@ function SelectionMathButton({ mode, state }: { mode: MathButtonMode, state: Sma
       isDisabled={!canConvert}
       label={label}
       mainTooltip={tooltip}
-      icon={isInline ? <Sigma size={16} strokeWidth={2} /> : <SquareSigma size={16} strokeWidth={2} />}
+      icon={<Sigma size={16} strokeWidth={2} />}
     />
   )
 }
@@ -138,21 +120,14 @@ export function SmartDocumentFormattingToolbar() {
 
   return (
     <FormattingToolbar>
-      <BlockTypeSelect key="blockTypeSelect" />
       <BasicTextStyleButton basicTextStyle="bold" key="boldStyleButton" />
       <BasicTextStyleButton basicTextStyle="italic" key="italicStyleButton" />
       <BasicTextStyleButton basicTextStyle="underline" key="underlineStyleButton" />
       <BasicTextStyleButton basicTextStyle="strike" key="strikeStyleButton" />
-      <BasicTextStyleButton basicTextStyle="code" key="codeStyleButton" />
-      {selectionState ? <CopySelectionButton key="copySelectionButton" state={selectionState} /> : null}
-      {selectionState ? <SelectionMathButton key="inlineMathButton" mode="inline" state={selectionState} /> : null}
-      {selectionState ? <SelectionMathButton key="blockMathButton" mode="block" state={selectionState} /> : null}
-      <TextAlignButton textAlignment="left" key="textAlignLeftButton" />
-      <TextAlignButton textAlignment="center" key="textAlignCenterButton" />
-      <TextAlignButton textAlignment="right" key="textAlignRightButton" />
       <ColorStyleButton key="colorStyleButton" />
-      <NestBlockButton key="nestBlockButton" />
-      <UnnestBlockButton key="unnestBlockButton" />
+      {selectionState ? <CopySelectionButton key="copySelectionButton" state={selectionState} /> : null}
+      <BasicTextStyleButton basicTextStyle="code" key="codeStyleButton" />
+      {selectionState ? <SelectionMathButton key="inlineMathButton" state={selectionState} /> : null}
       <CreateLinkButton key="createLinkButton" />
     </FormattingToolbar>
   )

@@ -53,7 +53,6 @@ export type SmartDocumentSelectedTextState = {
   rawText: string
   latex: string
   canConvertInlineMath: boolean
-  canConvertBlockMath: boolean
 }
 
 export function cloneSmartDocumentBlockWithoutIds<T extends SmartDocumentBlockLike>(block: T): Omit<T, 'id'> {
@@ -307,7 +306,6 @@ export function getSmartDocumentSelectedTextState(
     canConvertInlineMath: allBlocksSupportInlineContent
       && selectedBlocks.length === 1
       && !latex.includes('\n'),
-    canConvertBlockMath: allBlocksSupportInlineContent,
   }
 }
 
