@@ -73,6 +73,8 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     toggleExpand,
     selectStickyAncestor,
     registerDocumentRow,
+    getChildRenderLimit,
+    showMoreChildren,
     startRename,
     openContextMenu,
     openIconPicker,
@@ -174,6 +176,8 @@ export const DocumentSidebar = memo(function DocumentSidebar({
                   onInlineEditBlur={handleInputBlur}
                   onInlineEditKeyDown={handleInputKeyDown}
                   onRowElement={registerDocumentRow}
+                  getChildRenderLimit={getChildRenderLimit}
+                  onShowMoreChildren={showMoreChildren}
                 />
               ))}
               {inlineEdit?.mode !== 'rename' && !inlineEdit?.parentId && inlineEdit && (

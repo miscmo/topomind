@@ -23,7 +23,7 @@ type GNode = GraphState['nodes'][number]
 // nothing actually changed, letting callers skip the store update entirely.
 //
 // The id->index map is built from `nodes` on every call (O(n) Map build, no per-node
-// object allocation). This deliberately avoids relying on a store-level `nodeIndexById`,
+// object allocation). This deliberately avoids relying on any cached/store-level index,
 // which can be stale or empty (e.g. right after load / undo) and would make every change
 // silently skipped — leaving dragged nodes stuck in place. The per-frame cost stays
 // dominated by O(changed) for the actual node updates, which is what matters as the

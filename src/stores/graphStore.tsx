@@ -16,11 +16,6 @@ export interface GraphState {
   
   // Derived O(1) maps, automatically kept in sync
   nodesMap: Map<string, KnowledgeNode>
-  // id -> position in `nodes` (z-order index). Rebuilt only on structural changes
-  // (setNodes / removeNodes / replaceGraph); order is preserved by the per-frame
-  // setNodesPreservingSelection, so the index stays valid during drag/resize and can
-  // be reused to update individual nodes in O(changed) instead of O(total nodes).
-  nodeIndexById: Map<string, number>
   edgesMap: Map<string, KnowledgeEdge>
   // References used to distinguish normal setter updates from temporal restore.
   // These are excluded from undo history and only guard the derived-state sync.
@@ -44,12 +39,6 @@ function buildNodesMap(nodes: KnowledgeNode[]) {
   const nodesMap = new Map<string, KnowledgeNode>()
   nodes.forEach((n) => nodesMap.set(n.id, n))
   return nodesMap
-}
-
-function buildNodeIndex(nodes: KnowledgeNode[]) {
-  const index = new Map<string, number>()
-  for (let i = 0; i < nodes.length; i++) index.set(nodes[i].id, i)
-  return index
 }
 
 function buildEdgesMap(edges: KnowledgeEdge[]) {
@@ -230,7 +219,6 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
   selectedNodeIds: [],
   selectedNodes: [],
   nodesMap: new Map(),
-  nodeIndexById: new Map(),
   edgesMap: new Map(),
   derivedNodesRef: [],
   derivedEdgesRef: [],
@@ -242,7 +230,6 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
     viewport: viewport ?? state.viewport,
     ...buildDerivedGraphState(nodes, edges, state),
     nodesMap: buildNodesMap(nodes),
-    nodeIndexById: buildNodeIndex(nodes),
     derivedNodesRef: nodes,
     derivedEdgesRef: edges,
     historyRevision: state.historyRevision + 1,
@@ -251,7 +238,6 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
   setNodes: (nodes) => set((state) => ({
     nodes,
     nodesMap: reconcileMap(state.nodesMap, nodes),
-    nodeIndexById: buildNodeIndex(nodes),
     ...getSelectionState(nodes, state),
     derivedNodesRef: nodes,
   })),
@@ -260,12 +246,12 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
   // Avoid rescanning every node just to derive the same selection arrays on the drag hot path.
   // When `changedIds` is supplied (the per-frame drag/resize path), only those entries are
   // re-indexed into `nodesMap` — O(changed) instead of O(total nodes) — because the array
-  // order is preserved by callers, so `nodeIndexById` stays valid and is passed through.
+  // order is preserved by callers.
   setNodesPreservingSelection: (nodes, changedIds) => set((state) => {
     let nodesMap = state.nodesMap
     if (changedIds && changedIds.length > 0) {
-      // Build the id->index map from the incoming `nodes` rather than trusting
-      // `state.nodeIndexById`: the incoming array is authoritative and always in
+      // Build the id->index map from the incoming `nodes` rather than trusting any
+      // store-level index: the incoming array is authoritative and always in
       // sync, so this never silently skips a moved node. O(n) Map build with no
       // per-node allocation; the loop below only touches `changedIds`.
       const nodeIndexById = new Map<string, number>()
@@ -284,7 +270,6 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
     return {
       nodes,
       nodesMap,
-      nodeIndexById: state.nodeIndexById,
       // Always use the freshly derived list: a removed selected node would have
       // been filtered out here, so reusing the stale previous array would leave
       // a dangling reference to a node that no longer exists.
@@ -317,7 +302,6 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
     return {
       nodes: nextNodes,
       nodesMap: nextNodesMap,
-      nodeIndexById: state.nodeIndexById,
       ...selectionState,
       derivedNodesRef: nextNodes,
     }
@@ -330,7 +314,6 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
     return {
       nodes: nextNodes,
       nodesMap: reconcileMap(state.nodesMap, nextNodes),
-      nodeIndexById: buildNodeIndex(nextNodes),
       ...selectionState,
       derivedNodesRef: nextNodes,
     }

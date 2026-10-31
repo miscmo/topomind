@@ -1,6 +1,8 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState, useDeferredValue, useMemo } from 'react'
 import { Search, X } from 'lucide-react'
 import type { Node } from '@xyflow/react'
+
+const MAX_RESULTS = 50
 
 interface NodeSearchBoxProps {
   nodes: Node[]
@@ -17,9 +19,26 @@ export const NodeSearchBox = memo(function NodeSearchBox({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const filteredNodes = nodes.filter(node => 
-    (node.data?.label as string || '').toLowerCase().includes(query.toLowerCase())
-  )
+  // Defer the heavy filter so typing stays responsive even with thousands of nodes.
+  // The input updates immediately (query), but the O(n) scan runs against a deferred
+  // value that React can interrupt, keeping keystrokes smooth under large graphs.
+  const deferredQuery = useDeferredValue(query)
+
+  const filteredNodes = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase()
+    if (!q) return [] as Node[]
+    const result: Node[] = []
+    for (const node of nodes) {
+      const label = String(node.data?.label ?? '').toLowerCase()
+      if (label.includes(q)) result.push(node)
+    }
+    return result
+  }, [nodes, deferredQuery])
+
+  // Cap DOM nodes rendered; users rarely scroll past the first page of matches,
+  // and rendering thousands of rows would defeat the deferred filter above.
+  const visibleNodes = filteredNodes.slice(0, MAX_RESULTS)
+  const hasMore = filteredNodes.length > visibleNodes.length
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -35,16 +54,16 @@ export const NodeSearchBox = memo(function NodeSearchBox({
       onClose()
       return
     }
-    
+
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setSelectedIndex(i => Math.min(i + 1, filteredNodes.length - 1))
+      setSelectedIndex(i => Math.min(i + 1, visibleNodes.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setSelectedIndex(i => Math.max(i - 1, 0))
-    } else if (e.key === 'Enter' && filteredNodes.length > 0) {
+    } else if (e.key === 'Enter' && visibleNodes.length > 0) {
       e.preventDefault()
-      onSelectNode(filteredNodes[selectedIndex])
+      onSelectNode(visibleNodes[Math.min(selectedIndex, visibleNodes.length - 1)])
     }
   }
 
@@ -72,7 +91,7 @@ export const NodeSearchBox = memo(function NodeSearchBox({
         <div className="max-h-[300px] overflow-y-auto">
           {filteredNodes.length > 0 ? (
             <div className="py-1">
-              {filteredNodes.map((node, index) => (
+              {visibleNodes.map((node, index) => (
                 <div
                   key={node.id}
                   onClick={() => onSelectNode(node)}
@@ -82,9 +101,14 @@ export const NodeSearchBox = memo(function NodeSearchBox({
                       : 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-muted)]'
                   }`}
                 >
-                  {node.data?.label as string}
+                  {String(node.data?.label ?? '')}
                 </div>
               ))}
+              {hasMore && (
+                <div className="px-3 py-2 text-center text-[12px] text-[var(--color-text-muted)]">
+                  仅显示前 {MAX_RESULTS} 条，共匹配 {filteredNodes.length} 个节点
+                </div>
+              )}
             </div>
           ) : (
             <div className="px-3 py-4 text-center text-[13px] text-[var(--color-text-muted)]">

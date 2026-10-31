@@ -30,6 +30,10 @@ interface DocumentNodeProps {
   onRowElement?: (id: string, element: HTMLDivElement | null) => void
   renderChildren?: boolean
   sticky?: boolean
+  // 大文件夹展开时限制一次渲染的子项数，避免一次性创建数千个 DOM 节点（见模型层注释）。
+  // 未提供时表示不设上限（如 sticky 行 —— 它们 renderChildren=false，本就不渲染子项）。
+  getChildRenderLimit?: (id: string) => number
+  onShowMoreChildren?: (id: string) => void
 }
 
 export const DocumentNode: React.FC<DocumentNodeProps> = ({
@@ -58,6 +62,8 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
   onRowElement,
   renderChildren = true,
   sticky = false,
+  getChildRenderLimit,
+  onShowMoreChildren,
 }) => {
   const isEditing = inlineEdit?.mode === 'rename' && inlineEdit.targetId === node.id
   const setRowElement = React.useCallback((element: HTMLDivElement | null) => {
@@ -66,6 +72,10 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
   const children = childrenMap[node.id] || []
   const isExpanded = expandedNodes.has(node.id)
   const hasChildren = children.length > 0
+  // 超过上限的子项先不渲染，改由底部的「显示剩余 N 项」按需展开。
+  const childLimit = getChildRenderLimit ? getChildRenderLimit(node.id) : Number.MAX_SAFE_INTEGER
+  const visibleChildren = children.slice(0, childLimit)
+  const hiddenChildCount = children.length - visibleChildren.length
   const isActive = topoDocumentPath(node.id) === activeDocumentPath
   const isDragTarget = dragState?.id === node.id
   const dragClass = isDragTarget 
@@ -206,7 +216,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           </span>
         </div>
       )}
-      {renderChildren && isExpanded && children.map(child => (
+      {renderChildren && isExpanded && visibleChildren.map(child => (
         <DocumentNode
           key={child.id}
           node={child}
@@ -232,8 +242,20 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           onInlineEditBlur={onInlineEditBlur}
           onInlineEditKeyDown={onInlineEditKeyDown}
           onRowElement={onRowElement}
+          getChildRenderLimit={getChildRenderLimit}
+          onShowMoreChildren={onShowMoreChildren}
         />
       ))}
+      {renderChildren && isExpanded && hiddenChildCount > 0 && (
+        <button
+          type="button"
+          className="mb-[2px] py-1 pr-2.5 text-left text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:underline transition-colors"
+          style={{ paddingLeft: `${(level + 1) * 16 + 4}px` }}
+          onClick={() => onShowMoreChildren?.(node.id)}
+        >
+          显示剩余 {hiddenChildCount} 项
+        </button>
+      )}
       {renderChildren && isExpanded && inlineEdit?.mode !== 'rename' && inlineEdit?.parentId === node.id && (
         <DocumentInlineEdit
           level={level + 1}

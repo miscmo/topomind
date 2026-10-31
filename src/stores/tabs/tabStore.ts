@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { create } from 'zustand'
 import {
   createTabLifecycleActions,
@@ -6,7 +6,7 @@ import {
   createTabSelectors,
 } from './tabActions'
 import { TAB_INITIAL_STATE } from './tabState'
-import type { TabState, GraphSession } from './tabTypes'
+import type { TabState } from './tabTypes'
 
 export type { GraphSession, Tab, TabState } from './tabTypes'
 
@@ -20,24 +20,12 @@ export const tabStore = create<TabState>()((set, get) => ({
 export const useTabStore = tabStore
 
 export function useGraphSession(tabId: string) {
-  const [session, setSession] = useState<GraphSession>(() =>
-    tabStore.getState().getGraphSession(tabId)
+  // Subscribe with a selector + shallow equality so this only re-renders when the
+  // *session fields of this tab* actually change. The previous implementation
+  // subscribed to the entire tabStore, so any tab (or room) mutation anywhere
+  // re-rendered every consumer (e.g. the whole DocumentWorkspaceLayout).
+  // getGraphSession derives a fresh object each call, hence the shallow compare.
+  return useTabStore(
+    useShallow((state) => state.getGraphSession(tabId)),
   )
-
-  const tabIdRef = useRef(tabId)
-  tabIdRef.current = tabId
-
-  useEffect(() => {
-    setSession(tabStore.getState().getGraphSession(tabId))
-
-    const unsubscribe = tabStore.subscribe((state) => {
-      setSession(state.getGraphSession(tabIdRef.current))
-    })
-
-    return () => {
-      unsubscribe()
-    }
-  }, [tabId])
-
-  return session
 }

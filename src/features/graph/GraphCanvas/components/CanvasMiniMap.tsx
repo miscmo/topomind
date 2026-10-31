@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react'
 import { Panel, Position, getSmoothStepPath, getStraightPath, useReactFlow, useViewport, type Edge, type Node } from '@xyflow/react'
 import { Eye, EyeOff, Minus, Plus } from 'lucide-react'
 import { logAction } from '../../../../core/log-backend'
@@ -546,6 +546,14 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
   const pendingFocusPointRef = useRef<{ clientX: number; clientY: number } | null>(null)
   const [isDraggingPreview, setIsDraggingPreview] = useState(false)
 
+  // Defer the heavy preview-model rebuild so a burst of node/edge updates (selection,
+  // title/style edits, rapid graph mutations) doesn't synchronously rebuild the minimap
+  // on the main thread. The minimap keeps showing the previous frame's model while the new
+  // one is computed, keeping the main canvas responsive in large graphs. Visibility/positioning
+  // (graphBounds, isCanvasLarge) still use the immediate values so the panel stays accurate.
+  const deferredNodes = useDeferredValue(nodes)
+  const deferredEdges = useDeferredValue(edges)
+
   const miniMapDetailLevel = useMemo<MiniMapDetailLevel>(() => {
     if (
       nodes.length >= MINI_MAP_SKELETON_DETAIL_NODE_THRESHOLD ||
@@ -615,8 +623,8 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
   // 万级节点（skeleton）下改用签名判定是否需要重建预览：点击选中等操作不改变签名，
   // 可直接复用上一次结果，避免每次选中都重新构造上万个预览对象。
   const skeletonSignature = useMemo(
-    () => (miniMapDetailLevel === 'skeleton' ? computeSkeletonSignature(nodes) : ''),
-    [miniMapDetailLevel, nodes],
+    () => (miniMapDetailLevel === 'skeleton' ? computeSkeletonSignature(deferredNodes) : ''),
+    [miniMapDetailLevel, deferredNodes],
   )
   const derivedModelRef = useRef<{ signature: string; model: MiniMapDerivedModel } | null>(null)
   const derivedModel = useMemo<MiniMapDerivedModel>(() => {
@@ -635,14 +643,14 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
       return cached.model
     }
 
-    const nodeById = new Map(nodes.map((node) => [node.id, node]))
+    const nodeById = new Map(deferredNodes.map((node) => [node.id, node]))
     const nextModel = {
       nodeById,
-      previewModel: buildPreviewModel(nodes, edges, nodeById, miniMapDetailLevel),
+      previewModel: buildPreviewModel(deferredNodes, deferredEdges, nodeById, miniMapDetailLevel),
     }
     derivedModelRef.current = { signature: skeletonSignature, model: nextModel }
     return nextModel
-  }, [edges, interactionActive, isMiniMapVisible, miniMapDetailLevel, nodes, skeletonSignature])
+  }, [deferredEdges, deferredNodes, interactionActive, isMiniMapVisible, miniMapDetailLevel, skeletonSignature])
   const { previewModel } = derivedModel
 
   const edgeMarkerSize = useMemo(() => Math.max(6, Math.round(Math.min(previewBounds.width, previewBounds.height) * 0.015)), [previewBounds.height, previewBounds.width])

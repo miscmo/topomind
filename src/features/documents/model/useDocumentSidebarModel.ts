@@ -45,6 +45,17 @@ export interface UseDocumentSidebarModelProps {
   onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
 }
 
+/**
+ * 单个文件夹一次最多渲染的子项数。
+ *
+ * 背景：DocumentNode 在展开时递归 children.map 渲染全部子文档，没有上限也没有虚拟化。
+ * 一个含有数千子文档的文件夹被展开，会一次性创建数千个 DOM 节点，并且 useLayoutEffect
+ * 里的逐行 getBoundingClientRect 也会遍历同样多的行 —— 展开瞬间主线程被占满。
+ * 这里给「已渲染子项数」设上限，超出部分用「显示剩余 N 项」按需展开。
+ * 普通大小的文件夹（<= 上限）行为完全不变。
+ */
+const SIDEBAR_CHILD_RENDER_CAP = 200
+
 export function useDocumentSidebarModel({
   nodeId,
   topoDocuments,
@@ -67,6 +78,9 @@ export function useDocumentSidebarModel({
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => (
     loadExpandedDocumentNodeIds(localStorage, nodeId)
   ))
+  // 每个文件夹「已渲染子项数」的上限；未设置的文件夹走 SIDEBAR_CHILD_RENDER_CAP，
+  // 用户点「显示剩余 N 项」后该文件夹解除上限。
+  const [childRenderLimits, setChildRenderLimits] = useState<Record<string, number>>({})
   const visibleTreeRows = useMemo(
     () => flattenVisibleDocumentTree(rootItems, childrenMap, expandedNodes),
     [childrenMap, expandedNodes, rootItems],
@@ -99,6 +113,15 @@ export function useDocumentSidebarModel({
   const [scrollMetrics, setScrollMetrics] = useState<{ trackHeight: number; thumbHeight: number; thumbTop: number } | null>(null)
   const [scrollbarActive, setScrollbarActive] = useState(false)
   const scrollbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const getChildRenderLimit = useCallback(
+    (id: string) => childRenderLimits[id] ?? SIDEBAR_CHILD_RENDER_CAP,
+    [childRenderLimits],
+  )
+  const showMoreChildren = useCallback((id: string) => {
+    // 用户显式要求展开剩余项：解除该文件夹的上限（一次性渲染全部）。
+    setChildRenderLimits(prev => ({ ...prev, [id]: Number.MAX_SAFE_INTEGER }))
+  }, [])
 
   const registerDocumentRow = useCallback((id: string, element: HTMLDivElement | null) => {
     if (element) rowElementsRef.current.set(id, element)
@@ -565,6 +588,8 @@ export function useDocumentSidebarModel({
       toggleExpand,
       selectStickyAncestor,
       registerDocumentRow,
+      getChildRenderLimit,
+      showMoreChildren,
       startRename,
       openContextMenu,
       openIconPicker,

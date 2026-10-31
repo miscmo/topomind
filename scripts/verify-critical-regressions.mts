@@ -442,19 +442,16 @@ const edge = (
     rawText: '  x + y  ',
     latex: 'x + y',
     canConvertInlineMath: true,
-    canConvertBlockMath: true,
   })
   assert.deepEqual(getSmartDocumentSelectedTextState('x\ny', [{ content: [] }]), {
     rawText: 'x\ny',
     latex: 'x\ny',
     canConvertInlineMath: false,
-    canConvertBlockMath: true,
   })
   assert.deepEqual(getSmartDocumentSelectedTextState('x', [{ content: [] }, { content: undefined }]), {
     rawText: 'x',
     latex: 'x',
     canConvertInlineMath: false,
-    canConvertBlockMath: false,
   })
 }
 
