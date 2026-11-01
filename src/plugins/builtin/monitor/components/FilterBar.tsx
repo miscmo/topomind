@@ -1,3 +1,4 @@
+import { Search, X, RefreshCw } from 'lucide-react'
 import React, { useCallback } from 'react'
 import { useMonitorStore, type LogEntry } from '@/stores/monitorStore'
 
@@ -60,9 +61,9 @@ export function FilterBar() {
       <div className="flex items-center gap-2.5 flex-wrap flex-1">
         {/* 关键词搜索 */}
         <div className="relative flex items-center">
-          <span className="absolute left-2 text-[#999] text-[11px] pointer-events-none">&#9906;</span>
+          <Search className="absolute left-2 h-3.5 w-3.5 text-[var(--color-text-muted)] pointer-events-none" />
           <input
-              className="h-7 pl-[26px] pr-[28px] border border-[var(--color-border)] rounded-md text-[12px] outline-none w-[220px] bg-[var(--color-bg-muted)] transition-all duration-75 focus:border-[var(--color-primary)] focus:bg-[var(--color-surface)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
+              className="h-7 pl-[26px] pr-[28px] border border-[var(--color-border)] rounded-md text-[12px] outline-none w-[220px] bg-[var(--color-bg-muted)] transition-all duration-75 focus:border-[var(--color-accent)] focus:bg-[var(--color-surface)] focus:shadow-[var(--shadow-focus-ring)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
               type="text"
               placeholder="搜索关键词..."
             value={keyword}
@@ -73,18 +74,18 @@ export function FilterBar() {
             }}
           />
           {keyword && (
-              <button className="absolute right-[3px] w-5 h-5 flex items-center justify-center border-none bg-transparent cursor-pointer text-[#aaa] text-[10px] hover:text-[var(--color-text-primary)] rounded-[4px] hover:bg-[var(--color-hover-bg)]" onClick={() => {
+              <button className="absolute right-[3px] w-5 h-5 flex items-center justify-center border-none bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] rounded-sm hover:bg-[var(--color-hover-bg)]" onClick={() => {
               log.info('monitor keyword cleared', { previousKeyword: keyword })
               setKeyword('')
             }}>
-              &#10005;
+              <X className="h-3 w-3" />
             </button>
           )}
         </div>
 
         {/* 日期选择 */}
         <select
-          className="h-7 px-2 border border-[var(--color-border)] rounded-md text-[12px] outline-none bg-[var(--color-bg-muted)] cursor-pointer text-[var(--color-text-primary)] focus:border-[var(--color-primary)]"
+          className="h-7 px-2 border border-[var(--color-border)] rounded-md text-[12px] outline-none bg-[var(--color-bg-muted)] cursor-pointer text-[var(--color-text-primary)] focus:border-[var(--color-accent)]"
           value={selectedDate || ''}
           onChange={(e) => {
             log.info('monitor date selected', {
@@ -103,7 +104,7 @@ export function FilterBar() {
         </select>
 
         {/* 等级过滤 */}
-          <div className="flex gap-1 bg-[var(--color-bg-muted)] rounded-[6px] p-0.5 border border-[var(--color-border-subtle)]">
+          <div className="flex gap-1 bg-[var(--color-bg-muted)] rounded-md p-0.5 border border-[var(--color-border-subtle)]">
             {LEVELS.map((l) => (
               <button
                 key={l}
@@ -140,11 +141,11 @@ export function FilterBar() {
           <span>实时</span>
         </label>
 
-        <button className="w-7 h-7 flex items-center justify-center border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-muted)] cursor-pointer text-[13px] transition-all duration-120 hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]" onClick={handleRefresh} title="刷新">
-          &#8635;
+        <button className="w-7 h-7 flex items-center justify-center border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-muted)] cursor-pointer transition-all duration-120 hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]" onClick={handleRefresh} title="刷新">
+          <RefreshCw className="h-3.5 w-3.5" />
         </button>
         <button className={`w-7 h-7 flex items-center justify-center border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-muted)] cursor-pointer text-[13px] transition-all duration-120 hover:bg-[var(--color-hover-bg)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)] hover:!bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] hover:!border-[var(--color-danger)] hover:!text-[var(--color-danger)]`} onClick={handleClear} title="重置过滤">
-          &#10005;
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

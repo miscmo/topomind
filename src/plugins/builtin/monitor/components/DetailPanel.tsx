@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { formatDate } from '@/shared/observability/logFormatting'
 import { useMonitorStore } from '@/stores/monitorStore'
@@ -21,7 +22,7 @@ export function DetailPanel() {
 
   if (!selectedEntry) {
     return (
-      <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-surface)] max-h-[280px] overflow-y-auto shrink-0 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--color-border-strong)] hover:[&::-webkit-scrollbar-thumb]:bg-[var(--color-text-muted)] [&::-webkit-scrollbar-thumb]:rounded-[3px]">
+      <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-surface)] max-h-[280px] overflow-y-auto shrink-0 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--color-border-strong)] hover:[&::-webkit-scrollbar-thumb]:bg-[var(--color-text-muted)] [&::-webkit-scrollbar-thumb]:rounded-sm">
         <div className="p-6 text-[var(--color-text-muted)] text-[12px] text-center">选中一条日志查看详情</div>
       </div>
     )
@@ -44,7 +45,7 @@ export function DetailPanel() {
   }
 
   return (
-    <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-surface)] max-h-[280px] overflow-y-auto shrink-0 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--color-border-strong)] hover:[&::-webkit-scrollbar-thumb]:bg-[var(--color-text-muted)] [&::-webkit-scrollbar-thumb]:rounded-[3px]">
+    <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-surface)] max-h-[280px] overflow-y-auto shrink-0 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--color-border-strong)] hover:[&::-webkit-scrollbar-thumb]:bg-[var(--color-text-muted)] [&::-webkit-scrollbar-thumb]:rounded-sm">
       <div className="flex items-center px-4 py-2 bg-[var(--color-bg-muted)] border-b border-[var(--color-border-subtle)] gap-2 sticky top-0 z-10">
         <span
           className="text-[11px] font-bold tracking-[0.5px]"
@@ -63,7 +64,7 @@ export function DetailPanel() {
             log.info('close monitor detail entry', { closedEntryId: selectedEntry.id })
             setSelectedEntry(null)
           }}>
-            &#10005;
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>

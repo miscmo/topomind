@@ -2,6 +2,7 @@
  * 右侧详情面板
  * 显示节点 文档内容，支持预览/编辑切换
  */
+import { FolderOpen } from 'lucide-react'
 import { useEffect, useState, memo, useCallback } from 'react'
 import { useGraphStore, useSelectedNodeId } from '../../../../stores/graphStore'
 import { DocumentWorkspace } from '../../../../features/documents/DocumentWorkspace'
@@ -164,7 +165,7 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
 
   return (
     <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shrink-0 overflow-hidden transition-opacity">
-      <div className="flex-1 flex min-h-0 overflow-hidden p-0 leading-relaxed text-[13.5px] [&>*]:flex-1 [&>*]:min-h-0 [&>*]:min-w-0">
+      <div className="flex-1 flex min-h-0 overflow-hidden p-0 leading-relaxed text-[13px] [&>*]:flex-1 [&>*]:min-h-0 [&>*]:min-w-0">
         {isActive ? <DocumentWorkspace
           value={draftContent}
           isDirty={isDocumentDirty}
@@ -195,11 +196,11 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
                           title={`在文件管理器中打开：${currentDocumentDisplayPath}`}
                           onClick={() => { void handleOpenCurrentDocumentFolder(activeTopoDocumentId) }}
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                          <FolderOpen className="h-3.5 w-3.5" />
                         </button>
                       )}
                       {childCount > 0 && (
-                        <span className="py-0.5 px-[7px] rounded-[10px] bg-[var(--color-hover-bg)] text-[10px] text-[var(--color-text-muted)] shrink-0" title="含有子概念">
+                        <span className="py-0.5 px-[7px] rounded-lg bg-[var(--color-hover-bg)] text-[10px] text-[var(--color-text-muted)] shrink-0" title="含有子概念">
                           {childCount} 子
                         </span>
                       )}

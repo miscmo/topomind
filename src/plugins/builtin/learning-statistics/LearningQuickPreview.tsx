@@ -107,7 +107,7 @@ export const LearningQuickPreview = memo(function LearningQuickPreview({
         <div className="mt-3 grid grid-cols-7 gap-1.5">
           {loading ? (
             Array.from({ length: PREVIEW_DAYS }).map((_, index) => (
-              <div key={index} className="w-[14px] h-[14px] rounded-[4px] bg-[var(--color-bg-muted)] animate-pulse" />
+              <div key={index} className="w-[14px] h-[14px] rounded-sm bg-[var(--color-bg-muted)] animate-pulse" />
             ))
           ) : (
             days.map((date) => {
@@ -115,7 +115,7 @@ export const LearningQuickPreview = memo(function LearningQuickPreview({
               return (
                 <div
                   key={date}
-                  className={`w-[14px] h-[14px] rounded-[4px] ${getColor(duration)}`}
+                  className={`w-[14px] h-[14px] rounded-sm ${getColor(duration)}`}
                   title={`${date}: ${formatDuration(duration)}`}
                 />
               )

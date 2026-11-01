@@ -206,7 +206,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         <QuickNodeToolbar
           autoWidth={widthMode === 'auto'}
           fontSize={nodeStyle.headerFontSize ?? 11}
-          backgroundColor={nodeStyle.headerBackgroundColor ?? '#f8fafc'}
+          backgroundColor={nodeStyle.headerBackgroundColor ?? 'var(--color-bg-muted)'}
           bold={nodeStyle.headerFontWeight === 'bold'}
           italic={nodeStyle.headerFontStyle === 'italic'}
           isFormatPainterActive={isFormatPainterActive}
@@ -226,7 +226,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         minHeight={nodeSizeLimits.minHeight}
         maxWidth={nodeSizeLimits.maxWidth}
         maxHeight={nodeSizeLimits.maxHeight}
-        handleClassName="w-2 h-2 bg-[var(--color-surface)] border-[1.5px] border-[var(--color-accent)] rounded-[2px] shadow-sm z-30"
+        handleClassName="w-2 h-2 bg-[var(--color-surface)] border-[1.5px] border-[var(--color-accent)] rounded-sm shadow-sm z-30"
         lineClassName="border-transparent z-20"
         onResizeStart={(_, params) => updateResizePreview(params)}
         onResize={(_, params) => updateResizePreview(params)}
@@ -301,7 +301,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                     {data.emojis.map((emoji, index) => (
                       <div 
                         key={`${index}-${emoji}`}
-                        className="inline-flex items-center justify-center cursor-pointer rounded-[6px] px-[2px] transition-colors leading-none hover:bg-black/[0.045] dark:hover:bg-white/[0.06]"
+                        className="inline-flex items-center justify-center cursor-pointer rounded-md px-[2px] transition-colors leading-none hover:bg-black/[0.045] dark:hover:bg-white/[0.06]"
                         style={{ fontSize: '1.08em', lineHeight: 1, transform: 'translateY(0.02em)' }}
                         onClick={(e) => {
                           e.stopPropagation()

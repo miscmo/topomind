@@ -1,3 +1,4 @@
+import { ChevronDown, X } from 'lucide-react'
 import { memo, useState, useRef, useEffect } from 'react'
 import { useTabStore, type Tab } from '../../../stores/tabs/tabStore'
 import { useShortcut } from '../../../hooks/useShortcut'
@@ -135,14 +136,12 @@ export default memo(function TabBar() {
         aria-haspopup="menu"
         aria-expanded={isOpen}
         ref={triggerRef}
-        className={`relative z-10 h-[24px] w-[140px] flex items-center px-2 rounded-[6px] bg-transparent text-[12px] font-medium cursor-default transition-colors ${isOpen ? 'bg-[var(--titlebar-hover)] text-[var(--titlebar-text)]' : 'text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]'}`}
+        className={`relative z-10 h-[24px] w-[140px] flex items-center px-2 rounded-md bg-transparent text-[12px] font-medium cursor-default transition-colors ${isOpen ? 'bg-[var(--titlebar-hover)] text-[var(--titlebar-text)]' : 'text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]'}`}
         onClick={() => setIsOpen(!isOpen)}
         title={activeTab?.label}
       >
         <span className="flex-1 min-w-0 truncate text-center">{activeTab?.label || '无标签'}</span>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" className={`shrink-0 ml-1.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
-          <path d="M2.5 3.5L5 6L7.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <ChevronDown className={`h-2.5 w-2.5 shrink-0 ml-1.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {/* 下拉菜单 */}
@@ -185,9 +184,7 @@ export default memo(function TabBar() {
                     }
                   }}
                 >
-                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                  </svg>
+                  <X className="h-2 w-2" />
                 </button>
               )}
             </div>

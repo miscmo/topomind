@@ -834,7 +834,7 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
 
           {isMiniMapVisible && (
             <div
-              className="overflow-hidden rounded-[18px] border border-[var(--color-border)] bg-[var(--color-canvas-bg)] shadow-[var(--shadow-md)] backdrop-blur-xl"
+              className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas-bg)] shadow-[var(--shadow-md)] backdrop-blur-xl"
               style={{
                 width: miniMapSize.width,
                 height: miniMapSize.height,

@@ -51,7 +51,7 @@ function QuickNodeToolbar({
 
   return (
     <div
-      className="absolute left-1/2 -top-[60px] z-[60] flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12),0_4px_10px_rgba(0,0,0,0.06)] pointer-events-auto nodrag nowheel transition-all"
+      className="absolute left-1/2 -top-[60px] z-[60] flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1.5 shadow-[var(--shadow-popover)] pointer-events-auto nodrag nowheel transition-all"
       onPointerDown={stopEvent}
       onMouseDown={stopEvent}
       onDoubleClick={stopEvent}
@@ -79,12 +79,12 @@ function QuickNodeToolbar({
         <PaintBucket className="h-[15px] w-[15px] absolute opacity-40" strokeWidth={2} />
         <div 
           className="h-3.5 w-3.5 rounded-full border-[1.5px] border-[var(--color-surface)] shadow-sm z-10"
-          style={{ backgroundColor: backgroundColor || '#ffffff' }}
+          style={{ backgroundColor: backgroundColor || 'var(--color-surface)' }}
         />
         <input
           type="color"
           className="absolute inset-0 h-full w-full opacity-0 cursor-pointer z-20"
-          value={backgroundColor || '#ffffff'}
+          value={backgroundColor || 'var(--color-surface)'}
           onChange={(event) => onBackgroundColorChange(event.target.value)}
         />
       </div>
@@ -101,7 +101,7 @@ function QuickNodeToolbar({
         <span className="text-[13px] font-medium min-w-[16px] text-center tracking-tight">{fontSize}</span>
         <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-50" strokeWidth={2.5} />
         {isFontSizeMenuOpen && (
-          <div className="absolute top-[calc(100%+6px)] left-1/2 -translate-x-1/2 min-w-[90px] p-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12),0_4px_10px_rgba(0,0,0,0.06)] z-[70] flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-100">
+          <div className="absolute top-[calc(100%+6px)] left-1/2 -translate-x-1/2 min-w-[90px] p-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[70] flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-100">
             {[10, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32].map((size) => (
               <button
                 key={size}

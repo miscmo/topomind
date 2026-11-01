@@ -204,7 +204,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
           style={{ opacity: scrollbarActive ? 1 : 0 }}
         >
           <div
-            className="absolute right-0 left-0 mx-auto rounded-full bg-[#94a3b857]"
+            className="absolute right-0 left-0 mx-auto rounded-full bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)]"
             style={{ top: scrollMetrics.thumbTop, height: scrollMetrics.thumbHeight }}
           />
         </div>

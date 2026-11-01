@@ -169,7 +169,7 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
     }
 
         return (
-          <div className="absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[280px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col [scrollbar-width:thin] [scrollbar-color:#94a3b857_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
+          <div className="absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[280px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,var(--color-text-muted)_34%,transparent)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full">
         {children.map(child => {
           const Icon = child.icon || topoDocumentTypeIcon(child.type) || File
           const IconComp = typeof Icon === 'string' ? null : (Icon as React.ComponentType<{ size?: number }>)
@@ -229,7 +229,7 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
                       {IconComp ? <IconComp size={12} /> : (typeof Icon === 'string' ? Icon : null)}
                     </div>
                     {childCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[9px] font-semibold leading-none ring-1 ring-[var(--color-surface)]">
+                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[10px] font-semibold leading-none ring-1 ring-[var(--color-surface)]">
                         {childCount}
                       </span>
                     )}

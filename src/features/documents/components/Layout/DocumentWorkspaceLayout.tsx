@@ -252,7 +252,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   return (
     <div 
       ref={containerRef}
-      className={`flex flex-col h-full border border-[var(--color-border)] rounded-[10px] overflow-hidden bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shadow-[var(--shadow-sm)] ${documentType}`} 
+      className={`flex flex-col h-full border border-[var(--color-border)] rounded-lg overflow-hidden bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shadow-[var(--shadow-sm)] ${documentType}`} 
     >
       <div className="flex flex-1 overflow-hidden relative">
         {documentType === 'detail' && !effectiveFloating && (
@@ -274,7 +274,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               type="button"
               className={`w-7 h-7 rounded-lg border border-transparent cursor-pointer transition-colors flex items-center justify-center ${
                 isLocked
-                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]'
+                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-inset-highlight)]'
                   : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'
               }`}
               onClick={() => toggleLock(kbPath, selectedNodeIdRaw)}
@@ -291,7 +291,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             <div className="w-5 h-px bg-[var(--color-border-light)] my-0.5" />
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'documents' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
+              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'documents' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-inset-highlight)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
               onClick={() => handleRailTabClick('documents')}
               title="文档"
               aria-label="文档"
@@ -300,7 +300,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             </button>
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${!detailSidebarCollapsed && detailSidebarTab === 'attachments' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.08)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
+              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${!detailSidebarCollapsed && detailSidebarTab === 'attachments' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-inset-highlight)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
               onClick={() => handleRailTabClick('attachments')}
               disabled={!attachmentCardPath}
               title={!attachmentCardPath ? '当前环境暂不支持附件' : '附件'}
@@ -314,7 +314,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
           <aside
             className={`w-[180px] shrink-0 flex flex-col bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] ${
               effectiveFloating 
-                ? 'absolute left-[12px] top-[42px] bottom-[16px] z-30 shadow-[0_12px_40px_rgba(15,23,42,0.16)] border border-[var(--color-border-strong)] rounded-[12px] overflow-hidden'
+                ? 'absolute left-[12px] top-[42px] bottom-[16px] z-30 shadow-[var(--shadow-popover)] border border-[var(--color-border-strong)] rounded-lg overflow-hidden'
                 : detailSidebarCollapsed 
                   ? '!w-0 !bg-transparent overflow-hidden' 
                   : ''
@@ -379,7 +379,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               <nav
                 ref={tocNavRef}
                 aria-label="文档目录"
-                className="absolute z-20 max-w-[240px] rounded-xl border border-[var(--color-border-light)] bg-[color-mix(in_srgb,var(--color-surface)_82%,transparent)] backdrop-blur-[2px] shadow-[0_10px_30px_rgba(15,23,42,0.12)]"
+                className="absolute z-20 max-w-[240px] rounded-xl border border-[var(--color-border-light)] bg-[color-mix(in_srgb,var(--color-surface)_82%,transparent)] backdrop-blur-[2px] shadow-[var(--shadow-popover)]"
                 style={{ top: tocPos.top, right: tocPos.right }}
               >
                 <div className="flex items-center justify-between w-full gap-2 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] rounded-xl">
@@ -416,7 +416,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                   </button>
                 </div>
                 {!tocCollapsed && (
-                  <div ref={tocListRef} className="max-h-[calc(58vh-2.5rem)] overflow-y-auto px-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-[#94a3b857] [&::-webkit-scrollbar-thumb]:rounded-full">
+                  <div ref={tocListRef} className="max-h-[calc(58vh-2.5rem)] overflow-y-auto px-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full">
                     {tocItems.map(item => {
                       const isActive = item.id === effectiveActiveId
                       return (

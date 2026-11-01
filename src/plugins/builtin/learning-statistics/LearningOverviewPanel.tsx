@@ -202,7 +202,7 @@ export const LearningOverviewPanel = memo(function LearningOverviewPanel({
                       key={`${weekIndex}-${date}`}
                       role={inRange ? 'button' : undefined}
                       tabIndex={inRange ? 0 : -1}
-                      className={`w-[12px] h-[12px] rounded-[3px] transition-colors ${
+                      className={`w-[12px] h-[12px] rounded-sm transition-colors ${
                         inRange ? getHeatColorClass(duration, dailyGoal) : 'bg-transparent'
                       } ${
                         selectedDate === date ? 'ring-2 ring-[var(--color-accent)] ring-offset-1 ring-offset-[var(--color-surface)]' : ''
@@ -240,7 +240,7 @@ export const LearningOverviewPanel = memo(function LearningOverviewPanel({
           <div className="flex items-center gap-1">
             {[0, 1, 2, 3, 4].map(level => {
               const duration = level === 0 ? 0 : Math.ceil(dailyGoal * (level / 4))
-              return <div key={level} className={`w-[12px] h-[12px] rounded-[3px] ${getHeatColorClass(duration, dailyGoal)}`} />
+              return <div key={level} className={`w-[12px] h-[12px] rounded-sm ${getHeatColorClass(duration, dailyGoal)}`} />
             })}
           </div>
           <span>多</span>

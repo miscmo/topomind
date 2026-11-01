@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import React from 'react'
 import type { TopoDocumentManifestItem } from '../../../core/storage'
 import { topoDocumentPath, topoDocumentTypeIcon } from '../types/documentTypes'
@@ -135,7 +136,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
             tabIndex={hasChildren ? 0 : -1}
             draggable={hasChildren ? false : undefined}
             aria-label={hasChildren ? `${isExpanded ? '折叠' : '展开'}「${node.title}」` : undefined}
-            className={`w-5 h-5 flex items-center justify-center shrink-0 ${hasChildren ? 'cursor-pointer hover:bg-black/5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]' : ''}`}
+            className={`w-5 h-5 flex items-center justify-center shrink-0 ${hasChildren ? 'cursor-pointer hover:bg-black/5 rounded ' : ''}`}
             onPointerDown={(e) => {
               e.stopPropagation()
             }}
@@ -163,9 +164,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
             }}
           >
             {hasChildren ? (
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
-                <path d="M9 18l6-6-6-6" />
-              </svg>
+              <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
             ) : <span className="w-1" />}
           </span>
           <span className="w-5 h-5 flex items-center justify-center shrink-0 mr-1">
@@ -175,7 +174,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
               draggable={false}
               aria-label={`更换「${node.title}」的图标`}
               aria-disabled={isBusy || undefined}
-              className={`w-5 h-5 flex items-center justify-center rounded-md text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${isBusy ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-black/5'}`}
+              className={`w-5 h-5 flex items-center justify-center rounded-md text-sm  ${isBusy ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-black/5'}`}
               onPointerDown={(e) => {
                 e.stopPropagation()
               }}

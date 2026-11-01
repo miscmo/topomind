@@ -33,7 +33,7 @@ export function highlightText(text: string, keyword: string): React.ReactNode {
   return (
     <React.Fragment>
       {text.slice(0, index)}
-      <mark className="bg-[#fef08a] text-[#854d0e] rounded-[2px] px-[1px]">
+      <mark className="bg-[#fef08a] text-[#854d0e] rounded-sm px-[1px]">
         {text.slice(index, index + keyword.length)}
       </mark>
       {text.slice(index + keyword.length)}
