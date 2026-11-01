@@ -55,7 +55,7 @@ export function KBSettingsDialog(props: KBSettingsDialogProps) {
         <div className="p-[20px_24px]">
           {error && <div id="kb-settings-error" className="text-[#e74c3c] text-[13px] mb-3" role="alert">{error}</div>}
 
-          <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-75 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[0_0_0_2px_var(--color-accent-soft)] [&>input::placeholder]:text-[var(--color-text-muted)]">
+          <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-75 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[var(--shadow-focus-ring)] [&>input::placeholder]:text-[var(--color-text-muted)]">
             <label htmlFor="kb-settings-name">知识库名称</label>
             <input
               id="kb-settings-name"
@@ -115,7 +115,7 @@ export function KBSettingsDialog(props: KBSettingsDialogProps) {
                 <p className="text-xs text-muted-foreground mb-4">
                   推荐上传 1:1 比例的图片作为封面。可上下拖动调整展示区域，也可聚焦预览后使用上下方向键微调，按住 Shift 可加速。
                 </p>
-                <label className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md bg-[var(--color-hover-bg)] px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] shadow-sm transition-colors hover:bg-[var(--color-bg-muted)] focus-visible:outline-none cursor-pointer border border-[var(--color-border)] w-fit">
+                <label className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md bg-[var(--color-hover-bg)] px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] shadow-sm transition-colors hover:bg-[var(--color-bg-muted)]  cursor-pointer border border-[var(--color-border)] w-fit">
                   <input
                     type="file"
                     accept="image/*"
@@ -141,7 +141,7 @@ export function KBSettingsDialog(props: KBSettingsDialogProps) {
             </div>
           </div>
 
-          <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-75 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[0_0_0_2px_var(--color-accent-soft)] [&>input::placeholder]:text-[var(--color-text-muted)]">
+          <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-75 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[var(--shadow-focus-ring)] [&>input::placeholder]:text-[var(--color-text-muted)]">
             <label>基础信息</label>
             <div className="text-[var(--color-text-secondary)] text-[13px] py-2.5 px-3.5 bg-[var(--color-bg-muted)] rounded-lg border border-[var(--color-border-subtle)]">
               节点数量：<span className="font-semibold text-[var(--color-text-primary)]">{currentKb.nodeCount ?? '未知'}</span>

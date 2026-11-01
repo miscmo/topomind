@@ -72,8 +72,7 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
           onDragOver={(e) => handleDragOver(e, kb.name)}
           onDrop={(e) => handleDrop(e, kb.name)}
           onDragEnd={handleDragEnd}
-          className={`group relative flex cursor-pointer flex-col rounded-lg border border-border/60 bg-card transition-all duration-200 hover:-translate-y-1 hover:border-border hover:shadow-md overflow-hidden [transform:translateZ(0)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary
-            ${draggedItem === kb.name ? 'opacity-50' : ''}
+          className={`group relative flex cursor-pointer flex-col rounded-lg border border-border/60 bg-card transition-all duration-200 hover:-translate-y-1 hover:border-border hover:shadow-md overflow-hidden [transform:translateZ(0)]             ${draggedItem === kb.name ? 'opacity-50' : ''}
             ${dragOverItem === kb.name ? 'border-primary ring-2 ring-primary/20' : ''}
           `}
           onClick={() => {

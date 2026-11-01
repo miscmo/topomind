@@ -85,7 +85,7 @@ export function TrashDialog({ visible, onClose, refreshKBList }: TrashDialogProp
                         <span>时间：{formatDeletedAt(item.deletedAt)}</span>
                         {item.isImage && item.previewUrl && (
                           <div className="group relative flex items-center">
-                            <button type="button" className="cursor-pointer border-none bg-transparent p-0 text-[var(--color-primary)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]" aria-label={`预览 ${item.businessName || item.originalName}`} onClick={(event) => {
+                            <button type="button" className="cursor-pointer border-none bg-transparent p-0 text-[var(--color-primary)] hover:underline " aria-label={`预览 ${item.businessName || item.originalName}`} onClick={(event) => {
                               const preview = event.currentTarget.nextElementSibling
                               preview?.classList.toggle('hidden')
                             }}>预览图片</button>

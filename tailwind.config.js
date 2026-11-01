@@ -43,10 +43,29 @@ module.exports = {
           foreground: "var(--color-text-primary)",
         },
       },
+      // Radii resolve through tokens so they can be tuned in one place.
+      // Values intentionally match Tailwind's defaults (4/7/12/16/24px) so this
+      // mapping introduces ZERO visual change — note `xl` stays 12px, which is
+      // what the app has always rendered for `rounded-xl`.
       borderRadius: {
-        lg: "var(--radius-lg)",
-        md: "var(--radius-md)",
+        DEFAULT: "var(--radius-sm)",
         sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+        xl: "var(--radius-lg)",
+        "2xl": "var(--radius-xl)",
+        "3xl": "var(--radius-2xl)",
+      },
+      // Every named shadow now follows the theme (tokens have dedicated dark
+      // values). `shadow-[arbitrary]` inline values are NOT covered — migrate
+      // those to a named class or a token to get theming too.
+      boxShadow: {
+        sm: "var(--shadow-sm)",
+        DEFAULT: "var(--shadow-md)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+        xl: "var(--shadow-xl)",
+        "2xl": "var(--shadow-popover)",
       },
       transitionDuration: {
         '80': '80ms',

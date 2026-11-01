@@ -1,5 +1,5 @@
 import { type ComponentType, type ReactNode } from 'react'
-import { MdDragIndicator } from 'react-icons/md'
+import { GripVertical } from 'lucide-react'
 import { Menu as MantineMenu } from '@mantine/core'
 import {
   useComponentsContext,
@@ -69,7 +69,7 @@ export function SmartDocumentDragHandleButton(
           onDragStart={(e) => sideMenu.blockDragStart(e, block)}
           onDragEnd={sideMenu.blockDragEnd}
           className={'bn-button'}
-          icon={<MdDragIndicator size={24} data-test="dragHandle" />}
+          icon={<GripVertical size={24} data-test="dragHandle" />}
         />
       </MantineMenu.Target>
       <DragHandleMenuComponent>{props.children}</DragHandleMenuComponent>

@@ -16,4 +16,4 @@ export type {
 export type { Room, RoomHistoryItem } from './graph'
 export type { KBListItem } from './graph'
 
-export { COLORS, LAYOUT, SIZES, DOMAIN_COLORS } from './constants'
+export { LAYOUT, SIZES, DOMAIN_COLORS } from './constants'

@@ -87,6 +87,33 @@ body{display:flex;flex-direction:column}
 .react-flow__pane{cursor:default!important}
 .react-flow__pane.dragging{cursor:grabbing!important}
 
+/* ===== 全局键盘焦点环 =====
+   问题：全项目有 45 处 outline-none 移除了浏览器默认焦点环，但只有 10 个元素自己
+   补了 focus-visible → 约 35 个可聚焦元素在键盘 Tab 时完全没有焦点指示（无障碍缺陷）。
+   方案：给所有交互控件统一兜底。用 :focus-visible 而非 :focus，鼠标点击不会触发，
+   不会污染正常鼠标操作观感。
+   两个刻意取舍：
+   1) !important —— 必须压过 utilities 层的 .outline-none（其特异性 0,2,0 高于本规则，
+      且 Tailwind utilities 排在后面）；同时不影响 SmartDocumentEditor.css 里那些
+      特异性更高、同样带 !important 的编辑器专属 focus 规则。
+   2) 排除 [contenteditable] —— 富文本编辑器自身有光标与「当前块高亮」作为焦点反馈，
+      给整块文档描一圈边框反而干扰阅读。工具栏/侧栏按钮不属于 contenteditable，
+      仍会拿到焦点环。 */
+button:focus-visible,
+[role='button']:focus-visible,
+a[href]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:not([tabindex='-1']):focus-visible {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 2px !important;
+}
+
+[contenteditable]:focus-visible {
+  outline: none !important;
+}
+
 /* 画布视口常驻 GPU 合成层：平移/缩放只做合成、不做 layout+paint，
    避免“刚开始拖动”那一下浏览器首帧 layout+paint 大量可见节点导致的拖拽漂移/不跟手 */
 .react-flow__viewport{

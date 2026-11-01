@@ -1,39 +1,13 @@
 /**
  * TopoMind UI Constants & Design Tokens (TypeScript side)
  *
- * Mirrors the CSS custom properties defined in src/styles/tokens.css.
- * Keep in sync with tokens.css.
+ * Colors live ONLY in CSS custom properties (src/styles/tokens.css) so they can
+ * follow the theme. Read them with `getComputedStyle`/`var(--color-*)` rather
+ * than duplicating hex values here — a second copy silently drifts out of sync
+ * (the old COLORS map did exactly that: it still held the retired navy brand).
  *
- * CSS Variables (recommended for styling):
- *   import 'styles/tokens.css'
- *   color: var(--color-primary)
- *
- * TypeScript values (for logic):
- *   import { COLORS } from '@/types'
- *   const color = COLORS.primary
+ * This file therefore only holds NON-color values (zoom limits, sizing, ...).
  */
-
-/** 颜色方案 */
-export const COLORS = {
-  primary: '#1a3a5c',
-  primaryHover: '#254d73',
-  accent: '#3498db',
-  pageBg: '#f0f2f5',
-  panelBg: '#ffffff',
-  canvasBg: '#eef0f4',
-  textPrimary: '#2d3436',
-  textSecondary: '#555555',
-  border: '#e0e4ea',
-  borderLight: '#e8ecf0',
-  danger: '#e74c3c',
-  dangerHover: '#c0392b',
-  success: '#2ecc71',
-  hoverHighlight: '#f39c12',
-  edgeEvolution: '#5cb85c',
-  edgeDepend: '#e8913a',
-  edgeMinor: '#cccccc',
-  gridDot: '#c8cdd6',
-} as const
 
 /** 布局常量 */
 export const LAYOUT = {

@@ -66,7 +66,12 @@ function ToastCard({ item }: { item: ToastItem }) {
 export function Toaster() {
   const toasts = useToastStore((s) => s.toasts)
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[1000] flex flex-col gap-2">
+    // Toasts must sit ABOVE every dialog, otherwise e.g. a "deleted" toast is
+    // hidden behind the still-open dialog that triggered it. Existing layers:
+    // ConfirmModal 99999 > KB dialogs 10000 > PromptModal 9999 > BlockNote
+    // popovers 4000/4001 > TabBar dropdown 3002 > titlebar menu 3000.
+    // Keep this above the highest of them.
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[100000] flex flex-col gap-2">
       {toasts.map((item) => (
         <ToastCard key={item.id} item={item} />
       ))}

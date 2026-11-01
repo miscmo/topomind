@@ -31,7 +31,7 @@ export function ImportKBDialog(props: ImportKBDialogProps) {
           <button type="button" aria-label="关闭导入知识库弹窗" className="w-7 h-7 rounded-md border-none bg-[var(--color-hover-bg)] text-[var(--color-text-muted)] cursor-pointer text-[14px] transition-all duration-75 hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onClose} disabled={loading || selectingDir}>✕</button>
         </div>
         <div className="p-[20px_24px]">
-          <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-75 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[0_0_0_2px_var(--color-accent-soft)] [&>input::placeholder]:text-[var(--color-text-muted)]">
+          <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-75 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[var(--shadow-focus-ring)] [&>input::placeholder]:text-[var(--color-text-muted)]">
             <label>选择文件夹</label>
             <div className="flex gap-2">
               <input
@@ -40,7 +40,7 @@ export function ImportKBDialog(props: ImportKBDialogProps) {
                 readOnly
                 aria-label="待导入的文件夹路径"
                 placeholder="点击「选择文件夹」按钮选择"
-                className="flex-1 w-full p-[10px_14px] border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)] placeholder:text-[var(--color-text-muted)]"
+                className="flex-1 w-full p-[10px_14px] border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[var(--shadow-focus-ring)] placeholder:text-[var(--color-text-muted)]"
               />
               <button
                 className="whitespace-nowrap p-[10px_14px] text-[13px] bg-[var(--color-accent)] text-[var(--color-text-inverse)] rounded-lg border-none cursor-pointer hover:bg-[var(--color-accent-hover)]"
