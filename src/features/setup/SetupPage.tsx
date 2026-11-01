@@ -9,6 +9,8 @@ import { logAction } from '../../core/log-backend'
 import { enterHome } from '../../core/app-flow'
 import { getRecentWorkspaces, getLastWorkspace, removeRecentWorkspace, RecentWorkspace } from '../../core/workspace-cache'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
+import { History } from 'lucide-react'
+import { EmptyState } from '../../shared/ui/EmptyState'
 
 export default memo(function SetupPage() {
   const storage = useStorage()
@@ -206,12 +208,13 @@ export default memo(function SetupPage() {
                 })}
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] opacity-60 border-2 border-dashed border-[var(--color-border-light)] rounded-xl bg-[var(--color-bg-muted)]">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-2">
-                  <path d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <span className="text-[13px] font-medium">暂无最近记录</span>
-              </div>
+              <EmptyState
+                bordered
+                size="sm"
+                className="flex-1 justify-center"
+                icon={<History className="h-4 w-4" />}
+                title="暂无最近记录"
+              />
             )}
           </div>
         </div>

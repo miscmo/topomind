@@ -12,6 +12,7 @@ import { ImportKBDialog } from './components/ImportKBDialog'
 import { KBSettingsDialog } from './components/KBSettingsDialog'
 import { KnowledgeBaseGrid } from './components/KnowledgeBaseGrid'
 import { TrashDialog } from './components/TrashDialog'
+import { EmptyState } from '../../shared/ui/EmptyState'
 
 export default function HomePage() {
   const currentWorkDir = useWorkspaceStore((s: any) => s.currentWorkDir)
@@ -75,21 +76,21 @@ export default function HomePage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowTrashDialog(true)}
-                className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border border-input bg-transparent px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border border-input bg-transparent px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground  disabled:pointer-events-none disabled:opacity-50"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 回收站
               </button>
               <button
                 onClick={openImportSheet}
-                className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border border-input bg-transparent px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border border-input bg-transparent px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground  disabled:pointer-events-none disabled:opacity-50"
               >
                 <Download className="mr-2 h-4 w-4" />
                 导入
               </button>
               <button
                 onClick={openCreateSheet}
-                className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90  disabled:pointer-events-none disabled:opacity-50"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 新建
@@ -104,32 +105,31 @@ export default function HomePage() {
           )}
           
           {!loading && kbs.length === 0 ? (
-            <div className="flex min-h-[400px] flex-col items-center justify-center rounded-xl border border-dashed bg-muted/30 text-center">
-              <div className="mx-auto flex max-w-[420px] flex-col items-center justify-center text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted/50">
-                  <Book className="h-10 w-10 text-muted-foreground/50" strokeWidth={1.5} />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold text-foreground">暂无知识库</h3>
-                <p className="mb-8 mt-2 text-sm text-muted-foreground">
-                  您还没有创建任何知识库。创建一个新的知识库或导入现有内容，开始构建您的知识网络。
-                </p>
-                <div className="flex gap-4">
-                  <button
-                    onClick={openCreateSheet}
-                    className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    新建知识库
-                  </button>
-                  <button
-                    onClick={openImportSheet}
-                    className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    导入知识库
-                  </button>
-                </div>
-              </div>
+            <div className="flex min-h-[400px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-bg-muted)_45%,transparent)]">
+              <EmptyState
+                size="lg"
+                icon={<Book className="h-10 w-10" strokeWidth={1.5} />}
+                title="暂无知识库"
+                description="您还没有创建任何知识库。创建一个新的知识库或导入现有内容，开始构建您的知识网络。"
+                action={
+                  <>
+                    <button
+                      onClick={openCreateSheet}
+                      className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-text-inverse)] shadow transition-opacity hover:opacity-90"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      新建知识库
+                    </button>
+                    <button
+                      onClick={openImportSheet}
+                      className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-[var(--color-bg-muted)]"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      导入知识库
+                    </button>
+                  </>
+                }
+              />
             </div>
           ) : (
             <KnowledgeBaseGrid

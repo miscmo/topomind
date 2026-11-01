@@ -1,7 +1,13 @@
-import { memo, useEffect, useMemo, useState } from 'react'
-import { X, ArrowUp, ArrowUpFromLine, CornerDownRight } from 'lucide-react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { X, ArrowUp, ArrowUpFromLine, CornerDownRight, FolderTree } from 'lucide-react'
 import { useStorage } from '../../../../core/storage'
 import { joinRefs, normalizeRef } from '../../../../domain/graph/path-utils'
+import {
+  modalOverlayBaseClassName,
+  modalOverlayEnterClassName,
+  modalPanelEnterClassName,
+} from '../../../../shared/ui/modal'
+import { EmptyState } from '../../../../shared/ui/EmptyState'
 
 interface NodeMoveToRoomDialogProps {
   /** 要移动的节点 basename 列表（均为源房间的直接子节点） */
@@ -38,6 +44,15 @@ export const NodeMoveToRoomDialog = memo(function NodeMoveToRoomDialog({
   const [navPath, setNavPath] = useState(kbPath)
   const [sourceInfo, setSourceInfo] = useState<{ names: Record<string, string>; kept: number; dropped: number } | null>(null)
   const [rooms, setRooms] = useState<Array<{ basename: string; name: string; path: string; childCount: number; disabled: boolean; reason?: string }>>([])
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  // 键盘可达性：打开时把焦点移入对话框（保证 Esc 能冒泡到 overlay），
+  // 关闭时把焦点还给触发元素 —— 与 ConfirmModal 的行为保持一致。
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    closeButtonRef.current?.focus()
+    return () => { previous?.focus() }
+  }, [])
 
   // 源房间：节点名 + 连线边界预览
   useEffect(() => {
@@ -124,14 +139,28 @@ export const NodeMoveToRoomDialog = memo(function NodeMoveToRoomDialog({
   }, [sourceInfo, nodeIds])
 
   return (
-    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/30" onMouseDown={onClose}>
+    // 层级必须高于标题栏 chrome（z-[3000]~z-[3002]），否则半透明遮罩盖不住标题栏、
+    // 标题栏按钮在模态打开时仍可点击。与其他模态保持一致：KB 四件套 10000。
+    <div
+      className={`${modalOverlayBaseClassName} ${modalOverlayEnterClassName} z-[10000]`}
+      onMouseDown={onClose}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          onClose()
+        }
+      }}
+    >
       <div
-        className="w-[400px] max-w-[92vw] max-h-[82vh] flex flex-col bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] shadow-2xl overflow-hidden"
+        className={`w-[400px] max-w-[92vw] max-h-[82vh] flex flex-col bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] shadow-2xl overflow-hidden ${modalPanelEnterClassName}`}
         onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="node-move-to-room-title"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-subtle)]">
-          <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">移动节点到房间</div>
-          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-[var(--color-bg-muted)] text-[var(--color-text-muted)]" aria-label="关闭">
+          <div id="node-move-to-room-title" className="text-[14px] font-semibold text-[var(--color-text-primary)]">移动节点到房间</div>
+          <button type="button" ref={closeButtonRef} onClick={onClose} className="p-1 rounded hover:bg-[var(--color-bg-muted)] text-[var(--color-text-muted)]" aria-label="关闭">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -176,7 +205,7 @@ export const NodeMoveToRoomDialog = memo(function NodeMoveToRoomDialog({
         {/* 子房间列表 */}
         <div className="flex-1 overflow-y-auto py-1 min-h-[120px]">
           {rooms.length === 0 ? (
-            <div className="px-4 py-6 text-center text-[13px] text-[var(--color-text-muted)]">该房间没有子房间</div>
+            <EmptyState size="sm" className="min-h-[120px] justify-center" icon={<FolderTree className="h-4 w-4" />} title="该房间没有子房间" />
           ) : (
             rooms.map((r) => (
               <div key={r.path} className="flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-bg-muted)]">

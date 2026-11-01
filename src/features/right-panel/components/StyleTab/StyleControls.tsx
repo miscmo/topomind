@@ -133,7 +133,7 @@ export function ColorField({ value, onChange }: { value: string; onChange: (v: s
             <button
               type="button"
               key={c}
-              className="w-4 h-4 rounded border border-black/10 cursor-pointer p-0 transition-all duration-100 hover:scale-[1.15] hover:shadow-[0_2px_4px_rgba(0,0,0,0.1)]"
+              className="w-4 h-4 rounded border border-black/10 cursor-pointer p-0 transition-all duration-100 hover:scale-[1.15] hover:shadow-[var(--shadow-sm)]"
               style={{ backgroundColor: c }}
               onClick={() => handleChange(c)}
               title={c}
@@ -148,7 +148,7 @@ export function ColorField({ value, onChange }: { value: string; onChange: (v: s
                 <button
                   type="button"
                   key={c}
-                  className="w-4 h-4 rounded border border-black/10 cursor-pointer p-0 transition-all duration-100 hover:scale-[1.15] hover:shadow-[0_2px_4px_rgba(0,0,0,0.1)]"
+                  className="w-4 h-4 rounded border border-black/10 cursor-pointer p-0 transition-all duration-100 hover:scale-[1.15] hover:shadow-[var(--shadow-sm)]"
                   style={{ backgroundColor: c }}
                   onClick={() => handleChange(c)}
                   title={`最近使用: ${c}`}
@@ -192,7 +192,7 @@ export function NumberField({
       </label>
       <input
         id={fieldId}
-        className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_0_2px_var(--color-accent-soft)]"
+        className="w-full h-8 border border-[var(--color-border-strong)] rounded-md px-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] transition-all duration-75 box-border focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[var(--shadow-focus-ring)]"
         type="number"
         min={min}
         max={max}
@@ -201,31 +201,6 @@ export function NumberField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
       />
-    </div>
-  )
-}
-
-export function SegmentedControl({
-  options,
-  value,
-  onChange
-}: {
-  options: { label: string; value: string | number | boolean }[]
-  value: string | number | boolean
-  onChange: (v: string | number | boolean) => void
-}) {
-  return (
-    <div className="flex bg-[var(--color-bg-muted)] rounded-md p-[2px] w-full box-border">
-      {options.map((opt, i) => (
-        <button
-          type="button"
-          key={i}
-          className={`flex-1 border-none py-1 text-[12px] font-medium rounded cursor-pointer transition-all duration-75 text-center ${value === opt.value ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]' : 'bg-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
-          onClick={() => onChange(opt.value)}
-        >
-          {opt.label}
-        </button>
-      ))}
     </div>
   )
 }

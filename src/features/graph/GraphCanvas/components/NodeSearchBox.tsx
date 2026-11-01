@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState, useDeferredValue, useMemo } from 'react'
-import { Search, X } from 'lucide-react'
+import { Search, SearchX, X } from 'lucide-react'
 import type { Node } from '@xyflow/react'
+import { EmptyState } from '../../../../shared/ui/EmptyState'
 
 const MAX_RESULTS = 50
 
@@ -68,7 +69,7 @@ export const NodeSearchBox = memo(function NodeSearchBox({
   }
 
   return (
-    <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] w-[320px] bg-[var(--color-surface)] rounded-lg shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-[var(--color-border-strong)] flex flex-col overflow-hidden">
+    <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] w-[320px] bg-[var(--color-surface)] rounded-lg shadow-[var(--shadow-popover)] border border-[var(--color-border-strong)] flex flex-col overflow-hidden">
       <div className="flex items-center px-3 py-2 border-b border-[var(--color-border-subtle)]">
         <Search className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
         <input
@@ -111,9 +112,11 @@ export const NodeSearchBox = memo(function NodeSearchBox({
               )}
             </div>
           ) : (
-            <div className="px-3 py-4 text-center text-[13px] text-[var(--color-text-muted)]">
-              没有找到匹配的节点
-            </div>
+            <EmptyState
+              size="sm"
+              icon={<SearchX className="h-4 w-4" />}
+              title="没有找到匹配的节点"
+            />
           )}
         </div>
       )}

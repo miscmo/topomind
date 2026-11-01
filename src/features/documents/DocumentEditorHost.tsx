@@ -7,6 +7,8 @@ import { getTopoDocumentTypeDefinition, TOPO_DOCUMENT_TYPES } from './services/d
 import { getDocumentEditorAdapter } from './services/documentEditorRegistry'
 import { DocumentStatusBar } from './components/Layout/DocumentStatusBar'
 import { useGraphStoreApi } from '../../stores/graphStore'
+import { FilePlus } from 'lucide-react'
+import { EmptyState } from '../../shared/ui/EmptyState'
 
 interface DocumentEditorHostProps {
   value: unknown
@@ -87,11 +89,14 @@ export function DocumentEditorHost({
         detailSidebarTab={detailSidebarTab}
         onDetailSidebarTabChange={onDetailSidebarTabChange}
         editorContent={(
-          <div className="h-full min-h-0 flex items-center justify-center bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] p-6">
-            <div className="max-w-[360px] rounded-2xl text-center flex flex-col items-center gap-3">
-              <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">当前节点还没有文档</div>
-              <div className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">创建一个智能文档开始记录，也可以新建思维导图或流程图。</div>
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+          <div className="h-full min-h-0 flex items-center justify-center bg-[var(--color-surface)] p-6">
+            <EmptyState
+              className="max-w-[380px]"
+              icon={<FilePlus className="h-6 w-6" />}
+              title="当前节点还没有文档"
+              description="创建一个智能文档开始记录，也可以新建思维导图或流程图。"
+              action={
+                <>
                 {TOPO_DOCUMENT_TYPES.map((type, index) => {
                   const definition = getTopoDocumentTypeDefinition(type)
                   return (
@@ -99,7 +104,7 @@ export function DocumentEditorHost({
                       key={type}
                       type="button"
                       className={index === 0
-                        ? 'h-8 px-3 rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[12px] font-semibold cursor-pointer disabled:opacity-50'
+                        ? 'h-8 px-3 rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-text-inverse)] text-[12px] font-semibold cursor-pointer disabled:opacity-50'
                         : 'h-8 px-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[12px] font-semibold cursor-pointer disabled:opacity-50 hover:bg-[var(--color-hover-bg)]'}
                       onClick={() => {
                         let initialValue = definition.defaultTitle
@@ -117,8 +122,9 @@ export function DocumentEditorHost({
                     </button>
                   )
                 })}
-              </div>
-            </div>
+                </>
+              }
+            />
           </div>
         )}
       />
@@ -127,7 +133,7 @@ export function DocumentEditorHost({
 
   const adapter = getDocumentEditorAdapter(activeTopoDocument.type)
   const loadingContent = (
-    <div className="h-full min-h-0 flex items-center justify-center bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] p-6">
+    <div className="h-full min-h-0 flex items-center justify-center bg-[var(--color-surface)] p-6">
       <div className="text-[13px] text-[var(--color-text-muted)]">正在加载文档内容...</div>
     </div>
   )

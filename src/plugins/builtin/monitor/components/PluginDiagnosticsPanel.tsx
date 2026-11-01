@@ -8,6 +8,7 @@ import type {
 } from '../../../public'
 import { useMonitorHost } from '../hostContext'
 import { useMonitorStore } from '@/stores/monitorStore'
+import { EmptyState } from '@/shared/ui/EmptyState'
 
 function stateTone(state: PluginState): string {
   if (state === 'failed') {
@@ -263,7 +264,7 @@ export function PluginDiagnosticsPanel() {
               <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">运行时绑定</div>
               <div className="mt-3 space-y-2">
                 {selectedPlugin.runtimeRecords.length === 0 ? (
-                  <div className="text-[12px] text-[var(--color-text-muted)]">当前没有运行时绑定记录</div>
+                  <EmptyState size="sm" className="py-4" title="当前没有运行时绑定记录" />
                 ) : (
                   selectedPlugin.runtimeRecords.map((record) => (
                     <div

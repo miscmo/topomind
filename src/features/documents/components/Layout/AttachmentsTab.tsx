@@ -6,6 +6,8 @@ import { logger } from '../../../../core/logger'
 import type { AttachmentItem } from '../../../../core/storage'
 import { logAction } from '../../../../core/log-backend'
 import type { FSBTrashItem } from '../../../../core/fs-backend'
+import { EmptyState } from '../../../../shared/ui/EmptyState'
+import { Paperclip } from 'lucide-react'
 
 export function generateUniqueFileName(originalName: string): string {
   const uuid = crypto.randomUUID().split('-')[0]
@@ -125,14 +127,14 @@ const AttachmentItemRow = memo(function AttachmentItemRow({
           top: Math.min(rect.top, window.innerHeight - 340),
           left: rect.right + 340 > window.innerWidth ? rect.left - 330 : rect.right + 10,
           width: '320px',
-          backgroundColor: 'var(--color-bg-float, #fff)',
-          border: '1px solid var(--color-border, #e2e8f0)',
+          backgroundColor: 'var(--color-surface-elevated)',
+          border: '1px solid var(--color-border)',
           borderRadius: '6px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          boxShadow: 'var(--shadow-lg)',
           padding: '6px',
           pointerEvents: 'none'
         }}>
-          <img src={previewUrl} alt="Preview" style={{ width: '100%', height: 'auto', maxHeight: '320px', objectFit: 'contain', borderRadius: '4px', backgroundColor: 'var(--color-bg, #f8fafc)' }} />
+          <img src={previewUrl} alt="Preview" style={{ width: '100%', height: 'auto', maxHeight: '320px', objectFit: 'contain', borderRadius: '4px', backgroundColor: 'var(--color-bg-muted)' }} />
         </div>,
         document.body
       )}
@@ -288,7 +290,13 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
       </div>
       
       {attachments.length === 0 ? (
-        <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">暂无附件<br/><span style={{ fontSize: '11px', marginTop: 4, display: 'inline-block' }}>点击上方按钮或拖拽文件到编辑器</span></div>
+        <EmptyState
+          className="flex-1 justify-center"
+          size="sm"
+          icon={<Paperclip className="h-4 w-4" />}
+          title="暂无附件"
+          description="点击上方按钮或拖拽文件到编辑器"
+        />
       ) : (
         <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
           {attachments.map(item => (

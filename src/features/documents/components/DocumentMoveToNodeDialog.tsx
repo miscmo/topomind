@@ -1,6 +1,12 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Search, X, FolderInput, CornerDownRight } from 'lucide-react'
+import { Search, SearchX, X, FolderInput, CornerDownRight } from 'lucide-react'
 import { useGraphStoreApi } from '../../../stores/graphStore'
+import {
+  modalOverlayBaseClassName,
+  modalOverlayEnterClassName,
+  modalPanelEnterClassName,
+} from '../../../shared/ui/modal'
+import { EmptyState } from '../../../shared/ui/EmptyState'
 
 interface DocumentMoveToNodeDialogProps {
   sourceNodePath: string
@@ -54,7 +60,13 @@ export const DocumentMoveToNodeDialog = memo(function DocumentMoveToNodeDialog({
     return nodes.filter((n) => n.label.toLowerCase().includes(q))
   }, [nodes, query])
 
-  useEffect(() => { inputRef.current?.focus() }, [])
+  // 键盘可达性：打开时聚焦搜索框，关闭时把焦点还给触发元素。
+  // overlay 上另有 Escape 兜底（见下），处理焦点已移出输入框的情况。
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    inputRef.current?.focus()
+    return () => { previous?.focus() }
+  }, [])
   useEffect(() => { setSelectedIndex(0) }, [query])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -77,16 +89,27 @@ export const DocumentMoveToNodeDialog = memo(function DocumentMoveToNodeDialog({
   }
 
   return (
+    // 层级必须高于标题栏 chrome（z-[3000]~z-[3002]），否则半透明遮罩盖不住标题栏、
+    // 标题栏按钮在模态打开时仍可点击。与其他模态保持一致：KB 四件套 10000。
     <div
-      className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/30"
+      className={`${modalOverlayBaseClassName} ${modalOverlayEnterClassName} z-[10000]`}
       onMouseDown={onClose}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          onClose()
+        }
+      }}
     >
       <div
-        className="w-[360px] max-w-[92vw] bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] shadow-2xl overflow-hidden"
+        className={`w-[360px] max-w-[92vw] bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] shadow-2xl overflow-hidden ${modalPanelEnterClassName}`}
         onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="document-move-to-node-title"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-subtle)]">
-          <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">移动到节点</div>
+          <div id="document-move-to-node-title" className="text-[14px] font-semibold text-[var(--color-text-primary)]">移动到节点</div>
           <button
             type="button"
             onClick={onClose}
@@ -112,7 +135,7 @@ export const DocumentMoveToNodeDialog = memo(function DocumentMoveToNodeDialog({
         </div>
         <div className="max-h-[300px] overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <div className="px-4 py-6 text-center text-[13px] text-[var(--color-text-muted)]">没有匹配的节点</div>
+            <EmptyState size="sm" icon={<SearchX className="h-4 w-4" />} title="没有匹配的节点" />
           ) : (
             filtered.map((node, index) => (
               <button

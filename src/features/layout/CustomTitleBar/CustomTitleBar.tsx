@@ -5,6 +5,7 @@ import { PluginWidgetSlot } from '../../../plugins'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useShortcut } from '../../../hooks/useShortcut'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { SegmentedControl } from '../../../shared/ui/SegmentedControl'
 import TabBar from '../TabBar/TabBar'
 import type { WindowControlsState } from '../../../types/electron-api'
 
@@ -150,7 +151,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
       }}
     >
       <div className="shrink-0 flex items-center pl-2 gap-2 h-full relative after:content-[''] after:absolute after:right-0 after:top-[25%] after:bottom-[25%] after:w-px after:bg-[var(--titlebar-text)] after:opacity-10 pr-2">
-        <div className="inline-flex items-center h-6 gap-[6px] px-1.5 rounded-[6px] text-[var(--titlebar-text)]" title="TopoMind" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="inline-flex items-center h-6 gap-[6px] px-1.5 rounded-md text-[var(--titlebar-text)]" title="TopoMind" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <img src="./icon.svg" alt="Logo" className="w-4 h-4 drop-shadow-sm" />
         </div>
         {mode === 'workspace' && (
@@ -160,7 +161,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                 <button
                   type="button"
                   aria-haspopup="true"
-                  className={`h-full px-2.5 rounded-[6px] bg-transparent text-[12px] font-medium cursor-default transition-colors ${activeMenu === menu.key ? 'bg-[var(--titlebar-hover)] text-[var(--titlebar-text)]' : 'text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]'}`}
+                  className={`h-full px-2.5 rounded-md bg-transparent text-[12px] font-medium cursor-default transition-colors ${activeMenu === menu.key ? 'bg-[var(--titlebar-hover)] text-[var(--titlebar-text)]' : 'text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]'}`}
                   onClick={() => setActiveMenu((current) => current === menu.key ? null : menu.key)}
                   onMouseEnter={() => { if (activeMenu) setActiveMenu(menu.key) }}
                   style={{ WebkitAppRegion: 'no-drag' } as any}
@@ -246,22 +247,18 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
               {rightPanelCollapsed ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
             </button>
             <div className="flex items-center h-full mx-1 mr-2 relative z-[3002]" style={{ WebkitAppRegion: 'no-drag' } as any}>
-              <div className="flex items-center h-[24px] bg-[var(--color-bg-muted)] shadow-inner rounded-md p-[2px]">
-                <button
-                  type="button"
-                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-all duration-200 border-none ${rightPanelTab === 'detail' ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--color-hover-bg)]'}`}
-                  onClick={() => runCommand('rightPanel.reveal', { tab: 'detail' })}
-                >
-                  详情
-                </button>
-                <button
-                  type="button"
-                  className={`px-3 h-full rounded-[4px] text-[11px] font-medium transition-all duration-200 border-none ${rightPanelTab === 'style' ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'bg-transparent text-[var(--titlebar-muted)] hover:text-[var(--titlebar-text)] hover:bg-[var(--color-hover-bg)]'}`}
-                  onClick={() => runCommand('rightPanel.reveal', { tab: 'style' })}
-                >
-                  样式
-                </button>
-              </div>
+              <SegmentedControl
+                size="sm"
+                grow={false}
+                fullWidth={false}
+                ariaLabel="右侧面板分区"
+                options={[
+                  { label: '详情', value: 'detail' },
+                  { label: '样式', value: 'style' },
+                ]}
+                value={rightPanelTab}
+                onChange={(tab) => runCommand('rightPanel.reveal', { tab })}
+              />
             </div>
             <div className="mx-1 h-[18px] w-px bg-[var(--titlebar-text)] opacity-10" />
           </>

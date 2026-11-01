@@ -1,7 +1,8 @@
 import type { DefaultEdgeStyle } from '../../../../types/uiStoreTypes'
 import type { KnowledgeEdge } from '../../../../types'
-import { CollapsibleBlock, ColorField, NumberField, PresetButtonGrid, SegmentedControl, StyleCard, ToggleGroup } from './StyleControls'
+import { CollapsibleBlock, ColorField, NumberField, PresetButtonGrid, StyleCard, ToggleGroup } from './StyleControls'
 import { EdgeStylePreview } from './StylePreviews'
+import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
 import { EDGE_STYLE_PRESETS } from '../../model/stylePresets'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT } from '../../../../domain/style/styleConstraints'
 

@@ -2,8 +2,9 @@ import { memo } from 'react'
 import type { DefaultEditorStyle } from '../../../../types/uiStoreTypes'
 import { EDITOR_STYLE_NUMBER_LIMITS } from '../../../../domain/style/styleConstraints'
 import { resolveEditorFontChoice } from '../../../../domain/style/styleDefaults'
-import { CollapsibleBlock, ColorField, NumberField, PaperBackgroundGrid, PresetButtonGrid, SegmentedControl, StyleCard } from './StyleControls'
+import { CollapsibleBlock, ColorField, NumberField, PaperBackgroundGrid, PresetButtonGrid, StyleCard } from './StyleControls'
 import { EditorStylePreview } from './StylePreviews'
+import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
 import { EDITOR_STYLE_PRESETS } from '../../model/stylePresets'
 
 interface EditorStylePanelProps {

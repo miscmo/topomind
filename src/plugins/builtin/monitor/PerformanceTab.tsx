@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Activity } from 'lucide-react'
 
 import {
   average,
@@ -15,6 +16,7 @@ import type {
 } from '../../public'
 import { useMonitorHost } from './hostContext'
 import { useMonitorStore } from '@/stores/monitorStore'
+import { EmptyState } from '@/shared/ui/EmptyState'
 
 type MetricSummary = {
   id: PerformanceMetricId
@@ -87,7 +89,7 @@ function MetricCard({ summary, active, onClick }: { summary: MetricSummary; acti
 function TrendChart({ samples, color }: { samples: PerformanceSample[]; color: string }) {
   const chartSamples = samples.slice(-24)
   if (chartSamples.length === 0) {
-    return <div className="h-[220px] flex items-center justify-center text-[12px] text-[var(--color-text-muted)]">暂无趋势数据</div>
+    return <EmptyState size="sm" className="h-[220px]" title="暂无趋势数据" />
   }
 
   const maxDuration = Math.max(...chartSamples.map((sample) => sample.durationMs), 1)
@@ -112,16 +114,16 @@ function TrendChart({ samples, color }: { samples: PerformanceSample[]; color: s
         </div>
       </div>
       <svg viewBox="0 0 100 100" className="mt-4 h-[220px] w-full overflow-visible">
-        <line x1="8" y1="88" x2="94" y2="88" stroke="#dbe3ec" strokeWidth="1" />
-        <line x1="8" y1="18" x2="8" y2="88" stroke="#dbe3ec" strokeWidth="1" />
-        <line x1="8" y1="53" x2="94" y2="53" stroke="#eef2f7" strokeWidth="1" strokeDasharray="2 2" />
+        <line x1="8" y1="88" x2="94" y2="88" style={{ stroke: 'var(--color-border-subtle)' }} strokeWidth="1" />
+        <line x1="8" y1="18" x2="8" y2="88" style={{ stroke: 'var(--color-border-subtle)' }} strokeWidth="1" />
+        <line x1="8" y1="53" x2="94" y2="53" style={{ stroke: 'var(--color-border-subtle)' }} strokeWidth="1" strokeDasharray="2 2" />
         <path d={areaPath} fill={`${color}16`} />
         <polyline fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={linePath} />
         {points.map((point) => (
-          <circle key={point.sample.id} cx={point.x} cy={point.y} r="1.7" fill={point.sample.success ? color : '#ef4444'} />
+          <circle key={point.sample.id} cx={point.x} cy={point.y} r="1.7" fill={point.sample.success ? color : 'var(--color-danger)'} />
         ))}
-        <text x="3" y="20" fontSize="4" fill="#94a3b8">{formatDuration(maxDuration)}</text>
-        <text x="3" y="90" fontSize="4" fill="#94a3b8">0</text>
+        <text x="3" y="20" fontSize="4" style={{ fill: 'var(--color-text-muted)' }}>{formatDuration(maxDuration)}</text>
+        <text x="3" y="90" fontSize="4" style={{ fill: 'var(--color-text-muted)' }}>0</text>
       </svg>
     </div>
   )
@@ -130,7 +132,7 @@ function TrendChart({ samples, color }: { samples: PerformanceSample[]; color: s
 function DistributionChart({ summaries }: { summaries: MetricSummary[] }) {
   const visible = summaries.filter((summary) => summary.count > 0)
   if (visible.length === 0) {
-    return <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-4 shadow-sm text-[12px] text-[var(--color-text-muted)]">暂无分布数据</div>
+    return <EmptyState size="sm" bordered className="bg-[var(--color-surface)] shadow-[var(--shadow-sm)]" title="暂无分布数据" />
   }
   const maxValue = Math.max(...visible.flatMap((summary) => [summary.p50Ms, summary.p95Ms]), 1)
   const slotWidth = 100 / visible.length
@@ -141,7 +143,7 @@ function DistributionChart({ summaries }: { summaries: MetricSummary[] }) {
       <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">P50 / P95 分布</div>
       <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">用于快速识别哪条链路尾延迟最高</div>
       <svg viewBox="0 0 100 78" className="mt-4 h-[220px] w-full">
-        <line x1="6" y1="64" x2="96" y2="64" stroke="#dbe3ec" strokeWidth="1" />
+        <line x1="6" y1="64" x2="96" y2="64" style={{ stroke: 'var(--color-border-subtle)' }} strokeWidth="1" />
         {visible.map((summary, index) => {
           const center = slotWidth * index + slotWidth / 2
           const p50Height = (summary.p50Ms / maxValue) * 44
@@ -150,16 +152,16 @@ function DistributionChart({ summaries }: { summaries: MetricSummary[] }) {
             <g key={summary.id}>
               <rect x={center - barWidth - 1} y={64 - p50Height} width={barWidth} height={p50Height} rx="1.5" fill={`${summary.color}99`} />
               <rect x={center + 1} y={64 - p95Height} width={barWidth} height={p95Height} rx="1.5" fill={summary.color} />
-              <text x={center} y="70" textAnchor="middle" fontSize="3.4" fill="#64748b">{summary.shortLabel}</text>
+              <text x={center} y="70" textAnchor="middle" fontSize="3.4" style={{ fill: 'var(--color-text-secondary)' }}>{summary.shortLabel}</text>
             </g>
           )
         })}
-        <text x="2" y="22" fontSize="4" fill="#94a3b8">{formatDuration(maxValue)}</text>
-        <text x="2" y="66" fontSize="4" fill="#94a3b8">0</text>
+        <text x="2" y="22" fontSize="4" style={{ fill: 'var(--color-text-muted)' }}>{formatDuration(maxValue)}</text>
+        <text x="2" y="66" fontSize="4" style={{ fill: 'var(--color-text-muted)' }}>0</text>
       </svg>
       <div className="mt-3 flex items-center gap-4 text-[11px] text-[var(--color-text-muted)]">
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[color-mix(in_srgb,#64748b_60%,transparent)]" /> P50</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[#64748b]" /> P95</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[color-mix(in_srgb,var(--color-text-secondary)_60%,transparent)]" /> P50</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--color-text-secondary)]" /> P95</span>
       </div>
     </div>
   )
@@ -168,7 +170,7 @@ function DistributionChart({ summaries }: { summaries: MetricSummary[] }) {
 function SuccessRatePanel({ summaries }: { summaries: MetricSummary[] }) {
   const visible = summaries.filter((summary) => summary.count > 0)
   if (visible.length === 0) {
-    return <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-4 shadow-sm text-[12px] text-[var(--color-text-muted)]">暂无成功率数据</div>
+    return <EmptyState size="sm" bordered className="bg-[var(--color-surface)] shadow-[var(--shadow-sm)]" title="暂无成功率数据" />
   }
 
   return (
@@ -187,7 +189,7 @@ function SuccessRatePanel({ summaries }: { summaries: MetricSummary[] }) {
               <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#edf2f7]">
                 <div className="h-full rounded-full" style={{ width: `${summary.successRate}%`, backgroundColor: summary.color }} />
               </div>
-              <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#f8fafc]">
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-[var(--color-bg-muted)]">
                 <div className="h-full rounded-full bg-[#f59e0b]" style={{ width: `${slowRate}%` }} />
               </div>
             </div>
@@ -216,20 +218,20 @@ function RecentSamplesPanel({ samples }: { samples: PerformanceSample[] }) {
         </div>
       </div>
       <div className="mt-4 overflow-hidden rounded-lg border border-[var(--color-border-subtle)]">
-        <div className="grid grid-cols-[84px_110px_90px_1fr] bg-[#f8fafc] px-3 py-2 text-[11px] font-semibold text-[var(--color-text-muted)]">
+        <div className="grid grid-cols-[84px_110px_90px_1fr] bg-[var(--color-bg-muted)] px-3 py-2 text-[11px] font-semibold text-[var(--color-text-muted)]">
           <span>时间</span>
           <span>指标</span>
           <span>耗时</span>
           <span>上下文</span>
         </div>
         {slowest.length === 0 ? (
-          <div className="px-3 py-6 text-center text-[12px] text-[var(--color-text-muted)]">暂无样本</div>
+          <EmptyState size="sm" className="py-6" title="暂无样本" />
         ) : (
           slowest.map((sample) => (
             <div key={sample.id} className="grid grid-cols-[84px_110px_90px_1fr] items-center gap-3 border-t border-[var(--color-border-subtle)] px-3 py-2 text-[12px]">
               <span className="font-mono text-[11px] text-[var(--color-text-muted)]">{formatCompactDateTime(sample.timestamp)}</span>
               <span className="font-medium" style={{ color: sample.color }}>{sample.label}</span>
-              <span className={`font-semibold ${sample.success ? 'text-[var(--color-text-primary)]' : 'text-[#dc2626]'}`}>{formatDuration(sample.durationMs)}</span>
+              <span className={`font-semibold ${sample.success ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-danger)]'}`}>{formatDuration(sample.durationMs)}</span>
               <span className="truncate text-[var(--color-text-secondary)]" title={formatSampleContext(sample)}>{formatSampleContext(sample)}</span>
             </div>
           ))
@@ -347,11 +349,12 @@ export default function PerformanceTab() {
   if (totalSamples === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-[var(--color-bg-app)]">
-        <div className="flex flex-col items-center py-[60px] px-5 text-[#94a3b8] text-[14px] text-center">
-          <span className="text-[40px] mb-3 block opacity-40">&#9651;</span>
-          <p>暂无性能样本</p>
-          <p className="text-[12px] text-[#94a3b8] mt-1">先在图谱中执行加载房间、点选节点、读取或保存详情文档，再回来查看指标</p>
-        </div>
+        <EmptyState
+          size="md"
+          icon={<Activity className="h-6 w-6" />}
+          title="暂无性能样本"
+          description="先在图谱中执行加载房间、点选节点、读取或保存详情文档，再回来查看指标"
+        />
       </div>
     )
   }
@@ -404,19 +407,19 @@ export default function PerformanceTab() {
             if (!summary) return null
             return (
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-lg bg-[#f8fafc] px-3 py-3">
+                <div className="rounded-lg bg-[var(--color-bg-muted)] px-3 py-3">
                   <div className="text-[11px] text-[var(--color-text-muted)]">平均耗时</div>
                   <div className="mt-1 text-[18px] font-semibold text-[var(--color-text-primary)]">{formatDuration(summary.avgMs)}</div>
                 </div>
-                <div className="rounded-lg bg-[#f8fafc] px-3 py-3">
+                <div className="rounded-lg bg-[var(--color-bg-muted)] px-3 py-3">
                   <div className="text-[11px] text-[var(--color-text-muted)]">阈值</div>
                   <div className="mt-1 text-[18px] font-semibold text-[var(--color-text-primary)]">{formatDuration(summary.thresholdMs)}</div>
                 </div>
-                <div className="rounded-lg bg-[#f8fafc] px-3 py-3">
+                <div className="rounded-lg bg-[var(--color-bg-muted)] px-3 py-3">
                   <div className="text-[11px] text-[var(--color-text-muted)]">P95</div>
                   <div className="mt-1 text-[18px] font-semibold text-[var(--color-text-primary)]">{formatDuration(summary.p95Ms)}</div>
                 </div>
-                <div className="rounded-lg bg-[#f8fafc] px-3 py-3">
+                <div className="rounded-lg bg-[var(--color-bg-muted)] px-3 py-3">
                   <div className="text-[11px] text-[var(--color-text-muted)]">慢样本</div>
                   <div className="mt-1 text-[18px] font-semibold text-[var(--color-text-primary)]">{summary.slowCount}</div>
                 </div>
