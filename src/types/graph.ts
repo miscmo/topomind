@@ -118,8 +118,6 @@ export interface KnowledgeNodeData {
   hasDetail?: boolean
   /** 选中状态 */
   selected?: boolean
-  /** 悬停状态 */
-  hovered?: boolean
   /** 节点表情列表 */
   emojis?: string[]
   /** 上次展开时的宽度 */
@@ -134,9 +132,8 @@ export interface KnowledgeNodeData {
   widthMode?: NodeSizingMode
   /** 当前高度模式 */
   heightMode?: NodeSizingMode
-  /** 作为连线目标高亮 */
-  connectTarget?: boolean
   nodeStyle?: KnowledgeNodeStyle
+  /** 外部请求进入标题编辑（创建节点后自动重命名用），由 nodeCrudOperations 写入 */
   titleEditRequested?: boolean
   /** Index signature for React Flow Record<string, unknown> compatibility */
   [key: string]: unknown

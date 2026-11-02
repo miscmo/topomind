@@ -73,7 +73,9 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const resizeLabel = `${Math.round(resizeDisplaySize.width)} × ${Math.round(resizeDisplaySize.height)}`
   
   const visuallySelected = selected
-  const visuallyHovered = isHovered || data.hovered === true
+  // 悬停纯本地：由组件内 isHovered 驱动。data.hovered 历史上预留给"外部高亮"，
+  // 但全代码库没有任何写入者（已核实），属死字段，已从 KnowledgeNodeData 移除。
+  const visuallyHovered = isHovered
   const showHoverControls = !isConnecting && (visuallyHovered || visuallySelected || isConnectTarget || isConnectSource)
   const contentInteractionsEnabled = selected
   const nodeStyle = useMemo(
@@ -83,9 +85,9 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const widthMode = data.widthMode ?? 'auto'
   const heightMode = data.heightMode ?? 'auto'
   // 依赖只列真正影响尺寸的业务字段，不能用整个 data：
-  // data 上还挂着 hovered / connectTarget / titleEditRequested 等运行时字段，
-  // 每次悬停、连线瞄准、请求改标题都会重建 data 引用，进而白白重跑一遍
-  // canvas 文本测量（每个节点 3~5 次 measureText）。
+  // data 上还挂着 titleEditRequested 这类运行时字段，它的写入会重建 data 引用，
+  // 若把整个 data 当依赖就会白白重跑一遍 canvas 文本测量（每个节点 3~5 次 measureText）。
+  // 悬停走组件本地 isHovered、连线目标高亮走 graphUiStore，两者都不经过 data。
   const emojiCount = data.emojis?.length ?? 0
   const hasDetail = data.hasDetail === true
   const childCount = data.childCount ?? 0

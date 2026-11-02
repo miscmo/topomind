@@ -113,7 +113,10 @@ function buildDerivedGraphState(
   }
 }
 
-const NODE_RUNTIME_DATA_KEYS = new Set(['selected', 'hovered', 'connectTarget', 'titleEditRequested'])
+// 快照比较时要排除的"运行时"字段：这些变化不该记进历史、也不该触发脏保存。
+// hovered / connectTarget 已从 KnowledgeNodeData 删除（全代码库无写入者），
+// 悬停走组件本地 state，连线目标高亮走 graphUiStore，都不经过 data。
+const NODE_RUNTIME_DATA_KEYS = new Set(['selected', 'titleEditRequested'])
 const EDGE_RUNTIME_DATA_KEYS = new Set(['selected', 'highlighted', 'faded'])
 
 function areBusinessDataEqual(
