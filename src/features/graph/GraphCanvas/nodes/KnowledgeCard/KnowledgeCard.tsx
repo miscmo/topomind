@@ -21,7 +21,6 @@ const LazyEmojiPicker = lazy(async () => {
   }
 })
 import type { KnowledgeNode } from '../../../../../types'
-import { useDevPerfFlags } from '../../devPerfFlags'
 import { cn } from '@/lib/utils'
 import { useKnowledgeCardModel } from './model/useKnowledgeCardModel'
 import { getKnowledgeCardStyles } from './utils/styles'
@@ -59,24 +58,7 @@ function subscribeToAddEmoji(nodeId: string, listener: AddEmojiListener) {
   }
 }
 
-// TEMP-PROFILING：定位缩放/框选卡顿用的一次性埋点，测完即删。
-// render = 渲染次数累计；mount/unmount 看视口进出导致的挂载抖动。
-const __cardProf = { render: 0, mount: 0, unmount: 0, mountedNow: 0 }
-if (typeof window !== 'undefined') {
-  ;(window as unknown as Record<string, unknown>).__tmCardProf = __cardProf
-}
-
 function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }: KnowledgeCardProps) {
-  if (import.meta.env.DEV) __cardProf.render += 1
-  useEffect(() => {
-    if (!import.meta.env.DEV) return
-    __cardProf.mount += 1
-    __cardProf.mountedNow += 1
-    return () => {
-      __cardProf.unmount += 1
-      __cardProf.mountedNow -= 1
-    }
-  }, [])
   const { state, actions, refs } = useKnowledgeCardModel(id, data, selected, width, height, resizing)
 
   // 细节分三档，用一次订阅拿到档位而不是 zoom 浮点值本身。
@@ -117,9 +99,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   // （实测 2~3 秒可达 1600+ 次 mount/unmount），按最低档渲染能把每次挂载的成本
   // 从 ~12 个 DOM 元素压到 ~2 个。只在"开始/结束缩放"各翻转一次，不是每帧变化；
   // 且只有大房间才降级，小房间不牺牲缩放时的可读性。
-  // TEMP-PROFILING：__tmPerf.minimal() 打开后强制最简档，用于 A/B 定位瓶颈
-  const perfMinimalCards = useDevPerfFlags((s) => s.minimalCards)
-  const detailLevel = zoomDegradedDuringZoom || perfMinimalCards ? 0 : zoomDetailLevel
+  const detailLevel = zoomDegradedDuringZoom ? 0 : zoomDetailLevel
   const isMinimalDetail = detailLevel === 0
   const isLowDetail = detailLevel < 2
 

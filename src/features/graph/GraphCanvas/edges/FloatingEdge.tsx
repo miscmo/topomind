@@ -15,7 +15,6 @@ import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { getEdgeParams } from './floatingUtils'
 import QuickEdgeToolbar from './QuickEdgeToolbar'
-import { useDevPerfFlags } from '../devPerfFlags'
 
 /**
  * 箭头几何：在 12x12 的 viewBox 内画一个朝右的箭头，尖端位于 x=12、垂直居中于 y=6。
@@ -43,12 +42,6 @@ function readEdgeStyleSnapshot(edgeData: KnowledgeEdge['data'] | undefined): Edg
   }
 }
 
-// TEMP-PROFILING：与 KnowledgeCard 配套的一次性埋点，测完即删
-const __edgeProf = { render: 0 }
-if (typeof window !== 'undefined') {
-  ;(window as unknown as Record<string, unknown>).__tmEdgeProf = __edgeProf
-}
-
 function FloatingEdge({
   id,
   source,
@@ -56,15 +49,12 @@ function FloatingEdge({
   style,
   data,
 }: EdgeProps) {
-  if (import.meta.env.DEV) __edgeProf.render += 1
   // EdgeProps 的 data 是宽松类型，这里按 KnowledgeEdge 的数据契约取值
   const edgeData = data as KnowledgeEdge['data'] | undefined
   // 选中态以 data.selected 为唯一来源（setSelectedEdgeInGraph 维护）
   const isSelected = edgeData?.selected === true
   const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
   const isNodeFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
-  // TEMP-PROFILING：__tmPerf.edges() 打开后隐藏全部连线，用于 A/B 定位瓶颈
-  const hideEdges = useDevPerfFlags((s) => s.hideEdges)
   const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
   const { updateEdgeStyle } = useGraphContext()
 
@@ -93,8 +83,7 @@ function FloatingEdge({
     && connectingSourceId === null
     && !isNodeFormatPainterActive
 
-  // TEMP-PROFILING：hideEdges 打开时直接不渲染，保留上方所有 hook 的调用顺序
-  if (hideEdges || !sourceNode || !targetNode) {
+  if (!sourceNode || !targetNode) {
     return null
   }
 
