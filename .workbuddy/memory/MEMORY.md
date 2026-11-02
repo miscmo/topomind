@@ -72,6 +72,7 @@
 - `SegmentedControl.tsx`：**所有互斥单选切换必须用它**。泛型 `T extends string|number|boolean`，`size(sm 24px/11px 给标题栏；md 32px/12px 给面板)`、`grow`(是否等分)、`fullWidth`、`ariaLabel`；内部 `role=radiogroup`+`role=radio`。
 - `modal.ts`（`modalOverlayBaseClassName/Enter/PanelEnterClassName`）+ 统一 `z-[10000]`：所有模态对话框走它，别自定 `fixed inset-0 bg-black/x`。非模态 popover 例外（`DocumentMetaPicker` 保持 1300）。键盘三件套：打开聚焦首个控件、overlay 级 Esc、关闭把焦点还给触发元素。Toast 已提升 `z-[100000]`。
 - 全局 `:focus-visible`（accent 2px outline + 2px offset）在 `base.css`，已移除各处 `focus-visible:outline-none + ring-*` 补丁。**不要**再逐个补焦点环。
+- **踩坑（2026-11-02）**：要排除一类元素（如 `[contenteditable]`）必须写进原规则的 `:not()`，不能靠"后面再写一条 `outline:none` 覆盖"——`[tabindex]:not([tabindex='-1']):focus-visible` 特异性是 (0,3,0)（`:not()` 内选择器计入权重），压过 `[contenteditable]:focus-visible` 的 (0,2,0)，导致点击编辑器被描蓝框。ProseMirror 根同时有 `contenteditable` + `tabindex="0"`，且 Chrome 对 contenteditable 鼠标点击也匹配 `:focus-visible`。
 
 ### Tailwind / CSS 坑
 - **CSS 变量不能配透明度修饰符**：`bg-[var(--x)]/30`、`text-[var(--x)]/60` 在 **v3.4 无效**（变量不可解析，`/30` 被忽略甚至整条规则不生成）。要半透明必须写 `bg-[color-mix(in_srgb,var(--x)_45%,transparent)]`。

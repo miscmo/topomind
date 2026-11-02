@@ -98,19 +98,29 @@ body{display:flex;flex-direction:column}
       特异性更高、同样带 !important 的编辑器专属 focus 规则。
    2) 排除 [contenteditable] —— 富文本编辑器自身有光标与「当前块高亮」作为焦点反馈，
       给整块文档描一圈边框反而干扰阅读。工具栏/侧栏按钮不属于 contenteditable，
-      仍会拿到焦点环。 */
+      仍会拿到焦点环。
+      排除必须写在 `[tabindex]` 那条规则**自身的选择器里**（`:not([contenteditable])`），
+      不能只靠下面那条 `[contenteditable]:focus-visible { outline:none }` 去覆盖：
+      ProseMirror/BlockNote 的编辑器根同时带 `contenteditable="true"` 和 `tabindex="0"`，
+      而 `[tabindex]:not([tabindex='-1']):focus-visible` 的特异性是 (0,3,0)
+      （:not() 内部的选择器要计入权重），高于 `[contenteditable]:focus-visible` 的 (0,2,0)。
+      二者都是 !important，特异性高的那条胜出 → 点击编辑器会被描一圈 2px 蓝框，
+      用户看到的就是「内容两边两条竖线」。2026-11-02 修复。 */
 button:focus-visible,
 [role='button']:focus-visible,
 a[href]:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-[tabindex]:not([tabindex='-1']):focus-visible {
+[tabindex]:not([tabindex='-1']):not([contenteditable]):focus-visible {
   outline: 2px solid var(--color-accent) !important;
   outline-offset: 2px !important;
 }
 
-[contenteditable]:focus-visible {
+/* 富文本编辑器根：不描焦点环（有光标 + 当前块高亮作为反馈）。
+   双写 [contenteditable][tabindex] 是为了盖住第三方库里可能存在的同类 !important 规则。 */
+[contenteditable]:focus-visible,
+[contenteditable][tabindex]:focus-visible {
   outline: none !important;
 }
 
