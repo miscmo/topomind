@@ -82,10 +82,25 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   )
   const widthMode = data.widthMode ?? 'auto'
   const heightMode = data.heightMode ?? 'auto'
-  const autoSize = useMemo(() => calculateKnowledgeCardAutoSize(data.label, nodeStyle, data), [data, nodeStyle])
+  // 依赖只列真正影响尺寸的业务字段，不能用整个 data：
+  // data 上还挂着 hovered / connectTarget / titleEditRequested 等运行时字段，
+  // 每次悬停、连线瞄准、请求改标题都会重建 data 引用，进而白白重跑一遍
+  // canvas 文本测量（每个节点 3~5 次 measureText）。
+  const emojiCount = data.emojis?.length ?? 0
+  const hasDetail = data.hasDetail === true
+  const childCount = data.childCount ?? 0
+  const autoSize = useMemo(
+    () => calculateKnowledgeCardAutoSize(data.label, nodeStyle, data),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.label, emojiCount, hasDetail, childCount, nodeStyle],
+  )
   const displayWidth = widthMode === 'auto' ? autoSize.width : nodeWidth
   const displayHeight = heightMode === 'auto' ? autoSize.height : nodeHeight
-  const accessoryWidth = useMemo(() => getKnowledgeCardAccessoryWidth(data), [data])
+  const accessoryWidth = useMemo(
+    () => getKnowledgeCardAccessoryWidth(data),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hasDetail, childCount],
+  )
   
   const cardPath = useMemo(() => {
     const parent = typeof data.parent === 'string' ? data.parent : ''

@@ -61,11 +61,19 @@ function subscribeToAddEmoji(nodeId: string, listener: AddEmojiListener) {
 function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }: KnowledgeCardProps) {
   const { state, actions, refs } = useKnowledgeCardModel(id, data, selected, width, height, resizing)
 
-  // 订阅「是否低缩放」这一个布尔，而不是 zoom 浮点值本身。
+  // 细节分三档，用一次订阅拿到档位而不是 zoom 浮点值本身。
   // useStore 不传 equalityFn 时按 Object.is 比较：若 selector 返回 transform[2]，
   // 缩放期间每一个 zoom 变化都会让**所有可见节点**重渲染（大图缩放掉帧的主因）；
-  // 直接返回布尔后，只会在跨过 0.45 阈值时重渲染一次。
-  const isLowDetail = useStore((s) => s.transform[2] < 0.45)
+  // 返回 0/1/2 这种档位值后，只会在跨过阈值时重渲染一次。
+  //   2 = 完整；1 = 低细节（去掉 resizer/工具栏/阴影）；0 = 极低（再去掉 emoji/徽章/标题文字）
+  const detailLevel = useStore((s) => {
+    const zoom = s.transform[2]
+    if (zoom < 0.25) return 0
+    if (zoom < 0.45) return 1
+    return 2
+  })
+  const isMinimalDetail = detailLevel === 0
+  const isLowDetail = detailLevel < 2
   const {
     titleEditing,
     showHoverControls,
@@ -281,10 +289,14 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             : "bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)]"
         )}
       >
+        {/* Handle 元素本身必须保留：React Flow 靠它测量端点位置来画连线，
+            去掉会让边画不出来；但内部的加号图标在极低缩放下纯属浪费。 */}
+        {!isMinimalDetail && (
         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 5v14" />
           <path d="M5 12h14" />
         </svg>
+        )}
       </Handle>
 
       <div className="flex flex-1 flex-col items-center justify-center overflow-hidden pointer-events-none min-w-0 min-h-0" style={{ borderRadius }}>
@@ -319,13 +331,15 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                   }
                 }}
               />
-            ) : (
+            ) : isMinimalDetail ? null : (
+              // 极低缩放（<0.25）下标题字号不到 3px，本就不可读，
+              // 但浏览器仍要为它做一次文本排版；直接省掉，卡片退化成纯色块。
               <div
                 className="w-full h-full break-words whitespace-pre-wrap pointer-events-auto select-none flex items-center justify-center gap-[3px] min-w-0"
                 onDoubleClick={contentInteractionsEnabled ? startTitleEdit : undefined}
                 title={contentInteractionsEnabled ? '双击编辑标题' : undefined}
               >
-                {data.emojis && data.emojis.length > 0 && (
+                {!isMinimalDetail && data.emojis && data.emojis.length > 0 && (
                   <div className="flex items-center gap-[2px] shrink-0 pr-[2px]" onDoubleClick={e => e.stopPropagation()}>
                     {data.emojis.map((emoji, index) => (
                       <div 
@@ -349,6 +363,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
             )}
           </div>
 
+          {/* 右槽位：极低缩放下整块不渲染（此时徽章/图标都点不准，留着只是白付 DOM 成本）。
+              注意右侧内边距仍由 accessoryWidth 保留，卡片宽度不会因此抖动。 */}
+          {!isMinimalDetail && (
           <div className="absolute right-[6px] top-1/2 z-50 flex -translate-y-1/2 items-center justify-end gap-[2px] shrink-0 pointer-events-auto">
             {hasDetail && (
               <div className="flex items-center justify-center shrink-0 text-[var(--color-text-muted)] leading-none" title="包含详情" style={docIconStyle}>
@@ -379,6 +396,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
 

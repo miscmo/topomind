@@ -39,6 +39,31 @@ function measureTextWidth(text: string, style: KnowledgeNodeStyle): number {
   return ctx.measureText(text).width
 }
 
+/**
+ * 两个"基准宽度"（20 个汉字的块宽、单个字宽）只由字体决定，与节点文案无关，
+ * 但每次算尺寸都要测量一遍。ctx.measureText 会同步触发字体解析，节点多时是可观开销，
+ * 按字体特征做模块级缓存即可省掉这两次测量。
+ * 字体组合（normal/italic × 400/700 × 字号）数量有限，缓存不会无界膨胀。
+ */
+const baselineWidthCache = new Map<string, { chineseBlock: number; singleChar: number }>()
+
+function getBaselineWidths(style: KnowledgeNodeStyle): { chineseBlock: number; singleChar: number } {
+  const fontStyle = style.headerFontStyle === 'italic' ? 'italic' : 'normal'
+  const fontWeight = style.headerFontWeight === 'bold' ? '700' : '400'
+  const fontSize = style.headerFontSize ?? 11
+  const key = `${fontStyle}|${fontWeight}|${fontSize}`
+  const cached = baselineWidthCache.get(key)
+  if (cached) return cached
+
+  if (baselineWidthCache.size > 128) baselineWidthCache.clear()
+  const value = {
+    chineseBlock: Math.max(60, measureTextWidth('汉'.repeat(MAX_AUTO_CHINESE_CHARS), style)),
+    singleChar: measureTextWidth('字', style),
+  }
+  baselineWidthCache.set(key, value)
+  return value
+}
+
 export function getKnowledgeCardAccessoryWidth(data: KnowledgeNodeData): number {
   let width = RIGHT_SLOT_BASE_WIDTH
   if (data.hasDetail) width += RIGHT_SLOT_ICON_WIDTH
@@ -54,13 +79,11 @@ export function calculateKnowledgeCardAutoSize(
   const safeLabel = (label || '').trim() || '未命名节点'
   const fontSize = nodeStyle.headerFontSize ?? 11
   const lineHeightPx = Math.round(fontSize * 1.3)
-  const maxTextWidth = Math.max(
-    60,
-    measureTextWidth('汉'.repeat(MAX_AUTO_CHINESE_CHARS), nodeStyle),
-  )
+  const baseline = getBaselineWidths(nodeStyle)
+  const maxTextWidth = baseline.chineseBlock
   const linesArr = safeLabel.split('\n')
   const textWidthArr = linesArr.map(line => measureTextWidth(line, nodeStyle))
-  const maxLineWidth = Math.max(...textWidthArr, measureTextWidth('字', nodeStyle) * 2)
+  const maxLineWidth = Math.max(...textWidthArr, baseline.singleChar * 2)
   const accessoryWidth = getKnowledgeCardAccessoryWidth(data)
   
   // 左右内边距，减少无谓的空白
