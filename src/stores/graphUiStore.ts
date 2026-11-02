@@ -19,6 +19,12 @@ interface GraphUiStore {
   formatPainterStyle: KnowledgeNodeStyle | null
   /** 连线格式刷：激活时点击连线即把这份样式应用过去（与节点格式刷互斥） */
   edgeFormatPainterStyle: EdgeStylePatch | null
+  /**
+   * 是否正在缩放（不含平移）。缩放期间大量节点进出视口（实测 2~3 秒可达 1600+ 次
+   * mount/unmount），让每个节点都只按最低细节渲染，能把这笔挂载成本压到最小。
+   * 只在"开始缩放/结束缩放"各翻转一次，不是每帧变化。
+   */
+  isViewportZooming: boolean
   defaultEdgeStyle: DefaultEdgeStyle
   defaultNodeStyle: DefaultNodeStyle
   defaultNodeSize: DefaultNodeSize
@@ -32,6 +38,7 @@ interface GraphUiStore {
   setConnectingTargetId: (nodeId: string | null) => void
   setFormatPainterStyle: (style: KnowledgeNodeStyle | null) => void
   setEdgeFormatPainterStyle: (style: EdgeStylePatch | null) => void
+  setViewportZooming: (isViewportZooming: boolean) => void
   setDefaultEdgeStyle: (style: Partial<DefaultEdgeStyle>) => void
   replaceDefaultEdgeStyle: (style: DefaultEdgeStyle) => void
   setDefaultNodeStyle: (style: Partial<DefaultNodeStyle>) => void
@@ -46,7 +53,7 @@ interface GraphUiStore {
   resetGraphUi: () => void
 }
 
-export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMap' | 'miniMapSize' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'edgeFormatPainterStyle' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize'> = {
+export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMap' | 'miniMapSize' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'edgeFormatPainterStyle' | 'isViewportZooming' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize'> = {
   showGrid: true,
   showMiniMap: true,
   miniMapSize: {
@@ -58,6 +65,7 @@ export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMa
   connectingTargetId: null,
   formatPainterStyle: null,
   edgeFormatPainterStyle: null,
+  isViewportZooming: false,
   ...STYLE_CONFIG_DEFAULTS,
 }
 
@@ -72,6 +80,7 @@ export const useGraphUiStore = create<GraphUiStore>()(
       setConnectingTargetId: (connectingTargetId) => set({ connectingTargetId }),
       setFormatPainterStyle: (formatPainterStyle) => set({ formatPainterStyle }),
       setEdgeFormatPainterStyle: (edgeFormatPainterStyle) => set({ edgeFormatPainterStyle }),
+      setViewportZooming: (isViewportZooming) => set({ isViewportZooming }),
       setDefaultEdgeStyle: (style) => set((state) => ({
         defaultEdgeStyle: { ...state.defaultEdgeStyle, ...style },
       })),

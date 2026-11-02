@@ -207,12 +207,44 @@ export function useGraphCanvasModel({
     setZoomLevel(nextZoom)
   }, [])
 
+  // 区分"缩放"和"平移"：只有缩放会让大批节点进出视口，需要降级渲染。
+  // 这里靠 zoom 是否变化来判断——onMove 对平移和缩放都会触发，但平移时 zoom 恒定。
+  const zoomingRef = useRef(false)
+  const lastMoveZoomRef = useRef<number | null>(null)
+  const zoomEndTimerRef = useRef<number | null>(null)
+
+  const endZooming = useCallback(() => {
+    if (zoomEndTimerRef.current !== null) {
+      window.clearTimeout(zoomEndTimerRef.current)
+      zoomEndTimerRef.current = null
+    }
+    if (!zoomingRef.current) return
+    zoomingRef.current = false
+    useGraphUiStore.getState().setViewportZooming(false)
+  }, [])
+
   const handleMove = useCallback((_: unknown, viewport: Viewport) => {
     updateZoomLevel(viewport.zoom)
-  }, [updateZoomLevel])
+    const previousZoom = lastMoveZoomRef.current
+    lastMoveZoomRef.current = viewport.zoom
+    if (previousZoom !== null && Math.abs(viewport.zoom - previousZoom) > 0.0005) {
+      // 只在 false → true 时写 store，避免缩放期间每帧 setState
+      if (!zoomingRef.current) {
+        zoomingRef.current = true
+        useGraphUiStore.getState().setViewportZooming(true)
+      }
+      // 兜底：程序化变换（fitView / setViewport）不一定触发 onMoveEnd，
+      // 没有这个定时器会让所有节点永远停在最低细节档。
+      if (zoomEndTimerRef.current !== null) window.clearTimeout(zoomEndTimerRef.current)
+      zoomEndTimerRef.current = window.setTimeout(endZooming, 180)
+    }
+  }, [endZooming, updateZoomLevel])
+
+  useEffect(() => () => endZooming(), [endZooming])
 
   const handleMoveEnd = useCallback((_: unknown, viewport: Viewport) => {
     updateZoomLevel(viewport.zoom)
+    endZooming()
     const viewportChanged =
       Math.abs(viewport.x - storedViewport.x) > 0.5 ||
       Math.abs(viewport.y - storedViewport.y) > 0.5 ||

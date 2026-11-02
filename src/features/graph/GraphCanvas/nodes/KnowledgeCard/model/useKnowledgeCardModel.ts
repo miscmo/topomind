@@ -46,6 +46,12 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   // 框选时 count 每帧都在变，订阅数值会让**所有**节点跟着重渲染；
   // 布尔只在跨过阈值（>1）时翻转一次，代价恒定。
   const isMultiSelected = useGraphStore((state) => state.selectedNodeCount > 1)
+  // 缩放期间降级的开关（详见 KnowledgeCard 的 detailLevel）。
+  // 两个订阅都是布尔：isViewportZooming 只在"开始/结束缩放"翻转，
+  // isLargeRoom 只在节点增删时翻转，都不会每帧变化。
+  const isViewportZooming = useGraphUiStore((s) => s.isViewportZooming)
+  const isLargeRoom = useGraphStore((state) => state.nodes.length > 300)
+  const zoomDegradedDuringZoom = isViewportZooming && isLargeRoom
   
   const [isHovered, setIsHovered] = useState<boolean>(false)
   const [titleEditing, setTitleEditing] = useState(false)
@@ -351,6 +357,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       isConnectSource,
       contentInteractionsEnabled,
       isMultiSelected,
+      zoomDegradedDuringZoom,
       nodeStyle,
       nodeWidth: displayWidth,
       nodeHeight: displayHeight,

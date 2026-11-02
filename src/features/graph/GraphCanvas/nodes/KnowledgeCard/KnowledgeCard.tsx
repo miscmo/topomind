@@ -83,14 +83,12 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   // 缩放期间每一个 zoom 变化都会让**所有可见节点**重渲染（大图缩放掉帧的主因）；
   // 返回 0/1/2 这种档位值后，只会在跨过阈值时重渲染一次。
   //   2 = 完整；1 = 低细节（去掉 resizer/工具栏/阴影）；0 = 极低（再去掉 emoji/徽章/标题文字）
-  const detailLevel = useStore((s) => {
+  const zoomDetailLevel = useStore((s) => {
     const zoom = s.transform[2]
     if (zoom < 0.25) return 0
     if (zoom < 0.45) return 1
     return 2
   })
-  const isMinimalDetail = detailLevel === 0
-  const isLowDetail = detailLevel < 2
   const {
     titleEditing,
     showHoverControls,
@@ -102,6 +100,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     isConnectSource,
     contentInteractionsEnabled,
     isMultiSelected,
+    zoomDegradedDuringZoom,
     nodeStyle,
     nodeWidth,
     nodeHeight,
@@ -112,6 +111,14 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     accessoryWidth,
     isFormatPainterActive,
   } = state
+
+  // 缩放期间强制降到最低档：缩放会让大批节点在视口边界反复进出
+  // （实测 2~3 秒可达 1600+ 次 mount/unmount），按最低档渲染能把每次挂载的成本
+  // 从 ~12 个 DOM 元素压到 ~2 个。只在"开始/结束缩放"各翻转一次，不是每帧变化；
+  // 且只有大房间才降级，小房间不牺牲缩放时的可读性。
+  const detailLevel = zoomDegradedDuringZoom ? 0 : zoomDetailLevel
+  const isMinimalDetail = detailLevel === 0
+  const isLowDetail = detailLevel < 2
 
   const {
     setIsHovered,
