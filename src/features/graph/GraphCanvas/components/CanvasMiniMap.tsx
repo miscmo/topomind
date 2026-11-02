@@ -573,13 +573,16 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
     return 'full'
   }, [edges.length, nodes.length])
 
+  // 用 deferredNodes：框选/拖动期间 nodes 每帧都是新引用，若用即时值，
+  // 边界计算会跟着每帧重扫一遍整图；而下面的预览模型本来就用 deferred 值，
+  // 两者口径保持一致。
   const graphBounds = useMemo<RectLike>(() => {
-    if (!showMiniMap || nodes.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
+    if (!showMiniMap || deferredNodes.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
     let minX = Infinity
     let minY = Infinity
     let maxX = -Infinity
     let maxY = -Infinity
-    for (const node of nodes) {
+    for (const node of deferredNodes) {
       const rect = getNodeRect(node)
       minX = Math.min(minX, rect.x)
       minY = Math.min(minY, rect.y)
@@ -592,7 +595,7 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
       width: Math.max(0, maxX - minX),
       height: Math.max(0, maxY - minY),
     }
-  }, [nodes, showMiniMap])
+  }, [deferredNodes, showMiniMap])
 
   const previewBounds = useMemo(() => {
     const width = Math.max(graphBounds.width, 240)

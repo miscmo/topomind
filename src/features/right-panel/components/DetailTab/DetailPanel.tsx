@@ -3,7 +3,7 @@
  * 显示节点 文档内容，支持预览/编辑切换
  */
 import { FolderOpen } from 'lucide-react'
-import { useEffect, useState, memo, useCallback } from 'react'
+import { useCallback, useDeferredValue, useEffect, memo, useState } from 'react'
 import { useGraphStore, useSelectedNodeId } from '../../../../stores/graphStore'
 import { DocumentWorkspace } from '../../../../features/documents/DocumentWorkspace'
 import { tabStore, useGraphSession } from '../../../../stores/tabs/tabStore'
@@ -24,12 +24,17 @@ interface DetailPanelProps {
 
 const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: DetailPanelProps) {
   const rawSelectedNodeId = useSelectedNodeId()
+  // 框选（Shift 拖拽）期间 selectedNodeId 每帧都在变。若右栏同步跟随，会每帧重渲染
+  // 整个详情面板，并在下面的 effect 里为每个"路过"的节点重读一次文档列表（磁盘 IO）——
+  // 这是多选卡顿最重的一处。用 deferred 值让右栏在松手后再追上最终选中的节点，
+  // 中间过程不参与，画布的选中反馈完全不受影响。
+  const deferredSelectedNodeId = useDeferredValue(rawSelectedNodeId)
   // 锁定按知识库(kbPath)维度隔离：只取当前知识库自己的锁定节点，
   // 切到其它知识库时取不到该库的锁定 -> 右栏跟随当前库选中节点，互不串扰。
   const graphSession = useGraphSession(tabId)
   const kbPath = graphSession.kbPath
   const lockedNodeId = useDetailLockStore((s) => (kbPath ? (s.lockedByKb[kbPath] ?? null) : null))
-  const selectedNodeId = lockedNodeId ?? rawSelectedNodeId
+  const selectedNodeId = lockedNodeId ?? deferredSelectedNodeId
   const resolveNodePath = useCallback((nodeId: string) => {
     const graphSession = tabStore.getState().getGraphSession(tabId)
     return resolveRoomChildRef(graphSession.roomPath || graphSession.kbPath, nodeId)

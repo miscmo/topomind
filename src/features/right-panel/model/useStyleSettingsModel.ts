@@ -1,11 +1,11 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useCallback, useDeferredValue, useEffect, useState } from 'react'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { useGraphStore } from '../../../stores/graphStore'
 import { useStorage } from '../../../core/storage'
 import { GRAPH_UI_INITIAL_STATE } from '../../../stores/graphUiStore'
-import type { KnowledgeNodeStyle } from '../../../types'
+import type { KnowledgeNode, KnowledgeNodeStyle } from '../../../types'
 import type { NodeDimensionChange } from '@xyflow/react'
 import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, DefaultEditorStyle } from '../../../types/uiStoreTypes'
 import { NODE_BADGE_SIZE_LIMIT, NODE_STYLE_NUMBER_LIMITS, clampNumber } from '../../../domain/style/styleConstraints'
@@ -22,7 +22,14 @@ import {
 
 type NodeSizeLimitKey = keyof NodeSizeLimits
 
-export function useStyleSettingsModel() {
+/**
+ * 面板不可见（被另一个 Tab 用 CSS 隐藏但保持挂载）时返回的空选中集。
+ * 必须是模块级常量：若每次现写 `[]`，selector 每帧都返回新引用，
+ * 反而会让隐藏的面板跟着选中态一起重渲染。
+ */
+const EMPTY_SELECTED_NODES: KnowledgeNode[] = []
+
+export function useStyleSettingsModel(active = true) {
   const storage = useStorage()
   const selectedEdgeId = useGraphUiStore((s) => s.selectedEdgeId)
   const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
@@ -53,7 +60,12 @@ export function useStyleSettingsModel() {
     if (!id) return ''
     return s.nodesMap.get(id)?.data.label?.trim() || '未命名节点'
   })
-  const selectedNodes = useGraphStore((s) => s.selectedNodes)
+  // 面板不可见时直接订阅空数组，隐藏的面板就不会跟着选中态重渲染。
+  const selectedNodesLive = useGraphStore((s) => (active ? s.selectedNodes : EMPTY_SELECTED_NODES))
+  // 框选（Shift 拖拽）期间选中集每一帧都在变，而样式面板要重算十几个取值、
+  // 重建整棵 NodeStylePanel。用 deferred 值把它降级为可中断渲染：
+  // 画布的选中反馈不受影响，面板在松手后追上一次即可。
+  const selectedNodes = useDeferredValue(selectedNodesLive)
   const selectedNode = selectedNodes.length > 0 ? selectedNodes[0] : null
 
   const isMultiSelection = selectedNodes.length > 1
@@ -89,10 +101,14 @@ export function useStyleSettingsModel() {
   const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
-    if (selectedNode) {
-      setActiveTab('nodes')
-      setExpandedBlocks(prev => ({ ...prev, ownNode: true, globalNode: false, defaultNode: false }))
-    }
+    if (!selectedNode) return
+    setActiveTab('nodes')
+    // 状态没变就返回 prev 让 React bail out：否则每次选中变化都要多渲染一轮。
+    setExpandedBlocks((prev) => (
+      prev.ownNode === true && prev.globalNode === false && prev.defaultNode === false
+        ? prev
+        : { ...prev, ownNode: true, globalNode: false, defaultNode: false }
+    ))
   }, [selectedNode?.id])
 
   useEffect(() => {

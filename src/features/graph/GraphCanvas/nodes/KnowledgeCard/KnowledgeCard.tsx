@@ -61,11 +61,11 @@ function subscribeToAddEmoji(nodeId: string, listener: AddEmojiListener) {
 function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }: KnowledgeCardProps) {
   const { state, actions, refs } = useKnowledgeCardModel(id, data, selected, width, height, resizing)
 
-  // 订阅画布缩放级别，实现节点细节层次（LoD）：低缩放时简化渲染，
-  // 降低大量可见节点的 paint / 合成成本，缓解大图平移起步掉帧。
-  // 平移时 zoom 不变，此 hook 不会触发重渲染，故不影响拖拽跟手性。
-  const zoom = useStore((s) => s.transform[2])
-  const isLowDetail = zoom < 0.45
+  // 订阅「是否低缩放」这一个布尔，而不是 zoom 浮点值本身。
+  // useStore 不传 equalityFn 时按 Object.is 比较：若 selector 返回 transform[2]，
+  // 缩放期间每一个 zoom 变化都会让**所有可见节点**重渲染（大图缩放掉帧的主因）；
+  // 直接返回布尔后，只会在跨过 0.45 阈值时重渲染一次。
+  const isLowDetail = useStore((s) => s.transform[2] < 0.45)
   const {
     titleEditing,
     showHoverControls,
@@ -76,6 +76,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     isConnectTarget,
     isConnectSource,
     contentInteractionsEnabled,
+    isMultiSelected,
     nodeStyle,
     nodeWidth,
     nodeHeight,
@@ -243,7 +244,11 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         />
       )}
 
-      {!isLowDetail && (
+      {/* 多选时整组缩放手柄都不渲染：
+          ① 多选本来就不支持单个节点 resize，手柄纯属干扰；
+          ② NodeResizer 是 8 个句柄 + 4 条线，框选时每多选中一个节点就要挂载一整组，
+             选中几十上百个节点时这笔 DOM / reconciliation 开销相当可观。 */}
+      {!isLowDetail && !isMultiSelected && (
       <NodeResizer
         isVisible={showHoverControls}
         minWidth={nodeSizeLimits.minWidth}

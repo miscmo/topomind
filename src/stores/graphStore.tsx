@@ -129,6 +129,9 @@ function areBusinessDataEqual(
 }
 
 function areNodesEqual(nodeA: KnowledgeNode, nodeB: KnowledgeNode) {
+  // 节点一律不可变更新：引用相同 ⇒ 内容必然相同。这条短路让下面的逐字段比较
+  // 只在真正被改动的节点上发生（选中/悬停等运行时字段也不参与历史比较）。
+  if (nodeA === nodeB) return true
   return (
     nodeA.id === nodeB.id
     && nodeA.type === nodeB.type
@@ -141,6 +144,7 @@ function areNodesEqual(nodeA: KnowledgeNode, nodeB: KnowledgeNode) {
 }
 
 function areEdgesEqual(edgeA: KnowledgeEdge, edgeB: KnowledgeEdge) {
+  if (edgeA === edgeB) return true
   return (
     edgeA.id === edgeB.id
     && edgeA.type === edgeB.type
@@ -164,12 +168,19 @@ export type GraphStoreApi = StoreApi<GraphState> & {
 
 function areGraphHistorySnapshotsEqual(a: GraphHistorySnapshot, b: GraphHistorySnapshot) {
   if (a.historyRevision !== b.historyRevision) return false
+  if (a.nodes === b.nodes && a.edges === b.edges) return true
   if (a.nodes.length !== b.nodes.length || a.edges.length !== b.edges.length) return false
+  // 每次 store 更新 zundo 都会跑一遍这个比较（见 zundo 的 equality 调用点），
+  // 万级节点下"逐个引用比对 + 只对引用不同的做深比较"能把这里的开销压掉一个数量级。
   for (let i = 0; i < a.nodes.length; i += 1) {
-    if (!areNodesEqual(a.nodes[i], b.nodes[i])) return false
+    const nodeA = a.nodes[i]
+    const nodeB = b.nodes[i]
+    if (nodeA !== nodeB && !areNodesEqual(nodeA, nodeB)) return false
   }
   for (let i = 0; i < a.edges.length; i += 1) {
-    if (!areEdgesEqual(a.edges[i], b.edges[i])) return false
+    const edgeA = a.edges[i]
+    const edgeB = b.edges[i]
+    if (edgeA !== edgeB && !areEdgesEqual(edgeA, edgeB)) return false
   }
   return true
 }

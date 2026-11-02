@@ -19,7 +19,10 @@ export default memo(function RightPanelShell({ tabId, rightPanelTab, width, isAc
         <DetailPanel tabId={tabId} isActive={isActive && rightPanelTab === 'detail'} />
       </div>
       <div className={rightPanelTab === 'style' ? 'flex flex-1 min-h-0 flex-col overflow-hidden' : 'hidden'} aria-hidden={rightPanelTab !== 'style'}>
-        <StyleSection />
+        {/* 两个 Tab 都用 CSS 隐藏常驻挂载（不能卸载，否则会丢面板内部状态）。
+            但常驻意味着隐藏的那个也会跟着订阅重渲染，所以把可见性透传下去，
+            让它在不可见时不去订阅选中态 —— 否则框选时每帧都会重渲染一整块面板。 */}
+        <StyleSection active={rightPanelTab === 'style'} />
       </div>
     </div>
   )

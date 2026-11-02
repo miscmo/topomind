@@ -5,8 +5,8 @@ import { EditorStylePanel } from './EditorStylePanel'
 import { useStyleSettingsModel } from '../../model/useStyleSettingsModel'
 import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
 
-export default memo(function StyleSection() {
-  const { state, actions } = useStyleSettingsModel()
+export default memo(function StyleSection({ active = true }: { active?: boolean }) {
+  const { state, actions } = useStyleSettingsModel(active)
 
   const {
     activeTab,

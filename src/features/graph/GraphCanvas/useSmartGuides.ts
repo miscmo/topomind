@@ -4,6 +4,13 @@ import type { Node, NodeChange } from '@xyflow/react'
 const SNAP_THRESHOLD = 8
 const GUIDE_BUCKET_SIZE = SNAP_THRESHOLD * 2
 
+/**
+ * 共享的空数组常量。
+ * setGuideLines 要靠「返回同一个引用」让 React bail out，若每次现写 `[]`
+ * 就是一个新引用，React 会判定状态变化并重渲染整棵画布。
+ */
+const EMPTY_GUIDE_LINES: GuideLine[] = []
+
 type GuideIndex = Map<number, Set<string>>
 
 function addToGuideIndex(index: GuideIndex, value: number, nodeId: string) {
@@ -48,6 +55,20 @@ export type GuideLine = {
   end: number
 }
 
+/** 浅比较参考线数组，用于让 setGuideLines 在无变化时 bail out（避免每帧重渲染画布） */
+function guideLinesEqual(a: GuideLine[], b: GuideLine[]) {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i]
+    const y = b[i]
+    if (x.id !== y.id || x.position !== y.position || x.start !== y.start || x.end !== y.end) {
+      return false
+    }
+  }
+  return true
+}
+
 function getNodeRect(node: Node, pos?: { x?: number, y?: number }, dim?: { width?: number, height?: number }) {
   const x = pos?.x ?? node.position.x
   const y = pos?.y ?? node.position.y
@@ -68,7 +89,11 @@ function getNodeRect(node: Node, pos?: { x?: number, y?: number }, dim?: { width
 export function useSmartGuides(nodes: Node[]) {
   const [guideLines, setGuideLines] = useState<GuideLine[]>([])
   const activeNodeMetaRef = useRef<ReturnType<typeof buildNodeMeta> | null>(null)
-  
+  // 用 ref 读 nodes：拖动期间 nodes 每帧都是新引用，若把它放进 deps，
+  // onNodesChangeIntercept 会每帧重建，连带 handleNodesChange 每帧重建。
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
+
   const onNodesChangeIntercept = useCallback((changes: NodeChange[]) => {
     const nextChanges = [...changes]
     const newGuideLines: GuideLine[] = []
@@ -81,19 +106,33 @@ export function useSmartGuides(nodes: Node[]) {
       const hasEnd = nextChanges.some(c => (c.type === 'position' && !c.dragging) || (c.type === 'dimensions' && !c.resizing))
       if (hasEnd) {
         activeNodeMetaRef.current = null
-        setGuideLines([])
+        setGuideLines((prev) => (prev.length === 0 ? prev : EMPTY_GUIDE_LINES))
       }
       return nextChanges
     }
 
-    const nodeMeta = activeNodeMetaRef.current ?? buildNodeMeta(nodes)
+    // 多选拖动不做吸附，且必须在这里就短路。两点收益：
+    // ① 跳过下面的 buildNodeMeta —— 那是遍历整图建索引的 O(N) 开销，
+    //    万级节点下拖动起步会明显顿一下；
+    // ② setGuideLines 用函数式更新并在无变化时返回 prev（同引用），
+    //    React 会 bail out；若写成 `setGuideLines([])`，每帧一个新数组，
+    //    每次 mousemove 都会重渲染整棵画布。
+    if (dragChanges.length > 1) {
+      activeNodeMetaRef.current = null
+      setGuideLines((prev) => (prev.length === 0 ? prev : EMPTY_GUIDE_LINES))
+      return nextChanges
+    }
+
+    const nodeMeta = activeNodeMetaRef.current ?? buildNodeMeta(nodesRef.current)
     activeNodeMetaRef.current = nodeMeta
     const change = (dragChanges.length > 0 ? dragChanges[0] : resizeChanges[0]) as any
     const draggedNodeMeta = nodeMeta.byId.get(change.id)
     if (!draggedNodeMeta) return nextChanges
     const draggedNode = draggedNodeMeta.node
     if (nodeMeta.selectedNodeCount > 1) {
-      setGuideLines([])
+      // 兜底：万一 React Flow 没有为多选逐个派发 position change，这里同样不做吸附，
+      // 且用同引用的空数组避免每帧触发重渲染。
+      setGuideLines((prev) => (prev.length === 0 ? prev : EMPTY_GUIDE_LINES))
       return nextChanges
     }
 
@@ -295,10 +334,12 @@ export function useSmartGuides(nodes: Node[]) {
     if (bestSnapX?.guide) newGuideLines.push(bestSnapX.guide)
     if (bestSnapY?.guide) newGuideLines.push(bestSnapY.guide)
 
-    setGuideLines(newGuideLines)
+    // 绝大多数拖动帧并没有吸附到任何东西（newGuideLines 恒为空），
+    // 只有内容真的变了才更新，否则保持 prev 引用让 React bail out。
+    setGuideLines((prev) => (guideLinesEqual(prev, newGuideLines) ? prev : newGuideLines))
 
     return nextChanges
-  }, [nodes])
+  }, [])
 
   const clearGuides = useCallback(() => {
     activeNodeMetaRef.current = null
