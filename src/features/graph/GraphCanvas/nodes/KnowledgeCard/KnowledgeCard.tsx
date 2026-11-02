@@ -58,7 +58,24 @@ function subscribeToAddEmoji(nodeId: string, listener: AddEmojiListener) {
   }
 }
 
+// TEMP-PROFILING：定位缩放/框选卡顿用的一次性埋点，测完即删。
+// render = 渲染次数累计；mount/unmount 看视口进出导致的挂载抖动。
+const __cardProf = { render: 0, mount: 0, unmount: 0, mountedNow: 0 }
+if (typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__tmCardProf = __cardProf
+}
+
 function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }: KnowledgeCardProps) {
+  if (import.meta.env.DEV) __cardProf.render += 1
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    __cardProf.mount += 1
+    __cardProf.mountedNow += 1
+    return () => {
+      __cardProf.unmount += 1
+      __cardProf.mountedNow -= 1
+    }
+  }, [])
   const { state, actions, refs } = useKnowledgeCardModel(id, data, selected, width, height, resizing)
 
   // 细节分三档，用一次订阅拿到档位而不是 zoom 浮点值本身。

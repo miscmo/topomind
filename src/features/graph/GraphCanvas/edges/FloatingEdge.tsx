@@ -39,6 +39,12 @@ function readEdgeStyleSnapshot(edgeData: KnowledgeEdge['data'] | undefined): Edg
   }
 }
 
+// TEMP-PROFILING：与 KnowledgeCard 配套的一次性埋点，测完即删
+const __edgeProf = { render: 0 }
+if (typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__tmEdgeProf = __edgeProf
+}
+
 function FloatingEdge({
   id,
   source,
@@ -46,6 +52,7 @@ function FloatingEdge({
   style,
   data,
 }: EdgeProps) {
+  if (import.meta.env.DEV) __edgeProf.render += 1
   // EdgeProps 的 data 是宽松类型，这里按 KnowledgeEdge 的数据契约取值
   const edgeData = data as KnowledgeEdge['data'] | undefined
   // 选中态以 data.selected 为唯一来源（setSelectedEdgeInGraph 维护）
