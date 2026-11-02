@@ -70,7 +70,7 @@ function QuickNodeToolbar({
         <Maximize2 className="h-4 w-4" strokeWidth={2} />
       </button>
 
-      <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border)]/50" />
+      <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border-light)]" />
 
       <div 
         className="relative flex h-7 w-7 items-center justify-center rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text)] transition-all duration-200 cursor-pointer"
@@ -89,7 +89,7 @@ function QuickNodeToolbar({
         />
       </div>
 
-      <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border)]/50" />
+      <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border-light)]" />
 
       <div 
         className="relative flex h-7 items-center justify-center rounded-xl px-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text)] transition-all duration-200 cursor-pointer"
@@ -126,7 +126,7 @@ function QuickNodeToolbar({
         )}
       </div>
 
-      <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border)]/50" />
+      <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border-light)]" />
 
       <div className="flex items-center gap-0.5">
         <button
@@ -158,7 +158,7 @@ function QuickNodeToolbar({
         </button>
       </div>
 
-      <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border)]/50" />
+      <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border-light)]" />
 
       <button
         type="button"

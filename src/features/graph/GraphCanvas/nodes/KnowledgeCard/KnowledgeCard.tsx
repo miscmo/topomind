@@ -4,7 +4,7 @@
  *
  * @file components/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx
  */
-import { memo, useMemo, useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
+import { memo, useMemo, useState, useEffect, useRef, useCallback, lazy, Suspense, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, NodeResizer, Position, type NodeProps, useStore } from '@xyflow/react'
 const LazyEmojiPicker = lazy(async () => {
@@ -120,6 +120,35 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     titleFieldStyle
   } = useMemo(() => getKnowledgeCardStyles(nodeStyle, nodeBadgeSize), [nodeStyle, nodeBadgeSize])
 
+  // 边框色优先级：节点显式自定义 > 域色(domainColor) > 默认样式。
+  // 只写 CSS 变量、不直接写 border-color：inline 的 border-color 会压过 hover/active 变体类，
+  // 让自定义过颜色的节点彻底失去悬停反馈（历史 bug）。
+  const cardStyle = useMemo(() => {
+    const style: CSSProperties & Record<string, string | number> = {
+      cursor: dragging ? 'grabbing' : 'default',
+      '--tm-card-border': isConnectTarget
+        ? 'var(--color-success)'
+        : visuallySelected
+          ? 'var(--color-accent)'
+          : (data.nodeStyle?.borderColor ?? data.domainColor ?? nodeStyle.borderColor),
+      borderWidth: isConnectTarget ? 2 : nodeStyle.borderWidth,
+      borderRadius,
+      width: nodeWidth,
+      height: nodeHeight,
+    }
+    return style
+  }, [
+    borderRadius,
+    data.domainColor,
+    data.nodeStyle,
+    dragging,
+    isConnectTarget,
+    nodeHeight,
+    nodeStyle,
+    nodeWidth,
+    visuallySelected,
+  ])
+
   const resolvePickerPosition = useCallback((anchorRect: DOMRect, preferredPlacement: 'node' | 'emoji' = 'node') => {
     const PICKER_WIDTH = 352
     const PICKER_HEIGHT = 435
@@ -186,21 +215,16 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       onPointerDownCapture={selectNode}
       onPointerLeave={() => setIsHovered(false)}
       className={cn(
-        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border bg-[var(--color-surface)] w-full h-full box-border",
+        "relative flex items-stretch justify-stretch overflow-visible rounded-lg border border-[var(--tm-card-border)] bg-[var(--color-surface)] w-full h-full box-border",
         !isLowDetail && "shadow-sm transition-opacity duration-75 active:border-[var(--color-accent)] active:shadow-[0_0_0_1px_var(--color-accent-soft)]",
-        selected && "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)] z-10",
+        selected && "shadow-[0_0_0_1px_var(--color-accent)] z-10",
         isConnectTarget && "border-2 border-[var(--color-success)] shadow-[0_0_0_1px_var(--color-success)] !border-[var(--color-success)] z-10",
-        visuallyHovered && !visuallySelected && !isConnectTarget && "border-[var(--color-border-strong)]",
+        // hover/active 必须用变体类：inline style 的 border-color 优先级高于任何非 !important 的 class，
+        // 之前把颜色写进 inline 导致自定义过颜色的节点完全没有悬停反馈。
+        visuallyHovered && !visuallySelected && !isConnectTarget && "hover:border-[var(--color-border-strong)]",
         dragging && "opacity-90"
       )}
-      style={{
-        cursor: dragging ? 'grabbing' : 'default',
-        borderColor: visuallySelected ? undefined : data.domainColor ?? nodeStyle.borderColor,
-        borderWidth: isConnectTarget ? 2 : nodeStyle.borderWidth,
-        borderRadius,
-        width: nodeWidth,
-        height: nodeHeight,
-      }}
+      style={cardStyle}
     >
       {showQuickToolbar && !dragging && !isLowDetail && (
         <QuickNodeToolbar
@@ -262,7 +286,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         {/* Header 层 */}
         <div className="relative flex w-full items-center justify-center shrink-0 min-h-0 h-full" style={headerStyle}>
           <div
-            className={cn("flex w-full rounded-md transition-colors duration-75 items-center justify-center h-full", titleEditing && "bg-[var(--color-surface)]/20 shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-[var(--color-surface)]/40 focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
+            className={cn("flex w-full rounded-md transition-colors duration-75 items-center justify-center h-full", titleEditing && "bg-[color-mix(in_srgb,var(--color-surface)_20%,transparent)] shadow-[inset_0_0_0_1px_var(--color-border-light)] focus-within:bg-[color-mix(in_srgb,var(--color-surface)_40%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--color-border),0_0_0_2px_var(--color-accent-soft)]")}
             style={{
               ...titleFieldStyle,
               paddingLeft: '8px',

@@ -230,7 +230,8 @@ function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, N
     const headerColor = nodeStyle.headerColor ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.headerColor
     const borderColor = applySelectionHighlight && typedNode.selected
       ? 'var(--color-accent)'
-      : typedNode.data?.domainColor ?? nodeStyle.borderColor ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderColor
+      // 与卡片保持一致：节点显式自定义的边框色优先于域色（domainColor 只是默认/继承色）
+      : typedNode.data?.nodeStyle?.borderColor ?? typedNode.data?.domainColor ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderColor
     const borderWidth = applySelectionHighlight && typedNode.selected
       ? Math.max(1.5, (nodeStyle.borderWidth ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderWidth) + 0.5)
       : nodeStyle.borderWidth ?? STYLE_CONFIG_DEFAULTS.defaultNodeStyle.borderWidth

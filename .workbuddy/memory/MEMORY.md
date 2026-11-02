@@ -85,5 +85,12 @@
 - **禁用 HTML 实体图标**（`&#10005;` 等），一律 lucide（实体图标字重/基线/字号随字体回退漂移）。例外：`CustomTitleBar` 的 10px 发丝线窗口控制 glyph（lucide 24 网格缩到 10px 视觉退化）。
 - 保留不改：`FlowchartDocumentEditor` 的 jointjs 节点/连线色（画布内容色，非 UI chrome，且 `var()` 不保证生效）。
 
+### 卡片视觉通道所有权（2026-11-02 定 —— 进度/标记需求的地基）
+- **三层分离**：装饰层（背景/边框/字体/emoji，用户随意改）｜结构层（右槽位：文档图标+子数徽章，系统专有）｜语义层（新增：左边缘竖条=进度、标题前标记位=标记，系统专有）。
+- 铁律：语义层**永不**被装饰层覆盖，也**不进格式刷**复制；emoji 属装饰，**禁止**用它承载状态。
+- 状态态（selected/hover/active/connectTarget）临时覆盖装饰层，状态结束还原。
+- 边框色优先级：用户显式 `data.nodeStyle.borderColor` > `domainColor` > 默认样式。**必须**读未 merge 的 `data.nodeStyle?.borderColor`（`defaultNodeStyle.borderColor` 恒为 `#e2e8f0`，用 merge 后的值判断会让域色永远失效）。
+- 节点 inline style **不要写 border-color**（优先级压过 hover/active 变体类 → 悬停反馈全丢），改用 CSS 变量 `--tm-card-border` + class。
+
 ### 治理基线（2026-10-31 审计时 Level 1/5）
 `tokens.css` 自称 single source of truth，但 `space-*`、`font-size-*`、`line-height-*`、`z-*`、`font-family`、`left/right-panel-width`、`header/toolbar-height` **实测 `var()` 引用全为 0**——仍未治理。`components.json` 的 alias 指向不存在的 `src/components/`。已完成：① 单色制 ② `--color-bg-float`+`h-5.5` ③ Tailwind 映射 + Toast 层级 ④ 全局 focus-visible ⑤ 组件层（对话框统一 + EmptyState/SegmentedControl）。
