@@ -21,6 +21,7 @@ const LazyEmojiPicker = lazy(async () => {
   }
 })
 import type { KnowledgeNode } from '../../../../../types'
+import { useDevPerfFlags } from '../../devPerfFlags'
 import { cn } from '@/lib/utils'
 import { useKnowledgeCardModel } from './model/useKnowledgeCardModel'
 import { getKnowledgeCardStyles } from './utils/styles'
@@ -116,7 +117,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
   // （实测 2~3 秒可达 1600+ 次 mount/unmount），按最低档渲染能把每次挂载的成本
   // 从 ~12 个 DOM 元素压到 ~2 个。只在"开始/结束缩放"各翻转一次，不是每帧变化；
   // 且只有大房间才降级，小房间不牺牲缩放时的可读性。
-  const detailLevel = zoomDegradedDuringZoom ? 0 : zoomDetailLevel
+  // TEMP-PROFILING：__tmPerf.minimal() 打开后强制最简档，用于 A/B 定位瓶颈
+  const perfMinimalCards = useDevPerfFlags((s) => s.minimalCards)
+  const detailLevel = zoomDegradedDuringZoom || perfMinimalCards ? 0 : zoomDetailLevel
   const isMinimalDetail = detailLevel === 0
   const isLowDetail = detailLevel < 2
 

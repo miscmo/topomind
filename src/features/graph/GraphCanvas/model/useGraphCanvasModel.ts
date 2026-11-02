@@ -202,6 +202,10 @@ export function useGraphCanvasModel({
   }, [graph, onCloseContextMenu])
 
   const updateZoomLevel = useCallback((nextZoom: number) => {
+    // TEMP-PROFILING：记录当前 zoom，供 __tmPerf.show() 读数
+    if (import.meta.env.DEV && typeof window !== 'undefined') {
+      ;(window as unknown as Record<string, unknown>).__tmZoom = nextZoom
+    }
     if (Math.abs(zoomLevelRef.current - nextZoom) <= 0.001) return
     zoomLevelRef.current = nextZoom
     setZoomLevel(nextZoom)

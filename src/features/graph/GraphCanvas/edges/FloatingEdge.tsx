@@ -14,6 +14,7 @@ import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { getEdgeParams } from './floatingUtils'
 import QuickEdgeToolbar from './QuickEdgeToolbar'
+import { useDevPerfFlags } from '../devPerfFlags'
 
 /**
  * 箭头几何：在 12x12 的 viewBox 内画一个朝右的箭头，尖端位于 x=12、垂直居中于 y=6。
@@ -59,6 +60,8 @@ function FloatingEdge({
   const isSelected = edgeData?.selected === true
   const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
   const isNodeFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
+  // TEMP-PROFILING：__tmPerf.edges() 打开后隐藏全部连线，用于 A/B 定位瓶颈
+  const hideEdges = useDevPerfFlags((s) => s.hideEdges)
   const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
   const { updateEdgeStyle } = useGraphContext()
 
@@ -87,7 +90,8 @@ function FloatingEdge({
     && connectingSourceId === null
     && !isNodeFormatPainterActive
 
-  if (!sourceNode || !targetNode) {
+  // TEMP-PROFILING：hideEdges 打开时直接不渲染，保留上方所有 hook 的调用顺序
+  if (hideEdges || !sourceNode || !targetNode) {
     return null
   }
 
