@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, type Viewport, type NodeChange, type Node, type Edge } from '@xyflow/react'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { useGraphStore, useGraphStoreApi } from '../../../../stores/graphStore'
@@ -191,6 +191,9 @@ export function useGraphCanvasModel({
     if (uiStore.formatPainterStyle !== null) {
       uiStore.setFormatPainterStyle(null)
     }
+    if (uiStore.edgeFormatPainterStyle !== null) {
+      uiStore.setEdgeFormatPainterStyle(null)
+    }
     
     // Close search box if it's open
     setIsSearchOpen(false)
@@ -229,6 +232,9 @@ export function useGraphCanvasModel({
     const uiStore = useGraphUiStore.getState()
     if (uiStore.formatPainterStyle !== null) {
       uiStore.setFormatPainterStyle(null)
+    }
+    if (uiStore.edgeFormatPainterStyle !== null) {
+      uiStore.setEdgeFormatPainterStyle(null)
     }
     setIsSearchOpen(false)
   }, { scope: 'canvas', preventDefault: false })
@@ -371,6 +377,10 @@ export function useGraphCanvasModel({
   }, [connectingSourceId, setConnectingTargetId])
 
   const isFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
+  const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
+  // 缩放时 zoom 每帧都在变，而 zoomLevel 只喂给缩略图（算可见框 + 显示百分比）。
+  // 用 deferred 值把缩略图的更新降级为可中断渲染，主画布不必等它画完。
+  const deferredZoomLevel = useDeferredValue(zoomLevel)
 
   const handleCanvasMouseEnter = useCallback((e: React.MouseEvent) => {
     setIsMouseOverCanvas(true)
@@ -427,9 +437,10 @@ export function useGraphCanvasModel({
       nodes,
       edges,
       storedViewport,
-      zoomLevel,
+      zoomLevel: deferredZoomLevel,
       guideLines,
       isFormatPainterActive,
+      isEdgeFormatPainterActive,
       isShiftPressed,
       isMouseOverCanvas,
       isSearchOpen,

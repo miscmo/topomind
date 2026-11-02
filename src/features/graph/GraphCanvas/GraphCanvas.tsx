@@ -40,6 +40,7 @@ export default memo(function GraphCanvas({
     zoomLevel,
     guideLines,
     isFormatPainterActive,
+    isEdgeFormatPainterActive,
     isShiftPressed,
     isSearchOpen,
     isNodeInteractionActive,
@@ -82,11 +83,14 @@ export default memo(function GraphCanvas({
     }
   }, [])
 
+  // 节点/连线两个格式刷共用同一套"应用模式"视觉（光标 + 顶部提示条），但彼此互斥
+  const isAnyFormatPainterActive = isFormatPainterActive || isEdgeFormatPainterActive
+
   return (
     <div
       ref={containerRef}
       style={{ width: '100%', height: '100%', position: 'relative' }}
-      className={isFormatPainterActive ? "format-painter-active" : undefined}
+      className={isAnyFormatPainterActive ? "format-painter-active" : undefined}
       onMouseDown={actions.handleCanvasMouseDown}
       onMouseEnter={actions.handleCanvasMouseEnter}
       onMouseMove={actions.handleCanvasMouseMove}
@@ -94,7 +98,7 @@ export default memo(function GraphCanvas({
       data-shortcut-scope="canvas"
       tabIndex={-1}
     >
-      {isFormatPainterActive && (
+      {isAnyFormatPainterActive && (
         <>
           <style>{`
             .format-painter-active, .format-painter-active * {
@@ -106,7 +110,9 @@ export default memo(function GraphCanvas({
               <PaintRoller className="w-3.5 h-3.5" />
             </div>
             <span className="text-[13px] font-medium tracking-wide">
-              格式刷已激活，点击节点应用样式。按 Esc 退出
+              {isEdgeFormatPainterActive
+                ? "格式刷已激活，点击连线应用样式。按 Esc 退出"
+                : "格式刷已激活，点击节点应用样式。按 Esc 退出"}
             </span>
           </div>
         </>

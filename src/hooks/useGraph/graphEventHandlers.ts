@@ -90,7 +90,9 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
         // Multi-select via Shift is allowed natively by React Flow.
         // The selectionChanges array will contain all selections/deselections.
         ops.applyNodeSelectionChanges(selectionChanges)
-        const anyNodeSelected = storeApi.getState().nodes.some(n => n.selected)
+        // 直接读 store 派生好的计数：框选取消选中时会一路扫到底，
+        // 而 selectedNodeCount 是 setNodes 顺带算好的，O(1)。
+        const anyNodeSelected = storeApi.getState().selectedNodeCount > 0
         if (anyNodeSelected) {
           const currentSelectedEdgeId = useGraphUiStore.getState().selectedEdgeId
           if (currentSelectedEdgeId) {
@@ -168,6 +170,12 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
 
   const onEdgeClick = useCallback(
     (_: React.MouseEvent, edge: Edge) => {
+      // 连线格式刷激活时：点击连线即应用样式（可连续应用多条），不改变选中态，按 Esc 退出
+      const edgeFormatPainterStyle = useGraphUiStore.getState().edgeFormatPainterStyle
+      if (edgeFormatPainterStyle) {
+        ops.updateEdgeStyle(edge.id, edgeFormatPainterStyle)
+        return
+      }
       ops.deselectNode()
       ops.setSelectedEdgeInGraph(edge.id)
       setSelectedEdgeId(edge.id)

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, DefaultEditorStyle } from '../types/uiStoreTypes'
 import { STYLE_CONFIG_DEFAULTS } from '../domain/style/styleDefaults'
-import type { KnowledgeNodeStyle } from '../types'
+import type { EdgeStylePatch, KnowledgeNodeStyle } from '../types'
 
 interface MiniMapSize {
   width: number
@@ -17,6 +17,8 @@ interface GraphUiStore {
   connectingSourceId: string | null
   connectingTargetId: string | null
   formatPainterStyle: KnowledgeNodeStyle | null
+  /** 连线格式刷：激活时点击连线即把这份样式应用过去（与节点格式刷互斥） */
+  edgeFormatPainterStyle: EdgeStylePatch | null
   defaultEdgeStyle: DefaultEdgeStyle
   defaultNodeStyle: DefaultNodeStyle
   defaultNodeSize: DefaultNodeSize
@@ -29,6 +31,7 @@ interface GraphUiStore {
   setConnectingSourceId: (nodeId: string | null) => void
   setConnectingTargetId: (nodeId: string | null) => void
   setFormatPainterStyle: (style: KnowledgeNodeStyle | null) => void
+  setEdgeFormatPainterStyle: (style: EdgeStylePatch | null) => void
   setDefaultEdgeStyle: (style: Partial<DefaultEdgeStyle>) => void
   replaceDefaultEdgeStyle: (style: DefaultEdgeStyle) => void
   setDefaultNodeStyle: (style: Partial<DefaultNodeStyle>) => void
@@ -43,7 +46,7 @@ interface GraphUiStore {
   resetGraphUi: () => void
 }
 
-export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMap' | 'miniMapSize' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize'> = {
+export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMap' | 'miniMapSize' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'edgeFormatPainterStyle' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize'> = {
   showGrid: true,
   showMiniMap: true,
   miniMapSize: {
@@ -54,6 +57,7 @@ export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMa
   connectingSourceId: null,
   connectingTargetId: null,
   formatPainterStyle: null,
+  edgeFormatPainterStyle: null,
   ...STYLE_CONFIG_DEFAULTS,
 }
 
@@ -67,6 +71,7 @@ export const useGraphUiStore = create<GraphUiStore>()(
       setConnectingSourceId: (connectingSourceId) => set({ connectingSourceId }),
       setConnectingTargetId: (connectingTargetId) => set({ connectingTargetId }),
       setFormatPainterStyle: (formatPainterStyle) => set({ formatPainterStyle }),
+      setEdgeFormatPainterStyle: (edgeFormatPainterStyle) => set({ edgeFormatPainterStyle }),
       setDefaultEdgeStyle: (style) => set((state) => ({
         defaultEdgeStyle: { ...state.defaultEdgeStyle, ...style },
       })),

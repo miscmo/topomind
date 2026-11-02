@@ -42,6 +42,10 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const showQuickToolbarForNode = useGraphStore((state) => (
     state.selectedNodeCount === 1 && state.selectedNodeId === id
   ))
+  // 是否处于多选。只订阅布尔而不是 selectedNodeCount 数值本身：
+  // 框选时 count 每帧都在变，订阅数值会让**所有**节点跟着重渲染；
+  // 布尔只在跨过阈值（>1）时翻转一次，代价恒定。
+  const isMultiSelected = useGraphStore((state) => state.selectedNodeCount > 1)
   
   const [isHovered, setIsHovered] = useState<boolean>(false)
   const [titleEditing, setTitleEditing] = useState(false)
@@ -311,6 +315,8 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
     if (uiStore.formatPainterStyle !== null) {
       uiStore.setFormatPainterStyle(null)
     } else {
+      // 与连线格式刷互斥：启用节点格式刷时先关掉连线格式刷
+      uiStore.setEdgeFormatPainterStyle(null)
       uiStore.setFormatPainterStyle(nodeStyle)
     }
   }, [nodeStyle])
@@ -327,6 +333,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       isConnectTarget,
       isConnectSource,
       contentInteractionsEnabled,
+      isMultiSelected,
       nodeStyle,
       nodeWidth: displayWidth,
       nodeHeight: displayHeight,

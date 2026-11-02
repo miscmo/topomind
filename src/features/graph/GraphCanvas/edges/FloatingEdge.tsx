@@ -1,6 +1,7 @@
-import { memo } from 'react'
+import { memo, useCallback } from 'react'
 import {
   BaseEdge,
+  EdgeLabelRenderer,
   getSmoothStepPath,
   getStraightPath,
   useInternalNode,
@@ -8,8 +9,11 @@ import {
 } from '@xyflow/react'
 import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, clampNumber } from '../../../../domain/style/styleConstraints'
-import type { KnowledgeEdge } from '../../../../types'
+import type { EdgeStylePatch, KnowledgeEdge } from '../../../../types'
+import { useGraphContext } from '../../../../contexts/GraphContext'
+import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { getEdgeParams } from './floatingUtils'
+import QuickEdgeToolbar from './QuickEdgeToolbar'
 
 /**
  * 箭头几何：在 12x12 的 viewBox 内画一个朝右的箭头，尖端位于 x=12、垂直居中于 y=6。
@@ -20,6 +24,21 @@ const ARROW_VIEWBOX = 12
 const ARROW_PATH = 'M 0 0 L 12 6 L 0 12'
 const ARROW_STROKE_WIDTH = 1.2
 
+/** 从连线数据里取出完整样式快照（缺字段回落到默认样式），供格式刷复制 */
+function readEdgeStyleSnapshot(edgeData: KnowledgeEdge['data'] | undefined): EdgeStylePatch {
+  const defaults = STYLE_CONFIG_DEFAULTS.defaultEdgeStyle
+  return {
+    lineMode: edgeData?.lineMode ?? defaults.lineMode,
+    lineStyle: edgeData?.lineStyle ?? defaults.lineStyle,
+    color: edgeData?.color ?? defaults.color,
+    lineWidth: edgeData?.lineWidth ?? defaults.lineWidth,
+    arrow: edgeData?.arrow ?? defaults.arrow,
+    arrowSize: edgeData?.arrowSize ?? defaults.arrowSize,
+    arrowShape: edgeData?.arrowShape ?? defaults.arrowShape,
+    arrowPosition: edgeData?.arrowPosition ?? defaults.arrowPosition,
+  }
+}
+
 function FloatingEdge({
   id,
   source,
@@ -27,8 +46,39 @@ function FloatingEdge({
   style,
   data,
 }: EdgeProps) {
+  // EdgeProps 的 data 是宽松类型，这里按 KnowledgeEdge 的数据契约取值
+  const edgeData = data as KnowledgeEdge['data'] | undefined
+  // 选中态以 data.selected 为唯一来源（setSelectedEdgeInGraph 维护）
+  const isSelected = edgeData?.selected === true
+  const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
+  const isNodeFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
+  const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
+  const { updateEdgeStyle } = useGraphContext()
+
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
+
+  const handleColorChange = useCallback((value: string) => {
+    void updateEdgeStyle(id, { color: value })
+  }, [updateEdgeStyle, id])
+
+  const toggleFormatPainter = useCallback(() => {
+    const uiStore = useGraphUiStore.getState()
+    if (uiStore.edgeFormatPainterStyle !== null) {
+      uiStore.setEdgeFormatPainterStyle(null)
+      return
+    }
+    // 与节点格式刷互斥：启用连线格式刷时先关掉节点格式刷
+    uiStore.setFormatPainterStyle(null)
+    uiStore.setEdgeFormatPainterStyle(readEdgeStyleSnapshot(edgeData))
+  }, [edgeData])
+
+  // 节点格式刷激活时进入"应用到节点"模式，隐藏连线工具栏避免误点；
+  // 连线格式刷激活时保留本条连线的工具栏，方便再点一次取消。
+  const showToolbar =
+    isSelected
+    && connectingSourceId === null
+    && !isNodeFormatPainterActive
 
   if (!sourceNode || !targetNode) {
     return null
@@ -39,8 +89,6 @@ function FloatingEdge({
     targetNode
   )
 
-  // EdgeProps 的 data 是宽松类型，这里按 KnowledgeEdge 的数据契约取值
-  const edgeData = data as KnowledgeEdge['data'] | undefined
   const isStraight = edgeData?.lineMode === 'straight' || data?.type === 'straight'
   const arrowEnabled = edgeData?.arrow !== false
   const arrowSize = clampNumber(
@@ -57,7 +105,7 @@ function FloatingEdge({
   const markerColor = typeof style?.stroke === 'string' ? style.stroke : STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
   const markerOpacity = style?.opacity
 
-  const [edgePath] = isStraight
+  const [edgePath, labelX, labelY] = isStraight
     ? getStraightPath({
         sourceX: sx,
         sourceY: sy,
@@ -113,6 +161,25 @@ function FloatingEdge({
         markerEnd={showEnd ? `url(#${markerId})` : undefined}
         style={style}
       />
+      {showToolbar && (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan"
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -100%) translate(${labelX}px, ${labelY}px) translateY(-10px)`,
+              pointerEvents: 'all',
+            }}
+          >
+            <QuickEdgeToolbar
+              color={edgeData?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color}
+              isFormatPainterActive={isEdgeFormatPainterActive}
+              onColorChange={handleColorChange}
+              onToggleFormatPainter={toggleFormatPainter}
+            />
+          </div>
+        </EdgeLabelRenderer>
+      )}
     </>
   )
 }
