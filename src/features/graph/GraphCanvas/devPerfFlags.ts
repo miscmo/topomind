@@ -23,6 +23,38 @@ export const useDevPerfFlags = create<DevPerfState>((set) => ({
   setMinimalCards: (minimalCards) => set({ minimalCards }),
 }))
 
+/** 统计一段时间内的帧间隔，把"卡不卡"变成可比较的毫秒数 */
+function recordFrames(durationMs: number): Promise<Record<string, number>> {
+  return new Promise((resolve) => {
+    const intervals: number[] = []
+    const start = performance.now()
+    let last = start
+    const tick = () => {
+      const now = performance.now()
+      intervals.push(now - last)
+      last = now
+      if (now - start < durationMs) {
+        requestAnimationFrame(tick)
+        return
+      }
+      const sorted = intervals.slice().sort((a, b) => a - b)
+      const pick = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))]
+      const result = {
+        帧数: intervals.length,
+        平均: +(intervals.reduce((a, b) => a + b, 0) / intervals.length).toFixed(1),
+        p50: +pick(0.5).toFixed(1),
+        p95: +pick(0.95).toFixed(1),
+        最长: +sorted[sorted.length - 1].toFixed(1),
+        '超16ms帧': intervals.filter((v) => v > 16.7).length,
+        '超33ms帧': intervals.filter((v) => v > 33).length,
+      }
+      console.table(result)
+      resolve(result)
+    }
+    requestAnimationFrame(tick)
+  })
+}
+
 if (import.meta.env.DEV && typeof window !== 'undefined') {
   const host = window as unknown as Record<string, unknown>
   host.__tmPerf = {
@@ -36,5 +68,7 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
       const s = useDevPerfFlags.getState()
       return { hideEdges: s.hideEdges, minimalCards: s.minimalCards, zoom: (window as never as Record<string, number>).__tmZoom }
     },
+    // 用法：__tmPerf.frames(3000) 然后立刻滚轮缩放 3 秒，结束自动打印表格
+    frames: (ms: number = 3000) => recordFrames(ms),
   }
 }

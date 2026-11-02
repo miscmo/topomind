@@ -50,7 +50,10 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   // 两个订阅都是布尔：isViewportZooming 只在"开始/结束缩放"翻转，
   // isLargeRoom 只在节点增删时翻转，都不会每帧变化。
   const isViewportZooming = useGraphUiStore((s) => s.isViewportZooming)
-  const isLargeRoom = useGraphStore((state) => state.nodes.length > 300)
+  // 门槛刻意压得比较低：实测「视口里 280 个节点」就已经明显掉帧，而很多中等房间的
+  // 节点总数恰好在 300 以下（此时整张图基本全在视口内），门槛设 300 会让它们完全
+  // 享受不到降级。缩放是瞬态（松手即恢复），120 个节点以上开始降级是划算的取舍。
+  const isLargeRoom = useGraphStore((state) => state.nodes.length > 120)
   const zoomDegradedDuringZoom = isViewportZooming && isLargeRoom
   
   const [isHovered, setIsHovered] = useState<boolean>(false)

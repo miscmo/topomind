@@ -5,6 +5,7 @@ import {
   getSmoothStepPath,
   getStraightPath,
   useInternalNode,
+  useStore,
   type EdgeProps,
 } from '@xyflow/react'
 import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
@@ -24,6 +25,8 @@ import { useDevPerfFlags } from '../devPerfFlags'
 const ARROW_VIEWBOX = 12
 const ARROW_PATH = 'M 0 0 L 12 6 L 0 12'
 const ARROW_STROKE_WIDTH = 1.2
+/** 低于此缩放就不渲染箭头：此时箭头不足 1 像素，纯属白付 DOM 与光栅成本 */
+const ARROW_MIN_ZOOM = 0.35
 
 /** 从连线数据里取出完整样式快照（缺字段回落到默认样式），供格式刷复制 */
 function readEdgeStyleSnapshot(edgeData: KnowledgeEdge['data'] | undefined): EdgeStylePatch {
@@ -101,7 +104,11 @@ function FloatingEdge({
   )
 
   const isStraight = edgeData?.lineMode === 'straight' || data?.type === 'straight'
-  const arrowEnabled = edgeData?.arrow !== false
+  // 箭头在极低缩放下只有亚像素大小，却要为每条边额外渲染 <defs>+<marker>+<path>
+  // （可见边的 SVG DOM 直接三倍）。低于阈值就不画箭头，只留线条本身。
+  // 订阅的是布尔而非 zoom 浮点值，只在跨阈值时重渲染一次。
+  const showArrows = useStore((s) => s.transform[2] >= ARROW_MIN_ZOOM)
+  const arrowEnabled = edgeData?.arrow !== false && showArrows
   const arrowSize = clampNumber(
     edgeData?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize,
     EDGE_ARROW_SIZE_LIMIT.min,
