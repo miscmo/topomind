@@ -551,6 +551,9 @@ body.tm-text-selecting .tm-smart-side-menu-hit-area .bn-button {
 .smart-document-content .tm-code-toolbar__menu-list {
   max-height: 266px;
   overflow-y: auto;
+  /* 阻断滚动链：不加这行时，列表滚到首尾后浏览器会把剩余的滚动量继续交给
+     最近的祖先滚动容器，表现为「下拉里继续滚轮，整个编辑器正文跟着滚」。 */
+  overscroll-behavior: contain;
 }
 
 .smart-document-content .tm-code-toolbar__menu-item {
@@ -649,6 +652,8 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   -webkit-backdrop-filter: blur(24px) !important;
   box-shadow: var(--shadow-popover) !important;
   overflow-y: auto;
+  /* 同上：菜单滚到首尾后不要把滚动量透传给编辑器正文 */
+  overscroll-behavior: contain;
   color: var(--color-text-primary);
   /* BlockNote 的 Mantine 菜单 withinPortal={false}，内联在编辑器 DOM 内，
      z-index 走 Mantine 默认 popover 值（~300），远低于 CustomTitleBar 的
