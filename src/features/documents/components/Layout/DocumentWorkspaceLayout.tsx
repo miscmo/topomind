@@ -8,6 +8,7 @@ import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useDetailLockStore } from '../../../right-panel/model/detailLockStore'
 import { useGraphStore, useSelectedNodeId } from '../../../../stores/graphStore'
 import { useTabStore, useGraphSession } from '../../../../stores/tabs/tabStore'
+import { scrollChildIntoView } from '../../SmartDocumentEditor/smartDocumentUtils'
 
 export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   isDirty,
@@ -103,10 +104,14 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   }, [manualActiveId, activeTocId])
 
   // 滚动联动：当前所在标题在目录列表内自动滚动到可见区域（仅当展开时）
+  // 只调整目录列表自身的 scrollTop（scrollChildIntoView），不用 scrollIntoView：
+  // 后者会连带滚动祖先链上任何存在滚动空间的容器（html/body、图谱页、内容区），
+  // 表现为「整个页面往上漂移、底部露出空白」，且漂移无法用滚轮滚回。
   useEffect(() => {
     if (!effectiveActiveId || tocCollapsed || !tocListRef.current) return
     const activeEl = tocListRef.current.querySelector<HTMLElement>(`[data-toc-id="${CSS.escape(effectiveActiveId)}"]`)
-    activeEl?.scrollIntoView({ block: 'nearest' })
+    if (!activeEl) return
+    scrollChildIntoView(tocListRef.current, activeEl)
   }, [effectiveActiveId, tocCollapsed])
 
   useEffect(() => {

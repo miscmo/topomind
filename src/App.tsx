@@ -20,6 +20,7 @@ import { useConfigBootstrap } from './application/config'
 import { LearningTrackerProvider } from './features/learning-tracker/LearningTrackerProvider'
 import { ErrorBoundary } from './features/layout/ErrorBoundary'
 import { Toaster } from './shared/ui/Toaster/Toaster'
+import { installViewportScrollGuard } from './core/viewportScrollGuard'
 
 const HomePage = lazy(() => import('./features/kb/HomePage'))
 const GraphPage = lazy(() => import('./features/graph/GraphPage'))
@@ -32,6 +33,9 @@ export default memo(function App() {
   useConfigBootstrap()
 
   useEffect(() => { initHomeTab() }, [])
+
+  // 窗口不应整体滚动；一旦根层被程序化滚动（scrollIntoView/focus/滚动锚定）立即复位
+  useEffect(() => installViewportScrollGuard(), [])
 
   useEffect(() => {
     function onResetSession() { resetClientSession() }
@@ -84,7 +88,11 @@ export default memo(function App() {
               <Suspense fallback={null}>
                 <CustomTitleBar mode="workspace" />
               </Suspense>
-              <div className="relative w-full flex-1 min-h-0 overflow-hidden bg-[var(--color-surface)]">
+              {/* overflow-clip（不是 hidden）：该容器只负责裁剪，必须**不可滚动**。
+                  一旦它被滚动（scrollIntoView / 滚动锚定等程序化滚动都会带动
+                  overflow:hidden 的容器），图谱 + 右栏 + 编辑器状态栏会作为整体
+                  上移、底部露白，且无法用滚轮滚回。 */}
+              <div className="relative w-full flex-1 min-h-0 overflow-clip bg-[var(--color-surface)]">
                 <div
                   className="absolute inset-0 transition-opacity duration-120 ease-in-out"
                   inert={activeTab?.type === 'home' ? undefined : true}

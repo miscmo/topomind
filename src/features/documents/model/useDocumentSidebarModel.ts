@@ -3,6 +3,7 @@ import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/s
 import { topoDocumentIdFromPath, topoDocumentPath, buildDocumentTree } from '../types/documentTypes'
 import { TOPO_DOCUMENT_TYPES } from '../services/documentTypeRegistry'
 import { useGraphStoreApi } from '../../../stores/graphStore'
+import { scrollChildIntoView } from '../SmartDocumentEditor/smartDocumentUtils'
 import { useConfirmStore } from '../../../shared/ui/ConfirmModal/confirmStore'
 import type { DocumentMetaPickerState } from '../components/DocumentMetaPicker'
 import {
@@ -208,9 +209,13 @@ export function useDocumentSidebarModel({
     if (inlineEdit) {
       focusTimer = setTimeout(() => {
         const input = inlineInputRef.current
-        input?.scrollIntoView({ block: 'nearest' })
-        input?.focus()
-        input?.select()
+        if (!input) return
+        // 只把输入框滚进侧栏自己的滚动区：scrollIntoView 会连带滚动祖先链上的
+        // 其它容器（html/body、图谱页等），造成整页漂移。focus 同理需 preventScroll。
+        const container = scrollContainerRef.current
+        if (container) scrollChildIntoView(container, input)
+        input.focus({ preventScroll: true })
+        input.select()
       }, 0)
     }
     return () => {

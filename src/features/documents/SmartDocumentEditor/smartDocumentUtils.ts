@@ -15,6 +15,28 @@ type BlockWalkerEditor = {
   forEachBlock: (visitor: (block: any) => boolean) => void
 }
 
+/**
+ * 把子元素滚进「指定滚动容器」的可见区域，只调整该容器自身的 scrollTop。
+ *
+ * 不要用 `element.scrollIntoView()`：它会沿祖先链把**每一个**可滚动祖先都滚动一遍，
+ * 包括 html/body，以及图谱页、内容区这类 `overflow:hidden` 但运行时存在滚动空间的
+ * 容器。后者一旦被滚动，整个界面（图谱 + 右栏 + 编辑器状态栏）会整体上移、底部露白，
+ * 且因为它是 hidden 容器而无法再用滚轮滚回来（2026-11-03「整页漂移」缺陷）。
+ */
+export function scrollChildIntoView(
+  container: HTMLElement,
+  child: HTMLElement,
+  margin = 4,
+): void {
+  const containerRect = container.getBoundingClientRect()
+  const childRect = child.getBoundingClientRect()
+  if (childRect.top < containerRect.top + margin) {
+    container.scrollTop -= containerRect.top + margin - childRect.top
+  } else if (childRect.bottom > containerRect.bottom - margin) {
+    container.scrollTop += childRect.bottom - (containerRect.bottom - margin)
+  }
+}
+
 export function inlineContentToPlainText(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''

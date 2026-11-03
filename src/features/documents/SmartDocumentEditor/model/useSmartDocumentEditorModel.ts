@@ -433,9 +433,9 @@ export function useSmartDocumentEditorModel({
         const padTop = parseFloat(getComputedStyle(scroller).paddingTop) || 0
         const targetTop = scroller.scrollTop + (elRect.top - scRect.top) - padTop
         scroller.scrollTo({ top: targetTop, behavior: 'auto' })
-      } else {
-        el.scrollIntoView({ behavior: 'auto', block: 'start' })
       }
+      // 找不到可滚容器时不兜底调用 scrollIntoView：它会滚动祖先链上的任何容器
+      // （html/body、图谱页、内容区），导致整页漂移且无法滚回。宁可不动。
     }
     requestAnimationFrame(scrollToHeading)
 

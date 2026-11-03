@@ -54,9 +54,12 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
 
   return (
     <GraphContextProvider graph={graph}>
-      <div id="graph-page" className="w-full h-full overflow-hidden bg-[var(--color-canvas-bg)] pt-0">
+      {/* overflow-clip 而非 hidden：这两层外壳只负责裁剪，**必须不可滚动**。
+          它们被程序化滚动时（scrollIntoView/focus 会沿祖先链带动 hidden 容器），
+          图谱 + 右栏 + 编辑器状态栏会作为整体上移、底部露白且无法滚回。 */}
+      <div id="graph-page" className="w-full h-full overflow-clip bg-[var(--color-canvas-bg)] pt-0">
         <div id="app-layout" className="flex w-full h-full relative">
-          <div id="graph-panel" className="flex-1 h-full relative overflow-hidden bg-[var(--color-canvas-bg)]">
+          <div id="graph-panel" className="flex-1 h-full relative overflow-clip bg-[var(--color-canvas-bg)]">
             <div className="absolute top-3 left-3 z-[11] flex flex-col items-start gap-2 max-w-[min(560px,calc(100%-24px))]">
               <Breadcrumb tabId={tabId} />
               <RoomHistory tabId={tabId} />

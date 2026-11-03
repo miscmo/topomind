@@ -1232,6 +1232,12 @@ html[data-theme='dark'], .dark {
   --paper-kraft-bg: #2f2a20;
 }
 
+/* 编辑器正文滚动区：滚到边界后不要把滚动量继续往祖先容器传播
+   （与代码块语言下拉的滚动穿透同一类问题）。 */
+.tm-smart-editor-scroll {
+  overscroll-behavior: contain;
+}
+
 /* 所有纸张背景统一由 CSS 控制（plain + 非 plain 都在这里），
    滚动容器不再挂 Tailwind 渐变，避免机制冗余与浅/深色下不一致。 */
 

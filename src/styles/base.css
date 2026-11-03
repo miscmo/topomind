@@ -79,11 +79,18 @@
 /* 注意：Tab 栏、页面容器等旧布局样式已移除（React 组件各自管理） */
 
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;
+/* overscroll-behavior:none —— 禁止滚动/回弹继续往视口层传播 */
+html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   background:var(--color-bg-app);color:var(--color-text-primary)}
 body{display:flex;flex-direction:column}
-#root{width:100%;height:100%;display:flex;flex-direction:column}
+/* overflow:clip（而非 hidden）—— clip 不创建滚动容器，因此：
+   1) 不会被滚动链带动；2) 不会被 scrollIntoView/focus 这类程序化滚动带动；
+   3) 不参与 scroll anchoring。这是「整个页面上移、底部露白」的根治手段：
+   根层没有滚动空间，任何路径都滚不动它。
+   同时它也裁剪掉 #root 内溢出的内容，使其不再向 html/body 贡献可滚动区域。
+   fixed 定位元素（弹层/浮层）的包含块是视口，不会被这里裁剪。 */
+#root{width:100%;height:100%;display:flex;flex-direction:column;overflow:clip}
 .react-flow__pane{cursor:default!important}
 .react-flow__pane.dragging{cursor:grabbing!important}
 
