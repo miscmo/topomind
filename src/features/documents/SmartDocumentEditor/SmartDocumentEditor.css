@@ -281,7 +281,7 @@ body.tm-text-selecting .tm-smart-side-menu-hit-area .bn-button {
    .bn-button 定义 hover / 按下 / 展开 状态，项目此前也只给格式化工具栏的
    .bn-button 写了样式，导致点这些按钮时看不出任何反应。
    要点：按钮(26px)必须明显大于图标(20px)，否则背景色被图标填满、hover 看不出变化。 */
-.smart-document-content .bn-side-menu .bn-button {
+.tm-smart-side-menu-hit-area .bn-side-menu .bn-button {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -297,19 +297,19 @@ body.tm-text-selecting .tm-smart-side-menu-hit-area .bn-button {
 }
 
 /* 图标小于按钮，让 hover 的底色能在图标周围形成可见的一圈 */
-.smart-document-content .bn-side-menu .bn-button svg {
+.tm-smart-side-menu-hit-area .bn-side-menu .bn-button svg {
   width: 20px !important;
   height: 20px !important;
 }
 
-.smart-document-content .bn-side-menu .bn-button:hover {
+.tm-smart-side-menu-hit-area .bn-side-menu .bn-button:hover {
   background: color-mix(in srgb, var(--color-accent) 20%, transparent) !important;
   color: var(--color-accent) !important;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, transparent) !important;
 }
 
 /* 按下：更深底色 + 明显缩放，给出确定的"按到了"手感 */
-.smart-document-content .bn-side-menu .bn-button:active {
+.tm-smart-side-menu-hit-area .bn-side-menu .bn-button:active {
   background: color-mix(in srgb, var(--color-accent) 38%, transparent) !important;
   color: var(--color-accent) !important;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 55%, transparent) !important;
@@ -318,23 +318,23 @@ body.tm-text-selecting .tm-smart-side-menu-hit-area .bn-button {
 
 /* 菜单已展开：Mantine Menu.Target 会在触发器上写入 aria-expanded / data-expanded，
    给按钮一个持续可见的"已激活"外观，点击后不会毫无痕迹。 */
-.smart-document-content .bn-side-menu .bn-button[aria-expanded="true"],
-.smart-document-content .bn-side-menu .bn-button[data-expanded] {
+.tm-smart-side-menu-hit-area .bn-side-menu .bn-button[aria-expanded="true"],
+.tm-smart-side-menu-hit-area .bn-side-menu .bn-button[data-expanded] {
   background: color-mix(in srgb, var(--color-accent) 30%, transparent) !important;
   color: var(--color-accent) !important;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent) !important;
 }
 
-.smart-document-content .bn-side-menu .bn-button:focus-visible {
+.tm-smart-side-menu-hit-area .bn-side-menu .bn-button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-accent) 58%, transparent) !important;
   outline-offset: 1px;
 }
 
 /* 只有拖拽手柄是 draggable，光标区分开，避免误以为＋ 也能拖 */
-.smart-document-content .bn-side-menu .bn-button[draggable="true"] {
+.tm-smart-side-menu-hit-area .bn-side-menu .bn-button[draggable="true"] {
   cursor: grab;
 }
-.smart-document-content .bn-side-menu .bn-button[draggable="true"]:active {
+.tm-smart-side-menu-hit-area .bn-side-menu .bn-button[draggable="true"]:active {
   cursor: grabbing;
 }
 
@@ -1145,85 +1145,18 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
 .smart-document-content .bn-block-content[data-content-type="heading"] > h5 { --tm-heading-badge: 'H5' }
 .smart-document-content .bn-block-content[data-content-type="heading"] > h6 { --tm-heading-badge: 'H6' }
 
-/* Keep the side menu vertically centered with the new heading scale */
-.smart-document-content .bn-side-menu {
-  display: flex;
-  /* Align items to flex-end to push the menu icon to the bottom where the text baseline is */
-  align-items: flex-end;
-}
+/* 侧栏（＋/⠿）的垂直对齐由 SmartDocumentSideMenu 运行时实测后写 inline margin-top，
+   这里只做一件事：去掉 BlockNote 按 level 写死的容器高度（30 / 108 / 84 / 67px ——
+   那是为旧字号阶梯量身定的，会把按钮钉死在错误的位置）。
 
-/* 侧栏（＋/⠿）留白：目标是让图标垂直居中于标题**文字**，所以必须复刻标题的
-   padding-top / padding-bottom。
-   注意：这里的 em 以侧栏自身的 16px 为基准，而标题的 padding 以其**自身字号**
-   为基准，所以系数 = 标题系数 × 该级字号比（H1：0.95em × 1.75 = 1.66em）。
-   倍数变量 --tm-heading-gap-scale / -bottom-scale 定义在 .bn-block-outer 上，
-   侧栏与标题块同属一个 outer，天然继承，场景收紧时两侧同步。 */
-.smart-document-content .bn-side-menu[data-block-type="heading"] {
+   为什么不能像标题留白那样纯用 CSS 复刻：侧栏是 floating-ui **portal 到 body** 的
+   浮层（BlockNote 的 portalElement 为 null 时指向 document.body，见
+   @blocknote/react 的 usePortalElement），既不在 .smart-document-content 子树里
+   （写 .smart-document-content 前缀的规则一律不生效），也拿不到编辑器容器上的
+   --topomind-smart-body-font-size / --topomind-smart-heading-spacing-ratio，
+   更无法用 :has() 感知「上一块是不是标题」。所以只有实测最可靠。 */
+.tm-smart-side-menu-hit-area .bn-side-menu {
   height: auto !important;
-  margin-top: var(
-    --tm-side-gap-top-override,
-    calc(var(--tm-side-menu-gap-top, 1.1em) * var(--topomind-smart-heading-spacing-ratio, 1.5))
-  ) !important;
-  padding-bottom: var(
-    --tm-side-gap-bottom-override,
-    calc(var(--tm-side-menu-gap-bottom, 0.3em) * var(--topomind-smart-heading-spacing-ratio, 1.5))
-  ) !important;
-}
-
-.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="1"] {
-  --tm-side-menu-gap-top: 1.66em;
-  --tm-side-menu-gap-bottom: 0.7em;
-}
-
-.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="2"] {
-  --tm-side-menu-gap-top: 1.33em;
-  --tm-side-menu-gap-bottom: 0.51em;
-}
-
-.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="3"] {
-  --tm-side-menu-gap-top: 1.13em;
-  --tm-side-menu-gap-bottom: 0.38em;
-}
-
-.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="4"] {
-  --tm-side-menu-gap-top: 0.96em;
-  --tm-side-menu-gap-bottom: 0.28em;
-}
-
-.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="5"] {
-  --tm-side-menu-gap-top: 0.83em;
-  --tm-side-menu-gap-bottom: 0.2em;
-}
-
-.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="6"] {
-  --tm-side-menu-gap-top: 0.75em;
-  --tm-side-menu-gap-bottom: 0.18em;
-}
-
-/* 侧栏是浮层，不在 .bn-block-outer 子树里，继承不到上面那组场景覆盖值，所以由
-   SmartDocumentSideMenu 按文档位置打上分类标记，在这里换算成同样的值。
-   侧栏自身字号固定 16px，所以连续标题那一档直接用正文基准的绝对值，
-   与标题侧（0.4 / 0.25 × 正文字号 × 间距比）完全对应。 */
-.smart-document-content
-  .tm-smart-side-menu-hit-area[data-tm-gap-top="zero"]
-  .bn-side-menu[data-block-type="heading"] {
-  --tm-side-gap-top-override: 0px;
-}
-
-.smart-document-content
-  .tm-smart-side-menu-hit-area[data-tm-gap-top="tight"]
-  .bn-side-menu[data-block-type="heading"] {
-  --tm-side-gap-top-override: calc(
-    0.4 * var(--topomind-smart-body-font-size, 16px) * var(--topomind-smart-heading-spacing-ratio, 1.5)
-  );
-}
-
-.smart-document-content
-  .tm-smart-side-menu-hit-area[data-tm-gap-bottom="tight"]
-  .bn-side-menu[data-block-type="heading"] {
-  --tm-side-gap-bottom-override: calc(
-    0.25 * var(--topomind-smart-body-font-size, 16px) * var(--topomind-smart-heading-spacing-ratio, 1.5)
-  );
 }
 
 /* ---------- 标题留白：变量化，场景只改倍数 ----------

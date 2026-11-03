@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react'
 import { AddBlockButton, SideMenu, type SideMenuProps, useBlockNoteEditor, useExtensionState } from '@blocknote/react'
 import { SideMenuExtension } from '@blocknote/core/extensions'
 import { SmartDocumentBlockMenu } from './SmartDocumentBlockMenu'
@@ -13,26 +14,86 @@ export function SmartDocumentDragHandleMenu({ children }: { children?: React.Rea
 // 这里补一个固定 gap，把按钮整体往槽里推远，留出安全的点击空白区。
 const SIDE_MENU_TEXT_GAP = 10
 
-type HeadingGapCategory = { top: 'zero' | 'tight' | 'normal'; bottom: 'tight' | 'normal' }
+/** 只有「文字流」块的侧栏才对齐到第一行文字；图片/文件/表格等块仍贴块顶部，
+    否则按钮会跟着 caption（它同样是 .bn-inline-content）跑到图片下方去。 */
+const TEXT_FLOW_BLOCK_TYPES = new Set([
+  'paragraph',
+  'heading',
+  'bulletListItem',
+  'numberedListItem',
+  'checkListItem',
+  'quote',
+  'toggleListItem',
+])
 
-/** 只用到 id / type，收窄成最小形状即可，不必牵扯 schema 泛型。 */
-type HeadingGapBlockLike = { id?: string; type?: string }
+/** 非文本块回退：沿用 BlockNote 默认侧栏槽的高度，按钮落在块顶部往下 15px。 */
+const FALLBACK_SLOT_HEIGHT = 30
 
-/** 标题上下留白在「首块 / 连续标题」时会收紧（见 SmartDocumentEditor.css）。
-    返回分类，供侧栏同步自己的留白；非标题块返回 undefined。 */
-function getHeadingGapCategory(
-  editor: { document: readonly HeadingGapBlockLike[] },
-  block: HeadingGapBlockLike,
-): HeadingGapCategory | undefined {
-  if (block.type !== 'heading') return undefined
-  const doc = editor.document
-  const index = doc.findIndex((item) => item.id === block.id)
-  if (index < 0) return { top: 'normal', bottom: 'normal' }
-  const isHeading = (item: HeadingGapBlockLike | undefined) => item?.type === 'heading'
-  return {
-    top: index === 0 ? 'zero' : isHeading(doc[index - 1]) ? 'tight' : 'normal',
-    bottom: isHeading(doc[index + 1]) ? 'tight' : 'normal',
+type LineBox = { top: number; height: number }
+
+/**
+ * 取块「第一行文字」的矩形，作为侧栏按钮要对齐的目标。
+ * 用 Range 而不是元素矩形：多行段落的元素中心会落在段落中部，而按钮应该贴第一行。
+ */
+function getBlockFirstLineRect(
+  blockElement: HTMLElement | null | undefined,
+  blockType: string | undefined,
+): LineBox | null {
+  if (!blockElement) return null
+  if (!blockType || TEXT_FLOW_BLOCK_TYPES.has(blockType)) {
+    const inline = blockElement.querySelector('.bn-inline-content')
+    if (inline?.firstChild) {
+      try {
+        const range = document.createRange()
+        range.selectNodeContents(inline)
+        const first = range.getClientRects()[0]
+        if (first && first.height > 0) return { top: first.top, height: first.height }
+      } catch {
+        // Range 取不到就退回下面的整块矩形
+      }
+    }
   }
+  const rect = blockElement.getBoundingClientRect()
+  return { top: rect.top, height: Math.min(rect.height, FALLBACK_SLOT_HEIGHT) }
+}
+
+/**
+ * 把侧栏按钮垂直对齐到块的「第一行文字」中心。
+ *
+ * 为什么必须在运行时量：侧栏是 floating-ui **portal 到 body** 的浮层，不在
+ * .smart-document-content 子树里，因此拿不到编辑器容器上的字号 / 间距变量，
+ * 也无法用 :has() 判断「上一块是不是标题」；而 BlockNote 默认按 data-level 写死
+ * .bn-side-menu 的高度（30/108/84/67px，为旧字号阶梯设计），一旦标题间距因
+ * 「首块 / 连续标题」收紧，按钮就会相对文字明显偏下（H2→H3 连续时最明显）。
+ * 实测是唯一对所有级别、所有场景都成立的做法。
+ *
+ * 基准取 SideMenuExtension 给的 referencePos.y（浮动层的定位原点，即块的左上角），
+ * 而不是菜单自身的矩形：菜单刚挂载那一帧 floating-ui 可能还没落位，量到的
+ * getBoundingClientRect 是 0 附近的临时值，会算出上百像素的荒唐偏移。
+ */
+function useSideMenuVerticalNudge(
+  referenceY: number | undefined,
+  blockElement: HTMLElement | null | undefined,
+  blockType: string | undefined,
+  areaRef: React.RefObject<HTMLDivElement | null>,
+) {
+  useLayoutEffect(() => {
+    const area = areaRef.current
+    if (!area || referenceY == null) return
+    const menu = area.querySelector<HTMLElement>('.bn-side-menu')
+    if (!menu) return
+    // 先清零再量高度：留着上一次的偏移会把结果累加进去。
+    menu.style.marginTop = ''
+    const lineRect = getBlockFirstLineRect(blockElement, blockType)
+    if (!lineRect) return
+    const menuHeight = menu.getBoundingClientRect().height
+    const delta = lineRect.top + lineRect.height / 2 - (referenceY + menuHeight / 2)
+    if (Math.abs(delta) > 0.5) {
+      menu.style.marginTop = `${delta}px`
+    }
+    // blockElement 每次渲染重新查询，引用稳定；referenceY / blockType 随悬停块变化
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [referenceY, blockElement, blockType])
 }
 
 export function SmartDocumentSideMenu(props: SideMenuProps) {
@@ -42,6 +103,7 @@ export function SmartDocumentSideMenu(props: SideMenuProps) {
     selector: (state) => state ? {
       block: state.block,
       referenceX: state.referencePos.x,
+      referenceY: state.referencePos.y,
     } : undefined,
   })
   const block = sideMenuState?.block
@@ -55,20 +117,18 @@ export function SmartDocumentSideMenu(props: SideMenuProps) {
     : 0
   const isEmptyBlock = Array.isArray(block?.content) && block.content.length === 0
 
+  const areaRef = useRef<HTMLDivElement | null>(null)
+  useSideMenuVerticalNudge(sideMenuState?.referenceY, blockElement, block?.type, areaRef)
+
   if (!block) {
     return null
   }
 
-  // 侧栏是浮层，不在块的 DOM 子树里，继承不到 .bn-block-outer 上的标题间距倍数，
-  // 所以在组件侧判断场景、只给出**分类**，具体倍数仍由 CSS 定义（避免数值两处写）。
-  const headingGap = getHeadingGapCategory(editor, block)
-
   return (
     <div
+      ref={areaRef}
       className="tm-smart-side-menu-hit-area"
       data-smart-document-side-menu
-      data-tm-gap-top={headingGap?.top}
-      data-tm-gap-bottom={headingGap?.bottom}
       style={{ paddingRight: `${blockIndent + SIDE_MENU_TEXT_GAP}px` }}
     >
       <SideMenu {...props}>
