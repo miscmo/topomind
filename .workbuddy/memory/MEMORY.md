@@ -56,7 +56,11 @@
 ### 编辑器视觉约定（SmartDocumentEditor.css）
 - **交互/高亮一律 `--color-accent`，`--color-primary` 只留给真正的超链接文字**（否则代码/数学和链接撞色）。
 - 行内代码/数学：accent 极淡 tint 背景（`color-mix(accent 10~12%, transparent)`）+ 等宽 + 0.25em 圆角、无边框、无中性灰底。大面积容器走蓝调：引用块 `accent 7%`+左边框 `35%`、表头 `accent 9%`、数学块 `accent 7%`+边框 `18%`。UI 控件背景仍保留中性 `bg-muted`。
-- 标题阶梯：H1 1.5 / H2 1.28 / H3 1.14 / H4 1.05 / H5 1.0 / H6 0.95 em。
+- 标题阶梯：**H1 1.75 / H2 1.45 / H3 1.25 / H4 1.12 / H5 1.0 / H6 0.9 em**（正文 16px → 28/23.2/20/17.9/16/14.4px），相邻比值约 1.11~1.21。旧阶梯 H4~H6 只差 5% 看不出层级、H1 又过大，已重排。
+- **按级别写标题样式必须用 `:has(> h1…h6)`，不要用 `[data-level="N"]`**：首个 heading 块的 block-content 没有 `data-level`（旧 H1 整条规则因此从未生效，落到默认 h1 尺寸 48px）。侧栏 `.bn-side-menu` 的 `data-level` 是有的，那套规则不受影响。
+- 侧栏按钮留白与标题 padding 基准不同（侧栏 em 按自身 16px，标题 padding em 按标题字号），系数要 **× 该级字号比** 才对齐：H1 1.66 / H2 1.33 / H3 1.13 / H4 0.96 / H5 0.83 / H6 0.75（= 标题间距系数 × 字号比）—— 现在六级按钮中心与标题文字中心偏差 ≤5px。改字号或改间距时**必须同步这两组值**。
+- **标题留白是「场景变量」结构**，不要写死 padding：`--tm-heading-gap-top/-bottom`（各级 em，相对自身字号）由场景 `--tm-heading-gap-{top,bottom}-override` 覆盖（定义在 `.bn-block-outer` 上，标题块与侧栏共同继承）。三档：正常（正文→标题，H1 40px → H6 18px 递减）｜首块 override `0`（文档开头不该顶空白）｜连续标题 override 固定 `0.4 / 0.25 × 正文字号 × 间距比`（约 22px，**与级别无关** —— 用倍数会让字号大的那对更松：H1→H2 25px vs H3→H4 18px）。文档顶部边距交给 `.bn-editor` 的 `!pt-6`（24px），不靠标题 padding。
+- **侧栏是浮层，不在 `.bn-block-outer` 子树里**，继承不到场景变量：由 `SmartDocumentSideMenu` 用 `getHeadingGapCategory()` 按文档位置算分类（`zero|tight|normal`），打 `data-tm-gap-top/-bottom`，CSS 再换算成同样的值。数值只在 CSS 出现一次，TS 只给分类。注意 `:has()` **不能嵌套** `:has()`（写 `:has(+ .x:has(...))` 整条规则会被静默丢弃），「下一块是标题」要用 `:has(+ .bn-block-outer .bn-block-content[...])` 后代写法。
 - 代码块字号用相对值 `0.9em`（勿写 px），随 `--topomind-smart-body-font-size` 缩放；行号用 CSS 计数器伪元素，不参与复制。
 - 原生代码块 `<select>` 语言下拉是**死 DOM**（被 `> div:first-child{display:none}` 整块隐藏），`CustomCodeBlock` 只 `querySelector('select')` 程序读值，勿再为它加样式。
 - **纸张深色变量必须双写选择器** `html[data-theme='dark'], .dark`（对齐 `tokens.css:135`），否则只按 `data-theme` 切主题的入口会拿到浅色纸张。

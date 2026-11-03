@@ -13,6 +13,28 @@ export function SmartDocumentDragHandleMenu({ children }: { children?: React.Rea
 // 这里补一个固定 gap，把按钮整体往槽里推远，留出安全的点击空白区。
 const SIDE_MENU_TEXT_GAP = 10
 
+type HeadingGapCategory = { top: 'zero' | 'tight' | 'normal'; bottom: 'tight' | 'normal' }
+
+/** 只用到 id / type，收窄成最小形状即可，不必牵扯 schema 泛型。 */
+type HeadingGapBlockLike = { id?: string; type?: string }
+
+/** 标题上下留白在「首块 / 连续标题」时会收紧（见 SmartDocumentEditor.css）。
+    返回分类，供侧栏同步自己的留白；非标题块返回 undefined。 */
+function getHeadingGapCategory(
+  editor: { document: readonly HeadingGapBlockLike[] },
+  block: HeadingGapBlockLike,
+): HeadingGapCategory | undefined {
+  if (block.type !== 'heading') return undefined
+  const doc = editor.document
+  const index = doc.findIndex((item) => item.id === block.id)
+  if (index < 0) return { top: 'normal', bottom: 'normal' }
+  const isHeading = (item: HeadingGapBlockLike | undefined) => item?.type === 'heading'
+  return {
+    top: index === 0 ? 'zero' : isHeading(doc[index - 1]) ? 'tight' : 'normal',
+    bottom: isHeading(doc[index + 1]) ? 'tight' : 'normal',
+  }
+}
+
 export function SmartDocumentSideMenu(props: SideMenuProps) {
   const editor = useBlockNoteEditor<any, any, any>()
   const sideMenuState = useExtensionState(SideMenuExtension, {
@@ -37,10 +59,16 @@ export function SmartDocumentSideMenu(props: SideMenuProps) {
     return null
   }
 
+  // 侧栏是浮层，不在块的 DOM 子树里，继承不到 .bn-block-outer 上的标题间距倍数，
+  // 所以在组件侧判断场景、只给出**分类**，具体倍数仍由 CSS 定义（避免数值两处写）。
+  const headingGap = getHeadingGapCategory(editor, block)
+
   return (
     <div
       className="tm-smart-side-menu-hit-area"
       data-smart-document-side-menu
+      data-tm-gap-top={headingGap?.top}
+      data-tm-gap-bottom={headingGap?.bottom}
       style={{ paddingRight: `${blockIndent + SIDE_MENU_TEXT_GAP}px` }}
     >
       <SideMenu {...props}>

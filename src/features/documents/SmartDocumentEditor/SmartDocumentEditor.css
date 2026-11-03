@@ -1152,45 +1152,132 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   align-items: flex-end;
 }
 
-/* Adjust side menu heights and padding to match the actual text height at the bottom.
-   注意：这里的 em 以侧栏自身的 16px 为基准，而标题的 padding 以其**自身字号**为
-   基准，所以系数要乘上该级标题的字号比，两侧留白才对得上（H1：1.4em × 1.75 = 2.45em）。 */
-.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="1"] {
+/* 侧栏（＋/⠿）留白：目标是让图标垂直居中于标题**文字**，所以必须复刻标题的
+   padding-top / padding-bottom。
+   注意：这里的 em 以侧栏自身的 16px 为基准，而标题的 padding 以其**自身字号**
+   为基准，所以系数 = 标题系数 × 该级字号比（H1：0.95em × 1.75 = 1.66em）。
+   倍数变量 --tm-heading-gap-scale / -bottom-scale 定义在 .bn-block-outer 上，
+   侧栏与标题块同属一个 outer，天然继承，场景收紧时两侧同步。 */
+.smart-document-content .bn-side-menu[data-block-type="heading"] {
   height: auto !important;
-  /* Match the heading's padding-top + font-size * line-height + padding-bottom */
-  padding-bottom: calc(0.5em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  /* Give it a fixed height for the actual icon container to align with text */
-  margin-top: calc(2.45em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  margin-top: var(
+    --tm-side-gap-top-override,
+    calc(var(--tm-side-menu-gap-top, 1.1em) * var(--topomind-smart-heading-spacing-ratio, 1.5))
+  ) !important;
+  padding-bottom: var(
+    --tm-side-gap-bottom-override,
+    calc(var(--tm-side-menu-gap-bottom, 0.3em) * var(--topomind-smart-heading-spacing-ratio, 1.5))
+  ) !important;
+}
+
+.smart-document-content .bn-side-menu[data-block-type="heading"][data-level="1"] {
+  --tm-side-menu-gap-top: 1.66em;
+  --tm-side-menu-gap-bottom: 0.7em;
 }
 
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="2"] {
-  height: auto !important;
-  padding-bottom: calc(0.4em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: calc(2.175em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  --tm-side-menu-gap-top: 1.33em;
+  --tm-side-menu-gap-bottom: 0.51em;
 }
 
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="3"] {
-  height: auto !important;
-  padding-bottom: calc(0.3em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: calc(1.5em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  --tm-side-menu-gap-top: 1.13em;
+  --tm-side-menu-gap-bottom: 0.38em;
 }
 
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="4"] {
-  height: auto !important;
-  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: calc(1.12em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  --tm-side-menu-gap-top: 0.96em;
+  --tm-side-menu-gap-bottom: 0.28em;
 }
 
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="5"] {
-  height: auto !important;
-  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: calc(0.9em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  --tm-side-menu-gap-top: 0.83em;
+  --tm-side-menu-gap-bottom: 0.2em;
 }
 
 .smart-document-content .bn-side-menu[data-block-type="heading"][data-level="6"] {
-  height: auto !important;
-  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: calc(0.81em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
+  --tm-side-menu-gap-top: 0.75em;
+  --tm-side-menu-gap-bottom: 0.18em;
+}
+
+/* 侧栏是浮层，不在 .bn-block-outer 子树里，继承不到上面那组场景覆盖值，所以由
+   SmartDocumentSideMenu 按文档位置打上分类标记，在这里换算成同样的值。
+   侧栏自身字号固定 16px，所以连续标题那一档直接用正文基准的绝对值，
+   与标题侧（0.4 / 0.25 × 正文字号 × 间距比）完全对应。 */
+.smart-document-content
+  .tm-smart-side-menu-hit-area[data-tm-gap-top="zero"]
+  .bn-side-menu[data-block-type="heading"] {
+  --tm-side-gap-top-override: 0px;
+}
+
+.smart-document-content
+  .tm-smart-side-menu-hit-area[data-tm-gap-top="tight"]
+  .bn-side-menu[data-block-type="heading"] {
+  --tm-side-gap-top-override: calc(
+    0.4 * var(--topomind-smart-body-font-size, 16px) * var(--topomind-smart-heading-spacing-ratio, 1.5)
+  );
+}
+
+.smart-document-content
+  .tm-smart-side-menu-hit-area[data-tm-gap-bottom="tight"]
+  .bn-side-menu[data-block-type="heading"] {
+  --tm-side-gap-bottom-override: calc(
+    0.25 * var(--topomind-smart-body-font-size, 16px) * var(--topomind-smart-heading-spacing-ratio, 1.5)
+  );
+}
+
+/* ---------- 标题留白：变量化，场景只改倍数 ----------
+   标题上方的空白来自 padding-top，等于 gap系数 × 字号 × 间距比 × 场景倍数。
+   以前各级各自写死 padding，导致：① 数值整体偏大（H1 上 58.8px）；② 文档首块
+   也照加；③ 标题紧跟标题时两块留白叠加（H1→H2 之间近 75px）。
+
+   规则：留白表达的是「这一节与上一节的距离」，不是标题的固定附属物，所以
+   - 基准收紧：正常（正文→标题）间距按层级递减，H1 40px 到 H6 18px
+   - 首块（--tm-heading-gap-scale: 0）：文档开头不该顶一块空白
+   - 连续标题（0.38 / 底部 0.4）：章节头之间是「从属」关系，不是「分隔」关系，
+     留白应明显小于标题与正文之间
+
+   em 相对标题**自身字号**，因此系数接近、像素自然递减。 */
+.smart-document-content .bn-block-content[data-content-type="heading"] {
+  padding-top: var(
+    --tm-heading-gap-top-override,
+    calc(var(--tm-heading-gap-top, 0.9em) * var(--topomind-smart-heading-spacing-ratio, 1.5))
+  ) !important;
+  padding-bottom: var(
+    --tm-heading-gap-bottom-override,
+    calc(var(--tm-heading-gap-bottom, 0.25em) * var(--topomind-smart-heading-spacing-ratio, 1.5))
+  ) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* 场景覆盖值定义在 .bn-block-outer 上：标题块与侧栏都从它继承，收紧时不会各走各的。
+   用「覆盖」而不是「倍数」：连续标题之间要的是**统一的小间距**，若按倍数缩放，
+   字号大的那对标题间距反而更大（H1→H2 25px / H3→H4 18px，松紧不一）。
+   基准取正文字号而非标题字号，因此与级别无关。 */
+.smart-document-content .bn-block-outer:first-child {
+  --tm-heading-gap-top-override: 0px;
+}
+
+/* 连续标题：后一块的上间距 */
+.smart-document-content
+  .bn-block-outer:has(.bn-block-content[data-content-type="heading"])
+  + .bn-block-outer:has(.bn-block-content[data-content-type="heading"]) {
+  --tm-heading-gap-top-override: calc(
+    0.4 * var(--topomind-smart-body-font-size, 16px) * var(--topomind-smart-heading-spacing-ratio, 1.5)
+  );
+}
+
+/* 连续标题：前一块的下间距也收紧（否则两块之间仍是两块留白相加）。
+   注意：:has() 不能嵌套 :has()，所以「下一块是标题」只能用后代选择器写在
+   同一个 :has() 里，不能写成 :has(+ .x:has(...)) —— 那样整条规则会被丢弃。 */
+.smart-document-content
+  .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type="heading"]):has(
+    + .bn-block-outer .bn-block-content[data-content-type="heading"]
+  ) {
+  --tm-heading-gap-bottom-override: calc(
+    0.25 * var(--topomind-smart-body-font-size, 16px) * var(--topomind-smart-heading-spacing-ratio, 1.5)
+  );
 }
 
 /* 标题阶梯（em 相对正文）。两级之间统一保持约 1.11~1.21 的比值 —— 旧阶梯
@@ -1200,59 +1287,47 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h1) {
   font-size: 1.75em !important; /* 28px */
   line-height: 1.3 !important;
-  padding-top: calc(1.4em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  padding-bottom: calc(0.4em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  --tm-heading-gap-top: 0.95em; /* 40px */
+  --tm-heading-gap-bottom: 0.4em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h2) {
   font-size: 1.45em !important; /* 23.2px */
   line-height: 1.35 !important;
-  padding-top: calc(1.5em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  padding-bottom: calc(0.35em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  --tm-heading-gap-top: 0.92em; /* 32px */
+  --tm-heading-gap-bottom: 0.35em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h3) {
   font-size: 1.25em !important; /* 20px */
   font-weight: 600 !important;
   line-height: 1.4 !important;
-  padding-top: calc(1.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  padding-bottom: calc(0.3em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  --tm-heading-gap-top: 0.9em; /* 27px */
+  --tm-heading-gap-bottom: 0.3em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h4) {
   font-size: 1.12em !important; /* 17.9px */
   font-weight: 600 !important;
   line-height: 1.4 !important;
-  padding-top: calc(1em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  padding-bottom: calc(0.25em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  --tm-heading-gap-top: 0.86em; /* 23px */
+  --tm-heading-gap-bottom: 0.25em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h5) {
   font-size: 1.0em !important; /* 16px，与正文同大，靠字重与间距区分 */
   font-weight: 600 !important;
   line-height: 1.4 !important;
-  padding-top: calc(0.9em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  --tm-heading-gap-top: 0.83em; /* 20px */
+  --tm-heading-gap-bottom: 0.2em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h6) {
   font-size: 0.9em !important; /* 14.4px */
   font-weight: 600 !important;
   line-height: 1.4 !important;
-  padding-top: calc(0.9em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  padding-bottom: calc(0.2em * var(--topomind-smart-heading-spacing-ratio, 1.5)) !important;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  --tm-heading-gap-top: 0.83em; /* 18px */
+  --tm-heading-gap-bottom: 0.2em;
 }
 
 /* Lists spacing */
