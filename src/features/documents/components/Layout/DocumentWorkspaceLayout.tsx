@@ -159,6 +159,15 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   const containerRef = useRef<HTMLDivElement>(null)
   
   const tocItems = providedTocItems ?? []
+
+  // 目录缩进相对"当前目录里最顶级标题"，而非绝对等级：
+  // 例如全文只有 H4 时，H4 的缩进应为 0（作为顶级），而不是固定的 H4 缩进。
+  const minTocLevel = tocItems.reduce(
+    (min, item) => (item.level < min ? item.level : min),
+    Infinity,
+  )
+  const tocBaseLevel = Number.isFinite(minTocLevel) ? minTocLevel : 1
+
   const currentDetailDocumentPath = activeDetailDocumentPath ?? ''
   const detailSidebarCollapsed = controlledDetailSidebarCollapsed ?? internalDetailSidebarCollapsed
   const detailSidebarTab = controlledDetailSidebarTab ?? internalDetailSidebarTab
@@ -435,7 +444,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                               ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] font-semibold'
                               : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-selected-bg)] hover:text-[var(--color-accent)]'
                           }`}
-                          style={{ paddingLeft: `${10 + (item.level - 1) * 12}px` }}
+                          style={{ paddingLeft: `${10 + (item.level - tocBaseLevel) * 12}px` }}
                           onClick={() => handleTocJump(item)}
                           title={item.text}
                         >
