@@ -1159,6 +1159,35 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   height: auto !important;
 }
 
+/* ---------- BlockNote 容器/编辑器盒模型重置 ----------
+   这些本想用 JSX 上的 Tailwind 任意变体写
+   （[&_.bn-container]:!pl-8 / [&_.bn-editor]:!pt-6 …），但实测 **整组都没生成 CSS**
+   —— dev 与 dist 构建里都搜不到 `.smart-document-content .bn-editor { padding-top }`
+   这一条，编辑器一直吃着 BlockNote 默认样式（padding-inline:54px、无顶部留白）。
+   后果：首块标题的 gap-top 又被我们强制为 0，H1 第一行直接贴在滚动容器上沿，
+   被 overflow-y-auto 裁掉顶部（表现为“H1 不能完全展示 / 上方留白没显示全”）。
+   这里改为显式写死，避免依赖任意变体（同文件标题间距规则用同样方式，已证实可靠生效）。
+   数值与原本意图一致：编辑器顶部 24px、底部 16px 留白；容器左右内边距 32/16px 居中。 */
+.smart-document-content .bn-editor {
+  min-height: 0 !important;
+  width: 100% !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  padding-top: 1.5rem !important;   /* pt-6：编辑器顶部留白，首块标题不被裁切的关键 */
+  padding-bottom: 1rem !important;   /* pb-4 */
+  background: transparent !important;
+}
+.smart-document-content .bn-container {
+  width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 2rem !important;     /* pl-8 */
+  padding-right: 1rem !important;    /* pr-4 */
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  background: transparent !important;
+}
+
 /* ---------- 标题留白：变量化，场景只改倍数 ----------
    标题上方的空白来自 padding-top，等于 gap系数 × 字号 × 间距比 × 场景倍数。
    以前各级各自写死 padding，导致：① 数值整体偏大（H1 上 58.8px）；② 文档首块
