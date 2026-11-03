@@ -28,6 +28,11 @@
 - **不要在 `appendTransaction` 里同步改文档**（`setNodeMarkup` 会重建块 nodeView，连续输入时打断输入状态 → markdown 输入规则 `- `→列表偶发失效）。正确做法：`appendTransaction` 只记「脏块 id」进 pending 并 `return null`；用 `new Plugin({ view(editorView) })` 存 `EditorView`（不要用私有 `_tiptapEditor`），在停止输入 ~1s / blur / destroy 时批量 flush；延迟写入按**块 id** 定位（位置会漂移），`addToHistory:false` + pluginKey meta 防递归。
 - IME：`view.composing` 为真时 Tiptap input rule 直接跳过（原生行为）；中文标点下 `-` 是全角 `－`，不匹配 `/^\s?[-+*]\s$/`。这类"不触发"不是 bug，先让用户自查输入法中英文标点、是否在块首输入。
 
+### 浮层（侧栏/工具栏/菜单）的 CSS 作用域 —— 铁律
+- **BlockNote 的浮层一律 portal 到 `document.body`**：`usePortalElement(null)` 返回的是 **body**（不是"原地渲染"），`portalElements={{default:null}}` 同理；controller 未传 `portalElement` 时走默认同样是 body。**给浮层写样式时带 `.smart-document-content` / `.bn-block-outer` 前缀 = 永不生效**，也拿不到编辑器容器上的 `--topomind-smart-*` 变量。改之前先 `el.matches('.smart-document-content .bn-side-menu')` 验一次。
+- 侧栏（＋/⠿）的垂直对齐走**运行时实测**：`Range.selectNodeContents(.bn-inline-content)` 取第一行矩形，以 `SideMenuExtension` 的 `referencePos.y` 为基准算 delta 写 inline `margin-top`（见 `SmartDocumentSideMenu.tsx`）。别用菜单自身的 `getBoundingClientRect()` —— 挂载首帧 floating-ui 未落位会读到 0 附近。
+- 侧栏容器高度必须 `height:auto !important` 覆盖 BlockNote 按 `[data-level]` 写死的 30/108/84/67px（为旧字号阶梯设计，会让按钮钉死在错位置）。
+
 ### 分栏能力评估（2026-08-25）
 - BlockNote 0.51.4 核心是块级垂直流，默认一行一块。官方 `@blocknote/xl-multi-column` 可引入 `columnList`/`column` + `multiColumnDropCursor`。
 - **硬约束**：① 版本必须配对（0.54 需整体升级 core/react 0.54.x）；② **License 是 `GPL-3.0 OR Proprietary`**，闭源商用需订阅，有合规风险，集成前先确认。
