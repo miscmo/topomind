@@ -2,7 +2,12 @@ import { type ReactNode, useState } from 'react'
 import { useBlockNoteEditor, useComponentsContext, useExtensionState } from '@blocknote/react'
 import { SideMenuExtension } from '@blocknote/core/extensions'
 import { SMART_DOCUMENT_TEXT_ACTIONS, SMART_DOCUMENT_MEDIA_ACTIONS } from '../constants'
-import type { SmartDocumentBlockMenuAction, SmartDocumentBlockMenuMode } from '../types'
+import type {
+  SmartDocumentBlockMenuAction,
+  SmartDocumentBlockMenuMode,
+  SmartDocumentInsertPlacement,
+} from '../types'
+import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
 import {
   cloneSmartDocumentBlockWithoutIds,
   getSmartDocumentBlocksClipboardText,
@@ -11,6 +16,10 @@ import {
   writeClipboardBeforeMutation,
 } from '../smartDocumentUtils'
 import { SmartSubMenu, SmartSubMenuDropdown, SmartSubMenuTrigger } from './SmartBlockNoteMenu'
+
+// 菜单每次打开都是重新挂载的，方向若只存在组件内 state 会丢失。这里记在模块级，
+// 让「连续在上方插入多个块」不必每次重开菜单都再切一次方向（不落盘，仅本次会话）。
+let lastInsertPlacement: SmartDocumentInsertPlacement = 'after'
 
 function createTableBlock() {
   return {
@@ -33,6 +42,7 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
     selector: (state) => state?.block,
   })
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [insertPlacement, setInsertPlacement] = useState<SmartDocumentInsertPlacement>(lastInsertPlacement)
 
   if (!Components || !block) return null
 
@@ -53,7 +63,7 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
   const applyToCurrentBlock = (action: SmartDocumentBlockMenuAction) => {
     const hasTextContent = getSmartDocumentBlockPlainText(block).length > 0
     if (action.type === 'divider' && hasTextContent) {
-      insertBelow(action)
+      insertBlock(action, 'after')
       return
     }
     editor.updateBlock(block, createActionBlock(action, false) as any)
@@ -61,12 +71,17 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
     editor.focus()
   }
 
-  const insertBelow = (action: SmartDocumentBlockMenuAction) => {
-    const insertedBlock = editor.insertBlocks([createActionBlock(action, true) as any], block, 'after')[0]
+  const insertBlock = (action: SmartDocumentBlockMenuAction, placement: SmartDocumentInsertPlacement) => {
+    const insertedBlock = editor.insertBlocks([createActionBlock(action, true) as any], block, placement)[0]
     if (insertedBlock) {
       editor.setTextCursorPosition(insertedBlock)
       editor.focus()
     }
+  }
+
+  const changeInsertPlacement = (placement: SmartDocumentInsertPlacement) => {
+    lastInsertPlacement = placement
+    setInsertPlacement(placement)
   }
 
   const renderActionIcon = (action: SmartDocumentBlockMenuAction) => (
@@ -103,7 +118,7 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
     <Components.Generic.Menu.Item
       key={action.key}
       className="tm-smart-block-menu__row tm-smart-block-menu__row--icon"
-      onClick={() => mode === 'insert' ? applyToCurrentBlock(action) : insertBelow(action)}
+      onClick={() => mode === 'insert' ? applyToCurrentBlock(action) : insertBlock(action, insertPlacement)}
     >
       <span>{action.icon}</span>
       <span>{action.label}</span>
@@ -239,11 +254,35 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
         {mode === 'edit' ? (
           <SmartSubMenu position="right">
             <SmartSubMenuTrigger>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__row" subTrigger><span>在下方插入</span><span>›</span></Components.Generic.Menu.Item>
+              <Components.Generic.Menu.Item className="tm-smart-block-menu__row" subTrigger>
+                <span>插入块</span>
+                <span className="tm-smart-block-menu__row-hint">
+                  {insertPlacement === 'before' ? '上方' : '下方'} ›
+                </span>
+              </Components.Generic.Menu.Item>
             </SmartSubMenuTrigger>
             <SmartSubMenuDropdown className="bn-menu-dropdown tm-smart-block-menu__sub">
+              {/* 方向切换放在子菜单顶部：一个入口覆盖上/下两个方向，父菜单行直接显示当前方向。
+                  阻止冒泡，避免切换方向被菜单当成「选中了某项」而关掉整个菜单，
+                  也让方向键不会跑到下面的块类型列表上去移动高亮。 */}
+              <div
+                className="tm-smart-block-menu__subheader"
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <SegmentedControl
+                  size="sm"
+                  ariaLabel="插入位置"
+                  value={insertPlacement}
+                  onChange={changeInsertPlacement}
+                  options={[
+                    { value: 'before', label: '上方' },
+                    { value: 'after', label: '下方' },
+                  ]}
+                />
+              </div>
               {[...SMART_DOCUMENT_TEXT_ACTIONS, ...SMART_DOCUMENT_MEDIA_ACTIONS].map((action) => (
-                <Components.Generic.Menu.Item key={action.key} className="tm-smart-block-menu__subitem" onClick={() => insertBelow(action)}>
+                <Components.Generic.Menu.Item key={action.key} className="tm-smart-block-menu__subitem" onClick={() => insertBlock(action, insertPlacement)}>
                   <span>{action.label}</span>
                 </Components.Generic.Menu.Item>
               ))}

@@ -777,6 +777,15 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   font-size: 13px;
   font-weight: 400;
 }
+/* 子菜单触发行右侧的「当前值 + 箭头」（如 插入块 → 「下方 ›」），
+   比 `›` 更弱一档，避免和左侧标题抢注意力。 */
+.tm-smart-block-menu__row-hint {
+  flex: none;
+  overflow: visible;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
 
 .tm-smart-block-menu__feedback {
   padding: 6px 18px 2px;
@@ -795,6 +804,13 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   box-shadow: var(--shadow-popover) !important;
   /* 子菜单跟随父菜单浮在标题栏之上（高于 4000 的父级、高于标题栏 3000） */
   z-index: 4001 !important;
+}
+/* 子菜单顶部的方向切换（上方/下方）。与下方块类型列表用一条分隔线隔开，
+   表明它改的是「插入到哪」，而不是又一个可点的块类型。 */
+.tm-smart-block-menu__subheader {
+  padding: 0 14px 8px;
+  margin: 0 0 6px;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 .tm-smart-block-menu__subitem {
   width: 100%;

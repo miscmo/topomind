@@ -3,6 +3,9 @@ import type { TocItem } from '../types/workspaceTypes'
 
 export type SmartDocumentBlockMenuMode = 'edit' | 'insert'
 
+/** 「插入块」的方向：相对当前块的上方 / 下方。 */
+export type SmartDocumentInsertPlacement = 'before' | 'after'
+
 export interface SmartDocumentBlockMenuAction {
   key: string
   icon: string
