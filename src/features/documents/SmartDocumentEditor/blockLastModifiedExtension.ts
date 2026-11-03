@@ -2,6 +2,7 @@ import { createExtension, getBlockInfoWithManualOffset } from '@blocknote/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
+import { isMathEditing } from './mathEditSession'
 
 /**
  * 块「最后修改时间」——只负责**记录**，不负责展示。
@@ -27,6 +28,9 @@ const blockLastModifiedPluginKey = new PluginKey('topomind-block-last-modified')
 
 /** 停止输入后多久统一写入时间戳（毫秒）。 */
 const FLUSH_DELAY = 1000
+
+/** 因「正在编辑公式」而推迟写入的上限（毫秒）；超过后不再等，照常写入。 */
+const MAX_POSTPONE_MS = 30_000
 
 /** IME 输入法组合（拼音）进行中的标记：组合中不写时间戳，避免改动块 DOM 打断中文输入。 */
 let isComposing = false
@@ -101,6 +105,8 @@ export const blockLastModifiedExtension = createExtension(({ editor }) => {
   const pendingBlockIds = new Set<string>()
   let pmView: EditorView | null = null
   let flushTimer: ReturnType<typeof setTimeout> | null = null
+  /** 首次因「正在编辑公式」而推迟的时刻；超过上限后强制写入，避免时间戳永久不落盘 */
+  let postponeStartedAt: number | null = null
 
   function clearTimer() {
     if (flushTimer !== null) {
@@ -128,6 +134,18 @@ export const blockLastModifiedExtension = createExtension(({ editor }) => {
       scheduleFlush()
       return
     }
+    // 正在编辑公式：写入会让行内/块级公式的节点视图重建，输入框连同草稿一起
+    // 消失（焦点也会掉回正文，后续输入会写进错误的位置）。推迟到编辑结束后。
+    if (isMathEditing()) {
+      const startedAt = postponeStartedAt ?? Date.now()
+      postponeStartedAt = startedAt
+      // 编辑会话异常没有结束时（极端情况）不能一直不写，超过上限就照常写入
+      if (Date.now() - startedAt < MAX_POSTPONE_MS) {
+        scheduleFlush()
+        return
+      }
+    }
+    postponeStartedAt = null
     // 变为只读时丢弃待写入项，避免反复重试
     if (!editor.isEditable) {
       pendingBlockIds.clear()

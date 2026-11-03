@@ -9,6 +9,7 @@ import {
   useComponentsContext,
   useEditorState,
 } from '@blocknote/react'
+import { TextSelection } from '@tiptap/pm/state'
 
 import {
   getSmartDocumentSelectedTextState,
@@ -24,6 +25,10 @@ function useSelectedTextState(): SmartDocumentSelectedTextState | undefined {
 
       const selection = editor.prosemirrorState.selection
       if (selection.empty) return undefined
+      // 只认真正的文字选区。整块选区（NodeSelection）的范围是整个块容器，
+      // 拿它去做 replaceWith 会把整块换成一行公式 —— 内容就这么没了。
+      if (!(selection instanceof TextSelection)) return undefined
+      if (!selection.$from.parent.eq(selection.$to.parent)) return undefined
 
       const rawText = editor.prosemirrorState.doc.textBetween(selection.from, selection.to, '\n')
       const selectedBlocks = editor.getSelection()?.blocks || [editor.getTextCursorPosition().block]
@@ -83,6 +88,7 @@ function SelectionMathButton({ state }: { state: SmartDocumentSelectedTextState 
     if (!canConvert) return
 
     editor.focus()
+    const insertAt = editor.prosemirrorState?.selection?.from
     editor.insertInlineContent([
       {
         type: 'inlineMath',
@@ -91,6 +97,16 @@ function SelectionMathButton({ state }: { state: SmartDocumentSelectedTextState 
         },
       },
     ] as any)
+
+    // 插入后必须显式把光标放到公式之后：replaceWith 只是映射了原选区，映射
+    // 结果仍然是「覆盖刚插入公式」的一段选区，此时用户继续打字就会把公式
+    // （甚至更多文字）替换掉，看起来像内容凭空消失。
+    if (typeof insertAt !== 'number') return
+    const view = editor._tiptapEditor?.view
+    if (!view) return
+    const after = Math.min(insertAt + 1, view.state.doc.content.size)
+    const selection = TextSelection.create(view.state.doc, after)
+    view.dispatch(view.state.tr.setSelection(selection))
   }, [canConvert, editor, state.latex])
 
   if (!Components) {

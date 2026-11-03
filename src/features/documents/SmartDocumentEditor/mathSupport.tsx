@@ -2,9 +2,12 @@ import type { BlockIdentifier } from '@blocknote/core'
 import { createExtension } from '@blocknote/core'
 import { createReactBlockSpec, createReactInlineContentSpec } from '@blocknote/react'
 import { Extension, InputRule } from '@tiptap/core'
+import { TextSelection } from '@tiptap/pm/state'
+import type { EditorState, Transaction } from '@tiptap/pm/state'
 import katex from 'katex'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { quoteEnterPayload, shouldHandleQuoteEnter } from './quoteEnter'
+import { beginMathEditing, endMathEditing } from './mathEditSession'
 
 type InlineMathRenderProps = {
   inlineContent: {
@@ -23,6 +26,18 @@ type InlineMathRenderProps = {
     focus: () => void
   }
   contentRef: (node: HTMLElement | null) => void
+}
+
+/** 编辑器内部 ProseMirror 视图的最小可用形状（避免把整个 editor 标成 any）。 */
+type PmViewLike = {
+  state: EditorState
+  dispatch: (tr: Transaction) => void
+  posAtDOM: (dom: Node, offset: number, bias?: number) => number
+}
+
+function resolvePmView(editor: unknown): PmViewLike | null {
+  const view = (editor as { _tiptapEditor?: { view?: PmViewLike } } | null | undefined)?._tiptapEditor?.view
+  return view ?? null
 }
 
 function inlineContentToPlainText(content: unknown): string {
@@ -58,10 +73,19 @@ function InlineMathRenderer(props: InlineMathRenderProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState(latex)
   const inputRef = useRef<HTMLInputElement>(null)
+  const shellRef = useRef<HTMLSpanElement | null>(null)
 
   useEffect(() => {
     setDraft(latex)
   }, [latex])
+
+  // 编辑期间挂上「正在编辑公式」信号，让块时间戳写入推迟到编辑结束之后。
+  // 否则那次写入会重建节点视图，输入框连同草稿一起消失。
+  useEffect(() => {
+    if (!isEditing) return
+    beginMathEditing()
+    return () => endMathEditing()
+  }, [isEditing])
 
   useEffect(() => {
     if (!isEditing) return
@@ -71,44 +95,86 @@ function InlineMathRenderer(props: InlineMathRenderProps) {
 
   const previewHtml = useMemo(() => renderMathToHtml(latex, false), [latex])
 
-  const handleCommit = () => {
+  /**
+   * 把光标放到本公式节点之后。
+   *
+   * 点击公式时我们在捕获阶段拦下了事件，ProseMirror 不会自己更新选区；
+   * 而编辑期间又不写文档，选区会一直停在「上次点过的地方」（常常是块首）。
+   * 提交后 `editor.focus()` 恢复的就是那个旧选区，接着敲字会写进错误的位置
+   * （甚至替换掉一段被选中的文字）。所以进入编辑时先把光标归位。
+   */
+  const placeCursorAfterMath = useCallback(() => {
+    const view = resolvePmView(props.editor)
+    const dom = shellRef.current?.closest('[data-inline-content-type="inlineMath"]') ?? shellRef.current
+    if (!view || !dom) return
+    try {
+      const pos = view.posAtDOM(dom, 0)
+      if (typeof pos !== 'number') return
+      const nodeAfter = view.state.doc.resolve(pos).nodeAfter
+      const after = nodeAfter ? pos + nodeAfter.nodeSize : pos
+      const selection = TextSelection.create(view.state.doc, after)
+      if (selection.eq(view.state.selection)) return
+      view.dispatch(view.state.tr.setSelection(selection))
+    } catch {
+      // 位置解析失败不影响编辑，只是光标不归位
+    }
+  }, [props.editor])
+
+  const startEditing = (event: React.MouseEvent<HTMLSpanElement>) => {
+    if (!props.editor.isEditable) return
+    // 必须在捕获阶段拦下：ProseMirror 的监听器挂在编辑器根节点上，冒泡阶段
+    // 到达 React 时它已经处理完这次点击（改写选区 → 触发节点视图重建 →
+    // 刚设的编辑态立刻丢失，表现为「点了没反应」或「闪一下就没了」）。
+    event.preventDefault()
+    event.stopPropagation()
+    placeCursorAfterMath()
+    setDraft(latex)
+    setIsEditing(true)
+  }
+
+  /**
+   * 结束编辑。草稿只在此时一次性写入文档：编辑中途每敲一个字符就写一次，
+   * 会让 lastModified 的时间戳写入被反复触发，进而反复重建节点视图。
+   */
+  const commit = (nextLatex: string, restoreFocus: boolean) => {
     setIsEditing(false)
-    props.editor.focus()
+    if (nextLatex !== latex) {
+      props.updateInlineContent({
+        type: 'inlineMath',
+        props: {
+          latex: nextLatex,
+        },
+      })
+    }
+    // 失焦提交（用户点到了别处）时不抢焦点；Enter / Esc 提交则把光标还给编辑器
+    if (restoreFocus) {
+      props.editor.focus()
+    }
   }
 
   return (
-    <span ref={props.contentRef} className="tm-inline-math-shell">
+    <span
+      ref={(node) => {
+        shellRef.current = node
+        props.contentRef(node)
+      }}
+      className="tm-inline-math-shell"
+    >
       {isEditing && props.editor.isEditable ? (
         <input
           ref={inputRef}
           className="tm-inline-math-input"
           value={draft}
-          onChange={(event) => {
-            const nextDraft = event.target.value
-            setDraft(nextDraft)
-            props.updateInlineContent({
-              type: 'inlineMath',
-              props: {
-                latex: nextDraft,
-              },
-            })
-          }}
-          onBlur={handleCommit}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => commit(draft, false)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault()
-              handleCommit()
+              commit(draft, true)
             }
             if (event.key === 'Escape') {
               event.preventDefault()
-              setDraft(latex)
-              props.updateInlineContent({
-                type: 'inlineMath',
-                props: {
-                  latex,
-                },
-              })
-              handleCommit()
+              commit(latex, true)
             }
           }}
           placeholder="输入 LaTeX 公式"
@@ -116,11 +182,7 @@ function InlineMathRenderer(props: InlineMathRenderProps) {
       ) : (
         <span
           className="tm-inline-math-chip"
-          onMouseDown={(event) => {
-            if (!props.editor.isEditable) return
-            event.preventDefault()
-            setIsEditing(true)
-          }}
+          onMouseDownCapture={startEditing}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
       )}
@@ -159,6 +221,13 @@ function MathBlockRenderer(props: any) {
       }
     })
     return () => window.cancelAnimationFrame(frame)
+  }, [isEditing])
+
+  // 同行内公式：编辑期间推迟块时间戳写入，避免节点视图重建打断输入
+  useEffect(() => {
+    if (!isEditing) return
+    beginMathEditing()
+    return () => endMathEditing()
   }, [isEditing])
 
   const moveCursorAfterMathBlock = () => {
