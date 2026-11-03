@@ -1108,6 +1108,43 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   color: var(--color-text); /* Slightly darker for headings */
 }
 
+/* 标题层级水印：跟在标题内容末尾标出 H1~H6，一眼看清层级。
+   实现上用 ::after 生成内容，**不是**真实文本 —— 因此它不进文档 JSON、不进
+   剪贴板、不参与选区与光标定位，对一切编辑操作透明。
+   级别写进 --tm-heading-badge（按 h1~h6 标签判定，不用 data-level：实测首个
+   heading 块渲染时没有 data-level），样式只在此处定义一次。 */
+.smart-document-content .bn-block-content[data-content-type="heading"] > .bn-inline-content::after {
+  content: var(--tm-heading-badge, '');
+  margin-left: 0.5em;
+  font-size: clamp(11px, 0.45em, 13px);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  /* 平时是“水印”：极淡、不抢注意力；光标进入该标题块后才清晰显示 */
+  opacity: 0.45;
+  vertical-align: 0.08em;
+  pointer-events: none;
+  transition: opacity 100ms ease, color 100ms ease;
+}
+/* 光标在这个标题块里（点击 / 上下键移动）→ 标记转为清晰的主题色。
+   整个编辑器是一个 contenteditable，:focus-within 只会命中编辑器根，
+   判定不了「光标在哪个块」，因此用 currentBlockHighlightExtension 打在
+   blockOuter 上的 data-current-block（仅可编辑且聚焦时为 true）。 */
+.smart-document-content .bn-block-outer[data-current-block="true"] .bn-block-content[data-content-type="heading"] > .bn-inline-content::after {
+  opacity: 1;
+  color: var(--color-accent);
+}
+/* 鼠标扫过某个标题也点亮一下，便于快速核对层级 */
+.smart-document-content .bn-block-content[data-content-type="heading"]:hover > .bn-inline-content::after {
+  opacity: 0.85;
+}
+.smart-document-content .bn-block-content[data-content-type="heading"] > h1 { --tm-heading-badge: 'H1' }
+.smart-document-content .bn-block-content[data-content-type="heading"] > h2 { --tm-heading-badge: 'H2' }
+.smart-document-content .bn-block-content[data-content-type="heading"] > h3 { --tm-heading-badge: 'H3' }
+.smart-document-content .bn-block-content[data-content-type="heading"] > h4 { --tm-heading-badge: 'H4' }
+.smart-document-content .bn-block-content[data-content-type="heading"] > h5 { --tm-heading-badge: 'H5' }
+.smart-document-content .bn-block-content[data-content-type="heading"] > h6 { --tm-heading-badge: 'H6' }
+
 /* Keep the side menu vertically centered with the new heading scale */
 .smart-document-content .bn-side-menu {
   display: flex;
