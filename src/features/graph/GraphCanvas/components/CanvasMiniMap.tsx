@@ -4,8 +4,7 @@ import { Eye, EyeOff, Minus, Plus } from 'lucide-react'
 import { logAction } from '../../../../core/log-backend'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
-import { getAnchorSide, normalizeEdgeAnchor, resolveAnchorPoint } from '../../../../domain/graph/edgeAnchors'
-import { anchorSideToPosition } from '../edges/floatingUtils'
+import { normalizeEdgeAnchor, resolveAnchorPoint } from '../../../../domain/graph/edgeAnchors'
 import type { KnowledgeEdge, KnowledgeNode } from '../../../../types'
 import Toolbar from '../../../layout/Toolbar/Toolbar'
 import { getNodeRect } from '../utils/math'
@@ -167,12 +166,9 @@ function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, N
     let targetPoint = resolveAnchorPoint(targetRect, targetAnchor) ?? getRectBoundaryPoint(targetRect, sourceCenter)
     if (!sourceAnchor && targetAnchor) sourcePoint = getRectBoundaryPoint(sourceRect, targetPoint)
     if (!targetAnchor && sourceAnchor) targetPoint = getRectBoundaryPoint(targetRect, sourcePoint)
-    const sourcePosition = sourceAnchor
-      ? anchorSideToPosition(getAnchorSide(sourceAnchor, sourceRect, targetCenter))
-      : getAnchorPosition(sourceRect, sourcePoint)
-    const targetPosition = targetAnchor
-      ? anchorSideToPosition(getAnchorSide(targetAnchor, targetRect, sourceCenter))
-      : getAnchorPosition(targetRect, targetPoint)
+    // 自定义锚点与自动交点一样都落在边框上，统一按交点所在边判断出线方向
+    const sourcePosition = getAnchorPosition(sourceRect, sourcePoint)
+    const targetPosition = getAnchorPosition(targetRect, targetPoint)
     const isStraight = edgeData?.lineMode === 'straight' || edge.type === 'straight'
     const [path] = isStraight
       ? getStraightPath({

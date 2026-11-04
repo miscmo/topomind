@@ -49,7 +49,7 @@ export interface RoomGraphEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
-  /** 起点端 / 终点端锚点（相对各自节点的归一化坐标），绑定在本条边上 */
+  /** 起点端 / 终点端锚点（节点边框上的归一化位置，只决定出线位置），绑定在本条边上 */
   sourceAnchor?: EdgeAnchor | null
   targetAnchor?: EdgeAnchor | null
   highlighted?: boolean
@@ -93,7 +93,7 @@ export interface KBEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
-  /** 起点端 / 终点端锚点（相对各自节点的归一化坐标），绑定在本条边上 */
+  /** 起点端 / 终点端锚点（节点边框上的归一化位置，只决定出线位置），绑定在本条边上 */
   sourceAnchor?: EdgeAnchor | null
   targetAnchor?: EdgeAnchor | null
   highlighted?: boolean

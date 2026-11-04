@@ -73,9 +73,9 @@ export interface GraphEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
-  /** 起点端锚点（相对 source 节点的归一化坐标）；缺省 = 自动边界交点 */
+  /** 起点端锚点（source 节点边框上的归一化位置）；缺省 = 自动边界交点 */
   sourceAnchor?: EdgeAnchor | null
-  /** 终点端锚点（相对 target 节点的归一化坐标）；缺省 = 自动边界交点 */
+  /** 终点端锚点（target 节点边框上的归一化位置）；缺省 = 自动边界交点 */
   targetAnchor?: EdgeAnchor | null
   /** 高亮状态（搜索/选中连线时置 true） */
   highlighted?: boolean
@@ -173,7 +173,7 @@ export type KnowledgeEdge = Edge<{
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
-  /** 起点端 / 终点端锚点，绑定在本条边上；缺省 = 自动边界交点 */
+  /** 起点端 / 终点端锚点（边框位置，只决定出线方向），绑定在本条边上；缺省 = 自动边界交点 */
   sourceAnchor?: EdgeAnchor | null
   targetAnchor?: EdgeAnchor | null
   highlighted?: boolean

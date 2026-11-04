@@ -1,11 +1,10 @@
 import { Position, type InternalNode } from '@xyflow/react'
 import {
-  getAnchorSide,
   normalizeEdgeAnchor,
+  offsetBorderPoints,
   resolveAnchorPoint,
   type AnchorRect,
   type EdgeAnchorPatch,
-  type EdgeAnchorSide,
 } from '../../../../domain/graph/edgeAnchors'
 
 /** React Flow 内部节点的绝对矩形（含父节点偏移），锚点换算与路径计算共用 */
@@ -16,15 +15,6 @@ export function getInternalNodeRect(node: InternalNode): AnchorRect {
     y: position.y,
     width: node.measured?.width ?? node.width ?? 0,
     height: node.measured?.height ?? node.height ?? 0,
-  }
-}
-
-export function anchorSideToPosition(side: EdgeAnchorSide): Position {
-  switch (side) {
-    case 'left': return Position.Left
-    case 'right': return Position.Right
-    case 'top': return Position.Top
-    case 'bottom': return Position.Bottom
   }
 }
 
@@ -79,10 +69,15 @@ function getEdgePosition(rect: AnchorRect, intersectionPoint: { x: number; y: nu
 /**
  * 计算一条连线的两个端点。
  *
- * 缺省（老存档 / 未拖动过）时完全沿用旧算法：以两端中心连线为射线求边框交点，
- * 再沿方向各外推 offset px。任一端设置了锚点，该端就直接落在
- * 节点绝对位置 + (u × 宽, v × 高) 上，且不再做 offset 外推——手柄与线端点严格重合。
- * 另一端若仍是自动，则改朝这一端的实际锚点求交点，避免方向仍指向节点中心。
+ * 锚点只决定「这条线从节点边框的哪个位置出发」：有锚点的一端用锚点作为
+ * 边框交点，没锚点的一端沿用旧的「两端中心连线求边框交点」算法；
+ * 一端自定义、另一端自动时，自动端改朝对方的实际交点求交，避免方向跑偏。
+ *
+ * 两个边框交点随后一律沿连线方向各外推 offset(6px) 才成为真正的线头，
+ * 因此线不会直接连到锚点手柄上，线与边框之间始终保留原有间隙。
+ *
+ * 返回：sx/sy/tx/ty = 画线的线头；sourceBorder/targetBorder = 边框交点
+ * （锚点手柄贴在这里，工具栏避让也按这两个点算）。
  */
 export function getEdgeParams(
   source: InternalNode,
@@ -103,34 +98,11 @@ export function getEdgeParams(
   if (!sourceAnchor && targetAnchor) sourcePoint = getNodeIntersection(source, targetPoint)
   if (!targetAnchor && sourceAnchor) targetPoint = getNodeIntersection(target, sourcePoint)
 
-  const sourcePos = sourceAnchor
-    ? anchorSideToPosition(getAnchorSide(sourceAnchor, sourceRect, targetCenter))
-    : getEdgePosition(sourceRect, sourcePoint)
-  const targetPos = targetAnchor
-    ? anchorSideToPosition(getAnchorSide(targetAnchor, targetRect, sourceCenter))
-    : getEdgePosition(targetRect, targetPoint)
+  // 自定义端与自动端一样，都按交点实际落在哪条边上判断出线方向
+  const sourcePos = getEdgePosition(sourceRect, sourcePoint)
+  const targetPos = getEdgePosition(targetRect, targetPoint)
 
-  const dx = targetPoint.x - sourcePoint.x
-  const dy = targetPoint.y - sourcePoint.y
-  const length = Math.sqrt(dx * dx + dy * dy)
-
-  let sx = sourcePoint.x
-  let sy = sourcePoint.y
-  let tx = targetPoint.x
-  let ty = targetPoint.y
-
-  if (length > offset * 2) {
-    const ux = dx / length
-    const uy = dy / length
-    if (!sourceAnchor) {
-      sx += ux * offset
-      sy += uy * offset
-    }
-    if (!targetAnchor) {
-      tx -= ux * offset
-      ty -= uy * offset
-    }
-  }
+  const { sx, sy, tx, ty } = offsetBorderPoints(sourcePoint, targetPoint, offset)
 
   return {
     sx,
@@ -139,5 +111,7 @@ export function getEdgeParams(
     ty,
     sourcePos,
     targetPos,
+    sourceBorder: sourcePoint,
+    targetBorder: targetPoint,
   }
 }

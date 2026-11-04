@@ -114,7 +114,9 @@ function FloatingEdge({
   const sourceAnchor = anchorPreview?.side === 'source' ? anchorPreview.anchor : edgeData?.sourceAnchor
   const targetAnchor = anchorPreview?.side === 'target' ? anchorPreview.anchor : edgeData?.targetAnchor
 
-  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
+  const {
+    sx, sy, tx, ty, sourcePos, targetPos, sourceBorder, targetBorder,
+  } = getEdgeParams(
     sourceNode,
     targetNode,
     { sourceAnchor, targetAnchor }
@@ -198,12 +200,13 @@ function FloatingEdge({
       />
       {(showToolbar || showAnchorHandles) && (
         <EdgeLabelRenderer>
+          {/* 手柄贴在边框交点上，线头在其外侧 6px；工具栏按手柄位置避让 */}
           {showAnchorHandles && (
             <EdgeAnchorHandles
               sourceRect={sourceRect}
               targetRect={targetRect}
-              sourcePoint={{ x: sx, y: sy }}
-              targetPoint={{ x: tx, y: ty }}
+              sourcePoint={sourceBorder}
+              targetPoint={targetBorder}
               sourceAnchor={sourceAnchor}
               targetAnchor={targetAnchor}
               onPreview={setAnchorPreview}
@@ -214,7 +217,7 @@ function FloatingEdge({
             <EdgeToolbarAnchor
               labelX={labelX}
               labelY={labelY}
-              anchors={[{ x: sx, y: sy }, { x: tx, y: ty }]}
+              anchors={[sourceBorder, targetBorder]}
               faded={anchorPreview !== null}
             >
               <QuickEdgeToolbar

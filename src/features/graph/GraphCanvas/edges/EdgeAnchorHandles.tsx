@@ -18,7 +18,7 @@ export interface EdgeAnchorPreview {
 interface EdgeAnchorHandlesProps {
   sourceRect: AnchorRect
   targetRect: AnchorRect
-  /** 当前渲染出的两个端点（flow 坐标），手柄就贴在这里 */
+  /** 两端的边框交点（flow 坐标），手柄贴在这里；线头在其外侧 6px */
   sourcePoint: { x: number; y: number }
   targetPoint: { x: number; y: number }
   sourceAnchor?: EdgeAnchor | null
@@ -33,8 +33,9 @@ interface EdgeAnchorHandlesProps {
  * 选中连线后显示的两个锚点手柄（起点端 / 终点端互相独立）。
  *
  * 放在 EdgeLabelRenderer 内：该层已经带 viewport transform，直接用 flow 坐标定位。
- * 拖动时把屏幕坐标转回 flow 坐标，再换算成相对节点矩形的 (u, v)，
- * toEdgeAnchor 会把它钳制在 [0, 1]，所以锚点最多只能停在节点边框上。
+ * 手柄贴在节点边框的交点上（不是线头）：锚点只决定出线位置，线与边框之间
+ * 仍保留原有的 6px 间隙。拖动时把屏幕坐标转回 flow 坐标，toEdgeAnchor 会把
+ * 指针投影到最近的边框，因此锚点只能沿四条边滑动、不会跑到节点内部。
  */
 export default function EdgeAnchorHandles({
   sourceRect,
@@ -128,8 +129,8 @@ export default function EdgeAnchorHandles({
               zIndex: 11,
             }}
             title={side === 'source'
-              ? '拖动调整起点锚点（仅影响本条连线）'
-              : '拖动调整终点锚点（仅影响本条连线）'}
+              ? '沿节点边框拖动，调整本条连线的出线位置'
+              : '沿节点边框拖动，调整本条连线的入线位置'}
             onPointerDown={(event) => beginDrag(side, event)}
             onPointerMove={moveDrag}
             onPointerUp={(event) => finishDrag(event, true)}

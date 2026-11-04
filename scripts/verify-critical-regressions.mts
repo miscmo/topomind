@@ -63,7 +63,15 @@ import {
 } from '../src/core/close-guard.ts'
 import { normalizeDefaultEdgeStyle } from '../src/domain/style/normalizeStyleConfig.ts'
 import { normalizeGraphMeta } from '../src/domain/graph/normalizeGraphMeta.ts'
-import { clampEdgeAnchor, normalizeEdgeAnchor, resolveAnchorPoint, toEdgeAnchor, getAnchorSide } from '../src/domain/graph/edgeAnchors.ts'
+import {
+  clampEdgeAnchor,
+  isBorderAnchor,
+  normalizeEdgeAnchor,
+  offsetBorderPoints,
+  projectAnchorToBorder,
+  resolveAnchorPoint,
+  toEdgeAnchor,
+} from '../src/domain/graph/edgeAnchors.ts'
 import { STYLE_CONFIG_DEFAULTS } from '../src/domain/style/styleDefaults.ts'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, MAIN_EDGE_WIDTH_RATIO } from '../src/domain/style/styleConstraints.ts'
 import { buildEdgeView } from '../src/hooks/useGraph/edgeView.ts'
@@ -952,7 +960,7 @@ const edge = (
   assert.equal(meta.edges[1].lineWidth, EDGE_LINE_WIDTH_LIMIT.min)
 }
 
-// 连线锚点：归一化坐标 + 框内钳制 + 存档读入 + 全链路白名单同步
+// 连线锚点：只贴边框 + 线头与边框保留间隙 + 存档读入 + 全链路白名单同步
 {
   assert.deepEqual(clampEdgeAnchor({ u: 2, v: -1 }), { u: 1, v: 0 })
   assert.equal(normalizeEdgeAnchor({ u: Number.NaN, v: 0.3 }), undefined)
@@ -960,14 +968,73 @@ const edge = (
   assert.equal(normalizeEdgeAnchor('oops'), undefined)
 
   const rect = { x: 100, y: 50, width: 200, height: 80 }
-  assert.deepEqual(resolveAnchorPoint(rect, { u: 0.25, v: 0.75 }), { x: 150, y: 110 })
+  // 框内点一律投影到最近的边框（按像素距离，宽高比不同也不会贴错边）
+  assert.deepEqual(projectAnchorToBorder({ u: 0.25, v: 0.75 }, rect), { u: 0.25, v: 1 })
+  assert.deepEqual(projectAnchorToBorder({ u: 0.9, v: 0.5 }, rect), { u: 1, v: 0.5 })
+  assert.deepEqual(projectAnchorToBorder({ u: 0.5, v: 0 }, rect), { u: 0.5, v: 0 }, '已贴边的点投影必须幂等')
+  assert.equal(isBorderAnchor({ u: 0.5, v: 1 }), true)
+  assert.equal(isBorderAnchor({ u: 0.5, v: 0.5 }), false)
+  assert.deepEqual(resolveAnchorPoint(rect, { u: 0.25, v: 0.75 }), { x: 150, y: 130 })
   assert.equal(resolveAnchorPoint(rect, undefined), undefined)
   assert.deepEqual(toEdgeAnchor(rect, { x: 999, y: -999 }), { u: 1, v: 0 })
-  assert.deepEqual(toEdgeAnchor(rect, resolveAnchorPoint(rect, { u: 0.3, v: 0.6 })!), { u: 0.3, v: 0.6 })
-  assert.equal(getAnchorSide({ u: 1, v: 0.5 }, rect, { x: 0, y: 0 }), 'right')
-  assert.equal(getAnchorSide({ u: 0, v: 0.5 }, rect, { x: 0, y: 0 }), 'left')
-  assert.equal(getAnchorSide({ u: 0.5, v: 1 }, rect, { x: 0, y: 0 }), 'bottom')
-  assert.equal(getAnchorSide({ u: 0.5, v: 0 }, rect, { x: 0, y: 0 }), 'top')
+  assert.deepEqual(toEdgeAnchor(rect, { x: 150, y: 90 }), { u: 0.25, v: 0 }, '拖到节点内部也必须贴边')
+  assert.ok(isBorderAnchor(toEdgeAnchor(rect, { x: 210, y: 95 })!), '任意拖动结果都必须落在边框上')
+  assert.deepEqual(
+    toEdgeAnchor(rect, resolveAnchorPoint(rect, { u: 0.3, v: 0.6 })!),
+    { u: 0.3, v: 1 },
+    '边框点 → 画布点 → 锚点 必须往返一致'
+  )
+
+  // 铁律：自定义锚点不是线头，线头仍要从边框交点沿连线方向外推 6px
+  const heads = offsetBorderPoints({ x: 0, y: 0 }, { x: 100, y: 0 }, 6)
+  assert.deepEqual(heads, { sx: 6, sy: 0, tx: 94, ty: 0 })
+  assert.equal(Math.hypot(heads.sx - 0, heads.sy - 0), 6, '线头与起点锚点必须保持 6px 间隙')
+  assert.equal(Math.hypot(heads.tx - 100, heads.ty - 0), 6, '线头与终点锚点必须保持 6px 间隙')
+  assert.deepEqual(
+    offsetBorderPoints({ x: 0, y: 0 }, { x: 8, y: 0 }, 6),
+    { sx: 0, sy: 0, tx: 8, ty: 0 },
+    '两点过近时不外推，避免线头越过彼此'
+  )
+
+  // 只测纯函数不够：真跑一次 FloatingEdge 用的 getEdgeParams，确认自定义锚点端
+  // 同样是「边框交点 + 6px 间隙」，而不是把线头直接焊在锚点手柄上
+  const { build: buildFloating } = await import('esbuild')
+  const { fileURLToPath: floatingPath } = await import('node:url')
+  const floatingBundle = await buildFloating({
+    entryPoints: [floatingPath(new URL('../src/features/graph/GraphCanvas/edges/floatingUtils.ts', import.meta.url))],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  })
+  const floatingModule = await import(
+    `data:text/javascript;base64,${Buffer.from(floatingBundle.outputFiles[0].text).toString('base64')}`
+  ) as unknown as {
+    getEdgeParams: (source: unknown, target: unknown, anchors: Record<string, unknown>) => {
+      sx: number; sy: number; tx: number; ty: number
+      sourcePos: string; targetPos: string
+      sourceBorder: { x: number; y: number }
+      targetBorder: { x: number; y: number }
+    }
+  }
+  const fakeInternalNode = (x: number, y: number, w: number, h: number) => ({
+    internals: { positionAbsolute: { x, y } },
+    measured: { width: w, height: h },
+  })
+  const fakeSource = fakeInternalNode(0, 0, 200, 100)
+  const fakeTarget = fakeInternalNode(400, 0, 200, 100)
+  const gap = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.round(Math.hypot(a.x - b.x, a.y - b.y) * 100) / 100
+
+  const custom = floatingModule.getEdgeParams(fakeSource, fakeTarget, { sourceAnchor: { u: 1, v: 0.8 } })
+  assert.deepEqual(custom.sourceBorder, { x: 200, y: 80 }, '自定义锚点必须落在节点边框上')
+  assert.equal(gap({ x: custom.sx, y: custom.sy }, custom.sourceBorder), 6, '自定义端线头与边框必须留 6px')
+  assert.equal(gap({ x: custom.tx, y: custom.ty }, custom.targetBorder), 6, '自动端线头与边框必须留 6px')
+  assert.equal(custom.sourcePos, 'right', '出线方向按锚点所在的边框判断')
+  const auto = floatingModule.getEdgeParams(fakeSource, fakeTarget, {})
+  assert.equal(gap({ x: auto.sx, y: auto.sy }, auto.sourceBorder), 6, '无锚点时旧算法间隙不变')
+  assert.equal(gap({ x: auto.tx, y: auto.ty }, auto.targetBorder), 6, '无锚点时旧算法间隙不变')
 
   // 老存档没有锚点字段：行为完全不变；越界值读入时必须被夹回节点框内
   const meta = normalizeGraphMeta({
