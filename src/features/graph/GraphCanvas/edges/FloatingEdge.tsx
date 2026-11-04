@@ -20,6 +20,7 @@ import {
 } from '../../../../domain/graph/edgeCurve'
 import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
+import { useConfirmStore } from '../../../../shared/ui/ConfirmModal/confirmStore'
 import { getEdgeParams, getInternalNodeRect, getCurvedEdgePath } from './floatingUtils'
 import QuickEdgeToolbar from './QuickEdgeToolbar'
 import EdgeAnchorHandles, { type EdgeAnchorPreview } from './EdgeAnchorHandles'
@@ -69,6 +70,7 @@ function FloatingEdge({
   const isNodeFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
   const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
   const { updateEdgeStyle, updateEdgeAnchor, deleteEdge } = useGraphContext()
+  const confirm = useConfirmStore((s) => s.open)
   // 拖动锚点 / 弯曲控制柄时只在这里做路径预览，松手才写 store：一次拖动 = 一条撤销记录、一次落盘
   const [anchorPreview, setAnchorPreview] = useState<EdgeAnchorPreview | null>(null)
   const [curvePreview, setCurvePreview] = useState<CurveControl | null>(null)
@@ -88,9 +90,17 @@ function FloatingEdge({
     void updateEdgeStyle(id, { color: value })
   }, [updateEdgeStyle, id])
 
-  const handleDelete = useCallback(() => {
-    void deleteEdge(id)
-  }, [deleteEdge, id])
+  // 删除是不可逆的破坏性操作，且按钮就在工具栏最右、hover 变红，误触成本高：
+  // 走全局统一模态确认框（App.tsx 已挂载），取消则什么都不做。
+  const handleDelete = useCallback(async () => {
+    const confirmed = await confirm({
+      title: '删除连线',
+      message: '确定删除这条连线吗？删除后可用 Ctrl+Z 撤销。',
+      confirmText: '删除连线',
+    })
+    if (!confirmed) return
+    await deleteEdge(id)
+  }, [confirm, deleteEdge, id])
 
   const handleCurveCommit = useCallback((control: CurveControl) => {
     void updateEdgeStyle(id, { curveControl: control })

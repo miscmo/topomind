@@ -1322,6 +1322,62 @@ const edge = (
   // 10) 批次 A：写盘 JSON 不再为每条边写 "curveControl": null，往返语义仍不变
   assert.ok(!('curveControl' in (written.edges?.[2] as Record<string, unknown>)),
     '空的曲线控制点不应写进磁盘 JSON（万级边时避免白白膨胀）')
+
+  // 11) 批次 B：弯曲位置收紧到二次贝塞尔的安全区间，端点切线不得反向（消除回勾）
+  //     C 沿连线方向的投影 = L·(2u - 0.5)，u<0.25 或 u>0.75 会把 C 推到端点外侧。
+  assert.equal(CURVE_POSITION_MIN, 0.25, '弯曲位置下界必须是 C 投影不越过起点的临界值')
+  assert.equal(CURVE_POSITION_MAX, 0.75, '弯曲位置上界必须是 C 投影不越过终点的临界值')
+  assert.deepEqual(normalizeCurveControl({ u: 0.15, v: 0.3 }), { u: CURVE_POSITION_MIN, v: 0.3 },
+    '旧存档里越界的弯曲位置读入时应平滑钳到新边界，不能把整条曲线丢掉')
+  assert.deepEqual(normalizeCurveControl({ u: 0.85, v: 0.3 }), { u: CURVE_POSITION_MAX, v: 0.3 })
+  // 真跑几何：水平连线 S(0,0)→T(100,0)，解析路径里的 C，
+  // 断言 C.x ∈ [0,100] 且 x(t) 单调不减（不回勾、不从节点里钻出来）
+  for (const u of [CURVE_POSITION_MIN, 0.5, CURVE_POSITION_MAX]) {
+    for (const v of [-1, 0.4, 1]) {
+      const [path] = floatingModule.getCurvedEdgePath(0, 0, 100, 0, { u, v })
+      const match = /^M 0,0 Q ([-\d.]+),([-\d.]+) 100,0$/.exec(path)
+      assert.ok(match, '曲线路径必须能解析出二次贝塞尔控制点')
+      const cx = Number(match![1])
+      assert.ok(cx >= -1e-6 && cx <= 100 + 1e-6,
+        `u=${u} v=${v} 时贝塞尔控制点投影不得越过两端（否则端点回勾）`)
+      let prevX = -Infinity
+      for (let i = 0; i <= 20; i++) {
+        const t = i / 20
+        const x = 2 * t * (1 - t) * cx + t * t * 100
+        assert.ok(x >= prevX - 1e-6, `u=${u} v=${v} 时曲线沿连线方向必须单调，不能回勾`)
+        prevX = x
+      }
+    }
+  }
+  // 拖拽反推同样受新边界约束（把手柄拖到节点外不会写回越界控制点）
+  assert.equal(
+    floatingModule.resolveCurveControlFromDrag(0, 0, 100, 0, -100, 50).u,
+    CURVE_POSITION_MIN,
+    '拖到起点外侧时弯曲位置必须钳到下界',
+  )
+  assert.equal(
+    floatingModule.resolveCurveControlFromDrag(0, 0, 100, 0, 200, 50).u,
+    CURVE_POSITION_MAX,
+    '拖到终点外侧时弯曲位置必须钳到上界',
+  )
+
+  // 12) 批次 B：删除连线必须先过全局模态确认框，取消时不得删除
+  const edgeSource = await readFile(
+    fileURLToPath(new URL('../src/features/graph/GraphCanvas/edges/FloatingEdge.tsx', import.meta.url)),
+    'utf8',
+  )
+  assert.ok(edgeSource.includes("import { useConfirmStore } from '../../../../shared/ui/ConfirmModal/confirmStore'"),
+    '删除确认必须走 shared/ui 的全局统一模态（ConfirmModal 已在 App.tsx 挂载）')
+  assert.ok(edgeSource.includes('onDelete={handleDelete}'), '工具栏删除按钮必须接到带确认的处理函数')
+  const deleteBody = edgeSource.slice(
+    edgeSource.indexOf('const handleDelete = useCallback('),
+    edgeSource.indexOf('const handleCurveCommit = useCallback('),
+  )
+  assert.ok(deleteBody.length > 0, '必须能定位到 handleDelete 函数体')
+  assert.ok(deleteBody.includes('await confirm({') && deleteBody.includes('if (!confirmed) return'),
+    'handleDelete 必须等待确认结果，取消时不得删除')
+  assert.ok(deleteBody.includes('await deleteEdge(id)'), '确认后才真正删除连线')
+  assert.ok(!deleteBody.includes('void deleteEdge(id)'), '不允许未确认就直接删除')
 }
 
 // 主题收归为浅色/深色两套：已下线主题必须迁移到正确的一套，否则菜单勾选会悬空

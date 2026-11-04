@@ -386,7 +386,7 @@ function CurveControlFields({
     <>
       <CurveSlider
         label="弯曲位置"
-        hint="控制点沿连线的位置：0.15 靠近起点、0.85 靠近终点"
+        hint={`控制点沿连线的位置：${CURVE_POSITION_MIN} 靠近起点、${CURVE_POSITION_MAX} 靠近终点（过近会让曲线在端点打结）`}
         value={draft.u}
         min={CURVE_POSITION_MIN}
         max={CURVE_POSITION_MAX}
