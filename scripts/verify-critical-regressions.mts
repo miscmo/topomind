@@ -1585,6 +1585,16 @@ const edge = (
   assert.equal(isSameHeadingNumbers({ a: '1' }, { a: '1' }), true)
   assert.equal(isSameHeadingNumbers({ a: '1' }, { a: '2' }), false)
   assert.equal(isSameHeadingNumbers({ a: '1' }, { a: '1', b: '2' }), false)
+
+  // 编号（::before）与末尾 H1~H6 层级水印（::after）必须共存：
+  // 曾因「开启编号时隐藏水印」导致级标消失，这里锁死不允许再加按开关隐藏的规则。
+  const headingCss = await readFile(
+    new URL('../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.css', import.meta.url),
+    'utf-8',
+  )
+  assert.ok(headingCss.includes('content: var(--tm-heading-badge'), 'H1~H6 层级水印规则必须保留')
+  assert.equal(headingCss.includes('data-tm-heading-numbering'), false, '不得按编号开关隐藏层级水印')
+  assert.equal(headingCss.includes('content: none'), false, '不得用 content: none 吞掉层级水印')
 }
 
 console.log('Critical regression checks verified')

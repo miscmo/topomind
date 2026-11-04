@@ -800,7 +800,6 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       <div ref={scrollContainerRef} data-paper-bg={defaultEditorStyle.paperBackground ?? 'plain'} className="flex-1 min-h-0 overflow-y-auto tm-smart-editor-scroll" spellCheck={false}>
         <div
           ref={editorRootRef}
-          data-tm-heading-numbering={headingNumbering.enabled ? 'on' : 'off'}
         className="smart-document-content relative min-h-full"
         style={{ color: 'var(--color-text-primary)' }}
       >
