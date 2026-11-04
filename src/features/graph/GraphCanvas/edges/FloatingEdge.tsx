@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useState } from 'react'
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -11,10 +11,12 @@ import {
 import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, clampNumber } from '../../../../domain/style/styleConstraints'
 import type { EdgeStylePatch, KnowledgeEdge } from '../../../../types'
+import { normalizeEdgeAnchor, type EdgeAnchorPatch } from '../../../../domain/graph/edgeAnchors'
 import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
-import { getEdgeParams } from './floatingUtils'
+import { getEdgeParams, getInternalNodeRect } from './floatingUtils'
 import QuickEdgeToolbar from './QuickEdgeToolbar'
+import EdgeAnchorHandles, { type EdgeAnchorPreview } from './EdgeAnchorHandles'
 
 /**
  * 箭头几何：在 12x12 的 viewBox 内画一个朝右的箭头，尖端位于 x=12、垂直居中于 y=6。
@@ -56,10 +58,20 @@ function FloatingEdge({
   const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
   const isNodeFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
   const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
-  const { updateEdgeStyle } = useGraphContext()
+  const { updateEdgeStyle, updateEdgeAnchor } = useGraphContext()
+  // 拖动锚点时只在这里做路径预览，松手才写 store：一次拖动 = 一条撤销记录、一次落盘
+  const [anchorPreview, setAnchorPreview] = useState<EdgeAnchorPreview | null>(null)
 
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
+
+  const handleAnchorCommit = useCallback((patch: EdgeAnchorPatch) => {
+    void updateEdgeAnchor(id, patch)
+  }, [updateEdgeAnchor, id])
+
+  const handleAnchorReset = useCallback(() => {
+    void updateEdgeAnchor(id, { sourceAnchor: null, targetAnchor: null })
+  }, [updateEdgeAnchor, id])
 
   const handleColorChange = useCallback((value: string) => {
     void updateEdgeStyle(id, { color: value })
@@ -82,14 +94,29 @@ function FloatingEdge({
     isSelected
     && connectingSourceId === null
     && !isNodeFormatPainterActive
+  // 格式刷/连线中隐藏手柄，避免挡住「点击连线应用样式」
+  const showAnchorHandles =
+    isSelected
+    && connectingSourceId === null
+    && !isNodeFormatPainterActive
+    && !isEdgeFormatPainterActive
+  const hasCustomAnchors =
+    normalizeEdgeAnchor(edgeData?.sourceAnchor) != null
+    || normalizeEdgeAnchor(edgeData?.targetAnchor) != null
 
   if (!sourceNode || !targetNode) {
     return null
   }
 
+  const sourceRect = getInternalNodeRect(sourceNode)
+  const targetRect = getInternalNodeRect(targetNode)
+  const sourceAnchor = anchorPreview?.side === 'source' ? anchorPreview.anchor : edgeData?.sourceAnchor
+  const targetAnchor = anchorPreview?.side === 'target' ? anchorPreview.anchor : edgeData?.targetAnchor
+
   const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
     sourceNode,
-    targetNode
+    targetNode,
+    { sourceAnchor, targetAnchor }
   )
 
   const isStraight = edgeData?.lineMode === 'straight' || data?.type === 'straight'
@@ -168,23 +195,41 @@ function FloatingEdge({
         markerEnd={showEnd ? `url(#${markerId})` : undefined}
         style={style}
       />
-      {showToolbar && (
+      {(showToolbar || showAnchorHandles) && (
         <EdgeLabelRenderer>
-          <div
-            className="nodrag nopan"
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -100%) translate(${labelX}px, ${labelY}px) translateY(-10px)`,
-              pointerEvents: 'all',
-            }}
-          >
-            <QuickEdgeToolbar
-              color={edgeData?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color}
-              isFormatPainterActive={isEdgeFormatPainterActive}
-              onColorChange={handleColorChange}
-              onToggleFormatPainter={toggleFormatPainter}
+          {showAnchorHandles && (
+            <EdgeAnchorHandles
+              sourceRect={sourceRect}
+              targetRect={targetRect}
+              sourcePoint={{ x: sx, y: sy }}
+              targetPoint={{ x: tx, y: ty }}
+              sourceAnchor={sourceAnchor}
+              targetAnchor={targetAnchor}
+              onPreview={setAnchorPreview}
+              onCommit={handleAnchorCommit}
             />
-          </div>
+          )}
+          {showToolbar && (
+            <div
+              className="nodrag nopan"
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -100%) translate(${labelX}px, ${labelY}px) translateY(-10px)`,
+                pointerEvents: 'all',
+                // 与锚点手柄同层：连线两端贴近节点时，工具栏不能被节点盖住而点不到
+                zIndex: 10,
+              }}
+            >
+              <QuickEdgeToolbar
+                color={edgeData?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color}
+                isFormatPainterActive={isEdgeFormatPainterActive}
+                hasCustomAnchors={hasCustomAnchors}
+                onColorChange={handleColorChange}
+                onToggleFormatPainter={toggleFormatPainter}
+                onResetAnchors={handleAnchorReset}
+              />
+            </div>
+          )}
         </EdgeLabelRenderer>
       )}
     </>

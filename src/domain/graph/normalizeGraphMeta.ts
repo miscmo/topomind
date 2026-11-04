@@ -1,6 +1,7 @@
 import type { CardInfo, GraphMeta, KBEdge } from './model'
 import type { EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../style/styleConstraints.ts'
+import { normalizeEdgeAnchor } from './edgeAnchors.ts'
 
 const DEFAULT_VIEWPORT = { zoom: 1, pan: { x: 0, y: 0 } }
 const DEFAULT_NODE_SIZE = { width: 120, height: 52 }
@@ -141,6 +142,8 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       arrowSize: normalizeArrowSize(rawEdge.arrowSize),
       arrowShape: normalizeArrowShape(rawEdge.arrowShape),
       arrowPosition: normalizeArrowPosition(rawEdge.arrowPosition),
+      sourceAnchor: normalizeEdgeAnchor(rawEdge.sourceAnchor),
+      targetAnchor: normalizeEdgeAnchor(rawEdge.targetAnchor),
       highlighted: typeof rawEdge.highlighted === 'boolean' ? rawEdge.highlighted : undefined,
       faded: typeof rawEdge.faded === 'boolean' ? rawEdge.faded : undefined,
     })

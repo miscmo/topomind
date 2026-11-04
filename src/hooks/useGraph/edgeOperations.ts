@@ -7,12 +7,20 @@ import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../../domain/style/styleConstraints'
+import { normalizeEdgeAnchor, type EdgeAnchor, type EdgeAnchorPatch } from '../../domain/graph/edgeAnchors'
 
 export interface EdgeOperationsDeps {
   getActiveGraphSession: () => GraphSession | undefined
   saveNow: (dirPath: string) => Promise<void>
   saveLater: (dirPath: string) => Promise<void>
   storeApi: StoreApi<GraphState>
+}
+
+function sameAnchor(a: EdgeAnchor | null | undefined, b: EdgeAnchor | null | undefined) {
+  const left = normalizeEdgeAnchor(a)
+  const right = normalizeEdgeAnchor(b)
+  if (!left || !right) return left === right
+  return left.u === right.u && left.v === right.v
 }
 
 function withEdgeSelection(edge: KnowledgeEdge, selected: boolean): KnowledgeEdge {
@@ -241,6 +249,49 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     if (shouldPersist) logAction('连线:更新样式', 'graphOperations', { edgeId, ...style })
   }
 
+  /**
+   * 设置 / 复位某条连线的端点锚点。锚点属于连线，不属于节点：
+   * 同一节点对不同连线各有独立端点；存的是相对节点矩形的归一化坐标。
+   * patch 里显式传 null 表示恢复该端的自动交点。
+   */
+  const updateEdgeAnchor = async (edgeId: string, patch: EdgeAnchorPatch) => {
+    const graphSession = getActiveGraphSession()
+    const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
+    const store = storeApi.getState()
+    let changed = false
+    const nextEdges = store.edges.map((e) => {
+      if (e.id !== edgeId) return e
+      const nextData = { ...e.data }
+      if ('sourceAnchor' in patch) {
+        const normalized = normalizeEdgeAnchor(patch.sourceAnchor)
+        if (normalized) nextData.sourceAnchor = normalized
+        else delete nextData.sourceAnchor
+      }
+      if ('targetAnchor' in patch) {
+        const normalized = normalizeEdgeAnchor(patch.targetAnchor)
+        if (normalized) nextData.targetAnchor = normalized
+        else delete nextData.targetAnchor
+      }
+      if (
+        sameAnchor(e.data?.sourceAnchor, nextData.sourceAnchor)
+        && sameAnchor(e.data?.targetAnchor, nextData.targetAnchor)
+      ) return e
+      changed = true
+      return {
+        ...e,
+        data: {
+          ...nextData,
+          relation: e.data?.relation ?? '相关',
+          weight: e.data?.weight ?? 'minor',
+        },
+      } as KnowledgeEdge
+    })
+    if (!changed) return
+    store.setEdges(nextEdges)
+    if (currentRoomPath) await saveLater(currentRoomPath)
+    logAction('连线:更新锚点', 'graphOperations', { edgeId, ...patch })
+  }
+
   const setSelectedEdgeInGraph = (edgeId: string | null) => {
     const store = storeApi.getState()
     let changed = false
@@ -258,6 +309,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     deleteEdge,
     updateEdgeRelation,
     updateEdgeStyle,
+    updateEdgeAnchor,
     setSelectedEdgeInGraph,
   }
 }

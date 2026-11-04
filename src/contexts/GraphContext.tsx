@@ -9,6 +9,7 @@
 import { createContext, useContext, useMemo, type Context } from 'react'
 import { useGraph } from '../hooks/useGraph'
 import type { KnowledgeNodeData, KnowledgeNodeStyle, EdgeRelation, EdgeWeight, EdgeStylePatch, NodeSizingMode } from '../types'
+import type { EdgeAnchorPatch } from '../domain/graph/edgeAnchors'
 import type { Node, Edge, NodeChange, EdgeChange, Connection, FinalConnectionState } from '@xyflow/react'
 
 export interface GraphContextValue {
@@ -47,6 +48,7 @@ export interface GraphContextValue {
   // Edge operations
   updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => void
   updateEdgeStyle: (edgeId: string, style: EdgeStylePatch & { selected?: boolean }) => void
+  updateEdgeAnchor: (edgeId: string, patch: EdgeAnchorPatch) => void
 
   // Persistence
   flushCurrentRoomSave: () => Promise<void>
@@ -88,6 +90,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     createEdge: graph.createEdge,
     updateEdgeRelation: graph.updateEdgeRelation,
     updateEdgeStyle: graph.updateEdgeStyle,
+    updateEdgeAnchor: graph.updateEdgeAnchor,
     flushCurrentRoomSave: graph.flushCurrentRoomSave,
   }
 }

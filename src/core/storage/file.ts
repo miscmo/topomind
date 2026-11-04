@@ -1,8 +1,9 @@
 import { FSB } from '../fs-backend'
 import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem, TopoDocumentMetaPatch, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
-import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle } from '../../types'
+import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, EdgeAnchor } from '../../types'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
+import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 
 interface FSBGraphChild {
   name: string
@@ -33,6 +34,8 @@ interface FSBGraphEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  sourceAnchor?: EdgeAnchor | null
+  targetAnchor?: EdgeAnchor | null
   highlighted?: boolean
   faded?: boolean
 }
@@ -105,6 +108,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
     id: string; source: CardInfo; target: CardInfo; relation: EdgeRelation; weight: EdgeWeight
     lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'
     color?: string; lineWidth?: number; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
+    sourceAnchor?: EdgeAnchor | null; targetAnchor?: EdgeAnchor | null
     highlighted?: boolean; faded?: boolean
   }> = (raw.edges ?? []).map(e => ({
     id: e.id,
@@ -120,6 +124,8 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
     arrowSize: e.arrowSize,
     arrowShape: e.arrowShape,
     arrowPosition: e.arrowPosition,
+    sourceAnchor: normalizeEdgeAnchor(e.sourceAnchor),
+    targetAnchor: normalizeEdgeAnchor(e.targetAnchor),
     highlighted: e.highlighted,
     faded: e.faded,
   }))
@@ -142,6 +148,7 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
     id: string; source: string; target: string; relation: EdgeRelation; weight: EdgeWeight
     lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'
     color?: string; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
+    sourceAnchor?: EdgeAnchor | null; targetAnchor?: EdgeAnchor | null
     highlighted?: boolean; faded?: boolean
   }>
   zoom?: number; pan?: { x: number; y: number }

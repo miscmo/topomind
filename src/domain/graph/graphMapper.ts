@@ -1,5 +1,6 @@
 import type { CardInfo, GraphMeta } from './model'
 import { basenameRef, normalizeRef } from './path-utils'
+import { normalizeEdgeAnchor } from './edgeAnchors'
 import {
   DEFAULT_NODE_SIZE,
   DEFAULT_VIEWPORT,
@@ -63,6 +64,8 @@ export function graphMetaToRoomGraph(roomRef: string, meta: GraphMeta): RoomGrap
       arrowSize: edge.arrowSize,
       arrowShape: edge.arrowShape,
       arrowPosition: edge.arrowPosition,
+      sourceAnchor: normalizeEdgeAnchor(edge.sourceAnchor),
+      targetAnchor: normalizeEdgeAnchor(edge.targetAnchor),
       highlighted: edge.highlighted,
       faded: edge.faded,
     })),
@@ -114,6 +117,8 @@ export function roomGraphToGraphMeta(graph: RoomGraph): GraphMeta {
       arrowSize: edge.arrowSize,
       arrowShape: edge.arrowShape,
       arrowPosition: edge.arrowPosition,
+      sourceAnchor: normalizeEdgeAnchor(edge.sourceAnchor),
+      targetAnchor: normalizeEdgeAnchor(edge.targetAnchor),
       highlighted: edge.highlighted,
       faded: edge.faded,
     })),

@@ -4,6 +4,8 @@ import { Eye, EyeOff, Minus, Plus } from 'lucide-react'
 import { logAction } from '../../../../core/log-backend'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
+import { getAnchorSide, normalizeEdgeAnchor, resolveAnchorPoint } from '../../../../domain/graph/edgeAnchors'
+import { anchorSideToPosition } from '../edges/floatingUtils'
 import type { KnowledgeEdge, KnowledgeNode } from '../../../../types'
 import Toolbar from '../../../layout/Toolbar/Toolbar'
 import { getNodeRect } from '../utils/math'
@@ -157,11 +159,20 @@ function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, N
       y: targetRect.y + targetRect.height / 2,
     }
 
-    const sourcePoint = getRectBoundaryPoint(sourceRect, targetCenter)
-    const targetPoint = getRectBoundaryPoint(targetRect, sourceCenter)
-    const sourcePosition = getAnchorPosition(sourceRect, sourcePoint)
-    const targetPosition = getAnchorPosition(targetRect, targetPoint)
     const edgeData = (edge.data ?? {}) as KnowledgeEdge['data']
+    // 与画布 FloatingEdge 共用同一套锚点换算，避免缩略图和主画布的接线位置分叉
+    const sourceAnchor = normalizeEdgeAnchor(edgeData?.sourceAnchor)
+    const targetAnchor = normalizeEdgeAnchor(edgeData?.targetAnchor)
+    let sourcePoint = resolveAnchorPoint(sourceRect, sourceAnchor) ?? getRectBoundaryPoint(sourceRect, targetCenter)
+    let targetPoint = resolveAnchorPoint(targetRect, targetAnchor) ?? getRectBoundaryPoint(targetRect, sourceCenter)
+    if (!sourceAnchor && targetAnchor) sourcePoint = getRectBoundaryPoint(sourceRect, targetPoint)
+    if (!targetAnchor && sourceAnchor) targetPoint = getRectBoundaryPoint(targetRect, sourcePoint)
+    const sourcePosition = sourceAnchor
+      ? anchorSideToPosition(getAnchorSide(sourceAnchor, sourceRect, targetCenter))
+      : getAnchorPosition(sourceRect, sourcePoint)
+    const targetPosition = targetAnchor
+      ? anchorSideToPosition(getAnchorSide(targetAnchor, targetRect, sourceCenter))
+      : getAnchorPosition(targetRect, targetPoint)
     const isStraight = edgeData?.lineMode === 'straight' || edge.type === 'straight'
     const [path] = isStraight
       ? getStraightPath({

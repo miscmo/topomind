@@ -1,13 +1,16 @@
 import { memo } from 'react'
-import { PaintRoller } from 'lucide-react'
+import { PaintRoller, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface QuickEdgeToolbarProps {
   /** 当前线条颜色（用于色块预览） */
   color: string
   isFormatPainterActive: boolean
+  /** 本条连线是否设置了自定义锚点（决定要不要显示复位按钮） */
+  hasCustomAnchors: boolean
   onColorChange: (value: string) => void
   onToggleFormatPainter: () => void
+  onResetAnchors: () => void
 }
 
 function stopEvent(event: React.SyntheticEvent) {
@@ -23,8 +26,10 @@ function stopEvent(event: React.SyntheticEvent) {
 function QuickEdgeToolbar({
   color,
   isFormatPainterActive,
+  hasCustomAnchors,
   onColorChange,
   onToggleFormatPainter,
+  onResetAnchors,
 }: QuickEdgeToolbarProps) {
   return (
     <div
@@ -65,6 +70,20 @@ function QuickEdgeToolbar({
       >
         <PaintRoller className="h-4 w-4" strokeWidth={isFormatPainterActive ? 2.5 : 2} />
       </button>
+
+      {hasCustomAnchors && (
+        <>
+          <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border-light)]" />
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] transition-all duration-200"
+            onClick={onResetAnchors}
+            title="恢复自动锚点（两端）"
+          >
+            <RotateCcw className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </>
+      )}
     </div>
   )
 }

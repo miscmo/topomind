@@ -1,20 +1,50 @@
 import { Position, type InternalNode } from '@xyflow/react'
+import {
+  getAnchorSide,
+  normalizeEdgeAnchor,
+  resolveAnchorPoint,
+  type AnchorRect,
+  type EdgeAnchorPatch,
+  type EdgeAnchorSide,
+} from '../../../../domain/graph/edgeAnchors'
 
-// 计算从 source 中心到 target 中心的射线，与 source 边界的交点
-function getNodeIntersection(intersectionNode: InternalNode, targetNode: InternalNode) {
+/** React Flow 内部节点的绝对矩形（含父节点偏移），锚点换算与路径计算共用 */
+export function getInternalNodeRect(node: InternalNode): AnchorRect {
+  const position = node.internals?.positionAbsolute ?? { x: 0, y: 0 }
+  return {
+    x: position.x,
+    y: position.y,
+    width: node.measured?.width ?? node.width ?? 0,
+    height: node.measured?.height ?? node.height ?? 0,
+  }
+}
+
+export function anchorSideToPosition(side: EdgeAnchorSide): Position {
+  switch (side) {
+    case 'left': return Position.Left
+    case 'right': return Position.Right
+    case 'top': return Position.Top
+    case 'bottom': return Position.Bottom
+  }
+}
+
+function getRectCenter(rect: AnchorRect) {
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+}
+
+// 计算从节点中心射向目标点的射线，与该节点边框的交点
+function getNodeIntersection(intersectionNode: InternalNode, targetPoint: { x: number; y: number }) {
   const intersectionNodeWidth = intersectionNode.measured?.width || 0
   const intersectionNodeHeight = intersectionNode.measured?.height || 0
   const intersectionNodePosition = intersectionNode.internals?.positionAbsolute || { x: 0, y: 0 }
-
-  const targetPosition = targetNode.internals?.positionAbsolute || { x: 0, y: 0 }
 
   const w = Math.max(intersectionNodeWidth / 2, 1)
   const h = Math.max(intersectionNodeHeight / 2, 1)
 
   const x2 = intersectionNodePosition.x + w
   const y2 = intersectionNodePosition.y + h
-  const x1 = targetPosition.x + (targetNode.measured?.width || 0) / 2
-  const y1 = targetPosition.y + (targetNode.measured?.height || 0) / 2
+  const x1 = targetPoint.x
+  const y1 = targetPoint.y
 
   if (x1 === x2 && y1 === y2) {
     return { x: x2, y: y2 }
@@ -32,52 +62,74 @@ function getNodeIntersection(intersectionNode: InternalNode, targetNode: Interna
 }
 
 // 根据交点在节点的哪一侧，返回对应的 Position (上、下、左、右)
-function getEdgePosition(node: InternalNode, intersectionPoint: { x: number; y: number }) {
-  const nx = Math.round(node.internals?.positionAbsolute?.x || 0)
-  const ny = Math.round(node.internals?.positionAbsolute?.y || 0)
+function getEdgePosition(rect: AnchorRect, intersectionPoint: { x: number; y: number }) {
+  const nx = Math.round(rect.x)
+  const ny = Math.round(rect.y)
   const px = Math.round(intersectionPoint.x)
   const py = Math.round(intersectionPoint.y)
 
-  if (px <= nx + 1) {
-    return Position.Left
-  }
-  if (px >= nx + (node.measured?.width || 0) - 1) {
-    return Position.Right
-  }
-  if (py <= ny + 1) {
-    return Position.Top
-  }
-  if (py >= ny + (node.measured?.height || 0) - 1) {
-    return Position.Bottom
-  }
+  if (px <= nx + 1) return Position.Left
+  if (px >= nx + rect.width - 1) return Position.Right
+  if (py <= ny + 1) return Position.Top
+  if (py >= ny + rect.height - 1) return Position.Bottom
 
   return Position.Top
 }
 
-export function getEdgeParams(source: InternalNode, target: InternalNode, offset: number = 6) {
-  const sourceIntersectionPoint = getNodeIntersection(source, target)
-  const targetIntersectionPoint = getNodeIntersection(target, source)
+/**
+ * 计算一条连线的两个端点。
+ *
+ * 缺省（老存档 / 未拖动过）时完全沿用旧算法：以两端中心连线为射线求边框交点，
+ * 再沿方向各外推 offset px。任一端设置了锚点，该端就直接落在
+ * 节点绝对位置 + (u × 宽, v × 高) 上，且不再做 offset 外推——手柄与线端点严格重合。
+ * 另一端若仍是自动，则改朝这一端的实际锚点求交点，避免方向仍指向节点中心。
+ */
+export function getEdgeParams(
+  source: InternalNode,
+  target: InternalNode,
+  anchors: EdgeAnchorPatch = {},
+  offset: number = 6
+) {
+  const sourceRect = getInternalNodeRect(source)
+  const targetRect = getInternalNodeRect(target)
+  const sourceCenter = getRectCenter(sourceRect)
+  const targetCenter = getRectCenter(targetRect)
+  const sourceAnchor = normalizeEdgeAnchor(anchors.sourceAnchor)
+  const targetAnchor = normalizeEdgeAnchor(anchors.targetAnchor)
 
-  const sourcePos = getEdgePosition(source, sourceIntersectionPoint)
-  const targetPos = getEdgePosition(target, targetIntersectionPoint)
+  let sourcePoint = resolveAnchorPoint(sourceRect, sourceAnchor) ?? getNodeIntersection(source, targetCenter)
+  let targetPoint = resolveAnchorPoint(targetRect, targetAnchor) ?? getNodeIntersection(target, sourceCenter)
 
-  const dx = targetIntersectionPoint.x - sourceIntersectionPoint.x
-  const dy = targetIntersectionPoint.y - sourceIntersectionPoint.y
+  if (!sourceAnchor && targetAnchor) sourcePoint = getNodeIntersection(source, targetPoint)
+  if (!targetAnchor && sourceAnchor) targetPoint = getNodeIntersection(target, sourcePoint)
+
+  const sourcePos = sourceAnchor
+    ? anchorSideToPosition(getAnchorSide(sourceAnchor, sourceRect, targetCenter))
+    : getEdgePosition(sourceRect, sourcePoint)
+  const targetPos = targetAnchor
+    ? anchorSideToPosition(getAnchorSide(targetAnchor, targetRect, sourceCenter))
+    : getEdgePosition(targetRect, targetPoint)
+
+  const dx = targetPoint.x - sourcePoint.x
+  const dy = targetPoint.y - sourcePoint.y
   const length = Math.sqrt(dx * dx + dy * dy)
-  
-  let sx = sourceIntersectionPoint.x
-  let sy = sourceIntersectionPoint.y
-  let tx = targetIntersectionPoint.x
-  let ty = targetIntersectionPoint.y
+
+  let sx = sourcePoint.x
+  let sy = sourcePoint.y
+  let tx = targetPoint.x
+  let ty = targetPoint.y
 
   if (length > offset * 2) {
     const ux = dx / length
     const uy = dy / length
-    sx = sx + ux * offset
-    tx = tx - ux * offset
-    ty = ty - uy * offset
-    // sy also? Yes, but maybe source offset is also needed? The user only mentioned the arrow (target side) embedding into the node. Let's do both source and target by offset.
-    sy = sy + uy * offset
+    if (!sourceAnchor) {
+      sx += ux * offset
+      sy += uy * offset
+    }
+    if (!targetAnchor) {
+      tx -= ux * offset
+      ty -= uy * offset
+    }
   }
 
   return {

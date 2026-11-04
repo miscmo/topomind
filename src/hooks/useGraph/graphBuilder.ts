@@ -12,6 +12,7 @@ import { basenameRef, resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { graphMetaToRoomGraph, roomGraphToGraphMeta } from '../../domain/graph/graphMapper'
 import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph/model'
 import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
+import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 import { buildEdgeView } from './edgeView'
 
 export function generateId(prefix: string): string {
@@ -91,6 +92,8 @@ export function buildMetaFromNodesEdges(
     arrowSize: e.data?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize,
     arrowShape: e.data?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape,
     arrowPosition: e.data?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition,
+    sourceAnchor: normalizeEdgeAnchor(e.data?.sourceAnchor),
+    targetAnchor: normalizeEdgeAnchor(e.data?.targetAnchor),
     highlighted: e.data?.highlighted ?? false,
     faded: e.data?.faded ?? false,
   }))
@@ -187,6 +190,8 @@ export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
         arrowSize,
         arrowShape,
         arrowPosition,
+        sourceAnchor: normalizeEdgeAnchor(e.sourceAnchor),
+        targetAnchor: normalizeEdgeAnchor(e.targetAnchor),
         highlighted: e.highlighted ?? false,
         faded: e.faded ?? false,
       },

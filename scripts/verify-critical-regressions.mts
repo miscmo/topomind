@@ -63,6 +63,7 @@ import {
 } from '../src/core/close-guard.ts'
 import { normalizeDefaultEdgeStyle } from '../src/domain/style/normalizeStyleConfig.ts'
 import { normalizeGraphMeta } from '../src/domain/graph/normalizeGraphMeta.ts'
+import { clampEdgeAnchor, normalizeEdgeAnchor, resolveAnchorPoint, toEdgeAnchor, getAnchorSide } from '../src/domain/graph/edgeAnchors.ts'
 import { STYLE_CONFIG_DEFAULTS } from '../src/domain/style/styleDefaults.ts'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, MAIN_EDGE_WIDTH_RATIO } from '../src/domain/style/styleConstraints.ts'
 import { buildEdgeView } from '../src/hooks/useGraph/edgeView.ts'
@@ -949,6 +950,56 @@ const edge = (
   })
   assert.equal(meta.edges[0].lineWidth, 3)
   assert.equal(meta.edges[1].lineWidth, EDGE_LINE_WIDTH_LIMIT.min)
+}
+
+// 连线锚点：归一化坐标 + 框内钳制 + 存档读入 + 全链路白名单同步
+{
+  assert.deepEqual(clampEdgeAnchor({ u: 2, v: -1 }), { u: 1, v: 0 })
+  assert.equal(normalizeEdgeAnchor({ u: Number.NaN, v: 0.3 }), undefined)
+  assert.equal(normalizeEdgeAnchor({ u: 0.5 }), undefined)
+  assert.equal(normalizeEdgeAnchor('oops'), undefined)
+
+  const rect = { x: 100, y: 50, width: 200, height: 80 }
+  assert.deepEqual(resolveAnchorPoint(rect, { u: 0.25, v: 0.75 }), { x: 150, y: 110 })
+  assert.equal(resolveAnchorPoint(rect, undefined), undefined)
+  assert.deepEqual(toEdgeAnchor(rect, { x: 999, y: -999 }), { u: 1, v: 0 })
+  assert.deepEqual(toEdgeAnchor(rect, resolveAnchorPoint(rect, { u: 0.3, v: 0.6 })!), { u: 0.3, v: 0.6 })
+  assert.equal(getAnchorSide({ u: 1, v: 0.5 }, rect, { x: 0, y: 0 }), 'right')
+  assert.equal(getAnchorSide({ u: 0, v: 0.5 }, rect, { x: 0, y: 0 }), 'left')
+  assert.equal(getAnchorSide({ u: 0.5, v: 1 }, rect, { x: 0, y: 0 }), 'bottom')
+  assert.equal(getAnchorSide({ u: 0.5, v: 0 }, rect, { x: 0, y: 0 }), 'top')
+
+  // 老存档没有锚点字段：行为完全不变；越界值读入时必须被夹回节点框内
+  const meta = normalizeGraphMeta({
+    nodes: {},
+    edges: [
+      { id: 'e1', source: { ref: 'a' }, target: { ref: 'b' }, sourceAnchor: { u: 0.2, v: 0.8 }, targetAnchor: { u: 9, v: -3 } },
+      { id: 'e2', source: { ref: 'a' }, target: { ref: 'c' }, sourceAnchor: 'oops', targetAnchor: { u: 0.5 } },
+      { id: 'e3', source: { ref: 'a' }, target: { ref: 'd' } },
+    ],
+    viewport: {},
+  })
+  assert.deepEqual(meta.edges[0].sourceAnchor, { u: 0.2, v: 0.8 })
+  assert.deepEqual(meta.edges[0].targetAnchor, { u: 1, v: 0 })
+  assert.equal(meta.edges[1].sourceAnchor, undefined)
+  assert.equal(meta.edges[2].sourceAnchor, undefined)
+  assert.equal(meta.edges[2].targetAnchor, undefined)
+
+  // 铁律：新增/删除边字段时，读写、映射、渲染各层必须同步，否则锚点会静默丢失
+  const anchorWhitelistFiles = [
+    'src/core/storage/file.ts',
+    'src/domain/graph/normalizeGraphMeta.ts',
+    'src/domain/graph/graphMapper.ts',
+    'src/hooks/useGraph/graphBuilder.ts',
+    'src/hooks/useGraph/edgeOperations.ts',
+    'src/features/graph/GraphCanvas/edges/floatingUtils.ts',
+    'src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx',
+  ]
+  const fsSync = await import('node:fs')
+  for (const file of anchorWhitelistFiles) {
+    const source = fsSync.readFileSync(new URL(`../${file}`, import.meta.url), 'utf-8')
+    assert.ok(source.includes('sourceAnchor') && source.includes('targetAnchor'), `${file} 必须同步透传连线锚点`)
+  }
 }
 
 // 主题收归为浅色/深色两套：已下线主题必须迁移到正确的一套，否则菜单勾选会悬空

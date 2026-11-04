@@ -4,6 +4,7 @@
  * See constants.ts for visual/design constants.
  */
 import type { Node, Edge } from '@xyflow/react'
+import type { EdgeAnchor } from '../domain/graph/edgeAnchors'
 
 // ============== 视图状态 ==============
 
@@ -72,6 +73,10 @@ export interface GraphEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  /** 起点端锚点（相对 source 节点的归一化坐标）；缺省 = 自动边界交点 */
+  sourceAnchor?: EdgeAnchor | null
+  /** 终点端锚点（相对 target 节点的归一化坐标）；缺省 = 自动边界交点 */
+  targetAnchor?: EdgeAnchor | null
   /** 高亮状态（搜索/选中连线时置 true） */
   highlighted?: boolean
   /** 淡化状态（其他连线淡化时置 true） */
@@ -168,6 +173,9 @@ export type KnowledgeEdge = Edge<{
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  /** 起点端 / 终点端锚点，绑定在本条边上；缺省 = 自动边界交点 */
+  sourceAnchor?: EdgeAnchor | null
+  targetAnchor?: EdgeAnchor | null
   highlighted?: boolean
   faded?: boolean
   /** 选中状态（运行时状态，不持久化） */

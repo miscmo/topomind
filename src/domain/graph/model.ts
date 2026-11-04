@@ -1,4 +1,5 @@
 import type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, NodeSizingMode } from '../../types'
+import type { EdgeAnchor } from './edgeAnchors'
 
 export interface CardInfo {
   ref: string
@@ -48,6 +49,9 @@ export interface RoomGraphEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  /** 起点端 / 终点端锚点（相对各自节点的归一化坐标），绑定在本条边上 */
+  sourceAnchor?: EdgeAnchor | null
+  targetAnchor?: EdgeAnchor | null
   highlighted?: boolean
   faded?: boolean
 }
@@ -89,6 +93,9 @@ export interface KBEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  /** 起点端 / 终点端锚点（相对各自节点的归一化坐标），绑定在本条边上 */
+  sourceAnchor?: EdgeAnchor | null
+  targetAnchor?: EdgeAnchor | null
   highlighted?: boolean
   faded?: boolean
 }
