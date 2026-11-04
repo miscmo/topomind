@@ -206,16 +206,107 @@ function replaceInlineMathInMarkdownLine(line: string): string {
   }).join('')
 }
 
+/**
+ * 下面三个「粘贴内容探测」以前用带跨行惰性量词的正则：
+ *   /(^|\n)\s*\$\$[\s\S]*?\$\$\s*($|\n)/m
+ *   /(\*\*|__)(?!\s)[\s\S]+?(?<!\s)\1/
+ *   /\[[^\]]+\]\([^)]+\)/
+ * 只要文本里出现大量「有开头、没有合法闭合」的片段（从网页 / 日志粘来的
+ * $$ 行、未闭合的 [ 等），每个起点都会一路扫到文末 → O(n²)。实测 240KB
+ * 的 "$$abc\n" 重复耗时 7.7s、"**abc\n" 重复 3.3s、"[abc" 重复 3.1s，
+ * 且都在 pasteHandler 的同步路径上。改成单次线性扫描，语义保持一致。
+ */
+const WHITESPACE_CHAR = /\s/
+
+function isInlineSpace(ch: string | undefined): boolean {
+  return ch !== undefined && ch !== '\n' && WHITESPACE_CHAR.test(ch)
+}
+
+/** `$$...$$`：开标记须在行首、闭标记须在行尾，单次扫描 O(n) */
+function containsBlockMathDelimiter(text: string): boolean {
+  let open = false
+  let index = 0
+  while (index < text.length) {
+    if (text[index] !== '$' || text[index + 1] !== '$') {
+      index += 1
+      continue
+    }
+    let before = index - 1
+    while (isInlineSpace(text[before])) before -= 1
+    const atLineStart = before < 0 || text[before] === '\n'
+    let after = index + 2
+    while (isInlineSpace(text[after])) after += 1
+    const atLineEnd = after >= text.length || text[after] === '\n'
+    if (open) {
+      if (atLineEnd) return true
+    } else if (atLineStart) {
+      open = true
+    }
+    index += 2
+  }
+  return false
+}
+
+function hasPairedEmphasisMarker(text: string, marker: string): boolean {
+  let open = false
+  let index = 0
+  while (index < text.length) {
+    if (!text.startsWith(marker, index)) {
+      index += 1
+      continue
+    }
+    const next = text[index + marker.length]
+    const previous = text[index - 1]
+    if (open && previous !== undefined && !WHITESPACE_CHAR.test(previous)) return true
+    open = next !== undefined && !WHITESPACE_CHAR.test(next)
+    index += marker.length
+  }
+  return false
+}
+
+/** `**...**` / `__...__`：两种标记各自扫一遍，仍是 O(n) */
+function containsEmphasisDelimiter(text: string): boolean {
+  return hasPairedEmphasisMarker(text, '**') || hasPairedEmphasisMarker(text, '__')
+}
+
+/** `[label](target)`：状态机只扫一遍，不依赖跨行惰性匹配 */
+function containsMarkdownLink(text: string): boolean {
+  let labelStart = -1
+  let targetStart = -1
+  for (let index = 0; index < text.length; index += 1) {
+    const ch = text[index]
+    if (targetStart >= 0) {
+      if (ch === ')' && index > targetStart + 1) return true
+      if (ch === '[') {
+        targetStart = -1
+        labelStart = index
+      }
+      continue
+    }
+    if (labelStart >= 0) {
+      if (ch === ']') {
+        if (index > labelStart + 1 && text[index + 1] === '(') targetStart = index + 1
+        else labelStart = -1
+      } else if (ch === '[') {
+        labelStart = index
+      }
+      continue
+    }
+    if (ch === '[') labelStart = index
+  }
+  return false
+}
+
 export function containsMathDelimiters(text: string): boolean {
   if (!text) return false
-  return /(^|\n)\s*\$\$[\s\S]*?\$\$\s*($|\n)/m.test(text) || /(^|[^\\])\$[^$\n]+\$(?!\$)/m.test(text)
+  return containsBlockMathDelimiter(text) || /(^|[^\\])\$[^$\n]+\$(?!\$)/m.test(text)
 }
 
 export function containsMarkdownDelimiters(text: string): boolean {
   if (!text) return false
   return (
     // Bold / Italic (e.g. **bold** or __bold__)
-    /(\*\*|__)(?!\s)[\s\S]+?(?<!\s)\1/.test(text) ||
+    containsEmphasisDelimiter(text) ||
     // Headings
     /(^|\n)#{1,6}\s/.test(text) ||
     // Lists
@@ -225,7 +316,7 @@ export function containsMarkdownDelimiters(text: string): boolean {
     // Code block or inline code
     /`{1,3}[^`]+`{1,3}/.test(text) ||
     // Links
-    /\[[^\]]+\]\([^)]+\)/.test(text)
+    containsMarkdownLink(text)
   )
 }
 
@@ -233,11 +324,11 @@ export function containsStrictMarkdownDelimiters(text: string): boolean {
   if (!text) return false
   return (
     // Bold / Italic (e.g. **bold** or __bold__)
-    /(\*\*|__)(?!\s)[\s\S]+?(?<!\s)\1/.test(text) ||
+    containsEmphasisDelimiter(text) ||
     // Code block or inline code
     /`{1,3}[^`]+`{1,3}/.test(text) ||
     // Links
-    /\[[^\]]+\]\([^)]+\)/.test(text)
+    containsMarkdownLink(text)
   )
 }
 

@@ -20,6 +20,18 @@ const supportedLanguages: Record<string, { name: string; aliases: string[] }> = 
   shellscript: { name: 'Shell', aliases: ['shell', 'bash', 'sh'] },
   sql: { name: 'SQL', aliases: [] },
   yaml: { name: 'YAML', aliases: ['yml'] },
+  // 历史文档里实际出现过的语言（全库扫描得出）。未注册时 getLanguageId 返回
+  // undefined，BlockNote 会静默跳过语法高亮、语言选择器也认不出该值。shiki 都有
+  // 对应 grammar，统一补上；全部是动态 import，只有遇到该语言才加载，不影响首屏。
+  csharp: { name: 'C#', aliases: [] },
+  http: { name: 'HTTP', aliases: [] },
+  lua: { name: 'Lua', aliases: [] },
+  matlab: { name: 'MATLAB', aliases: [] },
+  mermaid: { name: 'Mermaid', aliases: [] },
+  objectivec: { name: 'Objective-C', aliases: [] },
+  perl: { name: 'Perl', aliases: [] },
+  ruby: { name: 'Ruby', aliases: [] },
+  scss: { name: 'SCSS', aliases: [] },
 }
 
 const CODE_THEME_LIGHT = 'github-light'
@@ -51,6 +63,15 @@ const createSmartDocumentHighlighter = createBundledHighlighter({
     shellscript: () => import('shiki/langs/shellscript.mjs'),
     sql: () => import('shiki/langs/sql.mjs'),
     yaml: () => import('shiki/langs/yaml.mjs'),
+    csharp: () => import('shiki/langs/csharp.mjs'),
+    http: () => import('shiki/langs/http.mjs'),
+    lua: () => import('shiki/langs/lua.mjs'),
+    matlab: () => import('shiki/langs/matlab.mjs'),
+    mermaid: () => import('shiki/langs/mermaid.mjs'),
+    objectivec: () => import('shiki/langs/objective-c.mjs'),
+    perl: () => import('shiki/langs/perl.mjs'),
+    ruby: () => import('shiki/langs/ruby.mjs'),
+    scss: () => import('shiki/langs/scss.mjs'),
   },
   // 必须用 Oniguruma（WASM），不要用 createJavaScriptRegexEngine：
   // JS 引擎靠 oniguruma-to-es 把 TextMate grammar 的正则编译成 JS 正则，某些代码内容

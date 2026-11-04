@@ -60,6 +60,8 @@ import {
 import { normalizeSmartDocumentContent } from '../src/features/documents/SmartDocumentEditor/smartDocumentTypes.ts'
 import {
   containsMarkdownDelimiters,
+  containsMathDelimiters,
+  containsStrictMarkdownDelimiters,
   escapeUnknownHtmlTags,
   hasMeaningfulHtmlStructure,
   stripClipboardHtmlNoise,
@@ -1681,6 +1683,80 @@ const edge = (
   highlighter.codeToTokens(worstGoSnippet, { lang: 'go' })
   const elapsed = performance.now() - started
   assert.ok(elapsed < 3000, `代码块高亮耗时 ${elapsed.toFixed(1)}ms，疑似回退到 JS 正则引擎`)
+}
+
+// --- 粘贴内容探测：线性时间 + 与旧正则判定一致 ---
+// 旧实现用跨行惰性量词，大量「有开头无闭合」的片段会让 pasteHandler 同步卡顿：
+// 240KB 的 "$$abc\n" 重复 7.7s、"**abc\n" 重复 3.3s、"[abc" 重复 3.1s。
+{
+  const legacyMath = (sample: string) =>
+    /(^|\n)\s*\$\$[\s\S]*?\$\$\s*($|\n)/m.test(sample) || /(^|[^\\])\$[^$\n]+\$(?!\$)/m.test(sample)
+  const legacyMarkdown = (sample: string) =>
+    /(\*\*|__)(?!\s)[\s\S]+?(?<!\s)\1/.test(sample) ||
+    /(^|\n)#{1,6}\s/.test(sample) ||
+    /(^|\n)\s*([*+-]|\d+\.)\s/.test(sample) ||
+    /(^|\n)>\s/.test(sample) ||
+    /`{1,3}[^`]+`{1,3}/.test(sample) ||
+    /\[[^\]]+\]\([^)]+\)/.test(sample)
+  const legacyStrict = (sample: string) =>
+    /(\*\*|__)(?!\s)[\s\S]+?(?<!\s)\1/.test(sample) ||
+    /`{1,3}[^`]+`{1,3}/.test(sample) ||
+    /\[[^\]]+\]\([^)]+\)/.test(sample)
+
+  const fixtures = [
+    '', 'plain text', '**bold**', '__bold__', '** a**', '**a__b**',
+    '$$\nx+y=1\n$$', '$$x$$', '$$abc', '$x$', '[链接](https://a.b)',
+    '[abc]', '[a](b)', '[abc](', '- item', '# heading', '`code`',
+    '100W * 50 B = 50 * 10^6 B = 50M', '> quote', '1. list',
+  ]
+  for (const sample of fixtures) {
+    assert.equal(containsMathDelimiters(sample), legacyMath(sample), `math 探测语义变化: ${sample}`)
+    assert.equal(containsMarkdownDelimiters(sample), legacyMarkdown(sample), `markdown 探测语义变化: ${sample}`)
+    assert.equal(containsStrictMarkdownDelimiters(sample), legacyStrict(sample), `strict 探测语义变化: ${sample}`)
+  }
+
+  const adversarial: Array<[string, string, (sample: string) => boolean]> = [
+    ['$$ 未闭合 240KB', '$$abc\n'.repeat(40000), containsMathDelimiters],
+    ['** 未闭合 120KB', '**abc\n'.repeat(20000), containsMarkdownDelimiters],
+    ['[ 未闭合 200KB', '[abc'.repeat(50000), containsMarkdownDelimiters],
+    ['[a]( 未闭合 200KB', '[a]('.repeat(50000), containsStrictMarkdownDelimiters],
+  ]
+  for (const [name, sample, probe] of adversarial) {
+    const started = performance.now()
+    probe(sample)
+    const elapsed = performance.now() - started
+    assert.ok(elapsed < 100, `${name} 探测耗时 ${elapsed.toFixed(1)}ms，疑似回退到跨行惰性正则`)
+  }
+}
+
+// --- 代码块语言覆盖：历史文档里的语言必须能识别，且 grammar 真能加载 ---
+// 只查 supportedLanguages 字面量不够：langs 工厂漏一项时 getLanguageId 认得出来，
+// 但 loadLanguage 会抛错，所以这里真跑一次加载。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundled = await build({
+    entryPoints: [fileURLToPath(new URL('../src/features/documents/SmartDocumentEditor/components/CustomCodeBlock.tsx', import.meta.url))],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  })
+  const codeBlockModule = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`)
+  const { supportedLanguages, createHighlighter } = codeBlockModule.customCodeBlockOptions
+  const historicalLanguages = ['csharp', 'http', 'lua', 'matlab', 'mermaid', 'objectivec', 'perl', 'ruby', 'scss']
+  for (const language of historicalLanguages) {
+    assert.ok(supportedLanguages[language], `代码块语言 ${language} 未注册，历史文档会失去高亮`)
+  }
+  const languageEntries = Object.values(supportedLanguages) as Array<{ aliases?: string[] }>
+  for (const alias of ['shell', 'bash', 'plaintext']) {
+    assert.ok(languageEntries.some((entry) => entry.aliases?.includes(alias)), `代码块语言别名 ${alias} 未映射`)
+  }
+  const codeHighlighter = await createHighlighter()
+  for (const language of historicalLanguages) {
+    await codeHighlighter.loadLanguage(language)
+  }
 }
 
 console.log('Critical regression checks verified')
