@@ -14,12 +14,21 @@ import { scrollChildIntoView } from '../../SmartDocumentEditor/smartDocumentUtil
 const TOC_PINNED_KEY = 'topomind_toc_pinned'
 // 触发条只保留「上下拖动」：存相对编辑器区可用高度的比例 0~1，窗口缩放后位置仍合理。
 const TOC_RAIL_Y_KEY = 'topomind_toc_rail_y'
-// 鼠标从贴边触发条移到滑出面板之间可能短暂离开命中区，延迟关闭避免面板闪烁。
+// 鼠标从触发条移到面板之间可能短暂离开命中区，延迟关闭避免面板闪烁。
 const TOC_CLOSE_DELAY_MS = 150
-// 触发条尺寸：加宽到 22px、加高到 104px，收起态也能一眼看到「目录 + 可拖动」。
+// 极短的展开延迟：给「按住触发条直接拖动」留出抓取窗口，同时不影响 hover 的即时感。
+const TOC_OPEN_DELAY_MS = 90
+// 触发条尺寸：收起态也能一眼看到「目录 + 可拖动」。
 const TOC_RAIL_WIDTH = 22
 const TOC_RAIL_HEIGHT = 104
 const TOC_RAIL_EDGE = 12
+// 展开后的整体宽度 = 触发条原宽 + 原面板宽。触发条与面板不再是两个物体，
+// 而是同一个 morph 容器的两种形态：宽/高/圆角/底色/边框/阴影连续过渡。
+const TOC_PANEL_WIDTH = 262
+const TOC_HEADER_HEIGHT = 36
+const TOC_MORPH_MS = 300
+// 标准缓动而非前载的 easeOutQuint：前 1/4 时间只张开约 1/3，才看得出「竖条在长成面板」。
+const TOC_MORPH_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
 
 export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   isDirty,
@@ -62,7 +71,9 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   const [tocHovered, setTocHovered] = useState(false)
   const tocExpanded = tocPinned || tocHovered
   const tocCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tocOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tocListRef = useRef<HTMLDivElement>(null)
+  const tocPanelContentRef = useRef<HTMLDivElement>(null)
 
   const [tocRailRatio, setTocRailRatio] = useState<number>(() => {
     try {
@@ -74,15 +85,29 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   const tocRailRatioRef = useRef(tocRailRatio)
   // 触发条所在区域的尺寸 / 编辑器原生滚动条宽度，运行时实测（overlay 滚动条宽度为 0）。
   const [tocZoneHeight, setTocZoneHeight] = useState(0)
-  // 滚动条宽度之外再留 6px 视觉间隙，避免触发条的阴影糊到滚动条上。
-  const [tocRightInset, setTocRightInset] = useState(6)
+  // 滚动条宽度之外再留 10px 视觉间隙，避免和原生滚动条挤成「两条细条」。
+  const [tocRightInset, setTocRightInset] = useState(10)
+  // 面板内容自然高度（实测），morph 容器展开时的目标高度由它和可用空间共同决定。
+  const [tocPanelHeight, setTocPanelHeight] = useState(TOC_RAIL_HEIGHT + TOC_HEADER_HEIGHT)
   const [tocDragging, setTocDragging] = useState(false)
   const tocZoneRef = useRef<HTMLDivElement>(null)
   const tocDragRef = useRef<{ startY: number; startTop: number; moved: boolean } | null>(null)
   const tocDraggingRef = useRef(false)
   const hasToc = (providedTocItems?.length ?? 0) > 0
+  // 拖动范围恒以「收起态高度」为基准：这样保存的比例在展开/收起两态换算出的位置一致，
+  // 而展开态容器高度又被可用空间钳住，不会顶出底边。
   const tocRailRange = Math.max(0, tocZoneHeight - TOC_RAIL_HEIGHT - TOC_RAIL_EDGE * 2)
   const tocRailTop = TOC_RAIL_EDGE + tocRailRange * tocRailRatio
+  const tocAvailableHeight = Math.max(140, tocZoneHeight - tocRailTop - TOC_RAIL_EDGE)
+  const tocShellHeight = Math.min(Math.max(140, tocPanelHeight), tocAvailableHeight)
+  const tocListMaxHeight = Math.max(80, tocAvailableHeight - TOC_HEADER_HEIGHT)
+  // 面板内容固定 262 宽贴右缘；展开时随容器左缘一起向左推（translateX = clip 右侧裁量），
+  // 让文字从第一帧就贴着容器左缘出现，而不是等板子长完才从右侧空白里「迟到」。
+  const tocClipRight = tocExpanded ? 0 : TOC_PANEL_WIDTH - TOC_RAIL_WIDTH
+  const tocClipBottom = Math.max(
+    0,
+    tocPanelHeight - (tocExpanded ? tocShellHeight : TOC_RAIL_HEIGHT),
+  )
 
   const toggleTocPinned = useCallback(() => {
     const next = !tocPinned
@@ -96,32 +121,52 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
       tocCloseTimerRef.current = null
     }
   }, [])
+  const cancelTocOpen = useCallback(() => {
+    if (tocOpenTimerRef.current != null) {
+      clearTimeout(tocOpenTimerRef.current)
+      tocOpenTimerRef.current = null
+    }
+  }, [])
+
+  // 鼠标进入：留 90ms 抓取窗口（按住即可直接拖动），随后展开；键盘 focus 立即展开。
   const handleTocEnter = useCallback(() => {
     cancelTocClose()
-    // 拖动触发条时不要顺手把面板展开（指针还在条上）
     if (tocDraggingRef.current) return
-    setTocHovered(true)
-  }, [cancelTocClose])
-  const handleTocLeave = useCallback(() => {
+    if (tocPinned || tocHovered) {
+      setTocHovered(true)
+      return
+    }
+    cancelTocOpen()
+    tocOpenTimerRef.current = setTimeout(() => setTocHovered(true), TOC_OPEN_DELAY_MS)
+  }, [cancelTocClose, cancelTocOpen, tocPinned, tocHovered])
+  const handleTocFocus = useCallback(() => {
+    cancelTocOpen()
     cancelTocClose()
-    // 触发条与面板之间有一帧空隙 / 滑出动画，延迟关闭接住这次转移，避免闪一下。
-    // 这是唯一的隐藏入口：点击目录项、编辑器 focus 等都不再触发收起。
+    if (!tocDraggingRef.current) setTocHovered(true)
+  }, [cancelTocOpen, cancelTocClose])
+  const handleTocLeave = useCallback(() => {
+    cancelTocOpen()
+    cancelTocClose()
+    // 拖动过程中指针可能滑出容器，此时不要收起；唯一隐藏入口仍是「鼠标移出」。
+    if (tocDraggingRef.current) return
     tocCloseTimerRef.current = setTimeout(() => setTocHovered(false), TOC_CLOSE_DELAY_MS)
-  }, [cancelTocClose])
+  }, [cancelTocOpen, cancelTocClose])
 
-  // 触发条只允许 Y 轴拖动，X 永远贴右侧（在原生滚动条内侧）。
-  const handleTocRailPointerDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+  // 拖动指针挂在 morph 容器上：收起态整条 22px 都是把手，展开态只认 header 的 grip，
+  // 这样捕获目标始终是同一个稳定元素，且不会抢走目录项 / 图钉的点击。
+  const handleTocPointerDown = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0) return
-    e.preventDefault()
+    const fromHandle = !!(e.target as HTMLElement).closest?.('[data-toc-drag-handle]')
+    if (tocExpanded && !fromHandle) return
+    cancelTocOpen()
     cancelTocClose()
     tocDraggingRef.current = true
     tocDragRef.current = { startY: e.clientY, startTop: tocRailTop, moved: false }
-    setTocHovered(false)
     setTocDragging(true)
     e.currentTarget.setPointerCapture(e.pointerId)
-  }, [cancelTocClose, tocRailTop])
+  }, [tocExpanded, tocRailTop, cancelTocOpen, cancelTocClose])
 
-  const handleTocRailPointerMove = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+  const handleTocPointerMove = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     const drag = tocDragRef.current
     if (!drag) return
     const dy = e.clientY - drag.startY
@@ -134,7 +179,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     setTocRailRatio(nextRatio)
   }, [tocZoneHeight])
 
-  const finishTocRailDrag = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+  const finishTocDrag = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     if (!tocDraggingRef.current) return
     const moved = tocDragRef.current?.moved ?? false
     tocDraggingRef.current = false
@@ -156,6 +201,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   useEffect(() => {
     return () => {
       if (tocCloseTimerRef.current != null) clearTimeout(tocCloseTimerRef.current)
+      if (tocOpenTimerRef.current != null) clearTimeout(tocOpenTimerRef.current)
     }
   }, [])
 
@@ -214,7 +260,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
       const scroller = containerRef.current?.querySelector<HTMLElement>('.tm-smart-editor-scroll')
       if (scroller) {
         const barWidth = Math.max(0, scroller.offsetWidth - scroller.clientWidth)
-        setTocRightInset(barWidth + 6)
+        setTocRightInset(barWidth + 10)
       }
     }
     measure()
@@ -222,6 +268,19 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     observer.observe(zone)
     const scroller = containerRef.current?.querySelector<HTMLElement>('.tm-smart-editor-scroll')
     if (scroller) observer.observe(scroller)
+    return () => observer.disconnect()
+  }, [hasToc])
+
+  // 面板内容自然高度：收起态 visibility:hidden 仍有布局，可直接量 scrollHeight。
+  // 展开时容器高度过渡到这个实测值，不做 max-height 那种「凭空撑开」的假动画。
+  useEffect(() => {
+    if (!hasToc) return
+    const el = tocPanelContentRef.current
+    if (!el) return
+    const measure = () => setTocPanelHeight(el.scrollHeight)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
     return () => observer.disconnect()
   }, [hasToc])
 
@@ -452,103 +511,160 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               </div>
             )}
 
-            {/* 目录默认只留贴右缘的触发条（在原生滚动条内侧），hover 才滑出面板；
-                唯一的隐藏条件是鼠标移出控件，点击目录项 / 编辑器 focus 都不收起。
-                触发条可上下拖动（X 始终贴右），位置按可用高度比例持久化；面板跟随触发条高度。
-                触发条与面板共用同一个「延迟关闭」状态，避免两者之间转移时闪烁。 */}
+            {/* 目录是「一个物体的两种形态」：同一个 morph 容器的宽/高/圆角/底色/边框连续过渡，
+                触发条内容让位淡出，面板内容沿同一节奏从右往左揭开——看起来就是竖条长成了面板。
+                唯一隐藏入口是鼠标移出；点击目录项、编辑器 focus 都不收起。
+                容器贴右缘且落在原生滚动条内侧，Y 轴可拖动，位置按可用高度比例持久化。 */}
             {hasToc && (
               <div
                 ref={tocZoneRef}
                 className="absolute inset-y-0 right-0 z-20 pointer-events-none"
                 style={{ width: 0 }}
               >
-                <button
-                  type="button"
-                  aria-label="文档目录（悬停展开，上下拖动调整位置）"
-                  aria-expanded={tocExpanded}
-                  aria-controls="topomind-toc-panel"
-                  title="悬停展开目录 · 上下拖动可调整位置"
-                  className={`absolute flex flex-col items-center justify-center gap-2 rounded-l-lg border border-r-0 border-[var(--color-border-strong)] bg-[color-mix(in_srgb,var(--color-accent)_10%,var(--color-surface))] text-[var(--color-accent)] shadow-[var(--shadow-sm)] select-none touch-none transition-colors duration-150 hover:bg-[var(--color-accent-soft)] hover:border-[var(--color-accent)] ${tocDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-                  style={{
-                    top: tocRailTop,
-                    right: tocRightInset,
-                    width: TOC_RAIL_WIDTH,
-                    height: TOC_RAIL_HEIGHT,
-                    pointerEvents: 'auto',
-                  }}
-                  onMouseEnter={handleTocEnter}
-                  onMouseLeave={handleTocLeave}
-                  onFocus={handleTocEnter}
-                  onPointerDown={handleTocRailPointerDown}
-                  onPointerMove={handleTocRailPointerMove}
-                  onPointerUp={finishTocRailDrag}
-                  onPointerCancel={finishTocRailDrag}
-                  onLostPointerCapture={finishTocRailDrag}
-                >
-                  <ListTree size={14} strokeWidth={2} aria-hidden="true" />
-                  <span className="text-[10px] font-semibold leading-none tracking-[0.15em]" style={{ writingMode: 'vertical-rl' }}>目录</span>
-                  <GripVertical size={12} className="opacity-60" aria-hidden="true" />
-                </button>
-
                 <nav
                   id="topomind-toc-panel"
                   aria-label="文档目录"
-                  className="absolute flex flex-col overflow-hidden rounded-l-xl border border-r-0 border-[var(--color-border-light)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] backdrop-blur-[2px] shadow-[var(--shadow-popover)]"
+                  className="absolute select-none touch-none border border-r-0 backdrop-blur-[2px]"
                   style={{
                     top: tocRailTop,
-                    right: tocRightInset + TOC_RAIL_WIDTH,
-                    width: 240,
-                    maxHeight: Math.max(160, tocZoneHeight - tocRailTop - TOC_RAIL_EDGE),
-                    transform: tocExpanded ? 'translateX(0)' : 'translateX(calc(100% + 48px))',
-                    opacity: tocExpanded ? 1 : 0,
-                    visibility: tocExpanded ? 'visible' : 'hidden',
-                    pointerEvents: tocExpanded ? 'auto' : 'none',
-                    transition: 'transform 200ms ease-out, opacity 200ms ease-out, visibility 200ms',
+                    right: tocRightInset,
+                    width: tocExpanded ? TOC_PANEL_WIDTH : TOC_RAIL_WIDTH,
+                    height: tocExpanded ? tocShellHeight : TOC_RAIL_HEIGHT,
+                    borderRadius: tocExpanded ? '14px 0 0 14px' : '8px 0 0 8px',
+                    backgroundColor: tocExpanded
+                      ? 'color-mix(in srgb, var(--color-surface) 92%, transparent)'
+                      : 'color-mix(in srgb, var(--color-accent) 10%, var(--color-surface))',
+                    borderColor: tocExpanded ? 'var(--color-border-light)' : 'var(--color-border-strong)',
+                    pointerEvents: 'auto',
+                    cursor: tocDragging ? 'grabbing' : undefined,
+                    transition: [
+                      `width ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
+                      `height ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
+                      `border-radius ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
+                      `background-color ${TOC_MORPH_MS}ms ease`,
+                      `border-color ${TOC_MORPH_MS}ms ease`,
+                    ].join(', '),
                   }}
                   onMouseEnter={handleTocEnter}
                   onMouseLeave={handleTocLeave}
-                  onFocus={handleTocEnter}
+                  onFocus={handleTocFocus}
+                  onPointerDown={handleTocPointerDown}
+                  onPointerMove={handleTocPointerMove}
+                  onPointerUp={finishTocDrag}
+                  onPointerCancel={finishTocDrag}
+                  onLostPointerCapture={finishTocDrag}
                 >
-                  <div className="shrink-0 flex items-center gap-1.5 w-full px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] border-b border-[var(--color-border-light)]">
-                    <button
-                      type="button"
-                      onClick={toggleTocPinned}
-                      aria-pressed={tocPinned}
-                      aria-label={tocPinned ? '取消固定目录' : '固定目录'}
-                      title={tocPinned ? '取消固定（恢复自动隐藏）' : '固定目录（一直显示）'}
-                      className={`shrink-0 flex items-center justify-center w-5 h-5 rounded-md cursor-pointer transition-colors duration-100 ${
-                        tocPinned
-                          ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                          : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'
-                      }`}
+                  {/* 两个 token 阴影层数不同，直接 transition box-shadow 会跳变；改为交叉淡入 */}
+                  <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{ borderRadius: 'inherit', boxShadow: 'var(--shadow-sm)', opacity: tocExpanded ? 0 : 1, transition: `opacity ${TOC_MORPH_MS}ms ease` }} />
+                  <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{ borderRadius: 'inherit', boxShadow: 'var(--shadow-popover)', opacity: tocExpanded ? 1 : 0, transition: `opacity ${TOC_MORPH_MS}ms ease` }} />
+
+                  {/* 收起态：整条就是拖拽把手；展开后彻底让位（视觉上不复存在） */}
+                  <button
+                    type="button"
+                    data-toc-drag-handle
+                    aria-label="文档目录（悬停展开，上下拖动调整位置）"
+                    aria-expanded={tocExpanded}
+                    aria-hidden={tocExpanded}
+                    tabIndex={tocExpanded ? -1 : 0}
+                    title="悬停展开目录 · 上下拖动可调整位置"
+                    className={`absolute top-0 right-0 flex flex-col items-center justify-center gap-2 text-[var(--color-accent)] ${tocDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                    style={{
+                      width: TOC_RAIL_WIDTH,
+                      height: TOC_RAIL_HEIGHT,
+                      opacity: tocExpanded ? 0 : 1,
+                      // 朝面板内部平移再淡出：像被「拉开融入」面板，而不是挂在右边原地缩小
+                      transform: tocExpanded ? 'translateX(-26px) scale(0.9)' : 'none',
+                      pointerEvents: tocExpanded ? 'none' : 'auto',
+                      transition: `opacity 220ms ease-out ${tocExpanded ? 0 : 130}ms, transform ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING} ${tocExpanded ? 0 : 130}ms`,
+                    }}
+                  >
+                    <ListTree size={14} strokeWidth={2} aria-hidden="true" />
+                    <span className="text-[10px] font-semibold leading-none tracking-[0.15em]" style={{ writingMode: 'vertical-rl' }}>目录</span>
+                    <GripVertical size={12} className="opacity-60" aria-hidden="true" />
+                  </button>
+
+                  {/* 展开态：内容层与容器左缘同步左移，clip-path 同时裁掉超出容器的右/下部分。
+                      于是文字从第一帧就贴着左缘、随板子一起「摊开」，不存在空板期。 */}
+                  <div
+                    ref={tocPanelContentRef}
+                    className="absolute top-0 right-0 flex flex-col"
+                    style={{
+                      width: TOC_PANEL_WIDTH,
+                      transform: `translateX(${tocClipRight}px)`,
+                      clipPath: `inset(0 ${tocClipRight}px ${tocClipBottom}px 0 round 14px 0 0 14px)`,
+                      // 展开时立即不透明（不留空板）；收起时先快速淡出，再让触发条浮现
+                      opacity: tocExpanded ? 1 : 0,
+                      visibility: tocExpanded ? 'visible' : 'hidden',
+                      pointerEvents: tocExpanded ? 'auto' : 'none',
+                      transition: `transform ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}, clip-path ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}, opacity ${tocExpanded ? 0 : 140}ms ease, visibility ${TOC_MORPH_MS}ms`,
+                    }}
+                  >
+                    <div
+                      className="shrink-0 flex items-center gap-1.5 w-full pl-2 pr-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] border-b border-[var(--color-border-light)]"
+                      style={{
+                        height: TOC_HEADER_HEIGHT,
+                        boxSizing: 'border-box',
+                      }}
                     >
-                      {tocPinned ? <PinOff size={12} aria-hidden="true" /> : <Pin size={12} aria-hidden="true" />}
-                    </button>
-                    <span className="flex-1 text-center select-none">目录</span>
-                    <span className="shrink-0 text-[10px] font-normal opacity-60">{tocItems.length}</span>
-                  </div>
-                  <div ref={tocListRef} className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full">
-                    {tocItems.map(item => {
-                      const isActive = item.id === effectiveActiveId
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          data-toc-id={item.id}
-                          aria-current={isActive ? 'true' : undefined}
-                          className={`block w-full text-left text-[12px] leading-[1.5] py-1 px-1.5 rounded-md border-none bg-transparent cursor-pointer transition-colors duration-75 truncate ${
-                            isActive
-                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] font-semibold'
-                              : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-selected-bg)] hover:text-[var(--color-accent)]'
-                          }`}
-                          style={{ paddingLeft: `${10 + (item.level - tocBaseLevel) * 12}px` }}
-                          onClick={() => handleTocJump(item)}
-                          title={item.text}
-                        >
-                          {item.text}
-                        </button>
-                      )
-                    })}
+                      <button
+                        type="button"
+                        onClick={toggleTocPinned}
+                        aria-pressed={tocPinned}
+                        aria-label={tocPinned ? '取消固定目录' : '固定目录'}
+                        title={tocPinned ? '取消固定（恢复自动隐藏）' : '固定目录（一直显示）'}
+                        className={`shrink-0 flex items-center justify-center w-5 h-5 rounded-md cursor-pointer transition-colors duration-100 ${
+                          tocPinned
+                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                            : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'
+                        }`}
+                      >
+                        {tocPinned ? <PinOff size={12} aria-hidden="true" /> : <Pin size={12} aria-hidden="true" />}
+                      </button>
+                      <span className="flex-1 text-center select-none">目录</span>
+                      <span className="shrink-0 text-[10px] font-normal tabular-nums opacity-80">{tocItems.length}</span>
+                      <button
+                        type="button"
+                        data-toc-drag-handle
+                        aria-label="上下拖动调整目录位置"
+                        title="上下拖动调整位置"
+                        className={`shrink-0 flex items-center justify-center w-5 h-5 rounded-md text-[var(--color-text-muted)] opacity-60 hover:opacity-100 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] ${tocDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                      >
+                        <GripVertical size={12} aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div
+                      ref={tocListRef}
+                      className="overflow-y-auto pl-2 pr-4 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full"
+                      style={{ maxHeight: tocListMaxHeight }}
+                    >
+                      {tocItems.map((item, index) => {
+                        const isActive = item.id === effectiveActiveId
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            data-toc-id={item.id}
+                            aria-current={isActive ? 'true' : undefined}
+                            className={`block w-full text-left text-[12px] leading-[1.5] py-1 px-1.5 rounded-md border-none bg-transparent cursor-pointer truncate ${
+                              isActive
+                                ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] font-semibold'
+                                : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-selected-bg)] hover:text-[var(--color-accent)]'
+                            }`}
+                            style={{
+                              paddingLeft: `${10 + (item.level - tocBaseLevel) * 12}px`,
+                              // 只做极轻的依次落位，不另做整体淡入（内容已由 clip-path 显现）
+                              transform: tocExpanded ? 'translateX(0)' : 'translateX(6px)',
+                              transition: `transform 240ms ${TOC_MORPH_EASING}, background-color 75ms`,
+                              transitionDelay: tocExpanded ? `${Math.min(index, 7) * 14}ms` : '0ms',
+                            }}
+                            onClick={() => handleTocJump(item)}
+                            title={item.text}
+                          >
+                            {item.text}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 </nav>
               </div>
