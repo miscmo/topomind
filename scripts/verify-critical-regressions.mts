@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
 import { getRemoteImageRequestHeaders } from '../electron/services/attachment-service.js'
 import { getImagePreviewScale } from '../src/features/documents/SmartDocumentEditor/imagePreview.ts'
@@ -75,11 +76,14 @@ import {
 import {
   CURVE_AMPLITUDE_MAX,
   CURVE_AMPLITUDE_MIN,
+  CURVE_MODE_DEFAULT_CONTROL,
   CURVE_POSITION_MAX,
   CURVE_POSITION_MIN,
   DEFAULT_CURVE_CONTROL,
+  hasCurveDraftChange,
   hasCustomCurve,
   normalizeCurveControl,
+  seedCurveControlOnModeSwitch,
 } from '../src/domain/graph/edgeCurve.ts'
 import { STYLE_CONFIG_DEFAULTS } from '../src/domain/style/styleDefaults.ts'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, MAIN_EDGE_WIDTH_RATIO } from '../src/domain/style/styleConstraints.ts'
@@ -1178,6 +1182,7 @@ const edge = (
   }) as unknown as {
     buildEdgeOperations: (deps: Record<string, unknown>) => {
       updateEdgeStyle: (edgeId: string, patch: Record<string, unknown>) => Promise<void>
+      addEdge: (connection: Record<string, unknown>, edgeId: string, defaultStyle?: Record<string, unknown>) => Promise<boolean>
     }
   }
   let edges: Array<Record<string, unknown>> = [{
@@ -1261,6 +1266,62 @@ const edge = (
   assert.deepEqual(reloaded.edges[0].curveControl, { u: 0.3, v: 0.4 }, '写盘往返后控制点不能丢')
   assert.deepEqual(reloaded.edges[1].curveControl, { u: 0.72, v: -0.6 }, '写盘往返后弯曲位置不能丢')
   assert.equal(reloaded.edges[2].curveControl, null, '写盘往返后缺失控制点应回落为 null')
+
+  // 6) 批次 A：从其它线型切到「曲线」必须给一个可见弧度，不能点了曲线还是直线
+  assert.notEqual(CURVE_MODE_DEFAULT_CONTROL.v, 0, '切到曲线时的默认弧度必须可见')
+  assert.deepEqual(seedCurveControlOnModeSwitch('curve', 'straight', null), CURVE_MODE_DEFAULT_CONTROL,
+    '直线 → 曲线且无自定义形态时必须注入默认弧度')
+  assert.equal(seedCurveControlOnModeSwitch('curve', 'curve', null), null,
+    '已经是曲线时不应重复注入（复位成直线后不能被再次改弯）')
+  assert.equal(seedCurveControlOnModeSwitch('curve', 'straight', { u: 0.3, v: 0 }), null,
+    '已有自定义形态时必须保留，不能被默认弧度覆盖')
+  assert.equal(seedCurveControlOnModeSwitch('straight', 'curve', null), null,
+    '切到非曲线线型不应注入控制点')
+
+  // 7) 批次 A：滑杆草稿提交判定 —— 点击轨道 / 拖回原值都不该白写一次库
+  assert.equal(hasCurveDraftChange({ u: 0.5, v: 0.25 }, { u: 0.5, v: 0.25 }), false)
+  assert.equal(hasCurveDraftChange({ u: 0.5, v: 0.25 }, { u: 0.5, v: 0.26 }), true)
+  assert.equal(hasCurveDraftChange({ u: 0.5, v: 0.25 }, { u: 0.51, v: 0.25 }), true)
+  // 组件结构约束：range 每帧只能改草稿，松手 / 键盘 / 失焦才提交。
+  // 精确截取 CurveSlider 函数体再断言，避免同文件其它函数把字面量断言"蒙混过关"。
+  const panelSource = await readFile(
+    fileURLToPath(new URL('../src/features/right-panel/components/StyleTab/EdgeStylePanel.tsx', import.meta.url)),
+    'utf8',
+  )
+  const sliderBody = panelSource.slice(
+    panelSource.indexOf('function CurveSlider('),
+    panelSource.indexOf('function CurveControlFields('),
+  )
+  assert.ok(sliderBody.length > 0, '必须能定位到 CurveSlider 组件')
+  assert.ok(sliderBody.includes('onDraftChange(Number(e.target.value))'), 'range 每帧只能更新草稿')
+  assert.ok(sliderBody.includes('onPointerUp={onCommit}') && sliderBody.includes('onBlur={onCommit}'),
+    '松手 / 失焦必须提交一次（拖一次滑杆只写一次库）')
+  const sliderOnChange = sliderBody.split('\n').find((line) => line.trim().startsWith('onChange=')) ?? ''
+  assert.ok(sliderOnChange.includes('onDraftChange') && !sliderOnChange.includes('onCommit'),
+    'range 的 onChange 只能改草稿，不能每帧直接写库')
+
+  // 8) 批次 A：旧配置「曲线 + 无控制点」刷新后也要补出弧度；显式直线形态必须被尊重
+  assert.deepEqual(normalizeDefaultEdgeStyle({ lineMode: 'curve' }).curveControl, CURVE_MODE_DEFAULT_CONTROL,
+    '旧配置只有 lineMode=curve 时刷新后必须补出可见弧度')
+  assert.deepEqual(
+    normalizeDefaultEdgeStyle({ lineMode: 'curve', curveControl: { u: 0.5, v: 0 } }).curveControl,
+    { u: 0.5, v: 0 },
+    '显式存了直线形态（v=0）必须被尊重',
+  )
+  assert.equal(normalizeDefaultEdgeStyle({ lineMode: 'straight' }).curveControl, null,
+    '非曲线默认样式不应凭空生成控制点')
+
+  // 9) 批次 A：新建曲线边继承默认样式时同样不能退化成直线（操作层真跑）
+  const created = await ops.addEdge({ source: 'x', target: 'y' }, 'e-new', { lineMode: 'curve' })
+  assert.equal(created, true, '新建曲线边应成功')
+  const createdEdge = edges.find((edge) => edge.id === 'e-new')
+  assert.ok(createdEdge, '新建边必须进入 store')
+  assert.deepEqual((createdEdge!.data as Record<string, unknown>).curveControl, CURVE_MODE_DEFAULT_CONTROL,
+    '默认线型为曲线且未带控制点时，新建边也必须有可见弧度')
+
+  // 10) 批次 A：写盘 JSON 不再为每条边写 "curveControl": null，往返语义仍不变
+  assert.ok(!('curveControl' in (written.edges?.[2] as Record<string, unknown>)),
+    '空的曲线控制点不应写进磁盘 JSON（万级边时避免白白膨胀）')
 }
 
 // 主题收归为浅色/深色两套：已下线主题必须迁移到正确的一套，否则菜单勾选会悬空

@@ -8,7 +8,7 @@ import type { StoreApi } from 'zustand'
 import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../../domain/style/styleConstraints'
 import { normalizeEdgeAnchor, type EdgeAnchor, type EdgeAnchorPatch } from '../../domain/graph/edgeAnchors'
-import { normalizeCurveControl, sameCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
+import { CURVE_MODE_DEFAULT_CONTROL, normalizeCurveControl, sameCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
 
 export interface EdgeOperationsDeps {
   getActiveGraphSession: () => GraphSession | undefined
@@ -107,10 +107,11 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     const arrowSize = defaultStyle?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize
     const arrowShape = defaultStyle?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape
     const arrowPosition = defaultStyle?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition
-    // 默认样式为曲线时，新建连线继承默认控制点（否则就是一条直线）
+    // 默认样式为曲线时，新建连线继承默认控制点；控制点缺失时给一个可见的默认弧度，
+    // 否则「默认线型=曲线」新建出来的仍是一条直线。显式存了 v=0 的直线形态会被尊重。
     const curveControl = normalizeCurveControl(
       defaultStyle?.curveControl ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.curveControl
-    )
+    ) ?? (lineMode === 'curve' ? { ...CURVE_MODE_DEFAULT_CONTROL } : null)
     const newEdge: KnowledgeEdge = {
       id: edgeId,
       source: connection.source,

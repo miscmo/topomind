@@ -32,6 +32,13 @@ export const CURVE_AMPLITUDE_SCALE = 0.5
 /** 缺省控制点：位于连线正中、零偏移 → 曲线退化为直线 */
 export const DEFAULT_CURVE_CONTROL: CurveControl = { u: 0.5, v: 0 }
 
+/**
+ * 从其它线型切到「曲线」且没有自定义控制点时使用的初始弧度。
+ * 不能直接沿用 DEFAULT_CURVE_CONTROL（v=0）：那会让用户点了「曲线」却得到一条
+ * 看不出变化的直线；给一个温和的默认弧度，之后仍可用手柄 / 滑杆 / 复位自由调整。
+ */
+export const CURVE_MODE_DEFAULT_CONTROL: CurveControl = { u: 0.5, v: 0.25 }
+
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 function isFiniteNumber(value: unknown): value is number {
@@ -65,6 +72,32 @@ export function hasCustomCurve(control: CurveControl | null | undefined): boolea
   if (!control) return false
   return Math.abs(control.u - DEFAULT_CURVE_CONTROL.u) > 1e-6
     || Math.abs(control.v - DEFAULT_CURVE_CONTROL.v) > 1e-6
+}
+
+/**
+ * 从其它线型切到「曲线」、且当前没有自定义曲线形态时，返回应注入的可见默认弧度；
+ * 其余情况返回 null（保持现状）。
+ *
+ * 单独抽成纯函数是为了让回归能锁住这条交互规则：早期版本切到曲线仍是直线
+ * （默认控制点 v=0），用户得再去拖手柄才看得到变化。
+ */
+export function seedCurveControlOnModeSwitch(
+  nextMode: unknown,
+  currentMode: unknown,
+  currentControl: CurveControl | null | undefined
+): CurveControl | null {
+  if (nextMode !== 'curve' || currentMode === 'curve') return null
+  return hasCustomCurve(normalizeCurveControl(currentControl))
+    ? null
+    : { ...CURVE_MODE_DEFAULT_CONTROL }
+}
+
+/**
+ * 曲线滑杆的草稿与已提交值是否有实质差异：点击轨道 / 拖回原值时不该白写一次库。
+ * 滑杆每帧只改草稿，pointerup 才据此判断是否提交。
+ */
+export function hasCurveDraftChange(committed: CurveControl, draft: CurveControl): boolean {
+  return Math.abs(draft.u - committed.u) > 1e-6 || Math.abs(draft.v - committed.v) > 1e-6
 }
 
 /** 两个控制点是否等价（用于变化检测） */

@@ -39,7 +39,7 @@ export default function EdgeBendHandle({
   onReset,
 }: EdgeBendHandleProps) {
   const { screenToFlowPosition } = useReactFlow()
-  const dragRef = useRef<{ moved: boolean } | null>(null)
+  const dragRef = useRef<{ moved: boolean; startClientX: number; startClientY: number } | null>(null)
 
   // 手柄位置严格等于曲线经过的点（与 getCurvedEdgePath 的 Q(0.5) 一致）
   const handle = getCurveControlPoint(sx, sy, tx, ty, control)
@@ -48,17 +48,21 @@ export default function EdgeBendHandle({
     if (event.button !== 0) return
     event.preventDefault()
     event.stopPropagation()
-    dragRef.current = { moved: false }
+    dragRef.current = { moved: false, startClientX: event.clientX, startClientY: event.clientY }
     onPreview(control)
     event.currentTarget.setPointerCapture(event.pointerId)
   }, [control, onPreview])
 
   const moveDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
+    const drag = dragRef.current
+    if (!drag) return
     event.stopPropagation()
+    // 与目录拖动把手一致：位移 <3px 视为点击 / 手抖，既不做预览也不写库。
+    // 否则单击手柄、双击复位都会平白产生一次 setEdges + 落盘 + 撤销记录。
+    if (!drag.moved && Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY) < 3) return
+    drag.moved = true
     const pointer = screenToFlowPosition({ x: event.clientX, y: event.clientY })
     const next = resolveCurveControlFromDrag(sx, sy, tx, ty, pointer.x, pointer.y)
-    dragRef.current.moved = true
     onPreview(next)
   }, [screenToFlowPosition, sx, sy, tx, ty, onPreview])
 

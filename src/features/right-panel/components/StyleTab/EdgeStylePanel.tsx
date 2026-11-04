@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { DefaultEdgeStyle } from '../../../../types/uiStoreTypes'
 import type { KnowledgeEdge } from '../../../../types'
 import { CollapsibleBlock, ColorField, NumberField, PresetButtonGrid, StyleCard, ToggleGroup } from './StyleControls'
@@ -11,9 +12,19 @@ import {
   CURVE_POSITION_MAX,
   CURVE_POSITION_MIN,
   DEFAULT_CURVE_CONTROL,
+  hasCurveDraftChange,
   normalizeCurveControl,
+  seedCurveControlOnModeSwitch,
   type CurveControl,
 } from '../../../../domain/graph/edgeCurve'
+
+type LineMode = 'smoothstep' | 'straight' | 'curve'
+
+/** 切到「曲线」且尚无自定义形态时，附带一个可见的默认弧度，避免选了曲线却还是直线 */
+function curveModePatch(nextMode: LineMode, currentMode: LineMode | undefined, currentControl: CurveControl | null | undefined): Partial<DefaultEdgeStyle> {
+  const seed = seedCurveControlOnModeSwitch(nextMode, currentMode, currentControl)
+  return seed ? { lineMode: nextMode, curveControl: seed } : { lineMode: nextMode }
+}
 
 type EdgeStylePreset = typeof EDGE_STYLE_PRESETS[number]
 
@@ -66,11 +77,16 @@ export function EdgeStylePanel({
                   { label: '曲线', value: 'curve' }
                 ]}
                 value={defaultEdgeStyle.lineMode || 'straight'}
-                onChange={(v) => onUpdateDefaultStyle({ lineMode: v as 'smoothstep' | 'straight' | 'curve' })}
+                onChange={(v) => onUpdateDefaultStyle(curveModePatch(
+                  v as LineMode,
+                  defaultEdgeStyle.lineMode,
+                  defaultEdgeStyle.curveControl,
+                ))}
               />
             </div>
             {defaultEdgeStyle.lineMode === 'curve' && (
               <CurveControlFields
+                key="default-curve"
                 control={normalizeCurveControl(defaultEdgeStyle.curveControl) ?? DEFAULT_CURVE_CONTROL}
                 onChange={(control) => onUpdateDefaultStyle({ curveControl: control })}
               />
@@ -175,11 +191,16 @@ export function EdgeStylePanel({
                       { label: '曲线', value: 'curve' }
                     ]}
                     value={currentEdgeStyle.lineMode || 'straight'}
-                    onChange={(v) => onApplyToSelectedEdge({ lineMode: v as 'smoothstep' | 'straight' | 'curve' })}
+                    onChange={(v) => onApplyToSelectedEdge(curveModePatch(
+                      v as LineMode,
+                      currentEdgeStyle.lineMode,
+                      currentEdgeStyle.curveControl,
+                    ))}
                   />
                 </div>
                 {currentEdgeStyle.lineMode === 'curve' && (
                   <CurveControlFields
+                    key={`edge-${selectedEdge?.id ?? 'none'}`}
                     control={normalizeCurveControl(currentEdgeStyle.curveControl) ?? DEFAULT_CURVE_CONTROL}
                     onChange={(control) => onApplyToSelectedEdge({ curveControl: control })}
                   />
@@ -272,21 +293,26 @@ export function EdgeStylePanel({
   )
 }
 
-/** 单个归一化滑杆：原生 range + accent-color 绑定单色品牌变量，避免引入新视觉通道 */
+/**
+ * 单个归一化滑杆：原生 range + accent-color 绑定单色品牌变量，避免引入新视觉通道。
+ * 每帧 onChange 只更新父组件草稿；pointerup / 键盘抬起 / 失焦才触发一次提交。
+ */
 function CurveSlider({
   label,
   hint,
   value,
   min,
   max,
-  onChange,
+  onDraftChange,
+  onCommit,
 }: {
   label: string
   hint: string
   value: number
   min: number
   max: number
-  onChange: (value: number) => void
+  onDraftChange: (value: number) => void
+  onCommit: () => void
 }) {
   return (
     <div className="flex flex-col gap-[6px] mb-0 col-span-full" title={hint}>
@@ -300,7 +326,11 @@ function CurveSlider({
         max={max}
         step={0.01}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => onDraftChange(Number(e.target.value))}
+        onPointerUp={onCommit}
+        onPointerCancel={onCommit}
+        onKeyUp={onCommit}
+        onBlur={onCommit}
         style={{ accentColor: 'var(--color-accent)' }}
         className="w-full cursor-pointer h-4"
       />
@@ -312,6 +342,10 @@ function CurveSlider({
  * 曲线形态的两条数值滑杆，与画布上那个可二维拖动的控制柄是同一份数据：
  * 弯曲位置 u 决定「在哪弯」，弯曲幅度 v 决定「弯多深 / 朝哪侧」。
  * 范围常量统一取自 domain/graph/edgeCurve，避免各层各写一套。
+ *
+ * 一次拖动 = 一次写库：range 的 onChange 每帧触发，若直接透传会让撤销栈、图谱落盘、
+ * 配置文件写入各产生几十次。这里把两条滑杆的 {u,v} 统一收在组件内草稿里，
+ * 松手才 onChange 一次；草稿值与已提交值相同则不写（避免点击轨道白写一次）。
  */
 function CurveControlFields({
   control,
@@ -320,23 +354,53 @@ function CurveControlFields({
   control: CurveControl
   onChange: (control: CurveControl) => void
 }) {
+  const [draft, setDraft] = useState<CurveControl>(control)
+  const draftRef = useRef<CurveControl>(control)
+  const committedRef = useRef<CurveControl>(control)
+  const dirtyRef = useRef(false)
+
+  // 外部值变化（复位弯曲 / 切换选中边）时才回灌草稿；拖动中不覆盖用户手上的值。
+  useEffect(() => {
+    if (dirtyRef.current) return
+    setDraft(control)
+    draftRef.current = control
+    committedRef.current = control
+  }, [control.u, control.v])
+
+  const updateDraft = (patch: Partial<CurveControl>) => {
+    const next = { ...draftRef.current, ...patch }
+    draftRef.current = next
+    dirtyRef.current = true
+    setDraft(next)
+  }
+
+  const commit = () => {
+    if (!dirtyRef.current) return
+    dirtyRef.current = false
+    const next = draftRef.current
+    if (hasCurveDraftChange(committedRef.current, next)) onChange(next)
+    committedRef.current = next
+  }
+
   return (
     <>
       <CurveSlider
         label="弯曲位置"
         hint="控制点沿连线的位置：0.15 靠近起点、0.85 靠近终点"
-        value={control.u}
+        value={draft.u}
         min={CURVE_POSITION_MIN}
         max={CURVE_POSITION_MAX}
-        onChange={(u) => onChange({ ...control, u })}
+        onDraftChange={(u) => updateDraft({ u })}
+        onCommit={commit}
       />
       <CurveSlider
         label="弯曲幅度"
-        hint="正值向上弯、负值向下弯，0 为直线"
-        value={control.v}
+        hint="正值朝连线一侧弯、负值朝另一侧弯，0 为直线（弯向随连线方向变化）"
+        value={draft.v}
         min={CURVE_AMPLITUDE_MIN}
         max={CURVE_AMPLITUDE_MAX}
-        onChange={(v) => onChange({ ...control, v })}
+        onDraftChange={(v) => updateDraft({ v })}
+        onCommit={commit}
       />
     </>
   )

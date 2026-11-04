@@ -195,7 +195,10 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
       arrowSize: e.arrowSize,
       arrowShape: e.arrowShape,
       arrowPosition: e.arrowPosition,
-      curveControl: normalizeCurveControl(e.curveControl),
+      // null 用 undefined 表示：JSON.stringify 会直接省略该键，避免每条边都写
+      // 一个 "curveControl": null 白白撑大 _graph.json（万级边时尤其明显）。
+      // 读入侧 normalizeCurveControl(undefined) 仍回落为 null，语义不变。
+      curveControl: normalizeCurveControl(e.curveControl) ?? undefined,
       sourceAnchor: normalizeEdgeAnchor(e.sourceAnchor),
       targetAnchor: normalizeEdgeAnchor(e.targetAnchor),
       highlighted: e.highlighted,

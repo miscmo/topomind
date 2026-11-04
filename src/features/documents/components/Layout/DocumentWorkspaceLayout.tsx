@@ -188,8 +188,17 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
     if (moved) {
       try { localStorage.setItem(TOC_RAIL_Y_KEY, String(tocRailRatioRef.current)) } catch { /* ignore */ }
+      return
     }
-  }, [])
+    // 收起态点击触发条：pointerdown 会取消 90ms 展开定时器，而展开原先只靠
+    // button 的 focus 兜底，触摸 / 不产生 focus 的场景点不开。这里按「本次未发生
+    // 拖动」补一次主动展开；拖动结束后不展开，避免干扰调位置。
+    if (!tocExpanded) {
+      cancelTocOpen()
+      cancelTocClose()
+      setTocHovered(true)
+    }
+  }, [tocExpanded, cancelTocOpen, cancelTocClose])
 
   useEffect(() => {
     const sync = (e: StorageEvent) => {

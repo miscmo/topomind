@@ -1,6 +1,6 @@
 import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeSize, DefaultNodeStyle, EditorPaperBackground, NodeSizeLimits, StyleConfigDefaults } from './styleTypes'
 import { STYLE_CONFIG_DEFAULTS } from './styleDefaults.ts'
-import { normalizeCurveControl } from '../graph/edgeCurve.ts'
+import { CURVE_MODE_DEFAULT_CONTROL, normalizeCurveControl } from '../graph/edgeCurve.ts'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, EDITOR_STYLE_NUMBER_LIMITS, NODE_BADGE_SIZE_LIMIT, NODE_STYLE_NUMBER_LIMITS, clampNumber, finiteNumber } from './styleConstraints.ts'
 
 const PAPER_BACKGROUND_VALUES: EditorPaperBackground[] = ['plain', 'ruled', 'dot-grid', 'grid', 'kraft', 'manuscript']
@@ -21,8 +21,11 @@ export function normalizeDefaultEdgeStyle(raw: unknown, edgeDefaultsVersion?: nu
       ? 'curve'
       : (edgeDefaultsVersion === 2 && style.lineMode === 'smoothstep' ? 'smoothstep' : defaults.lineMode),
     lineStyle: style.lineStyle === 'dashed' ? 'dashed' : defaults.lineStyle,
-    // 曲线控制点必须显式读回，否则默认曲线形态每次读配置都会被丢弃
-    curveControl: normalizeCurveControl(style.curveControl, style.curveBend) ?? defaults.curveControl ?? null,
+    // 曲线控制点必须显式读回，否则默认曲线形态每次读配置都会被丢弃。
+    // 旧配置可能只有 lineMode:'curve' 而没有控制点（选了曲线却仍是直线），
+    // 这里补一个可见的默认弧度；显式存了控制点（含 v=0 的直线形态）一律尊重。
+    curveControl: normalizeCurveControl(style.curveControl, style.curveBend)
+      ?? (style.lineMode === 'curve' ? { ...CURVE_MODE_DEFAULT_CONTROL } : defaults.curveControl ?? null),
     color: typeof style.color === 'string' ? style.color : defaults.color,
     arrow: edgeDefaultsVersion === 2 && typeof style.arrow === 'boolean' ? style.arrow : defaults.arrow,
     // 线宽与箭头三个字段都是后加的，旧存档里没有，统一回落默认值后参与 clamp。
