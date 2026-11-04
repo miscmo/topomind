@@ -51,6 +51,7 @@ export default function EdgeAnchorHandles({
     side: EdgeAnchorSideKey
     rect: AnchorRect
     grab: { x: number; y: number }
+    moved: boolean
   } | null>(null)
   const previewAnchorRef = useRef<EdgeAnchor | null>(null)
 
@@ -67,10 +68,14 @@ export default function EdgeAnchorHandles({
       rect,
       // 记住按下点相对手柄的偏移，避免手柄瞬间跳到指针中心
       grab: { x: pointer.x - current.x, y: pointer.y - current.y },
+      moved: false,
     }
-    previewAnchorRef.current = null
+    // 按下即进入拖动预览：让快捷工具栏先淡出，避免浮层压住另一端的手柄视线
+    const startAnchor = toEdgeAnchor(rect, current)
+    previewAnchorRef.current = startAnchor ?? null
+    if (startAnchor) onPreview({ side, anchor: startAnchor })
     event.currentTarget.setPointerCapture(event.pointerId)
-  }, [screenToFlowPosition, sourceRect, targetRect, sourceAnchor, targetAnchor, sourcePoint, targetPoint])
+  }, [screenToFlowPosition, sourceRect, targetRect, sourceAnchor, targetAnchor, sourcePoint, targetPoint, onPreview])
 
   const moveDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
@@ -82,6 +87,7 @@ export default function EdgeAnchorHandles({
       y: pointer.y - drag.grab.y,
     })
     if (!next) return
+    drag.moved = true
     previewAnchorRef.current = next
     onPreview({ side: drag.side, anchor: next })
   }, [screenToFlowPosition, onPreview])
@@ -91,9 +97,11 @@ export default function EdgeAnchorHandles({
     if (!drag) return
     event.stopPropagation()
     const anchor = previewAnchorRef.current
+    // 只是点一下手柄没拖动，不该写库（否则会平白多出一条撤销记录）
+    const shouldCommit = commit && drag.moved && anchor != null
     dragRef.current = null
     previewAnchorRef.current = null
-    if (commit && anchor) {
+    if (shouldCommit) {
       onCommit({ [`${drag.side}Anchor`]: anchor } as EdgeAnchorPatch)
     }
     onPreview(null)
@@ -115,7 +123,9 @@ export default function EdgeAnchorHandles({
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${point.x}px, ${point.y}px)`,
               pointerEvents: 'all',
-              zIndex: 10,
+              // 高于快捷工具栏（z-index 10）：即使工具栏避让失败落到手柄上，
+              // 手柄依然能优先抓到指针
+              zIndex: 11,
             }}
             title={side === 'source'
               ? '拖动调整起点锚点（仅影响本条连线）'

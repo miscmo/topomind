@@ -17,6 +17,7 @@ import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { getEdgeParams, getInternalNodeRect } from './floatingUtils'
 import QuickEdgeToolbar from './QuickEdgeToolbar'
 import EdgeAnchorHandles, { type EdgeAnchorPreview } from './EdgeAnchorHandles'
+import EdgeToolbarAnchor from './EdgeToolbarAnchor'
 
 /**
  * 箭头几何：在 12x12 的 viewBox 内画一个朝右的箭头，尖端位于 x=12、垂直居中于 y=6。
@@ -210,15 +211,11 @@ function FloatingEdge({
             />
           )}
           {showToolbar && (
-            <div
-              className="nodrag nopan"
-              style={{
-                position: 'absolute',
-                transform: `translate(-50%, -100%) translate(${labelX}px, ${labelY}px) translateY(-10px)`,
-                pointerEvents: 'all',
-                // 与锚点手柄同层：连线两端贴近节点时，工具栏不能被节点盖住而点不到
-                zIndex: 10,
-              }}
+            <EdgeToolbarAnchor
+              labelX={labelX}
+              labelY={labelY}
+              anchors={[{ x: sx, y: sy }, { x: tx, y: ty }]}
+              faded={anchorPreview !== null}
             >
               <QuickEdgeToolbar
                 color={edgeData?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color}
@@ -228,7 +225,7 @@ function FloatingEdge({
                 onToggleFormatPainter={toggleFormatPainter}
                 onResetAnchors={handleAnchorReset}
               />
-            </div>
+            </EdgeToolbarAnchor>
           )}
         </EdgeLabelRenderer>
       )}
