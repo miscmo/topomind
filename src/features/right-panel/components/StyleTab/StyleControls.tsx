@@ -1,8 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import type { EditorPaperBackground } from '../../../../types/uiStoreTypes'
-
-const COLOR_PRESETS = ['#7f8c8d', '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6']
+import { EDGE_COLOR_PRESETS as COLOR_PRESETS } from '../../../../domain/style/styleDefaults'
 
 interface RecentColorsStore {
   recentColors: string[]

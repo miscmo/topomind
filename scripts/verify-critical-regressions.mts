@@ -85,7 +85,7 @@ import {
   normalizeCurveControl,
   seedCurveControlOnModeSwitch,
 } from '../src/domain/graph/edgeCurve.ts'
-import { STYLE_CONFIG_DEFAULTS } from '../src/domain/style/styleDefaults.ts'
+import { EDGE_COLOR_PRESETS, STYLE_CONFIG_DEFAULTS } from '../src/domain/style/styleDefaults.ts'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, MAIN_EDGE_WIDTH_RATIO } from '../src/domain/style/styleConstraints.ts'
 import { buildEdgeView } from '../src/hooks/useGraph/edgeView.ts'
 import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../src/stores/themeStore.ts'
@@ -1378,6 +1378,86 @@ const edge = (
     'handleDelete 必须等待确认结果，取消时不得删除')
   assert.ok(deleteBody.includes('await deleteEdge(id)'), '确认后才真正删除连线')
   assert.ok(!deleteBody.includes('void deleteEdge(id)'), '不允许未确认就直接删除')
+
+  // 13) 浮窗快捷样式面板发出的四类 patch 必须真的写内存 + 落盘（不能重蹈白名单漏字段）
+  const beforeQuick = { setEdges: setEdgesCalls, saveLater: saveLaterCalls }
+  await ops.updateEdgeStyle('e1', { lineMode: 'smoothstep' })
+  await ops.updateEdgeStyle('e1', { lineStyle: 'dashed' })
+  await ops.updateEdgeStyle('e1', { lineWidth: 2.5 })
+  await ops.updateEdgeStyle('e1', { color: '#abcdef' })
+  await ops.updateEdgeStyle('e1', { lineMode: 'curve', curveControl: CURVE_MODE_DEFAULT_CONTROL })
+  assert.equal(setEdgesCalls - beforeQuick.setEdges, 5, '浮窗每次样式改动都必须写内存 store')
+  assert.equal(saveLaterCalls - beforeQuick.saveLater, 5, '浮窗每次样式改动都必须触发落盘')
+  const quickData = edges[0].data as Record<string, unknown>
+  assert.equal(quickData.lineMode, 'curve', '浮窗切曲线必须生效')
+  assert.deepEqual(quickData.curveControl, CURVE_MODE_DEFAULT_CONTROL, '浮窗切曲线必须带上可见默认弧度')
+  assert.equal(quickData.lineStyle, 'dashed', '浮窗切换实线/虚线必须生效')
+  assert.equal(quickData.lineWidth, 2.5, '浮窗设置粗细必须生效')
+  assert.equal(quickData.color, '#abcdef', '浮窗设置颜色必须生效')
+  await ops.updateEdgeStyle('e1', { lineWidth: 999 })
+  assert.equal((edges[0].data as Record<string, unknown>).lineWidth, EDGE_LINE_WIDTH_LIMIT.max,
+    '浮窗传入越界粗细仍须被 clamp（与右侧面板一致）')
+}
+
+// 连线浮窗快捷样式面板：四类控件齐全 + 不撑宽工具栏 + 粗细一次拖动一次提交 + 色板单一来源
+{
+  const { fileURLToPath } = await import('node:url')
+  const readSource = (relativePath: string) => readFile(
+    fileURLToPath(new URL(relativePath, import.meta.url)),
+    'utf8',
+  )
+  const popover = await readSource('../src/features/graph/GraphCanvas/edges/QuickEdgeStylePopover.tsx')
+  const toolbar = await readSource('../src/features/graph/GraphCanvas/edges/QuickEdgeToolbar.tsx')
+  const floating = await readSource('../src/features/graph/GraphCanvas/edges/FloatingEdge.tsx')
+  const styleControls = await readSource('../src/features/right-panel/components/StyleTab/StyleControls.tsx')
+
+  // 四类控件都要在（用户要求的「线型、线条、线条粗细、连线颜色」）
+  for (const label of ['线型', '线条', '线条粗细 (px)', '连线颜色']) {
+    assert.ok(popover.includes(label), `浮窗快捷面板必须提供「${label}」设置`)
+  }
+  assert.ok(popover.includes('SegmentedControl'), '互斥单选必须复用统一 SegmentedControl')
+  assert.ok(popover.includes('onChange({ lineStyle:'), '线条切换必须写回 lineStyle')
+  assert.ok(popover.includes('onCommit={(lineWidth) => onChange({ lineWidth })}'), '粗细提交必须写回 lineWidth')
+  assert.ok(popover.includes('onChange({ color: preset })'), '预设色板必须写回 color')
+  // 切曲线复用领域层注入规则，避免浮窗切过去还是一条直线
+  assert.ok(popover.includes('seedCurveControlOnModeSwitch('), '浮窗切曲线必须复用默认弧度注入规则')
+  assert.ok(popover.includes('{ lineMode: next, curveControl: seed }'), '注入的控制点必须与线型一起提交')
+
+  // 面板必须 absolute：EdgeToolbarAnchor 用 ResizeObserver 量工具栏尺寸做避让，
+  // 面板若参与文档流会把工具栏撑大 → 展开/收起时浮层位置跳动。
+  assert.ok(/className="[^"]*\babsolute\b[^"]*"/.test(popover), '快捷面板必须 absolute 定位，不能改变工具栏尺寸')
+  assert.ok(toolbar.includes('nodrag nopan relative flex items-center'), '工具栏根容器必须 relative 供面板定位')
+
+  // 粗细滑杆：range 每帧只改草稿，松手 / 键盘 / 失焦才提交一次
+  const widthBody = popover.slice(
+    popover.indexOf('function WidthSlider('),
+    popover.indexOf('export default function QuickEdgeStylePopover('),
+  )
+  assert.ok(widthBody.length > 0, '必须能定位到 WidthSlider 函数体')
+  assert.ok(widthBody.includes('onChange={(e) => updateDraft(Number(e.target.value))}'),
+    'range 每帧只能更新草稿')
+  assert.ok(widthBody.includes('onPointerUp={commit}') && widthBody.includes('onBlur={commit}'),
+    '松手 / 失焦必须提交一次（拖一次滑杆只写一次库）')
+  const widthOnChange = widthBody.split('\n').find((line) => line.trim().startsWith('onChange=')) ?? ''
+  assert.ok(widthOnChange.includes('updateDraft') && !widthOnChange.includes('onCommit'),
+    '粗细 range 的 onChange 不能直接写库')
+
+  // 颜色预设只定义一份（单色制铁律），右侧面板改为引用 domain 层常量
+  assert.ok(styleControls.includes('EDGE_COLOR_PRESETS as COLOR_PRESETS'),
+    '右侧样式面板必须引用共享色板常量')
+  assert.ok(!/const COLOR_PRESETS\s*=\s*\[/.test(styleControls),
+    'StyleControls 不应再自己写一份 hex 色板')
+  assert.equal(EDGE_COLOR_PRESETS.length, 6, '预设色板数量应保持不变')
+  assert.ok(EDGE_COLOR_PRESETS.every((c) => /^#[0-9a-fA-F]{6}$/.test(c)), '预设色必须是合法 hex')
+
+  // 接线：浮窗所有改动直达 updateEdgeStyle，工具栏色块也走同一入口
+  assert.ok(toolbar.includes('onStyleChange: (patch: EdgeStylePatch) => void'), '浮窗必须有统一样式写入口')
+  assert.ok(toolbar.includes('<QuickEdgeStylePopover edgeStyle={edgeStyle} onChange={onStyleChange} />'),
+    '展开的面板必须接到统一样式写入口')
+  assert.ok(toolbar.includes('onStyleChange({ color: event.target.value })'), '工具栏色块也必须走统一入口')
+  assert.ok(floating.includes('edgeStyle={quickEdgeStyle}') && floating.includes('onStyleChange={handleStyleChange}'),
+    'FloatingEdge 必须把样式快照与统一入口传给浮窗菜单')
+  assert.ok(floating.includes('void updateEdgeStyle(id, patch)'), '浮窗样式改动必须落到 updateEdgeStyle')
 }
 
 // 主题收归为浅色/深色两套：已下线主题必须迁移到正确的一套，否则菜单勾选会悬空

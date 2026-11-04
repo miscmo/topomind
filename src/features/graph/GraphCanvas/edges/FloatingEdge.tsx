@@ -9,7 +9,7 @@ import {
   type EdgeProps,
 } from '@xyflow/react'
 import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
-import { EDGE_ARROW_SIZE_LIMIT, clampNumber } from '../../../../domain/style/styleConstraints'
+import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../../../../domain/style/styleConstraints'
 import type { EdgeStylePatch, KnowledgeEdge } from '../../../../types'
 import { normalizeEdgeAnchor, type EdgeAnchorPatch } from '../../../../domain/graph/edgeAnchors'
 import {
@@ -23,6 +23,7 @@ import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { useConfirmStore } from '../../../../shared/ui/ConfirmModal/confirmStore'
 import { getEdgeParams, getInternalNodeRect, getCurvedEdgePath } from './floatingUtils'
 import QuickEdgeToolbar from './QuickEdgeToolbar'
+import type { QuickEdgeStyle } from './QuickEdgeStylePopover'
 import EdgeAnchorHandles, { type EdgeAnchorPreview } from './EdgeAnchorHandles'
 import EdgeBendHandle from './EdgeBendHandle'
 import EdgeToolbarAnchor from './EdgeToolbarAnchor'
@@ -86,8 +87,9 @@ function FloatingEdge({
     void updateEdgeAnchor(id, { sourceAnchor: null, targetAnchor: null })
   }, [updateEdgeAnchor, id])
 
-  const handleColorChange = useCallback((value: string) => {
-    void updateEdgeStyle(id, { color: value })
+  /** 浮窗菜单（色块 / 快捷样式面板）所有样式改动的统一写入口 */
+  const handleStyleChange = useCallback((patch: EdgeStylePatch) => {
+    void updateEdgeStyle(id, patch)
   }, [updateEdgeStyle, id])
 
   // 删除是不可逆的破坏性操作，且按钮就在工具栏最右、hover 变红，误触成本高：
@@ -138,6 +140,19 @@ function FloatingEdge({
     || normalizeEdgeAnchor(edgeData?.targetAnchor) != null
   const hasCurveCustomized = hasCustomCurve(normalizeCurveControl(edgeData?.curveControl))
   const isCurve = edgeData?.lineMode === 'curve' || data?.type === 'curve'
+  // 浮窗快捷样式面板的回显数据：缺字段一律回落到默认样式，保证控件永远有合法值
+  const defaults = STYLE_CONFIG_DEFAULTS.defaultEdgeStyle
+  const quickEdgeStyle: QuickEdgeStyle = {
+    lineMode: edgeData?.lineMode ?? defaults.lineMode,
+    lineStyle: edgeData?.lineStyle ?? defaults.lineStyle,
+    lineWidth: clampNumber(
+      edgeData?.lineWidth ?? defaults.lineWidth,
+      EDGE_LINE_WIDTH_LIMIT.min,
+      EDGE_LINE_WIDTH_LIMIT.max
+    ),
+    color: edgeData?.color ?? defaults.color,
+    curveControl: normalizeCurveControl(edgeData?.curveControl),
+  }
   // 曲线模式且选中时，在「曲线上的控制点」处显示可二维拖动的手柄
   const showBendHandle =
     isSelected
@@ -281,11 +296,11 @@ function FloatingEdge({
               faded={anchorPreview !== null || curvePreview !== null}
             >
               <QuickEdgeToolbar
-                color={edgeData?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color}
+                edgeStyle={quickEdgeStyle}
                 isFormatPainterActive={isEdgeFormatPainterActive}
                 hasCustomAnchors={hasCustomAnchors}
                 hasCustomCurve={isCurve && hasCurveCustomized}
-                onColorChange={handleColorChange}
+                onStyleChange={handleStyleChange}
                 onToggleFormatPainter={toggleFormatPainter}
                 onResetAnchors={handleAnchorReset}
                 onResetCurve={handleCurveReset}

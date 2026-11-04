@@ -1,6 +1,12 @@
 import type { StyleConfigDefaults } from './styleTypes'
 import { NODE_SIZE_LIMIT_DEFAULTS } from './styleConstraints.ts'
 
+/**
+ * 连线颜色的预设色板。右侧样式面板与画布浮窗菜单共用同一份定义，
+ * 避免两处各写一套 hex（单色制铁律：颜色只定义一份）。
+ */
+export const EDGE_COLOR_PRESETS = ['#7f8c8d', '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6'] as const
+
 export const EDITOR_FONT_FAMILIES = {
   documentSans: '"Inter", "SF Pro Display", "PingFang SC", "Helvetica Neue", "Microsoft YaHei", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
   sans: '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
