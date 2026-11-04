@@ -5,8 +5,11 @@ import { visualizer } from 'rollup-plugin-visualizer'
 
 import { resolve } from 'path'
 
-const DEV_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' local-file: data: blob:; font-src 'self' data:; connect-src 'self' http://localhost:5173 ws://localhost:5173; worker-src 'self' blob:;"
-const PROD_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' local-file: data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:;"
+// 'wasm-unsafe-eval'：代码块高亮用 Shiki 的 Oniguruma 引擎，它用 WebAssembly.instantiate
+// 编译内联的 wasm 二进制；Chromium 在 script-src 不含该指令时会直接拒绝编译（不是变慢，
+// 而是高亮整体失效）。它只放行 wasm 编译，不放开 JS eval。
+const DEV_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' local-file: data: blob:; font-src 'self' data:; connect-src 'self' http://localhost:5173 ws://localhost:5173; worker-src 'self' blob:;"
+const PROD_CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' local-file: data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:;"
 
 function cspPlugin() {
   return {

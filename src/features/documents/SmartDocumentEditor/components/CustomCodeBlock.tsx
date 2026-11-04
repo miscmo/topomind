@@ -1,5 +1,5 @@
 import { createBundledHighlighter } from 'shiki/core'
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
+import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
 
 const supportedLanguages: Record<string, { name: string; aliases: string[] }> = {
   text: { name: 'Plain Text', aliases: ['text', 'txt', 'plaintext'] },
@@ -52,7 +52,14 @@ const createSmartDocumentHighlighter = createBundledHighlighter({
     sql: () => import('shiki/langs/sql.mjs'),
     yaml: () => import('shiki/langs/yaml.mjs'),
   },
-  engine: createJavaScriptRegexEngine,
+  // 必须用 Oniguruma（WASM），不要用 createJavaScriptRegexEngine：
+  // JS 引擎靠 oniguruma-to-es 把 TextMate grammar 的正则编译成 JS 正则，某些代码内容
+  // 会让编译后的正则发生灾难性回溯。实测一个 615 字符的 Go struct 代码块
+  // 单块 codeToTokens 卡 59.6s（双主题），整篇文档打开卡约 1 分钟；换 Oniguruma 后
+  // 同样 25 个代码块仅 85.7ms。这是同步调用，会直接阻塞渲染主线程。
+  // import('shiki/wasm') 指向 wasm-inlined（base64 内联 Uint8Array），无需 fetch、
+  // 无需 Vite 的 unwasm/asset 配置，打包零改动。
+  engine: () => createOnigurumaEngine(import('shiki/wasm')),
 })
 
 type SmartDocumentHighlighter = Awaited<ReturnType<typeof createSmartDocumentHighlighter>>

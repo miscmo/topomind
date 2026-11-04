@@ -1597,4 +1597,90 @@ const edge = (
   assert.equal(headingCss.includes('content: none'), false, '不得用 content: none 吞掉层级水印')
 }
 
+// 代码块语法高亮：必须用 Oniguruma 引擎。
+// createJavaScriptRegexEngine 把 TextMate grammar 编译成 JS 正则，下面这段真实 Go 代码
+// 会触发灾难性回溯（单块 codeToTokens 实测 29~60s，整篇文档打开卡约 1 分钟）。
+// 先做源码断言快速拦截「改回 JS 引擎」，再真跑项目自己的 highlighter，
+// 顺带验证 wasm 加载 / 语言按需加载 / 双主题改写整条链路可用。
+{
+  const codeBlockSource = await readFile(
+    new URL('../src/features/documents/SmartDocumentEditor/components/CustomCodeBlock.tsx', import.meta.url),
+    'utf-8',
+  )
+  assert.ok(codeBlockSource.includes('createOnigurumaEngine'), '代码块高亮必须用 Oniguruma 引擎')
+  // 只匹配真实引用，别把注释里解释原因时提到的名字也算成违规。
+  assert.equal(/from ['"]shiki\/engine\/javascript['"]/.test(codeBlockSource), false,
+    '不得重新引入 JS 正则引擎')
+  assert.equal(/engine:\s*createJavaScriptRegexEngine/.test(codeBlockSource), false,
+    '不得改回 JS 正则引擎：特定代码内容会灾难性回溯，打开文档卡约 1 分钟')
+
+  // 配套：Oniguruma 用 WebAssembly.instantiate 编译内联 wasm，Chromium 的 CSP
+  // 不在 script-src 放行 'wasm-unsafe-eval' 时会直接拒绝编译，高亮整体失效。
+  const viteConfigSource = await readFile(new URL('../vite.config.js', import.meta.url), 'utf-8')
+  const devCsp = viteConfigSource.match(/const DEV_CSP = "([^"]+)"/)?.[1] ?? ''
+  const prodCsp = viteConfigSource.match(/const PROD_CSP = "([^"]+)"/)?.[1] ?? ''
+  assert.ok(devCsp.includes("'wasm-unsafe-eval'"), 'DEV CSP 必须放行 wasm 编译')
+  assert.ok(prodCsp.includes("'wasm-unsafe-eval'"), 'PROD CSP 必须放行 wasm 编译，否则 Oniguruma 高亮会被 CSP 拦截')
+
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundled = await build({
+    entryPoints: [fileURLToPath(new URL('../src/features/documents/SmartDocumentEditor/components/CustomCodeBlock.tsx', import.meta.url))],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  })
+  const codeBlockModule = await import(
+    `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
+  ) as {
+    customCodeBlockOptions: {
+      createHighlighter: () => Promise<{
+        loadLanguage: (lang: string) => Promise<unknown>
+        codeToTokens: (code: string, options: Record<string, unknown>) => unknown
+      }>
+    }
+  }
+  const highlighter = await codeBlockModule.customCodeBlockOptions.createHighlighter()
+  await highlighter.loadLanguage('go')
+  await highlighter.loadLanguage('cpp')
+
+  // 真实踩雷代码块（用户文档 doc_81a54ba7… 的第 6 个 Go 块）。空格已规范化为普通空格：
+  // 原块含 U+00A0 不换行空格，但实测替换后 JS 引擎仍卡约 29s，所以它保留结构即可复现。
+  const worstGoSnippet = `type mheap struct {
+    // 堆的全局锁
+    lock mutex
+
+
+    // 空闲页分配器，底层是多棵基数树组成的索引，每棵树对应 16 GB 内存空间
+    pages pageAlloc
+
+
+    // 记录了所有的 mspan. 需要知道，所有 mspan 都是经由 mheap，使用连续空闲页组装生成的
+    allspans []*mspan
+
+
+    // heapAreana 数组，64 位系统下，二维数组容量为 [1][2^22]
+    // 每个 heapArena 大小 64M，因此理论上，Golang 堆上限为 2^22*64M = 256T
+    arenas [1 << arenaL1Bits]*[1 << arenaL2Bits]*heapArena
+
+
+    // ...
+    // 多个 mcentral，总个数为 spanClass 的个数
+    central [numSpanClasses]struct {
+        mcentral mcentral
+        // 用于内存地址对齐
+        pad      [cpu.CacheLinePadSize - unsafe.Sizeof(mcentral{})%cpu.CacheLinePadSize]byte
+    }
+
+
+    // ...
+}`
+  const started = performance.now()
+  highlighter.codeToTokens(worstGoSnippet, { lang: 'go' })
+  const elapsed = performance.now() - started
+  assert.ok(elapsed < 3000, `代码块高亮耗时 ${elapsed.toFixed(1)}ms，疑似回退到 JS 正则引擎`)
+}
+
 console.log('Critical regression checks verified')
