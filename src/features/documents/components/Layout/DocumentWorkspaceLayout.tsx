@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import { ChevronLeft, Pin, PinOff } from 'lucide-react'
 import type { DetailSidebarTab, DocumentSaveStatus, DocumentWorkspaceLayoutProps, TocItem } from '../../types/workspaceTypes'
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../../../hooks/useResizePanel'
@@ -9,6 +9,11 @@ import { useDetailLockStore } from '../../../right-panel/model/detailLockStore'
 import { useGraphStore, useSelectedNodeId } from '../../../../stores/graphStore'
 import { useTabStore, useGraphSession } from '../../../../stores/tabs/tabStore'
 import { scrollChildIntoView } from '../../SmartDocumentEditor/smartDocumentUtils'
+
+// 目录固定状态持久化；旧的 topomind_toc_panel_position（自由拖动位置）已废弃，不再读取。
+const TOC_PINNED_KEY = 'topomind_toc_pinned'
+// 鼠标从贴边触发条移到滑出面板之间可能短暂离开命中区，延迟关闭避免面板闪烁。
+const TOC_CLOSE_DELAY_MS = 150
 
 export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   isDirty,
@@ -40,38 +45,53 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     return saved ? parseInt(saved, 10) : 180
   })
   const [internalDetailSidebarTab, setInternalDetailSidebarTab] = useState<DetailSidebarTab>('documents')
-  const [tocCollapsed, setTocCollapsed] = useState(false)
   // 点击目录项时锁定高亮，屏蔽滚动联动的覆写，直到 scroll-spy 追上一致 / 用户手动滚动 / 超时
   const [manualActiveId, setManualActiveId] = useState<string | null>(null)
-  // 目录浮层可拖动，位置记忆到 localStorage
-  const TOC_POS_KEY = 'topomind_toc_panel_position'
-  const [tocPos, setTocPos] = useState<{ top: number; right: number }>(() => {
-    try {
-      const raw = localStorage.getItem(TOC_POS_KEY)
-      if (raw) {
-        const p = JSON.parse(raw)
-        if (p && typeof p.top === 'number' && typeof p.right === 'number') return p
-      }
-    } catch { /* ignore corrupt value */ }
-    return { top: 12, right: 12 }
-  })
-  const [tocDragging, setTocDragging] = useState(false)
-  const tocNavRef = useRef<HTMLElement>(null)
-  const tocListRef = useRef<HTMLDivElement>(null)
-  const tocPosRef = useRef(tocPos)
-  const tocDragStartRef = useRef<{ mx: number; my: number; top: number; right: number } | null>(null)
 
-  const handleTocDragMouseDown = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    tocPosRef.current = tocPos
-    tocDragStartRef.current = { mx: e.clientX, my: e.clientY, top: tocPos.top, right: tocPos.right }
-    setTocDragging(true)
-  }, [tocPos])
+  // 目录默认收起成贴右缘的细条：hover 展开、移开自动隐藏；左上角图钉可固定常驻。
+  // 面板吸附右缘、位置固定（不再支持自由拖动），保证触发区位置可预测。
+  const [tocPinned, setTocPinned] = useState<boolean>(() => {
+    try { return localStorage.getItem(TOC_PINNED_KEY) === 'true' } catch { return false }
+  })
+  const [tocHovered, setTocHovered] = useState(false)
+  const tocExpanded = tocPinned || tocHovered
+  const tocCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tocListRef = useRef<HTMLDivElement>(null)
+
+  const toggleTocPinned = useCallback(() => {
+    const next = !tocPinned
+    setTocPinned(next)
+    try { localStorage.setItem(TOC_PINNED_KEY, String(next)) } catch { /* ignore */ }
+  }, [tocPinned])
+
+  const cancelTocClose = useCallback(() => {
+    if (tocCloseTimerRef.current != null) {
+      clearTimeout(tocCloseTimerRef.current)
+      tocCloseTimerRef.current = null
+    }
+  }, [])
+  const handleTocEnter = useCallback(() => {
+    cancelTocClose()
+    setTocHovered(true)
+  }, [cancelTocClose])
+  const handleTocLeave = useCallback(() => {
+    cancelTocClose()
+    // 细条与面板之间有一帧空隙 / 滑出动画，延迟关闭接住这次转移，避免闪一下
+    tocCloseTimerRef.current = setTimeout(() => setTocHovered(false), TOC_CLOSE_DELAY_MS)
+  }, [cancelTocClose])
 
   useEffect(() => {
-    tocPosRef.current = tocPos
-  }, [tocPos])
+    const sync = (e: StorageEvent) => {
+      if (e.key === TOC_PINNED_KEY) setTocPinned(e.newValue === 'true')
+    }
+    window.addEventListener('storage', sync)
+    return () => window.removeEventListener('storage', sync)
+  }, [])
+  useEffect(() => {
+    return () => {
+      if (tocCloseTimerRef.current != null) clearTimeout(tocCloseTimerRef.current)
+    }
+  }, [])
 
   // 有效的当前标题 = 点击锁定的 id 优先，否则跟随滚动联动算出的 activeTocId
   const effectiveActiveId = manualActiveId ?? activeTocId
@@ -108,54 +128,11 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   // 后者会连带滚动祖先链上任何存在滚动空间的容器（html/body、图谱页、内容区），
   // 表现为「整个页面往上漂移、底部露出空白」，且漂移无法用滚轮滚回。
   useEffect(() => {
-    if (!effectiveActiveId || tocCollapsed || !tocListRef.current) return
+    if (!effectiveActiveId || !tocExpanded || !tocListRef.current) return
     const activeEl = tocListRef.current.querySelector<HTMLElement>(`[data-toc-id="${CSS.escape(effectiveActiveId)}"]`)
     if (!activeEl) return
     scrollChildIntoView(tocListRef.current, activeEl)
-  }, [effectiveActiveId, tocCollapsed])
-
-  useEffect(() => {
-    if (!tocDragging) return
-    const onMove = (e: MouseEvent) => {
-      const s = tocDragStartRef.current
-      if (!s) return
-      const dx = e.clientX - s.mx
-      const dy = e.clientY - s.my
-      const parent = tocNavRef.current?.offsetParent as HTMLElement | null
-      const navEl = tocNavRef.current
-      const navW = navEl?.offsetWidth ?? 240
-      const navH = navEl?.offsetHeight ?? 30
-      let newRight = s.right - dx
-      let newTop = s.top + dy
-      if (parent) {
-        // 用浮层自身真实宽高做边界约束，保证左/上/下边都不越过编辑器容器，
-        // 不会滑入左侧边栏功能区，也不会溢出编辑器底部。
-        const maxRight = Math.max(4, parent.clientWidth - navW - 4)
-        const maxTop = Math.max(4, parent.clientHeight - navH - 4)
-        newRight = Math.min(Math.max(newRight, 4), maxRight)
-        newTop = Math.min(Math.max(newTop, 4), maxTop)
-      } else {
-        newRight = Math.max(newRight, 4)
-        newTop = Math.max(newTop, 4)
-      }
-      const next = { top: newTop, right: newRight }
-      tocPosRef.current = next
-      setTocPos(next)
-    }
-    const onUp = () => {
-      setTocDragging(false)
-      tocDragStartRef.current = null
-      try { localStorage.setItem(TOC_POS_KEY, JSON.stringify(tocPosRef.current)) } catch { /* ignore */ }
-    }
-    document.body.style.userSelect = 'none'
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => {
-      document.body.style.userSelect = ''
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-  }, [tocDragging])
+  }, [effectiveActiveId, tocExpanded])
   const containerRef = useRef<HTMLDivElement>(null)
   
   const tocItems = providedTocItems ?? []
@@ -387,49 +364,67 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               </div>
             )}
 
-            {/* 浮在文档右上角的常驻目录：半透明、绝对定位，不占文档布局宽度；
-                仅在文档有标题时显示，点击跳转到对应标题；可折叠成小条。 */}
+            {/* 目录默认只留贴右缘的 10px 细条，hover 才滑出面板、移开自动隐藏；
+                左上角图钉可固定常驻。细条与面板共用同一个「延迟关闭」状态，
+                避免鼠标在两者之间转移（或滑出动画那一帧）时面板闪烁。
+                visibility 参与过渡：收起动画播完才真正隐藏，隐藏态不可聚焦、不会被读屏读到。 */}
             {tocItems.length > 0 && (
-              <nav
-                ref={tocNavRef}
-                aria-label="文档目录"
-                className="absolute z-20 max-w-[240px] rounded-xl border border-[var(--color-border-light)] bg-[color-mix(in_srgb,var(--color-surface)_82%,transparent)] backdrop-blur-[2px] shadow-[var(--shadow-popover)]"
-                style={{ top: tocPos.top, right: tocPos.right }}
+              <div
+                className="absolute z-20"
+                style={{ top: 12, right: 0, width: 10, height: 72, pointerEvents: 'none' }}
               >
-                <div className="flex items-center justify-between w-full gap-2 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] rounded-xl">
-                  <div
-                    onMouseDown={handleTocDragMouseDown}
-                    className="flex-1 text-center select-none hover:text-[var(--color-text-secondary)]"
-                    style={{ cursor: tocDragging ? 'grabbing' : 'move' }}
-                    title="拖动以移动目录"
-                  >
-                    目录
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTocCollapsed(v => !v)}
-                    aria-expanded={!tocCollapsed}
-                    className="shrink-0 flex items-center justify-center w-4 h-4 rounded text-[var(--color-text-muted)] hover:text-[var(--color-primary)] cursor-pointer"
-                    title={tocCollapsed ? '展开目录' : '折叠目录'}
-                  >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="transition-transform duration-150"
-                      style={{ transform: tocCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
-                      aria-hidden="true"
+                <button
+                  type="button"
+                  aria-label="展开文档目录"
+                  aria-expanded={tocExpanded}
+                  aria-controls="topomind-toc-panel"
+                  title="悬停展开目录"
+                  className="absolute right-0 top-0 flex items-center justify-center rounded-l-md border border-r-0 border-[var(--color-border-light)] bg-[color-mix(in_srgb,var(--color-surface)_85%,transparent)] text-[var(--color-text-muted)] cursor-pointer transition-colors duration-150 hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)]"
+                  style={{ width: 10, height: 72, pointerEvents: 'auto', opacity: tocExpanded ? 1 : 0.6 }}
+                  onMouseEnter={handleTocEnter}
+                  onMouseLeave={handleTocLeave}
+                  onFocus={handleTocEnter}
+                  onBlur={handleTocLeave}
+                >
+                  <ChevronLeft size={10} strokeWidth={2.5} aria-hidden="true" />
+                </button>
+
+                <nav
+                  id="topomind-toc-panel"
+                  aria-label="文档目录"
+                  className="absolute top-0 rounded-l-xl border border-r-0 border-[var(--color-border-light)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] backdrop-blur-[2px] shadow-[var(--shadow-popover)]"
+                  style={{
+                    right: 10,
+                    width: 240,
+                    transform: tocExpanded ? 'translateX(0)' : 'translateX(calc(100% + 12px))',
+                    opacity: tocExpanded ? 1 : 0,
+                    visibility: tocExpanded ? 'visible' : 'hidden',
+                    pointerEvents: tocExpanded ? 'auto' : 'none',
+                    transition: 'transform 200ms ease-out, opacity 200ms ease-out, visibility 200ms',
+                  }}
+                  onMouseEnter={handleTocEnter}
+                  onMouseLeave={handleTocLeave}
+                  onFocus={handleTocEnter}
+                  onBlur={handleTocLeave}
+                >
+                  <div className="flex items-center gap-1.5 w-full px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] border-b border-[var(--color-border-light)]">
+                    <button
+                      type="button"
+                      onClick={toggleTocPinned}
+                      aria-pressed={tocPinned}
+                      aria-label={tocPinned ? '取消固定目录' : '固定目录'}
+                      title={tocPinned ? '取消固定（恢复自动隐藏）' : '固定目录（一直显示）'}
+                      className={`shrink-0 flex items-center justify-center w-5 h-5 rounded-md cursor-pointer transition-colors duration-100 ${
+                        tocPinned
+                          ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                          : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'
+                      }`}
                     >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-                </div>
-                {!tocCollapsed && (
+                      {tocPinned ? <PinOff size={12} aria-hidden="true" /> : <Pin size={12} aria-hidden="true" />}
+                    </button>
+                    <span className="flex-1 text-center select-none">目录</span>
+                    <span className="shrink-0 text-[10px] font-normal opacity-60">{tocItems.length}</span>
+                  </div>
                   <div ref={tocListRef} className="max-h-[calc(58vh-2.5rem)] overflow-y-auto px-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full">
                     {tocItems.map(item => {
                       const isActive = item.id === effectiveActiveId
@@ -453,8 +448,8 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                       )
                     })}
                   </div>
-                )}
-              </nav>
+                </nav>
+              </div>
             )}
           </div>
 
