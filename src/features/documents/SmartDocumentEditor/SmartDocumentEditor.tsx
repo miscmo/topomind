@@ -16,6 +16,7 @@ import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
 import { getImagePreviewScale } from './imagePreview'
 import { setEditorLinkClickHandler, shouldInterceptLink } from './editorLinkInterceptor'
+import { getEditorTopInset } from './smartDocumentUtils'
 
 import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
@@ -42,6 +43,13 @@ const SUPPORTED_CODE_LANGUAGES = Object.entries(customCodeBlockOptions.supported
   label: config.name,
 }))
 const SUPPORTED_CODE_LANGUAGES_MAP = customCodeBlockOptions.supportedLanguages as Record<string, { name: string }>
+
+/**
+ * 小于这个值的「记住的阅读位置」不予恢复。
+ * 编辑器顶部留白 24px，再加一个块的高度余量；这么小的滚动量本来就不是有效的阅读
+ * 位置，恢复它只会把 .bn-editor 的顶部留白滚掉，让首块 H1 看起来被上沿裁掉。
+ */
+const MIN_RESTORE_SCROLL_TOP = 48
 
 function getCodeBlockContainer(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null
@@ -249,13 +257,19 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       pendingScrollTop = null
     }
 
+    // 切到另一个文档实例时先回到顶部：BlockNote 初始化时的聚焦 / 浏览器滚动锚定
+    // 都可能留下一小段 scrollTop，把 .bn-editor 的 24px 顶部留白滚掉，首块 H1
+    // 的字顶看起来被裁。随后再按「有效的」历史位置恢复。
+    scrollContainer.scrollTop = 0
+
     if (attachmentInsertTargetKey) {
       const savedScroll = localStorage.getItem(`topomind_scroll_${attachmentInsertTargetKey}`)
-      if (savedScroll) {
+      const savedValue = savedScroll === null ? NaN : parseFloat(savedScroll)
+      // 目录跳转曾用滚动容器的 paddingTop（0）算顶部留白，把首块 H1 顶到容器上沿，
+      // 存下约 24px 的 scrollTop；这类历史脏值必须过滤，否则每次打开都复现裁切。
+      if (Number.isFinite(savedValue) && savedValue >= MIN_RESTORE_SCROLL_TOP) {
         scrollTimer = setTimeout(() => {
-          if (scrollContainer) {
-            scrollContainer.scrollTop = parseFloat(savedScroll)
-          }
+          scrollContainer.scrollTop = savedValue
         }, 50)
       }
     }
@@ -305,8 +319,10 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 
       // 阈值线放在容器“内容区顶部”：点击跳转（block:'start' / 直接设置 scrollTop）
       // 会把标题块对齐到这里，所以点击后 scroll-spy 算出的 id 与点击项一致，
-      // 不会回退到上一个标题。用容器 paddingTop 动态计算，避免被顶部留白抬高而“差一点不达标”。
-      const padTop = parseFloat(getComputedStyle(scrollContainer).paddingTop) || 0
+      // 不会回退到上一个标题。
+      // 与目录跳转共用同一个「内容区顶部」：留白在 .bn-editor 上（24px），
+      // 滚动容器自身 paddingTop 是 0，按后者算会让首块标题越过阈值线。
+      const padTop = getEditorTopInset(editorRoot)
       const OFFSET = padTop + 10
 
       // 滚到文档底部时，最后一个标题必然是“当前所在”，即使它还没滚到顶部阈值

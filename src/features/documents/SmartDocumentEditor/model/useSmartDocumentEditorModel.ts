@@ -6,7 +6,7 @@ import { multiColumnDropCursor, locales as multiColumnLocales } from '@blocknote
 import { useThemeStore, isDarkTheme } from '../../../../stores/themeStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../smartDocumentTypes'
-import { buildPastedImageHtml, getClipboardMarkdownImage, getCodeBlockPlainTextFromHtml, getCodeBlockPlainTextPaste, getSmartDocumentOutlineAndStats, getStandaloneCodeBlockPasteHtml, getUploadedFileUrl, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
+import { buildPastedImageHtml, getClipboardMarkdownImage, getCodeBlockPlainTextFromHtml, getCodeBlockPlainTextPaste, getEditorTopInset, getSmartDocumentOutlineAndStats, getStandaloneCodeBlockPasteHtml, getUploadedFileUrl, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
 import { containsMarkdownFence } from '../fenceNormalize'
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension, quoteEnterExtension } from '../mathSupport'
 import { containsMathDelimiters, containsMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml, hasMeaningfulHtmlStructure, stripClipboardHtmlNoise } from '../mathPaste'
@@ -430,8 +430,11 @@ export function useSmartDocumentEditorModel({
       if (scroller) {
         const scRect = scroller.getBoundingClientRect()
         const elRect = el.getBoundingClientRect()
-        const padTop = parseFloat(getComputedStyle(scroller).paddingTop) || 0
-        const targetTop = scroller.scrollTop + (elRect.top - scRect.top) - padTop
+        // 顶部留白在 .bn-editor（24px），滚动容器自身 paddingTop 是 0。按后者算会
+        // 把首块标题顶到容器上沿，吃掉留白并让字顶看起来被裁；这个 scrollTop 还会被
+        // 「记住阅读位置」持久化，之后每次打开都复现。两处统一取编辑器顶部留白。
+        const padTop = getEditorTopInset(root)
+        const targetTop = Math.max(0, scroller.scrollTop + (elRect.top - scRect.top) - padTop)
         scroller.scrollTo({ top: targetTop, behavior: 'auto' })
       }
       // 找不到可滚容器时不兜底调用 scrollIntoView：它会滚动祖先链上的任何容器

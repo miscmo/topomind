@@ -37,6 +37,26 @@ export function scrollChildIntoView(
   }
 }
 
+/**
+ * 编辑器内容区的顶部留白（.bn-editor 的 padding-top，当前 24px）。
+ *
+ * 这段留白加在 **.bn-editor** 上，而滚动容器 `.tm-smart-editor-scroll` 的
+ * paddingTop 是 0。目录跳转与 scroll-spy 若按滚动容器算「内容区顶部」，点第一个
+ * H1 时会把标题顶到滚动容器上沿：24px 留白被滚掉、字顶看起来被裁，而且这个
+ * scrollTop 会被「记住阅读位置」存进 localStorage，之后每次打开文档都复现
+ * （2026-11-04 首块 H1 顶部显示不全）。两处必须共用这个值，不能各算各的。
+ */
+export function getEditorTopInset(root: HTMLElement | null | undefined): number {
+  if (!root) return 0
+  const editorEl =
+    root.closest<HTMLElement>('.bn-editor') ??
+    root.querySelector<HTMLElement>('.bn-editor') ??
+    null
+  if (!editorEl) return 0
+  const value = parseFloat(getComputedStyle(editorEl).paddingTop)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
 export function inlineContentToPlainText(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
