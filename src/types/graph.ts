@@ -37,7 +37,7 @@ export type NodeSizingMode = 'auto' | 'manual'
 /**
  * _graph.json 中的 edges 条目
  */
-export type EdgeLineMode = 'smoothstep' | 'straight'
+export type EdgeLineMode = 'smoothstep' | 'straight' | 'curve'
 export type EdgeLineStyle = 'solid' | 'dashed'
 /** 箭头形状：实心三角 / 空心 V 形 */
 export type EdgeArrowShape = 'solid' | 'hollow'
@@ -55,6 +55,8 @@ export interface EdgeStylePatch {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  /** 曲线弯曲度：归一化 [-1, 1]，0 ≈ 直线、正负决定朝哪一侧弯；仅 lineMode='curve' 时生效 */
+  curveBend?: number | null
 }
 
 export interface GraphEdge {
@@ -73,6 +75,8 @@ export interface GraphEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  /** 曲线弯曲度：归一化 [-1, 1]，0 ≈ 直线；仅 lineMode='curve' 时生效 */
+  curveBend?: number | null
   /** 起点端锚点（source 节点边框上的归一化位置）；缺省 = 自动边界交点 */
   sourceAnchor?: EdgeAnchor | null
   /** 终点端锚点（target 节点边框上的归一化位置）；缺省 = 自动边界交点 */
@@ -176,6 +180,8 @@ export type KnowledgeEdge = Edge<{
   /** 起点端 / 终点端锚点（边框位置，只决定出线方向），绑定在本条边上；缺省 = 自动边界交点 */
   sourceAnchor?: EdgeAnchor | null
   targetAnchor?: EdgeAnchor | null
+  /** 曲线弯曲度：归一化 [-1, 1]，0 ≈ 直线；仅 lineMode='curve' 时生效 */
+  curveBend?: number | null
   highlighted?: boolean
   faded?: boolean
   /** 选中状态（运行时状态，不持久化） */

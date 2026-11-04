@@ -15,7 +15,7 @@ export interface GraphEventHandlerDeps {
   tabId: string
   ops: GraphOperations
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
-  defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'; color?: string; arrow?: boolean }
+  defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight' | 'curve'; lineStyle?: 'solid' | 'dashed'; curveBend?: number | null; color?: string; arrow?: boolean }
   setSelectedEdgeId: (edgeId: string | null) => void
   storeApi: StoreApi<GraphState>
 }

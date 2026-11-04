@@ -66,6 +66,7 @@ import { normalizeGraphMeta } from '../src/domain/graph/normalizeGraphMeta.ts'
 import {
   clampEdgeAnchor,
   isBorderAnchor,
+  normalizeCurveBend,
   normalizeEdgeAnchor,
   offsetBorderPoints,
   projectAnchorToBorder,
@@ -1103,6 +1104,85 @@ const edge = (
   assert.deepEqual(reloaded.edges[0].targetAnchor, { u: 1, v: 0 }, '写盘往返后末端锚点不能丢')
   assert.equal(reloaded.edges[2].sourceAnchor, undefined, '老存档无锚点字段时不应凭空生成')
   assert.equal(reloaded.edges[2].targetAnchor, undefined, '老存档无锚点字段时不应凭空生成')
+}
+
+// 连线曲线：弯曲度归一化 + 几何函数往返 + 写盘往返（与锚点同铁律：edges.map 漏写字段会静默复位）
+{
+  // 1) 弯曲度必须被夹到 [-1, 1]，非法/非有限值回落 null（与 curveBend 字段类型 number | null 对齐）
+  assert.equal(normalizeCurveBend(-2), -1)
+  assert.equal(normalizeCurveBend(2), 1)
+  assert.equal(normalizeCurveBend(0.5), 0.5)
+  assert.equal(normalizeCurveBend(Number.POSITIVE_INFINITY), null)
+  assert.equal(normalizeCurveBend('0.3'), null)
+  assert.equal(normalizeCurveBend(undefined), null)
+
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+
+  // 2) 几何函数：getCurvedEdgePath 必须返回合法三次贝塞尔路径与弧长中点；
+  //    resolveCurveBendFromDrag 必须由弧长中点反向反推回原弯曲度（二者共用同一套系数）。
+  const floatingBundle = await build({
+    entryPoints: [fileURLToPath(new URL('../src/features/graph/GraphCanvas/edges/floatingUtils.ts', import.meta.url))],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  })
+  const floatingModule = await import(
+    `data:text/javascript;base64,${Buffer.from(floatingBundle.outputFiles[0].text).toString('base64')}`
+  ) as unknown as {
+    getCurvedEdgePath: (sx: number, sy: number, tx: number, ty: number, bend: number) => [string, number, number]
+    resolveCurveBendFromDrag: (sx: number, sy: number, tx: number, ty: number, px: number, py: number) => number
+  }
+  const [path, midX, midY] = floatingModule.getCurvedEdgePath(0, 0, 100, 0, 0.5)
+  assert.ok(path.startsWith('M 0,0 C'), '曲线路径必须以起笔点开头')
+  assert.ok(path.includes(' C '), '曲线必须是三次贝塞尔')
+  // 直线中点 (50,0)，弯曲 0.5 后弧长中点应沿法向（y 轴）偏移、横向仍≈50
+  assert.ok(Math.abs(midX - 50) < 1e-6, '曲线弧长中点的横向应约等于直线中点')
+  assert.ok(Math.abs(midY) > 0, '弯曲的曲线弧长中点必须偏离直线')
+  // 由弧长中点反向反推弯曲度，必须回到 0.5
+  const back = floatingModule.resolveCurveBendFromDrag(0, 0, 100, 0, midX, midY)
+  assert.ok(Math.abs(back - 0.5) < 1e-6, '弧长中点反向反推弯曲度必须一致')
+
+  // 3) 铁律：curveBend 必须真的写进磁盘 JSON 并在往返后不丢（曾因 edges.map 漏写字段导致锚点复位）
+  const meta = normalizeGraphMeta({
+    nodes: {},
+    edges: [
+      { id: 'e1', source: { ref: 'a' }, target: { ref: 'b' }, lineMode: 'curve', curveBend: 0.5 },
+      { id: 'e2', source: { ref: 'a' }, target: { ref: 'c' }, lineMode: 'curve', curveBend: -0.7 },
+      { id: 'e3', source: { ref: 'a' }, target: { ref: 'd' }, lineMode: 'curve' },
+    ],
+    viewport: {},
+  })
+  assert.equal(meta.edges[0].lineMode, 'curve', 'normalizeGraphMeta 必须保留曲线模式')
+  assert.equal(meta.edges[0].curveBend, 0.5, 'normalizeGraphMeta 必须保留弯曲度')
+  assert.equal(meta.edges[2].curveBend, null, '缺失弯曲度的曲线边应回落为 null')
+
+  const storageBundle = await build({
+    entryPoints: [fileURLToPath(new URL('../src/core/storage/file.ts', import.meta.url))],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  })
+  const storageModule = await import(
+    `data:text/javascript;base64,${Buffer.from(storageBundle.outputFiles[0].text).toString('base64')}`
+  ) as {
+    convertGraphToFSB: (graphMeta: ReturnType<typeof normalizeGraphMeta>) => { edges?: Array<Record<string, unknown>> }
+    convertFSBToGraph: (raw: unknown) => { edges: Array<Record<string, unknown>> }
+  }
+  // 序列化一次，模拟真正落盘成 JSON 再读回来
+  const written = JSON.parse(JSON.stringify(storageModule.convertGraphToFSB(meta)))
+  assert.equal((written.edges?.[0] as Record<string, unknown>).lineMode, 'curve', '曲线模式必须写进磁盘 JSON')
+  assert.equal((written.edges?.[0] as Record<string, unknown>).curveBend, 0.5, '弯曲度必须真的写进磁盘 JSON')
+  assert.equal((written.edges?.[1] as Record<string, unknown>).curveBend, -0.7, '负弯曲度必须真的写进磁盘 JSON')
+  const reloaded = storageModule.convertFSBToGraph(written)
+  assert.equal(reloaded.edges[0].lineMode, 'curve', '写盘往返后曲线模式不能丢')
+  assert.equal(reloaded.edges[0].curveBend, 0.5, '写盘往返后弯曲度不能丢')
+  assert.equal(reloaded.edges[1].curveBend, -0.7, '写盘往返后负弯曲度不能丢')
+  assert.equal(reloaded.edges[2].curveBend, null, '写盘往返后缺失弯曲度应回落为 null')
 }
 
 // 主题收归为浅色/深色两套：已下线主题必须迁移到正确的一套，否则菜单勾选会悬空

@@ -66,7 +66,13 @@ export function NodeStylePreview({
 
 export function EdgeStylePreview({ style }: { style: DefaultEdgeStyle }) {
   const dashArray = style.lineStyle === 'dashed' ? '6 4' : undefined
-  const path = style.lineMode === 'smoothstep' ? 'M18 58 C58 18, 122 98, 162 58' : 'M18 58 L162 58'
+  const path =
+    style.lineMode === 'smoothstep'
+      ? 'M18 58 C58 18, 122 98, 162 58'
+      : style.lineMode === 'curve'
+        // 预览里用一条干净的对称拱线代表"曲线"模式，随弯曲度正负翻转拱向
+        ? (style.curveBend ?? 0) >= 0 ? 'M18 58 Q90 18 162 58' : 'M18 58 Q90 98 162 58'
+        : 'M18 58 L162 58'
   const arrowSize = clamp(style.arrowSize ?? 12, EDGE_ARROW_SIZE_LIMIT.min, EDGE_ARROW_SIZE_LIMIT.max)
   // 预览画的是次线（weight=minor），直接用基础线宽，与画布上非主线连线一致
   const lineWidth = clamp(style.lineWidth ?? 1.2, EDGE_LINE_WIDTH_LIMIT.min, EDGE_LINE_WIDTH_LIMIT.max)

@@ -7,8 +7,10 @@ import type { TopoDocumentType } from '../topoDocumentTypes'
 export interface VaultConfig {
   edgeDefaultsVersion?: number
   defaultEdgeStyle?: {
-    lineMode?: 'smoothstep' | 'straight'
+    lineMode?: 'smoothstep' | 'straight' | 'curve'
     lineStyle?: 'solid' | 'dashed'
+    /** 曲线弯曲度：归一化 [-1, 1]；仅 lineMode='curve' 时生效 */
+    curveBend?: number | null
     color?: string
     lineWidth?: number
     arrow?: boolean

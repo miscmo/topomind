@@ -53,12 +53,19 @@ export function EdgeStylePanel({
               <SegmentedControl
                 options={[
                   { label: '弯折', value: 'smoothstep' },
-                  { label: '直线', value: 'straight' }
+                  { label: '直线', value: 'straight' },
+                  { label: '曲线', value: 'curve' }
                 ]}
                 value={defaultEdgeStyle.lineMode || 'straight'}
-                onChange={(v) => onUpdateDefaultStyle({ lineMode: v as 'smoothstep' | 'straight' })}
+                onChange={(v) => onUpdateDefaultStyle({ lineMode: v as 'smoothstep' | 'straight' | 'curve' })}
               />
             </div>
+            {defaultEdgeStyle.lineMode === 'curve' && (
+              <CurveBendSlider
+                value={defaultEdgeStyle.curveBend ?? 0}
+                onChange={(v) => onUpdateDefaultStyle({ curveBend: v })}
+              />
+            )}
             <div className="flex flex-col gap-[6px] mb-0 col-span-full">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">线条</label>
               <SegmentedControl
@@ -155,12 +162,19 @@ export function EdgeStylePanel({
                   <SegmentedControl
                     options={[
                       { label: '弯折', value: 'smoothstep' },
-                      { label: '直线', value: 'straight' }
+                      { label: '直线', value: 'straight' },
+                      { label: '曲线', value: 'curve' }
                     ]}
                     value={currentEdgeStyle.lineMode || 'straight'}
-                    onChange={(v) => onApplyToSelectedEdge({ lineMode: v as 'smoothstep' | 'straight' })}
+                    onChange={(v) => onApplyToSelectedEdge({ lineMode: v as 'smoothstep' | 'straight' | 'curve' })}
                   />
                 </div>
+                {currentEdgeStyle.lineMode === 'curve' && (
+                  <CurveBendSlider
+                    value={currentEdgeStyle.curveBend ?? 0}
+                    onChange={(v) => onApplyToSelectedEdge({ curveBend: v })}
+                  />
+                )}
                 <div className="flex flex-col gap-[6px] mb-0 col-span-full">
                   <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">线条</label>
                   <SegmentedControl
@@ -245,6 +259,37 @@ export function EdgeStylePanel({
           )}
         </CollapsibleBlock>
       </StyleCard>
+    </div>
+  )
+}
+
+/**
+ * 曲率滑杆：拖动改变 curveBend ∈ [-1, 1]，0 ≈ 直线，正负决定弯向连线哪一侧。
+ * 用原生 range + accent-color 绑定单色品牌变量，避免引入新的视觉通道。
+ */
+function CurveBendSlider({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="flex flex-col gap-[6px] mb-0 col-span-full">
+      <div className="flex items-center justify-between">
+        <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">弯曲度</label>
+        <span className="text-[11px] tabular-nums text-[var(--color-text-muted)]">{value.toFixed(2)}</span>
+      </div>
+      <input
+        type="range"
+        min={-1}
+        max={1}
+        step={0.01}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ accentColor: 'var(--color-accent)' }}
+        className="w-full cursor-pointer h-4"
+      />
     </div>
   )
 }

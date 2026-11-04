@@ -1,8 +1,10 @@
 import type { EdgeArrowPosition, EdgeArrowShape } from '../../types/graph'
 
 export interface DefaultEdgeStyle {
-  lineMode: 'smoothstep' | 'straight'
+  lineMode: 'smoothstep' | 'straight' | 'curve'
   lineStyle: 'solid' | 'dashed'
+  /** 曲线弯曲度：归一化 [-1, 1]，0 ≈ 直线；仅 lineMode='curve' 时生效 */
+  curveBend?: number
   color: string
   /** 线条粗细（px）；主线在此基础上按比例加粗 */
   lineWidth: number

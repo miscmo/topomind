@@ -35,7 +35,7 @@ export interface SerializedEdge {
   target: string
   relation: string
   weight: string
-  lineMode?: 'smoothstep' | 'straight'
+  lineMode?: 'smoothstep' | 'straight' | 'curve'
   lineStyle?: 'solid' | 'dashed'
   color?: string
   arrow?: boolean
@@ -86,6 +86,7 @@ export function buildMetaFromNodesEdges(
     weight: e.data?.weight ?? 'minor',
     lineMode: e.data?.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode,
     lineStyle: e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle,
+    curveBend: e.data?.curveBend ?? undefined,
     color: e.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color,
     lineWidth: e.data?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth,
     arrow: e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow,
@@ -167,6 +168,7 @@ export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
   return roomGraph.edges.map((e) => {
     const lineMode = e.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
     const lineStyle = e.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
+    const curveBend = e.curveBend ?? undefined
     const color = e.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
     const lineWidth = e.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth
     const arrow = e.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
@@ -184,6 +186,7 @@ export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
         weight: e.weight,
         lineMode,
         lineStyle,
+        curveBend,
         color,
         lineWidth,
         arrow,

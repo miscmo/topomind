@@ -11,12 +11,13 @@ import {
 import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, clampNumber } from '../../../../domain/style/styleConstraints'
 import type { EdgeStylePatch, KnowledgeEdge } from '../../../../types'
-import { normalizeEdgeAnchor, type EdgeAnchorPatch } from '../../../../domain/graph/edgeAnchors'
+import { normalizeEdgeAnchor, normalizeCurveBend, type EdgeAnchorPatch } from '../../../../domain/graph/edgeAnchors'
 import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
-import { getEdgeParams, getInternalNodeRect } from './floatingUtils'
+import { getEdgeParams, getInternalNodeRect, getCurvedEdgePath } from './floatingUtils'
 import QuickEdgeToolbar from './QuickEdgeToolbar'
 import EdgeAnchorHandles, { type EdgeAnchorPreview } from './EdgeAnchorHandles'
+import EdgeBendHandle from './EdgeBendHandle'
 import EdgeToolbarAnchor from './EdgeToolbarAnchor'
 
 /**
@@ -60,8 +61,9 @@ function FloatingEdge({
   const isNodeFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
   const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
   const { updateEdgeStyle, updateEdgeAnchor, deleteEdge } = useGraphContext()
-  // 拖动锚点时只在这里做路径预览，松手才写 store：一次拖动 = 一条撤销记录、一次落盘
+  // 拖动锚点 / 弯曲控制柄时只在这里做路径预览，松手才写 store：一次拖动 = 一条撤销记录、一次落盘
   const [anchorPreview, setAnchorPreview] = useState<EdgeAnchorPreview | null>(null)
+  const [bendPreview, setBendPreview] = useState<number | null>(null)
 
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
@@ -81,6 +83,10 @@ function FloatingEdge({
   const handleDelete = useCallback(() => {
     void deleteEdge(id)
   }, [deleteEdge, id])
+
+  const handleBendCommit = useCallback((bend: number) => {
+    void updateEdgeStyle(id, { curveBend: bend })
+  }, [updateEdgeStyle, id])
 
   const toggleFormatPainter = useCallback(() => {
     const uiStore = useGraphUiStore.getState()
@@ -108,6 +114,14 @@ function FloatingEdge({
   const hasCustomAnchors =
     normalizeEdgeAnchor(edgeData?.sourceAnchor) != null
     || normalizeEdgeAnchor(edgeData?.targetAnchor) != null
+  const isCurve = edgeData?.lineMode === 'curve' || data?.type === 'curve'
+  // 曲线模式且选中时，弧长中点显示可拖拽的弯曲控制柄
+  const showBendHandle =
+    isSelected
+    && isCurve
+    && connectingSourceId === null
+    && !isNodeFormatPainterActive
+    && !isEdgeFormatPainterActive
 
   if (!sourceNode || !targetNode) {
     return null
@@ -127,6 +141,8 @@ function FloatingEdge({
   )
 
   const isStraight = edgeData?.lineMode === 'straight' || data?.type === 'straight'
+  // 拖动弯曲控制柄时只做路径预览，松手才写库；liveBend 优先用预览值
+  const liveBend = bendPreview ?? normalizeCurveBend(edgeData?.curveBend) ?? 0
   // 箭头在极低缩放下只有亚像素大小，却要为每条边额外渲染 <defs>+<marker>+<path>
   // （可见边的 SVG DOM 直接三倍）。低于阈值就不画箭头，只留线条本身。
   // 订阅的是布尔而非 zoom 浮点值，只在跨阈值时重渲染一次。
@@ -146,22 +162,27 @@ function FloatingEdge({
   const markerColor = typeof style?.stroke === 'string' ? style.stroke : STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
   const markerOpacity = style?.opacity
 
-  const [edgePath, labelX, labelY] = isStraight
-    ? getStraightPath({
-        sourceX: sx,
-        sourceY: sy,
-        targetX: tx,
-        targetY: ty,
-      })
-    : getSmoothStepPath({
-        sourceX: sx,
-        sourceY: sy,
-        sourcePosition: sourcePos,
-        targetPosition: targetPos,
-        targetX: tx,
-        targetY: ty,
-        borderRadius: 16,
-      })
+  // 曲线模式下 label 中点即曲线弧长中点（与 EdgeBendHandle 抓取点一致），
+  // 既作为工具栏默认挂靠点，也并入工具栏避让锚点，避免工具条盖住弯曲手柄。
+  const [edgePath, labelX, labelY] = isCurve
+    ? getCurvedEdgePath(sx, sy, tx, ty, liveBend)
+    : isStraight
+      ? getStraightPath({
+          sourceX: sx,
+          sourceY: sy,
+          targetX: tx,
+          targetY: ty,
+        })
+      : getSmoothStepPath({
+          sourceX: sx,
+          sourceY: sy,
+          sourcePosition: sourcePos,
+          targetPosition: targetPos,
+          targetX: tx,
+          targetY: ty,
+          borderRadius: 16,
+        })
+  const curveMid: { x: number; y: number } | null = isCurve ? { x: labelX, y: labelY } : null
 
   const isSolid = arrowShape === 'solid'
 
@@ -217,12 +238,23 @@ function FloatingEdge({
               onCommit={handleAnchorCommit}
             />
           )}
+          {showBendHandle && (
+            <EdgeBendHandle
+              sx={sx}
+              sy={sy}
+              tx={tx}
+              ty={ty}
+              bend={liveBend}
+              onPreview={setBendPreview}
+              onCommit={handleBendCommit}
+            />
+          )}
           {showToolbar && (
             <EdgeToolbarAnchor
               labelX={labelX}
               labelY={labelY}
-              anchors={[sourceBorder, targetBorder]}
-              faded={anchorPreview !== null}
+              anchors={showBendHandle && curveMid ? [sourceBorder, targetBorder, curveMid] : [sourceBorder, targetBorder]}
+              faded={anchorPreview !== null || bendPreview !== null}
             >
               <QuickEdgeToolbar
                 color={edgeData?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color}

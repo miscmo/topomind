@@ -115,3 +115,68 @@ export function getEdgeParams(
     targetBorder: targetPoint,
   }
 }
+
+/**
+ * 曲线弯曲系数：bend ∈ [-1, 1] 决定控制点相对连线的垂直偏移。
+ * 0 ≈ 直线，绝对值越大弯得越深，正负决定朝连线哪一侧弯。
+ */
+export const CURVE_BEND_FACTOR = 0.45
+/** 曲线弧长中点（手柄抓取点）相对直线中点的偏移系数，用于把 bend 反推回拖拽位移 */
+export const CURVE_MIDPOINT_RATIO = 0.75
+
+/**
+ * 计算一条三次贝塞尔曲线：两端固定在 (sx,sy)/(tx,ty)，两个控制点沿连线方向
+ * 各推进 1/3、2/3，并整体沿「垂直法向」偏移 bend·len·FACTOR。这样无论两端锚点
+ * 落在节点哪条边，曲线始终从边框交点平滑起笔、对称地弓起。
+ *
+ * 返回 [path, labelX, labelY]，label 取曲线弧长中点（≈ 直线中点 + 法向·offset·RATIO），
+ * 正好是曲线弓得最高的位置——也是拖动控制柄的抓取点。
+ */
+export function getCurvedEdgePath(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
+  bend: number
+): [string, number, number] {
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const len = Math.hypot(dx, dy) || 1
+  const nx = -dy / len
+  const ny = dx / len
+  const offset = bend * len * CURVE_BEND_FACTOR
+
+  const c1x = sourceX + dx * (1 / 3) + nx * offset
+  const c1y = sourceY + dy * (1 / 3) + ny * offset
+  const c2x = sourceX + dx * (2 / 3) + nx * offset
+  const c2y = sourceY + dy * (2 / 3) + ny * offset
+
+  const path = `M ${sourceX},${sourceY} C ${c1x},${c1y} ${c2x},${c2y} ${targetX},${targetY}`
+  const midX = (sourceX + targetX) / 2 + nx * offset * CURVE_MIDPOINT_RATIO
+  const midY = (sourceY + targetY) / 2 + ny * offset * CURVE_MIDPOINT_RATIO
+  return [path, midX, midY]
+}
+
+/**
+ * 由「拖拽点相对直线中点的垂直位移」反推 curveBend，钳制到 [-1, 1]。
+ * 与 getCurvedEdgePath 共用同一套 len / FACTOR / RATIO，保证手柄位置与数值一致。
+ */
+export function resolveCurveBendFromDrag(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
+  pointerX: number,
+  pointerY: number
+): number {
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const len = Math.hypot(dx, dy) || 1
+  const nx = -dy / len
+  const ny = dx / len
+  const midX = (sourceX + targetX) / 2
+  const midY = (sourceY + targetY) / 2
+  const perp = (pointerX - midX) * nx + (pointerY - midY) * ny
+  const bend = perp / (CURVE_MIDPOINT_RATIO * CURVE_BEND_FACTOR * len)
+  return Math.min(1, Math.max(-1, bend))
+}

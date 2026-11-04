@@ -3,7 +3,7 @@ import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem,
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, EdgeAnchor } from '../../types'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
-import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
+import { normalizeEdgeAnchor, normalizeCurveBend } from '../../domain/graph/edgeAnchors'
 
 interface FSBGraphChild {
   name: string
@@ -26,7 +26,7 @@ interface FSBGraphEdge {
   target: string
   relation?: EdgeRelation
   weight?: EdgeWeight
-  lineMode?: 'smoothstep' | 'straight'
+  lineMode?: 'smoothstep' | 'straight' | 'curve'
   lineStyle?: 'solid' | 'dashed'
   color?: string
   lineWidth?: number
@@ -34,6 +34,8 @@ interface FSBGraphEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  /** 曲线弯曲度：归一化 [-1, 1]，null/缺省=直线；仅 lineMode='curve' 时生效 */
+  curveBend?: number | null
   sourceAnchor?: EdgeAnchor | null
   targetAnchor?: EdgeAnchor | null
   highlighted?: boolean
@@ -106,10 +108,10 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
 
   const edges: Array<{
     id: string; source: CardInfo; target: CardInfo; relation: EdgeRelation; weight: EdgeWeight
-    lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'
-    color?: string; lineWidth?: number; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
-    sourceAnchor?: EdgeAnchor | null; targetAnchor?: EdgeAnchor | null
-    highlighted?: boolean; faded?: boolean
+  lineMode?: 'smoothstep' | 'straight' | 'curve'; lineStyle?: 'solid' | 'dashed'
+  color?: string; lineWidth?: number; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
+  curveBend?: number | null; sourceAnchor?: EdgeAnchor | null; targetAnchor?: EdgeAnchor | null
+  highlighted?: boolean; faded?: boolean
   }> = (raw.edges ?? []).map(e => ({
     id: e.id,
     source: { ref: normalizeRef(e.source), name: '', updatedAt: undefined },
@@ -124,6 +126,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
     arrowSize: e.arrowSize,
     arrowShape: e.arrowShape,
     arrowPosition: e.arrowPosition,
+    curveBend: normalizeCurveBend(e.curveBend),
     sourceAnchor: normalizeEdgeAnchor(e.sourceAnchor),
     targetAnchor: normalizeEdgeAnchor(e.targetAnchor),
     highlighted: e.highlighted,
@@ -146,9 +149,9 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
   children?: Record<string, FSBGraphChild>
   edges?: Array<{
     id: string; source: string; target: string; relation: EdgeRelation; weight: EdgeWeight
-    lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'
+    lineMode?: 'smoothstep' | 'straight' | 'curve'; lineStyle?: 'solid' | 'dashed'
     color?: string; lineWidth?: number; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
-    sourceAnchor?: EdgeAnchor | null; targetAnchor?: EdgeAnchor | null
+    curveBend?: number | null; sourceAnchor?: EdgeAnchor | null; targetAnchor?: EdgeAnchor | null
     highlighted?: boolean; faded?: boolean
   }>
   zoom?: number; pan?: { x: number; y: number }
@@ -189,6 +192,7 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
       arrowSize: e.arrowSize,
       arrowShape: e.arrowShape,
       arrowPosition: e.arrowPosition,
+      curveBend: normalizeCurveBend(e.curveBend),
       sourceAnchor: normalizeEdgeAnchor(e.sourceAnchor),
       targetAnchor: normalizeEdgeAnchor(e.targetAnchor),
       highlighted: e.highlighted,

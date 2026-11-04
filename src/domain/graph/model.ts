@@ -49,6 +49,8 @@ export interface RoomGraphEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  /** 曲线弯曲度：归一化 [-1, 1]，0 ≈ 直线；仅 lineMode='curve' 时生效 */
+  curveBend?: number | null
   /** 起点端 / 终点端锚点（节点边框上的归一化位置，只决定出线位置），绑定在本条边上 */
   sourceAnchor?: EdgeAnchor | null
   targetAnchor?: EdgeAnchor | null
@@ -93,6 +95,8 @@ export interface KBEdge {
   arrowSize?: number
   arrowShape?: EdgeArrowShape
   arrowPosition?: EdgeArrowPosition
+  /** 曲线弯曲度：归一化 [-1, 1]，0 ≈ 直线；仅 lineMode='curve' 时生效 */
+  curveBend?: number | null
   /** 起点端 / 终点端锚点（节点边框上的归一化位置，只决定出线位置），绑定在本条边上 */
   sourceAnchor?: EdgeAnchor | null
   targetAnchor?: EdgeAnchor | null

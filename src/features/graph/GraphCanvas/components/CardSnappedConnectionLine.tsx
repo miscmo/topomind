@@ -5,6 +5,8 @@ import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { useGraphStore } from '../../../../stores/graphStore'
 import { CONNECTION_ARROW_MARKER_ID } from '../constants'
 import { getNodeRect, getRectCenter, getRectIntersectionPoint } from '../utils/math'
+import { normalizeCurveBend } from '../../../../domain/graph/edgeAnchors'
+import { getCurvedEdgePath } from '../edges/floatingUtils'
 
 export function CardSnappedConnectionLine({
   fromX,
@@ -34,8 +36,10 @@ export function CardSnappedConnectionLine({
     ? getRectIntersectionPoint(targetPoint, getRectCenter(sourceRect), sourceRect)
     : { x: fromX, y: fromY }
   
-  // Use smoothstep or straight path based on defaultEdgeStyle
+  // Use smoothstep / straight / curve path based on defaultEdgeStyle
   const isStraight = defaultEdgeStyle.lineMode === 'straight'
+  const isCurve = defaultEdgeStyle.lineMode === 'curve'
+  const bend = normalizeCurveBend(defaultEdgeStyle.curveBend) ?? 0
   const [edgePath] = isStraight
     ? getStraightPath({
         sourceX: sourcePoint.x,
@@ -43,7 +47,9 @@ export function CardSnappedConnectionLine({
         targetX: targetPoint.x,
         targetY: targetPoint.y,
       })
-    : getSmoothStepPath({
+    : isCurve
+      ? getCurvedEdgePath(sourcePoint.x, sourcePoint.y, targetPoint.x, targetPoint.y, bend)
+      : getSmoothStepPath({
         sourceX: sourcePoint.x,
         sourceY: sourcePoint.y,
         sourcePosition: (targetPoint.x > sourcePoint.x ? 'right' : 'left') as any,

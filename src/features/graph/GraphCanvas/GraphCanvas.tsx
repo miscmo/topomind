@@ -13,6 +13,7 @@ const nodeTypes = { knowledgeCard: KnowledgeCard }
 const edgeTypes = {
   smoothstep: FloatingEdge,
   straight: FloatingEdge,
+  curve: FloatingEdge,
 }
 
 export default memo(function GraphCanvas({
