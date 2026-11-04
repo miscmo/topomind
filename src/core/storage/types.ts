@@ -1,23 +1,14 @@
 import type { GraphMeta } from '../../domain/graph/model'
 import type { CardInfo } from '../../domain/graph/model'
 import type { KBListItem } from '../../types'
+import type { DefaultEdgeStyle } from '../../domain/style/styleTypes'
 import type { FSBTrashItem, FSBTrashTopoDocumentItem } from '../fs-backend'
 import type { TopoDocumentType } from '../topoDocumentTypes'
 
 export interface VaultConfig {
   edgeDefaultsVersion?: number
-  defaultEdgeStyle?: {
-    lineMode?: 'smoothstep' | 'straight' | 'curve'
-    lineStyle?: 'solid' | 'dashed'
-    /** 曲线弯曲度：归一化 [-1, 1]；仅 lineMode='curve' 时生效 */
-    curveBend?: number | null
-    color?: string
-    lineWidth?: number
-    arrow?: boolean
-    arrowSize?: number
-    arrowShape?: 'solid' | 'hollow'
-    arrowPosition?: 'end' | 'start' | 'both'
-  }
+  /** 与运行时共享同一份定义：新增连线样式字段时无需再同步这里，避免字段白名单漂移 */
+  defaultEdgeStyle?: Partial<DefaultEdgeStyle>
   defaultNodeStyle?: {
     headerFontSize?: number
     bodyFontSize?: number

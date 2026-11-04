@@ -8,6 +8,7 @@ import type { StoreApi } from 'zustand'
 import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../../domain/style/styleConstraints'
 import { normalizeEdgeAnchor, type EdgeAnchor, type EdgeAnchorPatch } from '../../domain/graph/edgeAnchors'
+import { normalizeCurveControl, sameCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
 
 export interface EdgeOperationsDeps {
   getActiveGraphSession: () => GraphSession | undefined
@@ -21,6 +22,29 @@ function sameAnchor(a: EdgeAnchor | null | undefined, b: EdgeAnchor | null | und
   const right = normalizeEdgeAnchor(b)
   if (!left || !right) return left === right
   return left.u === right.u && left.v === right.v
+}
+
+/**
+ * 样式数据浅比较。
+ *
+ * 这里刻意不写"字段白名单"：早期 updateEdgeStyle 逐字段比对 8 个样式字段，
+ * 新增 curveBend 时漏加，导致「只改曲线参数 → 判定无变化 → 连内存都不写」。
+ * 改成遍历两边实际字段的并集，未来任何新增样式字段都自动纳入变化检测。
+ * 对象型字段（曲线控制点）单独按归一化后的值比较，避免 undefined/null 造成假变化。
+ */
+function sameStyleData(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  for (const key of keys) {
+    if (key === 'curveControl') {
+      if (!sameCurveControl(
+        a[key] as CurveControl | null | undefined,
+        b[key] as CurveControl | null | undefined
+      )) return false
+      continue
+    }
+    if (a[key] !== b[key]) return false
+  }
+  return true
 }
 
 function withEdgeSelection(edge: KnowledgeEdge, selected: boolean): KnowledgeEdge {
@@ -83,6 +107,10 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     const arrowSize = defaultStyle?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize
     const arrowShape = defaultStyle?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape
     const arrowPosition = defaultStyle?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition
+    // 默认样式为曲线时，新建连线继承默认控制点（否则就是一条直线）
+    const curveControl = normalizeCurveControl(
+      defaultStyle?.curveControl ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.curveControl
+    )
     const newEdge: KnowledgeEdge = {
       id: edgeId,
       source: connection.source,
@@ -95,6 +123,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
         weight: 'minor',
         lineMode,
         lineStyle,
+        curveControl,
         color,
         lineWidth,
         arrow,
@@ -168,50 +197,59 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     const store = storeApi.getState()
-    const shouldPersist =
-      style.lineMode !== undefined ||
-      style.lineStyle !== undefined ||
-      style.color !== undefined ||
-      style.lineWidth !== undefined ||
-      style.arrow !== undefined ||
-      style.arrowSize !== undefined ||
-      style.arrowShape !== undefined ||
-      style.arrowPosition !== undefined
+    // 通用持久化判定：除 selected（纯运行时状态）外，任何显式传入的 patch 字段都要落盘。
+    // 早期这里手写 8 个字段的白名单，新增曲线参数时漏加 → 设置后既不写库也不落盘。
+    const shouldPersist = Object.entries(style).some(
+      ([key, value]) => key !== 'selected' && value !== undefined
+    )
     let changed = false
     const nextEdges = store.edges.map((e) => {
       if (e.id !== edgeId) return e
-      const currentSelected = e.data?.selected ?? false
-      const nextColor = style.color ?? e.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
-      const nextLineStyle = style.lineStyle ?? e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
-      const nextLineMode = style.lineMode ?? e.data?.lineMode
-      const nextArrow = style.arrow ?? e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
+      const d = (e.data ?? {}) as Record<string, unknown> & KnowledgeEdge['data']
+      const defaults = STYLE_CONFIG_DEFAULTS.defaultEdgeStyle
+      const nextColor = style.color ?? d.color ?? defaults.color
+      const nextLineStyle = style.lineStyle ?? d.lineStyle ?? defaults.lineStyle
+      const nextLineMode = style.lineMode ?? d.lineMode
+      const nextArrow = style.arrow ?? d.arrow ?? defaults.arrow
       const nextLineWidth = clampNumber(
-        style.lineWidth ?? e.data?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth,
+        style.lineWidth ?? d.lineWidth ?? defaults.lineWidth,
         EDGE_LINE_WIDTH_LIMIT.min,
         EDGE_LINE_WIDTH_LIMIT.max
       )
       const nextArrowSize = clampNumber(
-        style.arrowSize ?? e.data?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize,
+        style.arrowSize ?? d.arrowSize ?? defaults.arrowSize,
         EDGE_ARROW_SIZE_LIMIT.min,
         EDGE_ARROW_SIZE_LIMIT.max
       )
-      const nextArrowShape = style.arrowShape ?? e.data?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape
-      const nextArrowPosition = style.arrowPosition ?? e.data?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition
-      const nextWeight = e.data?.weight ?? 'minor'
-      const nextSelected = style.selected ?? currentSelected
-      if (
-        nextLineMode === e.data?.lineMode &&
-        nextLineStyle === (e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle) &&
-        nextColor === (e.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color) &&
-        nextArrow === (e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow) &&
-        nextLineWidth === (e.data?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth) &&
-        nextArrowSize === (e.data?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize) &&
-        nextArrowShape === (e.data?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape) &&
-        nextArrowPosition === (e.data?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition) &&
-        nextSelected === currentSelected
-      ) {
-        return e
+      const nextArrowShape = style.arrowShape ?? d.arrowShape ?? defaults.arrowShape
+      const nextArrowPosition = style.arrowPosition ?? d.arrowPosition ?? defaults.arrowPosition
+      const nextWeight = d.weight ?? 'minor'
+      const nextSelected = style.selected ?? d.selected ?? false
+      // 显式传 curveControl（含 null）表示设置/复位；未传则沿用原值。
+      // 统一归一化后写入，避免非法值流入磁盘。
+      const nextCurveControl = 'curveControl' in style
+        ? normalizeCurveControl(style.curveControl)
+        : normalizeCurveControl(d.curveControl)
+
+      // ...style 原样透传所有 patch 字段（未来新增字段无需改这里），
+      // 随后用 clamp/兜底后的值覆盖，保证存进去的始终是合法值。
+      const nextData = {
+        ...d,
+        ...style,
+        relation: d.relation ?? '相关',
+        weight: nextWeight,
+        lineMode: nextLineMode,
+        color: nextColor,
+        lineStyle: nextLineStyle,
+        lineWidth: nextLineWidth,
+        arrow: nextArrow,
+        arrowSize: nextArrowSize,
+        arrowShape: nextArrowShape,
+        arrowPosition: nextArrowPosition,
+        curveControl: nextCurveControl,
+        selected: nextSelected,
       }
+      if (sameStyleData(d, nextData)) return e
       changed = true
       return {
         ...e,
@@ -227,21 +265,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
           weight: nextWeight,
           selected: nextSelected,
         }),
-        data: {
-          ...e.data,
-          ...style,
-          relation: e.data?.relation ?? '相关',
-          weight: e.data?.weight ?? 'minor',
-          color: nextColor,
-          lineStyle: nextLineStyle,
-          arrow: nextArrow,
-          // 放在 ...style 之后，确保存进去的是 clamp/兜底后的值
-          lineWidth: nextLineWidth,
-          arrowSize: nextArrowSize,
-          arrowShape: nextArrowShape,
-          arrowPosition: nextArrowPosition,
-          selected: nextSelected,
-        },
+        data: nextData,
       } as KnowledgeEdge
     })
     if (!changed) return

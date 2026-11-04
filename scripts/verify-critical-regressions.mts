@@ -66,13 +66,21 @@ import { normalizeGraphMeta } from '../src/domain/graph/normalizeGraphMeta.ts'
 import {
   clampEdgeAnchor,
   isBorderAnchor,
-  normalizeCurveBend,
   normalizeEdgeAnchor,
   offsetBorderPoints,
   projectAnchorToBorder,
   resolveAnchorPoint,
   toEdgeAnchor,
 } from '../src/domain/graph/edgeAnchors.ts'
+import {
+  CURVE_AMPLITUDE_MAX,
+  CURVE_AMPLITUDE_MIN,
+  CURVE_POSITION_MAX,
+  CURVE_POSITION_MIN,
+  DEFAULT_CURVE_CONTROL,
+  hasCustomCurve,
+  normalizeCurveControl,
+} from '../src/domain/graph/edgeCurve.ts'
 import { STYLE_CONFIG_DEFAULTS } from '../src/domain/style/styleDefaults.ts'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, MAIN_EDGE_WIDTH_RATIO } from '../src/domain/style/styleConstraints.ts'
 import { buildEdgeView } from '../src/hooks/useGraph/edgeView.ts'
@@ -885,6 +893,8 @@ const edge = (
   assert.deepEqual(legacy, {
     lineMode: 'straight',
     lineStyle: 'solid',
+    // 曲线控制点是后加字段，旧配置无该字段时必须回落 null（直线），不能凭空生成弯曲
+    curveControl: null,
     color: '#7f8c8d',
     lineWidth: STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth,
     arrow: true,
@@ -1106,83 +1116,151 @@ const edge = (
   assert.equal(reloaded.edges[2].targetAnchor, undefined, '老存档无锚点字段时不应凭空生成')
 }
 
-// 连线曲线：弯曲度归一化 + 几何函数往返 + 写盘往返（与锚点同铁律：edges.map 漏写字段会静默复位）
+// 连线曲线：归一化 + 几何往返 + 【操作层真跑】+ 默认样式 + 写盘往返
+// 铁律：上一版只测了 file.ts 的序列化往返，完全没测 updateEdgeStyle 这个真正的写库入口，
+// 结果「曲线参数被变化检测短路、既不写内存也不落盘」整个漏网。这次必须测到 ops 层。
 {
-  // 1) 弯曲度必须被夹到 [-1, 1]，非法/非有限值回落 null（与 curveBend 字段类型 number | null 对齐）
-  assert.equal(normalizeCurveBend(-2), -1)
-  assert.equal(normalizeCurveBend(2), 1)
-  assert.equal(normalizeCurveBend(0.5), 0.5)
-  assert.equal(normalizeCurveBend(Number.POSITIVE_INFINITY), null)
-  assert.equal(normalizeCurveBend('0.3'), null)
-  assert.equal(normalizeCurveBend(undefined), null)
+  // 1) 控制点归一化：越界钳制、非法回落 null、旧 curveBend 兼容映射
+  assert.deepEqual(normalizeCurveControl({ u: 0.3, v: 0.4 }), { u: 0.3, v: 0.4 })
+  assert.deepEqual(normalizeCurveControl({ u: -5, v: 9 }), { u: CURVE_POSITION_MIN, v: CURVE_AMPLITUDE_MAX })
+  assert.deepEqual(normalizeCurveControl({ u: 5, v: -9 }), { u: CURVE_POSITION_MAX, v: CURVE_AMPLITUDE_MIN })
+  assert.equal(normalizeCurveControl({ u: Number.NaN, v: 0.2 }), null)
+  assert.equal(normalizeCurveControl(undefined), null)
+  assert.equal(normalizeCurveControl(null), null)
+  assert.deepEqual(normalizeCurveControl(undefined, 0.5), { u: DEFAULT_CURVE_CONTROL.u, v: 0.3375 })
+  assert.equal(hasCustomCurve(null), false)
+  assert.equal(hasCustomCurve(DEFAULT_CURVE_CONTROL), false)
+  assert.equal(hasCustomCurve({ u: 0.3, v: 0 }), true)
+  assert.equal(hasCustomCurve({ u: 0.5, v: 0.2 }), true)
 
   const { build } = await import('esbuild')
   const { fileURLToPath } = await import('node:url')
-
-  // 2) 几何函数：getCurvedEdgePath 必须返回合法三次贝塞尔路径与弧长中点；
-  //    resolveCurveBendFromDrag 必须由弧长中点反向反推回原弯曲度（二者共用同一套系数）。
-  const floatingBundle = await build({
-    entryPoints: [fileURLToPath(new URL('../src/features/graph/GraphCanvas/edges/floatingUtils.ts', import.meta.url))],
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    write: false,
-    logLevel: 'silent',
-  })
-  const floatingModule = await import(
-    `data:text/javascript;base64,${Buffer.from(floatingBundle.outputFiles[0].text).toString('base64')}`
-  ) as unknown as {
-    getCurvedEdgePath: (sx: number, sy: number, tx: number, ty: number, bend: number) => [string, number, number]
-    resolveCurveBendFromDrag: (sx: number, sy: number, tx: number, ty: number, px: number, py: number) => number
+  const loadBundle = async (relativePath: string, extra: Record<string, unknown> = {}) => {
+    const result = await build({
+      entryPoints: [fileURLToPath(new URL(relativePath, import.meta.url))],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      write: false,
+      logLevel: 'silent',
+      ...extra,
+    })
+    return import(
+      `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
+    )
   }
-  const [path, midX, midY] = floatingModule.getCurvedEdgePath(0, 0, 100, 0, 0.5)
-  assert.ok(path.startsWith('M 0,0 C'), '曲线路径必须以起笔点开头')
-  assert.ok(path.includes(' C '), '曲线必须是三次贝塞尔')
-  // 直线中点 (50,0)，弯曲 0.5 后弧长中点应沿法向（y 轴）偏移、横向仍≈50
-  assert.ok(Math.abs(midX - 50) < 1e-6, '曲线弧长中点的横向应约等于直线中点')
-  assert.ok(Math.abs(midY) > 0, '弯曲的曲线弧长中点必须偏离直线')
-  // 由弧长中点反向反推弯曲度，必须回到 0.5
-  const back = floatingModule.resolveCurveBendFromDrag(0, 0, 100, 0, midX, midY)
-  assert.ok(Math.abs(back - 0.5) < 1e-6, '弧长中点反向反推弯曲度必须一致')
 
-  // 3) 铁律：curveBend 必须真的写进磁盘 JSON 并在往返后不丢（曾因 edges.map 漏写字段导致锚点复位）
+  // 2) 几何：控制柄严格落在曲线上（Q(0.5)=P），二维反推必须原样还原 {u,v}
+  const floatingModule = await loadBundle('../src/features/graph/GraphCanvas/edges/floatingUtils.ts') as unknown as {
+    getCurvedEdgePath: (sx: number, sy: number, tx: number, ty: number, c: { u: number; v: number }) => [string, number, number]
+    resolveCurveControlFromDrag: (sx: number, sy: number, tx: number, ty: number, px: number, py: number) => { u: number; v: number }
+  }
+  for (const control of [{ u: 0.5, v: 0 }, { u: 0.25, v: 0.4 }, { u: 0.72, v: -0.6 }]) {
+    const [path, px, py] = floatingModule.getCurvedEdgePath(0, 0, 100, 0, control)
+    assert.ok(path.startsWith('M 0,0 Q'), '曲线必须是二次贝塞尔且从起点起笔')
+    const back = floatingModule.resolveCurveControlFromDrag(0, 0, 100, 0, px, py)
+    assert.ok(Math.abs(back.u - control.u) < 1e-6, `控制点 u 往返必须还原：${control.u} → ${back.u}`)
+    assert.ok(Math.abs(back.v - control.v) < 1e-6, `控制点 v 往返必须还原：${control.v} → ${back.v}`)
+    // Q(0.5) 必须真的等于 P：0.25S + 0.5C + 0.25T
+    const match = /^M 0,0 Q ([-\d.]+),([-\d.]+) 100,0$/.exec(path)
+    assert.ok(match, '路径格式应可解析出二次贝塞尔控制点')
+    const qMidX = 0.5 * Number(match![1]) + 0.25 * 100
+    const qMidY = 0.5 * Number(match![2])
+    assert.ok(Math.abs(qMidX - px) < 1e-6, '曲线中点 x 必须等于控制柄位置')
+    assert.ok(Math.abs(qMidY - py) < 1e-6, '曲线中点 y 必须等于控制柄位置')
+  }
+
+  // 3) 【核心】操作层真跑 updateEdgeStyle：只改曲线参数必须既写内存又落盘。
+  //    上一版这里被「8 字段变化检测 + 8 字段 shouldPersist」双重短路，回归完全没覆盖到。
+  const opsModule = await loadBundle('../src/hooks/useGraph/edgeOperations.ts', {
+    // log-backend 读 window.electronAPI；注入空 window 让 logAction 自然返回 false
+    banner: { js: 'globalThis.window = globalThis.window || {};' },
+  }) as unknown as {
+    buildEdgeOperations: (deps: Record<string, unknown>) => {
+      updateEdgeStyle: (edgeId: string, patch: Record<string, unknown>) => Promise<void>
+    }
+  }
+  let edges: Array<Record<string, unknown>> = [{
+    id: 'e1', source: 'a', target: 'b', type: 'curve',
+    data: {
+      relation: '相关', weight: 'minor', lineMode: 'curve', lineStyle: 'solid',
+      color: '#111111', lineWidth: 1.2, arrow: true, arrowSize: 12,
+      arrowShape: 'hollow', arrowPosition: 'end',
+    },
+  }]
+  let setEdgesCalls = 0
+  let saveLaterCalls = 0
+  const ops = opsModule.buildEdgeOperations({
+    getActiveGraphSession: () => ({ roomPath: 'room-a' }),
+    saveNow: async () => {},
+    saveLater: async () => { saveLaterCalls++ },
+    storeApi: {
+      getState: () => ({
+        edges,
+        setEdges: (next: Array<Record<string, unknown>>) => { edges = next; setEdgesCalls++ },
+      }),
+    },
+  })
+
+  await ops.updateEdgeStyle('e1', { curveControl: { u: 0.3, v: 0.4 } })
+  assert.equal(setEdgesCalls, 1, '只改曲线参数必须写内存 store（上一版被变化检测短路）')
+  assert.equal(saveLaterCalls, 1, '只改曲线参数必须触发落盘（上一版被 shouldPersist 白名单挡掉）')
+  assert.deepEqual((edges[0].data as Record<string, unknown>).curveControl, { u: 0.3, v: 0.4 }, '写入的控制点值必须正确')
+
+  await ops.updateEdgeStyle('e1', { selected: true })
+  assert.equal(saveLaterCalls, 1, '纯选中态变化不应落盘')
+  assert.equal((edges[0].data as Record<string, unknown>).selected, true)
+
+  await ops.updateEdgeStyle('e1', { curveControl: null })
+  assert.equal(saveLaterCalls, 2, '显式 null 复位弯曲也要落盘')
+  assert.equal((edges[0].data as Record<string, unknown>).curveControl, null)
+
+  const callsBefore = setEdgesCalls
+  await ops.updateEdgeStyle('e1', { curveControl: null })
+  assert.equal(setEdgesCalls, callsBefore, '重复写入相同值不应产生多余写库')
+
+  // 未来新增任意样式字段也应自动透传（通用字段检测，而非白名单）
+  await ops.updateEdgeStyle('e1', { someFutureStyleField: 'x' } as Record<string, unknown>)
+  assert.equal(saveLaterCalls, 3, '未知/未来样式字段也必须透传并落盘')
+  assert.equal((edges[0].data as Record<string, unknown>).someFutureStyleField, 'x')
+
+  // 4) 默认样式：lineMode='curve' 与 curveControl 读配置时都不能被吞掉
+  const defaultStyle = normalizeDefaultEdgeStyle({
+    lineMode: 'curve',
+    curveControl: { u: 0.25, v: -0.6 },
+  })
+  assert.equal(defaultStyle.lineMode, 'curve', '默认线型选曲线后刷新不能被重置回直线')
+  assert.deepEqual(defaultStyle.curveControl, { u: 0.25, v: -0.6 }, '默认控制点读配置不能丢')
+
+  // 5) 铁律：curveControl 必须真的写进磁盘 JSON 并在往返后不丢
   const meta = normalizeGraphMeta({
     nodes: {},
     edges: [
-      { id: 'e1', source: { ref: 'a' }, target: { ref: 'b' }, lineMode: 'curve', curveBend: 0.5 },
-      { id: 'e2', source: { ref: 'a' }, target: { ref: 'c' }, lineMode: 'curve', curveBend: -0.7 },
+      { id: 'e1', source: { ref: 'a' }, target: { ref: 'b' }, lineMode: 'curve', curveControl: { u: 0.3, v: 0.4 } },
+      { id: 'e2', source: { ref: 'a' }, target: { ref: 'c' }, lineMode: 'curve', curveControl: { u: 0.72, v: -0.6 } },
       { id: 'e3', source: { ref: 'a' }, target: { ref: 'd' }, lineMode: 'curve' },
+      { id: 'e4', source: { ref: 'a' }, target: { ref: 'e' }, lineMode: 'curve', curveBend: 0.5 },
     ],
     viewport: {},
   })
-  assert.equal(meta.edges[0].lineMode, 'curve', 'normalizeGraphMeta 必须保留曲线模式')
-  assert.equal(meta.edges[0].curveBend, 0.5, 'normalizeGraphMeta 必须保留弯曲度')
-  assert.equal(meta.edges[2].curveBend, null, '缺失弯曲度的曲线边应回落为 null')
+  assert.deepEqual(meta.edges[0].curveControl, { u: 0.3, v: 0.4 }, 'normalizeGraphMeta 必须保留控制点')
+  assert.equal(meta.edges[2].curveControl, null, '缺失控制点的曲线边应回落为 null')
+  assert.ok(meta.edges[3].curveControl, '旧版 curveBend 存档应被兼容映射成控制点')
 
-  const storageBundle = await build({
-    entryPoints: [fileURLToPath(new URL('../src/core/storage/file.ts', import.meta.url))],
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    write: false,
-    logLevel: 'silent',
-  })
-  const storageModule = await import(
-    `data:text/javascript;base64,${Buffer.from(storageBundle.outputFiles[0].text).toString('base64')}`
-  ) as {
+  const storageModule = await loadBundle('../src/core/storage/file.ts') as {
     convertGraphToFSB: (graphMeta: ReturnType<typeof normalizeGraphMeta>) => { edges?: Array<Record<string, unknown>> }
     convertFSBToGraph: (raw: unknown) => { edges: Array<Record<string, unknown>> }
   }
   // 序列化一次，模拟真正落盘成 JSON 再读回来
   const written = JSON.parse(JSON.stringify(storageModule.convertGraphToFSB(meta)))
   assert.equal((written.edges?.[0] as Record<string, unknown>).lineMode, 'curve', '曲线模式必须写进磁盘 JSON')
-  assert.equal((written.edges?.[0] as Record<string, unknown>).curveBend, 0.5, '弯曲度必须真的写进磁盘 JSON')
-  assert.equal((written.edges?.[1] as Record<string, unknown>).curveBend, -0.7, '负弯曲度必须真的写进磁盘 JSON')
+  assert.deepEqual((written.edges?.[0] as Record<string, unknown>).curveControl, { u: 0.3, v: 0.4 }, '控制点必须真的写进磁盘 JSON')
+  assert.deepEqual((written.edges?.[1] as Record<string, unknown>).curveControl, { u: 0.72, v: -0.6 }, '弯曲位置变化必须写进磁盘 JSON')
   const reloaded = storageModule.convertFSBToGraph(written)
   assert.equal(reloaded.edges[0].lineMode, 'curve', '写盘往返后曲线模式不能丢')
-  assert.equal(reloaded.edges[0].curveBend, 0.5, '写盘往返后弯曲度不能丢')
-  assert.equal(reloaded.edges[1].curveBend, -0.7, '写盘往返后负弯曲度不能丢')
-  assert.equal(reloaded.edges[2].curveBend, null, '写盘往返后缺失弯曲度应回落为 null')
+  assert.deepEqual(reloaded.edges[0].curveControl, { u: 0.3, v: 0.4 }, '写盘往返后控制点不能丢')
+  assert.deepEqual(reloaded.edges[1].curveControl, { u: 0.72, v: -0.6 }, '写盘往返后弯曲位置不能丢')
+  assert.equal(reloaded.edges[2].curveControl, null, '写盘往返后缺失控制点应回落为 null')
 }
 
 // 主题收归为浅色/深色两套：已下线主题必须迁移到正确的一套，否则菜单勾选会悬空

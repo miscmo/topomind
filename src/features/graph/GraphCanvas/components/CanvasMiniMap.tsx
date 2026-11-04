@@ -4,7 +4,8 @@ import { Eye, EyeOff, Minus, Plus } from 'lucide-react'
 import { logAction } from '../../../../core/log-backend'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
-import { normalizeCurveBend, normalizeEdgeAnchor, resolveAnchorPoint } from '../../../../domain/graph/edgeAnchors'
+import { normalizeEdgeAnchor, resolveAnchorPoint } from '../../../../domain/graph/edgeAnchors'
+import { DEFAULT_CURVE_CONTROL, normalizeCurveControl } from '../../../../domain/graph/edgeCurve'
 import { getCurvedEdgePath } from '../edges/floatingUtils'
 import type { KnowledgeEdge, KnowledgeNode } from '../../../../types'
 import Toolbar from '../../../layout/Toolbar/Toolbar'
@@ -172,7 +173,7 @@ function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, N
     const targetPosition = getAnchorPosition(targetRect, targetPoint)
     const isStraight = edgeData?.lineMode === 'straight' || edge.type === 'straight'
     const isCurve = edgeData?.lineMode === 'curve' || edge.type === 'curve'
-    const bend = normalizeCurveBend(edgeData?.curveBend) ?? 0
+    const curveControl = normalizeCurveControl(edgeData?.curveControl) ?? DEFAULT_CURVE_CONTROL
     const [path] = isStraight
       ? getStraightPath({
           sourceX: sourcePoint.x,
@@ -181,7 +182,7 @@ function buildPreviewModel(nodes: Node[], edges: Edge[], nodeById: Map<string, N
           targetY: targetPoint.y,
         })
       : isCurve
-        ? getCurvedEdgePath(sourcePoint.x, sourcePoint.y, targetPoint.x, targetPoint.y, bend)
+        ? getCurvedEdgePath(sourcePoint.x, sourcePoint.y, targetPoint.x, targetPoint.y, curveControl)
         : getSmoothStepPath({
           sourceX: sourcePoint.x,
           sourceY: sourcePoint.y,

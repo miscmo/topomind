@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { PaintRoller, RotateCcw, Trash2 } from 'lucide-react'
+import { PaintRoller, RotateCcw, Spline, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface QuickEdgeToolbarProps {
@@ -8,9 +8,12 @@ interface QuickEdgeToolbarProps {
   isFormatPainterActive: boolean
   /** 本条连线是否设置了自定义锚点（决定要不要显示复位按钮） */
   hasCustomAnchors: boolean
+  /** 本条曲线是否偏离默认直线（决定要不要显示复位弯曲按钮） */
+  hasCustomCurve: boolean
   onColorChange: (value: string) => void
   onToggleFormatPainter: () => void
   onResetAnchors: () => void
+  onResetCurve: () => void
   onDelete: () => void
 }
 
@@ -29,9 +32,11 @@ function QuickEdgeToolbar({
   color,
   isFormatPainterActive,
   hasCustomAnchors,
+  hasCustomCurve,
   onColorChange,
   onToggleFormatPainter,
   onResetAnchors,
+  onResetCurve,
   onDelete,
 }: QuickEdgeToolbarProps) {
   return (
@@ -84,6 +89,20 @@ function QuickEdgeToolbar({
             title="恢复自动锚点（两端）"
           >
             <RotateCcw className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </>
+      )}
+
+      {hasCustomCurve && (
+        <>
+          <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border-light)]" />
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] transition-all duration-200"
+            onClick={onResetCurve}
+            title="复位弯曲（恢复成直线）"
+          >
+            <Spline className="h-4 w-4" strokeWidth={2} />
           </button>
         </>
       )}

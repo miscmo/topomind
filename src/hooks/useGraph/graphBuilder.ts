@@ -13,6 +13,7 @@ import { graphMetaToRoomGraph, roomGraphToGraphMeta } from '../../domain/graph/g
 import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph/model'
 import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
+import { normalizeCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
 import { buildEdgeView } from './edgeView'
 
 export function generateId(prefix: string): string {
@@ -37,6 +38,7 @@ export interface SerializedEdge {
   weight: string
   lineMode?: 'smoothstep' | 'straight' | 'curve'
   lineStyle?: 'solid' | 'dashed'
+  curveControl?: CurveControl | null
   color?: string
   arrow?: boolean
   highlighted?: boolean
@@ -86,7 +88,7 @@ export function buildMetaFromNodesEdges(
     weight: e.data?.weight ?? 'minor',
     lineMode: e.data?.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode,
     lineStyle: e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle,
-    curveBend: e.data?.curveBend ?? undefined,
+    curveControl: normalizeCurveControl(e.data?.curveControl) ?? undefined,
     color: e.data?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color,
     lineWidth: e.data?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth,
     arrow: e.data?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow,
@@ -168,7 +170,7 @@ export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
   return roomGraph.edges.map((e) => {
     const lineMode = e.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
     const lineStyle = e.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
-    const curveBend = e.curveBend ?? undefined
+    const curveControl = normalizeCurveControl(e.curveControl) ?? undefined
     const color = e.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
     const lineWidth = e.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth
     const arrow = e.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
@@ -186,7 +188,7 @@ export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
         weight: e.weight,
         lineMode,
         lineStyle,
-        curveBend,
+        curveControl,
         color,
         lineWidth,
         arrow,

@@ -1,5 +1,6 @@
 import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeSize, DefaultNodeStyle, EditorPaperBackground, NodeSizeLimits, StyleConfigDefaults } from './styleTypes'
 import { STYLE_CONFIG_DEFAULTS } from './styleDefaults.ts'
+import { normalizeCurveControl } from '../graph/edgeCurve.ts'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, EDITOR_STYLE_NUMBER_LIMITS, NODE_BADGE_SIZE_LIMIT, NODE_STYLE_NUMBER_LIMITS, clampNumber, finiteNumber } from './styleConstraints.ts'
 
 const PAPER_BACKGROUND_VALUES: EditorPaperBackground[] = ['plain', 'ruled', 'dot-grid', 'grid', 'kraft', 'manuscript']
@@ -14,8 +15,14 @@ export function normalizeDefaultEdgeStyle(raw: unknown, edgeDefaultsVersion?: nu
   const style = asRecord(raw)
   const defaults = STYLE_CONFIG_DEFAULTS.defaultEdgeStyle
   return {
-    lineMode: edgeDefaultsVersion === 2 && style.lineMode === 'smoothstep' ? 'smoothstep' : defaults.lineMode,
+    // 显式存了 curve 必须保留（否则默认线型选「曲线」后刷新会被重置成直线）；
+    // smoothstep 仍按 v2 历史规则处理，其余回落默认值。
+    lineMode: style.lineMode === 'curve'
+      ? 'curve'
+      : (edgeDefaultsVersion === 2 && style.lineMode === 'smoothstep' ? 'smoothstep' : defaults.lineMode),
     lineStyle: style.lineStyle === 'dashed' ? 'dashed' : defaults.lineStyle,
+    // 曲线控制点必须显式读回，否则默认曲线形态每次读配置都会被丢弃
+    curveControl: normalizeCurveControl(style.curveControl, style.curveBend) ?? defaults.curveControl ?? null,
     color: typeof style.color === 'string' ? style.color : defaults.color,
     arrow: edgeDefaultsVersion === 2 && typeof style.arrow === 'boolean' ? style.arrow : defaults.arrow,
     // 线宽与箭头三个字段都是后加的，旧存档里没有，统一回落默认值后参与 clamp。

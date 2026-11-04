@@ -1,6 +1,7 @@
 import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeStyle } from '../../../../types/uiStoreTypes'
 import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT } from '../../../../domain/style/styleConstraints'
+import { DEFAULT_CURVE_CONTROL, normalizeCurveControl } from '../../../../domain/graph/edgeCurve'
 
 const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max)
 
@@ -66,12 +67,25 @@ export function NodeStylePreview({
 
 export function EdgeStylePreview({ style }: { style: DefaultEdgeStyle }) {
   const dashArray = style.lineStyle === 'dashed' ? '6 4' : undefined
+  // 曲线预览与画布共用同一套「控制点 → 二次贝塞尔」推导（C = 2P - 中点）；
+  // 只是把幅度按预览尺寸缩小，避免 v=1 时弧线跑出 viewBox。
+  const curve = normalizeCurveControl(style.curveControl) ?? DEFAULT_CURVE_CONTROL
+  const PREVIEW_S = { x: 18, y: 58 }
+  const PREVIEW_T = { x: 162, y: 58 }
+  const PREVIEW_LEN = PREVIEW_T.x - PREVIEW_S.x
+  const PREVIEW_AMPLITUDE_SCALE = 0.22
+  const point = {
+    x: PREVIEW_S.x + PREVIEW_LEN * curve.u,
+    y: PREVIEW_S.y - curve.v * PREVIEW_LEN * PREVIEW_AMPLITUDE_SCALE,
+  }
+  const cx = 2 * point.x - (PREVIEW_S.x + PREVIEW_T.x) / 2
+  const cy = 2 * point.y - (PREVIEW_S.y + PREVIEW_T.y) / 2
+  const curvePath = `M${PREVIEW_S.x} ${PREVIEW_S.y} Q${cx} ${cy} ${PREVIEW_T.x} ${PREVIEW_T.y}`
   const path =
     style.lineMode === 'smoothstep'
       ? 'M18 58 C58 18, 122 98, 162 58'
       : style.lineMode === 'curve'
-        // 预览里用一条干净的对称拱线代表"曲线"模式，随弯曲度正负翻转拱向
-        ? (style.curveBend ?? 0) >= 0 ? 'M18 58 Q90 18 162 58' : 'M18 58 Q90 98 162 58'
+        ? curvePath
         : 'M18 58 L162 58'
   const arrowSize = clamp(style.arrowSize ?? 12, EDGE_ARROW_SIZE_LIMIT.min, EDGE_ARROW_SIZE_LIMIT.max)
   // 预览画的是次线（weight=minor），直接用基础线宽，与画布上非主线连线一致

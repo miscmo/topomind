@@ -1,10 +1,11 @@
 import type { EdgeArrowPosition, EdgeArrowShape } from '../../types/graph'
+import type { CurveControl } from '../graph/edgeCurve'
 
 export interface DefaultEdgeStyle {
   lineMode: 'smoothstep' | 'straight' | 'curve'
   lineStyle: 'solid' | 'dashed'
-  /** 曲线弯曲度：归一化 [-1, 1]，0 ≈ 直线；仅 lineMode='curve' 时生效 */
-  curveBend?: number
+  /** 曲线控制点（归一化 {u,v}）；null/缺省=直线；仅 lineMode='curve' 时生效 */
+  curveControl?: CurveControl | null
   color: string
   /** 线条粗细（px）；主线在此基础上按比例加粗 */
   lineWidth: number

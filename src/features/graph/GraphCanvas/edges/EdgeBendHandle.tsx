@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { useReactFlow } from '@xyflow/react'
-import { getCurvedEdgePath, resolveCurveBendFromDrag } from './floatingUtils'
+import type { CurveControl } from '../../../../domain/graph/edgeCurve'
+import { getCurveControlPoint, resolveCurveControlFromDrag } from './floatingUtils'
 
 interface EdgeBendHandleProps {
   /** 线头两端（flow 坐标，已含出线间隙），曲线从这两点起笔 */
@@ -8,50 +9,55 @@ interface EdgeBendHandleProps {
   sy: number
   tx: number
   ty: number
-  /** 当前弯曲度 [-1, 1]，决定手柄初始位置 */
-  bend: number
+  /** 当前控制点，决定手柄位置 */
+  control: CurveControl
   /** 拖动中只改父组件的路径预览，不写 store，避免每帧产生撤销记录 */
-  onPreview: (bend: number | null) => void
+  onPreview: (control: CurveControl | null) => void
   /** 松手时一次性写库并落盘 */
-  onCommit: (bend: number) => void
+  onCommit: (control: CurveControl) => void
+  /** 双击复位成直线 */
+  onReset: () => void
 }
 
 /**
- * 曲线模式下，连线弧长中点处的一个可拖拽控制柄。
+ * 曲线模式下落在「曲线上的控制点」处的可拖拽手柄。
  *
  * 放在 EdgeLabelRenderer 内（该层已带 viewport transform，直接用 flow 坐标定位）。
- * 拖动手柄时把屏幕坐标转回 flow 坐标，按其相对连线中点的「垂直位移」反推弯曲度，
- * 因此手柄永远贴着曲线弓得最高的位置、沿法向滑动；松手才写库。
+ * 与早期版本的区别：手柄不再被钉死在弧长中点、也不仅能沿法向移动——
+ * 指针的两个分量分别投影到连线方向（弯曲位置 u）与法向（弯曲幅度 v），
+ * 因此一次拖动即可同时调整「在哪弯」和「弯多深」。
+ * 松手才写库；双击复位成直线。
  */
 export default function EdgeBendHandle({
   sx,
   sy,
   tx,
   ty,
-  bend,
+  control,
   onPreview,
   onCommit,
+  onReset,
 }: EdgeBendHandleProps) {
   const { screenToFlowPosition } = useReactFlow()
   const dragRef = useRef<{ moved: boolean } | null>(null)
 
-  // 手柄位置 = 曲线弧长中点（与 getCurvedEdgePath 的 label 完全一致）
-  const [, handleX, handleY] = getCurvedEdgePath(sx, sy, tx, ty, bend)
+  // 手柄位置严格等于曲线经过的点（与 getCurvedEdgePath 的 Q(0.5) 一致）
+  const handle = getCurveControlPoint(sx, sy, tx, ty, control)
 
   const beginDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
     event.preventDefault()
     event.stopPropagation()
     dragRef.current = { moved: false }
-    onPreview(bend)
+    onPreview(control)
     event.currentTarget.setPointerCapture(event.pointerId)
-  }, [bend, onPreview])
+  }, [control, onPreview])
 
   const moveDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return
     event.stopPropagation()
     const pointer = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-    const next = resolveCurveBendFromDrag(sx, sy, tx, ty, pointer.x, pointer.y)
+    const next = resolveCurveControlFromDrag(sx, sy, tx, ty, pointer.x, pointer.y)
     dragRef.current.moved = true
     onPreview(next)
   }, [screenToFlowPosition, sx, sy, tx, ty, onPreview])
@@ -64,7 +70,7 @@ export default function EdgeBendHandle({
     // 只是点一下没拖动，不该写库（否则会平白多出一条撤销记录）
     if (commit && moved) {
       const pointer = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-      onCommit(resolveCurveBendFromDrag(sx, sy, tx, ty, pointer.x, pointer.y))
+      onCommit(resolveCurveControlFromDrag(sx, sy, tx, ty, pointer.x, pointer.y))
     }
     onPreview(null)
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -74,23 +80,27 @@ export default function EdgeBendHandle({
 
   return (
     <div
-      className="nodrag nopan flex h-4 w-4 touch-none items-center justify-center"
+      className="nodrag nopan flex h-5 w-5 touch-none items-center justify-center"
       style={{
         position: 'absolute',
-        transform: `translate(-50%, -50%) translate(${handleX}px, ${handleY}px)`,
+        transform: `translate(-50%, -50%) translate(${handle.x}px, ${handle.y}px)`,
         pointerEvents: 'all',
-        // 高于快捷工具栏（z-index 10）：即使避让失败落到手柄上，手柄也能优先抓到指针
-        zIndex: 11,
+        // 高于快捷工具栏（10）与锚点手柄（11）：曲线控制点是当前主要操作对象
+        zIndex: 12,
       }}
-      title="上下拖动调整曲线弧度（仅本连线）"
+      title="拖动调整弯曲位置与幅度（左右改位置、上下改弧度）· 双击复位成直线"
       onPointerDown={beginDrag}
       onPointerMove={moveDrag}
       onPointerUp={(event) => finishDrag(event, true)}
       onPointerCancel={(event) => finishDrag(event, false)}
       onLostPointerCapture={(event) => finishDrag(event, false)}
-      onDoubleClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => {
+        event.stopPropagation()
+        onReset()
+      }}
     >
-      <div className="h-3 w-3 cursor-grab rounded-full border-2 border-[var(--color-accent)] bg-[var(--color-surface)] shadow-[var(--shadow-sm)] transition-transform duration-100 hover:scale-125 active:cursor-grabbing" />
+      {/* 菱形区别于两端的圆形锚点手柄，避免混淆 */}
+      <div className="h-3 w-3 rotate-45 cursor-move rounded-[3px] border-2 border-[var(--color-accent)] bg-[var(--color-surface)] shadow-[var(--shadow-sm)] transition-transform duration-100 hover:scale-125 active:cursor-grabbing" />
     </div>
   )
 }

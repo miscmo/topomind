@@ -59,6 +59,8 @@ export const STYLE_CONFIG_DEFAULTS: StyleConfigDefaults = {
   defaultEdgeStyle: {
     lineMode: 'straight',
     lineStyle: 'solid',
+    // 曲线缺省为直线控制点（归一化 {u:0.5, v:0} 由 edgeCurve 提供）；null 表示"未自定义"
+    curveControl: null,
     color: '#7f8c8d',
     // 基础线宽；主线按 1.25 倍加粗 → 次线 1.2 / 主线 1.5，与改造前完全一致
     lineWidth: 1.2,

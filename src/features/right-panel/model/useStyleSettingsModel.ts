@@ -73,6 +73,8 @@ export function useStyleSettingsModel(active = true) {
     ? {
         lineMode: selectedEdge.data.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode,
         lineStyle: selectedEdge.data.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle,
+        // 必须带上曲线控制点，否则样式面板的弯曲位置/幅度滑杆永远显示缺省值
+        curveControl: selectedEdge.data.curveControl ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.curveControl ?? null,
         color: selectedEdge.data.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color,
         lineWidth: selectedEdge.data.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth,
         arrow: selectedEdge.data.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow,

@@ -85,15 +85,6 @@ export function normalizeEdgeAnchor(value: unknown): EdgeAnchor | undefined {
 }
 
 /**
- * 曲线弯曲度：裁剪到 [-1, 1]；非有限数（含 null/undefined）视为未设置（回落 0）。
- * 0 ≈ 直线，正负决定曲线朝连线的哪一侧弯。
- */
-export function normalizeCurveBend(value: unknown): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null
-  return Math.min(1, Math.max(-1, value))
-}
-
-/**
  * 归一化锚点 → 边框交点（画布坐标）。
  * 旧存档可能存着框内点，这里统一投影到最近边框，保证线只从边框出。
  * 矩形未测量完成时返回 undefined，由调用方回落自动交点。

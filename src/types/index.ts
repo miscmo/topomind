@@ -6,6 +6,7 @@
 export type { AppView } from './graph'
 export type { GraphChild, GraphEdge, GraphMeta, EdgeStylePatch } from './graph'
 export type { EdgeAnchor, EdgeAnchorPatch, AnchorRect } from '../domain/graph/edgeAnchors'
+export type { CurveControl } from '../domain/graph/edgeCurve'
 export type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition } from './graph'
 export type {
   KnowledgeNodeData,

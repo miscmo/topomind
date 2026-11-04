@@ -55,6 +55,7 @@ export const EDGE_STYLE_PRESETS: Array<{ label: string; style: DefaultEdgeStyle 
   { label: '虚线', style: { lineMode: 'smoothstep', lineStyle: 'dashed', color: '#94a3b8', lineWidth: 1.2, arrow: false, arrowSize: 12, arrowShape: 'hollow', arrowPosition: 'end' } },
   { label: '强调', style: { lineMode: 'straight', lineStyle: 'solid', color: '#e74c3c', lineWidth: 2.4, arrow: true, arrowSize: 18, arrowShape: 'solid', arrowPosition: 'end' } },
   { label: '双向', style: { lineMode: 'smoothstep', lineStyle: 'solid', color: '#8b5cf6', lineWidth: 1.6, arrow: true, arrowSize: 12, arrowShape: 'solid', arrowPosition: 'both' } },
+  { label: '弧线', style: { lineMode: 'curve', lineStyle: 'solid', curveControl: { u: 0.5, v: 0.35 }, color: '#7f8c8d', lineWidth: 1.2, arrow: true, arrowSize: 12, arrowShape: 'hollow', arrowPosition: 'end' } },
 ]
 
 export const EDITOR_STYLE_PRESETS: Array<{ label: string; style: DefaultEditorStyle }> = [

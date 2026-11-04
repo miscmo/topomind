@@ -6,6 +6,16 @@ import {
   type AnchorRect,
   type EdgeAnchorPatch,
 } from '../../../../domain/graph/edgeAnchors'
+import {
+  CURVE_AMPLITUDE_MAX,
+  CURVE_AMPLITUDE_MIN,
+  CURVE_AMPLITUDE_SCALE,
+  CURVE_POSITION_MAX,
+  CURVE_POSITION_MIN,
+  DEFAULT_CURVE_CONTROL,
+  normalizeCurveControl,
+  type CurveControl,
+} from '../../../../domain/graph/edgeCurve'
 
 /** React Flow 内部节点的绝对矩形（含父节点偏移），锚点换算与路径计算共用 */
 export function getInternalNodeRect(node: InternalNode): AnchorRect {
@@ -117,66 +127,72 @@ export function getEdgeParams(
 }
 
 /**
- * 曲线弯曲系数：bend ∈ [-1, 1] 决定控制点相对连线的垂直偏移。
- * 0 ≈ 直线，绝对值越大弯得越深，正负决定朝连线哪一侧弯。
- */
-export const CURVE_BEND_FACTOR = 0.45
-/** 曲线弧长中点（手柄抓取点）相对直线中点的偏移系数，用于把 bend 反推回拖拽位移 */
-export const CURVE_MIDPOINT_RATIO = 0.75
-
-/**
- * 计算一条三次贝塞尔曲线：两端固定在 (sx,sy)/(tx,ty)，两个控制点沿连线方向
- * 各推进 1/3、2/3，并整体沿「垂直法向」偏移 bend·len·FACTOR。这样无论两端锚点
- * 落在节点哪条边，曲线始终从边框交点平滑起笔、对称地弓起。
+ * 曲线几何：由「曲线上的一个可拖动控制点」P 定义二次贝塞尔。
  *
- * 返回 [path, labelX, labelY]，label 取曲线弧长中点（≈ 直线中点 + 法向·offset·RATIO），
- * 正好是曲线弓得最高的位置——也是拖动控制柄的抓取点。
+ * Q(0.5) = 0.25·S + 0.5·C + 0.25·T，故令 C = 2P - (S+T)/2 时曲线严格经过 P，
+ * 手柄永远落在曲线上，拖到哪曲线就经过哪。P 用相对连线的归一化坐标 {u,v} 表达：
+ *   u = 沿连线方向的位置（弯曲发生在哪）、v = 垂直偏移量（弯多深、朝哪侧）。
+ * 两者完全解耦，因此「弯曲位置」与「弯曲幅度」可用同一个手柄自由调整。
+ * 所有系数集中在 domain/graph/edgeCurve.ts，这里不再有自造的近似常量。
  */
+
+/** 由归一化控制点算出画布上的绝对点 P */
+export function getCurveControlPoint(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
+  control: CurveControl
+): { x: number; y: number } {
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const len = Math.hypot(dx, dy) || 1
+  // 法向取「朝上」：水平向右的连线，正值 v 向上弯
+  const nx = dy / len
+  const ny = -dx / len
+  const offset = control.v * len * CURVE_AMPLITUDE_SCALE
+  return {
+    x: sourceX + dx * control.u + nx * offset,
+    y: sourceY + dy * control.u + ny * offset,
+  }
+}
+
+/** 二次贝塞尔路径；返回 [path, P.x, P.y]，P 同时是手柄位置与工具栏挂靠/避让点 */
 export function getCurvedEdgePath(
   sourceX: number,
   sourceY: number,
   targetX: number,
   targetY: number,
-  bend: number
+  control: CurveControl | null | undefined
 ): [string, number, number] {
-  const dx = targetX - sourceX
-  const dy = targetY - sourceY
-  const len = Math.hypot(dx, dy) || 1
-  const nx = -dy / len
-  const ny = dx / len
-  const offset = bend * len * CURVE_BEND_FACTOR
-
-  const c1x = sourceX + dx * (1 / 3) + nx * offset
-  const c1y = sourceY + dy * (1 / 3) + ny * offset
-  const c2x = sourceX + dx * (2 / 3) + nx * offset
-  const c2y = sourceY + dy * (2 / 3) + ny * offset
-
-  const path = `M ${sourceX},${sourceY} C ${c1x},${c1y} ${c2x},${c2y} ${targetX},${targetY}`
-  const midX = (sourceX + targetX) / 2 + nx * offset * CURVE_MIDPOINT_RATIO
-  const midY = (sourceY + targetY) / 2 + ny * offset * CURVE_MIDPOINT_RATIO
-  return [path, midX, midY]
+  const resolved = normalizeCurveControl(control) ?? DEFAULT_CURVE_CONTROL
+  const point = getCurveControlPoint(sourceX, sourceY, targetX, targetY, resolved)
+  const cx = 2 * point.x - (sourceX + targetX) / 2
+  const cy = 2 * point.y - (sourceY + targetY) / 2
+  return [`M ${sourceX},${sourceY} Q ${cx},${cy} ${targetX},${targetY}`, point.x, point.y]
 }
 
-/**
- * 由「拖拽点相对直线中点的垂直位移」反推 curveBend，钳制到 [-1, 1]。
- * 与 getCurvedEdgePath 共用同一套 len / FACTOR / RATIO，保证手柄位置与数值一致。
- */
-export function resolveCurveBendFromDrag(
+/** 由拖拽指针位置反推控制点：沿连线投影得 u、沿法向投影得 v，各自钳制 */
+export function resolveCurveControlFromDrag(
   sourceX: number,
   sourceY: number,
   targetX: number,
   targetY: number,
   pointerX: number,
   pointerY: number
-): number {
+): CurveControl {
   const dx = targetX - sourceX
   const dy = targetY - sourceY
   const len = Math.hypot(dx, dy) || 1
-  const nx = -dy / len
-  const ny = dx / len
-  const midX = (sourceX + targetX) / 2
-  const midY = (sourceY + targetY) / 2
-  const perp = (pointerX - midX) * nx + (pointerY - midY) * ny
-  const bend = perp / (CURVE_MIDPOINT_RATIO * CURVE_BEND_FACTOR * len)
-  return Math.min(1, Math.max(-1, bend))
+  const len2 = len * len
+  const nx = dy / len
+  const ny = -dx / len
+  const u = ((pointerX - sourceX) * dx + (pointerY - sourceY) * dy) / len2
+  const offset = (pointerX - sourceX) * nx + (pointerY - sourceY) * ny
+  const v = offset / (len * CURVE_AMPLITUDE_SCALE)
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+  return {
+    u: clamp(u, CURVE_POSITION_MIN, CURVE_POSITION_MAX),
+    v: clamp(v, CURVE_AMPLITUDE_MIN, CURVE_AMPLITUDE_MAX),
+  }
 }

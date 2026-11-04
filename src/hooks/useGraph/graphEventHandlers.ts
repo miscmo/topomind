@@ -3,7 +3,7 @@ import type { Connection, Edge, EdgeChange, FinalConnectionState, Node, NodeChan
 import { tabStore } from '../../stores/tabs/tabStore'
 import { logAction } from '../../core/log-backend'
 import { markPerformanceMetricStart, PERFORMANCE_METRICS } from '../../core/performance-log'
-import type { KnowledgeNodeData } from '../../types'
+import type { EdgeStylePatch, KnowledgeNodeData } from '../../types'
 import { generateId } from './graphBuilder'
 import type { GraphOperations } from './graphOperations'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
@@ -15,7 +15,7 @@ export interface GraphEventHandlerDeps {
   tabId: string
   ops: GraphOperations
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
-  defaultEdgeStyle?: { lineMode?: 'smoothstep' | 'straight' | 'curve'; lineStyle?: 'solid' | 'dashed'; curveBend?: number | null; color?: string; arrow?: boolean }
+  defaultEdgeStyle?: Partial<EdgeStylePatch>
   setSelectedEdgeId: (edgeId: string | null) => void
   storeApi: StoreApi<GraphState>
 }
