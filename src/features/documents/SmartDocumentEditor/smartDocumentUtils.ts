@@ -449,7 +449,8 @@ export function isSameSmartDocumentToc(previous: TocItem[] | null, next: TocItem
       previousItem.id !== nextItem.id ||
       previousItem.level !== nextItem.level ||
       previousItem.text !== nextItem.text ||
-      previousItem.line !== nextItem.line
+      previousItem.line !== nextItem.line ||
+      previousItem.number !== nextItem.number
     ) {
       return false
     }

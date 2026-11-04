@@ -1428,3 +1428,24 @@ html[data-theme='dark'], .dark {
   /* 左侧一条红装订线，对应编辑器内的红色装订线 */
   background-image: linear-gradient(to right, transparent 0 11px, var(--paper-margin) 11px 12.5px, transparent 12.5px);
 }
+
+/* ---------- 标题自动编号（视图层装饰） ----------
+   编号文本由 headingNumbering.ts 的 buildHeadingNumberStyles 生成「按 block id 命中」的
+   动态 <style> 提供 content；这里只负责视觉。::before 是伪元素，不进文档 JSON /
+   剪贴板 / 选区 / 撤销历史，与末尾 H1~H6 层级水印的 ::after 是同一套思路。
+   基础规则不写 content（默认 normal＝不生成盒子），所以关闭编号时不会留空占位。 */
+.smart-document-content .bn-block-content[data-content-type="heading"] > .bn-inline-content::before {
+  margin-right: 0.5em;
+  color: var(--color-text-muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* 开启编号后层级已由编号表达，隐藏末尾 H1~H6 水印，避免首尾两端都有装饰。
+   !important 用来压过 BlockNote/Mantine 可能注入的同名伪元素规则。 */
+.smart-document-content[data-tm-heading-numbering="on"] .bn-block-content[data-content-type="heading"] > .bn-inline-content::after {
+  content: none !important;
+}

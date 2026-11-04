@@ -9,6 +9,8 @@ export interface TocItem {
   level: number
   text: string
   line: number
+  /** 标题自动编号（与正文同源）；关闭编号或超出深度时为 undefined */
+  number?: string
 }
 
 export interface DocumentContextMenuState {

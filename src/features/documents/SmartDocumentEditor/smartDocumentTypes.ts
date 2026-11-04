@@ -1,3 +1,5 @@
+import { normalizeHeadingNumbering, type HeadingNumberingConfig } from './headingNumbering.ts'
+
 export type BlockNoteBlock = Record<string, unknown>
 
 export interface SmartDocumentContent {
@@ -5,6 +7,8 @@ export interface SmartDocumentContent {
   version: 1
   title: string
   blocks: BlockNoteBlock[]
+  /** 标题自动编号设置（文档级）。缺省＝关闭，旧文档不写该字段即可零影响。 */
+  numbering?: HeadingNumberingConfig
   metadata?: {
     createdAt?: number
     updatedAt?: number
@@ -179,6 +183,11 @@ export function normalizeSmartDocumentContent(value: unknown, fallbackTitle: str
     version: 1,
     title: typeof input.title === 'string' ? input.title : fallbackTitle,
     blocks: parsedBlocks.length > 0 ? parsedBlocks : [],
+    // 必须显式透传：documentEditorRegistry 在每次 value 变化时都会跑本函数重建对象，
+    // 漏写就等于「工具栏开关点了不生效 / 重开文档设置丢失」（与连线曲线字段同型）。
+    ...(input.numbering !== undefined
+      ? { numbering: normalizeHeadingNumbering(input.numbering) }
+      : {}),
     metadata: {
       createdAt: typeof metadata.createdAt === 'number' ? metadata.createdAt : now,
       updatedAt: typeof metadata.updatedAt === 'number' ? metadata.updatedAt : now,

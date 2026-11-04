@@ -40,9 +40,19 @@ import {
   getSmartDocumentOutlineAndStats,
   getSmartDocumentSelectedTextState,
   getUploadedFileUrl,
+  isSameSmartDocumentToc,
   stripHtmlWrapperTags,
   writeClipboardBeforeMutation,
 } from '../src/features/documents/SmartDocumentEditor/smartDocumentUtils.ts'
+import {
+  buildHeadingNumberStyles,
+  computeHeadingNumbers,
+  formatHeadingNumber,
+  isSameHeadingNumbering,
+  isSameHeadingNumbers,
+  normalizeHeadingNumbering,
+  DEFAULT_HEADING_NUMBERING,
+} from '../src/features/documents/SmartDocumentEditor/headingNumbering.ts'
 import {
   areDocumentContentsEqual,
   prepareStructuredDocumentContentForSave,
@@ -1480,6 +1490,101 @@ const edge = (
   assert.equal(migrateRetiredTheme(LIGHT_THEME), null)
   assert.equal(migrateRetiredTheme(DARK_THEME), null)
   assert.equal(migrateRetiredTheme('unknown-theme'), null)
+}
+
+// 标题自动编号：压平规则 / 深度 / 四种预设 / 配置往返 / 动态样式表
+{
+  assert.deepEqual(DEFAULT_HEADING_NUMBERING, { enabled: false, style: 'decimal', depth: 3 })
+  assert.deepEqual(normalizeHeadingNumbering(undefined), DEFAULT_HEADING_NUMBERING)
+  assert.deepEqual(normalizeHeadingNumbering({ enabled: true, style: 'unknown', depth: 99 }), {
+    enabled: true,
+    style: 'decimal',
+    depth: 6,
+  })
+  assert.equal(isSameHeadingNumbering({ enabled: true, style: 'decimal', depth: 3 }, { enabled: true, style: 'decimal', depth: 3 }), true)
+  assert.equal(isSameHeadingNumbering({ enabled: true }, { enabled: false }), false)
+
+  const items = [
+    { id: 'a', level: 1, text: '项目背景' },
+    { id: 'b', level: 2, text: '目标与范围' },
+    { id: 'c', level: 3, text: '数据口径' },
+    { id: 'd', level: 4, text: '约束条件' },
+  ]
+  const decimal = { enabled: true, style: 'decimal', depth: 3 }
+  assert.deepEqual(computeHeadingNumbers(items, decimal), { a: '1', b: '1.1', c: '1.1.1' })
+
+  // 压平：H1 后直接 H3 得 1.1（不是 Word 的 1.0.1）；只有 H2 开头得 1（不是 0.1）
+  assert.deepEqual(computeHeadingNumbers([items[0], { ...items[2], id: 'x' }], decimal), { a: '1', x: '1.1' })
+  assert.deepEqual(computeHeadingNumbers([
+    { id: 'h2', level: 2, text: '甲' },
+    { id: 'h1', level: 1, text: '乙' },
+  ], decimal), { h2: '1', h1: '2' })
+  assert.deepEqual(computeHeadingNumbers([items[0], items[2], { ...items[2], id: 'x2' }], decimal), {
+    a: '1', c: '1.1', x2: '1.2',
+  })
+  // 新的一级章节：下级重新从 1 开始（Word 行为）
+  assert.deepEqual(computeHeadingNumbers([
+    items[0], items[1], { ...items[0], id: 'a2' }, { ...items[1], id: 'b2' },
+  ], decimal), { a: '1', b: '1.1', a2: '2', b2: '2.1' })
+
+  // 深度：H4 不编号也不占号，随后的 H2 继续 1.2；关闭时全部清空；空标题不占号
+  assert.deepEqual(computeHeadingNumbers([
+    ...items.slice(0, 3), items[3], { id: 'e', level: 2, text: '范围' },
+  ], decimal), { a: '1', b: '1.1', c: '1.1.1', e: '1.2' })
+  assert.deepEqual(computeHeadingNumbers(items, { ...decimal, enabled: false }), {})
+  assert.deepEqual(computeHeadingNumbers([
+    items[0], { id: 'empty', level: 1, text: '   ' }, { id: 'f', level: 1, text: '下一章' },
+  ], decimal), { a: '1', f: '2' })
+
+  // 四种样式
+  assert.deepEqual(computeHeadingNumbers(items, { ...decimal, style: 'chapter' }), {
+    a: '第一章', b: '1.1', c: '1.1.1',
+  })
+  assert.deepEqual(computeHeadingNumbers(items, { ...decimal, style: 'cjk' }), {
+    a: '一、', b: '（一）', c: '1.',
+  })
+  assert.deepEqual(computeHeadingNumbers(items, { ...decimal, style: 'alpha' }), {
+    a: 'A', b: 'A.1', c: 'A.1.a',
+  })
+  assert.equal(formatHeadingNumber([27], 'alpha'), 'AA')
+  assert.equal(formatHeadingNumber([11], 'chapter'), '第十一章')
+  assert.equal(formatHeadingNumber([1, 2, 3, 4], 'cjk'), '(4)')
+  assert.equal(formatHeadingNumber([], 'decimal'), '')
+
+  // 配置必须真跑「归一化 → JSON 写盘 → 读回」往返：漏在 normalizeSmartDocumentContent
+  // 里透传字段会导致「开关不生效 / 重开文档设置丢失」（与连线曲线字段同型）。
+  const source = {
+    schema: 'topomind.smart-document',
+    version: 1,
+    title: '编号测试',
+    blocks: [{ id: 'b1', type: 'heading', props: { level: 1 }, content: [{ type: 'text', text: '标题' }] }],
+    numbering: { enabled: true, style: 'chapter', depth: 4 },
+  }
+  const normalized = normalizeSmartDocumentContent(source, '回退标题')
+  const restored = normalizeSmartDocumentContent(JSON.parse(JSON.stringify(normalized)), '回退标题')
+  assert.deepEqual(restored.numbering, { enabled: true, style: 'chapter', depth: 4 })
+  // normalize 会给块补 children: undefined，序列化后消失；按 JSON 后的实际写盘内容比较
+  assert.deepEqual(JSON.parse(JSON.stringify(restored.blocks)), source.blocks)
+  // 旧文档没有该字段时不要凭空写入，保持「缺省即关闭、零影响」
+  assert.equal('numbering' in normalizeSmartDocumentContent({ schema: 'topomind.smart-document', version: 1, blocks: [] }, 'F'), false)
+
+  // 目录与正文同源：number 变化必须让目录重新发布
+  assert.equal(isSameSmartDocumentToc(
+    [{ id: 'a', level: 1, text: '标题', line: 1 }],
+    [{ id: 'a', level: 1, text: '标题', line: 1, number: '1' }],
+  ), false)
+
+  // 动态样式表：按 block id 注入 content，非法 id / 实例 id 一律过滤
+  const css = buildHeadingNumberStyles('r0', { a: '1.1', 'bad"id': '9' })
+  assert.ok(css.includes('[data-tm-editor="r0"]'))
+  assert.ok(css.includes('[data-id="a"]'))
+  assert.ok(css.includes('content: "1.1" !important'))
+  assert.equal(css.includes('bad'), false)
+  assert.equal(buildHeadingNumberStyles('bad:id', { a: '1' }), '')
+  assert.equal(buildHeadingNumberStyles('r0', {}), '')
+  assert.equal(isSameHeadingNumbers({ a: '1' }, { a: '1' }), true)
+  assert.equal(isSameHeadingNumbers({ a: '1' }, { a: '2' }), false)
+  assert.equal(isSameHeadingNumbers({ a: '1' }, { a: '1', b: '2' }), false)
 }
 
 console.log('Critical regression checks verified')

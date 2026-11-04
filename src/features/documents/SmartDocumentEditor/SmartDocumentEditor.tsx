@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useEffect, useState, useCallback, type CSSProperties, type WheelEvent as ReactWheelEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { memo, useMemo, useRef, useEffect, useState, useCallback, useId, type CSSProperties, type WheelEvent as ReactWheelEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, ChevronUp, Copy, WrapText, X } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
@@ -13,10 +13,12 @@ import { useSmartDocumentEditorModel } from './model/useSmartDocumentEditorModel
 import { useSmartDocumentAttachmentInsert } from './useSmartDocumentAttachmentInsert'
 import { SmartDocumentFormattingToolbar } from './components/SmartDocumentFormattingToolbar'
 import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
+import { HeadingNumberingToolbar } from './components/HeadingNumberingToolbar'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
 import { getImagePreviewScale } from './imagePreview'
 import { setEditorLinkClickHandler, shouldInterceptLink } from './editorLinkInterceptor'
 import { getEditorTopInset } from './smartDocumentUtils'
+import { buildHeadingNumberStyles, isSameHeadingNumbering } from './headingNumbering'
 
 import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
@@ -83,7 +85,15 @@ function openExternalLink(href: string) {
 
 export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: SmartDocumentEditorProps) {
   const { readOnly = false, attachmentInsertTargetKey, onTocActiveChange } = props
-  const { editor, handleChange, customTheme, defaultEditorStyle } = useSmartDocumentEditorModel(props)
+  const {
+    editor,
+    handleChange,
+    customTheme,
+    defaultEditorStyle,
+    headingNumbering,
+    headingNumbers,
+    updateNumbering,
+  } = useSmartDocumentEditorModel(props)
 
   useSmartDocumentAttachmentInsert(editor as any, attachmentInsertTargetKey)
 
@@ -97,6 +107,14 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     '--topomind-smart-letter-spacing': `${defaultEditorStyle.letterSpacing ?? -0.003}em`,
     '--topomind-smart-font-weight': String(defaultEditorStyle.fontWeight ?? 400),
   }) as CSSProperties, [customTheme.fontFamily, defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight, defaultEditorStyle.contentWidth, defaultEditorStyle.blockSpacing, defaultEditorStyle.headingSpacingRatio, defaultEditorStyle.letterSpacing, defaultEditorStyle.fontWeight])
+  // 每个编辑器实例一份独立的编号样式表：规则按 block id 命中，不写 ProseMirror 的 DOM。
+  const editorInstanceId = useId().replace(/[^A-Za-z0-9_-]/g, '')
+  const headingNumberStyles = useMemo(
+    () => (headingNumbering.enabled
+      ? buildHeadingNumberStyles(editorInstanceId, headingNumbers)
+      : ''),
+    [editorInstanceId, headingNumbering.enabled, headingNumbers],
+  )
   const editorRootRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [showBackToTop, setShowBackToTop] = useState(false)
@@ -776,10 +794,13 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   ), [slashMenuItems])
 
   return (
-    <div className="relative h-full w-full min-h-0">
-      <div ref={scrollContainerRef} data-paper-bg={defaultEditorStyle.paperBackground ?? 'plain'} className="h-full min-h-0 overflow-y-auto tm-smart-editor-scroll" spellCheck={false}>
+    <div className="relative h-full w-full min-h-0 flex flex-col" data-tm-editor={editorInstanceId}>
+      {headingNumberStyles ? <style dangerouslySetInnerHTML={{ __html: headingNumberStyles }} /> : null}
+      <HeadingNumberingToolbar config={headingNumbering} onChange={updateNumbering} disabled={readOnly} />
+      <div ref={scrollContainerRef} data-paper-bg={defaultEditorStyle.paperBackground ?? 'plain'} className="flex-1 min-h-0 overflow-y-auto tm-smart-editor-scroll" spellCheck={false}>
         <div
           ref={editorRootRef}
+          data-tm-heading-numbering={headingNumbering.enabled ? 'on' : 'off'}
         className="smart-document-content relative min-h-full"
         style={{ color: 'var(--color-text-primary)' }}
       >
@@ -976,4 +997,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 }, (prevProps, nextProps) => (
   prevProps.readOnly === nextProps.readOnly
   && prevProps.attachmentInsertTargetKey === nextProps.attachmentInsertTargetKey
+  // 编号配置变化必须放行重渲染，否则开关点了没反应；但不能直接比 value 引用
+  // （每次正文编辑都会变，会让整个编辑器跟着输入重渲染），只比归一化后的三项配置值。
+  && isSameHeadingNumbering(prevProps.value?.numbering, nextProps.value?.numbering)
 ))

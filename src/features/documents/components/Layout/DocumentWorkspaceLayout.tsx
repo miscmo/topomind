@@ -654,7 +654,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                             type="button"
                             data-toc-id={item.id}
                             aria-current={isActive ? 'true' : undefined}
-                            className={`block w-full text-left text-[12px] leading-[1.5] py-1 px-1.5 rounded-md border-none bg-transparent cursor-pointer truncate ${
+                            className={`flex w-full min-w-0 items-baseline gap-1.5 text-left text-[12px] leading-[1.5] py-1 px-1.5 rounded-md border-none bg-transparent cursor-pointer ${
                               isActive
                                 ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] font-semibold'
                                 : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-selected-bg)] hover:text-[var(--color-accent)]'
@@ -667,9 +667,12 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                               transitionDelay: tocExpanded ? `${Math.min(index, 7) * 14}ms` : '0ms',
                             }}
                             onClick={() => handleTocJump(item)}
-                            title={item.text}
+                            title={item.number ? `${item.number} ${item.text}` : item.text}
                           >
-                            {item.text}
+                            {item.number ? (
+                              <span className="shrink-0 tabular-nums opacity-70">{item.number}</span>
+                            ) : null}
+                            <span className="min-w-0 flex-1 truncate">{item.text}</span>
                           </button>
                         )
                       })}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lightDefaultTheme, darkDefaultTheme } from '@blocknote/mantine'
 import { useCreateBlockNote } from '@blocknote/react'
 import { zh as defaultEditorDictionary } from '@blocknote/core/locales'
@@ -19,6 +19,12 @@ import type { SmartDocumentEditorProps } from '../types'
 import type { TocItem } from '../../types/workspaceTypes'
 import type { SmartDocumentDerivedBlockCache } from '../smartDocumentUtils'
 import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
+import {
+  computeHeadingNumbers,
+  isSameHeadingNumbers,
+  normalizeHeadingNumbering,
+  type HeadingNumberingConfig,
+} from '../headingNumbering'
 
 /**
  * 读取「当前选中块」的最后修改时间。
@@ -59,6 +65,10 @@ export function useSmartDocumentEditorModel({
   const theme = useThemeStore((state: any) => state.theme)
   const defaultEditorStyle = useGraphUiStore((state: any) => state.defaultEditorStyle)
   const resolvedFontFamily = useMemo(() => resolveEditorFontFamily(defaultEditorStyle.fontFamily), [defaultEditorStyle.fontFamily])
+  // 文档级编号配置。旧文档没有该字段时归一化成「关闭」，不影响既有内容。
+  const headingNumbering = useMemo(() => normalizeHeadingNumbering(value.numbering), [value.numbering])
+  const headingNumberingRef = useRef(headingNumbering)
+  headingNumberingRef.current = headingNumbering
   const valueRef = useRef(value)
   const onChangeRef = useRef(onChange)
   const onTocChangeRef = useRef(onTocChange)
@@ -302,6 +312,8 @@ export function useSmartDocumentEditorModel({
   const lastPublishedTocRef = useRef<TocItem[] | null>(null)
   const lastPublishedStatsRef = useRef<{ characters: number; words: number; blocks: number } | null>(null)
   const derivedBlockCacheRef = useRef<SmartDocumentDerivedBlockCache>(new Map())
+  // 标题编号（blockId → 显示文本）。正文的 ::before 规则与右侧目录共用这一份结果。
+  const [headingNumbers, setHeadingNumbers] = useState<Record<string, string>>({})
 
   const clearScheduledStatsAndToc = useCallback(() => {
     if (updateStatsAndTocRef.current !== null) {
@@ -331,9 +343,21 @@ export function useSmartDocumentEditorModel({
         derivedBlockCacheRef.current,
       )
 
-      if (!isSameSmartDocumentToc(lastPublishedTocRef.current, toc)) {
-        lastPublishedTocRef.current = toc
-        onTocChangeRef.current?.(toc)
+      // 编号与目录同批计算、同源发布：正文不会比目录更新，也不会出现两边序号不一致。
+      const numberingConfig = headingNumberingRef.current
+      const nextHeadingNumbers = computeHeadingNumbers(toc, numberingConfig)
+      setHeadingNumbers((previous) => (
+        isSameHeadingNumbers(previous, nextHeadingNumbers) ? previous : nextHeadingNumbers
+      ))
+      const numberedToc = numberingConfig.enabled
+        ? toc.map((item) => (
+          nextHeadingNumbers[item.id] ? { ...item, number: nextHeadingNumbers[item.id] } : item
+        ))
+        : toc
+
+      if (!isSameSmartDocumentToc(lastPublishedTocRef.current, numberedToc)) {
+        lastPublishedTocRef.current = numberedToc
+        onTocChangeRef.current?.(numberedToc)
       }
 
       if (!isSameSmartDocumentStats(lastPublishedStatsRef.current, stats)) {
@@ -386,6 +410,9 @@ export function useSmartDocumentEditorModel({
       ...currentValue,
       blocks: currentDoc,
     })
+    // SmartDocumentEditor 的 memo 会跳过正文编辑引起的重渲染，valueRef 若不在这里同步，
+    // 之后点「标题编号」开关就会把旧 blocks 写回父组件、丢掉刚输入的内容。
+    valueRef.current = nextValue
     onChangeRef.current(nextValue)
     updateStatsAndToc(false)
   }, [editor, updateStatsAndToc])
@@ -458,6 +485,21 @@ export function useSmartDocumentEditorModel({
     }
   }, [clearScheduledStatsAndToc, editor, handleTocItemClick, updateStatsAndToc])
 
+  // 改编号设置时立即重算：派生块缓存的 key 只含 content/type/level，不含编号配置，
+  // 不主动触发的话开关要等到下一次正文编辑才生效。
+  useEffect(() => {
+    updateStatsAndToc(true)
+  }, [headingNumbering.enabled, headingNumbering.style, headingNumbering.depth, updateStatsAndToc])
+
+  /** 工具栏写入口：只改文档级配置，不动 blocks，因此不进 BlockNote 撤销栈、不重建编辑器。 */
+  const updateNumbering = useCallback((patch: Partial<HeadingNumberingConfig>) => {
+    const current = valueRef.current
+    onChangeRef.current({
+      ...current,
+      numbering: normalizeHeadingNumbering({ ...current.numbering, ...patch }),
+    })
+  }, [])
+
   // 当前选中块的「最后修改时间」：随光标移动 / 文档变化同步给底部状态栏展示。
   // 只从块属性里读取、不做任何 DOM 操作，因此不会干扰编辑、光标与输入法。
   useEffect(() => {
@@ -506,6 +548,9 @@ export function useSmartDocumentEditorModel({
     editor,
     handleChange,
     customTheme,
-    defaultEditorStyle
+    defaultEditorStyle,
+    headingNumbering,
+    headingNumbers,
+    updateNumbering,
   }
 }
