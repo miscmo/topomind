@@ -147,7 +147,7 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
   edges?: Array<{
     id: string; source: string; target: string; relation: EdgeRelation; weight: EdgeWeight
     lineMode?: 'smoothstep' | 'straight'; lineStyle?: 'solid' | 'dashed'
-    color?: string; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
+    color?: string; lineWidth?: number; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
     sourceAnchor?: EdgeAnchor | null; targetAnchor?: EdgeAnchor | null
     highlighted?: boolean; faded?: boolean
   }>
@@ -189,6 +189,8 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
       arrowSize: e.arrowSize,
       arrowShape: e.arrowShape,
       arrowPosition: e.arrowPosition,
+      sourceAnchor: normalizeEdgeAnchor(e.sourceAnchor),
+      targetAnchor: normalizeEdgeAnchor(e.targetAnchor),
       highlighted: e.highlighted,
       faded: e.faded,
     })),

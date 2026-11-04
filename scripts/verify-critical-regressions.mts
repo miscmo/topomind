@@ -1000,6 +1000,42 @@ const edge = (
     const source = fsSync.readFileSync(new URL(`../${file}`, import.meta.url), 'utf-8')
     assert.ok(source.includes('sourceAnchor') && source.includes('targetAnchor'), `${file} 必须同步透传连线锚点`)
   }
+
+  // 静态断言只保证「文件里出现过字段名」，抓不到「类型声明写了、edges.map 却忘写」的静默丢失。
+  // 曾因此导致锚点写盘时整段丢失、重开知识库后复位，所以这里必须真的走一遍写盘往返。
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundled = await build({
+    entryPoints: [fileURLToPath(new URL('../src/core/storage/file.ts', import.meta.url))],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  })
+  const storageModule = await import(
+    `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
+  ) as {
+    convertGraphToFSB: (graphMeta: ReturnType<typeof normalizeGraphMeta>) => { edges?: Array<Record<string, unknown>> }
+    convertFSBToGraph: (raw: unknown) => { edges: Array<Record<string, unknown>> }
+  }
+  // 序列化一次，模拟真正落盘成 JSON 再读回来
+  const written = JSON.parse(JSON.stringify(storageModule.convertGraphToFSB(meta)))
+  assert.deepEqual(
+    (written.edges?.[0] as Record<string, unknown>).sourceAnchor,
+    { u: 0.2, v: 0.8 },
+    '起端锚点必须真的写进磁盘 JSON'
+  )
+  assert.deepEqual(
+    (written.edges?.[0] as Record<string, unknown>).targetAnchor,
+    { u: 1, v: 0 },
+    '末端锚点必须真的写进磁盘 JSON（越界值先夹回边框）'
+  )
+  const reloaded = storageModule.convertFSBToGraph(written)
+  assert.deepEqual(reloaded.edges[0].sourceAnchor, { u: 0.2, v: 0.8 }, '写盘往返后起端锚点不能丢')
+  assert.deepEqual(reloaded.edges[0].targetAnchor, { u: 1, v: 0 }, '写盘往返后末端锚点不能丢')
+  assert.equal(reloaded.edges[2].sourceAnchor, undefined, '老存档无锚点字段时不应凭空生成')
+  assert.equal(reloaded.edges[2].targetAnchor, undefined, '老存档无锚点字段时不应凭空生成')
 }
 
 // 主题收归为浅色/深色两套：已下线主题必须迁移到正确的一套，否则菜单勾选会悬空
