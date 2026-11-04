@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { PaintRoller, RotateCcw } from 'lucide-react'
+import { PaintRoller, RotateCcw, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface QuickEdgeToolbarProps {
@@ -11,6 +11,7 @@ interface QuickEdgeToolbarProps {
   onColorChange: (value: string) => void
   onToggleFormatPainter: () => void
   onResetAnchors: () => void
+  onDelete: () => void
 }
 
 function stopEvent(event: React.SyntheticEvent) {
@@ -22,6 +23,7 @@ function stopEvent(event: React.SyntheticEvent) {
  *
  * 与节点快捷工具栏（QuickNodeToolbar）保持同一套视觉语言，但只放与"连线外观"相关的控件：
  * 线条颜色 + 格式刷。位置由 EdgeLabelRenderer 负责（传入的 transform 已居中到连线中点）。
+ * 删除按钮放在最右、用危险色 hover 区别于其它按钮，但沿用同样的圆角与尺寸。
  */
 function QuickEdgeToolbar({
   color,
@@ -30,6 +32,7 @@ function QuickEdgeToolbar({
   onColorChange,
   onToggleFormatPainter,
   onResetAnchors,
+  onDelete,
 }: QuickEdgeToolbarProps) {
   return (
     <div
@@ -84,6 +87,17 @@ function QuickEdgeToolbar({
           </button>
         </>
       )}
+
+      <div className="mx-0.5 h-4 w-[1px] bg-[var(--color-border-light)]" />
+
+      <button
+        type="button"
+        className="flex h-7 w-7 items-center justify-center rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-all duration-200"
+        onClick={onDelete}
+        title="删除连线"
+      >
+        <Trash2 className="h-4 w-4" strokeWidth={2} />
+      </button>
     </div>
   )
 }

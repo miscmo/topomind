@@ -129,6 +129,7 @@ export function useGraph(tabId: string) {
     updateEdgeRelation: ops.updateEdgeRelation,
     updateEdgeStyle: ops.updateEdgeStyle,
     updateEdgeAnchor: ops.updateEdgeAnchor,
+    deleteEdge: ops.deleteEdge,
     flushCurrentRoomSave,
     hasPendingCurrentRoomSave,
     isCreatingRef,
@@ -162,6 +163,7 @@ export function useGraph(tabId: string) {
     ops.updateEdgeRelation,
     ops.updateEdgeStyle,
     ops.updateEdgeAnchor,
+    ops.deleteEdge,
     flushCurrentRoomSave,
     hasPendingCurrentRoomSave,
   ])

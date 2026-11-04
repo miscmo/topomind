@@ -59,7 +59,7 @@ function FloatingEdge({
   const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
   const isNodeFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
   const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
-  const { updateEdgeStyle, updateEdgeAnchor } = useGraphContext()
+  const { updateEdgeStyle, updateEdgeAnchor, deleteEdge } = useGraphContext()
   // 拖动锚点时只在这里做路径预览，松手才写 store：一次拖动 = 一条撤销记录、一次落盘
   const [anchorPreview, setAnchorPreview] = useState<EdgeAnchorPreview | null>(null)
 
@@ -77,6 +77,10 @@ function FloatingEdge({
   const handleColorChange = useCallback((value: string) => {
     void updateEdgeStyle(id, { color: value })
   }, [updateEdgeStyle, id])
+
+  const handleDelete = useCallback(() => {
+    void deleteEdge(id)
+  }, [deleteEdge, id])
 
   const toggleFormatPainter = useCallback(() => {
     const uiStore = useGraphUiStore.getState()
@@ -227,6 +231,7 @@ function FloatingEdge({
                 onColorChange={handleColorChange}
                 onToggleFormatPainter={toggleFormatPainter}
                 onResetAnchors={handleAnchorReset}
+                onDelete={handleDelete}
               />
             </EdgeToolbarAnchor>
           )}

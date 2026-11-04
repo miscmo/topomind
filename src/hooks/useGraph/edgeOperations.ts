@@ -130,6 +130,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('连线:删除', 'graphOperations', { edgeId })
+    return true
   }
 
   const updateEdgeRelation = async (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => {

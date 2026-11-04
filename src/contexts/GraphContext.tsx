@@ -49,6 +49,7 @@ export interface GraphContextValue {
   updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => void
   updateEdgeStyle: (edgeId: string, style: EdgeStylePatch & { selected?: boolean }) => void
   updateEdgeAnchor: (edgeId: string, patch: EdgeAnchorPatch) => void
+  deleteEdge: (edgeId: string) => Promise<boolean>
 
   // Persistence
   flushCurrentRoomSave: () => Promise<void>
@@ -91,6 +92,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     updateEdgeRelation: graph.updateEdgeRelation,
     updateEdgeStyle: graph.updateEdgeStyle,
     updateEdgeAnchor: graph.updateEdgeAnchor,
+    deleteEdge: graph.deleteEdge,
     flushCurrentRoomSave: graph.flushCurrentRoomSave,
   }
 }
