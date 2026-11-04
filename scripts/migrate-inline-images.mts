@@ -7,9 +7,10 @@
  *   node --experimental-strip-types scripts/migrate-inline-images.mts --apply
  *
  * 可选参数：
- *   --root <path>    知识库根目录，默认取 TOPOMIND_KB_ROOT 或 D:/Document/NoteBook/kbs
- *   --report <path>  把完整清单写到该文件（dry-run 也会写，方便审阅）
- *   --limit <n>      只处理前 n 篇，用于小批量验证
+ *   --root <path>        知识库根目录，默认取 TOPOMIND_KB_ROOT 或 D:/Document/NoteBook/kbs
+ *   --report <path>      把完整清单写到该文件（dry-run 也会写，方便审阅）
+ *   --limit <n>          只处理前 n 篇「尚待迁移」的文档；分批执行时每批都取剩余的前 n 篇
+ *   --backup-dir <path>  指定备份目录（分批执行时共用，避免每次生成新的时间戳目录）
  *
  * 背景：旧版编辑器把图片整段 base64 写进 .tdoc.json，全库 55 篇、252 张、
  * 解码后约 55MB，最大单篇 22.6MB。现在的 buildSmartDocumentPersistedValue
@@ -34,10 +35,13 @@ const kbRoot = argValue('--root') || process.env.TOPOMIND_KB_ROOT || 'D:/Documen
 const reportPath = argValue('--report')
 const limitArg = argValue('--limit')
 const limit = limitArg ? Math.max(1, Number(limitArg) || 1) : Number.POSITIVE_INFINITY
-const backupDir = path.join(
-  path.dirname(kbRoot),
-  `_topomind_backup_inline_${new Date().toISOString().replace(/[:.]/g, '-')}`,
-)
+const customBackupDir = argValue('--backup-dir')
+const backupDir = customBackupDir
+  ? path.resolve(customBackupDir)
+  : path.join(
+      path.dirname(kbRoot),
+      `_topomind_backup_inline_${new Date().toISOString().replace(/[:.]/g, '-')}`,
+    )
 
 const DATA_URL = /^data:image\/([^;,]+);base64,([\s\S]+)$/i
 const EXTENSIONS: Record<string, string> = {
@@ -206,7 +210,7 @@ const summary = [
   `知识库：${kbRoot}`,
   `扫描文档：${documents.length} 篇`,
   `待迁移：${targets.length} 篇 / ${totalImages} 张内联图片`,
-  `文档体积：${mb(beforeBytes)}MB → ${mb(afterBytes)}MB（减少 ${mb(beforeBytes - afterBytes)}MB，${((1 - afterBytes / beforeBytes) * 100).toFixed(1)}%）`,
+  `文档体积：${mb(beforeBytes)}MB → ${mb(afterBytes)}MB（减少 ${mb(beforeBytes - afterBytes)}MB，${beforeBytes > 0 ? ((1 - afterBytes / beforeBytes) * 100).toFixed(1) : '0.0'}%）`,
   `将新增附件：${newAttachments} 个文件，合计 ${mb(targets.reduce((sum, t) => sum + t.plan.reduce((s, i) => s + i.binary.length, 0), 0))}MB（按内容去重后）`,
   apply ? `备份目录：${backupDir}` : `备份目录（执行 --apply 时生成）：与知识库同级`,
   '',
