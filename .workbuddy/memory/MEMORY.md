@@ -1,105 +1,62 @@
 # TopoMind 长期约定
 
-## 验证手段
-- 类型检查：`node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
+## 验证手段（每次迭代后必跑）
+- 类型：`node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
 - 回归：`npm run verify:critical`（末尾 "Critical regression checks verified" 即通过；日志里 "save failed" 是预期分支）、`verify:graph-store`、`verify:plugins:static`
-- 构建：`npx vite build`（renderer / main / preload 三阶段）
+- 构建：`npx vite build`（renderer/main/preload 三阶段）
+- **铁律**：删字段/改能力后必须同步回归脚本（`scripts/verify-critical-regressions.mts` 断言具体字段）。曾因删 `canConvertBlockMath` 没同步测试 → 误判"预存 bug"。
 
-## 铁律：删字段/改能力时必须同步回归脚本
-`scripts/verify-critical-regressions.mts` 会断言具体字段。曾因移除块级公式按钮删了 `canConvertBlockMath` 而测试没同步 → 误判成"预存 bug"。改动后先跑上面三条再收工。
+## 架构/运行时铁律
+- **GraphContextProvider 约束**：`GraphPage.tsx` 在返回 JSX **之前**就调用 `useGraphPageActions({graph})`，而 Provider 只包返回的 JSX → 链内 hook 运行在 Provider **之外**。绝不能直接 `useGraphContext()`，否则抛错 → 「标签加载失败」+「右侧笔记打不开」。需要 `graph` 就由上层作参数传入。
+- **Vite 启动卡死**：真元凶是 esbuild 依赖扫描 OOM——项目根堆积的 `build-*/outputs/release/stats.html`（完整 dist 含 index.html）被当扫描入口 → 内存暴涨。修复：`vite.config.js` 的 `optimizeDeps.entries:['index.html']`；陈旧产物应清出工作区。主进程若以纯 Node 启动（缺 app/BrowserWindow），常是继承了 `ELECTRON_RUN_AS_NODE=1`，已在 onstart 用 `startup(...,{env:{...process.env, ELECTRON_RUN_AS_NODE: undefined}})` 剥离。
+- **文档草稿存储**：完整正文**绝不**进 localStorage（旧代码整篇写含 base64 图片 → `QuotaExceededError`）。权威副本在 topo（`storage.writeTopoDocument`），关闭/切换由 close-guard flush。`draftStore.partialize` 只持久化 `cardDrafts` 小片段；detail 草稿仅内存态。**勿**引入"删最大历史草稿"eviction（会误删别的文档唯一未保存副本）。
+- **打包 EPERM rename**：`win-unpacked.tmp→win-unpacked` 的 EPERM 是 Windows Defender 实时防护锁刚解压的 electron 二进制。根治：管理员 PowerShell `Add-MpPreference -ExclusionPath 'D:\Code\topomind_latest\topomind'` 后再 `npm run build:win`。
 
-## 文档会话 / 草稿存储（right-panel）
-- **完整文档正文绝不能持久化进 localStorage**（旧代码按路径整篇写入，含 base64 图片，无上限无淘汰 → `QuotaExceededError` 刷屏）。注意：这与下面 Vite 启动卡死**无关**，勿再误判。
-- 现状：`draftStore` 的 `partialize` 只持久化 `cardDrafts`（小文本片段）；detail 草稿仅内存态（`detailDrafts`），`DocumentEditorHost` 用 `isContentLoaded` 门控挂载，全新启动由 read effect 从 topo 读回再挂载。
-- `getItem` 内有 `cleanupLegacyDetailDrafts`：清理旧版 `topomind-draft-storage:detail:*` 大 blob + 清空 index 的 `detailEntries`，幂等。
-- 权威副本在 topo（`storage.writeTopoDocument`），关闭/切换时 close-guard 把脏草稿 flush 过去。
-- **不要**引入"删除最大历史草稿"之类 eviction——会误删别的文档唯一的未保存副本（2026 早期回归过）。
-
-## Electron / Vite 启动卡死
-- **真元凶：Vite 依赖扫描 esbuild OOM**。项目根下堆积几十个 `build-*`/`outputs`/`release`/`stats.html`（每个都是完整 dist 含 index.html），Vite 默认把项目内**所有 `*.html`** 当扫描入口 → 内存暴涨 + `The service is no longer running` → 应用卡加载。报错特征：`Failed to scan for dependencies from entries:` 后一长串 `build-*/index.html`。修复：`vite.config.js` 的 `optimizeDeps.entries: ['index.html']`。这些陈旧产物也应清理出工作区。
-- 主进程若以"纯 Node"启动（缺 app/BrowserWindow），根因常是环境继承了 `ELECTRON_RUN_AS_NODE=1`。已在 `vite.config.js` 的 `onstart` 里用 `startup(..., { env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined } })` 剥离（该修复曾丢失后补回）。
-
-## 架构约束：GraphContextProvider
-- `GraphPage.tsx` 在返回 JSX **之前**就调用 `useGraphPageActions({ graph })`，而 `<GraphContextProvider>` 只包返回的 JSX。故该调用链里的所有 hook（含 `useNodeActions`、`useNodeMoveToRoom`）运行在 Provider **之外**。
-- **铁律**：链内 hook 绝不能直接 `useGraphContext()`，否则抛 `useGraphContext must be used within GraphContextProvider` → 整棵"知识库标签页"被 ErrorBoundary 兜底，表现为「标签加载失败」+「右侧笔记打不开」。需要 `graph` 就由上层作**参数**传入。
-- 该崩溃会级联成多个看似独立的报错，定位时认准单一根因。
+## 图谱存储 / `_graph.json`（P0 轻量节点 + P1 分片）
+- **唯一格式边界**：`electron/services/graph-meta-service.js` 是「逻辑 meta ↔ 磁盘」的唯一实现（纯 ESM、IO 由 deps 注入，迁移脚本复用同一份）。**禁止**在主进程任何地方直接 `_fs_readJsonFile(_graph.json).children` —— v2 房间索引里根本没有 children，会静默读成空图。已知必须走逻辑读的点：`card-service.readCardChildren`、`_fs_moveTopoNodesToRoom`（读/写/回滚 4 处）、`readRoomNodeSummaries`、`updateCardName`(file.ts)。
+- **v2 格式**：`_graph.json = {version:2, zoom, pan, ...}`，节点/边按 id 的 FNV-1a 取模落 `_graph/nodes-<0..15>.json` / `edges-<0..15>.json`，K=16 固定。写侧只覆盖内容变化的分片（键排序后 `JSON.stringify` 比较，消除遍历顺序影响），**索引最后写**（它是格式开关，v1→v2 途中崩溃时磁盘仍是完整 v1）。未知 version 读写都抛错。
+- **旧库零改写**：写侧跟随现有格式 —— v1 有数据的旧档继续单文件，只有空/新房间默认 v2；显式升级走 `scripts/migrate-graph-shards.mts`（默认 dry-run，`--apply` 才写、写前备份、真跑往返校验、`--verify` 复核）。
+- **P0 轻量节点**：新建节点只写父 `children`，不 mkdir、不写空图；物化由既有 `ensureDir` 在首次写文档/下钻/导入附件时自动发生。摘要用 `existsSync` 短路，不引入 `materialized` 标记。
+- **新增节点字段要同步 7 处白名单**：`src/types/graph.ts`、`src/domain/graph/model.ts`(KBNode+RoomGraphNode)、`graphMapper.ts` 双向、`normalizeGraphMeta.ts`、`src/core/storage/file.ts`(FSBGraphChild + convertFSBToGraph + **convertGraphToFSB 的 map 本体**)、`src/core/fs-backend.ts`、`graphBuilder.ts`(buildMetaFromNodesEdges + buildNodes)。`kind` 已按此预留；`buildNodes` 的 type 仍统一 `knowledgeCard`，接形状节点时只改映射 + 注册 nodeTypes。
+- **回归必须真跑到读库入口**：`verify-critical-regressions.mts` 用内存 fs 真跑分片读写、esbuild 打包真跑 kind 全链路、真跑 `readCardChildren` 对 v2 房间。反向验证过：注释里保留 `readGraphMeta(...)` 字面量能蒙混静态断言，只有真跑断言拦得住。
+- **迁移往返校验必须「边顺序无关」**：v2 读回 edges 按分片桶序 0..15 拼接，与 v1 原数组顺序不同；`migrateRoom` 用严格数组顺序比较会让所有多边房间 100% 误报失败（真实库首轮 6/10 中招，数据其实一条没丢）。统一走 `graphMetaComparisonKey(meta)`（递归排序键 + edges 按 id 排序，丢边/改字段仍严格检出），主进程与迁移脚本 `--verify` 共用一份。**回归样本必须含多条边且跨多个分片**，否则测不到顺序重排。
+- **迁移失败要隔离残留分片**：失败时只恢复 `_graph.json` 索引，`_graph/` 目录残留会让脚本「拒绝覆盖未知数据」永久卡住；`quarantineShards()` 把它 rename 到备份区 `<backupDir>/_shards_quarantine/`（保留证据、不删除），`--apply` 前与 catch 里都要调。
 
 ## 编辑器：BlockNote / ProseMirror
-- **不要在 `appendTransaction` 里同步改文档**（`setNodeMarkup` 会重建块 nodeView，连续输入时打断输入状态 → markdown 输入规则 `- `→列表偶发失效）。正确做法：`appendTransaction` 只记「脏块 id」进 pending 并 `return null`；用 `new Plugin({ view(editorView) })` 存 `EditorView`（不要用私有 `_tiptapEditor`），在停止输入 ~1s / blur / destroy 时批量 flush；延迟写入按**块 id** 定位（位置会漂移），`addToHistory:false` + pluginKey meta 防递归。
-- IME：`view.composing` 为真时 Tiptap input rule 直接跳过（原生行为）；中文标点下 `-` 是全角 `－`，不匹配 `/^\s?[-+*]\s$/`。这类"不触发"不是 bug，先让用户自查输入法中英文标点、是否在块首输入。
+- **别在 `appendTransaction` 同步改文档**：`setNodeMarkup` 重建 nodeView 打断输入；改为只记脏块 id 进 pending + `return null`，用 `new Plugin({view})` 存 `EditorView`，停止输入~1s/blur/destroy 时按**块 id** 批量 flush（`addToHistory:false`+pluginKey meta 防递归）。
+- **浮层一律 portal 到 `document.body`**：`usePortalElement(null)` 返回 body，controller 未传 `portalElement` 走默认 body。给浮层写样式带 `.smart-document-content`/`.bn-block-outer` 前缀**永不成立**，也拿不到 `--topomind-smart-*` 变量；改之前用 `el.matches()` 验一次。
+- **侧栏（＋/⠿）垂直对齐用运行时实测**：`Range.selectNodeContents(.bn-inline-content)` 取第一行矩形，以 `SideMenuExtension.referencePos.y` 为基准算 delta 写 inline `margin-top`；容器高度须 `height:auto !important` 覆盖 BlockNote 按 `[data-level]` 写死的 30/108/84/67px。别用菜单自身 `getBoundingClientRect()` 当基准（首帧落位前读到 0）。
+- **标题留白是「场景变量」结构**：各级 `--tm-heading-gap-top/-bottom`（em 相对自身字号）由 `.bn-block-outer` 上的 `--tm-heading-gap-{top,bottom}-override` 覆盖：正常 H1~H6 递减（约 40→18px）｜首块 `0`（文档开头不顶空白）｜连续标题固定 `0.4/0.25 × 正文字号 × 间距比`（与级别无关）。文档顶部边距交给 `.bn-editor` 的 24px（写在 `SmartDocumentEditor.css`，勿用 Tailwind 任意变体），不靠标题 padding。侧栏是浮层继承不到 → 由 `SmartDocumentSideMenu.getHeadingGapCategory()` 打 `data-tm-gap-*`。
+- **标题阶梯**：H1 1.75 / H2 1.45 / H3 1.25 / H4 1.12 / H5 1.0 / H6 0.9 em（28/23.2/20/17.9/16/14.4px）。按级别写样式**必须** `:has(> h1…h6)`，勿用 `[data-level="N"]`（首个 heading 无该属性，旧 H1 规则从未生效）。`:has()` **不能嵌套** `:has()`。
+- **xl-multi-column 坑**：`useCreateBlockNote` 须传 `dictionary:{...zh, multi_column: multiColumnLocales.zh}`（否则 "Multi-column dictionary not found" 整体崩溃）；版本须精确配对 0.51.4↔0.51.4。License `GPL-3.0 OR Proprietary`，闭源商用需订阅。
+- **「内容区顶部」统一取 `.bn-editor` 的 padding-top（24px）**：滚动容器 `.tm-smart-editor-scroll` 的 paddingTop 是 0。目录跳转与 scroll-spy 若按滚动容器算，点首块 H1 会把标题顶到容器上沿（顶部留白滚光、字顶像被裁），且该 scrollTop 被 `topomind_scroll_<docKey>` 持久化 → 每次打开都复现（2026-11-04）。统一走 `smartDocumentUtils.getEditorTopInset()`；切文档先 `scrollTop=0`；恢复阅读位置用 `MIN_RESTORE_SCROLL_TOP=48` 过滤历史脏值。**看到「顶部被裁」先量 scrollTop，别只量 padding。**
+- **目录控件隐藏只认 `mouseleave`**：`useSmartDocumentEditorModel.handleTocItemClick` 末尾会 `editor.focus()`，目录项按钮失焦 → 冒泡到 `nav` 的 `onBlur`；若把 `onBlur` 也绑到收起逻辑，点击目录项就会「自动隐藏」。触发条/面板只保留 `onMouseEnter` 展开 + `onMouseLeave`（150ms 延迟）隐藏，别绑 `onBlur`。
+- **贴右缘浮层别压原生滚动条**：编辑器 `.tm-smart-editor-scroll` 是原生滚动条，宽度靠运行时 `offsetWidth - clientWidth` 实测（Windows 经典 15px，overlay 0），浮层 `right = 滚动条宽 + 6px`；面板 `right` 再加触发条宽，二者右/左沿相接。别写死 `right:0`。
+- 行内公式/粘贴/链接拦截等见 `useSmartDocumentEditorModel.ts` 与 `editorLinkInterceptor.ts`。
 
-### 浮层（侧栏/工具栏/菜单）的 CSS 作用域 —— 铁律
-- **BlockNote 的浮层一律 portal 到 `document.body`**：`usePortalElement(null)` 返回的是 **body**（不是"原地渲染"），`portalElements={{default:null}}` 同理；controller 未传 `portalElement` 时走默认同样是 body。**给浮层写样式时带 `.smart-document-content` / `.bn-block-outer` 前缀 = 永不生效**，也拿不到编辑器容器上的 `--topomind-smart-*` 变量。改之前先 `el.matches('.smart-document-content .bn-side-menu')` 验一次。
-- 侧栏（＋/⠿）的垂直对齐走**运行时实测**：`Range.selectNodeContents(.bn-inline-content)` 取第一行矩形，以 `SideMenuExtension` 的 `referencePos.y` 为基准算 delta 写 inline `margin-top`（见 `SmartDocumentSideMenu.tsx`）。别用菜单自身的 `getBoundingClientRect()` —— 挂载首帧 floating-ui 未落位会读到 0 附近。
-- 侧栏容器高度必须 `height:auto !important` 覆盖 BlockNote 按 `[data-level]` 写死的 30/108/84/67px（为旧字号阶梯设计，会让按钮钉死在错位置）。
+## 图谱连线
+- **锚点归属「边」不归属节点，且只贴节点边框**：`edge.data.sourceAnchor/targetAnchor` = `EdgeAnchor{u,v}`（归一化，至少一个分量为 0/1；空/非法=自动交点；旧存档框内点由 `projectAnchorToBorder` 按像素距离投影到最近边框）。**锚点只决定出线位置/方向，不是线头**（2026-11-04 用户明确纠正，别改回「直接连到锚点」）：两个边框交点一律经 `offsetBorderPoints` 沿连线方向外推 6px 才得到 `sx/sy/tx/ty`，线与边框始终留间隙、线头不与手柄重合。手柄贴 `getEdgeParams` 返回的 `sourceBorder/targetBorder`，工具栏避让也按这两个点算；出线方向统一按交点所在边框判断（已删 `getAnchorSide`/`anchorSideToPosition`）。改边字段必须同步这些持久化点：`normalizeGraphMeta` / `file.ts` 的 `convertFSBToGraph` **与 `convertGraphToFSB` 的 `edges.map` 本体** / `graphMapper` 双向 / `graphBuilder` 保存+加载 / minimap。**只在返回类型里加字段不算数**——曾在 `convertGraphToFSB` 漏写 map 字段，画面生效但 `_graph.json` 从来没有锚点，重开知识库全部复位。
+- **回归断言必须跑真实数据往返**：`source.includes('字段名')` 这类源码字面量断言在同文件多函数时会互相掩盖（类型声明/读入函数有该字样就通过）。`verify-critical-regressions.mts` 已用 `esbuild build({write:false})` + data URL import 加载 `file.ts`，真跑 `convertGraphToFSB → JSON 序列化 → convertFSBToGraph` 往返并断言值不丢；已反向验证删掉修复会让回归 exit 1。
+- **光测序列化往返还不够，必须测到「写库入口」**：曲线第一版回归只测了 `file.ts` 往返，`updateEdgeStyle`（真正的写库函数）里的 8 字段白名单把新字段整个吞掉 → 设置既不写内存也不落盘，回归全绿。现在 `verify-critical-regressions.mts` 额外用 esbuild 打包 `edgeOperations.ts`、注入假 `storeApi`/`saveLater` 真跑 `updateEdgeStyle`，断言 `setEdges` + `saveLater` 调用数与写入值；bundle 需 `banner: {js:'globalThis.window = globalThis.window || {};'}` 让 log-backend 的 `_api()` 返回 null。已两次反向验证（临时恢复旧白名单）精确 exit 1。
+- **「字段白名单/子集类型」是本项目反复出 bug 的模式**：锚点持久化 6 处白名单、`updateEdgeStyle` 8 字段变化检测 + `shouldPersist`、`VaultConfig`/`graphEventHandlers` 手写的 `defaultEdgeStyle` 子集类型，每次加字段都漏。根治方向：① `updateEdgeStyle` 改成构造 `nextData` 后遍历字段并集浅比较 + `Object.entries(style).some(...)` 通用透传；② 子集类型一律改 `Partial<DefaultEdgeStyle>` / `Partial<EdgeStylePatch>` 引用同一份定义。新增字段后别再逐个补白名单。
+- **默认样式的历史兼容规则会吞掉新枚举值**：`normalizeDefaultEdgeStyle` 的 `lineMode` 曾写死 `edgeDefaultsVersion===2 && style.lineMode==='smoothstep' ? 'smoothstep' : defaults.lineMode`，新增 `'curve'` 后默认选曲线刷新就被重置成直线；同理 `currentEdgeStyle` 派生、`addEdge`、格式刷快照都要显式带新字段（否则面板无法回显/新建边不继承）。
+- **`EdgeLabelRenderer` 内浮层一律 `zIndex:10`**：否则被 `.react-flow__node` 盖住，真实鼠标点不到按钮，但 DOM `.click()` 却能触发 → 极易误判成事件 bug。同层多浮层再分层：锚点手柄 11 > 快捷工具栏 10。
+- **`EdgeLabelRenderer` 坐标系就是 flow 单位**（viewport scale 只做视觉缩放）：浮层 `offsetWidth` 读到的布局尺寸可直接与 flow 坐标比较，勿再除 zoom；缩放很小时浮层视觉随之变小是既有行为。选中连线的工具栏走 `EdgeToolbarAnchor` 自动避让两端手柄（上/下/左/右×2 档，`edgeToolbarPlacement.ts` 纯函数）。
+- **拖动类交互只在组件内 preview**：pointerup 才一次性写 store + 落盘；每帧 `setEdges` 会产生大量撤销历史与保存。右侧样式滑杆同理（草稿 + pointerup/keyup/blur 一次提交），别用 range 的 `onChange` 直写。
+- **曲线 `u` 区间 `[0.25,0.75]` 是数学边界，别为「位置自由度」放宽**：二次贝塞尔 `C=2P-(S+T)/2`，C 沿连线投影 = `L·(2u-0.5)`；`u<0.25` 会把 C 推到起点外侧 → 端点切线反向、曲线回勾钻回节点（0.15 时实测回勾约 3% 线长）。`domain/graph/edgeCurve.ts` 的 `CURVE_POSITION_MIN/MAX` 是唯一来源，拖拽反推与面板 hint 都引用它。要更大范围就得改三次贝塞尔，不能只调常量。
+- **Electron 里不要 `window.confirm`**：破坏性操作走 `useConfirmStore.getState().open()` / `useConfirmStore((s)=>s.open)`，`ConfirmModal` 已在 `App.tsx` 全局挂载（overlay z-[99999]）。当前只有浮窗工具栏「删除连线」加了确认，右键菜单 `useEdgeActions.handleEdgeDelete`（走 `deleteElements`）仍是一键生效。
+- **`EdgeToolbarAnchor` 内的下拉/展开面板必须 `position:absolute`**：它用 ResizeObserver 量 `boxRef`（工具栏 children 容器）的 offsetWidth/Height 做避让重算；任何参与文档流的新内容都会撑大工具栏 → 展开/收起时浮层位置跳动。`QuickEdgeStylePopover` 即按此挂在 `relative` 的工具栏根 div 下方，并自带 `pointerEvents:'all'`（`.react-flow__edgelabel-renderer` 是 none）。浮窗内所有 range 都必须「草稿 + pointerup/keyup/blur 一次提交」。
+- **连线预设色板只有一份**：`domain/style/styleDefaults.ts` 的 `EDGE_COLOR_PRESETS`，右侧样式面板与画布浮窗菜单都引用它，禁止在 TS 侧另写 hex 数组。浮窗样式改动统一 `onStyleChange(patch)` → `updateEdgeStyle`，切曲线复用 `seedCurveControlOnModeSwitch`。
 
-### 分栏能力评估（2026-08-25）
-- BlockNote 0.51.4 核心是块级垂直流，默认一行一块。官方 `@blocknote/xl-multi-column` 可引入 `columnList`/`column` + `multiColumnDropCursor`。
-- **硬约束**：① 版本必须配对（0.54 需整体升级 core/react 0.54.x）；② **License 是 `GPL-3.0 OR Proprietary`**，闭源商用需订阅，有合规风险，集成前先确认。
-- 第三方 `blocknote-layout` peer 依赖比现版旧，不作主路径；自研 ProseMirror 横向容器不划算。
+## 设计系统 / UI 铁律
+- **单色制 Monochrome Brand（用户决策）**：浅色下 `--color-primary`==`--color-accent`(`#0969da`)，深色为同蓝明度变体——**不是第二个品牌色**，勿"修复"同色。铁律：**颜色只在 `tokens.css` 定义一份**，TS 侧不复制 hex。
+- **shared/ui 组件**：所有空占位用 `EmptyState.tsx`；所有互斥单选切换用 `SegmentedControl.tsx`；所有模态对话框走 `modal.ts`+统一 `z-[10000]`（非模态 popover 例外）。全局 `:focus-visible`（accent 2px outline）在 `base.css`，勿逐个补焦点环。
+- **卡片视觉通道所有权**：装饰层（背景/边框/字体/emoji）/结构层（右槽位系统专有）/语义层（左竖条=进度、标题前=标记，系统专有）三层分离。语义层**永不**被装饰覆盖、不进格式刷；emoji 禁承载状态。边框色优先级：显式 `data.nodeStyle.borderColor` > `domainColor` > 默认（须读未 merge 的原值）；节点 inline style 勿写 border-color（压过 hover 变体）。
+- **「A 展开成 B」的 morph 动画**：用**同一个容器**过渡 width/height/radius/底色/边框，不要两套元素滑入滑出。右缘固定、向左长大时，内容层必须 `transform: translateX(d)` 与 `clip-path: inset(0 d bottom 0 round …)` 同节奏补偿（d = 面板宽−把手宽），否则从右往左揭开先露右侧留白 → 「空板」。别用前载 easing（前期张太快看不出生长）；内容别叠加延迟 opacity 淡入。层数不同的 token 阴影用两层 opacity 交叉淡入，别 transition box-shadow。中间帧验证用 `document.getAnimations().forEach(a => { a.pause(); a.currentTime = t })`，直接 screenshot 太慢会抓到完成态。
 
-### xl-multi-column 集成必踩坑
-- **字典未合并 → 编辑器整体崩溃**：`withMultiColumn(schema)` 只加块，不合并字典；`useCreateBlockNote` 也不像 `<BlockNote>` 那样合并 `locale`。结果 `editor.dictionary.multi_column` 缺失 → `getMultiColumnSlashMenuItems` 抛 `Multi-column dictionary not found`。修复：在 `useSmartDocumentEditorModel.ts` 的 `useCreateBlockNote` 选项里传
-  `dictionary: { ...en /* @blocknote/core/locales */, multi_column: multiColumnLocales.en }`（换成 `zh` 即整体中文化，属独立改动）。
-- **安装**：版本须精确配对（0.51.4 ↔ 0.51.4），不要顺手升级 BlockNote；曾因 peer-dep / Windows EPERM / 沙箱 / npm 缓存锁连环失败，最终 `--no-save` + 新 `--cache` 装好，再手工往 `package.json` 补条目。
-
-### 链接点击拦截（两层）
-1. **可编辑模式（可靠入口）**：在 `useCreateBlockNote` 配置注册 `links: { onClick }`。BlockNote 的 Link 扩展 `handleClick` 在 editable 时直接 `window.open`，`onClick` 早于它执行，返回 `true` 即不再跳转。**务必走这个钩子，不能只靠 DOM 捕获**。
-2. **只读兜底**：只读时 `handleClick` 提前 `return false` 不调 `onClick`，需在 `SmartDocumentEditor.tsx` 的 `editorRoot` 捕获阶段拦 `<a[href]>`。两路调同一个 `openLinkMenu`，带 200ms 去抖防重复触发。
-- 桥接层 `editorLinkInterceptor.ts`：`emitEditorLinkClick`/`setEditorLinkClickHandler`、`isNavigableHref`(http/https/mailto/ftp)、`shouldInterceptLink`（排除 `#` 与 `javascript:`）。只拦外部/导航链接，不动文档内锚点。
-- 外部打开走 Electron 安全通道 `window.electronAPI?.invoke('app:openExternal', href)`，非 Electron 回退 `window.open(href,'_blank','noopener,noreferrer')`。菜单关闭：点外 / Esc / 编辑器滚动；视口边缘自动上翻左移。
-
-### 快捷块格式 tile（SmartDocumentBlockMenu）
-- 可见方块放内层 `<span class="tm-smart-block-menu__tile-fill">`（框架的菜单高亮覆盖打不到）。选中态 = accent 填充 + 白字，**不是对号**（别加 `checked`）。
-- **字号坑**：`.bn-menu-item`/`.mantine-Menu-item` 自带 ~14px 会覆盖菜单项类上的 `font-size`；移到内层 span 后该覆盖失效、span 的字号真实生效。方块字号必须写 `14px`，写 17px 会突然变大（修过一次）。
-
-### DocumentMetaPicker（emoji-mart 宽度坑）
-- 弹层里的 `Picker` 是 **Web Component（Shadow DOM），宽度写死约 350px，根本不认 `width` prop**（`props.width` 在 `emoji-mart/dist/browser.js` 里不存在），传了被静默忽略。
-- 故**不能**用固定窄宽度（如 280）+ `overflow-hidden` 去包——会被裁掉右侧图标。正确做法：弹层不设固定 `width`，用 `boxSizing:'content-box'` 自适应；视口钳制用估算值（360×560 icon / 320 color），`max-w-[95vw]` 兜底。
-- `previewPosition`/`searchPosition`/`emojiSize`/`maxSearchResults`/`theme` 是**真实生效**的 prop。要搜索栏就设 `searchPosition` 为 `"static"` 或 `"sticky"`（默认 sticky，`"none"` 关掉）。
-
-### 编辑器视觉约定（SmartDocumentEditor.css）
-- **交互/高亮一律 `--color-accent`，`--color-primary` 只留给真正的超链接文字**（否则代码/数学和链接撞色）。
-- 行内代码/数学：accent 极淡 tint 背景（`color-mix(accent 10~12%, transparent)`）+ 等宽 + 0.25em 圆角、无边框、无中性灰底。大面积容器走蓝调：引用块 `accent 7%`+左边框 `35%`、表头 `accent 9%`、数学块 `accent 7%`+边框 `18%`。UI 控件背景仍保留中性 `bg-muted`。
-- 标题阶梯：**H1 1.75 / H2 1.45 / H3 1.25 / H4 1.12 / H5 1.0 / H6 0.9 em**（正文 16px → 28/23.2/20/17.9/16/14.4px），相邻比值约 1.11~1.21。旧阶梯 H4~H6 只差 5% 看不出层级、H1 又过大，已重排。
-- **按级别写标题样式必须用 `:has(> h1…h6)`，不要用 `[data-level="N"]`**：首个 heading 块的 block-content 没有 `data-level`（旧 H1 整条规则因此从未生效，落到默认 h1 尺寸 48px）。侧栏 `.bn-side-menu` 的 `data-level` 是有的，那套规则不受影响。
-- 侧栏按钮留白与标题 padding 基准不同（侧栏 em 按自身 16px，标题 padding em 按标题字号），系数要 **× 该级字号比** 才对齐：H1 1.66 / H2 1.33 / H3 1.13 / H4 0.96 / H5 0.83 / H6 0.75（= 标题间距系数 × 字号比）—— 现在六级按钮中心与标题文字中心偏差 ≤5px。改字号或改间距时**必须同步这两组值**。
-- **标题留白是「场景变量」结构**，不要写死 padding：`--tm-heading-gap-top/-bottom`（各级 em，相对自身字号）由场景 `--tm-heading-gap-{top,bottom}-override` 覆盖（定义在 `.bn-block-outer` 上，标题块与侧栏共同继承）。三档：正常（正文→标题，H1 40px → H6 18px 递减）｜首块 override `0`（文档开头不该顶空白）｜连续标题 override 固定 `0.4 / 0.25 × 正文字号 × 间距比`（约 22px，**与级别无关** —— 用倍数会让字号大的那对更松：H1→H2 25px vs H3→H4 18px）。文档顶部边距交给 `.bn-editor` 的 `!pt-6`（24px），不靠标题 padding。
-- **侧栏是浮层，不在 `.bn-block-outer` 子树里**，继承不到场景变量：由 `SmartDocumentSideMenu` 用 `getHeadingGapCategory()` 按文档位置算分类（`zero|tight|normal`），打 `data-tm-gap-top/-bottom`，CSS 再换算成同样的值。数值只在 CSS 出现一次，TS 只给分类。注意 `:has()` **不能嵌套** `:has()`（写 `:has(+ .x:has(...))` 整条规则会被静默丢弃），「下一块是标题」要用 `:has(+ .bn-block-outer .bn-block-content[...])` 后代写法。
-- 代码块字号用相对值 `0.9em`（勿写 px），随 `--topomind-smart-body-font-size` 缩放；行号用 CSS 计数器伪元素，不参与复制。
-- 原生代码块 `<select>` 语言下拉是**死 DOM**（被 `> div:first-child{display:none}` 整块隐藏），`CustomCodeBlock` 只 `querySelector('select')` 程序读值，勿再为它加样式。
-- **纸张深色变量必须双写选择器** `html[data-theme='dark'], .dark`（对齐 `tokens.css:135`），否则只按 `data-theme` 切主题的入口会拿到浅色纸张。
-
-## 设计系统（2026-10-31 起治理）
-### 品牌色：单色制 Monochrome Brand（用户决策，勿改回双色）
-- 只有一个色相 **GitHub 蓝**：浅色下 `--color-primary` **等于** `--color-accent`（`#0969da`，hover `#0550ae`）。历史上 `:root` 的藏青 `#1a3a5c`+`#3498db` 是永不生效的死值（浅色运行时唯一主题 `github-light`，见 `themeStore.ts`），已删；`src/types/constants.ts` 的 `COLORS`（同款藏青、零引用）也一并删。
-- 两个 token 保留纯属**语义约定**：交互/选中用 accent，品牌/CTA 用 primary，浅色下像素相同——**不要以为改其中一个界面会变**，也别再试图"修复"同色现象。深色 `#9bd2ff`(primary) vs `#4aa8ff`(accent) 是同一蓝的明度变体，不是第二个品牌色。
-- 铁律：**颜色只在 `tokens.css` 定义一份**，TS 侧不复制 hex（需要就 `getComputedStyle(...).getPropertyValue('--color-x')` 或内联 var）。
-
-### shared/ui 组件层（写 UI 前先看有没有现成的）
-- `EmptyState.tsx`：**所有空占位必须用它**。props `icon/title/description/action/size(sm列表内嵌13px|md面板级14px|lg hero 18px)/bordered(虚线卡片)/className`。
-- `SegmentedControl.tsx`：**所有互斥单选切换必须用它**。泛型 `T extends string|number|boolean`，`size(sm 24px/11px 给标题栏；md 32px/12px 给面板)`、`grow`(是否等分)、`fullWidth`、`ariaLabel`；内部 `role=radiogroup`+`role=radio`。
-- `modal.ts`（`modalOverlayBaseClassName/Enter/PanelEnterClassName`）+ 统一 `z-[10000]`：所有模态对话框走它，别自定 `fixed inset-0 bg-black/x`。非模态 popover 例外（`DocumentMetaPicker` 保持 1300）。键盘三件套：打开聚焦首个控件、overlay 级 Esc、关闭把焦点还给触发元素。Toast 已提升 `z-[100000]`。
-- 全局 `:focus-visible`（accent 2px outline + 2px offset）在 `base.css`，已移除各处 `focus-visible:outline-none + ring-*` 补丁。**不要**再逐个补焦点环。
-- **踩坑（2026-11-02）**：要排除一类元素（如 `[contenteditable]`）必须写进原规则的 `:not()`，不能靠"后面再写一条 `outline:none` 覆盖"——`[tabindex]:not([tabindex='-1']):focus-visible` 特异性是 (0,3,0)（`:not()` 内选择器计入权重），压过 `[contenteditable]:focus-visible` 的 (0,2,0)，导致点击编辑器被描蓝框。ProseMirror 根同时有 `contenteditable` + `tabindex="0"`，且 Chrome 对 contenteditable 鼠标点击也匹配 `:focus-visible`。
-
-### Tailwind / CSS 坑
-- **CSS 变量不能配透明度修饰符**：`bg-[var(--x)]/30`、`text-[var(--x)]/60` 在 **v3.4 无效**（变量不可解析，`/30` 被忽略甚至整条规则不生成）。要半透明必须写 `bg-[color-mix(in_srgb,var(--x)_45%,transparent)]`。
-- 先确认类真的生成（历史 `h-5.5` 无刻度 → 改 `h-6`）。
-- `tailwind.config.js` 的 `borderRadius`/`boxShadow` 已映射到 token（`rounded-xl`→12px、`2xl`→16px、`3xl`→`--radius-2xl` 24px；`shadow-*` 全 token）。圆角任意值已清零，写圆角请用这阶梯。
-- 阴影 token：`--shadow-sm/md/lg/xl/popover/inset-highlight/focus-ring`。浮层统一 `--shadow-popover`；按钮内高光用 `--shadow-inset-highlight`（深色下是纯下落，白内高光在深色面是脏边）；focus ring 用 `--shadow-focus-ring`。**有意保留**非层级的方向性阴影（左侧面板 `-4px 0 24px`、危险态侧光、内描边）与 22~30px 数据展示级字号。
-
-### SVG / 图标
-- SVG 取主题色**必须** `style={{ fill: 'var(--x)' }}` / `style={{ stroke: 'var(--x)' }}`，**不要**写 `fill="var(--x)"`（presentation attribute 对 `var()` 有浏览器历史 bug，jointjs 这类 `setAttribute` 的库尤甚）。React inline style 里可直接写 `'var(--x)'` 字符串。
-- **禁用 HTML 实体图标**（`&#10005;` 等），一律 lucide（实体图标字重/基线/字号随字体回退漂移）。例外：`CustomTitleBar` 的 10px 发丝线窗口控制 glyph（lucide 24 网格缩到 10px 视觉退化）。
-- 保留不改：`FlowchartDocumentEditor` 的 jointjs 节点/连线色（画布内容色，非 UI chrome，且 `var()` 不保证生效）。
-
-### 卡片视觉通道所有权（2026-11-02 定 —— 进度/标记需求的地基）
-- **三层分离**：装饰层（背景/边框/字体/emoji，用户随意改）｜结构层（右槽位：文档图标+子数徽章，系统专有）｜语义层（新增：左边缘竖条=进度、标题前标记位=标记，系统专有）。
-- 铁律：语义层**永不**被装饰层覆盖，也**不进格式刷**复制；emoji 属装饰，**禁止**用它承载状态。
-- 状态态（selected/hover/active/connectTarget）临时覆盖装饰层，状态结束还原。
-- 边框色优先级：用户显式 `data.nodeStyle.borderColor` > `domainColor` > 默认样式。**必须**读未 merge 的 `data.nodeStyle?.borderColor`（`defaultNodeStyle.borderColor` 恒为 `#e2e8f0`，用 merge 后的值判断会让域色永远失效）。
-- 节点 inline style **不要写 border-color**（优先级压过 hover/active 变体类 → 悬停反馈全丢），改用 CSS 变量 `--tm-card-border` + class。
-
-### 治理基线（2026-10-31 审计时 Level 1/5）
-`tokens.css` 自称 single source of truth，但 `space-*`、`font-size-*`、`line-height-*`、`z-*`、`font-family`、`left/right-panel-width`、`header/toolbar-height` **实测 `var()` 引用全为 0**——仍未治理。`components.json` 的 alias 指向不存在的 `src/components/`。已完成：① 单色制 ② `--color-bg-float`+`h-5.5` ③ Tailwind 映射 + Toast 层级 ④ 全局 focus-visible ⑤ 组件层（对话框统一 + EmptyState/SegmentedControl）。
+## Tailwind / CSS 坑
+- **CSS 变量不能配透明度修饰符**：`bg-[var(--x)]/30` 在 v3.4 无效，须 `bg-[color-mix(in_srgb,var(--x)_45%,transparent)]`。
+- **给 BlockNote 内部元素（`.bn-editor`/`.bn-container`）改样式，别用 Tailwind 任意变体 `[&_.bn-X]:!pt-6`**：本项目（tailwind 3.4.19）下整组**不生成 CSS**（dev/dist 都如此），编辑器会吃 BlockNote 默认样式。一律写进 `SmartDocumentEditor.css` 按 `.smart-document-content .bn-X` 作用域 + `!important` 覆盖。
+- `tailwind.config.js` 已把 `borderRadius`/`boxShadow` 映射到 token（`rounded-xl`→12px、`2xl`→16px、`3xl`→24px）；阴影用 `--shadow-*` token。
+- SVG 取主题色须 `style={{fill:'var(--x)'}}`，勿 `fill="var(--x)"`（presentation attribute 对 var() 有历史 bug）；禁用 HTML 实体图标，一律 lucide。
+- 纸张深色变量须双写 `html[data-theme='dark'], .dark`，否则只按 data-theme 切主题的入口拿到浅色纸张。

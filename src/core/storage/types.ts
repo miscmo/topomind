@@ -1,7 +1,7 @@
 import type { GraphMeta } from '../../domain/graph/model'
 import type { CardInfo } from '../../domain/graph/model'
 import type { KBListItem } from '../../types'
-import type { DefaultEdgeStyle } from '../../domain/style/styleTypes'
+import type { DefaultEdgeStyle, DefaultEditorStyle } from '../../domain/style/styleTypes'
 import type { FSBTrashItem, FSBTrashTopoDocumentItem } from '../fs-backend'
 import type { TopoDocumentType } from '../topoDocumentTypes'
 
@@ -21,13 +21,8 @@ export interface VaultConfig {
     borderRadius?: number
   }
   defaultNodeSize?: { width?: number; height?: number }
-  defaultEditorStyle?: {
-    fontSize?: number
-    fontFamily?: string
-    backgroundColor?: string
-    textColor?: string
-    lineHeight?: number
-  }
+  /** 与运行时共享同一份定义：新增编辑器样式字段（如内容宽度比例）时无需再同步这里 */
+  defaultEditorStyle?: Partial<DefaultEditorStyle>
   nodeSizeLimits?: { minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number }
   nodeBadgeSize?: number
   kbCovers?: Record<string, string>
@@ -139,7 +134,6 @@ export interface KnowledgeBaseStorageBackend {
 
 export interface CardStorageBackend {
   listCards: (parentCardPath: string) => Promise<CardInfo[]>
-  createCard: (parentPath: string, name: string) => Promise<CardInfo>
   deleteCard: (cardPath: string, label?: string) => Promise<void>
   renameCard: (cardPath: string, newName: string) => Promise<void>
 }

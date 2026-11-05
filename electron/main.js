@@ -323,7 +323,6 @@ function registerIPC() {
   ipcMain.handle('fs:clearTrashKBs', function(e, rootDir) { return fileService.clearTrashKBs(requireActiveWorkDir(rootDir)); });
   ipcMain.handle('fs:readCardChildren', function(e, rootDir, p) { return fileService.readCardChildren(requireActiveWorkDir(rootDir), p); });
   ipcMain.handle('fs:createKbsDir', function(e, rootDir, p) { return fileService.createKbsDir(requireActiveWorkDir(rootDir), p); });
-  ipcMain.handle('fs:createCardDir', function(e, rootDir, parentPath, cardName) { return fileService.createCardDir(requireActiveWorkDir(rootDir), parentPath, cardName); });
   ipcMain.handle('fs:deleteKbsDir', function(e, rootDir, p, options) { fileService.deleteKbsDir(requireActiveWorkDir(rootDir), p, options); });
   ipcMain.handle('fs:renameKB', function(e, rootDir, p, n) { return fileService.renameKB(requireActiveWorkDir(rootDir), p, n); });
   ipcMain.handle('fs:readGraphMeta', function(e, rootDir, p) { return fileService.readGraphMeta(requireActiveWorkDir(rootDir), p); });

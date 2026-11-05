@@ -414,39 +414,6 @@ export function _fs_requireValidWorkDir(rootDir) {
   return pathGuardRequireValidWorkDir(rootDir);
 }
 
-function _fs_createCardDir(rootDir, parentPath, cardName) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
-  var parent = _fs_resolveKbsPath(rootDir, parentPath);
-  if (!nodeFs.existsSync(parent)) {
-    throw new Error('父目录不存在: ' + String(parentPath || ''));
-  }
-  var finalName = _fs_safeSegment(cardName);
-  if (!String(cardName || '').trim()) {
-    throw new Error('卡片名称不能为空');
-  }
-  var d = nodePath.join(parent, finalName);
-  if (nodeFs.existsSync(d)) {
-    throw new Error('目录已存在: ' + _fs_relativeToKbs(rootDir, d));
-  }
-  _fs_ensureDir(d);
-  _fs_writeJsonFile(_fs_graphFilePath(d), {});
-  return _fs_relativeToKbs(rootDir, d);
-}
-
-function _fs_deleteKbsDir(rootDir, dirPath) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
-  if (!String(dirPath || '').trim()) {
-    throw new Error('不能删除知识库根目录');
-  }
-  var d = _fs_resolveKbsPath(rootDir, dirPath);
-  var normalizedPath = String(dirPath || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-  var kind = normalizedPath.includes('/') ? 'card' : 'kb';
-  _fs_moveToTrash(rootDir, d, 'kbs', {
-    kind: kind,
-    kbsPath: normalizedPath,
-  });
-}
-
 function _fs_kbsTrashItemKind(item) {
   var kind = item && item.meta ? String(item.meta.kind || '') : '';
   if (kind === 'kb' || kind === 'card') return kind;
@@ -576,29 +543,6 @@ export function _fs_attachmentRefToPath(rootDir, cardPath, attachmentRef) {
     throw new Error('附件路径越界: ' + rawRef);
   }
   return target;
-}
-
-function _fs_listAttachments(rootDir, cardPath) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
-  var cardDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, cardPath);
-  var attachDir = nodePath.join(cardDir, '_attach');
-  if (!nodeFs.existsSync(attachDir)) return [];
-  
-  return nodeFs.readdirSync(attachDir, { withFileTypes: true })
-    .filter(function(entry) { return entry.isFile(); })
-    .map(function(entry) {
-      var ext = nodePath.extname(entry.name).slice(1).toLowerCase();
-      var isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
-      var stat = nodeFs.statSync(nodePath.join(attachDir, entry.name));
-      return {
-        name: entry.name,
-        path: '_attach/' + entry.name,
-        isImage: isImage,
-        size: stat.size,
-        mtime: stat.mtimeMs
-      };
-    })
-    .sort(function(a, b) { return b.mtime - a.mtime; }); // 按修改时间降序
 }
 
 function _fs_importAttachment(rootDir, cardPath, sourceFilePath, targetFileName) {
@@ -1543,7 +1487,9 @@ function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetC
 }
 
 // 跨房间移动一批节点（含其整棵子目录树：子房间/文档/附件），并重分配房间级连线。
-// 磁盘 _graph.json 真实格式：{ children: { [basename]: {...} }, edges: [{ id, source, target, ... }], zoom, pan }。
+// P1：读写一律走 graphMetaService 的「逻辑 meta」接口，不能直接碰 _graph.json ——
+// 房间可能是 v2 分片格式，索引里没有 children/edges，直接读会静默清空整张图。
+// 逻辑 meta 形状：{ children: { [basename]: {...} }, edges: [{ id, source, target, ... }], zoom, pan }。
 // 节点 key 与 edge 的 source/target 均为 room 相对 basename。
 // 规则：
 //  - 移动 = 从源房间 children 移除 + 整个节点目录树物理 relocate 到目标房间目录 + 写入目标 children。
@@ -1574,10 +1520,11 @@ function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPat
   var sourceDir = _fs_resolveKbsPath(rootDir, sourceRoomPath);
   var targetDir = _fs_resolveKbsPath(rootDir, targetRoomPath);
   if (!nodeFs.existsSync(sourceDir)) throw new Error('源房间不存在: ' + sourceRoomPath);
-  if (!nodeFs.existsSync(targetDir)) throw new Error('目标房间不存在: ' + targetRoomPath);
+  // P0：目标房间可能是一个尚未物化的轻量节点（下钻后还没写过任何内容）。
+  // 不再把「目录已存在」当硬前提；后续 graphMetaService.writeGraphMeta 会补齐目录并写入目标图。
+  if (!nodeFs.existsSync(targetDir)) _fs_ensureDir(targetDir);
 
-  var graphFileOf = function (roomDir) { return nodePath.join(roomDir, '_graph.json'); };
-  var sourceMeta = _fs_readJsonFile(graphFileOf(sourceDir));
+  var sourceMeta = graphMetaService.readGraphMeta(rootDir, sourceRoomPath);
   var sourceChildren = (sourceMeta && sourceMeta.children && typeof sourceMeta.children === 'object' && !Array.isArray(sourceMeta.children)) ? sourceMeta.children : {};
   var sourceEdges = Array.isArray(sourceMeta && sourceMeta.edges) ? sourceMeta.edges : [];
 
@@ -1598,7 +1545,7 @@ function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPat
     if (targetRoomPath.indexOf(movedPath + '/') === 0) throw new Error('不能把节点移动到其自身的子房间内');
   }
 
-  var targetMetaRaw = _fs_readJsonFile(graphFileOf(targetDir));
+  var targetMetaRaw = graphMetaService.readGraphMeta(rootDir, targetRoomPath);
   var targetChildren = (targetMetaRaw && targetMetaRaw.children && typeof targetMetaRaw.children === 'object' && !Array.isArray(targetMetaRaw.children)) ? targetMetaRaw.children : {};
   var targetEdges = Array.isArray(targetMetaRaw && targetMetaRaw.edges) ? targetMetaRaw.edges : [];
 
@@ -1619,6 +1566,8 @@ function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPat
   // 物理 relocate：源目录 → 目标目录（使用新 basename）。
   // 若某被移动节点是另一被移动节点的后代，其目录已随祖先一起搬走（srcNodeDir 不存在），
   // 此时跳过 rename 但仍计入 movedBasenames（它已作为子树的一部分迁移）。
+  // P0 轻量节点可能从未物化（根本没有目录）：同样跳过 rename，只靠两端逻辑 meta 的 children 迁移，
+  // 仍计入 movedBasenames —— 节点数据本来就在父图里，不需要物理目录。
   var movedBasenames = [];
   movedList.forEach(function (oldId) {
     var newId = renameMap[oldId];
@@ -1675,11 +1624,11 @@ function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPat
 
   // 先写目标，再写源；任一步失败尽量回滚（恢复旧 meta + 搬回目录）
   try {
-    _fs_writeJsonFile(graphFileOf(targetDir), newTargetMeta);
-    _fs_writeJsonFile(graphFileOf(sourceDir), newSourceMeta);
+    graphMetaService.writeGraphMeta(rootDir, targetRoomPath, newTargetMeta);
+    graphMetaService.writeGraphMeta(rootDir, sourceRoomPath, newSourceMeta);
   } catch (e) {
-    try { _fs_writeJsonFile(graphFileOf(targetDir), targetMetaRaw); } catch (_) {}
-    try { _fs_writeJsonFile(graphFileOf(sourceDir), sourceMeta); } catch (_) {}
+    try { graphMetaService.writeGraphMeta(rootDir, targetRoomPath, targetMetaRaw); } catch (_) {}
+    try { graphMetaService.writeGraphMeta(rootDir, sourceRoomPath, sourceMeta); } catch (_) {}
     movedBasenames.forEach(function (newId) {
       var oldId = null;
       Object.keys(renameMap).forEach(function (k) { if (renameMap[k] === newId) oldId = k; });
@@ -1723,24 +1672,21 @@ const kbService = createKbService({
   validateAbsolutePath: _fs_validateAbsolutePath,
 });
 
-const cardService = createCardService({
-  ensureDir: _fs_ensureDir,
-  graphFilePath: _fs_graphFilePath,
-  readJsonFile: _fs_readJsonFile,
-  relativeToKbs: _fs_relativeToKbs,
-  requireValidWorkDir: _fs_requireValidWorkDir,
-  resolveKbsPath: _fs_resolveKbsPath,
-  safeSegment: _fs_safeSegment,
-  writeJsonFile: _fs_writeJsonFile,
-});
-
+// P1：graphMetaService 是「逻辑 meta ↔ 磁盘格式」的唯一边界（v1 单文件 / v2 分片）。
+// 所有直接读 _graph.json.children 的地方都必须委托它，否则分片房间会被误读成空图。
 const graphMetaService = createGraphMetaService({
   ensureDir: _fs_ensureDir,
   graphFilePath: _fs_graphFilePath,
+  joinPath: nodePath.join,
   readJsonFile: _fs_readJsonFile,
   requireValidWorkDir: _fs_requireValidWorkDir,
   resolveKbsPath: _fs_resolveKbsPath,
   writeJsonFile: _fs_writeJsonFile,
+});
+
+const cardService = createCardService({
+  readGraphMeta: graphMetaService.readGraphMeta,
+  requireValidWorkDir: _fs_requireValidWorkDir,
 });
 
 const attachmentService = createAttachmentService({
@@ -1956,17 +1902,6 @@ const fileService = {
     },
 
     /**
-     * @description 在指定父目录下创建卡片目录，并初始化默认文件
-     * @param { string } rootDir: 工作目录路径
-     * @param { string } parentPath: 父目录相对于 kbs/ 的路径
-     * @param { string } cardName: 卡片目录名
-     * @returns { string } 创建后的目录相对路径
-     */
-    createCardDir: function(rootDir, parentPath, cardName) {
-      return cardService.createCardDir(rootDir, parentPath, cardName);
-    },
-
-    /**
      * @description 删除 kbs/ 下的目录及其所有内容
      * @param { string } rootDir: 工作目录路径
      * @param { string } dirPath: 相对于 kbs/ 的目录路径
@@ -2006,6 +1941,13 @@ const fileService = {
       Array.from(new Set(roomPaths.map(function(roomPath) { return String(roomPath || ''); })))
         .forEach(function(roomPath) {
           try {
+            // P0 轻量节点：目录尚未物化 ⇒ 必然没有子房间、没有文档，直接给空摘要。
+            // 否则打开一个 N 节点的房间会变成 1 次主图 + 2N 次同步小文件读（readJsonFile + listTopoDocuments）。
+            // 旧库中「目录存在但无 _graph.json」仍走原路径，行为不变。
+            if (!nodeFs.existsSync(_fs_resolveKbsPath(rootDir, roomPath))) {
+              summaries[roomPath] = { childCount: 0, hasDetail: false };
+              return;
+            }
             var meta = graphMetaService.readGraphMeta(rootDir, roomPath);
             var children = meta && meta.children && typeof meta.children === 'object' && !Array.isArray(meta.children)
               ? meta.children

@@ -15,11 +15,20 @@ export type AppView = 'setup' | 'workspace'
 // ============== 图谱元数据 ==============
 
 /**
+ * 节点种类（P1 schema 预留）。
+ * 'knowledge' = 知识卡片（可下钻成房间、可挂文档）；'shape' = 纯画布图形节点
+ * （流程图等，永不物化目录、永不下钻）。缺省一律按 'knowledge' 处理，旧档零迁移。
+ * 本轮只做持久化往返，不注册新的 React Flow nodeTypes；新增形状节点时无需再改格式白名单。
+ */
+export type GraphNodeKind = 'knowledge' | 'shape'
+
+/**
  * _graph.json 中的 children 条目
  * key = 目录名（唯一），name = 显示名称（可不同）
  */
 export interface GraphChild {
   name: string
+  kind?: GraphNodeKind
   x?: number
   y?: number
   width?: number
@@ -89,7 +98,10 @@ export interface GraphEdge {
 }
 
 /**
- * _graph.json 完整结构
+ * _graph.json 完整结构（逻辑视图）
+ * P1 起磁盘上可能是 v2 分片：索引只存 version + 非节点顶层字段，
+ * children/edges 由 graphMetaService 从 _graph/nodes-*.json、_graph/edges-*.json 组装。
+ * 渲染层始终拿到下面这个完整形状，不需要感知 version。
  */
 export interface GraphMeta {
   children?: Record<string, GraphChild>
@@ -115,6 +127,8 @@ export type EdgeWeight = 'main' | 'minor'
 export interface KnowledgeNodeData {
   /** 显示名称（来自 _graph.children[name].name） */
   label: string
+  /** 节点种类（P1 schema 预留，缺省 = knowledge） */
+  kind?: GraphNodeKind
   /** 父节点 ID（顶层 KB 无 parent） */
   parent?: string
   /** 卡片引用路径 */

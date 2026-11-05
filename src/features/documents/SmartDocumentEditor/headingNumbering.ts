@@ -35,10 +35,10 @@ export const HEADING_NUMBERING_STYLE_OPTIONS: ReadonlyArray<{
   label: string
   preview: string
 }> = [
-  { value: 'decimal', label: '数字', preview: '1 / 1.1 / 1.1.1' },
+  { value: 'decimal', label: '数字', preview: '1. / 1.1 / 1.1.1' },
   { value: 'chapter', label: '章节', preview: '第一章 / 1.1 / 1.1.1' },
   { value: 'cjk', label: '中文', preview: '一、 / （一） / 1.' },
-  { value: 'alpha', label: '字母', preview: 'A / A.1 / A.1.a' },
+  { value: 'alpha', label: '字母', preview: 'A. / A.1 / A.1.a' },
 ]
 
 const STYLE_VALUES = HEADING_NUMBERING_STYLE_OPTIONS.map((option) => option.value)
@@ -97,34 +97,43 @@ function alphaNumeral(value: number, upper: boolean): string {
 /**
  * 把「层级计数」格式化成显示文本。
  * parts 是压平后的各级计数（例如 H1→H3 得到 [1, 1] 而不是 [1, 0, 1]）。
+ * 单级纯数字/字母编号补尾点（「1 标题」→「1. 标题」）；多级编号（1.1 / 1.1.1）
+ * 与自带标点的中文样式（第一章 / 一、）保持原样。正文 ::before 与目录共用这个结果。
  */
 export function formatHeadingNumber(parts: number[], style: HeadingNumberingStyle): string {
   if (parts.length === 0) return ''
   const decimal = parts.join('.')
+  let text: string
   switch (style) {
     case 'chapter':
       // 顶级用「第 X 章」，子级保持常见的 1.1 / 1.1.1 数字路径
-      return parts.length === 1 ? `第${chineseNumeral(parts[0])}章` : decimal
+      text = parts.length === 1 ? `第${chineseNumeral(parts[0])}章` : decimal
+      break
     case 'cjk': {
       // 公文习惯：每级只显示本级序号，不带父级路径
       const own = parts[parts.length - 1]
       switch (parts.length) {
-        case 1: return `${chineseNumeral(own)}、`
-        case 2: return `（${chineseNumeral(own)}）`
-        case 3: return `${own}.`
-        default: return `(${own})`
+        case 1: text = `${chineseNumeral(own)}、`; break
+        case 2: text = `（${chineseNumeral(own)}）`; break
+        case 3: text = `${own}.`; break
+        default: text = `(${own})`
       }
+      break
     }
     case 'alpha':
-      return parts
+      text = parts
         .map((value, index) => (index % 2 === 0
           ? alphaNumeral(value, index === 0)
           : String(value)))
         .join('.')
+      break
     case 'decimal':
     default:
-      return decimal
+      text = decimal
   }
+  // 只有一级时补尾点，让「1 标题」读起来是「1. 标题」而不是一个孤立数字。
+  // 用正则限定纯拉丁数字/字母：多级（含点号）和中文样式自带标点，一律不加。
+  return parts.length === 1 && /^[0-9A-Za-z]+$/.test(text) ? `${text}.` : text
 }
 
 export type HeadingNumberLike = Pick<TocItem, 'id' | 'level' | 'text'>
@@ -133,11 +142,12 @@ export type HeadingNumberLike = Pick<TocItem, 'id' | 'level' | 'text'>
  * 计算每个标题块应显示的编号。
  *
  * 「压平」＝按标题实际构成的层级栈编号，而不是照搬 H1~H6 的绝对级别：
- *   H1→H3            得 1、1.1（Word 的 1.0.1 太啰嗦）
- *   只有 H2 开头      得 1（而不是 0.1）
- *   H2→H1            得 1、2（顶级接着数，不重号）
- *   H1→H2→H1→H2     得 1、1.1、2、2.1（新的一级章节，下级重新从 1 开始）
- *   H1→H2→H3        得 1、1.1、1.1.1
+ *   H1→H3            得 1.、1.1（Word 的 1.0.1 太啰嗦）
+ *   只有 H2 开头      得 1.（而不是 0.1）
+ *   H2→H1            得 1.、2.（顶级接着数，不重号）
+ *   H1→H2→H1→H2     得 1.、1.1、2.、2.1（新的一级章节，下级重新从 1 开始）
+ *   H1→H2→H3        得 1.、1.1、1.1.1
+ *   H1,H2,H3,H3,H2,H3 得 1.、1.1、1.1.1、1.1.2、1.2、1.2.1（每个子章节独立编号）
  * 层级写乱时（H1→H3→H2）可能出现跳号，这是压平的固有取舍，不是缺陷。
  */
 export function computeHeadingNumbers(
@@ -150,7 +160,10 @@ export function computeHeadingNumbers(
 
   const levels: number[] = []       // 当前路径上每一层的绝对 level
   const counters: number[] = []     // 当前路径上每一层的计数（即输出的编号层级）
-  const layerHistory: number[] = [] // 每个输出层用过的最大计数，回退后重新进入时接着数
+  // 每个输出层当前用过的计数。仅用于「层级写乱」时避免回退后重号；
+  // 任一层计数递增或新建时，其下所有更深层必须立即作废，否则新章节的子标题
+  // 会沿用上一节的计数（4.1.2 → 4.2 → 4.2.3 就是这个 bug）。
+  const layerHistory: number[] = []
 
   for (const item of items) {
     const level = Math.min(
@@ -170,15 +183,16 @@ export function computeHeadingNumbers(
       const index = counters.length - 1
       counters[index] += 1
       layerHistory[index] = counters[index]
-      // 新的一级章节：下级全部重新从 1 开始（Word 行为）
-      if (index === 0) layerHistory.length = 1
+      // 任一层进入新的一节：其下所有子章节重新从 1 开始（Word 行为），不只是顶级。
+      layerHistory.length = index + 1
     } else {
       const index = levels.length
       const next = (layerHistory[index] ?? 0) + 1
       levels.push(level)
       counters.push(next)
       layerHistory[index] = next
-      if (index === 0) layerHistory.length = 1
+      // 新层建立后，更深层若残留历史同样作废。
+      layerHistory.length = index + 1
     }
 
     result[item.id] = formatHeadingNumber(counters, config.style)

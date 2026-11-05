@@ -44,6 +44,8 @@ export interface FSBRoomNodeSummary {
 
 export interface FSBGraphMeta {
   children?: Record<string, FSBKBInfo & {
+    /** P1 schema 预留：知识节点 / 画布形状节点 */
+    kind?: 'knowledge' | 'shape'
     x?: number
     y?: number
     width?: number
@@ -103,7 +105,6 @@ export interface FSB {
   clearTrashKBs: (rootDir: string) => Promise<void>
   readCardChildren: (rootDir: string, cardPath: string) => Promise<FSBCardChildren>
   createKbsDir: (rootDir: string, kbName: string) => Promise<void>
-  createCardDir: (rootDir: string, parentPath: string, cardName: string) => Promise<string>
   deleteKbsDir: (rootDir: string, dirPath: string, options?: { label?: string }) => Promise<unknown>
   renameKB: (rootDir: string, kbPath: string, newName: string) => Promise<string>
   readGraphMeta: (rootDir: string, roomPath: string) => Promise<FSBGraphMeta>
@@ -161,7 +162,6 @@ const FSBImpl: FSB = {
   clearTrashKBs: (rootDir) => _call('fs:clearTrashKBs', rootDir) as Promise<void>,
   readCardChildren: (rootDir, cardPath) => _call('fs:readCardChildren', rootDir, cardPath) as Promise<FSBCardChildren>,
   createKbsDir: (rootDir, kbName) => _call('fs:createKbsDir', rootDir, kbName) as Promise<void>,
-  createCardDir: (rootDir, parentPath, cardName) => _call('fs:createCardDir', rootDir, parentPath, cardName) as Promise<string>,
   deleteKbsDir: (rootDir, dirPath, options) => _call('fs:deleteKbsDir', rootDir, dirPath, options),
   renameKB: (rootDir, kbPath, newName) => _call('fs:renameKB', rootDir, kbPath, newName) as Promise<string>,
   readGraphMeta: (rootDir, roomPath) => _call('fs:readGraphMeta', rootDir, roomPath) as Promise<FSBGraphMeta>,

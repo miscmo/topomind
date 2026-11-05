@@ -31,6 +31,7 @@ export function graphMetaToRoomGraph(roomRef: string, meta: GraphMeta): RoomGrap
       id,
       cardRef,
       name: node.card?.name || basenameRef(cardRef) || basenameRef(id),
+      kind: node.kind,
       position: isFinitePoint(node.position) ? normalizePoint(node.position, { x: 0, y: 0 }) : undefined,
       size: {
         width: Number.isFinite(node.width) ? node.width : DEFAULT_NODE_SIZE.width,
@@ -88,6 +89,7 @@ export function roomGraphToGraphMeta(graph: RoomGraph): GraphMeta {
         name: node.name,
         updatedAt: undefined,
       } as CardInfo,
+      kind: node.kind,
       height: node.size?.height ?? DEFAULT_NODE_SIZE.height,
       width: node.size?.width ?? DEFAULT_NODE_SIZE.width,
       widthMode: node.widthMode,

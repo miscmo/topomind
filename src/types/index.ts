@@ -4,7 +4,7 @@
  * 对应 Vue 版本的数据结构，保证旧数据完全兼容。
  */
 export type { AppView } from './graph'
-export type { GraphChild, GraphEdge, GraphMeta, EdgeStylePatch } from './graph'
+export type { GraphChild, GraphEdge, GraphMeta, GraphNodeKind, EdgeStylePatch } from './graph'
 export type { EdgeAnchor, EdgeAnchorPatch, AnchorRect } from '../domain/graph/edgeAnchors'
 export type { CurveControl } from '../domain/graph/edgeCurve'
 export type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition } from './graph'

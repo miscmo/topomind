@@ -18,7 +18,6 @@ import type { GraphSession } from '../../stores/tabs/tabStore'
 export interface StorageApi {
   saveGraphDebounced: (dirPath: string, buildMeta: () => GraphMeta, onSaved: (() => void) | undefined) => Promise<void>
   hasPendingGraphSave: (dirPath: string) => boolean
-  createCard: (parentPath: string, cardName: string) => Promise<string | null>
   deleteCard: (cardPath: string) => Promise<unknown>
   renameCard: (cardPath: string, newName: string) => Promise<unknown>
   flushGraphSave: (dirPath: string, buildMeta: () => GraphMeta, onFlush: (() => void) | undefined) => Promise<void>

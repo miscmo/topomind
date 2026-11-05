@@ -1,4 +1,4 @@
-import type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, NodeSizingMode } from '../../types'
+import type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, NodeSizingMode, GraphNodeKind } from '../../types'
 import type { EdgeAnchor } from './edgeAnchors'
 import type { CurveControl } from './edgeCurve'
 
@@ -22,6 +22,8 @@ export interface RoomGraphNode {
   id: string
   cardRef: string
   name: string
+  /** P1 schema 预留：知识节点 / 纯画布图形节点，缺省 = knowledge */
+  kind?: GraphNodeKind
   position?: GraphPoint
   size?: GraphSize
   widthMode?: NodeSizingMode
@@ -67,6 +69,8 @@ export interface RoomGraphViewport {
 export interface KBNode {
   id: string
   card: CardInfo
+  /** P1 schema 预留，缺省 = knowledge；随 GraphMeta 全链路往返 */
+  kind?: GraphNodeKind
   height: number
   width: number
   widthMode?: NodeSizingMode

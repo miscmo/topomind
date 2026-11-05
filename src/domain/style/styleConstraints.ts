@@ -28,10 +28,11 @@ export const EDGE_LINE_WIDTH_LIMIT = { min: 0.5, max: 8, step: 0.1 }
  */
 export const MAIN_EDGE_WIDTH_RATIO = 1.25
 
-export const EDITOR_STYLE_NUMBER_LIMITS: Record<keyof Pick<DefaultEditorStyle, 'fontSize' | 'lineHeight' | 'contentWidth' | 'blockSpacing' | 'headingSpacingRatio' | 'letterSpacing' | 'fontWeight'>, { min: number; max: number; step?: number }> = {
+export const EDITOR_STYLE_NUMBER_LIMITS: Record<keyof Pick<DefaultEditorStyle, 'fontSize' | 'lineHeight' | 'contentWidth' | 'contentMarginRatio' | 'blockSpacing' | 'headingSpacingRatio' | 'letterSpacing' | 'fontWeight'>, { min: number; max: number; step?: number }> = {
   fontSize: { min: 10, max: 36 },
   lineHeight: { min: 1, max: 3, step: 0.1 },
-  contentWidth: { min: 400, max: 1200, step: 10 },
+  contentWidth: { min: 400, max: 2000, step: 20 },
+  contentMarginRatio: { min: 0, max: 1, step: 0.01 },
   blockSpacing: { min: 0, max: 32, step: 1 },
   headingSpacingRatio: { min: 0.5, max: 3.0, step: 0.1 },
   letterSpacing: { min: -0.1, max: 0.5, step: 0.01 },

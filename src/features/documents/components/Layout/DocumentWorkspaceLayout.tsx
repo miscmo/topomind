@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
-import { GripVertical, ListTree, Pin, PinOff } from 'lucide-react'
+import { ListTree, Pin, PinOff } from 'lucide-react'
 import type { DetailSidebarTab, DocumentSaveStatus, DocumentWorkspaceLayoutProps, TocItem } from '../../types/workspaceTypes'
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../../../hooks/useResizePanel'
@@ -12,20 +12,31 @@ import { scrollChildIntoView } from '../../SmartDocumentEditor/smartDocumentUtil
 
 // 目录固定状态持久化；旧的 topomind_toc_panel_position（自由拖动位置）已废弃，不再读取。
 const TOC_PINNED_KEY = 'topomind_toc_pinned'
-// 触发条只保留「上下拖动」：存相对编辑器区可用高度的比例 0~1，窗口缩放后位置仍合理。
+// 触发条只保留「上下拖动」：存相对编辑器正文区可用高度的比例 0~1，窗口缩放后位置仍合理。
 const TOC_RAIL_Y_KEY = 'topomind_toc_rail_y'
 // 鼠标从触发条移到面板之间可能短暂离开命中区，延迟关闭避免面板闪烁。
 const TOC_CLOSE_DELAY_MS = 150
 // 极短的展开延迟：给「按住触发条直接拖动」留出抓取窗口，同时不影响 hover 的即时感。
 const TOC_OPEN_DELAY_MS = 90
-// 触发条尺寸：收起态也能一眼看到「目录 + 可拖动」。
+// 触发条尺寸：收起态也能一眼看到「目录 + 可拖动」。高度 69 ≈ 原 104 的 2/3。
 const TOC_RAIL_WIDTH = 22
-const TOC_RAIL_HEIGHT = 104
+const TOC_RAIL_HEIGHT = 69
 const TOC_RAIL_EDGE = 12
-// 展开后的整体宽度 = 触发条原宽 + 原面板宽。触发条与面板不再是两个物体，
-// 而是同一个 morph 容器的两种形态：宽/高/圆角/底色/边框/阴影连续过渡。
-const TOC_PANEL_WIDTH = 262
 const TOC_HEADER_HEIGHT = 36
+// 触发条与面板不再是两个物体，而是同一个 morph 容器的两种形态：
+// 宽/高/圆角/底色/边框/阴影连续过渡。展开宽度按目录项内容自适应，夹在 [MIN, MAX] 之间；
+// 超过 MAX 的单个目录项用省略号截断（title 可看全文），不出现横向滚动条。
+// 下限 320→160→240（用户最终拍板 240）：320px≈24 个汉字会把窄/宽目录一起钳住，看着像固定宽度。
+// 240px≈18 个汉字：13 字以内的短目录落在下限是用户接受的预期，21 字起进入自适应区间，
+// 37 字左右一路撑到 480 才封顶；标题栏（图钉/目录/数量）在 240 下也不挤。
+const TOC_PANEL_MIN_WIDTH = 240
+// 480 = 原 320 × 1.5：长标题能多显示一截，仍封顶、仍不出现横向滚动条。
+const TOC_PANEL_MAX_WIDTH = 480
+// 目录列表左右 padding（pl-2 + pr-4），测量内容自然宽度时补回。
+const TOC_LIST_PADDING_X = 8 + 16
+// 目录项共用样式：真实按钮与离屏宽度探针必须用同一套字号/缩进/间距，测量才准。
+const TOC_ROW_CLASS = 'flex min-w-0 items-center gap-1.5 text-left text-[12px] leading-[1.5] py-1 px-1.5 rounded-md border-none bg-transparent'
+const TOC_PANEL_MIN_HEIGHT = TOC_RAIL_HEIGHT + TOC_HEADER_HEIGHT
 const TOC_MORPH_MS = 300
 // 标准缓动而非前载的 easeOutQuint：前 1/4 时间只张开约 1/3，才看得出「竖条在长成面板」。
 const TOC_MORPH_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
@@ -83,30 +94,61 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     } catch { return 0 }
   })
   const tocRailRatioRef = useRef(tocRailRatio)
-  // 触发条所在区域的尺寸 / 编辑器原生滚动条宽度，运行时实测（overlay 滚动条宽度为 0）。
+  // tocZoneRef 覆盖「顶部编号工具栏 + 正文滚动区」整块高度；拖动/定位只认正文滚动区的上下边界，
+  // 否则向上拖会盖住编号工具栏。scroller 未就绪时回退到整块高度。
   const [tocZoneHeight, setTocZoneHeight] = useState(0)
+  const [tocEditorTop, setTocEditorTop] = useState(0)
+  const [tocEditorHeight, setTocEditorHeight] = useState(0)
   // 滚动条宽度之外再留 10px 视觉间隙，避免和原生滚动条挤成「两条细条」。
   const [tocRightInset, setTocRightInset] = useState(10)
-  // 面板内容自然高度（实测），morph 容器展开时的目标高度由它和可用空间共同决定。
-  const [tocPanelHeight, setTocPanelHeight] = useState(TOC_RAIL_HEIGHT + TOC_HEADER_HEIGHT)
+  // 面板内容自然高度 / 目录项自然宽度（实测，收起态 visibility:hidden 仍有布局）。
+  const [tocPanelHeight, setTocPanelHeight] = useState(TOC_PANEL_MIN_HEIGHT)
+  // 初值 0：测量前不要先给一个假的自然宽度（旧版初值 320 会让首帧算出 344 的假面板宽度）。
+  const [tocNaturalWidth, setTocNaturalWidth] = useState(0)
   const [tocDragging, setTocDragging] = useState(false)
   const tocZoneRef = useRef<HTMLDivElement>(null)
+  const tocWidthProbeRef = useRef<HTMLDivElement>(null)
   const tocDragRef = useRef<{ startY: number; startTop: number; moved: boolean } | null>(null)
   const tocDraggingRef = useRef(false)
   const hasToc = (providedTocItems?.length ?? 0) > 0
-  // 拖动范围恒以「收起态高度」为基准：这样保存的比例在展开/收起两态换算出的位置一致，
-  // 而展开态容器高度又被可用空间钳住，不会顶出底边。
-  const tocRailRange = Math.max(0, tocZoneHeight - TOC_RAIL_HEIGHT - TOC_RAIL_EDGE * 2)
-  const tocRailTop = TOC_RAIL_EDGE + tocRailRange * tocRailRatio
-  const tocAvailableHeight = Math.max(140, tocZoneHeight - tocRailTop - TOC_RAIL_EDGE)
-  const tocShellHeight = Math.min(Math.max(140, tocPanelHeight), tocAvailableHeight)
-  const tocListMaxHeight = Math.max(80, tocAvailableHeight - TOC_HEADER_HEIGHT)
-  // 面板内容固定 262 宽贴右缘；展开时随容器左缘一起向左推（translateX = clip 右侧裁量），
+  // 目录项内容签名：文字/层级/编号变化会改变自然宽度，需要重新测量。
+  const tocItemsSignature = (providedTocItems ?? [])
+    .map((item) => `${item.id}:${item.level}:${item.number ?? ''}:${item.text}`)
+    .join('|')
+
+  const tocBoundsTop = tocEditorHeight > 0 ? tocEditorTop : 0
+  const tocBoundsBottom = tocEditorHeight > 0 ? tocEditorTop + tocEditorHeight : tocZoneHeight
+  const tocBoundsHeight = Math.max(0, tocBoundsBottom - tocBoundsTop)
+  // 正文区比触发条本身还矮时，触发条也按可用高度收缩，保证收起态底边同样不出界。
+  const tocRailHeight = Math.min(TOC_RAIL_HEIGHT, Math.max(0, tocBoundsHeight - TOC_RAIL_EDGE * 2))
+  // 锚点 = 触发条 top，按可用高度比例换算；只依赖正文区尺寸，不随形态/内容变化，持久化才稳定。
+  const tocRailRange = Math.max(0, tocBoundsHeight - tocRailHeight - TOC_RAIL_EDGE * 2)
+  const tocRailTop = tocBoundsTop + TOC_RAIL_EDGE + tocRailRange * tocRailRatio
+  const tocMaxRailTop = tocBoundsTop + TOC_RAIL_EDGE + tocRailRange
+  // 面板高度只由「自身内容」和「正文区总高度」决定，不随触发条位置变化 ——
+  // 不再出现越往下拖面板越矮、越往上拖又变高的自适应压缩。
+  // 上限严格受正文区总高约束（不设超过可用空间的下限），否则窗口很矮时面板底边仍会越界；
+  // 列表 maxHeight 只依赖这个上限，不依赖实测高度，避免测量与布局互相钳制。
+  const tocShellMaxHeight = Math.max(0, tocBoundsHeight - TOC_RAIL_EDGE * 2)
+  const tocShellHeight = Math.min(Math.max(TOC_PANEL_MIN_HEIGHT, tocPanelHeight), tocShellMaxHeight)
+  const tocListMaxHeight = Math.max(0, tocShellMaxHeight - TOC_HEADER_HEIGHT)
+  // 触发条在底部时，展开的面板自动上移，保证底边仍贴住正文区底边（不与触发条死板对齐）。
+  const tocMaxPanelTop = Math.max(
+    tocBoundsTop + TOC_RAIL_EDGE,
+    tocBoundsBottom - TOC_RAIL_EDGE - tocShellHeight,
+  )
+  const tocPanelTop = Math.min(tocRailTop, tocMaxPanelTop)
+  // 宽度 = 目录项自然宽度 + 列表 padding，夹在 min/max 之间；超过 max 的行按面板宽度省略截断。
+  const tocPanelWidth = Math.min(
+    TOC_PANEL_MAX_WIDTH,
+    Math.max(TOC_PANEL_MIN_WIDTH, tocNaturalWidth + TOC_LIST_PADDING_X),
+  )
+  // 内容层随容器左缘一起向左推（translateX = clip 右侧裁量），
   // 让文字从第一帧就贴着容器左缘出现，而不是等板子长完才从右侧空白里「迟到」。
-  const tocClipRight = tocExpanded ? 0 : TOC_PANEL_WIDTH - TOC_RAIL_WIDTH
+  const tocClipRight = tocExpanded ? 0 : tocPanelWidth - TOC_RAIL_WIDTH
   const tocClipBottom = Math.max(
     0,
-    tocPanelHeight - (tocExpanded ? tocShellHeight : TOC_RAIL_HEIGHT),
+    tocPanelHeight - (tocExpanded ? tocShellHeight : tocRailHeight),
   )
 
   const toggleTocPinned = useCallback(() => {
@@ -152,19 +194,22 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     tocCloseTimerRef.current = setTimeout(() => setTocHovered(false), TOC_CLOSE_DELAY_MS)
   }, [cancelTocOpen, cancelTocClose])
 
-  // 拖动指针挂在 morph 容器上：收起态整条 22px 都是把手，展开态只认 header 的 grip，
-  // 这样捕获目标始终是同一个稳定元素，且不会抢走目录项 / 图钉的点击。
+  // 拖动指针挂在 morph 容器上：收起态整条 22px 都是把手，展开态整条标题栏（目录标题栏）
+  // 都是把手（图钉按钮除外），这样捕获目标始终是同一个稳定元素，且不会抢走目录项 / 图钉的点击。
   const handleTocPointerDown = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0) return
     const fromHandle = !!(e.target as HTMLElement).closest?.('[data-toc-drag-handle]')
-    if (tocExpanded && !fromHandle) return
+    // 标题栏（含图钉按钮）整体是把手，但图钉按钮是独立交互控件，按下它只切换固定态、不触发拖动。
+    const onInteractive = !!(e.target as HTMLElement).closest?.('[data-toc-skip-drag]')
+    if (tocExpanded && (!fromHandle || onInteractive)) return
     cancelTocOpen()
     cancelTocClose()
     tocDraggingRef.current = true
-    tocDragRef.current = { startY: e.clientY, startTop: tocRailTop, moved: false }
+    // 展开态从「面板实际 top」起拖（可能已被自适应上移），收起态从触发条 top 起拖。
+    tocDragRef.current = { startY: e.clientY, startTop: tocExpanded ? tocPanelTop : tocRailTop, moved: false }
     setTocDragging(true)
     e.currentTarget.setPointerCapture(e.pointerId)
-  }, [tocExpanded, tocRailTop, cancelTocOpen, cancelTocClose])
+  }, [tocExpanded, tocRailTop, tocPanelTop, cancelTocOpen, cancelTocClose])
 
   const handleTocPointerMove = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     const drag = tocDragRef.current
@@ -172,12 +217,15 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     const dy = e.clientY - drag.startY
     if (!drag.moved && Math.abs(dy) < 3) return
     drag.moved = true
-    const range = Math.max(0, tocZoneHeight - TOC_RAIL_HEIGHT - TOC_RAIL_EDGE * 2)
-    const nextTop = Math.min(TOC_RAIL_EDGE + range, Math.max(TOC_RAIL_EDGE, drag.startTop + dy))
-    const nextRatio = range > 0 ? (nextTop - TOC_RAIL_EDGE) / range : 0
+    // 展开态的最大 top 按「面板整高」算，到正文区底部即停住；收起态按触发条高度算。
+    // 两者都不得越过正文区上边界（顶部编号工具栏），也不得越出下边界。
+    const minTop = tocBoundsTop + TOC_RAIL_EDGE
+    const maxTop = tocExpanded ? tocMaxPanelTop : tocMaxRailTop
+    const nextTop = Math.min(maxTop, Math.max(minTop, drag.startTop + dy))
+    const nextRatio = tocRailRange > 0 ? (nextTop - minTop) / tocRailRange : 0
     tocRailRatioRef.current = nextRatio
     setTocRailRatio(nextRatio)
-  }, [tocZoneHeight])
+  }, [tocExpanded, tocMaxPanelTop, tocMaxRailTop, tocBoundsTop, tocRailRange])
 
   const finishTocDrag = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     if (!tocDraggingRef.current) return
@@ -258,8 +306,9 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   
   const tocItems = providedTocItems ?? []
 
-  // 实测编辑器区高度与原生滚动条宽度：触发条/面板都放在滚动条内侧，避免压住滚动条。
-  // 滚动条随内容高度出现或消失（overlay 滚动条宽度为 0），ResizeObserver 负责同步。
+  // 实测编辑器「正文滚动区」的上下边界与原生滚动条宽度：拖动/定位只在这个区间内，
+  // 顶部编号工具栏不被覆盖；浮层贴滚动条内侧避免压住滚动条。ResizeObserver 同步窗口缩放、
+  // 工具栏显隐、滚动条出现/消失（overlay 滚动条宽度为 0）。
   useEffect(() => {
     if (!hasToc) return
     const zone = tocZoneRef.current
@@ -268,6 +317,10 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
       setTocZoneHeight(zone.clientHeight)
       const scroller = containerRef.current?.querySelector<HTMLElement>('.tm-smart-editor-scroll')
       if (scroller) {
+        const zoneRect = zone.getBoundingClientRect()
+        const rect = scroller.getBoundingClientRect()
+        setTocEditorTop(rect.top - zoneRect.top)
+        setTocEditorHeight(rect.height)
         const barWidth = Math.max(0, scroller.offsetWidth - scroller.clientWidth)
         setTocRightInset(barWidth + 10)
       }
@@ -281,7 +334,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   }, [hasToc])
 
   // 面板内容自然高度：收起态 visibility:hidden 仍有布局，可直接量 scrollHeight。
-  // 展开时容器高度过渡到这个实测值，不做 max-height 那种「凭空撑开」的假动画。
+  // 列表 maxHeight 只依赖正文区总高（不依赖这个实测值），避免测量与布局互相钳制形成坏的不动点。
   useEffect(() => {
     if (!hasToc) return
     const el = tocPanelContentRef.current
@@ -292,6 +345,33 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     observer.observe(el)
     return () => observer.disconnect()
   }, [hasToc])
+
+  // 目录项自然宽度：离屏 probe 用 w-max，宽度由最长标题决定，不受面板当前宽度钳制。
+  // 它不包住真实列表，所以超长标题既不会撑出横向滚动条，也不会让真实行失去截断基准。
+  useEffect(() => {
+    if (!hasToc) return
+    const el = tocWidthProbeRef.current
+    if (!el) return
+    let cancelled = false
+    const measure = () => {
+      if (cancelled) return
+      // scrollWidth 不受祖先 transform 缩放影响，与 rect 取较大值，避免缩放场景下把宽度测小。
+      setTocNaturalWidth(Math.ceil(Math.max(el.getBoundingClientRect().width, el.scrollWidth)))
+    }
+    measure()
+    // 只靠 ResizeObserver 有测量时机风险：首帧布局未稳、字体异步加载完成、从收起态
+    // 展开时 visibility 变化都可能让文字宽度改变而回调未覆盖。补两次主动重测，
+    // 保证面板宽度确实「被最长目录项撑开」，不会一直停在初始值。
+    const raf = requestAnimationFrame(measure)
+    void document.fonts?.ready.then(measure).catch(() => {})
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+      observer.disconnect()
+    }
+  }, [hasToc, tocItemsSignature, tocExpanded])
 
   // 目录缩进相对"当前目录里最顶级标题"，而非绝对等级：
   // 例如全文只有 H4 时，H4 的缩进应为 0（作为顶级），而不是固定的 H4 缩进。
@@ -533,22 +613,27 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                 <nav
                   id="topomind-toc-panel"
                   aria-label="文档目录"
+                  data-toc-natural-width={tocNaturalWidth}
+                  data-toc-panel-width={tocPanelWidth}
                   className="absolute select-none touch-none border border-r-0 backdrop-blur-[2px]"
                   style={{
-                    top: tocRailTop,
+                    // 触发条在底部时，展开的面板自动上移贴住正文区底边；切换形态时平滑滑过去，
+                    // 拖动中则去掉 top 过渡保证跟手（否则每帧缓动会明显滞后）。
+                    top: tocExpanded ? tocPanelTop : tocRailTop,
                     right: tocRightInset,
-                    width: tocExpanded ? TOC_PANEL_WIDTH : TOC_RAIL_WIDTH,
-                    height: tocExpanded ? tocShellHeight : TOC_RAIL_HEIGHT,
+                    width: tocExpanded ? tocPanelWidth : TOC_RAIL_WIDTH,
+                    height: tocExpanded ? tocShellHeight : tocRailHeight,
                     borderRadius: tocExpanded ? '14px 0 0 14px' : '8px 0 0 8px',
                     backgroundColor: tocExpanded
                       ? 'color-mix(in srgb, var(--color-surface) 92%, transparent)'
-                      : 'color-mix(in srgb, var(--color-accent) 10%, var(--color-surface))',
+                      : 'linear-gradient(to bottom, var(--color-surface), var(--color-bg))',
                     borderColor: tocExpanded ? 'var(--color-border-light)' : 'var(--color-border-strong)',
                     pointerEvents: 'auto',
                     cursor: tocDragging ? 'grabbing' : undefined,
                     transition: [
                       `width ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
                       `height ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
+                      `top ${tocDragging ? 0 : TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
                       `border-radius ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
                       `background-color ${TOC_MORPH_MS}ms ease`,
                       `border-color ${TOC_MORPH_MS}ms ease`,
@@ -576,10 +661,10 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                     aria-hidden={tocExpanded}
                     tabIndex={tocExpanded ? -1 : 0}
                     title="悬停展开目录 · 上下拖动可调整位置"
-                    className={`absolute top-0 right-0 flex flex-col items-center justify-center gap-2 text-[var(--color-accent)] ${tocDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                    className={`absolute top-0 right-0 flex flex-col items-center justify-center gap-2 text-[var(--color-text-muted)] ${tocDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                     style={{
                       width: TOC_RAIL_WIDTH,
-                      height: TOC_RAIL_HEIGHT,
+                      height: tocRailHeight,
                       opacity: tocExpanded ? 0 : 1,
                       // 朝面板内部平移再淡出：像被「拉开融入」面板，而不是挂在右边原地缩小
                       transform: tocExpanded ? 'translateX(-26px) scale(0.9)' : 'none',
@@ -589,7 +674,6 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                   >
                     <ListTree size={14} strokeWidth={2} aria-hidden="true" />
                     <span className="text-[10px] font-semibold leading-none tracking-[0.15em]" style={{ writingMode: 'vertical-rl' }}>目录</span>
-                    <GripVertical size={12} className="opacity-60" aria-hidden="true" />
                   </button>
 
                   {/* 展开态：内容层与容器左缘同步左移，clip-path 同时裁掉超出容器的右/下部分。
@@ -598,7 +682,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                     ref={tocPanelContentRef}
                     className="absolute top-0 right-0 flex flex-col"
                     style={{
-                      width: TOC_PANEL_WIDTH,
+                      width: tocPanelWidth,
                       transform: `translateX(${tocClipRight}px)`,
                       clipPath: `inset(0 ${tocClipRight}px ${tocClipBottom}px 0 round 14px 0 0 14px)`,
                       // 展开时立即不透明（不留空板）；收起时先快速淡出，再让触发条浮现
@@ -609,7 +693,8 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                     }}
                   >
                     <div
-                      className="shrink-0 flex items-center gap-1.5 w-full pl-2 pr-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] border-b border-[var(--color-border-light)]"
+                      data-toc-drag-handle
+                      className={`shrink-0 flex items-center gap-1.5 w-full pl-2 pr-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] border-b border-[var(--color-border-light)] ${tocDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                       style={{
                         height: TOC_HEADER_HEIGHT,
                         boxSizing: 'border-box',
@@ -617,6 +702,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                     >
                       <button
                         type="button"
+                        data-toc-skip-drag
                         onClick={toggleTocPinned}
                         aria-pressed={tocPinned}
                         aria-label={tocPinned ? '取消固定目录' : '固定目录'}
@@ -631,19 +717,10 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                       </button>
                       <span className="flex-1 text-center select-none">目录</span>
                       <span className="shrink-0 text-[10px] font-normal tabular-nums opacity-80">{tocItems.length}</span>
-                      <button
-                        type="button"
-                        data-toc-drag-handle
-                        aria-label="上下拖动调整目录位置"
-                        title="上下拖动调整位置"
-                        className={`shrink-0 flex items-center justify-center w-5 h-5 rounded-md text-[var(--color-text-muted)] opacity-60 hover:opacity-100 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] ${tocDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-                      >
-                        <GripVertical size={12} aria-hidden="true" />
-                      </button>
                     </div>
                     <div
                       ref={tocListRef}
-                      className="overflow-y-auto pl-2 pr-4 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full"
+                      className="overflow-x-hidden overflow-y-auto pl-2 pr-4 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full"
                       style={{ maxHeight: tocListMaxHeight }}
                     >
                       {tocItems.map((item, index) => {
@@ -654,7 +731,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                             type="button"
                             data-toc-id={item.id}
                             aria-current={isActive ? 'true' : undefined}
-                            className={`flex w-full min-w-0 items-baseline gap-1.5 text-left text-[12px] leading-[1.5] py-1 px-1.5 rounded-md border-none bg-transparent cursor-pointer ${
+                            className={`${TOC_ROW_CLASS} w-full cursor-pointer ${
                               isActive
                                 ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] font-semibold'
                                 : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-selected-bg)] hover:text-[var(--color-accent)]'
@@ -669,13 +746,37 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                             onClick={() => handleTocJump(item)}
                             title={item.number ? `${item.number} ${item.text}` : item.text}
                           >
+                            {/* 编号与目录项文字同色同字重，不再压淡（与正文标题编号一致） */}
                             {item.number ? (
-                              <span className="shrink-0 tabular-nums opacity-70">{item.number}</span>
+                              <span className="shrink-0 tabular-nums">{item.number}</span>
                             ) : null}
+                            {/* 超出面板最大宽度的部分用省略号，全文仍可 hover 看 title */}
                             <span className="min-w-0 flex-1 truncate">{item.text}</span>
                           </button>
                         )
                       })}
+                    </div>
+
+                    {/* 离屏宽度探针：0×0 + overflow hidden 的包装不产生任何滚动溢出，也不撑高内容层；
+                        内层 w-max 仍按最长目录项的自然宽度布局，供 tocPanelWidth 测量自适应宽度。 */}
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-0 top-0 h-0 w-0 overflow-hidden"
+                    >
+                      <div ref={tocWidthProbeRef} className="invisible w-max">
+                        {tocItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`${TOC_ROW_CLASS} whitespace-nowrap`}
+                            style={{ paddingLeft: `${10 + (item.level - tocBaseLevel) * 12}px` }}
+                          >
+                            {item.number ? (
+                              <span className="shrink-0 tabular-nums">{item.number}</span>
+                            ) : null}
+                            <span className="whitespace-nowrap">{item.text}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </nav>

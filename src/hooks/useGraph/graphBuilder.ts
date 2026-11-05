@@ -67,6 +67,8 @@ export function buildMetaFromNodesEdges(
       id: node.id,
       cardRef: node.id,
       name: node.data.label,
+      // P1：kind 随 node.data 一路写进 RoomGraphNode → GraphMeta.nodes → _graph.json。
+      kind: node.data.kind,
       position: node.position,
       size: {
         width: collapsedWidth,
@@ -139,12 +141,16 @@ export function buildNodes(
 
     return {
       id: nodeId,
+      // P1 本轮只做 schema 往返，形状节点的 nodeTypes 还未注册，type 仍统一为 knowledgeCard。
+      // 后续接流程图节点时只需在这里按 roomNode.kind 映射 type + 在 GraphCanvas 注册 nodeTypes，
+      // 不必再改 _graph.json / convert* / normalize* 的格式白名单。
       type: 'knowledgeCard',
       position,
       width: isExpanded ? (roomNode.expandedWidth ?? roomNode.size?.width) : roomNode.size?.width,
       height: isExpanded ? (roomNode.expandedHeight ?? roomNode.size?.height) : roomNode.size?.height,
       data: {
         label: roomNode.name || basenameRef(childPath),
+        kind: roomNode.kind,
         parent: dirPath || kbPath || undefined,
         cardRef: roomNode.cardRef || nodeId,
         domainColor: roomNode.color, // Only use explicitly saved color

@@ -92,6 +92,8 @@ export function normalizeDefaultEditorStyle(raw: unknown): DefaultEditorStyle {
     textColor: typeof style.textColor === 'string' ? style.textColor : defaults.textColor,
     lineHeight: clampNumber(finiteNumber(style.lineHeight, defaults.lineHeight), EDITOR_STYLE_NUMBER_LIMITS.lineHeight.min, EDITOR_STYLE_NUMBER_LIMITS.lineHeight.max),
     contentWidth: clampNumber(finiteNumber(style.contentWidth, defaults.contentWidth), EDITOR_STYLE_NUMBER_LIMITS.contentWidth.min, EDITOR_STYLE_NUMBER_LIMITS.contentWidth.max),
+    // 旧存档的 contentWidth 语义与新的一致（固定 px 上限），直接沿用，不换算成比例。
+    contentMarginRatio: clampNumber(finiteNumber(style.contentMarginRatio, defaults.contentMarginRatio), EDITOR_STYLE_NUMBER_LIMITS.contentMarginRatio.min, EDITOR_STYLE_NUMBER_LIMITS.contentMarginRatio.max),
     blockSpacing: clampNumber(finiteNumber(style.blockSpacing, defaults.blockSpacing), EDITOR_STYLE_NUMBER_LIMITS.blockSpacing.min, EDITOR_STYLE_NUMBER_LIMITS.blockSpacing.max),
     headingSpacingRatio: clampNumber(finiteNumber(style.headingSpacingRatio, defaults.headingSpacingRatio), EDITOR_STYLE_NUMBER_LIMITS.headingSpacingRatio.min, EDITOR_STYLE_NUMBER_LIMITS.headingSpacingRatio.max),
     letterSpacing: clampNumber(finiteNumber(style.letterSpacing, defaults.letterSpacing), EDITOR_STYLE_NUMBER_LIMITS.letterSpacing.min, EDITOR_STYLE_NUMBER_LIMITS.letterSpacing.max),

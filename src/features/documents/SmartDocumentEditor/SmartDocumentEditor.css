@@ -1072,9 +1072,18 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   color: var(--color-text-primary); /* Ensure base color matches the soft dark gray */
 }
 
-/* Container width */
+/* Container width / 左右留白：
+   实际内容宽度 = min(编辑器可用宽度, 配置的最大宽度 px)：
+   - 右栏很宽（全屏）→ 铺到配置上限，剩余留白按 margin-split 比例分给左 / 右；
+   - 右栏变窄 → width:100% 占满，剩余留白为 0（max(0%, …)），不再浪费横向空间。
+   margin-right:auto 自动吃下剩余留白；box-sizing:border-box 让 32/16px 内边距算进宽度，
+   避免 100% + padding 撑出横向滚动条。 */
 .smart-document-content .bn-container {
-  max-width: var(--topomind-smart-content-width, 800px) !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: var(--topomind-smart-content-max-width, 1200px) !important;
+  margin-left: calc(max(0%, 100% - var(--topomind-smart-content-max-width, 1200px)) * var(--topomind-smart-content-margin-split, 0.5)) !important;
+  margin-right: auto !important;
 }
 
 /* Paragraph spacing */
@@ -1167,7 +1176,9 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
    后果：首块标题的 gap-top 又被我们强制为 0，H1 第一行直接贴在滚动容器上沿，
    被 overflow-y-auto 裁掉顶部（表现为“H1 不能完全展示 / 上方留白没显示全”）。
    这里改为显式写死，避免依赖任意变体（同文件标题间距规则用同样方式，已证实可靠生效）。
-   数值与原本意图一致：编辑器顶部 24px、底部 16px 留白；容器左右内边距 32/16px 居中。 */
+   数值与原本意图一致：编辑器顶部 24px、底部 16px 留白；内容框内左右内边距 32/16px。
+   内容框的 width / max-width / margin 由上方「Container width」规则按版面配置给出，
+   这里不要再写，否则同选择器 + !important 会把自适应宽度覆盖回固定 100% 居中。 */
 .smart-document-content .bn-editor {
   min-height: 0 !important;
   width: 100% !important;
@@ -1178,9 +1189,6 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   background: transparent !important;
 }
 .smart-document-content .bn-container {
-  width: 100% !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
   padding-left: 2rem !important;     /* pl-8 */
   padding-right: 1rem !important;    /* pr-4 */
   padding-top: 0 !important;
@@ -1435,14 +1443,24 @@ html[data-theme='dark'], .dark {
    剪贴板 / 选区 / 撤销历史，与末尾 H1~H6 层级水印的 ::after 是同一套思路。
    基础规则不写 content（默认 normal＝不生成盒子），所以关闭编号时不会留空占位。
    编号（::before，标题前）与层级水印（::after，标题后）是两个不同伪元素，
-   互不干扰：开启编号后 H1~H6 标识照常显示，不要在这里加 content:none 去隐藏它。 */
+   互不干扰：开启编号后 H1~H6 标识照常显示，不要在这里加 content:none 去隐藏它。
+   字体样式一律继承所在标题：旧版用 muted 灰 + 400 字重，在 700/600 的深色标题前
+   像另一段文字。这里只做装饰定位，颜色/字重/字距都不另起一套。 */
 .smart-document-content .bn-block-content[data-content-type="heading"] > .bn-inline-content::before {
   margin-right: 0.5em;
-  color: var(--color-text-muted);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
+  color: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* 顶部工具栏：右栏很窄时允许横向滚动，但隐藏滚动条，避免经典的 15px 横向滚动条
+   吃掉 36px 行高、把控件挤扁。 */
+.tm-editor-top-toolbar {
+  scrollbar-width: none;
+}
+.tm-editor-top-toolbar::-webkit-scrollbar {
+  height: 0;
 }

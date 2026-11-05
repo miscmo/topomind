@@ -19,6 +19,8 @@ import type { SmartDocumentEditorProps } from '../types'
 import type { TocItem } from '../../types/workspaceTypes'
 import type { SmartDocumentDerivedBlockCache } from '../smartDocumentUtils'
 import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
+import { useStorage } from '../../../../core/storage'
+import { normalizeEditorLayout, type EditorLayout } from '../editorLayout'
 import {
   computeHeadingNumbers,
   isSameHeadingNumbers,
@@ -65,6 +67,9 @@ export function useSmartDocumentEditorModel({
   const theme = useThemeStore((state: any) => state.theme)
   const defaultEditorStyle = useGraphUiStore((state: any) => state.defaultEditorStyle)
   const resolvedFontFamily = useMemo(() => resolveEditorFontFamily(defaultEditorStyle.fontFamily), [defaultEditorStyle.fontFamily])
+  const storage = useStorage()
+  // 版面滑杆拖动期间只存这份预览（改 CSS 变量），松手才写 store + 落盘。
+  const [layoutPreview, setLayoutPreview] = useState<EditorLayout | null>(null)
   // 文档级编号配置。旧文档没有该字段时归一化成「关闭」，不影响既有内容。
   const headingNumbering = useMemo(() => normalizeHeadingNumbering(value.numbering), [value.numbering])
   const headingNumberingRef = useRef(headingNumbering)
@@ -500,6 +505,24 @@ export function useSmartDocumentEditorModel({
     })
   }, [])
 
+  /**
+   * 版面配置的「一次提交」入口：全局配置，走 graphUiStore + writeConfig。
+   * 拖动期间由 setLayoutPreview 走纯 CSS 预览，绝不能每帧调用本函数（writeConfig 无 debounce，
+   * 每帧写盘会卡；且每帧 set store 会让所有订阅者重渲染）。
+   */
+  const commitEditorLayout = useCallback((draft: EditorLayout) => {
+    const next = normalizeEditorLayout(draft)
+    const patch = {
+      contentWidth: next.maxWidth,
+      contentMarginRatio: next.marginRatio,
+    }
+    const current = useGraphUiStore.getState().defaultEditorStyle
+    useGraphUiStore.getState().setDefaultEditorStyle(patch)
+    void storage.writeConfig({ defaultEditorStyle: { ...current, ...patch } })
+      .catch((e) => { console.error('[editor-layout] 保存版面配置失败', e) })
+    setLayoutPreview(null)
+  }, [storage])
+
   // 当前选中块的「最后修改时间」：随光标移动 / 文档变化同步给底部状态栏展示。
   // 只从块属性里读取、不做任何 DOM 操作，因此不会干扰编辑、光标与输入法。
   useEffect(() => {
@@ -552,5 +575,8 @@ export function useSmartDocumentEditorModel({
     headingNumbering,
     headingNumbers,
     updateNumbering,
+    layoutPreview,
+    setLayoutPreview,
+    commitEditorLayout,
   }
 }

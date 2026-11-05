@@ -13,12 +13,13 @@ import { useSmartDocumentEditorModel } from './model/useSmartDocumentEditorModel
 import { useSmartDocumentAttachmentInsert } from './useSmartDocumentAttachmentInsert'
 import { SmartDocumentFormattingToolbar } from './components/SmartDocumentFormattingToolbar'
 import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
-import { HeadingNumberingToolbar } from './components/HeadingNumberingToolbar'
+import { EditorTopToolbar } from './components/EditorTopToolbar'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
 import { getImagePreviewScale } from './imagePreview'
 import { setEditorLinkClickHandler, shouldInterceptLink } from './editorLinkInterceptor'
 import { getEditorTopInset } from './smartDocumentUtils'
 import { buildHeadingNumberStyles, isSameHeadingNumbering } from './headingNumbering'
+import { buildEditorLayoutVars, normalizeEditorLayout } from './editorLayout'
 
 import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
@@ -93,20 +94,38 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     headingNumbering,
     headingNumbers,
     updateNumbering,
+    layoutPreview,
+    setLayoutPreview,
+    commitEditorLayout,
   } = useSmartDocumentEditorModel(props)
 
   useSmartDocumentAttachmentInsert(editor as any, attachmentInsertTargetKey)
 
-  const blockNoteViewStyle = useMemo(() => ({
-    '--topomind-smart-body-font-size': `${defaultEditorStyle.fontSize}px`,
-    '--topomind-smart-font-family': customTheme.fontFamily,
-    '--topomind-smart-line-height': String(defaultEditorStyle.lineHeight),
-    '--topomind-smart-content-width': `${defaultEditorStyle.contentWidth ?? 800}px`,
-    '--topomind-smart-block-spacing': `${defaultEditorStyle.blockSpacing ?? 6}px`,
-    '--topomind-smart-heading-spacing-ratio': String(defaultEditorStyle.headingSpacingRatio ?? 1.5),
-    '--topomind-smart-letter-spacing': `${defaultEditorStyle.letterSpacing ?? -0.003}em`,
-    '--topomind-smart-font-weight': String(defaultEditorStyle.fontWeight ?? 400),
-  }) as CSSProperties, [customTheme.fontFamily, defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight, defaultEditorStyle.contentWidth, defaultEditorStyle.blockSpacing, defaultEditorStyle.headingSpacingRatio, defaultEditorStyle.letterSpacing, defaultEditorStyle.fontWeight])
+  // 已提交值（不含拖动预览）：工具栏只认它，预览值绝不回传，否则滑杆拖动中
+  // 会被「外部配置变化」的同步 effect 重置脏标记，松手就不写盘了。
+  const committedLayout = useMemo(() => normalizeEditorLayout({
+    maxWidth: defaultEditorStyle.contentWidth,
+    marginRatio: defaultEditorStyle.contentMarginRatio,
+  }), [defaultEditorStyle.contentWidth, defaultEditorStyle.contentMarginRatio])
+  // 渲染层：拖动期间用预览值，其余时候用全局配置。
+  const effectiveLayout = layoutPreview ?? committedLayout
+
+  const blockNoteViewStyle = useMemo(() => {
+    const layout = buildEditorLayoutVars(effectiveLayout)
+    return {
+      '--topomind-smart-body-font-size': `${defaultEditorStyle.fontSize}px`,
+      '--topomind-smart-font-family': customTheme.fontFamily,
+      '--topomind-smart-line-height': String(defaultEditorStyle.lineHeight),
+      // 内容框 width:100% + max-width:配置上限 → 实际宽度 = min(可用宽度, 上限)；
+      // 剩余留白按比例分给 margin-left，margin-right:auto 自动吃下剩余部分。
+      '--topomind-smart-content-max-width': layout.maxWidth,
+      '--topomind-smart-content-margin-split': layout.marginRatio,
+      '--topomind-smart-block-spacing': `${defaultEditorStyle.blockSpacing ?? 6}px`,
+      '--topomind-smart-heading-spacing-ratio': String(defaultEditorStyle.headingSpacingRatio ?? 1.5),
+      '--topomind-smart-letter-spacing': `${defaultEditorStyle.letterSpacing ?? -0.003}em`,
+      '--topomind-smart-font-weight': String(defaultEditorStyle.fontWeight ?? 400),
+    } as CSSProperties
+  }, [customTheme.fontFamily, effectiveLayout, defaultEditorStyle.fontSize, defaultEditorStyle.lineHeight, defaultEditorStyle.blockSpacing, defaultEditorStyle.headingSpacingRatio, defaultEditorStyle.letterSpacing, defaultEditorStyle.fontWeight])
   // 每个编辑器实例一份独立的编号样式表：规则按 block id 命中，不写 ProseMirror 的 DOM。
   const editorInstanceId = useId().replace(/[^A-Za-z0-9_-]/g, '')
   const headingNumberStyles = useMemo(
@@ -796,7 +815,14 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   return (
     <div className="relative h-full w-full min-h-0 flex flex-col" data-tm-editor={editorInstanceId}>
       {headingNumberStyles ? <style dangerouslySetInnerHTML={{ __html: headingNumberStyles }} /> : null}
-      <HeadingNumberingToolbar config={headingNumbering} onChange={updateNumbering} disabled={readOnly} />
+      <EditorTopToolbar
+        numbering={headingNumbering}
+        onNumberingChange={updateNumbering}
+        layout={committedLayout}
+        onLayoutPreview={setLayoutPreview}
+        onLayoutCommit={commitEditorLayout}
+        disabled={readOnly}
+      />
       <div ref={scrollContainerRef} data-paper-bg={defaultEditorStyle.paperBackground ?? 'plain'} className="flex-1 min-h-0 overflow-y-auto tm-smart-editor-scroll" spellCheck={false}>
         <div
           ref={editorRootRef}

@@ -1,13 +1,15 @@
 import { FSB } from '../fs-backend'
 import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem, TopoDocumentMetaPatch, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
-import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, EdgeAnchor } from '../../types'
+import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, EdgeAnchor, GraphNodeKind } from '../../types'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
 import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 import { normalizeCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
 
 interface FSBGraphChild {
   name: string
+  /** P1 schema：知识节点 / 画布形状节点，缺省 = knowledge */
+  kind?: GraphNodeKind
   x?: number
   y?: number
   width?: number
@@ -56,6 +58,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
 )
 
+/** 与 normalizeGraphMeta 同规则：只放行已知枚举，未知值回落缺省 knowledge。 */
+const normalizeNodeKind = (value: unknown): GraphNodeKind | undefined => (
+  value === 'knowledge' || value === 'shape' ? value : undefined
+)
+
 const toCardInfo = (parentCardPath: string, key: string, rawChild: unknown): CardInfo => {
   const child = isRecord(rawChild) ? rawChild : {}
   const rawName = child.name
@@ -94,6 +101,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
     nodes[ref] = {
       id: ref,
       card: { ref, name: child.name, updatedAt: undefined },
+      kind: normalizeNodeKind(child.kind),
       height: Number.isFinite(child.height) ? child.height as number : 52,
       width: Number.isFinite(child.width) ? child.width as number : 120,
       widthMode: child.widthMode === 'manual' ? 'manual' : (child.widthMode === 'auto' ? 'auto' : undefined),
@@ -165,6 +173,9 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
     const key = ref || basenameRef(node.id) || node.id
     children[key] = {
       name: node.card.name,
+      // P1：kind 必须写在 map 本体里。历史上只在返回类型加字段、漏写 map，
+      // 结果画面生效但 _graph.json 从来没有该值，重开知识库全部复位。
+      kind: normalizeNodeKind(node.kind),
       x: node.position?.x,
       y: node.position?.y,
       width: node.width,
@@ -282,11 +293,6 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return Object.entries(children)
         .map(([key, child]) => toCardInfo(parentCardPath, key, child))
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN'))
-    },
-
-    createCard: async (parentPath: string, name: string): Promise<CardInfo> => {
-      const cardPath = await FSB.createCardDir(requireRootDir(), parentPath, name)
-      return { ref: cardPath, name, updatedAt: undefined }
     },
 
     deleteCard: async (cardPath: string, label?: string): Promise<void> => {

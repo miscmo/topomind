@@ -14,7 +14,7 @@ interface HeadingNumberingToolbarProps {
   disabled?: boolean
 }
 
-/** 编辑器顶部一行：开关 / 样式 / 深度。改的是文档级配置，不动正文 blocks。 */
+/** 顶部工具栏左半段：标题编号开关 / 样式 / 深度。改的是文档级配置，不动正文 blocks。 */
 export function HeadingNumberingToolbar({
   config,
   onChange,
@@ -24,11 +24,7 @@ export function HeadingNumberingToolbar({
   const settingsDisabled = disabled || !config.enabled
 
   return (
-    <div
-      role="toolbar"
-      aria-label="标题自动编号设置"
-      className="flex h-9 shrink-0 items-center gap-3 border-b border-[var(--color-border-light)] bg-[var(--color-surface)] px-3 text-[12px] text-[var(--color-text-secondary)] box-border"
-    >
+    <>
       <span className="flex shrink-0 items-center gap-1.5 font-medium text-[var(--color-text-primary)]">
         <ListOrdered size={14} strokeWidth={2} aria-hidden="true" />
         标题编号
@@ -84,6 +80,6 @@ export function HeadingNumberingToolbar({
           ))}
         </select>
       </label>
-    </div>
+    </>
   )
 }

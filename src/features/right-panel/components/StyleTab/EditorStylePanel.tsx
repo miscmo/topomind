@@ -28,7 +28,7 @@ export const EditorStylePanel = memo(function EditorStylePanel({
       <StyleCard>
         <CollapsibleBlock
           title="编辑器全局设计"
-          hint="这些设置当前应用到智能文档编辑器。"
+          hint="这些设置当前应用到智能文档编辑器。内容最大宽度与左右留白已移到编辑器顶部工具栏。"
           defaultExpanded={true}
           expandedKey="defaultEditor"
           expandedState={expandedBlocks}
@@ -117,16 +117,6 @@ export const EditorStylePanel = memo(function EditorStylePanel({
               max={EDITOR_STYLE_NUMBER_LIMITS.blockSpacing.max} 
               value={defaultEditorStyle.blockSpacing} 
               onChange={(value) => onUpdateDefaultEditorStyle({ blockSpacing: Number(value) })} 
-            />
-            <NumberField 
-              className="col-span-full" 
-              label="内容线宽" 
-              unit="px" 
-              step={EDITOR_STYLE_NUMBER_LIMITS.contentWidth.step} 
-              min={EDITOR_STYLE_NUMBER_LIMITS.contentWidth.min} 
-              max={EDITOR_STYLE_NUMBER_LIMITS.contentWidth.max} 
-              value={defaultEditorStyle.contentWidth} 
-              onChange={(value) => onUpdateDefaultEditorStyle({ contentWidth: Number(value) })} 
             />
             <div className="flex flex-col gap-[6px] mb-0 col-span-full">
               <label className="text-[12px] font-medium text-[var(--color-text-secondary)]">文字颜色</label>

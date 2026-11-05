@@ -44,7 +44,11 @@ export interface DefaultEditorStyle {
   backgroundColor: string
   textColor: string
   lineHeight: number
+  /** 内容最大宽度（px）。实际宽度 = min(编辑器可用宽度, 本值)：
+   *  右栏很宽时铺到上限、两侧留白；右栏变窄时自动占满可用宽度，不浪费空间。 */
   contentWidth: number
+  /** 剩余留白分给左侧的比例 0~1：0.5 居中、0 贴左、1 贴右（右侧自动取 1 - 该值） */
+  contentMarginRatio: number
   blockSpacing: number
   headingSpacingRatio: number
   letterSpacing: number

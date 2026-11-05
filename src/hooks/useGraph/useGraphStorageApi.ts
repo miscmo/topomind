@@ -13,10 +13,6 @@ export function useGraphStorageApi(storage: Store): StorageApi {
     (dirPath: string) => storage.hasPendingGraphSave(dirPath),
     [storage]
   )
-  const createCard = useCallback(
-    async (parentPath: string, cardName: string) => storage.createCard(parentPath, cardName),
-    [storage]
-  )
   const deleteCard = useCallback(async (cardPath: string) => storage.deleteCard(cardPath), [storage])
   const renameCard = useCallback(
     async (cardPath: string, newName: string) => storage.renameCard(cardPath, newName),
@@ -38,13 +34,12 @@ export function useGraphStorageApi(storage: Store): StorageApi {
     () => ({
       saveGraphDebounced,
       hasPendingGraphSave,
-      createCard,
       deleteCard,
       renameCard,
       flushGraphSave,
       readLayout,
       writeLayout,
     }),
-    [saveGraphDebounced, hasPendingGraphSave, createCard, deleteCard, renameCard, flushGraphSave, readLayout, writeLayout]
+    [saveGraphDebounced, hasPendingGraphSave, deleteCard, renameCard, flushGraphSave, readLayout, writeLayout]
   )
 }

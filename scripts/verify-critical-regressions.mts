@@ -52,7 +52,14 @@ import {
   isSameHeadingNumbers,
   normalizeHeadingNumbering,
   DEFAULT_HEADING_NUMBERING,
+  HEADING_NUMBERING_STYLE_OPTIONS,
 } from '../src/features/documents/SmartDocumentEditor/headingNumbering.ts'
+import {
+  buildEditorLayoutVars,
+  computeEditorLayoutPixels,
+  normalizeEditorLayout,
+  DEFAULT_EDITOR_LAYOUT,
+} from '../src/features/documents/SmartDocumentEditor/editorLayout.ts'
 import {
   areDocumentContentsEqual,
   prepareStructuredDocumentContentForSave,
@@ -1513,30 +1520,64 @@ const edge = (
     { id: 'd', level: 4, text: '约束条件' },
   ]
   const decimal = { enabled: true, style: 'decimal', depth: 3 }
-  assert.deepEqual(computeHeadingNumbers(items, decimal), { a: '1', b: '1.1', c: '1.1.1' })
+  // 单级编号带尾点（「1. 标题」），多级保持 1.1 / 1.1.1 不变
+  assert.deepEqual(computeHeadingNumbers(items, decimal), { a: '1.', b: '1.1', c: '1.1.1' })
 
-  // 压平：H1 后直接 H3 得 1.1（不是 Word 的 1.0.1）；只有 H2 开头得 1（不是 0.1）
-  assert.deepEqual(computeHeadingNumbers([items[0], { ...items[2], id: 'x' }], decimal), { a: '1', x: '1.1' })
+  // 压平：H1 后直接 H3 得 1.1（不是 Word 的 1.0.1）；只有 H2 开头得 1.（不是 0.1）
+  assert.deepEqual(computeHeadingNumbers([items[0], { ...items[2], id: 'x' }], decimal), { a: '1.', x: '1.1' })
   assert.deepEqual(computeHeadingNumbers([
     { id: 'h2', level: 2, text: '甲' },
     { id: 'h1', level: 1, text: '乙' },
-  ], decimal), { h2: '1', h1: '2' })
+  ], decimal), { h2: '1.', h1: '2.' })
   assert.deepEqual(computeHeadingNumbers([items[0], items[2], { ...items[2], id: 'x2' }], decimal), {
-    a: '1', c: '1.1', x2: '1.2',
+    a: '1.', c: '1.1', x2: '1.2',
   })
   // 新的一级章节：下级重新从 1 开始（Word 行为）
   assert.deepEqual(computeHeadingNumbers([
     items[0], items[1], { ...items[0], id: 'a2' }, { ...items[1], id: 'b2' },
-  ], decimal), { a: '1', b: '1.1', a2: '2', b2: '2.1' })
+  ], decimal), { a: '1.', b: '1.1', a2: '2.', b2: '2.1' })
+
+  // 用户实报 BUG：4.1.1 / 4.1.2 之后切到 4.2，子标题必须 4.2.1 而不是 4.2.3。
+  // 原因是 layerHistory 只在顶级递增时截断，中间层(H2)递增后残留了第 3 层计数。
+  assert.deepEqual(computeHeadingNumbers([
+    { id: 'k1', level: 1, text: '1' }, { id: 'k2', level: 1, text: '2' },
+    { id: 'k3', level: 1, text: '3' }, { id: 'k4', level: 1, text: '4' },
+    { id: 's41', level: 2, text: '4.1' },
+    { id: 's411', level: 3, text: '4.1.1' }, { id: 's412', level: 3, text: '4.1.2' },
+    { id: 's42', level: 2, text: '4.2' },
+    { id: 's421', level: 3, text: '4.2.1' }, { id: 's422', level: 3, text: '4.2.2' },
+    { id: 's43', level: 2, text: '4.3' }, { id: 's431', level: 3, text: '4.3.1' },
+  ], decimal), {
+    k1: '1.', k2: '2.', k3: '3.', k4: '4.',
+    s41: '4.1', s411: '4.1.1', s412: '4.1.2',
+    s42: '4.2', s421: '4.2.1', s422: '4.2.2',
+    s43: '4.3', s431: '4.3.1',
+  })
+  // 中间层章节切换 + 顶级章节切换，都要让所有更深层重新从 1 开始
+  assert.deepEqual(computeHeadingNumbers([
+    items[0], items[1], items[2], { ...items[2], id: 'c2' },
+    { ...items[1], id: 'b2' }, { ...items[2], id: 'c3' },
+    { ...items[0], id: 'a2' }, { ...items[1], id: 'b3' }, { ...items[2], id: 'c4' },
+  ], decimal), {
+    a: '1.', b: '1.1', c: '1.1.1', c2: '1.1.2',
+    b2: '1.2', c3: '1.2.1',
+    a2: '2.', b3: '2.1', c4: '2.1.1',
+  })
+  // 四种样式同样共用这套计数器，不能只在 decimal 下正确
+  assert.deepEqual(computeHeadingNumbers([
+    items[0], items[1], items[2], { ...items[1], id: 'b2' }, { ...items[2], id: 'c2' },
+  ], { ...decimal, style: 'chapter' }), {
+    a: '第一章', b: '1.1', c: '1.1.1', b2: '1.2', c2: '1.2.1',
+  })
 
   // 深度：H4 不编号也不占号，随后的 H2 继续 1.2；关闭时全部清空；空标题不占号
   assert.deepEqual(computeHeadingNumbers([
     ...items.slice(0, 3), items[3], { id: 'e', level: 2, text: '范围' },
-  ], decimal), { a: '1', b: '1.1', c: '1.1.1', e: '1.2' })
+  ], decimal), { a: '1.', b: '1.1', c: '1.1.1', e: '1.2' })
   assert.deepEqual(computeHeadingNumbers(items, { ...decimal, enabled: false }), {})
   assert.deepEqual(computeHeadingNumbers([
     items[0], { id: 'empty', level: 1, text: '   ' }, { id: 'f', level: 1, text: '下一章' },
-  ], decimal), { a: '1', f: '2' })
+  ], decimal), { a: '1.', f: '2.' })
 
   // 四种样式
   assert.deepEqual(computeHeadingNumbers(items, { ...decimal, style: 'chapter' }), {
@@ -1546,12 +1587,27 @@ const edge = (
     a: '一、', b: '（一）', c: '1.',
   })
   assert.deepEqual(computeHeadingNumbers(items, { ...decimal, style: 'alpha' }), {
-    a: 'A', b: 'A.1', c: 'A.1.a',
+    a: 'A.', b: 'A.1', c: 'A.1.a',
   })
-  assert.equal(formatHeadingNumber([27], 'alpha'), 'AA')
+
+  // 单级编号带尾点：只作用于纯拉丁数字/字母；多级编号与自带标点的中文样式一律不变。
+  // 用户实报：「1 标题」应显示「1. 标题」，而「1.1 / 1.1.1 标题」保持现状。
+  assert.equal(formatHeadingNumber([1], 'decimal'), '1.')
+  assert.equal(formatHeadingNumber([12], 'decimal'), '12.')
+  assert.equal(formatHeadingNumber([1, 1], 'decimal'), '1.1')
+  assert.equal(formatHeadingNumber([1, 1, 1], 'decimal'), '1.1.1')
+  assert.equal(formatHeadingNumber([1], 'chapter'), '第一章')
+  assert.equal(formatHeadingNumber([1], 'cjk'), '一、')
+  assert.equal(formatHeadingNumber([1], 'alpha'), 'A.')
+  assert.equal(formatHeadingNumber([27], 'alpha'), 'AA.')
+  assert.equal(formatHeadingNumber([1, 1], 'alpha'), 'A.1')
   assert.equal(formatHeadingNumber([11], 'chapter'), '第十一章')
   assert.equal(formatHeadingNumber([1, 2, 3, 4], 'cjk'), '(4)')
   assert.equal(formatHeadingNumber([], 'decimal'), '')
+  // 工具栏下拉的示例文案必须与实际显示一致（否则选样式时看到的是错的预览）
+  assert.equal(HEADING_NUMBERING_STYLE_OPTIONS.find((o) => o.value === 'decimal')?.preview, '1. / 1.1 / 1.1.1')
+  assert.equal(HEADING_NUMBERING_STYLE_OPTIONS.find((o) => o.value === 'alpha')?.preview, 'A. / A.1 / A.1.a')
+  assert.equal(HEADING_NUMBERING_STYLE_OPTIONS.find((o) => o.value === 'chapter')?.preview, '第一章 / 1.1 / 1.1.1')
 
   // 配置必须真跑「归一化 → JSON 写盘 → 读回」往返：漏在 normalizeSmartDocumentContent
   // 里透传字段会导致「开关不生效 / 重开文档设置丢失」（与连线曲线字段同型）。
@@ -1584,6 +1640,13 @@ const edge = (
   assert.equal(css.includes('bad'), false)
   assert.equal(buildHeadingNumberStyles('bad:id', { a: '1' }), '')
   assert.equal(buildHeadingNumberStyles('r0', {}), '')
+  // 正文真正渲染的 content 必须来自同一份编号结果，单级带尾点、多级保持原样
+  const realNumberCss = buildHeadingNumberStyles(
+    'r0', computeHeadingNumbers([items[0], items[1], items[2]], decimal),
+  )
+  assert.ok(realNumberCss.includes('content: "1." !important'))
+  assert.ok(realNumberCss.includes('content: "1.1" !important'))
+  assert.ok(realNumberCss.includes('content: "1.1.1" !important'))
   assert.equal(isSameHeadingNumbers({ a: '1' }, { a: '1' }), true)
   assert.equal(isSameHeadingNumbers({ a: '1' }, { a: '2' }), false)
   assert.equal(isSameHeadingNumbers({ a: '1' }, { a: '1', b: '2' }), false)
@@ -1597,6 +1660,27 @@ const edge = (
   assert.ok(headingCss.includes('content: var(--tm-heading-badge'), 'H1~H6 层级水印规则必须保留')
   assert.equal(headingCss.includes('data-tm-heading-numbering'), false, '不得按编号开关隐藏层级水印')
   assert.equal(headingCss.includes('content: none'), false, '不得用 content: none 吞掉层级水印')
+
+  // 编号字体样式必须与所在标题一致：旧版 muted 灰 + 400 字重，在 700/600 的深色
+  // 粗体标题前像另一段文字。锁死「继承」，避免以后又给编号另起一套视觉。
+  const numberRule = headingCss.match(
+    /\.smart-document-content \.bn-block-content\[data-content-type="heading"\] > \.bn-inline-content::before \{([^}]*)\}/,
+  )?.[1] ?? ''
+  assert.ok(numberRule, '标题编号 ::before 规则必须存在')
+  assert.ok(numberRule.includes('color: inherit'), '编号颜色必须继承标题')
+  assert.ok(numberRule.includes('font-weight: inherit'), '编号字重必须继承标题')
+  assert.ok(numberRule.includes('letter-spacing: inherit'), '编号字距必须继承标题')
+  assert.equal(numberRule.includes('--color-text-muted'), false, '编号不得再用 muted 灰')
+  assert.equal(/font-weight:\s*(400|normal)/.test(numberRule), false, '编号不得再改回常规字重')
+
+  // 目录侧的编号同样不能压淡，否则与目录项文字又出现明显色差
+  const tocLayoutSource = await readFile(
+    new URL('../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx', import.meta.url),
+    'utf-8',
+  )
+  const tocNumberBlock = tocLayoutSource.match(/\{item\.number \? \([\s\S]{0,400}?\) : null\}/)?.[0] ?? ''
+  assert.ok(tocNumberBlock, '目录编号渲染分支必须存在')
+  assert.equal(tocNumberBlock.includes('opacity-'), false, '目录编号不得用 opacity 压淡')
 }
 
 // 代码块语法高亮：必须用 Oniguruma 引擎。
@@ -1757,6 +1841,604 @@ const edge = (
   for (const language of historicalLanguages) {
     await codeHighlighter.loadLanguage(language)
   }
+}
+
+// 编辑器版面：固定 px 上限 + min(可用宽度, 上限) 自适应 + 【真跑 writeConfig 写库入口】
+// 铁律：只测 normalize / 类型声明不够，必须测到 backend.writeConfig 真正收到的对象。
+// 之前连线曲线就是漏测写库入口，画面生效但重开知识库全部复位。
+{
+  // 1) 几何语义：右栏宽 → 铺到上限并按比例分留白；右栏窄 → 占满可用宽度、留白归零
+  const cap = { maxWidth: 1200, marginRatio: 0.5 }
+  assert.deepEqual(computeEditorLayoutPixels(1600, cap), { width: 1200, left: 200, right: 200 })
+  assert.deepEqual(computeEditorLayoutPixels(900, cap), { width: 900, left: 0, right: 0 })
+  assert.deepEqual(computeEditorLayoutPixels(1600, { maxWidth: 1200, marginRatio: 0 }), { width: 1200, left: 0, right: 400 })
+  assert.deepEqual(computeEditorLayoutPixels(1600, { maxWidth: 1200, marginRatio: 1 }), { width: 1200, left: 400, right: 0 })
+  assert.deepEqual(computeEditorLayoutPixels(1600, { maxWidth: 2000, marginRatio: 0.5 }), { width: 1600, left: 0, right: 0 })
+  assert.deepEqual(computeEditorLayoutPixels(500, { maxWidth: 1200, marginRatio: 0.3 }), { width: 500, left: 0, right: 0 })
+  for (const available of [320, 500, 900, 1200, 1400, 1600, 2400]) {
+    for (const marginRatio of [0, 0.13, 0.5, 0.87, 1]) {
+      for (const maxWidth of [400, 800, 1200, 2000]) {
+        const p = computeEditorLayoutPixels(available, { maxWidth, marginRatio })
+        assert.equal(p.width, Math.min(available, maxWidth), '内容宽必须 = min(右栏可用宽度, 配置上限)')
+        assert.ok(Math.abs(p.width + p.left + p.right - available) < 1e-9, '内容宽 + 左留白 + 右留白必须恰好等于可用宽度')
+        assert.ok(p.left >= 0 && p.right >= 0, '留白不得为负')
+        if (available <= maxWidth) assert.equal(p.left + p.right, 0, '右栏比上限窄时不得留白')
+      }
+    }
+  }
+  assert.deepEqual(normalizeEditorLayout(undefined), DEFAULT_EDITOR_LAYOUT)
+  assert.deepEqual(normalizeEditorLayout({ maxWidth: 99999, marginRatio: -3 }), { maxWidth: 2000, marginRatio: 0 })
+  assert.deepEqual(normalizeEditorLayout({ maxWidth: Number.NaN, marginRatio: Number.NaN }), DEFAULT_EDITOR_LAYOUT)
+  assert.deepEqual(buildEditorLayoutVars({ maxWidth: 1350, marginRatio: 0.25 }), { maxWidth: '1350px', marginRatio: '0.25' })
+  assert.equal(DEFAULT_EDITOR_LAYOUT.maxWidth, 1200, '默认上限要够宽，右栏全屏时才能看得更多')
+
+  // 2) 真跑写库入口：注入假 backend，断言 backend.writeConfig 收到的对象保留两个新字段
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundled = await build({
+    entryPoints: [fileURLToPath(new URL('../src/core/storage/service.ts', import.meta.url))],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+    banner: { js: 'globalThis.window = globalThis.window || {};' },
+  })
+  const storageService = await import(
+    `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
+  ) as { createStore: (backend: unknown) => { writeConfig: (config: unknown) => Promise<void> } }
+  const makeStore = () => {
+    const calls: Array<Record<string, any>> = []
+    const backend = { writeConfig: async (config: Record<string, any>) => { calls.push(config) } }
+    return { store: storageService.createStore(backend), calls }
+  }
+  {
+    const { store, calls } = makeStore()
+    await store.writeConfig({ defaultEditorStyle: { contentWidth: 1350, contentMarginRatio: 0.25 } })
+    const written = JSON.parse(JSON.stringify(calls[0])) as { defaultEditorStyle: Record<string, unknown> }
+    assert.equal(written.defaultEditorStyle.contentWidth, 1350, '内容最大宽度必须真的写进配置')
+    assert.equal(written.defaultEditorStyle.contentMarginRatio, 0.25, '左右留白比例必须真的写进配置')
+  }
+  {
+    const { store, calls } = makeStore()
+    await store.writeConfig({ defaultEditorStyle: { contentWidth: 99, contentMarginRatio: -1 } })
+    assert.equal(calls[0].defaultEditorStyle.contentWidth, 400, '越界宽度必须钳制到下限')
+    assert.equal(calls[0].defaultEditorStyle.contentMarginRatio, 0, '越界留白比例必须钳制')
+  }
+  {
+    // 旧存档（含上一版已废弃的比例字段）：px 宽度直接沿用为上限，比例字段归一化时丢弃、不再写回。
+    const { store, calls } = makeStore()
+    await store.writeConfig({ defaultEditorStyle: { contentWidth: 700, contentWidthRatio: 0.63 } })
+    assert.equal(calls[0].defaultEditorStyle.contentWidth, 700, '旧存档的 px 内容线宽直接沿用为上限')
+    assert.equal(calls[0].defaultEditorStyle.contentMarginRatio, DEFAULT_EDITOR_LAYOUT.marginRatio)
+    assert.equal('contentWidthRatio' in calls[0].defaultEditorStyle, false, '废弃的比例字段不得再写回配置')
+  }
+  {
+    // 全新知识库：上限取较宽默认值、留白居中
+    const { store, calls } = makeStore()
+    await store.writeConfig({})
+    assert.equal(calls[0].defaultEditorStyle.contentWidth, DEFAULT_EDITOR_LAYOUT.maxWidth)
+  }
+
+  // 3) 渲染层与入口：CSS 按「占满 + px 上限 + 留白比例」布局；旧入口与废弃字段已清理
+  const editorCss = await readFile(
+    new URL('../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.css', import.meta.url),
+    'utf-8',
+  )
+  const containerRules = [...editorCss.matchAll(/\.smart-document-content \.bn-container \{([^}]*)\}/g)].map((m) => m[1])
+  assert.ok(containerRules.length >= 2, '.bn-container 的宽度规则与盒模型重置都必须存在')
+  const containerCss = containerRules.join('\n')
+  assert.ok(containerCss.includes('width: 100% !important'), '内容框必须先占满右栏可用宽度')
+  assert.ok(containerCss.includes('max-width: var(--topomind-smart-content-max-width'), '宽度上限必须由配置的 px 变量给出')
+  assert.ok(
+    containerCss.includes('max(0%, 100% - var(--topomind-smart-content-max-width'),
+    '剩余留白必须按「可用宽度 − 上限」算，右栏比上限窄时自动归零',
+  )
+  assert.ok(containerCss.includes('* var(--topomind-smart-content-margin-split'), '剩余留白必须按比例分配')
+  assert.ok(containerCss.includes('margin-right: auto'), '右侧留白交给 auto 吃下剩余')
+  assert.equal(containerCss.includes('max-width: none'), false, '不得压掉配置上限')
+  assert.equal(containerCss.includes('topomind-smart-content-width'), false, '不得退回按比例的百分比宽度变量')
+  assert.equal(containerCss.includes('800px'), false, '旧的固定 800px 内容线宽必须移除')
+
+  // 废弃的比例字段必须全链路清干净，避免配置里留两套互相覆盖的宽度语义
+  const legacyFieldFiles = [
+    '../src/domain/style/styleTypes.ts',
+    '../src/domain/style/styleDefaults.ts',
+    '../src/domain/style/styleConstraints.ts',
+    '../src/domain/style/normalizeStyleConfig.ts',
+    '../src/features/right-panel/model/stylePresets.ts',
+    '../src/features/documents/SmartDocumentEditor/editorLayout.ts',
+    '../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx',
+    '../src/features/documents/SmartDocumentEditor/model/useSmartDocumentEditorModel.ts',
+    '../src/features/documents/SmartDocumentEditor/components/ContentLayoutControls.tsx',
+  ]
+  for (const rel of legacyFieldFiles) {
+    const source = await readFile(new URL(rel, import.meta.url), 'utf-8')
+    assert.equal(source.includes('contentWidthRatio'), false, `${rel} 不得残留废弃的比例字段`)
+  }
+
+  const editorStylePanel = await readFile(
+    new URL('../src/features/right-panel/components/StyleTab/EditorStylePanel.tsx', import.meta.url),
+    'utf-8',
+  )
+  assert.equal(editorStylePanel.includes('label="内容线宽"'), false, '右侧样式面板的旧配置入口必须移除')
+  const vaultConfigTypes = await readFile(new URL('../src/core/storage/types.ts', import.meta.url), 'utf-8')
+  assert.ok(
+    vaultConfigTypes.includes('defaultEditorStyle?: Partial<DefaultEditorStyle>'),
+    'VaultConfig 必须引用同一份定义，避免字段白名单漂移',
+  )
+
+  // 4) 滑杆提交时序：只接已提交值 + 松手才写。
+  // 若把预览值回传，拖动中「外部配置变化」的同步 effect 会清掉 dirty 标记 → 松手不保存。
+  const editorComponent = await readFile(
+    new URL('../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx', import.meta.url),
+    'utf-8',
+  )
+  const toolbarCall = editorComponent.match(/<EditorTopToolbar[\s\S]{0,600}?\/>/)?.[0] ?? ''
+  assert.ok(toolbarCall, '顶部工具栏调用必须存在')
+  assert.ok(toolbarCall.includes('layout={committedLayout}'), '滑杆只能接收已提交配置，不能回传预览值')
+  assert.ok(editorComponent.includes("'--topomind-smart-content-max-width': layout.maxWidth"), '必须注入 px 上限变量')
+  assert.ok(editorComponent.includes("'--topomind-smart-content-margin-split': layout.marginRatio"), '必须注入留白比例变量')
+  assert.ok(editorComponent.includes('maxWidth: defaultEditorStyle.contentWidth'), '已提交版面必须取自全局 contentWidth')
+
+  const controls = await readFile(
+    new URL('../src/features/documents/SmartDocumentEditor/components/ContentLayoutControls.tsx', import.meta.url),
+    'utf-8',
+  )
+  assert.equal((controls.match(/onPointerUp=\{commit\}/g) ?? []).length, 2, '两个滑杆都要在松手时提交')
+  assert.equal((controls.match(/onKeyUp=\{commit\}/g) ?? []).length, 2, '键盘调整结束也要提交')
+  assert.equal((controls.match(/onBlur=\{commit\}/g) ?? []).length, 2, '失焦兜底提交')
+  assert.equal((controls.match(/onCommit\(/g) ?? []).length, 1, '写盘只能发生在提交函数里，不能每帧调用')
+  assert.ok(controls.includes('dirtyRef'), '必须有脏标记，避免无效写盘')
+  assert.ok(controls.includes('aria-label="内容最大宽度"'), '宽度滑杆必须调固定 px 上限')
+  assert.ok(controls.includes('{draft.maxWidth}px'), '宽度读数必须是 px')
+  assert.equal(controls.includes('widthRatio'), false, '滑杆不得再按比例调宽度')
+
+  const modelSource = await readFile(
+    new URL('../src/features/documents/SmartDocumentEditor/model/useSmartDocumentEditorModel.ts', import.meta.url),
+    'utf-8',
+  )
+  assert.ok(modelSource.includes('contentWidth: next.maxWidth'), '提交必须把 px 上限写进全局配置')
+}
+
+// 目录控件：宽度仍按内容自适应并封顶，但超长目录项用省略号截断，绝不出现横向滚动条。
+// 关键结构：w-max 的离屏探针不能包住真实列表，否则真实行会被撑到自然宽度 → truncate 失效 +
+// 列表出现横向滚动条（这正是旧实现的 bug）。
+{
+  const toc = await readFile(
+    new URL('../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx', import.meta.url),
+    'utf-8',
+  )
+  assert.ok(toc.includes('overflow-x-hidden overflow-y-auto'), '目录列表必须禁止横向滚动')
+  assert.equal(toc.includes('overflow-x-auto'), false, '不得再用横向滚动查看超长目录项')
+  assert.ok(toc.includes('min-w-0 flex-1 truncate'), '超长目录项必须用省略号截断')
+  assert.ok(toc.includes('title={item.number ? `${item.number} ${item.text}` : item.text}'), '截断后仍需 title 看全文')
+
+  const listPos = toc.indexOf('ref={tocListRef}')
+  const probePos = toc.indexOf('ref={tocWidthProbeRef}')
+  assert.ok(listPos > 0 && probePos > listPos, '宽度探针必须独立于目录列表')
+  assert.ok(toc.includes('h-0 w-0 overflow-hidden'), '探针包装必须是 0×0，不能产生滚动溢出或撑高内容层')
+  assert.ok(toc.includes('invisible w-max'), '探针仍按最长目录项的自然宽度测量')
+  assert.equal((toc.slice(listPos, probePos).match(/\{tocItems\.map/g) ?? []).length, 1,
+    '真实目录项与探针必须各渲染一次，探针不得包住真实列表')
+  assert.equal((toc.match(/\$\{TOC_ROW_CLASS\}/g) ?? []).length, 2,
+    '真实行与探针必须共用同一套字号/缩进/间距，测量才准')
+  // 尺寸是用户明确拍板的：最大宽度 320×1.5=480、触发条高度 104×2/3≈69、下限 240。
+  // 下限曾设 320（≈24 个汉字）把常见标题全钳住 → 看着像固定宽度；改成 240 后短目录落在下限是预期行为。
+  // 解析真实数值而非只查字面量，避免注释/字符串里的数字蒙混过关。
+  const maxWidth = Number(toc.match(/^const TOC_PANEL_MAX_WIDTH = (\d+)/m)?.[1])
+  const minWidth = Number(toc.match(/^const TOC_PANEL_MIN_WIDTH = (\d+)/m)?.[1])
+  const railHeight = Number(toc.match(/^const TOC_RAIL_HEIGHT = (\d+)/m)?.[1])
+  assert.equal(maxWidth, 480, '面板最大宽度必须是原 320 的 1.5 倍')
+  assert.equal(minWidth, 240, '面板下限必须是用户拍板的 240')
+  assert.equal(railHeight, 69, '触发条高度必须缩到原 104 的 2/3')
+  assert.ok(maxWidth > minWidth, '最大宽度必须仍大于最小宽度')
+  // 用解析出的常量真跑宽度公式：56/188/284/476 是真实 Chromium 在项目 Tailwind CSS 下测到的
+  // 2/13/21/37 字目录项自然宽度。三档面板宽度必须各不相同，否则就是「自适应没生效」。
+  const panelWidthFor = (natural: number) => Math.min(maxWidth, Math.max(minWidth, natural + 24))
+  const widths = [56, 284, 476].map(panelWidthFor)
+  assert.deepEqual(widths, [240, 308, 480], '面板宽度必须随最长目录项自然宽度在 min/max 之间变化')
+  assert.equal(new Set(widths).size, 3, '窄/中/宽目录的面板宽度不得相同（下限不得把差异吃掉）')
+  assert.ok(minWidth < 284 + 24, '约 21 字的标题必须能进入自适应区间')
+  assert.equal(panelWidthFor(188), 240, '13 字左右的常见短标题落在 240 下限是用户拍板的预期，不是 bug')
+  // 宽度必须真的「被最长目录项撑开」：公式用自然宽度，且测量要在首帧/字体/展开时兜底重测。
+  assert.ok(toc.includes('tocNaturalWidth + TOC_LIST_PADDING_X'), '面板宽度必须由最长目录项自然宽度推导')
+  assert.ok(toc.includes('Math.max(el.getBoundingClientRect().width, el.scrollWidth)'), '自然宽度测量要有 scrollWidth 兜底')
+  assert.ok(toc.includes('data-toc-natural-width={tocNaturalWidth}'), '面板要暴露实测自然宽度便于排查')
+  assert.ok(toc.includes('requestAnimationFrame(measure)'), '首帧后要重测一次自然宽度')
+  assert.ok(toc.includes('document.fonts?.ready.then(measure)'), '字体加载完成后要重测一次自然宽度')
+  assert.ok(toc.includes('}, [hasToc, tocItemsSignature, tocExpanded])'), '展开态变化时要重测自然宽度')
+}
+
+// P0 节点轻量化：新建节点只写父 _graph.json.children，绝不 mkdir / 写空 _graph.json。
+// createCard / createCardDir 整条 Store→FSB→IPC→主进程链已删除；下面先在 fakeStorage 里
+// 放一个会抛错的 createCard「诱饵」，再真跑 createChildCardNode 断言它一次都没被调用，
+// 这样即使将来有人把接口加回来，也拦得住「新建节点又回去建目录」的退化。
+{
+  const cardSvcUrl = new URL('../src/application/graph/cardNodeService.ts', import.meta.url)
+  const cardSvcSource = await readFile(cardSvcUrl, 'utf-8')
+  assert.equal(cardSvcSource.includes('storage.createCard('), false, '新建节点不得再调用 createCard 建目录')
+  assert.ok(cardSvcSource.includes('joinRefs(options.parentRef, cardKey)'), 'newRef 必须是逻辑路径，不能假装是磁盘目录')
+  assert.ok(cardSvcSource.includes('parentLayout.nodes[cardKey]'), '必须用 cardId 作 key 并做冲突保护')
+
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundled = await build({
+    entryPoints: [fileURLToPath(cardSvcUrl)],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  })
+  const cardModule = await import(
+    `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
+  ) as {
+    createChildCardNode: (
+      storage: Record<string, unknown>,
+      options: Record<string, unknown>
+    ) => Promise<{ newRef: string | null; reloadRef: string }>
+  }
+
+  const calls: string[] = []
+  let written: any = null
+  const fakeStorage = {
+    // 诱饵：生产 Store 已无此成员；若新建节点退回去调它，这里立刻炸掉。
+    createCard: async () => { calls.push('createCard'); throw new Error('P0 不应再调用 createCard') },
+    deleteCard: async () => {},
+    renameCard: async () => {},
+    readLayout: async () => ({
+      nodes: { existing: { id: 'existing', card: { ref: 'existing', name: '旧节点' }, position: { x: 1, y: 2 } } },
+      edges: [],
+      viewport: { zoom: 1, pan: { x: 0, y: 0 } },
+    }),
+    writeLayout: async (_ref: string, meta: any) => { calls.push('writeLayout'); written = meta },
+  }
+  const result = await cardModule.createChildCardNode(fakeStorage, {
+    name: '新节点',
+    parentRef: '计算机',
+    reloadRef: '计算机',
+    cardId: 'card-abc',
+    position: { x: 10, y: 20 },
+    size: { width: 130, height: 60 },
+  })
+  assert.deepEqual(calls, ['writeLayout'], '新建节点必须只写一次父图，不产生任何目录操作')
+  assert.equal(written.nodes['card-abc'].card.name, '新节点', '显示名必须写进父图 children')
+  assert.deepEqual(written.nodes['card-abc'].position, { x: 10, y: 20 })
+  assert.equal(written.nodes['card-abc'].width, 130)
+  assert.equal(written.nodes.existing.card.name, '旧节点', '原有节点不能被覆盖')
+  assert.equal(result.newRef, '计算机/card-abc', 'newRef 是逻辑路径')
+  await assert.rejects(
+    () => cardModule.createChildCardNode(fakeStorage, {
+      name: '冲突', parentRef: '计算机', reloadRef: '计算机', cardId: 'existing',
+    }),
+    /节点 ID 冲突/,
+    'cardId 撞车必须显式报错'
+  )
+
+  // 摘要短路：消除打开房间时每个节点 2 次同步读（readGraphMeta + listTopoDocuments）。
+  const fileServiceSource = await readFile(new URL('../electron/file-service.js', import.meta.url), 'utf-8')
+  const summaryStart = fileServiceSource.indexOf('readRoomNodeSummaries: function')
+  assert.ok(summaryStart > 0, '必须存在 readRoomNodeSummaries')
+  const summaryBlock = fileServiceSource.slice(summaryStart, summaryStart + 1400)
+  assert.ok(
+    summaryBlock.includes('existsSync(_fs_resolveKbsPath(rootDir, roomPath))'),
+    '未物化节点必须用 existsSync 短路'
+  )
+  assert.ok(summaryBlock.includes('childCount: 0, hasDetail: false'), '短路必须返回空摘要')
+  // 跨房间移动：目标房间可能是尚未物化的轻量节点，不能再硬抛「目标房间不存在」。
+  assert.equal(
+    fileServiceSource.includes("throw new Error('目标房间不存在: ')"), false,
+    '跨房间移动不得再要求目标目录已存在'
+  )
+  assert.ok(
+    fileServiceSource.includes('if (!nodeFs.existsSync(targetDir)) _fs_ensureDir(targetDir)'),
+    '目标房间未物化时按需建目录'
+  )
+  const deleteConfirm = await readFile(
+    new URL('../src/features/graph/GraphPage/model/useNodeActions.ts', import.meta.url), 'utf-8'
+  )
+  assert.ok(deleteConfirm.includes('若该节点已有文档或子房间'), '删除确认文案必须反映按需物化语义')
+}
+
+// P0 后续清理：createCard / createCardDir 整条死链、3 个仅定义未调用的 _fs_ 函数、
+// 4 处「渲染层永远拿不到」的 version? 死声明必须保持已删除状态。
+// 逐文件按精确串断言，避免「接口里还留着成员」或「注释里保留字面量」蒙混过去。
+{
+  const forbiddenByFile: Array<[string, string[]]> = [
+    ['../src/core/storage/types.ts', ['createCard:']],
+    ['../src/core/storage/service.ts', ['createCard(', 'Store.createCard']],
+    ['../src/core/storage/file.ts', ['createCard:', 'FSB.createCardDir', 'version?: number']],
+    ['../src/core/fs-backend.ts', ['createCardDir', 'version?: number']],
+    ['../src/types/graph.ts', ['version?: number']],
+    ['../src/hooks/useGraph/useGraphStorageApi.ts', ['createCard']],
+    ['../src/hooks/useGraph/graphOperations.ts', ['createCard']],
+    ['../electron/preload.js', ['fs:createCardDir']],
+    ['../electron/main.js', ['fs:createCardDir']],
+    ['../electron/file-service.js', ['createCardDir', '_fs_createCardDir(', '_fs_deleteKbsDir(', '_fs_listAttachments(']],
+    ['../electron/services/card-service.js', ['createCardDir']],
+  ]
+  for (const [rel, forbidden] of forbiddenByFile) {
+    const source = await readFile(new URL(rel, import.meta.url), 'utf-8')
+    for (const token of forbidden) {
+      assert.equal(source.includes(token), false, `${rel} 仍残留已退役的 ${token}`)
+    }
+  }
+  // 保留的入口必须还在：删死链时不能误删 deleteCard / readCardChildren / createKbsDir。
+  const liveFileService = await readFile(new URL('../electron/file-service.js', import.meta.url), 'utf-8')
+  assert.ok(liveFileService.includes('readCardChildren: function'), 'readCardChildren 仍须保留（首页 KB 计数入口）')
+  assert.ok(liveFileService.includes('createKbsDir: function'), 'createKbsDir 仍须保留（新建知识库入口）')
+  assert.ok(liveFileService.includes('deleteKbsDir: function'), 'deleteKbsDir 仍须保留（删除节点走回收站）')
+}
+
+// P1：_graph.json 固定分片 + version + kind schema。
+// 铁律：格式改造只查源码字面量会被「类型里加了字段但 map 本体没写」蒙混，
+// 因此这里用内存文件系统真跑分片读写、用 esbuild 打包真跑 kind 全链路往返。
+{
+  const nodePath = await import('node:path')
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const shardModule = await import(
+    new URL('../electron/services/graph-meta-service.js', import.meta.url).href
+  ) as Record<string, any>
+  const { createGraphMetaService, graphShardIndexOf, graphMetaComparisonKey, GRAPH_SHARD_COUNT, GRAPH_FORMAT_VERSION } = shardModule
+
+  assert.equal(GRAPH_FORMAT_VERSION, 2, '磁盘格式版本必须是 2')
+  assert.equal(GRAPH_SHARD_COUNT, 16, '分片数必须固定为 16（不随节点规模增长、无需 rebalance）')
+
+  const stable = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value as object).sort().map((k) => `${k}:${stable((value as Record<string, unknown>)[k])}`).join(',')}}`
+    }
+    return JSON.stringify(value)
+  }
+
+  const makeFs = () => {
+    const files = new Map<string, string>()
+    const writes: string[] = []
+    const deps = {
+      ensureDir: () => {},
+      graphFilePath: (dir: string) => nodePath.join(dir, '_graph.json'),
+      joinPath: (...parts: string[]) => nodePath.join(...parts),
+      readJsonFile: (fp: string) => (files.has(fp) ? JSON.parse(files.get(fp) as string) : {}),
+      requireValidWorkDir: (d: string) => d,
+      resolveKbsPath: (_root: string, rel: string) => nodePath.join('/kb', rel || ''),
+      writeJsonFile: (fp: string, data: unknown) => {
+        files.set(fp, JSON.stringify(data ?? {}, null, 2))
+        writes.push(fp)
+      },
+    }
+    return { files, writes, deps, store: createGraphMetaService(deps) }
+  }
+
+  const meta: Record<string, any> = {
+    children: {},
+    edges: [
+      {
+        id: 'e1', source: 'n0', target: 'n1', relation: '相关', weight: 'minor',
+        lineMode: 'curve', lineStyle: 'dashed', color: '#0969da', lineWidth: 2,
+        arrow: true, arrowSize: 12, arrowShape: 'hollow', arrowPosition: 'both',
+        curveControl: { u: 0.4, v: 0.2 },
+        sourceAnchor: { u: 0, v: 0.5 }, targetAnchor: { u: 1, v: 0.5 },
+        highlighted: true, faded: false,
+      },
+    ],
+    zoom: 1.25,
+    pan: { x: 10, y: 20 },
+  }
+  for (let i = 0; i < 40; i += 1) {
+    meta.children[`n${i}`] = {
+      name: `节点${i}`, kind: i % 2 ? 'shape' : 'knowledge', x: i, y: i * 2,
+      width: 120, height: 52, widthMode: 'manual', expanded: i === 0,
+      style: { borderColor: '#123456', borderRadius: 8 }, expandedWidth: 240,
+      expandedHeight: 120, emojis: ['📌'],
+    }
+  }
+
+  // 空房间首次写 → v2：索引只留 version + viewport，children/edges 落到分片。
+  const fsA = makeFs()
+  fsA.store.writeGraphMeta('/kb', 'room', meta)
+  const indexPath = nodePath.join('/kb', 'room', '_graph.json')
+  const index = JSON.parse(fsA.files.get(indexPath) as string)
+  assert.equal(index.version, 2, '新房间必须写 v2 索引')
+  assert.equal(index.children, undefined, 'v2 索引不得再带 children')
+  assert.equal(index.edges, undefined, 'v2 索引不得再带 edges')
+  assert.deepEqual({ zoom: index.zoom, pan: index.pan }, { zoom: 1.25, pan: { x: 10, y: 20 } }, 'viewport 必须留在索引')
+  assert.equal(stable(fsA.store.readGraphMeta('/kb', 'room')), stable(meta), 'v2 分片组装必须与写入的完整 meta 一致')
+
+  // 真跑「只写脏分片」：改 1 个节点，只应有 1 个 nodes 分片落盘，索引/edges 分片都不动。
+  fsA.writes.length = 0
+  const moved = { ...meta, children: { ...meta.children, n0: { ...meta.children.n0, x: 999 } } }
+  fsA.store.writeGraphMeta('/kb', 'room', moved)
+  assert.equal(fsA.writes.filter((p) => p.includes('nodes-')).length, 1, '改一个节点只能写 1 个节点分片')
+  assert.equal(fsA.writes.filter((p) => p.includes('edges-')).length, 0, '未改边时不得写边分片')
+  assert.equal(fsA.writes.filter((p) => p.endsWith('_graph.json')).length, 0, 'viewport 未变时不得重写索引')
+  assert.equal((fsA.store.readGraphMeta('/kb', 'room') as any).children.n0.x, 999, '脏分片写回后逻辑读必须看到新值')
+
+  // 删除节点必须覆盖所在分片（不能因为「桶变空就跳过写」而留下幽灵节点）。
+  const withoutN0 = { ...moved, children: { ...moved.children } }
+  delete withoutN0.children.n0
+  fsA.store.writeGraphMeta('/kb', 'room', withoutN0)
+  assert.equal((fsA.store.readGraphMeta('/kb', 'room') as any).children.n0, undefined, '删除的节点不得从分片里复活')
+
+  // 旧库零改写：v1 有数据的房间继续单文件，绝不自动变成分片。
+  const legacy = { children: { a: { name: '旧节点', kind: 'knowledge' } }, edges: [], zoom: 1, pan: { x: 0, y: 0 } }
+  const fsB = makeFs()
+  const legacyIndex = nodePath.join('/kb', 'legacy', '_graph.json')
+  fsB.deps.writeJsonFile(legacyIndex, legacy)
+  fsB.writes.length = 0
+  fsB.store.writeGraphMeta('/kb', 'legacy', legacy)
+  const legacyAfter = JSON.parse(fsB.files.get(legacyIndex) as string)
+  assert.equal(legacyAfter.version, undefined, '旧库不得被自动加上 version')
+  assert.ok(Array.isArray(legacyAfter.edges), '旧库必须保持单文件里的 edges')
+  assert.equal([...fsB.files.keys()].some((p) => p.includes('_graph') && p.includes('nodes-')), false, '旧库不得凭空出现分片目录')
+
+  // 显式迁移：v1 → v2 后往返必须完全一致（含 kind 与所有边样式字段）。
+  assert.equal(fsB.store.migrateRoom('/kb', 'legacy'), true, 'migrateRoom 必须执行 v1→v2')
+  assert.equal(JSON.parse(fsB.files.get(legacyIndex) as string).version, 2, '迁移后索引必须标 v2')
+  assert.equal(graphMetaComparisonKey(fsB.store.readGraphMeta('/kb', 'legacy')), graphMetaComparisonKey(legacy), '迁移往返不得丢任何字段')
+  assert.equal(fsB.store.migrateRoom('/kb', 'legacy'), false, '已是 v2 的房间不得重复迁移')
+
+  // 全库格式统一：{} 空档（version=0）也必须能升级成 v2 索引，且空桶不产生分片文件。
+  // 真实库里有 165 个这样的房间（有文档/附件、无子节点），升级前后逻辑读都必须是空图。
+  const fsBlank = makeFs()
+  const blankIndex = nodePath.join('/kb', 'blank', '_graph.json')
+  fsBlank.deps.writeJsonFile(blankIndex, {})
+  assert.equal(fsBlank.store.detectVersion('/kb', 'blank'), 0, '{} 空档必须被识别为 version=0')
+  assert.equal(fsBlank.store.migrateRoom('/kb', 'blank'), true, '空档必须也能显式升级')
+  assert.deepEqual(JSON.parse(fsBlank.files.get(blankIndex) as string), { version: 2 }, '空档升级后索引只留 version')
+  assert.equal([...fsBlank.files.keys()].some((p) => p.includes('nodes-') || p.includes('edges-')), false, '空档不得产生任何分片文件')
+  assert.deepEqual(fsBlank.store.readGraphMeta('/kb', 'blank'), { children: {}, edges: [] }, '空档升级后逻辑读仍须是空图')
+  assert.equal(fsBlank.store.detectVersion('/kb', 'blank'), 2, '升级后必须能被识别为 v2')
+  assert.equal(fsBlank.store.migrateRoom('/kb', 'blank'), false, '升级后不得重复迁移')
+
+  // 带 viewport 的空档：顶层非节点字段必须原样留在索引里，不能被升级吞掉。
+  const fsViewport = makeFs()
+  const viewportIndex = nodePath.join('/kb', 'viewport', '_graph.json')
+  fsViewport.deps.writeJsonFile(viewportIndex, { zoom: 0.8, pan: { x: 3, y: 4 } })
+  assert.equal(fsViewport.store.migrateRoom('/kb', 'viewport'), true, '带 viewport 的空档也应升级')
+  assert.deepEqual(
+    JSON.parse(fsViewport.files.get(viewportIndex) as string),
+    { zoom: 0.8, pan: { x: 3, y: 4 }, version: 2 },
+    '空档升级不得丢 zoom/pan'
+  )
+  assert.equal(graphMetaComparisonKey(fsViewport.store.readGraphMeta('/kb', 'viewport')), graphMetaComparisonKey({
+    zoom: 0.8, pan: { x: 3, y: 4 }, children: {}, edges: [],
+  }), '带 viewport 的空档往返必须一致')
+
+  // 真实事故回归：v1 房间有多条边且跨多个分片时，v2 读回顺序必然与原始数组不同。
+  // 旧版 migrateRoom 用严格数组顺序比较，导致真实知识库首轮 26 个房间中 6 个多边房间
+  // 全部误报「往返校验失败」（数据其实一条没丢），并留下 148 个残留分片卡住后续迁移。
+  const fsMulti = makeFs()
+  const multiEdges = Array.from({ length: 24 }, (_, i) => ({
+    id: `edge-${String(i).padStart(2, '0')}`,
+    source: `n${i % 7}`,
+    target: `n${(i + 3) % 7}`,
+    lineMode: 'curve',
+    curveControl: { u: 0.3, v: 0.6 },
+    lineWidth: 2,
+  }))
+  const multiChildren: Record<string, any> = {}
+  for (let i = 0; i < 7; i += 1) multiChildren[`n${i}`] = { name: `节点${i}`, kind: 'knowledge', x: i, y: i }
+  const multiLegacy = { children: multiChildren, edges: multiEdges, zoom: 1, pan: { x: 0, y: 0 } }
+  fsMulti.deps.writeJsonFile(nodePath.join('/kb', 'multi', '_graph.json'), multiLegacy)
+  assert.ok(new Set(multiEdges.map((e) => graphShardIndexOf(e.id))).size > 1, '样本边必须跨多个分片，否则测不到顺序重排')
+  assert.equal(fsMulti.store.migrateRoom('/kb', 'multi'), true, '多边房间迁移必须成功（边按分片桶序重排属正常）')
+  const multiBack = fsMulti.store.readGraphMeta('/kb', 'multi') as any
+  assert.notDeepEqual(
+    multiBack.edges.map((e: any) => e.id),
+    multiEdges.map((e) => e.id),
+    '样本必须真的发生顺序重排，否则这条断言形同虚设'
+  )
+  assert.equal(graphMetaComparisonKey(multiBack), graphMetaComparisonKey(multiLegacy), '顺序无关比较必须判定往返完全一致')
+  // 顺序无关 ≠ 忽略边：丢边、改字段都必须仍被检出。
+  const lostEdge = { ...multiBack, edges: multiBack.edges.slice(1) }
+  assert.notEqual(graphMetaComparisonKey(lostEdge), graphMetaComparisonKey(multiLegacy), '丢一条边必须被比较键检出')
+  const lostField = {
+    ...multiBack,
+    edges: multiBack.edges.map((e: any, i: number) => (i === 0 ? { ...e, lineWidth: 99 } : e)),
+  }
+  assert.notEqual(graphMetaComparisonKey(lostField), graphMetaComparisonKey(multiLegacy), '改一个边字段必须被比较键检出')
+
+  // 未知版本必须拒绝读写，防止旧程序把新格式当空图或降级覆盖。
+  const fsC = makeFs()
+  fsC.deps.writeJsonFile(nodePath.join('/kb', 'future', '_graph.json'), { version: 99, zoom: 1 })
+  assert.throws(() => fsC.store.readGraphMeta('/kb', 'future'), /不支持的 _graph.json 版本/, '未知版本读侧必须抛错')
+  assert.throws(() => fsC.store.writeGraphMeta('/kb', 'future', meta), /不支持的 _graph.json 版本/, '未知版本写侧必须抛错')
+
+  // 分片 hash 稳定且恒定落在 16 个桶内。
+  for (let i = 0; i < 1000; i += 1) {
+    const idx = graphShardIndexOf(`card-${i}`)
+    assert.ok(Number.isInteger(idx) && idx >= 0 && idx < GRAPH_SHARD_COUNT, '分片下标越界')
+    assert.equal(graphShardIndexOf(`card-${i}`), idx, '同一 id 必须恒定落在同一分片')
+  }
+
+  // kind 端到端真跑：React Flow → buildMeta → normalize → 磁盘 JSON → convert → normalize → RoomGraph → buildNodes。
+  // 任一白名单漏写都会在这条链上暴露（历史踩过：只在返回类型加字段、convertGraphToFSB 的 map 本体没写）。
+  const bundle = async (rel: string) => {
+    const result = await build({
+      entryPoints: [fileURLToPath(new URL(rel, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+      banner: { js: 'globalThis.window = globalThis.window || {};' },
+    })
+    return await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  }
+  const fileAdapter = await bundle('../src/core/storage/file.ts')
+  const normalizer = await bundle('../src/domain/graph/normalizeGraphMeta.ts')
+  const mapper = await bundle('../src/domain/graph/graphMapper.ts')
+  const builder = await bundle('../src/hooks/useGraph/graphBuilder.ts')
+
+  const rfInput = [
+    { id: 'n-shape', position: { x: 1, y: 2 }, width: 120, height: 52, data: { label: '开始', kind: 'shape', nodeStyle: { borderRadius: 4 } } },
+    { id: 'n-know', position: { x: 9, y: 9 }, width: 120, height: 52, data: { label: '知识', kind: 'knowledge' } },
+  ]
+  const built = builder.buildMetaFromNodesEdges(rfInput, [], { zoom: 1, pan: { x: 0, y: 0 } })
+  assert.equal(built.nodes['n-shape'].kind, 'shape', 'buildMetaFromNodesEdges 必须写出 kind')
+  const normalizedOut = normalizer.normalizeGraphMeta(built)
+  assert.equal(normalizedOut.nodes['n-shape'].kind, 'shape', 'normalizeGraphMeta（写侧最后一道）不得吞掉 kind')
+  const disk = JSON.parse(JSON.stringify(fileAdapter.convertGraphToFSB(normalizedOut, '')))
+  assert.equal(disk.children['n-shape'].kind, 'shape', 'kind 必须真的出现在 _graph.json 序列化结果里')
+  assert.equal(disk.children['n-know'].kind, 'knowledge', '显式 knowledge 也必须落盘')
+  const restored = normalizer.normalizeGraphMeta(fileAdapter.convertFSBToGraph(disk, ''))
+  assert.equal(restored.nodes['n-shape'].kind, 'shape', 'convertFSBToGraph → normalize 读回不得丢 kind')
+  const room = mapper.graphMetaToRoomGraph('', restored)
+  assert.equal(room.nodes['n-shape'].kind, 'shape', 'graphMetaToRoomGraph 不得丢 kind')
+  assert.equal(mapper.roomGraphToGraphMeta(room).nodes['n-shape'].kind, 'shape', 'roomGraphToGraphMeta 不得丢 kind')
+  const rfOutput = builder.buildNodes('', mapper.roomGraphToGraphMeta(room), {}, '')
+  assert.equal(rfOutput.find((n: any) => n.id === 'n-shape').data.kind, 'shape', 'buildNodes 必须把 kind 放回 node.data')
+  assert.equal(rfOutput[0].type, 'knowledgeCard', '本轮只做 schema 预留，nodeTypes 仍统一为 knowledgeCard')
+
+  // 真跑「读库入口」：只测 graphMetaService 不够，readCardChildren 若偷偷改回直接读
+  // _graph.json 索引，v2 房间就会返回空子树（历史踩过：只测序列化往返放过了写库入口）。
+  const cardModule = await import(new URL('../electron/services/card-service.js', import.meta.url).href) as Record<string, any>
+  const cardService = cardModule.createCardService({
+    ensureDir: fsA.deps.ensureDir,
+    graphFilePath: fsA.deps.graphFilePath,
+    joinPath: fsA.deps.joinPath,
+    readGraphMeta: fsA.store.readGraphMeta,
+    readJsonFile: fsA.deps.readJsonFile,
+    relativeToKbs: () => '',
+    requireValidWorkDir: fsA.deps.requireValidWorkDir,
+    resolveKbsPath: fsA.deps.resolveKbsPath,
+    safeSegment: (s: string) => s,
+    writeJsonFile: fsA.deps.writeJsonFile,
+  })
+  const logicalChildren = (fsA.store.readGraphMeta('/kb', 'room') as any).children
+  assert.equal(
+    Object.keys(cardService.readCardChildren('/kb', 'room')).length,
+    Object.keys(logicalChildren).length,
+    'readCardChildren 必须能从 v2 分片房间读出全部子节点（不能只读索引）'
+  )
+
+  // 主进程里所有「直接读 _graph.json.children」的地方都必须改走逻辑读，否则分片房间会被读成空图。
+  const cardServiceSource = await readFile(new URL('../electron/services/card-service.js', import.meta.url), 'utf-8')
+  assert.ok(cardServiceSource.includes('readGraphMeta(rootDir, cardPath)'), 'readCardChildren 必须走 graphMetaService 逻辑读')
+  const fileServiceSource = await readFile(new URL('../electron/file-service.js', import.meta.url), 'utf-8')
+  assert.equal(fileServiceSource.includes('graphFileOf'), false, '跨房间移动不得再直接读写 _graph.json')
+  assert.ok(fileServiceSource.includes('joinPath: nodePath.join'), 'graphMetaService 必须注入 joinPath 才能定位分片目录')
+  const migrationSource = await readFile(new URL('../scripts/migrate-graph-shards.mts', import.meta.url), 'utf-8')
+  assert.ok(migrationSource.includes("const apply = args.includes('--apply')"), '迁移脚本必须默认 dry-run')
+  assert.ok(migrationSource.includes('store.migrateRoom('), '迁移脚本必须复用主进程同一份分片实现')
+  assert.ok(migrationSource.includes('fs.copyFileSync(room.graphFile, backupFile)'), '落盘前必须备份原始 _graph.json')
+  const shardServiceSource = await readFile(new URL('../electron/services/graph-meta-service.js', import.meta.url), 'utf-8')
+  assert.ok(shardServiceSource.includes('export function graphMetaComparisonKey'), '顺序无关比较键必须单一实现在主进程模块')
+  assert.ok(
+    shardServiceSource.includes('graphMetaComparisonKey(expected) !== graphMetaComparisonKey(roundTrip)'),
+    'migrateRoom 必须用顺序无关比较键，否则所有多边房间都会被误判失败'
+  )
+  assert.ok(migrationSource.includes('graphMetaComparisonKey('), '迁移脚本 --verify 必须复用主进程比较键，不得自己写第二套')
+  assert.ok(migrationSource.includes('quarantineShards'), '迁移失败后必须隔离残留 _graph/ 分片，否则房间会被永久拒绝迁移')
+  // 全库格式统一：迁移脚本必须把 version=0 的 {} 空档也纳入升级，只迁 v1 会永远留 165 个旧格式房间。
+  assert.ok(migrationSource.includes('[...v1, ...empty]'), '待升级列表必须同时包含 v1 有数据房间与 version=0 空档')
+  // 应用可能在运行：落盘前必须复核扫描时记录的 sha256，防止覆盖用户刚保存的数据。
+  // 不能只查字面量：把判断写成 `false && currentHash !== ...` 也能蒙混过去。
+  // 断言「if 块里紧接着真的 throw」，把「条件被禁用」这类退化也拦住。
+  assert.ok(
+    /if \(currentHash !== room\.contentHash\) \{\s*throw new Error\('扫描后/.test(migrationSource),
+    '落盘前必须真的执行 TOCTOU 哈希复核，且 hash 不符时必须抛错中止'
+  )
+  assert.ok(migrationSource.includes('backupCreated'), 'TOCTOU 提前中止时不得回滚/隔离分片（只能在实际写盘后）')
 }
 
 console.log('Critical regression checks verified')

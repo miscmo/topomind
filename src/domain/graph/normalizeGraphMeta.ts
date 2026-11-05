@@ -1,5 +1,5 @@
 import type { CardInfo, GraphMeta, KBEdge } from './model'
-import type { EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, EdgeRelation, EdgeWeight, KnowledgeNodeStyle } from '../../types'
+import type { EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, EdgeRelation, EdgeWeight, KnowledgeNodeStyle, GraphNodeKind } from '../../types'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../style/styleConstraints.ts'
 import { normalizeEdgeAnchor } from './edgeAnchors.ts'
 import { normalizeCurveControl } from './edgeCurve.ts'
@@ -62,6 +62,11 @@ function normalizeArrowSize(value: unknown): number | undefined {
   return clampNumber(value, EDGE_ARROW_SIZE_LIMIT.min, EDGE_ARROW_SIZE_LIMIT.max)
 }
 
+/** P1：只放行已知枚举，未知值回落 undefined（等价 knowledge），避免脏值污染磁盘。 */
+function normalizeNodeKind(value: unknown): GraphNodeKind | undefined {
+  return value === 'knowledge' || value === 'shape' ? value : undefined
+}
+
 function normalizeCard(value: unknown, fallbackRef: string): CardInfo {
   const card = isRecord(value) ? value : {}
   const ref = asString(card.ref, fallbackRef)
@@ -100,6 +105,7 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
     nodes[id] = {
       id,
       card,
+      kind: normalizeNodeKind(rawNode.kind),
       height: asFiniteNumber(rawNode.height, DEFAULT_NODE_SIZE.height),
       width: asFiniteNumber(rawNode.width, DEFAULT_NODE_SIZE.width),
       widthMode: rawNode.widthMode === 'manual' ? 'manual' : (rawNode.widthMode === 'auto' ? 'auto' : undefined),

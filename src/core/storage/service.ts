@@ -124,13 +124,6 @@ export function createStore(backend: StorageBackend) {
         return await backend.listCards(kbPath)
       } catch (e) { logger.catch('Store.listCards', `列出卡片失败: ${kbPath}`, e); throw e }
     },
-    async createCard(kbPath: string, cardName: unknown) {
-      const safeName = ensureValidName(cardName, '卡片目录名')
-      try {
-        const cardInfo = await backend.createCard(kbPath, safeName)
-        return cardInfo.ref
-      } catch (e) { logger.catch('Store.createCard', `创建卡片失败: ${kbPath}/${cardName}`, e); throw e }
-    },
     async deleteCard(cardPath: string, label?: string) {
       try {
         await backend.deleteCard(cardPath, label)
