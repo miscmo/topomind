@@ -2141,7 +2141,7 @@ const edge = (
   assert.ok(deleteConfirm.includes('若该节点已有文档或子房间'), '删除确认文案必须反映按需物化语义')
 }
 
-// P0 后续清理：createCard / createCardDir 整条死链、3 个仅定义未调用的 _fs_ 函数、
+// P0 后续清理：createCard / createCardDir 整条死链、全部仅定义未调用的 _fs_ 函数、
 // 4 处「渲染层永远拿不到」的 version? 死声明必须保持已删除状态。
 // 逐文件按精确串断言，避免「接口里还留着成员」或「注释里保留字面量」蒙混过去。
 {
@@ -2155,7 +2155,10 @@ const edge = (
     ['../src/hooks/useGraph/graphOperations.ts', ['createCard']],
     ['../electron/preload.js', ['fs:createCardDir']],
     ['../electron/main.js', ['fs:createCardDir']],
-    ['../electron/file-service.js', ['createCardDir', '_fs_createCardDir(', '_fs_deleteKbsDir(', '_fs_listAttachments(']],
+    ['../electron/file-service.js', ['createCardDir', '_fs_createCardDir(', '_fs_deleteKbsDir(', '_fs_listAttachments(',
+      '_fs_logsDir(', '_fs_isDirEmpty(', '_fs_isValidWorkDir(', '_fs_kbRelativePath(',
+      '_fs_roomRelativePath(', '_fs_restoreTrashAttachment(', '_fs_listTrashAttachments(',
+      'pathGuardLogsDir', 'pathGuardIsValidWorkDir']],
     ['../electron/services/card-service.js', ['createCardDir']],
   ]
   for (const [rel, forbidden] of forbiddenByFile) {

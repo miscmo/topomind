@@ -10,9 +10,7 @@ import { shell } from 'electron';
 import { randomUUID } from 'crypto';
 import {
   appConfigPath as pathGuardAppConfigPath,
-  isValidWorkDir as pathGuardIsValidWorkDir,
   kbsDir as pathGuardKbsDir,
-  logsDir as pathGuardLogsDir,
   requireValidWorkDir as pathGuardRequireValidWorkDir,
   validateAbsolutePath as pathGuardValidateAbsolutePath,
 } from './services/path-guard.js';
@@ -63,44 +61,12 @@ function _fs_kbsDir(dir) {
 }
 
 /**
- * @description 返回工作目录下的日志目录路径
- * @param { string } dir: 工作目录路径
- * @returns { string } logs 目录路径
- */
-function _fs_logsDir(dir) {
-  return pathGuardLogsDir(dir);
-}
-
-/**
  * @description 返回工作目录下的应用配置文件路径
  * @param { string } dir: 工作目录路径
  * @returns { string } _config.json 文件路径
  */
 function _fs_appConfigPath(dir) {
   return pathGuardAppConfigPath(dir);
-}
-
-/**
- * @description 判断目录是否为空，不存在的目录视为空目录
- * @param { string } dirPath: 目录路径
- * @returns { boolean } 是否为空目录
- */
-function _fs_isDirEmpty(dirPath) {
-  try {
-    if (!nodeFs.existsSync(dirPath))
-      return true;
-    return nodeFs.readdirSync(dirPath).length === 0;
-  } catch (e) { return false; }
-}
-
-/**
- * @description 验证路径是否为有效工作目录：工作目录存在且为目录 -> 存在 _config.json -> 存在 kbs 目录 -> 存在 logs 目录
- * @param { string } dirPath: 工作目录路径
- * @returns { { valid: boolean, error?: string } } 工作目录校验结果
- * @throws { Error } 路径处理异常时抛出错误
- */
-function _fs_isValidWorkDir(dirPath) {
-  return pathGuardIsValidWorkDir(dirPath);
 }
 
 /**
@@ -306,35 +272,6 @@ function _fs_requireSafeKbsTextFile(rootDir, relPath) {
  */
 function _fs_relativeToKbs(rootDir, absPath) {
   return nodePath.relative(_fs_kbsDir(rootDir), absPath).split(nodePath.sep).join('/');
-}
-
-/**
- * @description 将完整知识库路径转换为相对于知识库根节点的路径
- * @param { string } relPath: 知识库内路径
- * @returns { string } KB 相对路径
- */
-function _fs_kbRelativePath(relPath) {
-  var parts = String(relPath || '').split('/').filter(Boolean);
-  if (parts.length <= 1) return '';
-  return parts.slice(1).join('/');
-}
-
-/**
- * @description 将子节点路径转换为相对于父房间的路径
- * @param { string } parentPath: 父房间路径
- * @param { string } childPath: 子节点完整路径
- * @returns { string } 房间相对路径
- */
-function _fs_roomRelativePath(parentPath, childPath) {
-  var parentParts = String(parentPath || '').split('/').filter(Boolean);
-  var childParts = String(childPath || '').split('/').filter(Boolean);
-  var matchesParent = parentParts.length > 0 && parentParts.every(function(part, index) {
-    return childParts[index] === part;
-  });
-  if (matchesParent) {
-    return childParts.slice(parentParts.length).join('/');
-  }
-  return childParts.length ? childParts[childParts.length - 1] : '';
 }
 
 /**
@@ -579,43 +516,6 @@ function _fs_attachmentDir(rootDir, cardPath) {
   rootDir = _fs_requireValidWorkDir(rootDir);
   var cardDir = cardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, cardPath);
   return nodePath.join(cardDir, '_attach');
-}
-
-function _fs_listTrashAttachments(rootDir, cardPath) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
-  var attachDir = _fs_attachmentDir(rootDir, cardPath);
-  var expectedOriginalDir = nodePath.relative(rootDir, attachDir).split(nodePath.sep).join('/');
-  return _fs_listTrashItems(rootDir, 'attachments').filter(function(item) {
-    return nodePath.dirname(item.originalPath).split(nodePath.sep).join('/') === expectedOriginalDir;
-  });
-}
-
-function _fs_restoreTrashAttachment(rootDir, cardPath, trashName) {
-  rootDir = _fs_requireValidWorkDir(rootDir);
-  var attachDir = _fs_attachmentDir(rootDir, cardPath);
-  var allowed = _fs_listTrashAttachments(rootDir, cardPath).some(function(item) {
-    return item.trashName === trashName;
-  });
-  if (!allowed) throw new Error('附件不属于当前文档回收站');
-  var safeTrashName = nodePath.basename(String(trashName || '').trim());
-  var trashDir = nodePath.join(rootDir, '.trash', 'attachments');
-  var source = nodePath.resolve(trashDir, safeTrashName);
-  if (!isPathWithinDirCompat(trashDir, source) || !nodeFs.existsSync(source)) {
-    throw new Error('回收站附件不存在');
-  }
-  var meta = {};
-  try {
-    meta = _fs_readJsonFile(source + '.trash.json');
-  } catch {}
-  var fileName = _fs_safeFileName(meta.originalName || safeTrashName);
-  _fs_ensureDir(attachDir);
-  var target = _fs_uniqueFilePath(attachDir, fileName);
-  nodeFs.copyFileSync(source, target);
-  try {
-    if (nodeFs.existsSync(source)) nodeFs.rmSync(source, { force: true });
-    if (nodeFs.existsSync(source + '.trash.json')) nodeFs.rmSync(source + '.trash.json', { force: true });
-  } catch {}
-  return '_attach/' + nodePath.basename(target);
 }
 
 const TOPO_DOCUMENT_DIR = '_docs';
