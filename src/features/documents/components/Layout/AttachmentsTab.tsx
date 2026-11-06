@@ -5,7 +5,6 @@ import { useConfirmStore } from '../../../../shared/ui/ConfirmModal/confirmStore
 import { logger } from '../../../../core/logger'
 import type { AttachmentItem } from '../../../../core/storage'
 import { logAction } from '../../../../core/log-backend'
-import type { FSBTrashItem } from '../../../../core/fs-backend'
 import { EmptyState } from '../../../../shared/ui/EmptyState'
 import { Paperclip } from 'lucide-react'
 
@@ -151,8 +150,6 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
   const storage = useStorage()
   const confirm = useConfirmStore(s => s.open)
   const [attachments, setAttachments] = useState<AttachmentItem[]>([])
-  const [] = useState<FSBTrashItem[]>([])
-  const [] = useState<'active' | 'trash'>('active')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 

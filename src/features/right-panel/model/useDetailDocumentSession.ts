@@ -60,7 +60,7 @@ export function useDetailDocumentSession({
     const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label
     const saveStartedAt = performance.now()
-    let savedContentLength = getDocumentContentLength(contentSnapshot)
+    let savedContentLength: number
 
     try {
       if (activeTopoDocumentId) {
@@ -68,7 +68,7 @@ export function useDetailDocumentSession({
         try {
           contentToWrite = prepareStructuredDocumentContentForSave(contentSnapshot)
         } catch (parseError) {
-          throw new Error(`文档内容解析失败，为防止覆盖，已终止保存: ${(parseError as Error).message}`)
+          throw new Error(`文档内容解析失败，为防止覆盖，已终止保存: ${(parseError as Error).message}`, { cause: parseError })
         }
 
         if (contentToWrite === null) contentToWrite = {}

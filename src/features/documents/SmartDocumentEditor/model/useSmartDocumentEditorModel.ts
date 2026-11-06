@@ -34,7 +34,7 @@ import {
  * 都没有（例如刚失焦、空文档）时返回 null。
  */
 function readCurrentBlockLastModified(editor: any): number | null {
-  let block: any = null
+  let block: any
   try {
     block = editor.getSelection()?.blocks?.[0] ?? null
   } catch {

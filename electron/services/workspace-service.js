@@ -29,11 +29,11 @@ function writeJsonFile(filePath, data) {
     if (fd !== null) {
       try {
         nodeFs.closeSync(fd);
-      } catch {}
+      } catch { /* 忽略：清理失败不影响主流程 */ }
     }
     try {
       if (nodeFs.existsSync(tempPath)) nodeFs.rmSync(tempPath, { force: true });
-    } catch {}
+    } catch { /* 忽略：清理失败不影响主流程 */ }
     throw e;
   }
 }

@@ -162,7 +162,7 @@ function _fs_moveToTrash(rootDir, sourcePath, category, extraMetadata) {
       trashName: nodePath.basename(target),
       ...(_fs_isPlainObject(extraMetadata) ? extraMetadata : {}),
     });
-  } catch {}
+  } catch { /* 忽略：此处失败按兜底路径继续 */ }
   return target;
 }
 
@@ -178,7 +178,7 @@ function _fs_listTrashItems(rootDir, category) {
       var meta = {};
       try {
         meta = _fs_readJsonFile(itemPath + '.trash.json');
-      } catch {}
+      } catch { /* 忽略：元数据缺失时走兜底值 */ }
       return {
         trashName: entry.name,
         originalName: String(meta.originalName || entry.name),
@@ -204,7 +204,7 @@ function _fs_restoreTrashItem(rootDir, category, trashName, destinationParentDir
   var meta = {};
   try {
     meta = _fs_readJsonFile(source + '.trash.json');
-  } catch {}
+  } catch { /* 忽略：元数据缺失时走兜底值 */ }
   var originalName = _fs_safeSegment(meta.originalName || safeTrashName.replace(/^\d{4}-\d{2}-\d{2}t?\d{2}-\d{2}-\d{2}-\d{3}z?-/i, ''));
   var targetParent = destinationParentDir || rootDir;
   _fs_ensureDir(targetParent);
@@ -212,7 +212,7 @@ function _fs_restoreTrashItem(rootDir, category, trashName, destinationParentDir
   nodeFs.renameSync(source, target);
   try {
     if (nodeFs.existsSync(source + '.trash.json')) nodeFs.rmSync(source + '.trash.json', { force: true });
-  } catch {}
+  } catch { /* 忽略：清理失败不影响主流程 */ }
   return target;
 }
 
@@ -317,11 +317,11 @@ function _fs_writeJsonFile(filePath, data) {
     if (fd !== null) {
       try {
         nodeFs.closeSync(fd);
-      } catch {}
+      } catch { /* 忽略：清理失败不影响主流程 */ }
     }
     try {
       if (nodeFs.existsSync(tempPath)) nodeFs.rmSync(tempPath, { force: true });
-    } catch {}
+    } catch { /* 忽略：清理失败不影响主流程 */ }
     throw e;
   }
 }
@@ -598,8 +598,7 @@ function _fs_topoDocumentTitleFromFile(type, filePath, fileName) {
     if (_fs_isPlainObject(content) && typeof content.title === 'string' && content.title.trim()) {
       return content.title.trim();
     }
-  } catch {
-  }
+  } catch { /* 忽略：此处失败按兜底路径继续 */ }
   return fallback || '未命名文档';
 }
 
@@ -628,7 +627,7 @@ function _fs_normalizeTopoDocumentManifest(raw) {
           if (typeof item.color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(item.color)) documents[id].color = item.color;
           if (item.originalParentId) documents[id].originalParentId = String(item.originalParentId);
           if (item.originalDocumentId) documents[id].originalDocumentId = String(item.originalDocumentId);
-        } catch (e) {}
+        } catch { /* 忽略：此处失败按兜底路径继续 */ }
       });
     } else if (Array.isArray(raw.documents)) {
       // v1 array migration
@@ -654,7 +653,7 @@ function _fs_normalizeTopoDocumentManifest(raw) {
           if (typeof item.color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(item.color)) documents[id].color = item.color;
           if (item.originalParentId) documents[id].originalParentId = String(item.originalParentId);
           if (item.originalDocumentId) documents[id].originalDocumentId = String(item.originalDocumentId);
-        } catch (e) {}
+        } catch { /* 忽略：此处失败按兜底路径继续 */ }
       });
     }
   }
@@ -763,7 +762,7 @@ function _fs_loadTopoDocumentManifest(rootDir, cardPath) {
   if (!nodeFs.existsSync(treePath) && nodeFs.existsSync(oldManifestPath)) {
     try {
       nodeFs.renameSync(oldManifestPath, treePath);
-    } catch(e) {}
+    } catch { /* 忽略：此处失败按兜底路径继续 */ }
   }
   
   if (!nodeFs.existsSync(treePath)) return { manifest: { version: 2, documents: {} }, corrupted: false, normalized: false };
@@ -775,8 +774,7 @@ function _fs_loadTopoDocumentManifest(rootDir, cardPath) {
     var backupPath = treePath + '.broken-' + Date.now();
     try {
       nodeFs.copyFileSync(treePath, backupPath);
-    } catch {
-    }
+    } catch { /* 忽略：此处失败按兜底路径继续 */ }
     return { manifest: { version: 2, documents: {} }, corrupted: true, normalized: true };
   }
 }
@@ -1083,7 +1081,7 @@ function _fs_listTrashTopoDocuments(rootDir, cardPath) {
     var type = 'smart';
     try {
       type = _fs_normalizeTopoDocumentType(topoItem && topoItem.type);
-    } catch {}
+    } catch { /* 忽略：元数据缺失时走兜底值 */ }
     return {
       trashName: item.trashName,
       originalName: item.originalName,
@@ -1144,7 +1142,7 @@ function _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName) {
     var restoredBody = _fs_readJsonFile(target);
     var nextBody = withSelfDescribingDocumentId(restoredBody, target, Object.values(DOCUMENT_EXTENSIONS));
     if (nextBody !== restoredBody) _fs_writeJsonFile(target, nextBody);
-  } catch {}
+  } catch { /* 忽略：元数据缺失时走兜底值 */ }
   var restoredPath = nodePath.basename(target);
   var originalDocumentId = topoItem.id ? String(topoItem.id) : null;
   var originalParentId = topoItem.parentId ? String(topoItem.parentId) : null;
@@ -1185,13 +1183,13 @@ function _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName) {
   } catch (e) {
     try {
       if (nodeFs.existsSync(target)) nodeFs.rmSync(target, { force: true });
-    } catch {}
+    } catch { /* 忽略：清理失败不影响主流程 */ }
     throw e;
   }
   try {
     if (nodeFs.existsSync(source)) nodeFs.rmSync(source, { force: true });
     if (nodeFs.existsSync(source + '.trash.json')) nodeFs.rmSync(source + '.trash.json', { force: true });
-  } catch {}
+  } catch { /* 忽略：清理失败不影响主流程 */ }
   return restoredItem;
 }
 
@@ -1229,7 +1227,7 @@ function _fs_extractAttachmentRefs(content) {
   var text;
   try {
     text = JSON.stringify(content == null ? '' : content);
-  } catch (e) {
+  } catch {
     return [];
   }
   var re = /_attach\/[^"'\\\s]+/g;
@@ -1248,7 +1246,7 @@ function _fs_rewriteAttachmentRefsInContent(content, refMap) {
   var text;
   try {
     text = JSON.stringify(content == null ? '' : content);
-  } catch (e) {
+  } catch {
     return content;
   }
   Object.keys(refMap).forEach(function(oldRef) {
@@ -1260,7 +1258,7 @@ function _fs_rewriteAttachmentRefsInContent(content, refMap) {
   });
   try {
     return JSON.parse(text);
-  } catch (e) {
+  } catch {
     return content;
   }
 }
@@ -1275,7 +1273,7 @@ function _fs_copyDocumentAttachmentsToCard(rootDir, sourceCardPath, targetCardPa
     var sourcePath;
     try {
       sourcePath = _fs_attachmentRefToPath(rootDir, sourceCardPath, ref);
-    } catch (e) {
+    } catch {
       return;
     }
     if (!nodeFs.existsSync(sourcePath)) return;
@@ -1283,7 +1281,7 @@ function _fs_copyDocumentAttachmentsToCard(rootDir, sourceCardPath, targetCardPa
     var newRef;
     try {
       newRef = _fs_importAttachment(rootDir, targetCardPath, sourcePath, fileName);
-    } catch (e) {
+    } catch {
       return;
     }
     if (newRef) refMap[ref] = newRef;
@@ -1312,7 +1310,7 @@ function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetC
   }
 
   // 提前校验目标节点目录合法（不存在则抛错，避免写到无效位置）。
-  var targetCardDir = targetCardPath === '__ROOT__' ? rootDir : _fs_resolveKbsPath(rootDir, targetCardPath);
+  if (targetCardPath !== '__ROOT__') _fs_resolveKbsPath(rootDir, targetCardPath);
 
   // 收集整棵子树（深度优先，含自身）。
   var subtreeIds = [];
@@ -1389,15 +1387,15 @@ function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetC
         try {
           var c = _fs_readTopoDocument(rootDir, sourceCardPath, rid);
           _fs_extractAttachmentRefs(c).forEach(function(r) { stillReferenced[r] = true; });
-        } catch (e) {}
+        } catch { /* 忽略：单项读取失败时跳过 */ }
       });
-    } catch (e) {}
+    } catch { /* 忽略：单项读取失败时跳过 */ }
     Object.keys(movedAttachmentRefs).forEach(function(ref) {
       if (stillReferenced[ref]) return; // 仍被源节点其他文档引用，保留
       try {
         _fs_deleteAttachment(rootDir, sourceCardPath, ref);
         attachmentCleaned += 1;
-      } catch (e) {}
+      } catch { /* 忽略：此处失败按兜底路径继续 */ }
     });
   }
 
@@ -1553,12 +1551,12 @@ function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPat
     graphMetaService.writeGraphMeta(rootDir, targetRoomPath, newTargetMeta);
     graphMetaService.writeGraphMeta(rootDir, sourceRoomPath, newSourceMeta);
   } catch (e) {
-    try { graphMetaService.writeGraphMeta(rootDir, targetRoomPath, targetMetaRaw); } catch (_) {}
-    try { graphMetaService.writeGraphMeta(rootDir, sourceRoomPath, sourceMeta); } catch (_) {}
+    try { graphMetaService.writeGraphMeta(rootDir, targetRoomPath, targetMetaRaw); } catch { /* 忽略：回滚失败时继续抛出原错误 */ }
+    try { graphMetaService.writeGraphMeta(rootDir, sourceRoomPath, sourceMeta); } catch { /* 忽略：回滚失败时继续抛出原错误 */ }
     movedBasenames.forEach(function (newId) {
       var oldId = null;
       Object.keys(renameMap).forEach(function (k) { if (renameMap[k] === newId) oldId = k; });
-      try { nodeFs.renameSync(nodePath.join(targetDir, newId), nodePath.join(sourceDir, oldId)); } catch (_) {}
+      try { nodeFs.renameSync(nodePath.join(targetDir, newId), nodePath.join(sourceDir, oldId)); } catch { /* 忽略：此处失败按兜底路径继续 */ }
     });
     throw e;
   }
@@ -1717,7 +1715,7 @@ const fileService = {
         if (data && typeof data === 'object') {
           result[dateStr] = data;
         }
-      } catch (e) {}
+      } catch { /* 忽略：此处失败按兜底路径继续 */ }
     });
 
     return result;
@@ -1746,7 +1744,7 @@ const fileService = {
             result[dateStr] = data.totalDuration;
           }
         }
-      } catch(e) {}
+      } catch { /* 忽略：此处失败按兜底路径继续 */ }
     }
     return result;
   },
@@ -1910,7 +1908,7 @@ const fileService = {
               childCount: Object.keys(children).length,
               hasDetail: documents.length > 0,
             };
-          } catch (_) {
+          } catch {
             summaries[roomPath] = { childCount: 0, hasDetail: false };
           }
         });

@@ -109,7 +109,7 @@ export function createAttachmentService(deps) {
       var meta = {};
       try {
         meta = readJsonFile(source + '.trash.json');
-      } catch {}
+      } catch { /* 忽略：元数据缺失时走兜底值 */ }
 
       // If cardPath is empty, try to guess from originalPath
       if (!cardPath && meta.originalPath) {
@@ -135,7 +135,7 @@ export function createAttachmentService(deps) {
       try {
         if (nodeFs.existsSync(source)) nodeFs.rmSync(source, { force: true });
         if (nodeFs.existsSync(source + '.trash.json')) nodeFs.rmSync(source + '.trash.json', { force: true });
-      } catch {}
+      } catch { /* 忽略：清理失败不影响主流程 */ }
       return '_attach/' + nodePath.basename(target);
     },
 

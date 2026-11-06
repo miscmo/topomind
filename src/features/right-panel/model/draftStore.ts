@@ -23,7 +23,6 @@ let persistTimer: number | null = null
 let pendingPersistName: string | null = null
 let pendingPersistValue: StorageValue<DraftPersistedState> | null = null
 let pendingPersistRemove = false
-let persistListenersRegistered = false
 let persistFailureCount = 0
 let lastPersistedValue: StorageValue<DraftPersistedState> | null = null
 const pendingDirtyCardPaths = new Set<string>()
@@ -232,10 +231,9 @@ function scheduleDraftPersist(
   }, DRAFT_STORAGE_WRITE_DELAY_MS)
 }
 
-if (typeof window !== 'undefined' && !persistListenersRegistered) {
+if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', flushPendingDraftPersist)
   window.addEventListener('pagehide', flushPendingDraftPersist)
-  persistListenersRegistered = true
 }
 
 // Older builds persisted full document bodies as detail drafts in localStorage.

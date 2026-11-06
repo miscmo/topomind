@@ -237,7 +237,7 @@ async function readRendererDirtyState() {
   try {
     const result = await requestRendererCloseGuard('get-dirty-state');
     return sanitizeCloseGuardDirtyState(result);
-  } catch (e) {
+  } catch {
     return { hasDirty: true, dirtyTabIds: [] };
   }
 }
@@ -410,7 +410,7 @@ function registerIPC() {
     try {
       const absPath = _fs_attachmentRefToPath(requireActiveWorkDir(rootDir), cardPath, attachmentRef);
       return buildLocalFileUrl(absPath);
-    } catch (err) {
+    } catch {
       return null;
     }
   });

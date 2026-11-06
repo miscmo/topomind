@@ -59,7 +59,7 @@ const SANITIZE_OPTIONS = {
   ],
   KEEP_CONTENT: true,
   ADD_DATA_URI_TAGS: ['img'],
-  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|local-file):|data:image\/(?:bmp|gif|jpeg|jpg|png|svg\+xml|webp);base64,|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|local-file):|data:image\/(?:bmp|gif|jpeg|jpg|png|svg\+xml|webp);base64,|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
 }
 
 function sanitizeEditorHtml(html: string): string {
@@ -634,8 +634,8 @@ function replaceInlineMarkdownInHtmlDocument(root: ParentNode) {
     }
 
     // Bold
-    if (/\*\*([^\*\n]+)\*\*/.test(newHtml)) {
-      newHtml = newHtml.replace(/\*\*([^\*\n]+)\*\*/g, '<strong>$1</strong>')
+    if (/\*\*([^*\n]+)\*\*/.test(newHtml)) {
+      newHtml = newHtml.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
       changed = true
     }
     if (/__([^_\n]+)__/.test(newHtml)) {
@@ -644,8 +644,8 @@ function replaceInlineMarkdownInHtmlDocument(root: ParentNode) {
     }
 
     // Italic
-    if (/(?<!\*)\*([^\*\n]+)\*(?!\*)/.test(newHtml)) {
-      newHtml = newHtml.replace(/(?<!\*)\*([^\*\n]+)\*(?!\*)/g, '<em>$1</em>')
+    if (/(?<!\*)\*([^*\n]+)\*(?!\*)/.test(newHtml)) {
+      newHtml = newHtml.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>')
       changed = true
     }
     if (/(?<!_)_([^_\n]+)_(?!_)/.test(newHtml)) {

@@ -549,7 +549,7 @@ export function useDocumentSidebarModel({
         if (targetDoc) {
           const siblings = (targetDoc.parentId ? childrenMap[targetDoc.parentId] : rootItems) || []
           const targetIndex = siblings.findIndex(s => s.id === targetId)
-          let newSortOrder = targetDoc.sortOrder
+          let newSortOrder: number
           if (position === 'before') {
             const prev = targetIndex > 0 ? siblings[targetIndex - 1].sortOrder : targetDoc.sortOrder - 1
             newSortOrder = (prev + targetDoc.sortOrder) / 2

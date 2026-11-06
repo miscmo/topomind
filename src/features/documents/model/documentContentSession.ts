@@ -27,7 +27,7 @@ export function prepareStructuredDocumentContentForSave(value: DocumentContentVa
     try {
       parsedContent = JSON.parse(value.trim())
     } catch (error) {
-      throw new Error(`文档内容不是有效的 JSON 格式，为防止覆盖，已终止保存: ${error instanceof Error ? error.message : String(error)}`)
+      throw new Error(`文档内容不是有效的 JSON 格式，为防止覆盖，已终止保存: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
   }
   if (!isPlainStructuredDocumentContent(parsedContent)) {

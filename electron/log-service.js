@@ -9,7 +9,7 @@
  * 5. 响应 renderer 发来的日志 IPC 请求
  */
 
-import { ipcMain, app, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 
@@ -314,11 +314,11 @@ function query({ dateStr, keyword, levels, actions, startTime, endTime } = {}) {
         if (startTime && entry.timestamp < startTime) return;
         if (endTime && entry.timestamp > endTime) return;
         results.push(entry);
-      } catch (e) {
+      } catch {
         // 忽略解析失败的行
       }
     });
-  } catch (e) {
+  } catch {
     // 文件不存在或读取失败
   }
   return results;
@@ -361,7 +361,7 @@ function getAvailableDates() {
       .map(f => f.replace(/\.log$/, ''))
       .sort()
       .reverse(); // 最新的在前
-  } catch (e) {
+  } catch {
     return [];
   }
 }

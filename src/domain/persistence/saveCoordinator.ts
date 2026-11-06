@@ -126,6 +126,7 @@ export class SaveCoordinator<T> {
     const version = pending.version
     const value = pending.buildValue()
     let savePromise!: Promise<void>
+    // eslint-disable-next-line prefer-const -- finally 会引用 savePromise；同步抛错时改成 const 会触发 TDZ
     savePromise = (async () => {
       try {
         await this.save(key, value)

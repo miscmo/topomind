@@ -156,7 +156,7 @@ export function createKbService(deps) {
       // 否则 docId 不再是全库唯一主键，节点关联 / 文档间引用会指向错误副本。
       var existingIds = [];
       if (typeof collectDocumentIds === 'function') {
-        try { existingIds = collectDocumentIds(rootDir) || []; } catch {}
+        try { existingIds = collectDocumentIds(rootDir) || []; } catch { /* 忽略：收集失败时按空列表继续 */ }
       }
       var destKbPath = nodePath.relative(kbsDir(rootDir), dest).split(nodePath.sep).join('/');
       try {
@@ -167,7 +167,7 @@ export function createKbService(deps) {
       } catch (e) {
         try {
           if (nodeFs.existsSync(dest)) nodeFs.rmSync(dest, { recursive: true, force: true });
-        } catch {}
+        } catch { /* 忽略：清理失败不影响主流程 */ }
         throw e;
       }
 
