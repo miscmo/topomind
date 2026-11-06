@@ -2586,6 +2586,23 @@ const edge = (
   assert.equal(service.resolveDocumentById('/root', 'doc_c').status, 'trashed', '删除进回收站的文档必须标记 trashed')
   assert.equal(service.resolveDocumentById('/root', 'doc_no_such').status, 'missing', '彻底删除的文档必须标记 missing')
 
+  // 来源面包屑：末段必须换成可读节点名，不能 slice(0,-1) 把所属节点丢掉。
+  assert.equal(idService.formatDocumentSource('KB1/room/card-a', '节点 A'), 'KB1 / room / 节点 A', '来源末段必须显示节点名而非 id')
+  assert.equal(idService.formatDocumentSource('测试库/node-b', '节点 B'), '测试库 / 节点 B', '顶层节点来源必须保留所属节点')
+  assert.equal(idService.formatDocumentSource('KB1', '测试库'), '测试库', '单段路径来源不得退化成根节点')
+  assert.equal(idService.formatDocumentSource('__ROOT__', ''), '根节点', '工作区根节点来源')
+  const hintResolved = service.resolveDocumentById('/root', 'doc_a', 'KB1/room/card-a')
+  assert.equal(hintResolved.nodeName, '节点 A', 'cardRef 直取也必须解析出节点名（用于「在所属节点打开」）')
+  assert.equal(hintResolved.sourceLabel, 'KB1 / room / 节点 A', 'cardRef 直取必须返回可读来源')
+  assert.equal(healed.sourceLabel, 'KB2 / room2 / 节点 B', '全库自愈必须返回新所属节点的可读来源')
+  assert.equal(healed.nodeName, '节点 B', '全库自愈必须返回新所属节点名')
+  assert.equal(service.resolveDocumentById('/root', 'doc_c').sourceLabel, 'KB1 / room / 节点 A', '回收站文档也要显示原来源')
+  assert.equal(service.resolveDocumentById('/root', 'doc_no_such').sourceLabel, '未知位置', '彻底失效文档的来源必须兜底')
+  assert.ok(
+    candidates.some((c: any) => c.docId === 'doc_b' && c.breadcrumb === 'KB2 / room2 / 节点 B'),
+    '选择器候选面包屑与 resolve 的 sourceLabel 必须走同一格式规则'
+  )
+
   // 导入 KB 副本：只重映射与现有库冲突的 id，并同步文件名 + 正文自描述 id。
   const importResult = service.remapImportedDocumentIds('/root', 'KB3', ['doc_a'])
   assert.equal(importResult.remappedCount, 1, '导入副本只应重映射冲突的 docId')
@@ -2659,6 +2676,17 @@ const edge = (
   assert.ok(detailPanelSource.includes('syncHasDetail: detailView === \'own\''), '关联视图不得改动当前节点的自身文档标记')
   const linkDocumentsSource = await readFile(new URL('../src/features/right-panel/model/useDetailDocuments.ts', import.meta.url), 'utf-8')
   assert.ok(linkDocumentsSource.includes('allowedDocumentIds'), '关联视图的默认激活兜底必须限制在关联文档内')
+
+  // 来源面包屑只有一份格式规则：不允许右栏再自己 slice(0,-1) 丢掉所属节点。
+  const linkedListSource = await readFile(new URL('../src/features/right-panel/components/DetailTab/LinkedDocumentList.tsx', import.meta.url), 'utf-8')
+  const resolvedHookSource = await readFile(new URL('../src/features/right-panel/model/useResolvedLinkedDocuments.ts', import.meta.url), 'utf-8')
+  assert.equal(detailPanelSource.includes('function displaySource'), false, '右栏不得再自定义来源格式化')
+  assert.equal(linkedListSource.includes('function displaySource'), false, '关联列表不得再自定义来源格式化')
+  assert.equal(detailPanelSource.includes("parts.slice(0, -1).join(' / ')"), false, '来源不得丢掉末段所属节点')
+  assert.ok(detailPanelSource.includes('activeLinked?.sourceLabel'), '右栏来源必须使用后端解析出的可读面包屑')
+  assert.ok(linkedListSource.includes('link.sourceLabel'), '关联列表来源必须使用后端解析出的可读面包屑')
+  assert.ok(resolvedHookSource.includes('sourceLabel: result.sourceLabel'), '解析结果必须透传 sourceLabel')
+  assert.ok(resolvedHookSource.includes('nodeName: result.nodeName'), '解析结果必须透传 nodeName')
 }
 
 // 任务 #58：topo 正文序列化兼容性 —— columnList / column 等自定义块不得被剥掉。

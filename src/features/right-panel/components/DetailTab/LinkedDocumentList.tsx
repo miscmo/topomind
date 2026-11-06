@@ -14,12 +14,6 @@ interface LinkedDocumentListProps {
   onAdd: () => void
 }
 
-function displaySource(cardPath: string) {
-  if (!cardPath) return '未知位置'
-  const parts = cardPath.split('/').filter(Boolean)
-  return parts.slice(0, -1).join(' / ') || '根节点'
-}
-
 /** 关联视图的侧栏：平铺的关联列表，不展示源节点的整棵文档树。 */
 export const LinkedDocumentList = memo(function LinkedDocumentList({
   links,
@@ -74,7 +68,7 @@ export const LinkedDocumentList = memo(function LinkedDocumentList({
                         {link.title || '未命名文档'}
                       </span>
                       <span className="block truncate text-[10px] text-[var(--color-text-muted)]">
-                        来源：{displaySource(link.cardPath || link.cardRef)}
+                        来源：{link.sourceLabel || '未知位置'}
                       </span>
                       {link.status === 'trashed' && (
                         <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] text-[var(--color-warning)]">

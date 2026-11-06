@@ -136,6 +136,18 @@ function normalizeCardPath(value) {
   return String(value ?? '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/')
 }
 
+/**
+ * 文档来源的唯一格式化规则：末段是节点 id，必须换成可读节点名。
+ * 选择器候选面包屑与右栏「来源」共用本函数，避免两处各写一份 slice(0,-1) 把末段丢掉。
+ */
+export function formatDocumentSource(cardPath, nodeName) {
+  const normalized = normalizeCardPath(cardPath)
+  if (!normalized || normalized === '__ROOT__') return '根节点'
+  const parts = normalized.split('/').filter(Boolean)
+  const leaf = String(nodeName ?? '').trim() || parts[parts.length - 1]
+  return [...parts.slice(0, -1), leaf].join(' / ') || '根节点'
+}
+
 /** 递归找出所有 _docs 目录（含 tree.json 才算有文档）。 */
 function collectDocsDirs(fs, path, startDir, maxDepth = 32) {
   const found = []
@@ -243,17 +255,17 @@ export function createDocumentIndexService(deps) {
 
   const listDocumentCandidates = (rootDir) => scanDocumentEntries(rootDir).map((entry) => ({
     ...entry,
-    breadcrumb: entry.cardPath === '__ROOT__'
-      ? '根节点'
-      : `${entry.cardPath.split('/').slice(0, -1).join(' / ')}${entry.cardPath.includes('/') ? ' / ' : ''}${entry.nodeName}`,
+    breadcrumb: formatDocumentSource(entry.cardPath, entry.nodeName),
   }))
 
-  const okResult = (docId, item, cardPath) => ({
+  const okResult = (docId, item, cardPath, nodeName = '') => ({
     status: 'ok',
     docId,
     cardPath: normalizeCardPath(cardPath),
     title: String(item.title || '未命名文档'),
     type: String(item.type || 'smart'),
+    nodeName: String(nodeName || '').trim(),
+    sourceLabel: formatDocumentSource(cardPath, nodeName),
   })
 
   /**
@@ -262,20 +274,30 @@ export function createDocumentIndexService(deps) {
    */
   const resolveDocumentById = (rootDir, docId, cardRef = '') => {
     const id = String(docId ?? '').trim()
-    if (!id) return { status: 'missing', docId: id, cardPath: '', title: '', type: 'smart' }
+    const nameCache = new Map()
+    const missing = () => ({
+      status: 'missing',
+      docId: id,
+      cardPath: '',
+      title: '',
+      type: 'smart',
+      nodeName: '',
+      sourceLabel: '未知位置',
+    })
+    if (!id) return missing()
     const hint = normalizeCardPath(cardRef)
     if (hint) {
       try {
         const manifest = readTopoManifest(rootDir, hint)
         const item = manifest && manifest.documents ? manifest.documents[id] : null
-        if (item) return okResult(id, item, hint)
+        if (item) return okResult(id, item, hint, nodeNameOf(rootDir, hint, nameCache))
       } catch { /* best-effort：单项探测/修复失败按「不存在」处理，不阻断整次扫描 */ }
     }
     const matches = scanDocumentEntries(rootDir).filter((entry) => entry.docId === id)
     if (matches.length) {
       const hintKb = hint.split('/')[0]
       const match = (hintKb && matches.find((entry) => entry.cardPath.split('/')[0] === hintKb)) || matches[0]
-      return okResult(id, { title: match.title, type: match.type }, match.cardPath)
+      return okResult(id, { title: match.title, type: match.type }, match.cardPath, match.nodeName)
     }
     let trashed = null
     try {
@@ -285,16 +307,20 @@ export function createDocumentIndexService(deps) {
     } catch { /* best-effort：单项探测/修复失败按「不存在」处理，不阻断整次扫描 */ }
     if (trashed) {
       const item = trashed.meta.topoDocumentItem
+      const cardPath = normalizeCardPath(trashed.meta.cardPath || '')
+      const nodeName = nodeNameOf(rootDir, cardPath, nameCache)
       return {
         status: 'trashed',
         docId: id,
-        cardPath: normalizeCardPath(trashed.meta.cardPath || ''),
+        cardPath,
         title: String(item.title || trashed.originalName || '未命名文档'),
         type: String(item.type || 'smart'),
         trashName: String(trashed.trashName || ''),
+        nodeName,
+        sourceLabel: formatDocumentSource(cardPath, nodeName),
       }
     }
-    return { status: 'missing', docId: id, cardPath: '', title: '', type: 'smart' }
+    return missing()
   }
 
   /**

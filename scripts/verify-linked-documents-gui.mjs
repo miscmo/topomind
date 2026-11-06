@@ -237,12 +237,17 @@ async function main() {
       hasOwnTitle: (document.body.innerText || '').includes(own),
       segmented: [...document.querySelectorAll('button')].filter((b) => /本节点文档|关联文档 ·/.test(b.innerText || '')).map((b) => (b.innerText || '').trim()),
       ownerPath: [...document.querySelectorAll('button')].map((b) => b.getAttribute('title') || '').find((t) => t.includes('在文件管理器中打开')),
+      sourceLines: [...document.querySelectorAll('span')].map((s) => (s.innerText || '').trim()).filter((t) => t.startsWith('来源：')),
     }), { link: LINK_TITLE, own: OWN_TITLE })
     check('链环一键直达右栏关联视图', linkedView.hasLinkedTitle && !linkedView.hasOwnTitle &&
       linkedView.segmented.includes('本节点文档') && linkedView.segmented.includes('关联文档 · 1'),
       JSON.stringify(linkedView.segmented))
     check('右栏文档路径指向文档所属节点 node-b',
       (linkedView.ownerPath || '').includes('node-b/_docs/doc_b.tdoc.json'), linkedView.ownerPath)
+    check('右栏来源面包屑显示所属节点名而非裸 id',
+      linkedView.sourceLines.some((t) => t.includes('测试库 / 节点 B')) &&
+      !linkedView.sourceLines.some((t) => t.includes('node-b') || t.includes('来源：测试库 / B')),
+      JSON.stringify(linkedView.sourceLines))
 
     // ---- 阶段 D：ownerCardPath 写入隔离（最关键的回归）----
     const beforeA = sha(DOC_A)
@@ -286,8 +291,13 @@ async function main() {
       remove: [...document.querySelectorAll('button')].some((b) => b.getAttribute('title') === '移除关联'),
       openOwner: [...document.querySelectorAll('button')].some((b) => b.getAttribute('title') === '在所属节点打开'),
       add: [...document.querySelectorAll('button')].some((b) => (b.innerText || '').trim() === '添加'),
+      sourceLines: [...document.querySelectorAll('span')].map((s) => (s.innerText || '').trim()).filter((t) => t.startsWith('来源：')),
     }))
     check('关联列表侧栏提供添加/在所属节点打开/移除', list.remove && list.openOwner && list.add, JSON.stringify(list))
+    check('关联列表来源与右栏一致且显示节点名',
+      list.sourceLines.some((t) => t.includes('测试库 / 节点 B')) &&
+      !list.sourceLines.some((t) => t.includes('node-b')),
+      JSON.stringify(list.sourceLines))
 
     await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.getAttribute('title') === '在所属节点打开')?.click())
     await sleep(1300)

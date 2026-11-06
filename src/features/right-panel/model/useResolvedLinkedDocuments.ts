@@ -41,9 +41,11 @@ export function useResolvedLinkedDocuments({ nodeId, nodePath, links, refreshTok
           title: result.status === 'missing' ? link.title : (result.title || link.title),
           type: result.type || 'smart',
           trashName: result.trashName,
+          nodeName: result.nodeName,
+          sourceLabel: result.sourceLabel || '未知位置',
         }
       } catch {
-        return { ...link, status: 'missing', cardPath: '', type: 'smart' }
+        return { ...link, status: 'missing', cardPath: '', type: 'smart', sourceLabel: '未知位置' }
       }
     })).then((list) => {
       if (cancelled) return

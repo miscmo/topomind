@@ -35,12 +35,6 @@ interface DetailPanelProps {
 
 const EMPTY_LINKS: LinkedDocumentRef[] = []
 
-function displaySource(cardPath: string) {
-  if (!cardPath) return '未知位置'
-  const parts = cardPath.split('/').filter(Boolean)
-  return parts.slice(0, -1).join(' / ') || '根节点'
-}
-
 const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: DetailPanelProps) {
   const rawSelectedNodeId = useSelectedNodeId()
   // 框选期间 selectedNodeId 每帧都变；用 deferred 值让右栏松手后再追上最终节点。
@@ -396,9 +390,9 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
                       )}
                     </div>
                     {detailView === 'linked' ? (
-                      <div className="flex items-center gap-1 text-[11px] text-[var(--color-text-muted)] min-w-0 truncate" title={`来源：${displaySource(activeLinked?.cardPath || '')} / ${activeDocumentDisplayName}`}>
+                      <div className="flex items-center gap-1 text-[11px] text-[var(--color-text-muted)] min-w-0 truncate" title={`来源：${activeLinked?.sourceLabel || '未知位置'} / ${activeDocumentDisplayName}`}>
                         <MapPin className="w-3 h-3 shrink-0" />
-                        <span className="truncate">来源：{displaySource(activeLinked?.cardPath || '')} / {activeDocumentDisplayName}</span>
+                        <span className="truncate">来源：{activeLinked?.sourceLabel || '未知位置'} / {activeDocumentDisplayName}</span>
                       </div>
                     ) : topoDocuments.length > 0 && (
                       <DocumentBreadcrumb

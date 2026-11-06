@@ -20,7 +20,10 @@ export interface ResolvedLinkedDocument extends LinkedDocumentRef {
   cardPath: string
   type: string
   trashName?: string
+  /** 所属节点的可读名称，用于「在所属节点打开」时的房间名 */
   nodeName?: string
+  /** 来源面包屑（唯一格式规则在主进程 formatDocumentSource），末段是节点名而非 id */
+  sourceLabel?: string
 }
 
 /** 后端 resolveDocumentById 的原始返回（不含 cardRef，由调用方合并）。 */
@@ -31,6 +34,8 @@ export interface DocumentResolution {
   title: string
   type: string
   trashName?: string
+  nodeName?: string
+  sourceLabel?: string
 }
 
 /** 返回 undefined 表示「没有关联」：写盘时省略该键，旧档零迁移、不撑大 _graph.json。 */
