@@ -60,6 +60,13 @@ export default tseslint.config(
     },
   },
 
+  // simple-mind-map 的 MindMap.usePlugin 是模块级插件注册 API（名字带 use 但不是 React Hook）。
+  // 该文件顶部 11 次调用被 react-hooks/rules-of-hooks 误报，因此只对该文件关闭这一条规则。
+  {
+    files: ['src/features/documents/MindMapDocumentEditor/MindMapDocumentEditor.tsx'],
+    rules: { 'react-hooks/rules-of-hooks': 'off' },
+  },
+
   // Electron main/preload are CommonJS running in Node.
   {
     files: ['electron/**/*.{js,cjs}'],

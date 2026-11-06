@@ -78,6 +78,11 @@ function FloatingEdge({
 
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
+  // 必须在下方「节点缺失时提前 return」之前调用，否则 hook 顺序会随渲染变化
+  // 箭头在极低缩放下只有亚像素大小，却要为每条边额外渲染 <defs>+<marker>+<path>
+  // （可见边的 SVG DOM 直接三倍）。低于阈值就不画箭头，只留线条本身。
+  // 订阅的是布尔而非 zoom 浮点值，只在跨阈值时重渲染一次。
+  const showArrows = useStore((s) => s.transform[2] >= ARROW_MIN_ZOOM)
 
   const handleAnchorCommit = useCallback((patch: EdgeAnchorPatch) => {
     void updateEdgeAnchor(id, patch)
@@ -181,10 +186,7 @@ function FloatingEdge({
   const isStraight = edgeData?.lineMode === 'straight' || data?.type === 'straight'
   // 拖动弯曲控制柄时只做路径预览，松手才写库；预览优先于已保存值
   const liveControl = curvePreview ?? normalizeCurveControl(edgeData?.curveControl) ?? DEFAULT_CURVE_CONTROL
-  // 箭头在极低缩放下只有亚像素大小，却要为每条边额外渲染 <defs>+<marker>+<path>
-  // （可见边的 SVG DOM 直接三倍）。低于阈值就不画箭头，只留线条本身。
-  // 订阅的是布尔而非 zoom 浮点值，只在跨阈值时重渲染一次。
-  const showArrows = useStore((s) => s.transform[2] >= ARROW_MIN_ZOOM)
+  // showArrows 订阅已上移到组件顶部，保证 hook 顺序稳定
   const arrowEnabled = edgeData?.arrow !== false && showArrows
   const arrowSize = clampNumber(
     edgeData?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize,
