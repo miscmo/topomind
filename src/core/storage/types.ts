@@ -129,7 +129,7 @@ export interface KnowledgeBaseStorageBackend {
   renameKB: (kbPath: string, newName: string) => Promise<void>
   importKB: (sourcePath: string) => Promise<string>
   listAllTrashItems: () => Promise<FSBTrashItem[]>
-  restoreGlobalTrashItem: (category: string, trashName: string) => Promise<any>
+  restoreGlobalTrashItem: (category: string, trashName: string) => Promise<unknown>
   clearAllTrashItems: () => Promise<void>
 }
 

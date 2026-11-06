@@ -14,7 +14,7 @@ export interface KBSettingsDialogProps {
 
 export function useKBSettingsDialogModel({ visible, kb, onClose, refreshKBList }: KBSettingsDialogProps) {
   const storage = useStorage()
-  const prompt = usePromptStore((s: any) => s.open)
+  const prompt = usePromptStore((s) => s.open)
 
   const [dialogKb, setDialogKb] = useState<KBItem | null>(kb)
   const [name, setName] = useState('')
@@ -175,7 +175,7 @@ export function useKBSettingsDialogModel({ visible, kb, onClose, refreshKBList }
       if (config.kbOrder) {
         const idx = config.kbOrder.indexOf(currentKb.name)
         if (idx !== -1) {
-          newConfig.kbOrder = config.kbOrder.filter((n: any) => n !== currentKb.name)
+          newConfig.kbOrder = config.kbOrder.filter((n: string) => n !== currentKb.name)
           updated = true
         }
       }

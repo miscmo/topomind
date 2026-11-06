@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from 'react'
-import { useBlockNoteEditor, useComponentsContext, useExtensionState } from '@blocknote/react'
+import { useComponentsContext, useExtensionState } from '@blocknote/react'
+import { useSmartBlockNoteEditor, type SmartDocumentPartialBlock } from '../smartDocumentEditorTypes'
 import { SideMenuExtension } from '@blocknote/core/extensions'
 import { SMART_DOCUMENT_TEXT_ACTIONS, SMART_DOCUMENT_MEDIA_ACTIONS } from '../constants'
 import type {
@@ -36,7 +37,7 @@ function createTableBlock() {
 
 export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocumentBlockMenuMode, children?: ReactNode }) {
   const Components = useComponentsContext()
-  const editor = useBlockNoteEditor<any, any, any>()
+  const editor = useSmartBlockNoteEditor()
   const block = useExtensionState(SideMenuExtension, {
     editor,
     selector: (state) => state?.block,
@@ -66,13 +67,13 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
       insertBlock(action, 'after')
       return
     }
-    editor.updateBlock(block, createActionBlock(action, false) as any)
+    editor.updateBlock(block, createActionBlock(action, false) as unknown as SmartDocumentPartialBlock)
     editor.setTextCursorPosition(block.id, 'start')
     editor.focus()
   }
 
   const insertBlock = (action: SmartDocumentBlockMenuAction, placement: SmartDocumentInsertPlacement) => {
-    const insertedBlock = editor.insertBlocks([createActionBlock(action, true) as any], block, placement)[0]
+    const insertedBlock = editor.insertBlocks([createActionBlock(action, true) as unknown as SmartDocumentPartialBlock], block, placement)[0]
     if (insertedBlock) {
       editor.setTextCursorPosition(insertedBlock)
       editor.focus()
@@ -160,7 +161,7 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
   })
   const duplicateBlock = () => {
     const nextBlock = cloneSmartDocumentBlockWithoutIds(block)
-    editor.insertBlocks([nextBlock as any], block, 'after')
+    editor.insertBlocks([nextBlock as unknown as SmartDocumentPartialBlock], block, 'after')
   }
   const writeClipboard = async (text: string, successMessage: string) => {
     if (!navigator.clipboard?.writeText) {

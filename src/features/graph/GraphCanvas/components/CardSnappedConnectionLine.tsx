@@ -1,5 +1,5 @@
 
-import { getSmoothStepPath, getStraightPath, type ConnectionLineComponentProps, type Node } from '@xyflow/react'
+import { getSmoothStepPath, getStraightPath, Position, type ConnectionLineComponentProps, type Node } from '@xyflow/react'
 import { useTabStore } from '../../../../stores/tabs/tabStore'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { useGraphStore } from '../../../../stores/graphStore'
@@ -15,18 +15,18 @@ export function CardSnappedConnectionLine({
   toY,
   connectionLineStyle,
 }: ConnectionLineComponentProps) {
-  const activeTabId = useTabStore((s: any) => s.activeTabId)
+  const activeTabId = useTabStore((s) => s.activeTabId)
   const markerId = `${CONNECTION_ARROW_MARKER_ID}-${activeTabId}`
-  const connectingSourceId = useGraphUiStore((s: any) => s.connectingSourceId)
-  const connectingTargetId = useGraphUiStore((s: any) => s.connectingTargetId)
-  const defaultEdgeStyle = useGraphUiStore((s: any) => s.defaultEdgeStyle)
+  const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
+  const connectingTargetId = useGraphUiStore((s) => s.connectingTargetId)
+  const defaultEdgeStyle = useGraphUiStore((s) => s.defaultEdgeStyle)
   
   // Use a different color (accent color) for the connection line while drawing
   const connectionColor = 'var(--color-accent)'
   const strokeWidth = 1.2
   
-  const sourceNode = useGraphStore((s: any) => connectingSourceId ? s.nodesMap.get(connectingSourceId) : null)
-  const targetNode = useGraphStore((s: any) => connectingTargetId ? s.nodesMap.get(connectingTargetId) : null)
+  const sourceNode = useGraphStore((s) => connectingSourceId ? s.nodesMap.get(connectingSourceId) : null)
+  const targetNode = useGraphStore((s) => connectingTargetId ? s.nodesMap.get(connectingTargetId) : null)
   const sourceRect = sourceNode ? getNodeRect(sourceNode as Node) : null
   const targetRect = targetNode ? getNodeRect(targetNode as Node) : null
   const targetPoint = targetRect
@@ -52,8 +52,8 @@ export function CardSnappedConnectionLine({
       : getSmoothStepPath({
         sourceX: sourcePoint.x,
         sourceY: sourcePoint.y,
-        sourcePosition: (targetPoint.x > sourcePoint.x ? 'right' : 'left') as any,
-        targetPosition: (targetPoint.x > sourcePoint.x ? 'left' : 'right') as any,
+        sourcePosition: targetPoint.x > sourcePoint.x ? Position.Right : Position.Left,
+        targetPosition: targetPoint.x > sourcePoint.x ? Position.Left : Position.Right,
         targetX: targetPoint.x,
         targetY: targetPoint.y,
         borderRadius: 16,

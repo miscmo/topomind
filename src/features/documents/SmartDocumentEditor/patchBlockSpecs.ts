@@ -20,9 +20,11 @@ import { defaultBlockSpecs } from '@blocknote/core'
 
 export const lastModifiedPropSpec = { default: 0 }
 
-for (const spec of Object.values(defaultBlockSpecs as Record<string, any>)) {
-  const config = (spec as any).config
-  if (config && config.propSchema && !('lastModified' in config.propSchema)) {
+type BlockSpecLike = { config?: { propSchema?: Record<string, unknown> } }
+
+for (const spec of Object.values(defaultBlockSpecs as unknown as Record<string, BlockSpecLike>)) {
+  const config = spec.config
+  if (config?.propSchema && !('lastModified' in config.propSchema)) {
     config.propSchema = { ...config.propSchema, lastModified: lastModifiedPropSpec }
   }
 }

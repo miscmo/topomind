@@ -190,7 +190,28 @@ function InlineMathRenderer(props: InlineMathRenderProps) {
   )
 }
 
-function MathBlockRenderer(props: any) {
+/** createReactBlockSpec 的 render props 是泛型对象，这里只声明本组件实际用到的字段。 */
+interface MathBlockRenderProps {
+  block: {
+    id: string
+    props: {
+      expression?: string
+      textAlignment?: 'left' | 'center' | 'right' | 'justify'
+      autoEdit?: boolean
+    }
+  }
+  editor: {
+    document: { id: string }[]
+    isEditable: boolean
+    updateBlock: (block: unknown, update: unknown) => unknown
+    setTextCursorPosition: (block: unknown, placement: 'start') => unknown
+    insertBlocks: (blocks: { type: string }[], referenceBlock: unknown, placement: 'after') => { id: string }[]
+    focus: () => void
+  }
+}
+
+function MathBlockRenderer(rawProps: unknown) {
+  const props = rawProps as MathBlockRenderProps
   const expression = props.block.props.expression || ''
   const textAlignment = props.block.props.textAlignment || 'left'
   const [isEditing, setIsEditing] = useState(Boolean(props.block.props.autoEdit))

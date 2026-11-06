@@ -125,7 +125,7 @@ export function useSmartGuides(nodes: Node[]) {
 
     const nodeMeta = activeNodeMetaRef.current ?? buildNodeMeta(nodesRef.current)
     activeNodeMetaRef.current = nodeMeta
-    const change = (dragChanges.length > 0 ? dragChanges[0] : resizeChanges[0]) as any
+    const change = (dragChanges.length > 0 ? dragChanges[0] : resizeChanges[0])
     const draggedNodeMeta = nodeMeta.byId.get(change.id)
     if (!draggedNodeMeta) return nextChanges
     const draggedNode = draggedNodeMeta.node

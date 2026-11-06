@@ -89,7 +89,7 @@ export interface FSBTrashItem {
   size: number
   isDirectory: boolean
   category?: string
-  meta?: any
+  meta?: Record<string, unknown>
   businessName?: string
   isImage?: boolean
   previewUrl?: string | null
@@ -165,7 +165,7 @@ export interface FSB {
   createWorkDir: (dirPath: string) => Promise<FSBResult>
   importKB: (rootDir: string, sourcePath: string) => Promise<string>
   listAllTrashItems: (rootDir: string) => Promise<FSBTrashItem[]>
-  restoreGlobalTrashItem: (rootDir: string, category: string, trashName: string) => Promise<any>
+  restoreGlobalTrashItem: (rootDir: string, category: string, trashName: string) => Promise<unknown>
   clearAllTrashItems: (rootDir: string) => Promise<void>
 }
 

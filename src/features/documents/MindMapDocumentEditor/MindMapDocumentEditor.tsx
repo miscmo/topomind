@@ -18,6 +18,7 @@ import {
   normalizeMindMapLayout,
   normalizeMindMapTheme,
   type MindMapDocumentContent,
+  type MindMapNodeData,
   withMindMapUpdatedAt,
 } from './mindMapDocumentTypes'
 
@@ -76,7 +77,7 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
   const pendingLocalValueRef = useRef<AppliedMindMapValue | null>(null)
   const [isReady, setIsReady] = useState(false)
 
-  const globalTheme = useThemeStore((s: any) => s.theme)
+  const globalTheme = useThemeStore((s) => s.theme)
   const isDark = isDarkTheme(globalTheme)
   const documentTheme = normalizeMindMapTheme(value.theme)
   const documentLayout = normalizeMindMapLayout(value.layout)
@@ -113,13 +114,13 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
       },
       layout: documentLayout,
       mousewheelAction: 'zoom',
-    } as any)
+    } as unknown as ConstructorParameters<typeof MindMap>[0])
 
     mindMapRef.current = mindMap
     lastAppliedValueRef.current = getAppliedValue(value)
 
     let dataChangeTimer: number | null = null
-    let pendingRoot: any = null
+    let pendingRoot: MindMapNodeData | null = null
 
     const flushDataChange = () => {
       dataChangeTimer = null
@@ -141,7 +142,7 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
       onChangeRef.current(updatedValue)
     }
 
-    const scheduleDataChange = (data: any) => {
+    const scheduleDataChange = (data: MindMapNodeData) => {
       if (readOnlyRef.current || isApplyingExternalValueRef.current) return
       pendingRoot = data
       if (dataChangeTimer !== null) return
@@ -330,7 +331,7 @@ export const MindMapDocumentEditor = memo(function MindMapDocumentEditor({ value
               type="button"
               className="h-9 px-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] disabled:opacity-40"
               onClick={() => {
-                const map = mindMapRef.current as any
+                const map = mindMapRef.current as unknown as { view?: { fit?: () => void }; fit?: () => void } | null
                 if (map?.view?.fit) map.view.fit()
                 else if (map?.fit) map.fit()
               }}

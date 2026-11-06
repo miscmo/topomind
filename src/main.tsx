@@ -34,7 +34,7 @@ bootstrapPlugins()
 // functional impact, so we keep it out of the console to avoid noise.
 const suppressResizeObserverError = () => {
   const RO_LOOP = 'ResizeObserver loop'
-  const isRoLoop = (...args: any[]): boolean =>
+  const isRoLoop = (...args: unknown[]): boolean =>
     args.some(
       (a) =>
         (typeof a === 'string' && a.includes(RO_LOOP)) ||
@@ -42,12 +42,12 @@ const suppressResizeObserverError = () => {
     )
 
   const originalError = console.error
-  console.error = (...args: any[]) => {
+  console.error = (...args: unknown[]) => {
     if (isRoLoop(...args)) return
     originalError.apply(console, args)
   }
   const originalWarn = console.warn
-  console.warn = (...args: any[]) => {
+  console.warn = (...args: unknown[]) => {
     if (isRoLoop(...args)) return
     originalWarn.apply(console, args)
   }

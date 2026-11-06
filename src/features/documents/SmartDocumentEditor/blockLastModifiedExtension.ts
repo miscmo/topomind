@@ -174,7 +174,8 @@ export const blockLastModifiedExtension = createExtension(({ editor }) => {
       // 防御：仅当该节点类型在编辑器 schema 的 propSchema 中确实含 lastModified 时才写入，
       // 避免把 lastModified 写进 propSchema 不含它的节点（如 column/columnList），导致渲染时
       // props 与 propSchema 不一致而崩编辑器。
-      const spec = (editor.schema.blockSpecs as any)?.[node.type.name]
+const blockSpecs = editor.schema.blockSpecs as unknown as Record<string, { config?: { propSchema?: Record<string, unknown> } }>
+const spec = blockSpecs?.[node.type.name]
       if (!spec?.config?.propSchema?.lastModified) {
         continue
       }

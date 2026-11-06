@@ -455,7 +455,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
           )}
           <Suspense fallback={<div className="w-[352px] h-[360px] grid place-items-center text-sm text-[var(--color-text-muted)]">正在加载表情选择器…</div>}>
           <LazyEmojiPicker
-            onEmojiSelect={(emoji: any) => {
+            onEmojiSelect={(emoji: { native: string }) => {
               const currentEmojis = data.emojis || []
               const newEmojis = [...currentEmojis]
               if (editingEmojiIndex !== null) {
@@ -467,7 +467,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
               setEmojiPickerPosition(null)
               setEditingEmojiIndex(null)
             }}
-            onClickOutside={(e: any) => {
+            onClickOutside={(e: MouseEvent) => {
               const target = e.target as Element
               if (target.closest?.('[data-context-menu-item]')) return
               setEmojiPickerPosition(null)

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
-import { AddBlockButton, SideMenu, type SideMenuProps, useBlockNoteEditor, useExtensionState } from '@blocknote/react'
+import { AddBlockButton, SideMenu, type SideMenuProps, useExtensionState } from '@blocknote/react'
+import { useSmartBlockNoteEditor } from '../smartDocumentEditorTypes'
 import { SideMenuExtension } from '@blocknote/core/extensions'
 import { SmartDocumentBlockMenu } from './SmartDocumentBlockMenu'
 import { SmartDocumentDragHandleButton } from './SmartDocumentDragHandleButton'
@@ -97,7 +98,7 @@ function useSideMenuVerticalNudge(
 }
 
 export function SmartDocumentSideMenu(props: SideMenuProps) {
-  const editor = useBlockNoteEditor<any, any, any>()
+  const editor = useSmartBlockNoteEditor()
   const sideMenuState = useExtensionState(SideMenuExtension, {
     editor,
     selector: (state) => state ? {

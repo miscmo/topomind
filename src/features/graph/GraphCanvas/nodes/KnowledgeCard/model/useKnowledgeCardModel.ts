@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { useReactFlow } from '@xyflow/react'
-import type { KnowledgeNode } from '../../../../../../types'
+import { useReactFlow, type NodeChange } from '@xyflow/react'
+import type { KnowledgeNode, KnowledgeNodeStyle } from '../../../../../../types'
 import { resolveRoomChildRef } from '../../../../../../domain/graph/path-utils'
 import { useGraphUiStore } from '../../../../../../stores/graphUiStore'
 import { useGraphStore, useGraphStoreApi } from '../../../../../../stores/graphStore'
@@ -66,14 +66,14 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const resizeHideTimerRef = useRef<number | null>(null)
   const isUpdatingDimensionsRef = useRef(false)
   
-  const defaultNodeStyle = useGraphUiStore((state: any) => state.defaultNodeStyle)
-  const defaultNodeSize = useGraphUiStore((state: any) => state.defaultNodeSize)
-  const nodeSizeLimits = useGraphUiStore((state: any) => state.nodeSizeLimits)
-  const nodeBadgeSize = useGraphUiStore((state: any) => state.nodeBadgeSize)
-  const isConnecting = useGraphUiStore((state: any) => state.connectingSourceId !== null)
+  const defaultNodeStyle = useGraphUiStore((state) => state.defaultNodeStyle)
+  const defaultNodeSize = useGraphUiStore((state) => state.defaultNodeSize)
+  const nodeSizeLimits = useGraphUiStore((state) => state.nodeSizeLimits)
+  const nodeBadgeSize = useGraphUiStore((state) => state.nodeBadgeSize)
+  const isConnecting = useGraphUiStore((state) => state.connectingSourceId !== null)
   
-  const isConnectTarget = useGraphUiStore((state: any) => !!state.connectingSourceId && state.connectingTargetId === id)
-  const isConnectSource = useGraphUiStore((state: any) => state.connectingSourceId === id)
+  const isConnectTarget = useGraphUiStore((state) => !!state.connectingSourceId && state.connectingTargetId === id)
+  const isConnectSource = useGraphUiStore((state) => state.connectingSourceId === id)
   
   const nodeWidth = width ?? defaultNodeSize.width
   const nodeHeight = height ?? defaultNodeSize.height
@@ -127,7 +127,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
     if (!data.titleEditRequested) return
     titleDraftRef.current = data.label
     setTitleEditing(true)
-    storeApi.getState().updateNode(id, (node: any) => ({
+    storeApi.getState().updateNode(id, (node) => ({
       ...node,
       data: {
         ...node.data,
@@ -308,7 +308,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       dimensions: { width: nextWidth, height: nextHeight },
       resizing: false,
       origin: 'auto-size',
-    } as any])
+    } as unknown as NodeChange])
     isUpdatingDimensionsRef.current = false
   }, [autoSize.height, autoSize.width, graph, heightMode, id, nodeHeight, nodeWidth, titleEditing, widthMode])
 
@@ -395,7 +395,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
           
           // apply format painter style
           const { headerBackgroundColor, headerFontSize, headerFontWeight, headerFontStyle, headerColor, borderColor, borderWidth, borderRadius } = uiStore.formatPainterStyle
-          const patch: any = {}
+          const patch: KnowledgeNodeStyle = {}
           if (headerBackgroundColor !== undefined) patch.headerBackgroundColor = headerBackgroundColor
           if (headerFontSize !== undefined) patch.headerFontSize = headerFontSize
           if (headerFontWeight !== undefined) patch.headerFontWeight = headerFontWeight

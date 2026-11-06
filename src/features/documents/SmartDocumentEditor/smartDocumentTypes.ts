@@ -64,7 +64,7 @@ function splitTextByNewlines(blocks: BlockNoteBlock[]): BlockNoteBlock[] {
 
     // 只处理普通文本块，不能作用到 codeBlock 这类本身依赖换行的块
     if (shouldSplitBlockTextByNewlines(block) && Array.isArray(block.content)) {
-      let currentContent: any[] = []
+      let currentContent: unknown[] = []
       let currentBlock: BlockNoteBlock = { ...block, children, content: currentContent }
       // 为了防止生成的块 id 冲突，如果拆分出新块，后续块不保留原有 id
       let isFirstPart = true

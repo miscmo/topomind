@@ -1,14 +1,22 @@
 import { useEffect, useRef } from 'react'
 
-type SmartDocumentAttachmentEditor = {
-  document: any[]
-  getSelection: () => { blocks: any[] } | undefined
-  getTextCursorPosition: () => { block: any } | undefined
-  insertBlocks: (blocks: any[], referenceBlock: any, placement: 'after') => unknown
+/** 附件插入只用到块的 id / children；插入参数按宽松记录处理（第三方 API 边界）。 */
+type AttachmentTargetBlock = {
+  id: string
+  children?: AttachmentTargetBlock[]
+  [key: string]: unknown
+}
+
+export interface SmartDocumentAttachmentEditor {
+  document: AttachmentTargetBlock[]
+  getSelection: () => { blocks: AttachmentTargetBlock[] } | undefined
+  getTextCursorPosition: () => { block: AttachmentTargetBlock } | undefined
+  insertBlocks: (blocks: Record<string, unknown>[], referenceBlock: AttachmentTargetBlock, placement: 'after') => unknown
+  prosemirrorView?: { hasFocus?: () => boolean }
 }
 
 export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachmentEditor, attachmentInsertTargetKey?: string) {
-  const lastTargetBlockRef = useRef<any>(null)
+  const lastTargetBlockRef = useRef<AttachmentTargetBlock | null>(null)
   const updateLastTargetRef = useRef<(() => void) | null>(null)
   const updateFrameRef = useRef<number | null>(null)
 
@@ -18,7 +26,7 @@ export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachment
 
     const updateLastTarget = () => {
       // 只在当前编辑器有焦点时更新，避免多实例同时响应全局事件造成污染
-      const hasFocus = (editor as any).prosemirrorView?.hasFocus?.() ?? true
+      const hasFocus = editor.prosemirrorView?.hasFocus?.() ?? true
       if (!hasFocus) return
 
       let foundBlock = undefined
@@ -91,10 +99,10 @@ export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachment
       }
 
       // 如果当前没有获取到（因为焦点在侧边栏附件面板），则回退到最后记录的块
-      let blockToInsertAfter = targetBlock || lastTargetBlockRef.current
+      let blockToInsertAfter: AttachmentTargetBlock | null | undefined = targetBlock || lastTargetBlockRef.current
 
       // 验证待插入的块是否还存在于文档中
-      const checkBlockExists = (blocks: any[], blockId: string): boolean => {
+      const checkBlockExists = (blocks: AttachmentTargetBlock[], blockId: string): boolean => {
         for (const b of blocks) {
           if (b.id === blockId) return true
           if (b.children && checkBlockExists(b.children, blockId)) return true

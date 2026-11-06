@@ -53,7 +53,7 @@ export function useDetailDocuments({
     const node = storeApi.getState().nodesMap.get(targetNodeId)
     if (!node || node.data.hasDetail === hasDetail) return
 
-    const temporalState = (storeApi as any).temporal?.getState?.()
+    const temporalState = storeApi.temporal?.getState?.()
     if (temporalState) temporalState.pause()
     storeApi.getState().updateNode(targetNodeId, (currentNode) => ({
       ...currentNode,

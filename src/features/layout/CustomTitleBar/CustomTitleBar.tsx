@@ -40,9 +40,9 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null)
   const [windowState, setWindowState] = useState<WindowControlsState>({ isMaximized: false, isFocused: true })
-  const theme = useThemeStore((s: any) => s.theme)
-  const rightPanelCollapsed = useRightPanelStore((s: any) => s.rightPanelCollapsed)
-  const rightPanelTab = useRightPanelStore((s: any) => s.rightPanelTab)
+  const theme = useThemeStore((s) => s.theme)
+  const rightPanelCollapsed = useRightPanelStore((s) => s.rightPanelCollapsed)
+  const rightPanelTab = useRightPanelStore((s) => s.rightPanelTab)
 
   useEffect(() => {
     const api = window.electronAPI
@@ -151,11 +151,11 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
       }}
     >
       <div className="shrink-0 flex items-center pl-2 gap-2 h-full relative after:content-[''] after:absolute after:right-0 after:top-[25%] after:bottom-[25%] after:w-px after:bg-[var(--titlebar-text)] after:opacity-10 pr-2">
-        <div className="inline-flex items-center h-6 gap-[6px] px-1.5 rounded-md text-[var(--titlebar-text)]" title="TopoMind" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="inline-flex items-center h-6 gap-[6px] px-1.5 rounded-md text-[var(--titlebar-text)]" title="TopoMind" style={{ WebkitAppRegion: 'no-drag' }}>
           <img src="./icon.svg" alt="Logo" className="w-4 h-4 drop-shadow-sm" />
         </div>
         {mode === 'workspace' && (
-          <nav className="hidden md:flex items-stretch h-[24px] gap-[1px] min-w-0 relative z-[3002] ml-1" aria-label="应用菜单" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <nav className="hidden md:flex items-stretch h-[24px] gap-[1px] min-w-0 relative z-[3002] ml-1" aria-label="应用菜单" style={{ WebkitAppRegion: 'no-drag' }}>
             {MENU_LABELS.map((menu) => (
               <div key={menu.key} className="relative flex items-center h-full">
                 <button
@@ -164,12 +164,12 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                   className={`h-full px-2.5 rounded-md bg-transparent text-[12px] font-medium cursor-default transition-colors ${activeMenu === menu.key ? 'bg-[var(--titlebar-hover)] text-[var(--titlebar-text)]' : 'text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]'}`}
                   onClick={() => setActiveMenu((current) => current === menu.key ? null : menu.key)}
                   onMouseEnter={() => { if (activeMenu) setActiveMenu(menu.key) }}
-                  style={{ WebkitAppRegion: 'no-drag' } as any}
+                  style={{ WebkitAppRegion: 'no-drag' }}
                 >
                   {menu.label}
                 </button>
                 {activeMenu === menu.key && (
-                  <div className="absolute top-[calc(100%+6px)] left-0 min-w-[188px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-[3001]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                  <div className="absolute top-[calc(100%+6px)] left-0 min-w-[188px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-[3001]" role="menu" style={{ WebkitAppRegion: 'no-drag' }}>
                     {menuItems[menu.key].map((item) => (
                       item.submenu ? (
                         <div key={item.label} className="relative group">
@@ -180,7 +180,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
                             <span>{item.label}</span>
                             <span className="text-[var(--color-text-muted)] text-[10px]">▶</span>
                           </button>
-                          <div className="absolute top-[-6px] left-[calc(100%-4px)] min-w-[140px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-100 animate-in fade-in slide-in-from-left-1 z-[3002]" role="menu" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                          <div className="absolute top-[-6px] left-[calc(100%-4px)] min-w-[140px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-100 animate-in fade-in slide-in-from-left-1 z-[3002]" role="menu" style={{ WebkitAppRegion: 'no-drag' }}>
                             {item.submenu.map(subItem => (
                               <button
                                 key={subItem.label}
@@ -224,7 +224,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
         )}
       </div>
 
-      <div className="flex-1 min-w-0 flex items-center justify-start h-full mx-2.5 relative" style={{ WebkitAppRegion: 'drag' } as any}>
+      <div className="flex-1 min-w-0 flex items-center justify-start h-full mx-2.5 relative" style={{ WebkitAppRegion: 'drag' }}>
         {mode === 'workspace' && (
           <div className="h-full max-w-[65%] min-w-0 flex items-center gap-2">
             <TabBar />
@@ -242,11 +242,11 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
               onClick={() => runCommand('rightPanel.toggle')}
               title={rightPanelCollapsed ? '展开右侧面板' : '折叠右侧面板'}
               aria-label={rightPanelCollapsed ? '展开右侧面板' : '折叠右侧面板'}
-              style={{ WebkitAppRegion: 'no-drag' } as any}
+              style={{ WebkitAppRegion: 'no-drag' }}
             >
               {rightPanelCollapsed ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
             </button>
-            <div className="flex items-center h-full mx-1 mr-2 relative z-[3002]" style={{ WebkitAppRegion: 'no-drag' } as any}>
+            <div className="flex items-center h-full mx-1 mr-2 relative z-[3002]" style={{ WebkitAppRegion: 'no-drag' }}>
               <SegmentedControl
                 size="sm"
                 grow={false}
@@ -264,12 +264,12 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
           </>
         )}
         <div className="h-full inline-flex items-stretch">
-          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]" onClick={() => runCommand('window.minimize')} aria-label="最小化窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]" onClick={() => runCommand('window.minimize')} aria-label="最小化窗口" style={{ WebkitAppRegion: 'no-drag' }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M0 5H10" stroke="currentColor" strokeWidth="1"/>
             </svg>
           </button>
-          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]" onClick={() => runCommand('window.toggleMaximize')} aria-label={windowState.isMaximized ? '还原窗口' : '最大化窗口'} style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]" onClick={() => runCommand('window.toggleMaximize')} aria-label={windowState.isMaximized ? '还原窗口' : '最大化窗口'} style={{ WebkitAppRegion: 'no-drag' }}>
             {windowState.isMaximized ? (
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="2.5" y="0.5" width="7" height="7" stroke="currentColor" strokeWidth="1"/>
@@ -281,7 +281,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
               </svg>
             )}
           </button>
-          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:!bg-[var(--color-danger)] hover:!text-[var(--color-text-inverse)] transition-colors" onClick={() => runCommand('window.close')} aria-label="关闭窗口" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:!bg-[var(--color-danger)] hover:!text-[var(--color-text-inverse)] transition-colors" onClick={() => runCommand('window.close')} aria-label="关闭窗口" style={{ WebkitAppRegion: 'no-drag' }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1"/>
             </svg>

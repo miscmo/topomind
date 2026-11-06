@@ -28,7 +28,7 @@ export const DocumentMetaPicker: React.FC<DocumentMetaPickerProps> = ({ picker, 
   const [pickerPosition, setPickerPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [hexInput, setHexInput] = useState('')
   const panelRef = useRef<HTMLDivElement>(null)
-  const [emojiPicker, setEmojiPicker] = useState<{ Picker: React.ComponentType<any>; data: unknown } | null>(null)
+  const [emojiPicker, setEmojiPicker] = useState<{ Picker: React.ComponentType<Record<string, unknown>>; data: unknown } | null>(null)
 
   // 异步加载 emoji 选择器（避免增大首屏包体积）
   useEffect(() => {

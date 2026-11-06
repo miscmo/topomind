@@ -438,10 +438,10 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
       setLastSavedAt(Date.now())
       setSaveStatus('saved')
       logAction('Document:保存成功', 'DocumentWorkspaceLayout', { documentType, path: currentDetailDocumentPath })
-    } catch (err: any) {
+    } catch (err) {
       setSaveStatus('error')
       setSaveError(err instanceof Error ? err.message : String(err))
-      logAction('Document:保存失败', 'DocumentWorkspaceLayout', { error: err.message, documentType })
+      logAction('Document:保存失败', 'DocumentWorkspaceLayout', { error: err instanceof Error ? err.message : String(err), documentType })
     }
   }, [isDirty, isSaving, onSave, documentType, currentDetailDocumentPath])
 

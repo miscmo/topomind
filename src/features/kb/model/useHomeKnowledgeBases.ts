@@ -70,15 +70,15 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
       latestOrderRef.current = [...kbOrder]
 
       // Sort according to kbOrder
-      const orderMap = new Map(kbOrder.map((name: any, i: any) => [name, i]))
-      kbList.sort((a: any, b: any) => {
+      const orderMap = new Map(kbOrder.map((name, i): [string, number] => [name, i]))
+      kbList.sort((a, b) => {
         const orderA = orderMap.has(a.name) ? orderMap.get(a.name)! : Infinity
         const orderB = orderMap.has(b.name) ? orderMap.get(b.name)! : Infinity
         if (orderA !== orderB) return orderA - orderB
         return a.name.localeCompare(b.name, 'zh-CN')
       })
 
-      const initial: KBItem[] = await mapWithConcurrency(kbList, HOME_KB_IO_CONCURRENCY, async (kb: any) => {
+      const initial: KBItem[] = await mapWithConcurrency(kbList, HOME_KB_IO_CONCURRENCY, async (kb) => {
         let coverUrl = null
         if (kbCovers[kb.name]) {
           try {
@@ -101,7 +101,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
       const counts = await mapWithConcurrency(
         initial,
         HOME_KB_IO_CONCURRENCY,
-        async (kb: any) => {
+        async (kb) => {
           try {
             return await storage.countChildren(kb.name)
           } catch (err) {

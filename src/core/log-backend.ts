@@ -29,7 +29,6 @@ interface LogQueryOptions {
   endTime?: string
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _api = (): ElectronAPI | null => {
   return (window as Window).electronAPI ?? null
 }

@@ -374,10 +374,10 @@ export const setupTemporalMapSync = (store: StoreApi<GraphState>) => {
   })
 }
 
-export const GraphStoreContext = createContext<StoreApi<GraphState> | null>(null)
+export const GraphStoreContext = createContext<GraphStoreApi | null>(null)
 
 export function GraphStoreProvider({ children }: { children: ReactNode }) {
-  const storeRef = useRef<StoreApi<GraphState> | null>(null)
+  const storeRef = useRef<GraphStoreApi | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
 
   if (!storeRef.current) {

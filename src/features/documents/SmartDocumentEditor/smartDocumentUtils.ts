@@ -11,8 +11,17 @@ export type SmartDocumentDerivedBlockCache = Map<string, {
   words: number
 }>
 
+/** 目录/统计遍历只需要这些字段；BlockNote 的具体 Block 类型可结构兼容。 */
+type SmartDocumentWalkerBlock = {
+  id?: string
+  type?: string
+  content?: unknown
+  props?: { level?: unknown; [key: string]: unknown }
+  [key: string]: unknown
+}
+
 type BlockWalkerEditor = {
-  forEachBlock: (visitor: (block: any) => boolean) => void
+  forEachBlock: (visitor: (block: SmartDocumentWalkerBlock) => boolean) => void
 }
 
 /**
@@ -364,7 +373,7 @@ export function getSmartDocumentOutlineAndStats(
   let words = 0
   let blocks = 0
 
-  editor.forEachBlock((block: any) => {
+  editor.forEachBlock((block) => {
     blocks++
 
     const blockId = typeof block?.id === 'string' ? block.id : ''
@@ -409,7 +418,7 @@ export function getSmartDocumentOutlineAndStats(
         ? Math.min(Math.max(rawLevel, 1), 6)
         : 1
       items.push({
-        id: block.id,
+        id: blockId,
         level,
         text,
         line: items.length + 1,

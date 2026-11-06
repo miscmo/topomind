@@ -294,7 +294,7 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
 
     isApplyingExternalValueRef.current = true
     try {
-      graph.fromJSON({ cells: value.cells as any })
+      graph.fromJSON({ cells: value.cells as unknown as Cell.Properties[] })
       appliedCellsRef.current = value.cells
       graph.zoomTo(value.viewport.zoom)
       graph.translate(value.viewport.pan.x, value.viewport.pan.y)
@@ -316,7 +316,7 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
     graph.on('history:undo', handleHistoryReplay)
     graph.on('history:redo', handleHistoryReplay)
 
-    graph.on('node:dblclick', ({ node }: { node: any }) => {
+    graph.on('node:dblclick', ({ node }) => {
       if (readOnlyRef.current) return
       const label = node.attr('label/text') as string
       void usePromptStore.getState().open({ title: '修改节点名称', defaultValue: label }).then((newLabel) => {
@@ -327,7 +327,7 @@ export const FlowchartDocumentEditor = memo(function FlowchartDocumentEditor({ v
         }
       })
     })
-    graph.on('edge:dblclick', ({ edge }: { edge: any }) => {
+    graph.on('edge:dblclick', ({ edge }) => {
       if (readOnlyRef.current) return
       const currentLabel = edge.getLabels()?.[0]?.attrs?.label?.text || edge.getLabels()?.[0]?.attrs?.text?.text || ''
       void usePromptStore.getState().open({ title: '修改连线标签', defaultValue: currentLabel as string }).then((newLabel) => {

@@ -15,7 +15,7 @@ import { TrashDialog } from './components/TrashDialog'
 import { EmptyState } from '../../shared/ui/EmptyState'
 
 export default function HomePage() {
-  const currentWorkDir = useWorkspaceStore((s: any) => s.currentWorkDir)
+  const currentWorkDir = useWorkspaceStore((s) => s.currentWorkDir)
   const [message, setMessage] = useState('')
   const [messageError, setMessageError] = useState(false)
   const {

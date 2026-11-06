@@ -16,6 +16,7 @@ import { blockLastModifiedExtension } from '../blockLastModifiedExtension'
 import { resolveBlockLastModified } from '../blockLastModifiedTime'
 import { emitEditorLinkClick, isNavigableHref } from '../editorLinkInterceptor'
 import type { SmartDocumentEditorProps } from '../types'
+import type { SmartDocumentBlock, SmartDocumentEditor } from '../smartDocumentEditorTypes'
 import type { TocItem } from '../../types/workspaceTypes'
 import type { SmartDocumentDerivedBlockCache } from '../smartDocumentUtils'
 import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
@@ -33,8 +34,8 @@ import {
  * 优先用 getSelection()（对图片等节点块选区同样有效），失败再退回文本光标位置；
  * 都没有（例如刚失焦、空文档）时返回 null。
  */
-function readCurrentBlockLastModified(editor: any): number | null {
-  let block: any
+function readCurrentBlockLastModified(editor: SmartDocumentEditor): number | null {
+  let block: SmartDocumentBlock | null | undefined
   try {
     block = editor.getSelection()?.blocks?.[0] ?? null
   } catch {
@@ -64,8 +65,8 @@ export function useSmartDocumentEditorModel({
   importRemoteImage,
   resolveFileUrl,
 }: SmartDocumentEditorProps) {
-  const theme = useThemeStore((state: any) => state.theme)
-  const defaultEditorStyle = useGraphUiStore((state: any) => state.defaultEditorStyle)
+  const theme = useThemeStore((state) => state.theme)
+  const defaultEditorStyle = useGraphUiStore((state) => state.defaultEditorStyle)
   const resolvedFontFamily = useMemo(() => resolveEditorFontFamily(defaultEditorStyle.fontFamily), [defaultEditorStyle.fontFamily])
   const storage = useStorage()
   // 版面滑杆拖动期间只存这份预览（改 CSS 变量），松手才写 store + 落盘。
@@ -399,7 +400,7 @@ export function useSmartDocumentEditorModel({
     )
   }, [clearScheduledStatsAndToc, editor])
 
-  const lastDocumentRef = useRef<any>(null)
+  const lastDocumentRef = useRef<SmartDocumentEditor['document'] | null>(null)
 
   const handleChange = useCallback(() => {
     const currentValue = valueRef.current

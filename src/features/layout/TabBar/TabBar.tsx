@@ -129,7 +129,7 @@ export default memo(function TabBar() {
   if (tabs.length === 0) return null
 
   return (
-    <div ref={rootRef} className="relative flex items-center h-full z-[3002]" style={{ WebkitAppRegion: 'no-drag' } as any}>
+    <div ref={rootRef} className="relative flex items-center h-full z-[3002]" style={{ WebkitAppRegion: 'no-drag' }}>
       {/* 触发按钮 */}
       <button
         type="button"
@@ -146,7 +146,7 @@ export default memo(function TabBar() {
 
       {/* 下拉菜单 */}
       {isOpen && (
-          <div ref={menuRef} className="absolute top-[calc(100%+6px)] left-0 min-w-[220px] max-w-[320px] max-h-[60vh] overflow-y-auto overflow-x-hidden p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-10" role="menu" aria-label="打开的标签页" onKeyDown={handleMenuKeyDown} style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div ref={menuRef} className="absolute top-[calc(100%+6px)] left-0 min-w-[220px] max-w-[320px] max-h-[60vh] overflow-y-auto overflow-x-hidden p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-10" role="menu" aria-label="打开的标签页" onKeyDown={handleMenuKeyDown} style={{ WebkitAppRegion: 'no-drag' }}>
           {closeError && (
             <div className="mx-1 mb-1 rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-2 py-1.5 text-[11px] text-[var(--color-danger)]" role="alert">
               {closeError}

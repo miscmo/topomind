@@ -2,7 +2,7 @@ import { memo, useMemo, useRef, useEffect, useState, useCallback, useId, type CS
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, ChevronUp, Copy, WrapText, X } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
-import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
+import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems, type DefaultReactSuggestionItem } from '@blocknote/react'
 import { getMultiColumnSlashMenuItems } from '@blocknote/xl-multi-column'
 import { filterSuggestionItems } from '@blocknote/core'
 import { SideMenuExtension } from '@blocknote/core/extensions'
@@ -10,7 +10,7 @@ import { insertMermaid } from 'blocknote-mermaid'
 
 import type { SmartDocumentEditorProps } from './types'
 import { useSmartDocumentEditorModel } from './model/useSmartDocumentEditorModel'
-import { useSmartDocumentAttachmentInsert } from './useSmartDocumentAttachmentInsert'
+import { useSmartDocumentAttachmentInsert, type SmartDocumentAttachmentEditor } from './useSmartDocumentAttachmentInsert'
 import { SmartDocumentFormattingToolbar } from './components/SmartDocumentFormattingToolbar'
 import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
 import { EditorTopToolbar } from './components/EditorTopToolbar'
@@ -99,7 +99,8 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     commitEditorLayout,
   } = useSmartDocumentEditorModel(props)
 
-  useSmartDocumentAttachmentInsert(editor as any, attachmentInsertTargetKey)
+  // BlockNote 编辑器满足附件插入的最小结构契约；此处是唯一的边界收窄点
+  useSmartDocumentAttachmentInsert(editor as unknown as SmartDocumentAttachmentEditor, attachmentInsertTargetKey)
 
   // 已提交值（不含拖动预览）：工具栏只认它，预览值绝不回传，否则滑杆拖动中
   // 会被「外部配置变化」的同步 effect 重置脏标记，松手就不写盘了。
@@ -798,14 +799,14 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       group: 'Media',
       icon: <span>∑</span>,
       subtext: '插入块级 LaTeX 数学公式',
-    } as any
+    }
 
     return [
       ...getDefaultReactSlashMenuItems(editor),
       ...getMultiColumnSlashMenuItems(editor),
       insertMermaid(),
       mathItem,
-    ]
+    ] as unknown as DefaultReactSuggestionItem[]
   }, [editor])
 
   const getSlashMenuItems = useCallback(async (query: string) => (

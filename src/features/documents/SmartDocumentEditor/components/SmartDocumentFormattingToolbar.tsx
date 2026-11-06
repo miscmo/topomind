@@ -5,10 +5,10 @@ import {
   ColorStyleButton,
   CreateLinkButton,
   FormattingToolbar,
-  useBlockNoteEditor,
   useComponentsContext,
   useEditorState,
 } from '@blocknote/react'
+import { useSmartBlockNoteEditor } from '../smartDocumentEditorTypes'
 import { TextSelection } from '@tiptap/pm/state'
 
 import {
@@ -17,7 +17,7 @@ import {
 } from '../smartDocumentUtils'
 
 function useSelectedTextState(): SmartDocumentSelectedTextState | undefined {
-  const editor = useBlockNoteEditor<any, any, any>()
+  const editor = useSmartBlockNoteEditor()
   return useEditorState({
     editor,
     selector: ({ editor }) => {
@@ -39,7 +39,7 @@ function useSelectedTextState(): SmartDocumentSelectedTextState | undefined {
 
 function CopySelectionButton({ state }: { state: SmartDocumentSelectedTextState }) {
   const Components = useComponentsContext()
-  const editor = useBlockNoteEditor<any, any, any>()
+  const editor = useSmartBlockNoteEditor()
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   const handleClick = useCallback(async () => {
@@ -81,7 +81,7 @@ function CopySelectionButton({ state }: { state: SmartDocumentSelectedTextState 
 
 function SelectionMathButton({ state }: { state: SmartDocumentSelectedTextState }) {
   const Components = useComponentsContext()
-  const editor = useBlockNoteEditor<any, any, any>()
+  const editor = useSmartBlockNoteEditor()
   const canConvert = state.canConvertInlineMath
 
   const handleClick = useCallback(() => {
@@ -96,7 +96,7 @@ function SelectionMathButton({ state }: { state: SmartDocumentSelectedTextState 
           latex: state.latex,
         },
       },
-    ] as any)
+    ])
 
     // 插入后必须显式把光标放到公式之后：replaceWith 只是映射了原选区，映射
     // 结果仍然是「覆盖刚插入公式」的一段选区，此时用户继续打字就会把公式

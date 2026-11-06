@@ -278,9 +278,9 @@ export function useGraphCanvasModel({
   useShortcut(['Control+z', 'Meta+z'], (event) => {
     if (activeTabId !== tabId) return
     event.preventDefault()
-    ;(graphStoreApi as any).temporal.getState().undo()
+    ;graphStoreApi.temporal.getState().undo()
     const tab = useTabStore.getState().tabs.find(t => t.id === tabId && t.type === 'kb')
-    if (tab && 'graphSession' in tab && (tab as any).graphSession?.roomPath) {
+    if (tab && 'graphSession' in tab && (tab as unknown as { graphSession?: { roomPath?: string } }).graphSession?.roomPath) {
       void graph.flushCurrentRoomSave?.()
     }
     logAction('快捷键:撤销', 'GraphCanvas', { source: 'undo' })
@@ -289,9 +289,9 @@ export function useGraphCanvasModel({
   useShortcut(['Control+y', 'Meta+y', 'Control+Shift+Z', 'Meta+Shift+Z'], (event) => {
     if (activeTabId !== tabId) return
     event.preventDefault()
-    ;(graphStoreApi as any).temporal.getState().redo()
+    ;graphStoreApi.temporal.getState().redo()
     const tab = useTabStore.getState().tabs.find(t => t.id === tabId && t.type === 'kb')
-    if (tab && 'graphSession' in tab && (tab as any).graphSession?.roomPath) {
+    if (tab && 'graphSession' in tab && (tab as unknown as { graphSession?: { roomPath?: string } }).graphSession?.roomPath) {
       void graph.flushCurrentRoomSave?.()
     }
     logAction('快捷键:重做', 'GraphCanvas', { source: 'redo' })
