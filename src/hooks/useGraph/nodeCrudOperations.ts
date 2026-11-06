@@ -217,7 +217,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       if (!node?.data.nodeStyle) return
       anyChanged = true
       store.updateNode(nodeId, (currentNode) => {
-        const { nodeStyle, ...nextData } = currentNode.data
+        const { nodeStyle: _nodeStyle, ...nextData } = currentNode.data
         return {
           ...currentNode,
           data: nextData,

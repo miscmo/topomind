@@ -83,7 +83,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
         if (kbCovers[kb.name]) {
           try {
             coverUrl = await storage.readAttachmentDataUrl('__ROOT__', kbCovers[kb.name])
-          } catch (e) {
+          } catch {
             // Ignore error
           }
         }

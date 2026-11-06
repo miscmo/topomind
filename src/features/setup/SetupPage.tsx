@@ -40,7 +40,7 @@ export default memo(function SetupPage() {
           } else {
             removeRecentWorkspace(lastWorkspace)
           }
-        } catch (e) {
+        } catch {
           removeRecentWorkspace(lastWorkspace)
         }
       }

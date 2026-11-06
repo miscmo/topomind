@@ -44,7 +44,7 @@ export async function logWrite(entry: Partial<LogEntry>): Promise<boolean> {
   if (!api) return false
   try {
     return await (_call('log:write', entry) as Promise<boolean>)
-  } catch (e) {
+  } catch {
     return false
   }
 }

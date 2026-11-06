@@ -9,7 +9,7 @@ export function parseStructuredDocumentDraft(value: string): unknown {
   if (!trimmed) return {}
   try {
     return JSON.parse(trimmed)
-  } catch (e) {
+  } catch {
     return {}
   }
 }

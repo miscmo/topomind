@@ -35,7 +35,7 @@ export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachment
         if (selection && selection.blocks.length > 0) {
           foundBlock = selection.blocks[0]
         }
-      } catch (err) {
+      } catch {
         // 忽略没有焦点时的报错
       }
 
@@ -45,7 +45,7 @@ export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachment
           if (cursor && cursor.block) {
             foundBlock = cursor.block
           }
-        } catch (err) {
+        } catch {
           // 忽略没有焦点时的报错
         }
       }
@@ -94,7 +94,7 @@ export function useSmartDocumentAttachmentInsert(editor: SmartDocumentAttachment
         } else {
           targetBlock = editor.getTextCursorPosition()?.block
         }
-      } catch (err) {
+      } catch {
         // ignore TextSelection endpoint error
       }
 
