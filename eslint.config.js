@@ -19,6 +19,9 @@ export default tseslint.config(
       'release',
       'outputs',
       '.verify-build-tmp',
+      // gitignore 的临时测试产物（.graph-store-test-*）：不是产品代码，
+      // 且每次跑回归可能换目录名，混进 lint 基线会让它不稳定。
+      '.graph-store-test-*',
       '*.config.js',
       '*.config.cjs',
       '*.config.mjs',

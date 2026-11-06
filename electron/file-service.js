@@ -94,6 +94,7 @@ function _fs_ensureDir(d) {
  * @returns { string } 清洗后的目录名
  */
 function _fs_safeSegment(name) {
+  // eslint-disable-next-line no-control-regex -- 安全校验：有意过滤控制字符，防止路径注入
   var s = String(name || '').trim().replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/[. ]+$/g, '');
   if (!s || s === '.' || s === '..') s = 'untitled';
   return s.slice(0, 80);
@@ -261,6 +262,7 @@ function _fs_resolveKbsPath(rootDir, relPath) {
 function _fs_requireSafeKbsTextFile(rootDir, relPath) {
   if (typeof relPath !== 'string') throw new Error('文件路径必须是字符串');
   var safeRelPath = relPath.trim().replace(/\\/g, '/');
+  // eslint-disable-next-line no-control-regex -- 安全校验：有意拒绝含控制字符的相对路径
   if (!safeRelPath || safeRelPath.length > 512 || /[\x00-\x1F\x7F]/.test(safeRelPath)) {
     throw new Error('文件路径无效');
   }

@@ -12,6 +12,8 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit --pretty false",
     "lint": "eslint .",
+    "verify:lint:baseline": "node scripts/verify-lint-baseline.mjs",
+    "lint:baseline:update": "node scripts/verify-lint-baseline.mjs --update",
     "verify:plugins:static": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-plugin-static-discovery.mts",
     "verify:plugins:boundaries": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-plugin-boundaries.mts",
     "verify:plugins:runtime": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-plugin-runtime-guards.mts",

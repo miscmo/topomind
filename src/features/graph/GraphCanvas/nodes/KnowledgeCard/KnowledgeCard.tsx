@@ -457,7 +457,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
           <LazyEmojiPicker
             onEmojiSelect={(emoji: any) => {
               const currentEmojis = data.emojis || []
-              let newEmojis = [...currentEmojis]
+              const newEmojis = [...currentEmojis]
               if (editingEmojiIndex !== null) {
                 newEmojis[editingEmojiIndex] = emoji.native
               } else {

@@ -76,6 +76,7 @@ function sanitizeOpenFileDialogOptions(options) {
 function sanitizeExternalUrl(rawUrl) {
   if (typeof rawUrl !== 'string') return null;
   var target = rawUrl.trim();
+  // eslint-disable-next-line no-control-regex -- 安全校验：有意拒绝含控制字符的外部 URL
   if (!target || target.length > 2048 || /[\x00-\x1F\x7F]/.test(target)) return null;
   try {
     var parsed = new URL(target);

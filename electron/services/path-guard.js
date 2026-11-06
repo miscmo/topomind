@@ -14,6 +14,7 @@ export function appConfigPath(dir) {
 }
 
 export function validateAbsolutePath(dir) {
+  // eslint-disable-next-line no-control-regex -- 安全校验：有意拒绝含控制字符的绝对路径
   if (typeof dir !== 'string' || !dir.trim() || /[\x00-\x1F\x7F]/.test(dir)) {
     throw new Error('路径无效');
   }

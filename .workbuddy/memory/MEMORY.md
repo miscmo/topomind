@@ -63,3 +63,10 @@
 - **ownerCardPath 铁律**：右栏读写 / 草稿 / 附件 / 内容缓存键 / 滚动 key 一律用「文档实际所属节点」`documentCardPath`，不能用当前选中节点 `nodePath`；linked 视图 `syncHasDetail:false` + `allowedDocumentIds`。链环标记在语义层、不进格式刷；对话框全局唯一挂 `App.tsx`；`navRequest` 带 `tabId`。
 - **GUI 用例** `npm run verify:linked:gui`（`scripts/verify-linked-documents-gui.mjs`，22 项断言）：隔离临时库 + CDP attach/自启 Electron；右键菜单须 `dispatchEvent(contextmenu)`（puppeteer 右键不触发 React `onNodeContextMenu`）；用 localStorage 预置 `topomind_last_workspace` + reload 绕过原生目录对话框。`file-service.js` 依赖 `electron.shell`，纯 Node 不能整模块 import，写库入口真跑必须进真实 Electron。
 - 反向验证安全写法（先读 bytes 到内存、`finally` 恢复、sha256 比对）与 `sortKeys` 导致 `JSON.stringify` 误报的陷阱，见 `2026-11-06.md`。
+- **来源面包屑唯一规则**是主进程 `formatDocumentSource(cardPath, nodeName)`：resolve 返回 `nodeName`/`sourceLabel`（运行时派生，不落盘），选择器候选与右栏共用；渲染层不得再自己 `slice(0,-1)`。
+
+## 插件边界 / lint 门禁 / 构建产物
+- **共享 store 的位置有规则**：`verify:plugins:boundaries` 禁止 builtin 插件与 `shared/` 引用 `@/stores/*`。共享 UI 状态放 `src/shared/ui/<Comp>/xxxStore.ts`（沿用 ConfirmModal / PromptModal）；主应用↔内置插件共享的状态放 `src/plugins/public/xxxStore.ts`（规则显式放行 `@/plugins/public/*`）。`npm run verify:plugins` 三步 static/boundaries/runtime 全绿才算过。`features/monitor/` 重复模块已删除，别再按旧记忆找。
+- `verify-plugin-runtime-guards.mts` 跑在原生 Node，顶层 import 含 `@` 别名的模块必崩；用脚本内 `loadModuleWithVite()` 加载。
+- **lint 基线门禁**：`npm run verify:lint:baseline`（`scripts/verify-lint-baseline.mjs` + `lint-baseline.json`，按文件 error 数比对，新增脏文件/恶化即 exit 1），修完历史债用 `npm run lint:baseline:update`。当前 247 errors / 61 files。`eslint.config.js` 忽略 `scripts/` 与 `.graph-store-test-*`。lint 建议不能盲改（`saveCoordinator.ts` 的 `let savePromise!` 改 const 会因 IIFE finally 同步路径触发 TDZ）。
+- **构建/GUI**：默认 `npx vite build` 清空 `dist/assets` 会撞 `SAFE_DELETE_BULK_CONFIRM_REQUIRED`；必须构建到 `$TEMP/...` 再 `cp -r .../. dist/`（只覆盖不删除）。GUI 用例读 `dist`，改源码后不同步就会测到旧代码；`index-*.js` 只是 bootstrap，UI 在懒加载 chunk。
