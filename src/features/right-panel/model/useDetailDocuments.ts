@@ -19,12 +19,18 @@ export function useDetailDocuments({
   activeDocumentPath,
   setActiveDocumentPath,
   flushDocumentSave,
+  allowedDocumentIds,
+  syncHasDetail = true,
 }: {
   selectedNodeId: string | null
   nodePath: string | null
   activeDocumentPath: string
   setActiveDocumentPath: (path: string | ((prev: string) => string)) => void
   flushDocumentSave: () => Promise<void>
+  /** 关联视图：默认激活项的兜底只允许落在这些文档上，避免跳到源节点其它文档 */
+  allowedDocumentIds?: string[] | null
+  /** 关联视图必须关掉：owner 节点有没有文档，不代表当前节点有自身文档 */
+  syncHasDetail?: boolean
 }) {
   const storage = useStorage()
   const confirm = useConfirmStore((s) => s.open)
@@ -66,10 +72,10 @@ export function useDetailDocuments({
     const cachedDocuments = state.documentListsByNodePath[nodePath] ?? []
     setTopoDocuments(cachedDocuments)
     setTopoDocumentsCardPath(nodePath)
-    if (Object.prototype.hasOwnProperty.call(state.documentListsByNodePath, nodePath)) {
+    if (syncHasDetail && Object.prototype.hasOwnProperty.call(state.documentListsByNodePath, nodePath)) {
       syncNodeHasDetail(selectedNodeId, cachedDocuments.length > 0)
     }
-  }, [nodePath, selectedNodeId, syncNodeHasDetail])
+  }, [nodePath, selectedNodeId, syncNodeHasDetail, syncHasDetail])
 
   const loadDocuments = useCallback(async (cardPath: string, requestSeq?: number, targetNodeId?: string | null) => {
     const nextTopoDocuments = await storage.listTopoDocuments(cardPath).catch((e) => {
@@ -82,17 +88,21 @@ export function useDetailDocuments({
     setTopoDocuments(nextTopoDocuments)
     setTopoDocumentsCardPath(cardPath)
     setDocumentListForNodePath(cardPath, nextTopoDocuments)
-    syncNodeHasDetail(targetNodeId ?? selectedNodeId, nextTopoDocuments.length > 0)
-    
-    // Default to the first available document if the active one doesn't exist anymore
+    if (syncHasDetail) syncNodeHasDetail(targetNodeId ?? selectedNodeId, nextTopoDocuments.length > 0)
+
+    // Default to the first available document if the active one doesn't exist anymore.
+    // 关联视图只展示被关联的几篇：兜底不能跳到所属节点文档树里的其它文档。
+    const eligible = allowedDocumentIds
+      ? nextTopoDocuments.filter((item) => allowedDocumentIds.includes(item.id))
+      : nextTopoDocuments
     setActiveDocumentPath((currentPath) => {
-      if (nextTopoDocuments.some((item) => topoDocumentPath(item.id) === currentPath)) {
+      if (eligible.some((item) => topoDocumentPath(item.id) === currentPath)) {
         return currentPath
       }
-      return nextTopoDocuments.length > 0 ? topoDocumentPath(nextTopoDocuments[0].id) : ''
+      return eligible.length > 0 ? topoDocumentPath(eligible[0].id) : ''
     })
     return nextTopoDocuments
-  }, [selectedNodeId, setDocumentListForNodePath, setActiveDocumentPath, storage, syncNodeHasDetail])
+  }, [selectedNodeId, setDocumentListForNodePath, setActiveDocumentPath, storage, syncNodeHasDetail, allowedDocumentIds, syncHasDetail])
 
   useEffect(() => {
     if (!documentLinkNotice) return

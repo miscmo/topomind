@@ -26,6 +26,9 @@ import { useKnowledgeCardModel } from './model/useKnowledgeCardModel'
 import { getKnowledgeCardStyles } from './utils/styles'
 import QuickNodeToolbar from './QuickNodeToolbar'
 import { useGraphContext } from '../../../../../contexts/GraphContext'
+import { Link2 } from 'lucide-react'
+import { useLinkedDocumentStore } from '../../../linkedDocumentStore'
+import { tabStore } from '../../../../../stores/tabs/tabStore'
 
 interface KnowledgeCardProps extends NodeProps<KnowledgeNode> {
   resizing?: boolean
@@ -60,6 +63,8 @@ function subscribeToAddEmoji(nodeId: string, listener: AddEmojiListener) {
 
 function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }: KnowledgeCardProps) {
   const { state, actions, refs } = useKnowledgeCardModel(id, data, selected, width, height, resizing)
+  // 语义层标记：与右槽位的「自身文档」纸片图标分离，不进格式刷。
+  const linkedDocumentCount = data.linkedDocuments?.length ?? 0
 
   // 细节分三档，用一次订阅拿到档位而不是 zoom 浮点值本身。
   // useStore 不传 equalityFn 时按 Object.is 比较：若 selector 返回 transform[2]，
@@ -346,6 +351,24 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                 onDoubleClick={contentInteractionsEnabled ? startTitleEdit : undefined}
                 title={contentInteractionsEnabled ? '双击编辑标题' : undefined}
               >
+                {!isMinimalDetail && linkedDocumentCount > 0 && (
+                  <button
+                    type="button"
+                    className="nodrag nowheel flex items-center gap-[1px] shrink-0 px-[2px] rounded text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)] leading-none cursor-pointer border-none bg-transparent"
+                    style={{ fontSize: '0.92em' }}
+                    title={`${linkedDocumentCount} 篇关联文档 · 点击在右栏查看`}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      useLinkedDocumentStore.getState().requestLinkedView(id, tabStore.getState().activeTabId ?? '')
+                    }}
+                  >
+                    <Link2 style={{ width: '1em', height: '1em' }} />
+                    {linkedDocumentCount > 1 && <span className="font-semibold" style={{ fontSize: '0.82em' }}>{linkedDocumentCount}</span>}
+                  </button>
+                )}
                 {!isMinimalDetail && data.emojis && data.emojis.length > 0 && (
                   <div className="flex items-center gap-[2px] shrink-0 pr-[2px]" onDoubleClick={e => e.stopPropagation()}>
                     {data.emojis.map((emoji, index) => (

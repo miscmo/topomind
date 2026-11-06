@@ -378,6 +378,15 @@ function registerIPC() {
   ipcMain.handle('fs:openTopoDocumentFolder', function(e, rootDir, cardPath, documentId) {
     return fileService.openTopoDocumentFolder(requireActiveWorkDir(rootDir), cardPath, documentId);
   });
+  ipcMain.handle('fs:listDocumentCandidates', function(e, rootDir) {
+    return fileService.listDocumentCandidates(requireActiveWorkDir(rootDir));
+  });
+  ipcMain.handle('fs:resolveDocumentById', function(e, rootDir, docId, cardRef) {
+    return fileService.resolveDocumentById(requireActiveWorkDir(rootDir), docId, cardRef);
+  });
+  ipcMain.handle('fs:updateNodeLinkedDocuments', function(e, rootDir, nodePath, links) {
+    return fileService.updateNodeLinkedDocuments(requireActiveWorkDir(rootDir), nodePath, links);
+  });
   ipcMain.handle('fs:listAttachments', function(e, rootDir, cardPath) {
     return fileService.listAttachments(requireActiveWorkDir(rootDir), cardPath);
   });

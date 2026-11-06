@@ -5,13 +5,19 @@ import { useNodeMoveToRoom } from './useNodeMoveToRoom'
 import { logAction } from '../../../../core/log-backend'
 import type { ContextMenuState } from '../../../../types/uiStoreTypes'
 import type { GraphContextValue } from '../../../../contexts/GraphContext'
+import { resolveRoomChildRef } from '../../../../domain/graph/path-utils'
+import { tabStore } from '../../../../stores/tabs/tabStore'
+import { useGraphStoreApi } from '../../../../stores/graphStore'
+import { useLinkedDocumentStore } from '../../linkedDocumentStore'
 
 interface UseGraphPageActionsOptions {
   graph: GraphContextValue
+  tabId: string
 }
 
-export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
+export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions) {
   const { screenToFlowPosition } = useReactFlow()
+  const graphStoreApi = useGraphStoreApi()
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
     x: 0,
@@ -27,6 +33,19 @@ export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
     handleEdgeStyle,
   } = useNodeActions({ graph })
   const { moveState, openMoveToRoom, closeMoveToRoom, handleMoveNodesToRoom } = useNodeMoveToRoom({ graph })
+
+  const openLinkDocument = useCallback((nodeId: string) => {
+    const node = graphStoreApi.getState().nodesMap.get(nodeId)
+    if (!node) return
+    const session = tabStore.getState().getGraphSession(tabId)
+    const cardPath = resolveRoomChildRef(session.roomPath || session.kbPath, nodeId)
+    useLinkedDocumentStore.getState().openDialog({
+      nodeId,
+      cardPath,
+      label: String(node.data.label || nodeId),
+      links: node.data.linkedDocuments ?? [],
+    })
+  }, [graphStoreApi, tabId])
 
   const closeContextMenu = useCallback(() => {
     setContextMenu((current) => {
@@ -107,6 +126,7 @@ export function useGraphPageActions({ graph }: UseGraphPageActionsOptions) {
         }, 50)
       },
       onMoveToRoom: openMoveToRoom,
+      onLinkDocument: openLinkDocument,
       onClose: closeContextMenu,
     },
     moveDialogProps: { moveState, closeMoveToRoom, handleMoveNodesToRoom },

@@ -3,6 +3,7 @@ import type { EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, Ed
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../style/styleConstraints.ts'
 import { normalizeEdgeAnchor } from './edgeAnchors.ts'
 import { normalizeCurveControl } from './edgeCurve.ts'
+import { normalizeLinkedDocuments } from './linkedDocuments.ts'
 
 const DEFAULT_VIEWPORT = { zoom: 1, pan: { x: 0, y: 0 } }
 const DEFAULT_NODE_SIZE = { width: 120, height: 52 }
@@ -119,6 +120,7 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       expandedWidth: typeof rawNode.expandedWidth === 'number' ? rawNode.expandedWidth : undefined,
       expandedHeight: typeof rawNode.expandedHeight === 'number' ? rawNode.expandedHeight : undefined,
       emojis: Array.isArray(rawNode.emojis) ? rawNode.emojis.filter((emoji): emoji is string => typeof emoji === 'string') : undefined,
+      linkedDocuments: normalizeLinkedDocuments(rawNode.linkedDocuments),
     }
   }
 

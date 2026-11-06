@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Palette, Trash2, Maximize2, SmilePlus, FolderInput } from 'lucide-react'
+import { Plus, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2 } from 'lucide-react'
 
 interface MenuItem {
   label: string
@@ -36,6 +36,7 @@ interface GraphPageContextMenuProps {
   onEdgeStyle: (edgeId: string) => void
   onAddEmoji: (nodeId: string, position: { x: number, y: number }) => void
   onMoveToRoom: (nodeId: string) => void
+  onLinkDocument: (nodeId: string) => void
   onClose: () => void
 }
 
@@ -52,6 +53,7 @@ export default memo(function GraphPageContextMenu({
   onEdgeStyle,
   onAddEmoji,
   onMoveToRoom,
+  onLinkDocument,
   onClose,
 }: GraphPageContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -110,6 +112,14 @@ export default memo(function GraphPageContextMenu({
             icon: <SmilePlus className="w-4 h-4" />,
             action: async () => {
               if (targetId) await onAddEmoji(targetId, { x, y })
+              onClose()
+            },
+          },
+          {
+            label: '关联已有文档…',
+            icon: <Link2 className="w-4 h-4" />,
+            action: async () => {
+              if (targetId) await onLinkDocument(targetId)
               onClose()
             },
           },

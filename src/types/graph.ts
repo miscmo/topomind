@@ -6,6 +6,7 @@
 import type { Node, Edge } from '@xyflow/react'
 import type { EdgeAnchor } from '../domain/graph/edgeAnchors'
 import type { CurveControl } from '../domain/graph/edgeCurve'
+import type { LinkedDocumentRef } from '../domain/graph/linkedDocuments'
 
 // ============== 视图状态 ==============
 
@@ -40,6 +41,8 @@ export interface GraphChild {
   expandedWidth?: number
   expandedHeight?: number
   emojis?: string[]
+  /** 关联到别处已有文档（docId 为主键，cardRef 为定位缓存），最多 8 条 */
+  linkedDocuments?: LinkedDocumentRef[]
 }
 
 export type NodeSizingMode = 'auto' | 'manual'
@@ -144,6 +147,8 @@ export interface KnowledgeNodeData {
   selected?: boolean
   /** 节点表情列表 */
   emojis?: string[]
+  /** 关联到别处已有文档（语义层标记，不进格式刷） */
+  linkedDocuments?: LinkedDocumentRef[]
   /** 上次展开时的宽度 */
   expandedWidth?: number
   /** 上次展开时的高度 */

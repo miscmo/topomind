@@ -7,6 +7,7 @@ import type { ElectronAPI } from '../types/electron-api'
 import type { EdgeRelation, EdgeWeight } from '../types'
 import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentRepairResult, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './storage/service'
 import type { TopoDocumentType } from './topoDocumentTypes'
+import type { LinkedDocumentRef, DocumentResolution } from '../domain/graph/linkedDocuments'
 
 const getApi = (): ElectronAPI | null => {
   const w = window as Window
@@ -56,6 +57,8 @@ export interface FSBGraphMeta {
     style?: unknown
     expandedWidth?: number
     expandedHeight?: number
+    /** 关联到别处已有文档，写盘时由 convertGraphToFSB 的 map 本体带入 */
+    linkedDocuments?: LinkedDocumentRef[]
   }> | undefined
   edges?: Array<{
     id: string
@@ -98,6 +101,16 @@ export interface FSBTrashTopoDocumentItem extends FSBTrashItem {
   type: TopoDocumentType
 }
 
+/** 全库文档候选项（选择关联文档时用）。 */
+export interface FSBDocumentCandidate {
+  docId: string
+  title: string
+  type: string
+  cardPath: string
+  nodeName: string
+  breadcrumb: string
+}
+
 export interface FSB {
   listKBs: (rootDir: string) => Promise<FSBKBInfo[]>
   listTrashKBs: (rootDir: string) => Promise<FSBTrashItem[]>
@@ -126,6 +139,9 @@ export interface FSB {
   repairTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentRepairResult>
   exportTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
   openTopoDocumentFolder: (rootDir: string, cardPath: string, documentId: string) => Promise<boolean>
+  listDocumentCandidates: (rootDir: string) => Promise<FSBDocumentCandidate[]>
+  resolveDocumentById: (rootDir: string, docId: string, cardRef?: string) => Promise<DocumentResolution>
+  updateNodeLinkedDocuments: (rootDir: string, nodePath: string, links: LinkedDocumentRef[]) => Promise<LinkedDocumentRef[]>
   listAttachments: (rootDir: string, cardPath: string) => Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>
   importAttachment: (rootDir: string, cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
   deleteAttachment: (rootDir: string, cardPath: string, attachmentName: string) => Promise<void>
@@ -195,6 +211,12 @@ const FSBImpl: FSB = {
     _call('fs:moveTopoDocumentToCard', rootDir, sourceCardPath, documentId, targetCardPath) as Promise<MoveTopoDocumentToCardResult>,
   moveTopoNodesToRoom: (rootDir, sourceRoomPath, nodeIds, targetRoomPath) =>
     _call('fs:moveTopoNodesToRoom', rootDir, sourceRoomPath, nodeIds, targetRoomPath) as Promise<MoveTopoNodesToRoomResult>,
+  listDocumentCandidates: (rootDir) =>
+    _call('fs:listDocumentCandidates', rootDir) as Promise<FSBDocumentCandidate[]>,
+  resolveDocumentById: (rootDir, docId, cardRef) =>
+    _call('fs:resolveDocumentById', rootDir, docId, cardRef ?? '') as Promise<DocumentResolution>,
+  updateNodeLinkedDocuments: (rootDir, nodePath, links) =>
+    _call('fs:updateNodeLinkedDocuments', rootDir, nodePath, links) as Promise<LinkedDocumentRef[]>,
   repairTopoDocuments: (rootDir, cardPath) =>
     _call('fs:repairTopoDocuments', rootDir, cardPath) as Promise<TopoDocumentRepairResult>,
   exportTopoDocument: (rootDir, cardPath, documentId) =>

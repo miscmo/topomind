@@ -4,12 +4,14 @@ import nodePath from 'path';
 export function createKbService(deps) {
   const {
     clearTrashItems,
+    collectDocumentIds,
     ensureDir,
     kbsDir,
     kbsTrashItemKind,
     listTrashItems,
     moveToTrash,
     relativeToKbs,
+    remapImportedDocumentIds,
     requireSafeDirName,
     requireValidWorkDir,
     restoreTrashItem,
@@ -150,8 +152,18 @@ export function createKbService(deps) {
         }
       }
 
+      // 复制「前」收集现有库的 docId：导入副本里同 id 的文档必须重新分配，
+      // 否则 docId 不再是全库唯一主键，节点关联 / 文档间引用会指向错误副本。
+      var existingIds = [];
+      if (typeof collectDocumentIds === 'function') {
+        try { existingIds = collectDocumentIds(rootDir) || []; } catch {}
+      }
+      var destKbPath = nodePath.relative(kbsDir(rootDir), dest).split(nodePath.sep).join('/');
       try {
         copyDirRecursive(src, dest);
+        if (typeof remapImportedDocumentIds === 'function') {
+          remapImportedDocumentIds(rootDir, destKbPath, existingIds);
+        }
       } catch (e) {
         try {
           if (nodeFs.existsSync(dest)) nodeFs.rmSync(dest, { recursive: true, force: true });
@@ -159,7 +171,7 @@ export function createKbService(deps) {
         throw e;
       }
 
-      return nodePath.relative(kbsDir(rootDir), dest).split(nodePath.sep).join('/');
+      return destKbPath;
     },
   };
 }

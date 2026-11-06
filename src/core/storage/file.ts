@@ -1,10 +1,12 @@
 import { FSB } from '../fs-backend'
+import type { FSBDocumentCandidate } from '../fs-backend'
 import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem, TopoDocumentMetaPatch, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, EdgeAnchor, GraphNodeKind } from '../../types'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
 import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 import { normalizeCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
+import { normalizeLinkedDocuments, type LinkedDocumentRef, type DocumentResolution } from '../../domain/graph/linkedDocuments'
 
 interface FSBGraphChild {
   name: string
@@ -21,6 +23,8 @@ interface FSBGraphChild {
   expandedWidth?: number
   expandedHeight?: number
   emojis?: string[]
+  /** 关联到别处已有文档；docId 为全库主键 */
+  linkedDocuments?: LinkedDocumentRef[]
 }
 
 interface FSBGraphEdge {
@@ -114,6 +118,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
       expandedWidth: Number.isFinite(child.expandedWidth) ? child.expandedWidth as number : undefined,
       expandedHeight: Number.isFinite(child.expandedHeight) ? child.expandedHeight as number : undefined,
       emojis: Array.isArray(child.emojis) ? child.emojis.filter((emoji): emoji is string => typeof emoji === 'string') : undefined,
+      linkedDocuments: normalizeLinkedDocuments(child.linkedDocuments),
     }
   }
 
@@ -187,6 +192,8 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
       expandedWidth: node.expandedWidth,
       expandedHeight: node.expandedHeight,
       emojis: node.emojis,
+      // 必须写在 map 本体里：历史上只在返回类型加字段，画面生效但从未落盘。
+      linkedDocuments: normalizeLinkedDocuments(node.linkedDocuments),
     }
   }
 
@@ -321,6 +328,18 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
 
     writeLayout: async (roomPath: string, meta: GraphMeta): Promise<void> => {
       await FSB.writeGraphMeta(requireRootDir(), roomPath, convertGraphToFSB(meta, roomPath) as Parameters<typeof FSB.writeGraphMeta>[2])
+    },
+
+    listDocumentCandidates: async (): Promise<FSBDocumentCandidate[]> => {
+      return FSB.listDocumentCandidates(requireRootDir())
+    },
+
+    resolveDocumentById: async (docId: string, cardRef?: string): Promise<DocumentResolution> => {
+      return FSB.resolveDocumentById(requireRootDir(), docId, cardRef)
+    },
+
+    updateNodeLinkedDocuments: async (nodePath: string, links: LinkedDocumentRef[]): Promise<LinkedDocumentRef[]> => {
+      return FSB.updateNodeLinkedDocuments(requireRootDir(), nodePath, links)
     },
 
     listTopoDocuments: async (cardPath: string): Promise<TopoDocumentManifestItem[]> => {

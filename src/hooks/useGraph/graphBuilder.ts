@@ -14,6 +14,7 @@ import type { RoomGraph, RoomGraphEdge, RoomGraphNode } from '../../domain/graph
 import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 import { normalizeCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
+import { normalizeLinkedDocuments } from '../../domain/graph/linkedDocuments'
 import { buildEdgeView } from './edgeView'
 
 export function generateId(prefix: string): string {
@@ -80,6 +81,8 @@ export function buildMetaFromNodesEdges(
       expandedWidth: node.data.expandedWidth,
       expandedHeight: node.data.expandedHeight,
       emojis: node.data.emojis,
+      // 关联文档必须随节点一起写回 _graph.json；只放在 node.data 里会在刷新后丢失。
+      linkedDocuments: normalizeLinkedDocuments(node.data.linkedDocuments),
     }
   }
   const roomEdges: RoomGraphEdge[] = edges.map((e) => ({
@@ -165,6 +168,7 @@ export function buildNodes(
         widthMode: roomNode.widthMode,
         heightMode: roomNode.heightMode,
         emojis: roomNode.emojis,
+        linkedDocuments: roomNode.linkedDocuments,
       },
     }
   })

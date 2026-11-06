@@ -1,6 +1,7 @@
 import type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, NodeSizingMode, GraphNodeKind } from '../../types'
 import type { EdgeAnchor } from './edgeAnchors'
 import type { CurveControl } from './edgeCurve'
+import type { LinkedDocumentRef } from './linkedDocuments'
 
 export interface CardInfo {
   ref: string
@@ -34,6 +35,8 @@ export interface RoomGraphNode {
   expandedWidth?: number
   expandedHeight?: number
   emojis?: string[]
+  /** 关联到别处已有文档；不参与布局，不进格式刷 */
+  linkedDocuments?: LinkedDocumentRef[]
 }
 
 export interface RoomGraphEdge {
@@ -82,6 +85,8 @@ export interface KBNode {
   expandedWidth?: number
   expandedHeight?: number
   emojis?: string[]
+  /** 关联到别处已有文档；随 GraphMeta 全链路往返 */
+  linkedDocuments?: LinkedDocumentRef[]
 }
 
 export interface KBEdge {

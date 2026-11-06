@@ -7,6 +7,8 @@ export type { AppView } from './graph'
 export type { GraphChild, GraphEdge, GraphMeta, GraphNodeKind, EdgeStylePatch } from './graph'
 export type { EdgeAnchor, EdgeAnchorPatch, AnchorRect } from '../domain/graph/edgeAnchors'
 export type { CurveControl } from '../domain/graph/edgeCurve'
+export { MAX_LINKED_DOCUMENTS } from '../domain/graph/linkedDocuments'
+export type { LinkedDocumentRef, ResolvedLinkedDocument } from '../domain/graph/linkedDocuments'
 export type { EdgeRelation, EdgeWeight, EdgeLineMode, EdgeLineStyle, EdgeArrowShape, EdgeArrowPosition } from './graph'
 export type {
   KnowledgeNodeData,

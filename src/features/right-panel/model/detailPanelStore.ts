@@ -4,9 +4,14 @@ import type { FSBTrashTopoDocumentItem } from '../../../core/fs-backend'
 import type { TopoDocumentManifestItem } from '../../../core/storage'
 import type { DetailSidebarTab } from '../../documents/types/workspaceTypes'
 
+/** 右栏当前展示的是本节点文档还是关联文档；按节点记忆上次选择。 */
+export type DetailView = 'own' | 'linked'
+
 interface DetailPanelStore {
   activeDocumentPathsByNodeId: Record<string, string>
   detailSidebarTabsByNodeId: Record<string, DetailSidebarTab>
+  detailViewsByNodeId: Record<string, DetailView>
+  setDetailViewForNode: (nodeId: string, view: DetailView) => void
   documentListsByNodePath: Record<string, TopoDocumentManifestItem[]>
   trashDocumentListsByNodePath: Record<string, FSBTrashTopoDocumentItem[]>
   setActiveDocumentPathForNode: (nodeId: string, path: string) => void
@@ -21,6 +26,13 @@ export const useDetailPanelStore = create<DetailPanelStore>()(
     (set) => ({
       activeDocumentPathsByNodeId: {},
       detailSidebarTabsByNodeId: {},
+      detailViewsByNodeId: {},
+      setDetailViewForNode: (nodeId, view) => {
+        if (!nodeId) return
+        set((state) => ({
+          detailViewsByNodeId: { ...state.detailViewsByNodeId, [nodeId]: view },
+        }))
+      },
       documentListsByNodePath: {},
       trashDocumentListsByNodePath: {},
       setActiveDocumentPathForNode: (nodeId, path) => {
@@ -102,6 +114,7 @@ export const useDetailPanelStore = create<DetailPanelStore>()(
       partialize: (state) => ({
         activeDocumentPathsByNodeId: state.activeDocumentPathsByNodeId,
         detailSidebarTabsByNodeId: state.detailSidebarTabsByNodeId,
+        detailViewsByNodeId: state.detailViewsByNodeId,
       }),
     }
   )

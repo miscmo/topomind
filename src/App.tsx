@@ -21,6 +21,7 @@ import { LearningTrackerProvider } from './features/learning-tracker/LearningTra
 import { ErrorBoundary } from './features/layout/ErrorBoundary'
 import { Toaster } from './shared/ui/Toaster/Toaster'
 import { installViewportScrollGuard } from './core/viewportScrollGuard'
+import { LinkDocumentDialog } from './features/graph/components/LinkDocumentDialog'
 
 const HomePage = lazy(() => import('./features/kb/HomePage'))
 const GraphPage = lazy(() => import('./features/graph/GraphPage'))
@@ -74,6 +75,7 @@ export default memo(function App() {
           <Suspense fallback={null}>
             <ConfirmModal />
             <PromptModal />
+            <LinkDocumentDialog />
           </Suspense>
           <Toaster />
           {isSetup ? (

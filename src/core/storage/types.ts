@@ -2,7 +2,8 @@ import type { GraphMeta } from '../../domain/graph/model'
 import type { CardInfo } from '../../domain/graph/model'
 import type { KBListItem } from '../../types'
 import type { DefaultEdgeStyle, DefaultEditorStyle } from '../../domain/style/styleTypes'
-import type { FSBTrashItem, FSBTrashTopoDocumentItem } from '../fs-backend'
+import type { FSBTrashItem, FSBTrashTopoDocumentItem, FSBDocumentCandidate } from '../fs-backend'
+import type { LinkedDocumentRef, DocumentResolution } from '../../domain/graph/linkedDocuments'
 import type { TopoDocumentType } from '../topoDocumentTypes'
 
 export interface VaultConfig {
@@ -156,6 +157,13 @@ export interface TopoDocumentStorageBackend {
   openTopoDocumentFolder: (cardPath: string, documentId: string) => Promise<boolean>
 }
 
+/** 节点关联已有文档：全库候选 / docId 反查 / 原子写回节点字段。 */
+export interface LinkedDocumentStorageBackend {
+  listDocumentCandidates: () => Promise<FSBDocumentCandidate[]>
+  resolveDocumentById: (docId: string, cardRef?: string) => Promise<DocumentResolution>
+  updateNodeLinkedDocuments: (nodePath: string, links: LinkedDocumentRef[]) => Promise<LinkedDocumentRef[]>
+}
+
 export interface AttachmentStorageBackend {
   listAttachments: (cardPath: string) => Promise<AttachmentItem[]>
   importAttachment: (cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
@@ -202,6 +210,7 @@ export interface StorageBackend extends
   KnowledgeBaseStorageBackend,
   CardStorageBackend,
   TopoDocumentStorageBackend,
+  LinkedDocumentStorageBackend,
   AttachmentStorageBackend,
   GraphLayoutStorageBackend,
   NodeMoveStorageBackend,

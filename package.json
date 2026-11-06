@@ -18,6 +18,7 @@
     "verify:plugins": "node ./scripts/verify-plugins.mjs",
     "verify:critical": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-critical-regressions.mts",
     "verify:graph-store": "node --experimental-strip-types --experimental-specifier-resolution=node ./scripts/verify-graph-store.mts",
+    "verify:linked:gui": "node scripts/verify-linked-documents-gui.mjs",
     "clean": "node -e \"const fs=require('fs');['dist','dist-electron'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",
     "build": "node ./scripts/build.mjs",
     "prebuild:mac": "npm run build",

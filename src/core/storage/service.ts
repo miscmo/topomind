@@ -7,6 +7,7 @@ import type { KBListItem } from '../../types'
 import type { GraphMeta } from '../../domain/graph/model'
 import { SaveCoordinator } from '../../domain/persistence/saveCoordinator'
 import { normalizeGraphMeta } from '../../domain/graph/normalizeGraphMeta'
+import { normalizeLinkedDocuments } from '../../domain/graph/linkedDocuments'
 import { isTopoDocumentType, type TopoDocumentType } from '../topoDocumentTypes'
 import { normalizeConfig } from './normalizeConfig'
 import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentMetaPatch, VaultConfig } from './types'
@@ -135,6 +136,16 @@ export function createStore(backend: StorageBackend) {
         await backend.renameCard(cardPath, safeName)
         return cardPath
       } catch (e) { logger.catch('Store.renameCard', `重命名卡片失败: ${cardPath} -> ${newName}`, e); throw e }
+    },
+    async listDocumentCandidates() {
+      try { return await backend.listDocumentCandidates() } catch (e) { logger.catch('Store.listDocumentCandidates', '列出全库文档失败', e); throw e }
+    },
+    async resolveDocumentById(docId: string, cardRef?: string) {
+      try { return await backend.resolveDocumentById(docId, cardRef) } catch (e) { logger.catch('Store.resolveDocumentById', `解析文档失败: ${docId}`, e); throw e }
+    },
+    async updateNodeLinkedDocuments(nodePath: string, links: unknown) {
+      const safeLinks = normalizeLinkedDocuments(links) ?? []
+      try { return await backend.updateNodeLinkedDocuments(nodePath, safeLinks) } catch (e) { logger.catch('Store.updateNodeLinkedDocuments', `更新节点关联失败: ${nodePath}`, e); throw e }
     },
     async listTopoDocuments(cardPath: string) {
       try { return await backend.listTopoDocuments(cardPath) } catch (e) { logger.catch('Store.listTopoDocuments', `列出多类型文档失败: ${cardPath}`, e); throw e }

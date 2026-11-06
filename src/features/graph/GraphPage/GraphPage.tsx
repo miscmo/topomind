@@ -4,7 +4,8 @@
  */
 import { memo, useEffect } from 'react'
 import { GraphContextProvider } from '../../../contexts/GraphContext'
-import { useSelectedNodeId } from '../../../stores/graphStore'
+import { useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
+import { registerGraphApi } from '../linkedDocumentStore'
 import Breadcrumb from '../../layout/Breadcrumb/Breadcrumb'
 import RoomHistory from '../../layout/RoomHistory/RoomHistory'
 import { useLearningTrackerContextStore } from '../../learning-tracker/model/learningTrackerContextStore'
@@ -25,8 +26,12 @@ interface GraphPageProps {
 
 export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProps) {
   const { graph } = useGraphPageController({ tabId })
-  const { canvasProps, contextMenuProps, moveDialogProps } = useGraphPageActions({ graph })
+  const { canvasProps, contextMenuProps, moveDialogProps } = useGraphPageActions({ graph, tabId })
   const selectedNodeId = useSelectedNodeId()
+  const graphStoreApi = useGraphStoreApi()
+
+  // 关联对话框挂在 App 根（全局唯一实例），保存后需要把结果广播回各标签页的画布内存。
+  useEffect(() => registerGraphApi(graphStoreApi), [graphStoreApi])
   const setSelectedNodeIdForTab = useLearningTrackerContextStore((s) => s.setSelectedNodeIdForTab)
   const clearTabContext = useLearningTrackerContextStore((s) => s.clearTabContext)
   const activeTabId = useTabStore((s) => s.activeTabId)

@@ -14,6 +14,8 @@ interface DocumentWorkspaceProps {
   onSave: () => Promise<void> | void
   attachmentCardPath: string | null
   detailHeader: ReactNode
+  /** 关联视图传入自定义侧栏列表；缺省渲染本节点的文档树。 */
+  documentsTabContent?: ReactNode
   topoDocuments: TopoDocumentManifestItem[]
   activeDocumentPath: string
   detailSidebarTab?: DetailSidebarTab
@@ -43,6 +45,7 @@ export function DocumentWorkspace({
   onSave,
   attachmentCardPath,
   detailHeader,
+  documentsTabContent,
   topoDocuments,
   activeDocumentPath,
   detailSidebarTab,
@@ -62,7 +65,7 @@ export function DocumentWorkspace({
   onUpdateDocumentMeta,
   isDocumentBusy,
 }: DocumentWorkspaceProps) {
-  const sidebarContent = useMemo(() => (
+  const sidebarContent = useMemo(() => documentsTabContent ?? (
     <DocumentSidebar
       key={nodeId ?? 'document-sidebar'}
       nodeId={nodeId}
@@ -78,7 +81,7 @@ export function DocumentWorkspace({
       onMoveDocumentToCard={onMoveDocumentToCard}
       onUpdateDocumentMeta={onUpdateDocumentMeta}
     />
-  ), [nodeId, topoDocuments, activeDocumentPath, isDocumentBusy, onSelectDocument, onCreateTopoDocument, onExportTopoDocument, onRenameDocument, onDeleteDocument, onMoveDocument, onMoveDocumentToCard, onUpdateDocumentMeta])
+  ), [documentsTabContent, nodeId, topoDocuments, activeDocumentPath, isDocumentBusy, onSelectDocument, onCreateTopoDocument, onExportTopoDocument, onRenameDocument, onDeleteDocument, onMoveDocument, onMoveDocumentToCard, onUpdateDocumentMeta])
 
   return (
     <DocumentEditorHost

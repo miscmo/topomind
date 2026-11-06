@@ -2392,6 +2392,40 @@ const edge = (
   assert.equal(rfOutput.find((n: any) => n.id === 'n-shape').data.kind, 'shape', 'buildNodes 必须把 kind 放回 node.data')
   assert.equal(rfOutput[0].type, 'knowledgeCard', '本轮只做 schema 预留，nodeTypes 仍统一为 knowledgeCard')
 
+  // 节点关联文档：与 kind 同一条端到端链，7 处白名单任一漏写都会在这里暴露。
+  const linksModule = await bundle('../src/domain/graph/linkedDocuments.ts')
+  const sampleLinks = [
+    { docId: 'doc_a', cardRef: 'KB1/room/card-a', title: '关联 A' },
+    { docId: 'doc_b', cardRef: 'KB2/room2/card-b', title: '关联 B' },
+  ]
+  const rfWithLinks = rfInput.map((node, i) => ({
+    ...node,
+    data: { ...node.data, linkedDocuments: i === 0 ? sampleLinks : undefined },
+  }))
+  const builtLinks = builder.buildMetaFromNodesEdges(rfWithLinks, [], { zoom: 1, pan: { x: 0, y: 0 } })
+  assert.deepEqual(builtLinks.nodes['n-shape'].linkedDocuments, sampleLinks, 'buildMetaFromNodesEdges 必须写出 linkedDocuments')
+  const normalizedLinks = normalizer.normalizeGraphMeta(builtLinks)
+  assert.deepEqual(normalizedLinks.nodes['n-shape'].linkedDocuments, sampleLinks, 'normalizeGraphMeta 不得吞掉 linkedDocuments')
+  const diskLinks = JSON.parse(JSON.stringify(fileAdapter.convertGraphToFSB(normalizedLinks, '')))
+  assert.deepEqual(diskLinks.children['n-shape'].linkedDocuments, sampleLinks, 'linkedDocuments 必须真的出现在 _graph.json 序列化结果里')
+  assert.equal(diskLinks.children['n-know'].linkedDocuments, undefined, '无关联的节点不得写入空数组（旧档零迁移）')
+  const restoredLinks = normalizer.normalizeGraphMeta(fileAdapter.convertFSBToGraph(diskLinks, ''))
+  assert.deepEqual(restoredLinks.nodes['n-shape'].linkedDocuments, sampleLinks, 'convertFSBToGraph 读入不得丢 linkedDocuments')
+  const roomLinks = mapper.graphMetaToRoomGraph('', restoredLinks)
+  assert.deepEqual(roomLinks.nodes['n-shape'].linkedDocuments, sampleLinks, 'graphMetaToRoomGraph 不得丢 linkedDocuments')
+  const metaLinks = mapper.roomGraphToGraphMeta(roomLinks)
+  assert.deepEqual(metaLinks.nodes['n-shape'].linkedDocuments, sampleLinks, 'roomGraphToGraphMeta 不得丢 linkedDocuments')
+  const rfLinksBack = builder.buildNodes('', metaLinks, {}, '')
+  assert.deepEqual(rfLinksBack.find((n: any) => n.id === 'n-shape').data.linkedDocuments, sampleLinks, 'buildNodes 必须把关联放回 node.data')
+  const tooMany = Array.from({ length: 12 }, (_, i) => ({ docId: `doc_${i}`, cardRef: 'p', title: `T${i}` }))
+  assert.equal(linksModule.normalizeLinkedDocuments(tooMany).length, 8, '关联上限必须是 8')
+  assert.equal(linksModule.normalizeLinkedDocuments([{ docId: 'x' }, { docId: 'x' }]).length, 1, '关联必须按 docId 去重')
+  assert.deepEqual(
+    linksModule.normalizeLinkedDocuments([{ docId: 'x', cardRef: 'KB\\room', title: 'T', evil: 1 }]),
+    [{ docId: 'x', cardRef: 'KB/room', title: 'T' }],
+    '关联字段必须走白名单，未知字段不得落盘'
+  )
+
   // 真跑「读库入口」：只测 graphMetaService 不够，readCardChildren 若偷偷改回直接读
   // _graph.json 索引，v2 房间就会返回空子树（历史踩过：只测序列化往返放过了写库入口）。
   const cardModule = await import(new URL('../electron/services/card-service.js', import.meta.url).href) as Record<string, any>
@@ -2442,6 +2476,237 @@ const edge = (
     '落盘前必须真的执行 TOCTOU 哈希复核，且 hash 不符时必须抛错中止'
   )
   assert.ok(migrationSource.includes('backupCreated'), 'TOCTOU 提前中止时不得回滚/隔离分片（只能在实际写盘后）')
+}
+
+// 节点关联已有文档：docId 全库主键 + 关联写库 + ownerCardPath 贯通。
+// 与上面同理，只查源码字面量会被注释/类型声明蒙混，纯函数与主进程 service 一律真跑。
+{
+  const posix = (await import('node:path')).posix
+  const idService = await import(
+    new URL('../electron/services/document-id-service.js', import.meta.url).href
+  ) as Record<string, any>
+
+  // 移动文档：无冲突必须保留原 id；只有目标节点已存在的 id 才重分配。
+  let seq = 0
+  const gen = () => `doc_generated_${++seq}`
+  assert.deepEqual(idService.planDocumentIdRemap(['doc_a', 'doc_b'], [], gen), {}, '跨节点移动无冲突时不得 idRemap')
+  const remap = idService.planDocumentIdRemap(['doc_a', 'doc_b'], ['doc_b'], gen)
+  assert.equal(remap.doc_a, undefined, '未冲突的 docId 必须原样保留')
+  assert.ok(remap.doc_b && remap.doc_b !== 'doc_b', '冲突的 docId 必须重新分配')
+
+  // 正文自描述 id：旧档在下次保存自动获得身份，且以文件名为准自愈。
+  const body = { schema: 'topomind.smart-document', blocks: [] }
+  const docPath = 'C:/kb/room/_docs/doc_abc.tdoc.json'
+  assert.equal(idService.documentIdFromContentPath(docPath), 'doc_abc', '必须能从正文文件名反推 docId')
+  assert.equal(idService.withSelfDescribingDocumentId(body, docPath).id, 'doc_abc', '写入正文必须补自描述 id')
+  assert.equal(idService.withSelfDescribingDocumentId({ ...body, id: 'doc_old' }, docPath).id, 'doc_abc', '正文 id 与文件名不符时必须自愈')
+  assert.equal(
+    idService.withSelfDescribingDocumentId({ ...body, id: 'doc_abc' }, docPath).id,
+    'doc_abc',
+    '已有正确 id 时不得改变内容'
+  )
+  assert.equal(idService.normalizeLinkedDocuments(Array.from({ length: 12 }, (_, i) => ({ docId: `d${i}` }))).length, 8, '主进程关联上限必须是 8')
+  assert.deepEqual(
+    idService.normalizeLinkedDocuments([{ docId: 'x', cardRef: 'KB\\room', title: 'T', evil: 1 }]),
+    [{ docId: 'x', cardRef: 'KB/room', title: 'T' }],
+    '主进程关联字段必须走白名单'
+  )
+
+  // 内存文件系统真跑 documentIndexService：cardRef 直取 / 失效自愈 / 回收站 / 彻底失效。
+  const dirs = new Map<string, string[]>()
+  const fileContents = new Map<string, string>()
+  const putFile = (p: string, value: unknown) => fileContents.set(p, JSON.stringify(value))
+  const fsMock = {
+    existsSync: (p: string) => fileContents.has(p) || dirs.has(p),
+    readdirSync: (p: string) => (dirs.get(p) ?? []).map((name) => ({
+      name,
+      isDirectory: () => dirs.has(`${p}/${name}`),
+    })),
+    renameSync: (from: string, to: string) => {
+      if (fileContents.has(from)) { fileContents.set(to, fileContents.get(from) as string); fileContents.delete(from) }
+    },
+  }
+  const manifests: Record<string, any> = {
+    'KB1/room/card-a': { doc_a: { id: 'doc_a', type: 'smart', title: '文档 A', path: 'doc_a.tdoc.json' } },
+    'KB2/room2/card-b': { doc_b: { id: 'doc_b', type: 'smart', title: '文档 B', path: 'doc_b.tdoc.json' } },
+    KB3: {
+      doc_a: { id: 'doc_a', type: 'smart', title: '副本 A', path: 'doc_a.tdoc.json' },
+      doc_x: { id: 'doc_x', type: 'smart', title: '副本 X', path: 'doc_x.tdoc.json' },
+    },
+  }
+  const nodeNames: Record<string, any> = {
+    'KB1/room': { 'card-a': { name: '节点 A' } },
+    'KB2/room2': { 'card-b': { name: '节点 B' } },
+  }
+  dirs.set('/kb', ['KB1', 'KB2', 'KB3'])
+  dirs.set('/kb/KB1', ['room'])
+  dirs.set('/kb/KB1/room', ['card-a'])
+  dirs.set('/kb/KB1/room/card-a', ['_docs'])
+  dirs.set('/kb/KB1/room/card-a/_docs', ['tree.json', 'doc_a.tdoc.json'])
+  dirs.set('/kb/KB2', ['room2'])
+  dirs.set('/kb/KB2/room2', ['card-b'])
+  dirs.set('/kb/KB2/room2/card-b', ['_docs'])
+  dirs.set('/kb/KB2/room2/card-b/_docs', ['tree.json'])
+  dirs.set('/kb/KB3', ['_docs'])
+  dirs.set('/kb/KB3/_docs', ['tree.json', 'doc_a.tdoc.json', 'doc_x.tdoc.json'])
+  for (const [cardPath] of Object.entries(manifests)) {
+    const prefix = cardPath === 'KB3' ? '/kb/KB3' : `/kb/${cardPath}`
+    putFile(`${prefix}/_docs/tree.json`, { version: 2, documents: manifests[cardPath] })
+  }
+  putFile('/kb/KB3/_docs/doc_a.tdoc.json', { schema: 'topomind.smart-document', id: 'doc_a', blocks: [] })
+  putFile('/kb/KB3/_docs/doc_x.tdoc.json', { schema: 'topomind.smart-document', id: 'doc_x', blocks: [] })
+
+  const service = idService.createDocumentIndexService({
+    fs: fsMock,
+    path: posix,
+    requireValidWorkDir: (d: string) => d,
+    resolveKbsPath: (_root: string, rel: string) => (rel ? `/kb/${rel}` : '/kb'),
+    readTopoManifest: (_root: string, cardPath: string) => (
+      JSON.parse(fileContents.get(`/kb/${cardPath}/_docs/tree.json`) ?? '{}')
+    ),
+    readGraphMeta: (_root: string, parentPath: string) => ({ children: nodeNames[parentPath] ?? {} }),
+    readJsonFile: (p: string) => JSON.parse(fileContents.get(p) ?? '{}'),
+    writeJsonFile: (p: string, value: unknown) => putFile(p, value),
+    listTrashItems: (_root: string, category: string) => (category === 'topo-documents' ? [
+      {
+        trashName: 'doc_c.tdoc.json',
+        originalName: 'doc_c.tdoc.json',
+        meta: { cardPath: 'KB1/room/card-a', topoDocumentItem: { id: 'doc_c', title: '已删除文档', type: 'smart' } },
+      },
+    ] : []),
+  })
+  const candidates = service.listDocumentCandidates('/root')
+  assert.equal(candidates.length, 4, '全库候选必须包含所有节点的文档')
+  assert.ok(candidates.some((c: any) => c.docId === 'doc_a' && c.breadcrumb.includes('节点 A')), '候选必须带所属节点面包屑')
+  assert.equal(service.resolveDocumentById('/root', 'doc_a', 'KB1/room/card-a').status, 'ok', 'cardRef 命中时必须 O(1) 直取')
+  assert.equal(service.resolveDocumentById('/root', 'doc_a', 'KB1/room/card-a').cardPath, 'KB1/room/card-a', '解析结果必须返回真实 cardPath')
+  const healed = service.resolveDocumentById('/root', 'doc_b', 'OLD/wrong-path')
+  assert.equal(healed.status, 'ok', 'cardRef 失效时必须按 docId 全库自愈')
+  assert.equal(healed.cardPath, 'KB2/room2/card-b', '自愈必须回写正确的所属节点')
+  assert.equal(service.resolveDocumentById('/root', 'doc_c').status, 'trashed', '删除进回收站的文档必须标记 trashed')
+  assert.equal(service.resolveDocumentById('/root', 'doc_no_such').status, 'missing', '彻底删除的文档必须标记 missing')
+
+  // 导入 KB 副本：只重映射与现有库冲突的 id，并同步文件名 + 正文自描述 id。
+  const importResult = service.remapImportedDocumentIds('/root', 'KB3', ['doc_a'])
+  assert.equal(importResult.remappedCount, 1, '导入副本只应重映射冲突的 docId')
+  const importedTree = JSON.parse(fileContents.get('/kb/KB3/_docs/tree.json') as string)
+  assert.equal(importedTree.documents.doc_a, undefined, '冲突 id 必须从副本 tree.json 移除')
+  assert.equal(importedTree.documents.doc_x.id, 'doc_x', '未冲突 id 必须原样保留')
+  const newId = Object.keys(importedTree.documents).find((id) => id !== 'doc_x') as string
+  assert.ok(newId && newId !== 'doc_a', '冲突 id 必须换成全新 id')
+  assert.equal(importedTree.documents[newId].path, `${newId}.tdoc.json`, '副本文件名必须跟随新 id')
+  const importedBody = JSON.parse(fileContents.get(`/kb/KB3/_docs/${newId}.tdoc.json`) as string)
+  assert.equal(importedBody.id, newId, '副本正文自描述 id 必须跟随新 id')
+
+  // 真跑「写库入口」：关联必须经由 graphMetaService 写进 v2 分片房间，
+  // 只测序列化往返会放过「主进程入口偷偷改回直接读 _graph.json 索引」。
+  const shardModule2 = await import(
+    new URL('../electron/services/graph-meta-service.js', import.meta.url).href
+  ) as Record<string, any>
+  const graphFiles = new Map<string, string>()
+  const graphDeps = {
+    ensureDir: () => {},
+    graphFilePath: (dir: string) => posix.join(dir, '_graph.json'),
+    joinPath: (...parts: string[]) => posix.join(...parts),
+    readJsonFile: (fp: string) => (graphFiles.has(fp) ? JSON.parse(graphFiles.get(fp) as string) : {}),
+    requireValidWorkDir: (d: string) => d,
+    resolveKbsPath: (_root: string, rel: string) => posix.join('/kb', rel || ''),
+    writeJsonFile: (fp: string, data: unknown) => { graphFiles.set(fp, JSON.stringify(data ?? {}, null, 2)) },
+  }
+  const graphStore = shardModule2.createGraphMetaService(graphDeps)
+  graphStore.writeGraphMeta('/kb', 'room', {
+    children: { n0: { name: '节点0' }, n1: { name: '节点1' } },
+    edges: [], zoom: 1, pan: { x: 0, y: 0 },
+  })
+  const writer = idService.createLinkedDocumentWriter({
+    readGraphMeta: graphStore.readGraphMeta,
+    writeGraphMeta: graphStore.writeGraphMeta,
+  })
+  const savedLinks = writer.updateNodeLinkedDocuments('/kb', 'room/n0', [
+    { docId: 'doc_a', cardRef: 'KB1/x', title: 'A', evil: 1 },
+  ])
+  assert.deepEqual(savedLinks, [{ docId: 'doc_a', cardRef: 'KB1/x', title: 'A' }], '写库入口必须返回规范化后的关联')
+  const backFromDisk = graphStore.readGraphMeta('/kb', 'room') as any
+  assert.deepEqual(backFromDisk.children.n0.linkedDocuments, savedLinks, 'v2 分片房间必须真读到写回的关联')
+  assert.equal(backFromDisk.children.n1.linkedDocuments, undefined, '未关联的节点不得被写上空数组')
+  assert.equal(backFromDisk.children.n0.name, '节点0', '写关联不得丢掉节点其它字段')
+  writer.updateNodeLinkedDocuments('/kb', 'room/n0', [])
+  assert.equal((graphStore.readGraphMeta('/kb', 'room') as any).children.n0.linkedDocuments, undefined, '清空关联必须删除该键')
+  assert.throws(() => writer.updateNodeLinkedDocuments('/kb', 'room/nope', []), /节点不存在/, '节点不存在必须抛错')
+
+  // 主进程与渲染层的关键接线：只查字面量不够，配合上面的真跑一起守住。
+  const docFileServiceSource = await readFile(new URL('../electron/file-service.js', import.meta.url), 'utf-8')
+  assert.ok(docFileServiceSource.includes('planDocumentIdRemap(subtreeIds, Object.keys(targetManifest.documents), newDocumentId)'), '跨节点移动必须只重映射冲突 id')
+  assert.equal(docFileServiceSource.includes("idRemap[id] = 'doc_' + randomUUID()"), false, '不得再无条件 idRemap')
+  assert.ok(docFileServiceSource.includes('withSelfDescribingDocumentId(normalizedContent, filePath'), '正文写入必须补自描述 id')
+  assert.ok(docFileServiceSource.includes('updateNodeLinkedDocuments: function'), '主进程必须提供原子写入口')
+  assert.ok(docFileServiceSource.includes('linkedDocumentWriter.updateNodeLinkedDocuments('), '主进程入口必须委托可注入的写库实现')
+  assert.ok(docFileServiceSource.includes('readGraphMeta: graphMetaService.readGraphMeta'), '关联写库必须走逻辑读（v2 分片）')
+  const kbServiceSource = await readFile(new URL('../electron/services/kb-service.js', import.meta.url), 'utf-8')
+  assert.ok(kbServiceSource.includes('remapImportedDocumentIds(rootDir, destKbPath, existingIds)'), '导入 KB 必须重映射冲突 id')
+  const preloadSource = await readFile(new URL('../electron/preload.js', import.meta.url), 'utf-8')
+  const mainSource = await readFile(new URL('../electron/main.js', import.meta.url), 'utf-8')
+  for (const channel of ['fs:listDocumentCandidates', 'fs:resolveDocumentById', 'fs:updateNodeLinkedDocuments']) {
+    assert.ok(preloadSource.includes(`'${channel}'`), `${channel} 必须在 preload 白名单里`)
+    assert.ok(mainSource.includes(`ipcMain.handle('${channel}'`), `${channel} 必须注册 IPC handler`)
+  }
+
+  // ownerCardPath 是本需求最大的事故风险：读写 / 草稿 / 附件 / 缓存键必须全部跟着文档走。
+  const detailPanelSource = await readFile(new URL('../src/features/right-panel/components/DetailTab/DetailPanel.tsx', import.meta.url), 'utf-8')
+  assert.ok(detailPanelSource.includes('nodePath: documentCardPath'), '右栏文档读写必须传 documentCardPath（不能传当前节点 nodePath）')
+  assert.ok(detailPanelSource.includes('attachmentCardPath={documentCardPath}'), '附件路径必须指向文档所属节点')
+  assert.ok(detailPanelSource.includes('joinRefs(documentCardPath, activeDocumentPath)'), '草稿/内容缓存键必须含文档所属节点')
+  assert.ok(detailPanelSource.includes('syncHasDetail: detailView === \'own\''), '关联视图不得改动当前节点的自身文档标记')
+  const linkDocumentsSource = await readFile(new URL('../src/features/right-panel/model/useDetailDocuments.ts', import.meta.url), 'utf-8')
+  assert.ok(linkDocumentsSource.includes('allowedDocumentIds'), '关联视图的默认激活兜底必须限制在关联文档内')
+}
+
+// 任务 #58：topo 正文序列化兼容性 —— columnList / column 等自定义块不得被剥掉。
+// file-service.js 顶层 import 了 electron 的 shell，纯 Node 无法整模块加载；
+// 因此真跑「写入路径唯一的变换函数 + 整体 JSON 往返」，再用源码断言守住三层透传接线。
+// 真实写库入口的往返另由 scripts/verify-linked-documents-gui.mjs 在 Electron 里补跑。
+{
+  const docIdService = await import(
+    new URL('../electron/services/document-id-service.js', import.meta.url).href
+  ) as Record<string, any>
+  const columnBody = {
+    schema: 'topomind.smart-document',
+    version: 1,
+    title: '分栏文档',
+    metadata: { customFlag: { nested: [1, 2, 3] } },
+    blocks: [
+      {
+        type: 'columnList', id: 'cl-1', props: { gap: 8 }, children: [
+          {
+            type: 'column', id: 'c-1', props: { width: 0.5 }, children: [
+              { type: 'paragraph', id: 'p-1', content: [{ type: 'text', text: '左栏', styles: {} }] },
+            ],
+          },
+          { type: 'column', id: 'c-2', props: { width: 0.5 }, children: [] },
+        ],
+      },
+    ],
+  }
+  const written = docIdService.withSelfDescribingDocumentId(
+    columnBody, 'C:/kb/_docs/doc_cols.tdoc.json', ['.tdoc.json']
+  )
+  assert.equal(written.id, 'doc_cols', '正文必须补自描述 id')
+  assert.deepEqual(written.blocks, columnBody.blocks, 'columnList / column 块不得被序列化剥掉')
+  assert.deepEqual(written.metadata, columnBody.metadata, '未知顶层扩展字段必须整体保留')
+  assert.deepEqual(JSON.parse(JSON.stringify(written)), written, '整体 JSON 往返不得丢字段')
+  assert.equal(Object.prototype.hasOwnProperty.call(columnBody, 'id'), false, '补 id 不得就地改写入参')
+
+  const idServiceSrc = await readFile(new URL('../electron/services/document-id-service.js', import.meta.url), 'utf-8')
+  assert.ok(idServiceSrc.includes('return { ...content, id }'), '补 id 必须整体展开，不能按字段白名单重建正文')
+  const fsSrc = await readFile(new URL('../electron/file-service.js', import.meta.url), 'utf-8')
+  assert.ok(
+    fsSrc.includes('_fs_writeJsonFile(filePath, withSelfDescribingDocumentId(normalizedContent, filePath'),
+    '主进程写正文必须整体透传 normalizedContent'
+  )
+  const storageServiceSrc = await readFile(new URL('../src/core/storage/service.ts', import.meta.url), 'utf-8')
+  assert.ok(storageServiceSrc.includes('await backend.writeTopoDocument(cardPath, documentId, content)'), 'store 层不得筛选正文字段')
+  const fileAdapterSrc = await readFile(new URL('../src/core/storage/file.ts', import.meta.url), 'utf-8')
+  assert.ok(fileAdapterSrc.includes('await FSB.writeTopoDocument(requireRootDir(), cardPath, documentId, content)'), 'backend 层不得筛选正文字段')
 }
 
 console.log('Critical regression checks verified')

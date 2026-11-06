@@ -24,6 +24,15 @@ import { createGraphMetaService } from './services/graph-meta-service.js';
 import { createAttachmentService } from './services/attachment-service.js';
 import { createDocumentService } from './services/document-service.js';
 import { createTrashService } from './services/trash-service.js';
+import {
+  DOCUMENT_EXTENSIONS,
+  MAX_LINKED_DOCUMENTS,
+  newDocumentId,
+  planDocumentIdRemap,
+  withSelfDescribingDocumentId,
+  createDocumentIndexService,
+  createLinkedDocumentWriter,
+} from './services/document-id-service.js';
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_TEXT_FILE_BYTES = 5 * 1024 * 1024;
@@ -876,7 +885,9 @@ function _fs_writeTopoDocumentContent(filePath, type, content) {
   if (!Number.isFinite(normalizedContent.version)) {
     normalizedContent.version = 1;
   }
-  _fs_writeJsonFile(filePath, normalizedContent);
+  // A 阶段：正文顶层补自描述 id。文件名即 docId，旧档在下次保存时自动获得身份，
+  // 无需迁移；移动 / 恢复时若发生改名也会在这里自愈。
+  _fs_writeJsonFile(filePath, withSelfDescribingDocumentId(normalizedContent, filePath, Object.values(DOCUMENT_EXTENSIONS)));
 }
 
 function _fs_listTopoDocuments(rootDir, cardPath) {
@@ -903,11 +914,15 @@ function _fs_exportTopoDocument(rootDir, cardPath, documentId) {
   var found = _fs_findTopoDocument(rootDir, cardPath, documentId);
   var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, found.item);
   var fileName = nodePath.basename(found.item.path);
+  var body = nodeFs.existsSync(filePath)
+    ? _fs_readJsonFile(filePath)
+    : _fs_createTopoDocumentInitialContent(found.item.type, found.item.title, Date.now());
+  body = withSelfDescribingDocumentId(body, filePath, Object.values(DOCUMENT_EXTENSIONS));
   return {
     fileName: fileName,
     type: found.item.type,
     mimeType: 'application/json;charset=utf-8',
-    content: JSON.stringify(nodeFs.existsSync(filePath) ? _fs_readJsonFile(filePath) : _fs_createTopoDocumentInitialContent(found.item.type, found.item.title, Date.now()), null, 2),
+    content: JSON.stringify(body, null, 2),
   };
 }
 
@@ -928,7 +943,7 @@ function _fs_createTopoDocument(rootDir, cardPath, input) {
   var docsDir = _fs_topoDocumentsDir(rootDir, cardPath);
   _fs_ensureDir(docsDir);
   var manifest = _fs_readTopoDocumentManifest(rootDir, cardPath);
-  var id = 'doc_' + randomUUID().replace(/-/g, '');
+  var id = newDocumentId();
   var fileName = id + TOPO_DOCUMENT_EXTENSIONS[type];
   var filePath = nodePath.join(docsDir, fileName);
   
@@ -973,9 +988,13 @@ function _fs_readTopoDocument(rootDir, cardPath, documentId) {
   }
   var filePath = _fs_topoDocumentAbsolutePath(rootDir, cardPath, found.item);
   if (!nodeFs.existsSync(filePath)) {
-    return _fs_createTopoDocumentInitialContent(found.item.type, found.item.title, Date.now());
+    return withSelfDescribingDocumentId(
+      _fs_createTopoDocumentInitialContent(found.item.type, found.item.title, Date.now()),
+      filePath,
+      Object.values(DOCUMENT_EXTENSIONS)
+    );
   }
-  return _fs_readJsonFile(filePath);
+  return withSelfDescribingDocumentId(_fs_readJsonFile(filePath), filePath, Object.values(DOCUMENT_EXTENSIONS));
 }
 
 function _fs_writeTopoDocument(rootDir, cardPath, documentId, content) {
@@ -1105,7 +1124,7 @@ function _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName) {
   var manifest = _fs_readTopoDocumentManifest(rootDir, cardPath);
   var nextId = String(topoItem.id || '');
   if (!nextId || manifest.documents[nextId]) {
-    nextId = 'doc_' + randomUUID().replace(/-/g, '');
+    nextId = newDocumentId();
   }
   var safePath = _fs_normalizeTopoDocumentPath(type, topoItem.path || (nextId + TOPO_DOCUMENT_EXTENSIONS[type]));
   if (manifest.documents[nextId] || Object.values(manifest.documents).some(function(existing) { return existing.path === safePath; })) {
@@ -1118,6 +1137,12 @@ function _fs_restoreTrashTopoDocument(rootDir, cardPath, trashName) {
   var target = nodePath.join(docsDir, safePath);
   if (nodeFs.existsSync(target)) target = _fs_uniqueFilePath(docsDir, safePath);
   nodeFs.copyFileSync(source, target);
+  // 恢复时若 id 因冲突被重新分配，正文里的自描述 id 必须同步，否则身份与 manifest 不一致。
+  try {
+    var restoredBody = _fs_readJsonFile(target);
+    var nextBody = withSelfDescribingDocumentId(restoredBody, target, Object.values(DOCUMENT_EXTENSIONS));
+    if (nextBody !== restoredBody) _fs_writeJsonFile(target, nextBody);
+  } catch {}
   var restoredPath = nodePath.basename(target);
   var originalDocumentId = topoItem.id ? String(topoItem.id) : null;
   var originalParentId = topoItem.parentId ? String(topoItem.parentId) : null;
@@ -1296,13 +1321,10 @@ function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetC
     });
   })(sourceKey);
 
-  // 为子树每个文档分配新 id（避免与目标节点已有 id 冲突），并保持父子映射。
-  var idRemap = {};
-  subtreeIds.forEach(function(id) {
-    idRemap[id] = 'doc_' + randomUUID().replace(/-/g, '');
-  });
-
+  // docId 是全库稳定主键：只在目标节点已存在同 id 时才重新分配，其余一律保留原 id。
+  // 历史上无条件 idRemap 会让「节点关联文档 / 文档间引用」在移动一次后全部失效。
   var targetManifest = _fs_readTopoDocumentManifest(rootDir, targetCardPath);
+  var idRemap = planDocumentIdRemap(subtreeIds, Object.keys(targetManifest.documents), newDocumentId);
   var targetDocsDir = _fs_topoDocumentsDir(rootDir, targetCardPath);
   _fs_ensureDir(targetDocsDir);
   var maxSortOrder = 0;
@@ -1327,8 +1349,8 @@ function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetC
     // 同子树中已被移动文档的新 id。
     var newParentId = (oldId === sourceKey)
       ? null
-      : (item.parentId && idRemap[item.parentId] ? idRemap[item.parentId] : null);
-    var newId = idRemap[oldId];
+      : (item.parentId ? (idRemap[item.parentId] || item.parentId) : null);
+    var newId = idRemap[oldId] || oldId;
     var fileName = newId + TOPO_DOCUMENT_EXTENSIONS[item.type];
     var filePath = nodePath.join(targetDocsDir, fileName);
     _fs_writeTopoDocumentContent(filePath, item.type, content);
@@ -1383,6 +1405,8 @@ function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetC
     movedCount: movedItems.length,
     attachmentCount: attachmentCount,
     attachmentCleaned: attachmentCleaned,
+    // 真正被改名的 id（通常为空对象）。引用方可据此更新自身记录。
+    idRemap: idRemap,
   };
 }
 
@@ -1555,23 +1579,6 @@ const trashService = createTrashService({
   restoreTrashItem: _fs_restoreTrashItem,
 });
 
-const kbService = createKbService({
-  clearTrashItems: trashService.clearTrashItems,
-  ensureDir: _fs_ensureDir,
-  kbsDir: _fs_kbsDir,
-  kbsTrashItemKind: _fs_kbsTrashItemKind,
-  listTrashItems: trashService.listTrashItems,
-  moveToTrash: trashService.moveToTrash,
-  relativeToKbs: _fs_relativeToKbs,
-  requireSafeDirName: _fs_requireSafeDirName,
-  requireValidWorkDir: _fs_requireValidWorkDir,
-  resolveKbsPath: _fs_resolveKbsPath,
-  restoreTrashItem: trashService.restoreTrashItem,
-  safeSegment: _fs_safeSegment,
-  uniqueFolderName: _fs_uniqueFolderName,
-  validateAbsolutePath: _fs_validateAbsolutePath,
-});
-
 // P1：graphMetaService 是「逻辑 meta ↔ 磁盘格式」的唯一边界（v1 单文件 / v2 分片）。
 // 所有直接读 _graph.json.children 的地方都必须委托它，否则分片房间会被误读成空图。
 const graphMetaService = createGraphMetaService({
@@ -1582,6 +1589,46 @@ const graphMetaService = createGraphMetaService({
   requireValidWorkDir: _fs_requireValidWorkDir,
   resolveKbsPath: _fs_resolveKbsPath,
   writeJsonFile: _fs_writeJsonFile,
+});
+
+const linkedDocumentWriter = createLinkedDocumentWriter({
+  readGraphMeta: graphMetaService.readGraphMeta,
+  writeGraphMeta: graphMetaService.writeGraphMeta,
+});
+
+// A 阶段：docId 全库解析 / 关联记录规范化。不建常驻索引，按需扫描 _docs/tree.json。
+const documentIndexService = createDocumentIndexService({
+  fs: nodeFs,
+  path: nodePath,
+  requireValidWorkDir: _fs_requireValidWorkDir,
+  resolveKbsPath: _fs_resolveKbsPath,
+  // 只读装载，避免「扫描全库」顺带 reconcile 写盘。
+  readTopoManifest: function(rootDir, cardPath) {
+    return _fs_loadTopoDocumentManifest(rootDir, cardPath).manifest;
+  },
+  readGraphMeta: graphMetaService.readGraphMeta,
+  readJsonFile: _fs_readJsonFile,
+  writeJsonFile: _fs_writeJsonFile,
+  listTrashItems: trashService.listTrashItems,
+});
+
+const kbService = createKbService({
+  clearTrashItems: trashService.clearTrashItems,
+  collectDocumentIds: documentIndexService.collectDocumentIds,
+  ensureDir: _fs_ensureDir,
+  kbsDir: _fs_kbsDir,
+  kbsTrashItemKind: _fs_kbsTrashItemKind,
+  listTrashItems: trashService.listTrashItems,
+  moveToTrash: trashService.moveToTrash,
+  relativeToKbs: _fs_relativeToKbs,
+  remapImportedDocumentIds: documentIndexService.remapImportedDocumentIds,
+  requireSafeDirName: _fs_requireSafeDirName,
+  requireValidWorkDir: _fs_requireValidWorkDir,
+  resolveKbsPath: _fs_resolveKbsPath,
+  restoreTrashItem: trashService.restoreTrashItem,
+  safeSegment: _fs_safeSegment,
+  uniqueFolderName: _fs_uniqueFolderName,
+  validateAbsolutePath: _fs_validateAbsolutePath,
 });
 
 const cardService = createCardService({
@@ -2114,6 +2161,30 @@ const fileService = {
       return kbService.importKB(rootDir, sourcePath);
     },
   };
+
+// ===== 节点关联已有文档（A 阶段全局解析 + B 阶段原子写入） =====
+// 单独 Object.assign，保持上方 fileService 字面量的既有区域不动。
+Object.assign(fileService, {
+  /** 全库文档候选：选择关联文档时一次性列出，带所属节点面包屑。 */
+  listDocumentCandidates: function(rootDir) {
+    return documentIndexService.listDocumentCandidates(_fs_requireValidWorkDir(rootDir));
+  },
+
+  /** docId → 当前所属 cardPath；cardRef 失效时全库自愈，删除时返回 trashed/missing。 */
+  resolveDocumentById: function(rootDir, docId, cardRef) {
+    return documentIndexService.resolveDocumentById(_fs_requireValidWorkDir(rootDir), docId, cardRef);
+  },
+
+  /**
+   * 主进程内 read-modify-write，避免渲染层「读全图 → 写回」与画布保存互相覆盖。
+   * nodePath 是节点在文档系统里的完整 cardPath，其父房间才是 _graph.json 的持有者。
+   */
+  updateNodeLinkedDocuments: function(rootDir, nodePath, links) {
+    return linkedDocumentWriter.updateNodeLinkedDocuments(
+      _fs_requireValidWorkDir(rootDir), nodePath, links, MAX_LINKED_DOCUMENTS
+    );
+  },
+});
 
 export { fileService };
 export default fileService;
