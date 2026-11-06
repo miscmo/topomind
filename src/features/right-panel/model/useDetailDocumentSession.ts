@@ -7,7 +7,7 @@ import { logPerformanceMetric, PERFORMANCE_METRICS, takePerformanceMetricStart }
 import { useCardContentStore } from './cardContentStore'
 import { useDraftStore } from './draftStore'
 import { useGraphStoreApi } from '../../../stores/graphStore'
-import { toast } from '../../../stores/toastStore'
+import { toast } from '../../../shared/ui/Toaster/toastStore'
 import { areDocumentContentsEqual, getDocumentContentLength, prepareStructuredDocumentContentForSave } from '../../../features/documents/model/documentContentSession'
 
 interface UseDetailDocumentSessionParams {

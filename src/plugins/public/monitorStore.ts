@@ -1,17 +1,18 @@
 /**
  * 日志/性能监控窗口的全局状态（Zustand）
  *
+ * 位置说明：这是「主应用 ↔ 内置 monitor 插件」共享的 UI 状态契约，放在
+ * `plugins/public`（插件允许访问的公共层）而不是 `stores`：插件边界规则禁止
+ * builtin 插件引用 `@/stores/*`。`core/session-reset.ts` 也直接引用本文件。
+ *
  * ⚠️ 历史背景：本 store 曾同时存在两份完全相同的拷贝——
  * `features/monitor/model/monitorStore.ts` 与 `plugins/builtin/monitor/model/monitorStore.ts`，
  * 两者状态与 action 逐行一致，但只有 features 那份被 `core/session-reset.ts` 引用，
  * 造成 core 反向依赖 features 的分层倒置，且两份拷贝需要同步修改。
- *
- * 现已统一到此处（`src/stores/`，与 graphStore / workspaceStore 同级）：
- * - plugins/builtin/monitor 与 core/session-reset 都改为引用本文件；
- * - `features/monitor/` 整个目录（除本 store 外 1452 行均为无人引用的死代码）已删除。
+ * 现在只保留这一份，`features/monitor/`（1452 行死代码）已删除。
  */
 import { create } from 'zustand'
-import type { LogEntrySnapshot, PluginDiagnosticsSnapshot as PluginDiagnostics } from '@/plugins/public'
+import type { LogEntrySnapshot, PluginDiagnosticsSnapshot as PluginDiagnostics } from './api'
 
 export interface LogEntry {
   id?: string

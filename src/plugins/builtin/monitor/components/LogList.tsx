@@ -2,7 +2,7 @@ import { FileText, SearchX } from 'lucide-react'
 
 import { toDateStr } from '@/shared/observability/logFormatting'
 
-import { useMonitorStore } from '@/stores/monitorStore'
+import { useMonitorStore } from '@/plugins/public/monitorStore'
 import { LEVEL_ORDER } from '../constants'
 import { LogRow } from './LogRow'
 import { EmptyState } from '@/shared/ui/EmptyState'

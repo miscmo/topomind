@@ -15,7 +15,7 @@ import type {
   PerformanceSample,
 } from '../../public'
 import { useMonitorHost } from './hostContext'
-import { useMonitorStore } from '@/stores/monitorStore'
+import { useMonitorStore } from '@/plugins/public/monitorStore'
 import { EmptyState } from '@/shared/ui/EmptyState'
 
 type MetricSummary = {

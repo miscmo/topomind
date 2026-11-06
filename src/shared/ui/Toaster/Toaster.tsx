@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useToastStore, type ToastItem } from '@/stores/toastStore'
+import { useToastStore, type ToastItem } from './toastStore'
 
 const LEVEL_STYLES: Record<ToastItem['level'], { bar: string; label: string }> = {
   info: { bar: 'bg-[var(--color-accent)]', label: 'text-[var(--color-text-secondary)]' },

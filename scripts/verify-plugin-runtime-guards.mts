@@ -9,11 +9,6 @@ import {
   loadLearningStatisticsData,
   subscribeLearningStatisticsWorkspace,
 } from '../src/plugins/builtin/learning-statistics/runtime.ts'
-import {
-  initializeMonitorPage,
-  subscribeMonitorDiagnostics,
-  subscribeMonitorLogs,
-} from '../src/plugins/builtin/monitor/runtime.ts'
 import { PluginManager } from '../src/plugins/host/pluginManager.ts'
 import { createPluginContext } from '../src/plugins/host/pluginContext.ts'
 import { validatePluginManifest } from '../src/plugins/host/pluginManifest.ts'
@@ -1112,16 +1107,38 @@ async function loadModuleWithVite<T = Record<string, unknown>>(entryPath: string
 
   assert.match(monitorMarkup, /日志|性能|插件/)
 
-  const monitorState = await initializeMonitorPage({
+  // runtime.ts 依赖 @ 别名，原生 Node 顶层 import 无法解析；与页面入口一样走 Vite SSR 加载。
+  const monitorRuntime = await loadModuleWithVite<{
+    initializeMonitorPage: (input: {
+      logs: LogsApi
+      plugins: PluginsApi
+      log: LoggingApi
+      now?: () => Date
+    }) => Promise<{
+      entries: Array<{ message: string }>
+      availableDates: string[]
+      pluginDiagnostics: PluginDiagnosticsSnapshot[]
+    }>
+    subscribeMonitorLogs: (
+      logs: LogsApi,
+      listener: (entry: { message: string }) => void,
+    ) => { dispose(): void }
+    subscribeMonitorDiagnostics: (
+      plugins: PluginsApi,
+      listener: (diagnostics: PluginDiagnosticsSnapshot[]) => void,
+    ) => { dispose(): void }
+  }>('/src/plugins/builtin/monitor/runtime.ts')
+
+  const monitorState = await monitorRuntime.initializeMonitorPage({
     logs: viewNode?.props?.logs as LogsApi,
     plugins: viewNode?.props?.plugins as PluginsApi,
     log: viewNode?.props?.log as LoggingApi,
     now: () => new Date('2026-06-04T11:00:00.000Z'),
   })
-  const logSubscription = subscribeMonitorLogs(viewNode?.props?.logs as LogsApi, (entry) => {
+  const logSubscription = monitorRuntime.subscribeMonitorLogs(viewNode?.props?.logs as LogsApi, (entry) => {
     observedMonitorMessages.push(entry.message)
   })
-  const diagnosticsSubscription = subscribeMonitorDiagnostics(
+  const diagnosticsSubscription = monitorRuntime.subscribeMonitorDiagnostics(
     viewNode?.props?.plugins as PluginsApi,
     (diagnostics) => {
       observedDiagnosticPluginIds.push(...diagnostics.map((item) => item.pluginId))

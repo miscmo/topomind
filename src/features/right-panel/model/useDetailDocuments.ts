@@ -10,7 +10,7 @@ import { joinRefs } from '../../../domain/graph/path-utils'
 import { topoDocumentIdFromPath, topoDocumentPath } from '../../../features/documents/types/documentTypes'
 import { getTopoDocumentTypeDefinition } from '../../../features/documents/services/documentTypeRegistry'
 import { useDetailPanelStore } from './detailPanelStore'
-import { toast } from '../../../stores/toastStore'
+import { toast } from '../../../shared/ui/Toaster/toastStore'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
 
 export function useDetailDocuments({

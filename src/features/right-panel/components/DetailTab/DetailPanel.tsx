@@ -22,7 +22,7 @@ import { useResolvedLinkedDocuments } from '../../model/useResolvedLinkedDocumen
 import type { DetailSidebarTab } from '../../../../features/documents/types/workspaceTypes'
 import type { LinkedDocumentRef, ResolvedLinkedDocument } from '../../../../domain/graph/linkedDocuments'
 import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
-import { toast } from '../../../../stores/toastStore'
+import { toast } from '../../../../shared/ui/Toaster/toastStore'
 import { syncLinkedDocumentsToGraph, useLinkedDocumentStore } from '../../../graph/linkedDocumentStore'
 import { DocumentBreadcrumb } from './DocumentBreadcrumb'
 import { DocumentMoveToNodeDialog } from '../../../documents/components/DocumentMoveToNodeDialog'

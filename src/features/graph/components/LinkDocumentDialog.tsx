@@ -9,7 +9,7 @@ import {
   modalPanelEnterClassName,
 } from '../../../shared/ui/modal'
 import { EmptyState } from '../../../shared/ui/EmptyState'
-import { toast } from '../../../stores/toastStore'
+import { toast } from '../../../shared/ui/Toaster/toastStore'
 import { syncLinkedDocumentsToGraph, useLinkedDocumentStore } from '../linkedDocumentStore'
 
 /**

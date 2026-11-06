@@ -1,5 +1,5 @@
 import { tabStore } from '../stores/tabs/tabStore'
-import { useMonitorStore } from '../stores/monitorStore'
+import { useMonitorStore } from '../plugins/public/monitorStore'
 import { useGraphUiStore } from '../stores/graphUiStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useWorkspaceStore } from '../stores/workspaceStore'

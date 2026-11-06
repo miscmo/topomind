@@ -1,6 +1,6 @@
 import { Search, X, RefreshCw } from 'lucide-react'
 import React, { useCallback } from 'react'
-import { useMonitorStore, type LogEntry } from '@/stores/monitorStore'
+import { useMonitorStore, type LogEntry } from '@/plugins/public/monitorStore'
 
 import { LEVELS, LEVEL_COLORS } from '../constants'
 import { useMonitorHost } from '../hostContext'

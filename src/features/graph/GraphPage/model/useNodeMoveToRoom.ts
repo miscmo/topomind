@@ -11,7 +11,7 @@ import { useStorage } from '../../../../core/storage'
 import type { MoveTopoNodesToRoomResult } from '../../../../core/storage'
 import type { GraphContextValue } from '../../../../contexts/GraphContext'
 import { useGraphStoreApi } from '../../../../stores/graphStore'
-import { toast } from '../../../../stores/toastStore'
+import { toast } from '../../../../shared/ui/Toaster/toastStore'
 import { logAction } from '../../../../core/log-backend'
 import { normalizeRef } from '../../../../domain/graph/path-utils'
 

@@ -6,7 +6,7 @@
  * feature 共同引用——它实质是**全局 UI 状态**，而非 right-panel 的内部实现。
  * 放在 features 下会造成 core / application 反向依赖 features 的分层倒置。
  *
- * 现统一到 `src/stores/`（与 graphStore / workspaceStore / monitorStore 同级），
+ * 现统一到 `src/stores/`（与 graphStore / workspaceStore 同级），
  * 各使用方统一按 `@/stores/rightPanelStore` 引用。
  */
 import { create } from 'zustand'

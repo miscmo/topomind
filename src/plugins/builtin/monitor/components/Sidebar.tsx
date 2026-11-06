@@ -1,6 +1,6 @@
 
 import { ScrollText, Activity, Settings } from 'lucide-react'
-import { useMonitorStore } from '@/stores/monitorStore'
+import { useMonitorStore } from '@/plugins/public/monitorStore'
 import { useMonitorHost } from '../hostContext'
 import { LEVEL_COLORS } from '../constants'
 

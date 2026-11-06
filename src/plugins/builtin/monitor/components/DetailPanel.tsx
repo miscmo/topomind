@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { formatDate } from '@/shared/observability/logFormatting'
-import { useMonitorStore } from '@/stores/monitorStore'
+import { useMonitorStore } from '@/plugins/public/monitorStore'
 import { LEVEL_COLORS } from '../constants'
 import { useMonitorHost } from '../hostContext'
 
