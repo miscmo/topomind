@@ -39,7 +39,7 @@ export interface DocumentResolution {
 }
 
 /**
- * 文档双链的「被引用」条目：另一篇文档的正文中出现了指向本 docId 的 docLink。
+ * 文档双链的一条关系：入链时是「引用了本页的文档」，出链时是「本页引用的文档」。
  * breadcrumb 由主进程 formatDocumentSource 统一生成，右栏不得自行拼接。
  */
 export interface DocumentBacklink {
@@ -51,6 +51,20 @@ export interface DocumentBacklink {
   breadcrumb: string
   /** 该文档中指向目标的引用次数 */
   references: number
+  /** 出链目标已删除 / 不在索引里时为 missing，UI 应禁用跳转并用标题快照兜底 */
+  status?: 'ok' | 'missing'
+}
+
+/**
+ * 一次查询同时给出上下两栏的数据，避免两栏各扫一遍全库。
+ * parsed = 本轮真正读正文解析的篇数（0 表示完全命中关系索引）；
+ * indexed = 索引覆盖的文档数。两者用于回归断言与「已缓存」提示。
+ */
+export interface DocumentRelations {
+  incoming: DocumentBacklink[]
+  outgoing: DocumentBacklink[]
+  parsed: number
+  indexed: number
 }
 
 /** 返回 undefined 表示「没有关联」：写盘时省略该键，旧档零迁移、不撑大 _graph.json。 */

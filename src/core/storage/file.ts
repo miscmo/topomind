@@ -346,6 +346,10 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.listDocumentBacklinks(requireRootDir(), docId)
     },
 
+    listDocumentRelations: async (docId: string, force?: boolean) => {
+      return FSB.listDocumentRelations(requireRootDir(), docId, force)
+    },
+
     listTopoDocuments: async (cardPath: string): Promise<TopoDocumentManifestItem[]> => {
       return FSB.listTopoDocuments(requireRootDir(), cardPath)
     },

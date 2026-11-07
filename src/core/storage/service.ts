@@ -150,6 +150,9 @@ export function createStore(backend: StorageBackend) {
     async listDocumentBacklinks(docId: string) {
       try { return await backend.listDocumentBacklinks(docId) } catch (e) { logger.catch('Store.listDocumentBacklinks', `扫描反向链接失败: ${docId}`, e); throw e }
     },
+    async listDocumentRelations(docId: string, force = false) {
+      try { return await backend.listDocumentRelations(docId, force) } catch (e) { logger.catch('Store.listDocumentRelations', `查询文档引用关系失败: ${docId}`, e); throw e }
+    },
     async listTopoDocuments(cardPath: string) {
       try { return await backend.listTopoDocuments(cardPath) } catch (e) { logger.catch('Store.listTopoDocuments', `列出多类型文档失败: ${cardPath}`, e); throw e }
     },
