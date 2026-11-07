@@ -4,10 +4,10 @@ import { createReactBlockSpec, createReactInlineContentSpec } from '@blocknote/r
 import { Extension, InputRule } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import type { EditorState, Transaction } from '@tiptap/pm/state'
-import katex from 'katex'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { quoteEnterPayload, shouldHandleQuoteEnter } from './quoteEnter'
 import { beginMathEditing, endMathEditing } from './mathEditSession'
+import { renderMathToHtml } from './mathRender'
 
 type InlineMathRenderProps = {
   inlineContent: {
@@ -53,13 +53,6 @@ function inlineContentToPlainText(content: unknown): string {
     }
     return ''
   }).join('')
-}
-
-function renderMathToHtml(latex: string, displayMode: boolean): string {
-  return katex.renderToString(latex || ' ', {
-    displayMode,
-    throwOnError: false,
-  })
 }
 
 function focusAndSelectInput(input: HTMLInputElement | HTMLTextAreaElement | null) {
