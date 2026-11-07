@@ -2,6 +2,7 @@ import { BlockNoteSchema, createCodeBlockSpec } from '@blocknote/core'
 import { withMultiColumn } from '@blocknote/xl-multi-column'
 import { MermaidBlock } from 'blocknote-mermaid'
 import { InlineMath, MathBlock } from './mathSupport'
+import { DocumentLink } from './docLinkSupport'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
 
 // 用 xl-multi-column 包裹 schema，加入 column / columnList 块，
@@ -16,6 +17,8 @@ export const smartDocumentSchema = withMultiColumn(
     },
     inlineContentSpecs: {
       inlineMath: InlineMath,
+      // 文档双链：正文里指向另一篇文档的行内 chip，按全库稳定 docId 寻址。
+      docLink: DocumentLink,
     },
   }),
 )

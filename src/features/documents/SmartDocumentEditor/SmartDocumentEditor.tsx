@@ -1,6 +1,6 @@
 import { memo, useMemo, useRef, useEffect, useState, useCallback, useId, type CSSProperties, type WheelEvent as ReactWheelEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, ChevronUp, Copy, WrapText, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Copy, Link2, WrapText, X } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems, type DefaultReactSuggestionItem } from '@blocknote/react'
 import { getMultiColumnSlashMenuItems } from '@blocknote/xl-multi-column'
@@ -17,6 +17,17 @@ import { EditorTopToolbar } from './components/EditorTopToolbar'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
 import { getImagePreviewScale } from './imagePreview'
 import { setEditorLinkClickHandler, shouldInterceptLink } from './editorLinkInterceptor'
+import {
+  readCaretRect,
+  requestDocumentLinkPicker,
+  setDocumentLinkOpenHandler,
+  setDocumentLinkPickerHandler,
+  type DocumentLinkPickerRequest,
+} from './docLinkBridge'
+import { createDocumentLinkInlineContent } from './docLinkModel'
+import { DocumentLinkPicker } from './components/DocumentLinkPicker'
+import { topoDocumentIdFromPath } from '../types/documentTypes'
+import type { FSBDocumentCandidate } from '../../../core/fs-backend'
 import { getEditorTopInset } from './smartDocumentUtils'
 import { buildHeadingNumberStyles, isSameHeadingNumbering } from './headingNumbering'
 import { buildEditorLayoutVars, normalizeEditorLayout } from './editorLayout'
@@ -153,6 +164,11 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   const [linkMenu, setLinkMenu] = useState<{ href: string; top: number; left: number } | null>(null)
   const linkMenuRef = useRef<HTMLDivElement>(null)
   const lastLinkMenuOpenRef = useRef<{ t: number; href: string } | null>(null)
+  // 文档双链：由 `[[` InputRule / 斜杠菜单打开的浮层请求（模块级桥只负责传一次性请求）。
+  const [docLinkPicker, setDocLinkPicker] = useState<DocumentLinkPickerRequest | null>(null)
+  const onOpenDocumentByDocIdRef = useRef(props.onOpenDocumentByDocId)
+  onOpenDocumentByDocIdRef.current = props.onOpenDocumentByDocId
+  const currentDocId = attachmentInsertTargetKey ? topoDocumentIdFromPath(attachmentInsertTargetKey) : null
   // 滚动联动（scroll-spy）：把当前所在标题的 block id 上抛给目录高亮
   const onTocActiveChangeRef = useRef(onTocActiveChange)
   onTocActiveChangeRef.current = onTocActiveChange
@@ -233,6 +249,29 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     setEditorLinkClickHandler(({ href, rect }) => openLinkMenu(href, rect))
     return () => setEditorLinkClickHandler(null)
   }, [openLinkMenu])
+
+  // 文档双链 chip 的点击 / `[[` 选择器的打开都从 ProseMirror 深处的节点视图发出来，
+  // 通过模块级桥把一次性请求交给本组件；回调走 ref，注册只做一次，不受 props 陈旧影响。
+  useEffect(() => {
+    setDocumentLinkOpenHandler(({ docId }) => {
+      onOpenDocumentByDocIdRef.current?.(docId)
+    })
+    setDocumentLinkPickerHandler((request) => setDocLinkPicker(request))
+    return () => {
+      setDocumentLinkOpenHandler(null)
+      setDocumentLinkPickerHandler(null)
+    }
+  }, [])
+
+  const handlePickDocumentLink = useCallback((candidate: FSBDocumentCandidate) => {
+    // `[[` 被 InputRule 删掉后光标就停在触发点；选择器浮层用 preventDefault 保住了选区，
+    // 因此 insertInlineContent 会准确落在原处。末尾补一个空格，避免紧接着打字贴到 chip 上。
+    editor.insertInlineContent([
+      createDocumentLinkInlineContent(candidate.docId, candidate.title),
+      ' ',
+    ] as Parameters<typeof editor.insertInlineContent>[0])
+    try { editor.focus() } catch { /* 失焦时插入仍然有效 */ }
+  }, [editor])
 
   const handleImagePreviewWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -801,11 +840,26 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       subtext: '插入块级 LaTeX 数学公式',
     }
 
+    const docLinkItem = {
+      title: '引用文档',
+      onItemClick: () => {
+        // 斜杠菜单会先删掉 /query 再回调，等这一帧落定再读光标矩形与打开选择器。
+        queueMicrotask(() => {
+          requestDocumentLinkPicker({ rect: readCaretRect(), source: 'slash-menu' })
+        })
+      },
+      aliases: ['link', 'doc', 'ref', 'doclink', '引用', '双链', '文档引用'],
+      group: 'Media',
+      icon: <Link2 size={16} />,
+      subtext: '插入指向另一篇文档的行内引用（也可直接输入 [[）',
+    }
+
     return [
       ...getDefaultReactSlashMenuItems(editor),
       ...getMultiColumnSlashMenuItems(editor),
       insertMermaid(),
       mathItem,
+      docLinkItem,
     ] as unknown as DefaultReactSuggestionItem[]
   }, [editor])
 
@@ -1018,6 +1072,14 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
         </div>,
         document.body,
       ) : null}
+      {docLinkPicker && typeof document !== 'undefined' ? (
+        <DocumentLinkPicker
+          rect={docLinkPicker.rect}
+          excludeDocId={currentDocId ?? undefined}
+          onPick={handlePickDocumentLink}
+          onClose={() => setDocLinkPicker(null)}
+        />
+      ) : null}
     </div>
   )
 }, (prevProps, nextProps) => (
@@ -1026,4 +1088,5 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   // 编号配置变化必须放行重渲染，否则开关点了没反应；但不能直接比 value 引用
   // （每次正文编辑都会变，会让整个编辑器跟着输入重渲染），只比归一化后的三项配置值。
   && isSameHeadingNumbering(prevProps.value?.numbering, nextProps.value?.numbering)
+  && prevProps.onOpenDocumentByDocId === nextProps.onOpenDocumentByDocId
 ))

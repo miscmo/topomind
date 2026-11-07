@@ -44,6 +44,11 @@ const SANITIZE_OPTIONS = {
     'alt',
     'colspan',
     'data-content-type',
+    // 文档双链：BlockNote 把 propSchema 的 docId/title 序列化成这两个属性，
+    // 少放行一个粘贴后引用就会退化成普通文本或丢掉目标 docId。
+    'data-doc-id',
+    'data-doc-title',
+    'data-title',
     'data-expression',
     'data-inline-content-type',
     'data-language',

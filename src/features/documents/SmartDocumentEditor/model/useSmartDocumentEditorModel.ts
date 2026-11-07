@@ -9,6 +9,7 @@ import { createDefaultBlockNoteBlocks, withSmartDocumentUpdatedAt } from '../sma
 import { buildPastedImageHtml, getClipboardMarkdownImage, getCodeBlockPlainTextFromHtml, getCodeBlockPlainTextPaste, getEditorTopInset, getSmartDocumentOutlineAndStats, getStandaloneCodeBlockPasteHtml, getUploadedFileUrl, isSameSmartDocumentStats, isSameSmartDocumentToc } from '../smartDocumentUtils'
 import { containsMarkdownFence } from '../fenceNormalize'
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension, quoteEnterExtension } from '../mathSupport'
+import { docLinkInputRuleExtension } from '../docLinkSupport'
 import { containsMathDelimiters, containsMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml, hasMeaningfulHtmlStructure, stripClipboardHtmlNoise } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
 import { currentBlockHighlightExtension } from '../currentBlockHighlightExtension'
@@ -292,7 +293,8 @@ export function useSmartDocumentEditorModel({
       blockLastModifiedExtension(),
     ],
     _tiptapOptions: {
-      extensions: [inlineMathInputRuleExtension],
+      // `[[` 触发文档双链选择器；与行内公式输入规则并列，互不干扰。
+      extensions: [inlineMathInputRuleExtension, docLinkInputRuleExtension],
     },
     // 链接点击：默认 BlockNote 在可编辑模式下会直接 window.open 跳转。
     // 通过 links.onClick 钩子在跳转前拦截，转交给编辑器组件弹出“打开/复制”菜单。

@@ -85,6 +85,20 @@ export function inlineContentToPlainText(content: unknown): string {
     ) {
       return item.props.latex
     }
+    if (
+      item &&
+      typeof item === 'object' &&
+      'type' in item &&
+      item.type === 'docLink' &&
+      'props' in item &&
+      item.props &&
+      typeof item.props === 'object' &&
+      'title' in item.props &&
+      typeof item.props.title === 'string'
+    ) {
+      // 文档双链 chip 的可见文字要计入字数 / 目录文本，否则引用行会被当成空块。
+      return item.props.title
+    }
     return ''
   }).join('')
 }

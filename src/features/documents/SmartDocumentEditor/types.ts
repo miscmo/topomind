@@ -31,6 +31,8 @@ export interface SmartDocumentEditorProps {
   // 由底部状态栏展示，避免在块内插入标签干扰布局与光标。
   onBlockLastModifiedChange?: (timestamp: number | null) => void
   attachmentInsertTargetKey?: string
+  /** 点击正文里的文档双链 chip：按 docId 在右栏打开目标文档（可跨节点 / 跨房间）。 */
+  onOpenDocumentByDocId?: (docId: string) => void
 }
 
 export * from './smartDocumentTypes'
