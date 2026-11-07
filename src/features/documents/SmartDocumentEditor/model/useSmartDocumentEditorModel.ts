@@ -21,6 +21,7 @@ import type { SmartDocumentBlock, SmartDocumentEditor } from '../smartDocumentEd
 import type { TocItem } from '../../types/workspaceTypes'
 import type { SmartDocumentDerivedBlockCache } from '../smartDocumentUtils'
 import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
+import type { DefaultEditorStyle } from '../../../../domain/style/styleTypes'
 import { useStorage } from '../../../../core/storage'
 import { normalizeEditorLayout, type EditorLayout } from '../editorLayout'
 import {
@@ -526,6 +527,20 @@ export function useSmartDocumentEditorModel({
     setLayoutPreview(null)
   }, [storage])
 
+  /**
+   * 顶部工具栏「样式」浮层的一次提交入口：写全局 defaultEditorStyle。
+   * 与 commitEditorLayout 共用 graphUiStore + writeConfig，不另建存储链路。
+   * 预设会完整覆盖（含 contentWidth / contentMarginRatio），所以顺手清掉拖动预览，
+   * 避免残留的预览值盖住刚提交的版面。
+   */
+  const commitEditorStyle = useCallback((patch: Partial<DefaultEditorStyle>) => {
+    const current = useGraphUiStore.getState().defaultEditorStyle
+    useGraphUiStore.getState().setDefaultEditorStyle(patch)
+    void storage.writeConfig({ defaultEditorStyle: { ...current, ...patch } })
+      .catch((e) => { console.error('[editor-style] 保存编辑器样式失败', e) })
+    setLayoutPreview(null)
+  }, [storage])
+
   // 当前选中块的「最后修改时间」：随光标移动 / 文档变化同步给底部状态栏展示。
   // 只从块属性里读取、不做任何 DOM 操作，因此不会干扰编辑、光标与输入法。
   useEffect(() => {
@@ -581,5 +596,6 @@ export function useSmartDocumentEditorModel({
     layoutPreview,
     setLayoutPreview,
     commitEditorLayout,
+    commitEditorStyle,
   }
 }

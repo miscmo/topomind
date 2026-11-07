@@ -39,7 +39,6 @@ export default memo(function StyleSection({ active = true }: { active?: boolean 
     updateDefaultStyle,
     updateDefaultNodeStyle,
     updateDefaultNodeSize,
-    updateDefaultEditorStyle,
     updateNodeSizeLimits,
     updateNodeBadgeSize,
     applyToSelectedEdge,
@@ -47,7 +46,6 @@ export default memo(function StyleSection({ active = true }: { active?: boolean 
     resetDefaultNodeAppearance,
     applyNodePreset,
     applyEdgePreset,
-    applyEditorPreset,
     clearSelectedNodesStyle,
     applyNumberToDefaultNode,
     applyNumberToSelectedNode,
@@ -131,13 +129,7 @@ export default memo(function StyleSection({ active = true }: { active?: boolean 
         )}
 
         {activeTab === 'editor' && (
-          <EditorStylePanel
-            defaultEditorStyle={defaultEditorStyle}
-            expandedBlocks={expandedBlocks}
-            onToggleBlock={toggleBlock}
-            onApplyEditorPreset={applyEditorPreset}
-            onUpdateDefaultEditorStyle={updateDefaultEditorStyle}
-          />
+          <EditorStylePanel defaultEditorStyle={defaultEditorStyle} />
         )}
       </div>
     </div>

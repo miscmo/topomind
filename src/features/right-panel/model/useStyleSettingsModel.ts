@@ -7,10 +7,10 @@ import { useStorage } from '../../../core/storage'
 import { GRAPH_UI_INITIAL_STATE } from '../../../stores/graphUiStore'
 import type { KnowledgeNode, KnowledgeNodeStyle } from '../../../types'
 import type { NodeDimensionChange } from '@xyflow/react'
-import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, DefaultEditorStyle } from '../../../types/uiStoreTypes'
+import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits } from '../../../types/uiStoreTypes'
 import { NODE_BADGE_SIZE_LIMIT, NODE_STYLE_NUMBER_LIMITS, clampNumber } from '../../../domain/style/styleConstraints'
 import { STYLE_CONFIG_DEFAULTS } from '../../../domain/style/styleDefaults'
-import { EDGE_STYLE_PRESETS, EDITOR_STYLE_PRESETS, NODE_STYLE_PRESETS } from './stylePresets'
+import { EDGE_STYLE_PRESETS, NODE_STYLE_PRESETS } from './stylePresets'
 import {
   getNodeHeight,
   getNodeWidth,
@@ -43,7 +43,6 @@ export function useStyleSettingsModel(active = true) {
   const setNodeSizeLimits = useGraphUiStore((s) => s.setNodeSizeLimits)
   const setNodeBadgeSize = useGraphUiStore((s) => s.setNodeBadgeSize)
   const defaultEditorStyle = useGraphUiStore((s) => s.defaultEditorStyle)
-  const setDefaultEditorStyle = useGraphUiStore((s) => s.setDefaultEditorStyle)
 
   const graph = useGraphContext()
 
@@ -160,12 +159,6 @@ export function useStyleSettingsModel(active = true) {
     writeStyleConfig({ defaultNodeSize: next })
   }, [defaultNodeSize, nodeSizeLimits, setDefaultNodeSize, writeStyleConfig])
 
-  const updateDefaultEditorStyle = useCallback((patch: Partial<DefaultEditorStyle>) => {
-    const next = { ...defaultEditorStyle, ...patch }
-    setDefaultEditorStyle(patch)
-    writeStyleConfig({ defaultEditorStyle: next })
-  }, [defaultEditorStyle, setDefaultEditorStyle, writeStyleConfig])
-
   const updateNodeSizeLimits = useCallback((key: NodeSizeLimitKey, value: string) => {
     const nextValue = Number(value)
     if (!Number.isFinite(nextValue)) return
@@ -213,11 +206,6 @@ export function useStyleSettingsModel(active = true) {
     setDefaultEdgeStyle(preset.style)
     writeStyleConfig({ defaultEdgeStyle: preset.style })
   }, [setDefaultEdgeStyle, writeStyleConfig])
-
-  const applyEditorPreset = useCallback((preset: typeof EDITOR_STYLE_PRESETS[number]) => {
-    setDefaultEditorStyle(preset.style)
-    writeStyleConfig({ defaultEditorStyle: preset.style })
-  }, [setDefaultEditorStyle, writeStyleConfig])
 
   const clearSelectedNodesStyle = useCallback(() => {
     if (selectedNodes.length === 0) return
@@ -296,7 +284,6 @@ export function useStyleSettingsModel(active = true) {
       updateDefaultStyle,
       updateDefaultNodeStyle,
       updateDefaultNodeSize,
-      updateDefaultEditorStyle,
       updateNodeSizeLimits,
       updateNodeBadgeSize,
       applyToSelectedEdge,
@@ -304,7 +291,6 @@ export function useStyleSettingsModel(active = true) {
       resetDefaultNodeAppearance,
       applyNodePreset,
       applyEdgePreset,
-      applyEditorPreset,
       clearSelectedNodesStyle,
       applyNumberToDefaultNode,
       applyNumberToSelectedNode,

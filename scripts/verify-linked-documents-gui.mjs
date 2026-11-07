@@ -15,8 +15,10 @@
  *       关联列表 / 在所属节点打开 / 移除关联；以及文档双链：
  *       `[[` 触发选择器 → 行内 chip 落盘 → 点击跨节点打开 → 引用关系上下两栏 →
  *       关系索引二次命中（parsed=0）→ 复制粘贴结构保真；顶部工具栏：
- *       右侧按钮折叠/展开往返 → 高度收缩、正文变高、偏好落盘；以及连线关系：
- *       右栏打开「连线关系」→ 内置四种齐全 → 新增自定义关系与标签开关写进 _config.json。
+ *       右侧按钮折叠/展开往返 → 高度收缩、正文变高、偏好落盘；样式迁移：
+ *       「样式」浮层 10 类设置齐全 → 改字号/套预设写进 _config.json → 折叠态仍可打开
+ *       → 右栏只剩指引；以及连线关系：右栏打开「连线关系」→ 内置四种齐全
+ *       → 新增自定义关系与标签开关写进 _config.json。
  */
 import puppeteer from 'puppeteer'
 import fs from 'node:fs'
@@ -542,6 +544,77 @@ async function main() {
       && restoredToolbar.height >= 34 && restoredToolbar.height <= 38 && restoredToolbar.controlsVisible
       && restoredToolbar.hasNumbering && restoredToolbar.stored === 'false', JSON.stringify(restoredToolbar))
 
+    // ===== 阶段 I-2：编辑器样式设置迁到顶部工具栏 =====
+    await page.evaluate(() => document.querySelector('[data-tm-editor-style-trigger]')?.click())
+    const stylePopoverReady = await waitFor(page, () => !!document.querySelector('[data-tm-editor-style-popover]'), 6000)
+    const expectedStyleFields = [
+      'fontSize', 'fontFamily', 'lineHeight', 'letterSpacing', 'fontWeight',
+      'headingSpacingRatio', 'blockSpacing', 'textColor', 'backgroundColor', 'paperBackground',
+    ]
+    const styleFieldInfo = await page.evaluate(() => {
+      const pop = document.querySelector('[data-tm-editor-style-popover]')
+      if (!pop) return { fields: [], presets: 0, papers: 0, inBody: false }
+      return {
+        fields: [...pop.querySelectorAll('[data-tm-editor-style-field]')].map((el) => el.getAttribute('data-tm-editor-style-field')),
+        presets: pop.querySelectorAll('[data-tm-editor-style-preset]').length,
+        papers: pop.querySelectorAll('[data-tm-editor-style-paper]').length,
+        inBody: pop.parentElement === document.body,
+      }
+    })
+    check('顶部工具栏「样式」浮层打开且 10 类设置项齐全', stylePopoverReady
+      && expectedStyleFields.every((field) => styleFieldInfo.fields.includes(field)), JSON.stringify(styleFieldInfo.fields))
+    check('风格预设 3 个与纸张 6 种都迁到浮层', styleFieldInfo.presets === 3 && styleFieldInfo.papers === 6,
+      `presets=${styleFieldInfo.presets}, papers=${styleFieldInfo.papers}`)
+    check('浮层 portal 到 body（不被工具栏 overflow 裁剪）', styleFieldInfo.inBody)
+
+    // 改字号：原生 setter + input 事件驱动 React onChange，blur 触发一次提交
+    await page.evaluate(() => {
+      const input = document.querySelector('[data-tm-editor-style-popover] [data-tm-editor-style-field="fontSize"] input[type="number"]')
+      if (!input) return
+      input.focus()
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, '19')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.blur()
+    })
+    const configPathForStyle = path.join(WORKDIR, '_config.json')
+    let fontSizeWritten = false
+    for (let attempt = 0; attempt < 20 && !fontSizeWritten; attempt += 1) {
+      try {
+        const config = JSON.parse(fs.readFileSync(configPathForStyle, 'utf8'))
+        fontSizeWritten = config.defaultEditorStyle?.fontSize === 19
+      } catch { /* 写盘尚未完成 */ }
+      if (!fontSizeWritten) await sleep(200)
+    }
+    check('浮层改字号一次提交即写进工作区 _config.json', fontSizeWritten)
+    check('编辑器正文 CSS 变量随配置实时更新', await waitFor(page, () => {
+      const el = document.querySelector('[style*="--topomind-smart-body-font-size"]')
+      return !!el && el.style.getPropertyValue('--topomind-smart-body-font-size').trim() === '19px'
+    }, 6000))
+
+    await page.evaluate(() => document.querySelector('[data-tm-editor-style-preset="护眼"]')?.click())
+    let presetWritten = false
+    for (let attempt = 0; attempt < 20 && !presetWritten; attempt += 1) {
+      try {
+        const config = JSON.parse(fs.readFileSync(configPathForStyle, 'utf8'))
+        presetWritten = config.defaultEditorStyle?.backgroundColor === '#f7f3e8'
+          && config.defaultEditorStyle?.fontSize === 16
+      } catch { /* 写盘尚未完成 */ }
+      if (!presetWritten) await sleep(200)
+    }
+    check('风格预设一键套用整套样式并落盘', presetWritten)
+
+    await page.keyboard.press('Escape')
+    check('Esc 关闭样式浮层', await waitFor(page, () => !document.querySelector('[data-tm-editor-style-popover]'), 4000))
+
+    await page.evaluate(() => document.querySelector('[data-tm-editor-top-toolbar-toggle]')?.click())
+    await sleep(320)
+    await page.evaluate(() => document.querySelector('[data-tm-editor-style-trigger]')?.click())
+    check('工具栏折叠态下「样式」入口仍可打开', await waitFor(page, () => !!document.querySelector('[data-tm-editor-style-popover]'), 5000))
+    await page.keyboard.press('Escape')
+    await page.evaluate(() => document.querySelector('[data-tm-editor-top-toolbar-toggle]')?.click())
+    await sleep(320)
+
     // ===== 阶段 J：连线关系管理（全局 _config.json） =====
     await page.evaluate(() => {
       const group = document.querySelector('[role="radiogroup"][aria-label="右侧面板分区"]')
@@ -550,6 +623,22 @@ async function main() {
       button?.click()
     })
     await sleep(500)
+    // 右栏「文档编辑器」分区现在只剩预览 + 迁移指引，不能再有重复的设置控件
+    await page.evaluate(() => {
+      const group = document.querySelector('[role="radiogroup"][aria-label="样式面板分区"]')
+      const button = Array.from(group?.querySelectorAll('button') ?? [])
+        .find((item) => item.textContent?.trim() === '文档编辑器')
+      button?.click()
+    })
+    const migratedHint = await waitFor(page, () => !!document.querySelector('[data-tm-editor-style-migrated-hint]'), 6000)
+    const duplicateControls = await page.evaluate(() => {
+      const hint = document.querySelector('[data-tm-editor-style-migrated-hint]')
+      if (!hint) return -1
+      return hint.parentElement?.querySelectorAll('input[type="number"], input[type="color"], select').length ?? -1
+    })
+    check('右栏「文档编辑器」只剩迁移指引与预览', migratedHint && duplicateControls === 0,
+      `duplicate=${duplicateControls}`)
+
     await page.evaluate(() => {
       const group = document.querySelector('[role="radiogroup"][aria-label="样式面板分区"]')
       const button = Array.from(group?.querySelectorAll('button') ?? [])

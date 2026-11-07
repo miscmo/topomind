@@ -1,5 +1,8 @@
-import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeSize, DefaultNodeStyle } from '../../../types/uiStoreTypes'
+import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle } from '../../../types/uiStoreTypes'
 import { STYLE_CONFIG_DEFAULTS } from '../../../domain/style/styleDefaults'
+
+// 编辑器预设已下沉到 domain：顶部工具栏样式浮层与右栏共用同一份，避免两套定义漂移。
+export { EDITOR_STYLE_PRESETS } from '../../../domain/style/editorStyleOptions'
 
 export const NODE_STYLE_PRESETS: Array<{ label: string; style: DefaultNodeStyle; size: DefaultNodeSize }> = [
   {
@@ -58,8 +61,3 @@ export const EDGE_STYLE_PRESETS: Array<{ label: string; style: DefaultEdgeStyle 
   { label: '弧线', style: { lineMode: 'curve', lineStyle: 'solid', curveControl: { u: 0.5, v: 0.35 }, color: '#7f8c8d', lineWidth: 1.2, arrow: true, arrowSize: 12, arrowShape: 'hollow', arrowPosition: 'end' } },
 ]
 
-export const EDITOR_STYLE_PRESETS: Array<{ label: string; style: DefaultEditorStyle }> = [
-  { label: '默认', style: STYLE_CONFIG_DEFAULTS.defaultEditorStyle },
-  { label: '护眼', style: { fontSize: 16, fontFamily: 'document-sans', backgroundColor: '#f7f3e8', textColor: '#3f3a2f', lineHeight: 1.75, contentWidth: 1200, contentMarginRatio: 0.5, blockSpacing: 6, headingSpacingRatio: 1.5, letterSpacing: 0, fontWeight: 400, paperBackground: 'plain' } },
-  { label: '紧凑', style: { fontSize: 14, fontFamily: 'document-sans', backgroundColor: '#ffffff', textColor: '#1f2937', lineHeight: 1.5, contentWidth: 1200, contentMarginRatio: 0.5, blockSpacing: 4, headingSpacingRatio: 1.0, letterSpacing: -0.01, fontWeight: 400, paperBackground: 'plain' } },
-]

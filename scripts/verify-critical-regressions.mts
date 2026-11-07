@@ -1932,6 +1932,28 @@ const edge = (
     await store.writeConfig({})
     assert.equal(calls[0].defaultEditorStyle.contentWidth, DEFAULT_EDITOR_LAYOUT.maxWidth)
   }
+  {
+    // 顶部工具栏样式浮层的 10 个字段必须能经 writeConfig 完整往返。
+    // 只查源码字面量会被字段白名单漂移蒙混：某天漏列 normalizeConfig 一项，UI 生效但永远不落盘。
+    const { store, calls } = makeStore()
+    const patch = {
+      fontSize: 19,
+      fontFamily: 'lxgw',
+      lineHeight: 1.9,
+      letterSpacing: 0.02,
+      fontWeight: 500,
+      headingSpacingRatio: 1.8,
+      blockSpacing: 9,
+      textColor: '#123456',
+      backgroundColor: '#abcdef',
+      paperBackground: 'ruled',
+    }
+    await store.writeConfig({ defaultEditorStyle: patch })
+    const written = calls[0].defaultEditorStyle as Record<string, unknown>
+    for (const [key, value] of Object.entries(patch)) {
+      assert.deepEqual(written[key], value, `编辑器样式字段 ${key} 必须真的写进配置`)
+    }
+  }
 
   // 3) 渲染层与入口：CSS 按「占满 + px 上限 + 留白比例」布局；旧入口与废弃字段已清理
   const editorCss = await readFile(
@@ -2044,6 +2066,70 @@ const edge = (
     'utf-8',
   )
   assert.ok(modelSource.includes('contentWidth: next.maxWidth'), '提交必须把 px 上限写进全局配置')
+
+  // 4c) 编辑器样式设置迁移到顶部工具栏：字段齐全、单一来源、右栏去重复、写盘接线。
+  const stylePopover = await readFile(
+    new URL('../src/features/documents/SmartDocumentEditor/components/EditorStylePopover.tsx', import.meta.url),
+    'utf-8',
+  )
+  const migratedFields = [
+    'fontSize', 'fontFamily', 'lineHeight', 'letterSpacing', 'fontWeight',
+    'headingSpacingRatio', 'blockSpacing', 'textColor', 'backgroundColor', 'paperBackground',
+  ]
+  // 数字/颜色项是通用行组件，运行时才把 field 写成 data 属性（源码里是 {field}）；
+  // 字体/纸张是静态 JSX，直接写死字面量。真实 DOM 的字段完整性由 GUI 用例再验一遍。
+  for (const field of migratedFields) {
+    assert.ok(
+      stylePopover.includes(`field="${field}"`) || stylePopover.includes(`data-tm-editor-style-field="${field}"`),
+      `顶部工具栏样式浮层必须提供 ${field} 设置项`,
+    )
+  }
+  assert.ok(
+    stylePopover.includes('createPortal(') && stylePopover.includes('document.body'),
+    '样式浮层必须 portal 到 body（工具栏 overflow-hidden 会裁掉它）',
+  )
+  assert.ok(stylePopover.includes('data-tm-editor-style-preset={preset.label}'), '风格预设必须迁到浮层')
+  assert.ok(stylePopover.includes('data-tm-editor-style-paper={option.value}'), '纸张背景必须迁到浮层')
+  assert.ok(stylePopover.includes('onBlur={commit}'), '数字项必须失焦一次提交，不能逐字写盘')
+  assert.ok(stylePopover.includes('EDITOR_STYLE_PRESETS'), '预设必须引用 domain 单一来源')
+
+  const styleOptions = await readFile(
+    new URL('../src/domain/style/editorStyleOptions.ts', import.meta.url), 'utf-8',
+  )
+  assert.ok(styleOptions.includes('export const EDITOR_STYLE_PRESETS'), '编辑器预设必须下沉到 domain')
+  assert.ok(styleOptions.includes('export const PAPER_BACKGROUND_OPTIONS'), '纸张选项必须下沉到 domain')
+  const rightPresets = await readFile(
+    new URL('../src/features/right-panel/model/stylePresets.ts', import.meta.url), 'utf-8',
+  )
+  assert.ok(rightPresets.includes("export { EDITOR_STYLE_PRESETS }"), '右栏必须复用 domain 预设，不得再复制一份')
+  assert.equal(rightPresets.includes('paperBackground:'), false, '右栏不得再残留编辑器预设的重复内容')
+  const styleControls = await readFile(
+    new URL('../src/features/right-panel/components/StyleTab/StyleControls.tsx', import.meta.url), 'utf-8',
+  )
+  assert.ok(styleControls.includes("export { PAPER_BACKGROUND_OPTIONS }"), '纸张选项必须只有一份定义')
+
+  const migratedPanel = await readFile(
+    new URL('../src/features/right-panel/components/StyleTab/EditorStylePanel.tsx', import.meta.url), 'utf-8',
+  )
+  assert.ok(migratedPanel.includes('data-tm-editor-style-migrated-hint'), '右栏必须留下迁移指引')
+  assert.ok(migratedPanel.includes('EditorStylePreview'), '右栏保留效果预览，但不保留设置入口')
+  for (const duplicate of ['NumberField', 'ColorField', 'PaperBackgroundGrid', 'PresetButtonGrid']) {
+    assert.equal(migratedPanel.includes(duplicate), false, `右栏不得再保留重复的 ${duplicate} 控件`)
+  }
+
+  assert.ok(topToolbar.includes('data-tm-editor-style-trigger=""'), '顶部工具栏必须有样式入口按钮')
+  assert.ok(topToolbar.includes('onChange={onStyleChange}'), '样式浮层必须接到全局写盘回调')
+  assert.ok(topToolbar.includes('editorStyle={editorStyle}'), '浮层必须接收当前全局样式')
+  assert.ok(
+    topToolbar.indexOf('data-tm-editor-style-trigger=""') < topToolbar.indexOf('data-tm-editor-top-toolbar-toggle=""'),
+    '折叠按钮必须仍在最右侧，样式按钮排在它左边',
+  )
+  assert.ok(
+    editorComponent.includes('editorStyle={defaultEditorStyle}') && editorComponent.includes('onStyleChange={commitEditorStyle}'),
+    '编辑器必须把全局样式与写盘回调传给工具栏',
+  )
+  assert.ok(modelSource.includes('const commitEditorStyle = useCallback('), '必须复用同一条 writeConfig 链路，不另建存储')
+  assert.ok(modelSource.includes('storage.writeConfig({ defaultEditorStyle: { ...current, ...patch } })'), '样式提交必须真写盘')
 }
 
 // 目录控件：宽度仍按内容自适应并封顶，但超长目录项用省略号截断，绝不出现横向滚动条。

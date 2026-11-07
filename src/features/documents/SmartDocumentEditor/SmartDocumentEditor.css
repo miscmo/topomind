@@ -1479,6 +1479,14 @@ html[data-theme='dark'], .dark {
   visibility: hidden;
   pointer-events: none;
 }
+/* 「样式」按钮的打开态：浮层 portal 在 body 上，靠按钮高亮保持两者的视觉关联。 */
+.tm-editor-top-toolbar__style-trigger[aria-expanded='true'] {
+  background: var(--color-selected-bg);
+  color: var(--color-accent);
+}
+.tm-editor-style-popover__body {
+  scrollbar-width: thin;
+}
 
 /* ---------- 文档双链：正文行内引用 chip ----------
    由自定义 inline content spec docLinkSupport.tsx 渲染，嵌在 BlockNote 的

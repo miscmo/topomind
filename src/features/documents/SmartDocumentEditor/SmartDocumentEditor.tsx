@@ -108,6 +108,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     layoutPreview,
     setLayoutPreview,
     commitEditorLayout,
+    commitEditorStyle,
   } = useSmartDocumentEditorModel(props)
 
   // BlockNote 编辑器满足附件插入的最小结构契约；此处是唯一的边界收窄点
@@ -876,6 +877,8 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
         layout={committedLayout}
         onLayoutPreview={setLayoutPreview}
         onLayoutCommit={commitEditorLayout}
+        editorStyle={defaultEditorStyle}
+        onStyleChange={commitEditorStyle}
         disabled={readOnly}
       />
       <div ref={scrollContainerRef} data-paper-bg={defaultEditorStyle.paperBackground ?? 'plain'} className="flex-1 min-h-0 overflow-y-auto tm-smart-editor-scroll" spellCheck={false}>

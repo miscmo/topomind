@@ -1,9 +1,11 @@
-import { useCallback, useSyncExternalStore } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { useCallback, useRef, useState, useSyncExternalStore } from 'react'
+import { ChevronDown, ChevronUp, Palette } from 'lucide-react'
+import type { DefaultEditorStyle } from '../../../../domain/style/styleTypes'
 import type { HeadingNumberingConfig } from '../headingNumbering'
 import type { EditorLayout } from '../editorLayout'
 import { HeadingNumberingToolbar } from './HeadingNumberingToolbar'
 import { ContentLayoutControls } from './ContentLayoutControls'
+import { EditorStylePopover } from './EditorStylePopover'
 
 interface EditorTopToolbarProps {
   numbering: HeadingNumberingConfig
@@ -11,6 +13,9 @@ interface EditorTopToolbarProps {
   layout: EditorLayout
   onLayoutPreview: (layout: EditorLayout) => void
   onLayoutCommit: (layout: EditorLayout) => void
+  /** 全局编辑器样式（右栏「文档编辑器」分区的设置已迁到本工具栏的样式浮层） */
+  editorStyle: DefaultEditorStyle
+  onStyleChange: (patch: Partial<DefaultEditorStyle>) => void
   disabled?: boolean
 }
 
@@ -62,9 +67,11 @@ if (typeof window !== 'undefined') {
 
 /**
  * 编辑器顶部工具栏：左＝标题编号（文档级配置），右＝内容最大宽度 / 左右留白（全局配置），
- * 最右侧＝折叠/展开按钮。折叠时同一条容器把高度从 36px 收到 24px（morph），控件层只做
- * 显隐过渡而不卸载——滑杆的本地草稿与拖动预览状态不会因折叠丢失。
- * 内容区自己横向滚动（窄右栏时），根容器 overflow-hidden 才能在收起时裁掉控件。
+ * 「样式」按钮＝编辑器全部外观设置的入口（portal 浮层），最右侧＝折叠/展开按钮。
+ * 折叠时同一条容器把高度从 36px 收到 24px（morph），控件层只做显隐过渡而不卸载——
+ * 滑杆的本地草稿与拖动预览状态不会因折叠丢失。
+ * 内容区自己横向滚动（窄右栏时），根容器 overflow-hidden 才能在收起时裁掉控件，
+ * 也正因如此样式浮层必须 portal 到 body。
  */
 export function EditorTopToolbar({
   numbering,
@@ -72,10 +79,32 @@ export function EditorTopToolbar({
   layout,
   onLayoutPreview,
   onLayoutCommit,
+  editorStyle,
+  onStyleChange,
   disabled = false,
 }: EditorTopToolbarProps) {
   const collapsed = useSyncExternalStore(subscribe, getCollapsedSnapshot, () => false)
-  const toggleCollapsed = useCallback(() => setCollapsed(!collapsedState), [])
+  const styleTriggerRef = useRef<HTMLButtonElement>(null)
+  const [styleOpen, setStyleOpen] = useState(false)
+  const [styleRect, setStyleRect] = useState<{ top: number; bottom: number; left: number; right: number } | null>(null)
+
+  const closeStylePopover = useCallback(() => setStyleOpen(false), [])
+  const toggleStylePopover = useCallback(() => {
+    if (styleOpen) {
+      setStyleOpen(false)
+      return
+    }
+    const rect = styleTriggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setStyleRect({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right })
+    setStyleOpen(true)
+  }, [styleOpen])
+
+  // 折叠会改变按钮位置，先关浮层，避免它停在旧坐标上。
+  const handleToggleCollapsed = useCallback(() => {
+    setStyleOpen(false)
+    setCollapsed(!collapsedState)
+  }, [])
 
   return (
     <div
@@ -100,15 +129,36 @@ export function EditorTopToolbar({
       </div>
       <button
         type="button"
+        ref={styleTriggerRef}
+        data-tm-editor-style-trigger=""
+        aria-expanded={styleOpen}
+        aria-label="编辑器样式设置"
+        title="编辑器样式设置"
+        onClick={toggleStylePopover}
+        className="tm-editor-top-toolbar__style-trigger flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-md border-none bg-transparent px-1.5 text-[11px] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]"
+      >
+        <Palette size={13} aria-hidden="true" />
+        样式
+      </button>
+      <button
+        type="button"
         data-tm-editor-top-toolbar-toggle=""
         aria-expanded={!collapsed}
         aria-label={collapsed ? '展开顶部工具栏' : '收起顶部工具栏'}
         title={collapsed ? '展开顶部工具栏' : '收起顶部工具栏'}
-        onClick={toggleCollapsed}
+        onClick={handleToggleCollapsed}
         className="tm-editor-top-toolbar__toggle flex h-5 w-6 shrink-0 items-center justify-center rounded-md border-none bg-transparent text-[var(--color-text-muted)] cursor-pointer transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]"
       >
         {collapsed ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
       </button>
+      {styleOpen && styleRect && (
+        <EditorStylePopover
+          rect={styleRect}
+          editorStyle={editorStyle}
+          onChange={onStyleChange}
+          onClose={closeStylePopover}
+        />
+      )}
     </div>
   )
 }

@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import type { EditorPaperBackground } from '../../../../types/uiStoreTypes'
 import { EDGE_COLOR_PRESETS as COLOR_PRESETS } from '../../../../domain/style/styleDefaults'
+import { PAPER_BACKGROUND_OPTIONS } from '../../../../domain/style/editorStyleOptions'
+export { PAPER_BACKGROUND_OPTIONS }
 
 interface RecentColorsStore {
   recentColors: string[]
@@ -268,15 +270,6 @@ export function PresetButtonGrid<T extends { label: string }>({
     </div>
   )
 }
-
-export const PAPER_BACKGROUND_OPTIONS: Array<{ label: string; value: EditorPaperBackground }> = [
-  { label: '无', value: 'plain' },
-  { label: '参考线', value: 'ruled' },
-  { label: '点阵', value: 'dot-grid' },
-  { label: '方格', value: 'grid' },
-  { label: '牛皮', value: 'kraft' },
-  { label: '红装订线', value: 'manuscript' },
-]
 
 export function PaperBackgroundGrid({
   value,
