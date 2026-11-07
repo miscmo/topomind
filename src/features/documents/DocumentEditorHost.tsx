@@ -26,7 +26,10 @@ interface DocumentEditorHostProps {
   detailSidebarFloating?: boolean
   onDetailSidebarCollapsedChange: (collapsed: boolean) => void
   onSidebarHoverChange: (hovered: boolean) => void
-  onOpenDetailDocumentLink: (documentPath: string) => void
+  /** 正文 docLink chip 点击：按 docId 在右栏打开目标文档（可跨节点 / 跨房间）。 */
+  onOpenDocumentByDocId: (docId: string) => void
+  /** 「被引用」侧栏页内容；由右栏按需扫描反向链接后传入。 */
+  backlinksTabContent?: React.ReactNode
   onCreateTopoDocument: (type: TopoDocumentType, name: string, parentId?: string | null) => void
   isDetailDocumentBusy?: boolean
   topoDocuments: TopoDocumentManifestItem[]
@@ -49,6 +52,8 @@ export function DocumentEditorHost({
   detailSidebarFloating,
   onDetailSidebarCollapsedChange,
   onSidebarHoverChange,
+  onOpenDocumentByDocId,
+  backlinksTabContent,
   onCreateTopoDocument,
   isDetailDocumentBusy,
   topoDocuments,
@@ -148,6 +153,7 @@ export function DocumentEditorHost({
     onTocActiveChange: setSmartActiveTocId,
     onWordCountChange: setDocumentStats,
     onBlockLastModifiedChange: setBlockLastModified,
+    onOpenDocumentByDocId,
   })
 
   return (
@@ -163,6 +169,7 @@ export function DocumentEditorHost({
       onSidebarHoverChange={onSidebarHoverChange}
       detailHeader={detailHeader}
       documentsTabContent={documentsTabContent}
+      backlinksTabContent={backlinksTabContent}
       activeDetailDocumentPath={activeDetailDocumentPath}
       detailSidebarTab={detailSidebarTab}
       onDetailSidebarTabChange={onDetailSidebarTabChange}

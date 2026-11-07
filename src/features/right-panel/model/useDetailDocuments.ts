@@ -123,17 +123,6 @@ export function useDetailDocuments({
     }
   }, [activeDocumentPath, flushDocumentSave, setActiveDocumentPath])
 
-  const handleOpenDetailDocumentLink = useCallback(async (documentPath: string) => {
-    if (!nodePath) return
-    const nextDocuments = await loadDocuments(nodePath)
-    if (!nextDocuments.some((item) => topoDocumentPath(item.id) === documentPath)) {
-      setDocumentLinkNotice(`未找到文档：${documentPath}`)
-      return
-    }
-    setDocumentLinkNotice('')
-    await handleSelectDocument(documentPath)
-  }, [handleSelectDocument, loadDocuments, nodePath])
-
   const createTopoDocumentByType = useCallback(async (type: TopoDocumentType, name: string, parentId?: string | null) => {
     if (!nodePath) return
     const nextName = name.trim()
@@ -395,7 +384,6 @@ export function useDetailDocuments({
     documentListRequestSeqRef,
     loadDocuments,
     handleSelectDocument,
-    handleOpenDetailDocumentLink,
     handleCreateTopoDocument,
     handleRenameDocument,
     handleDeleteDocument,

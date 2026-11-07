@@ -6,7 +6,7 @@
  * 关联文档属于别的节点，读写 / 附件 / 草稿 / 缓存键一律用 documentCardPath，
  * 否则会把内容写到当前节点的 _docs 目录（本需求最大的事故风险）。
  */
-import { FolderOpen, MapPin } from 'lucide-react'
+import { FolderOpen, Link2, MapPin } from 'lucide-react'
 import { useCallback, useDeferredValue, useEffect, memo, useMemo, useRef, useState } from 'react'
 import { useGraphStore, useGraphStoreApi, useSelectedNodeId } from '../../../../stores/graphStore'
 import { DocumentWorkspace } from '../../../../features/documents/DocumentWorkspace'
@@ -27,6 +27,8 @@ import { syncLinkedDocumentsToGraph, useLinkedDocumentStore } from '../../../gra
 import { DocumentBreadcrumb } from './DocumentBreadcrumb'
 import { DocumentMoveToNodeDialog } from '../../../documents/components/DocumentMoveToNodeDialog'
 import { LinkedDocumentList } from './LinkedDocumentList'
+import { DocumentBacklinkList } from './DocumentBacklinkList'
+import { useDocumentBacklinks } from '../../model/useDocumentBacklinks'
 
 interface DetailPanelProps {
   tabId: string
@@ -187,7 +189,6 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
     documentListRequestSeqRef,
     loadDocuments,
     handleSelectDocument,
-    handleOpenDetailDocumentLink,
     handleCreateTopoDocument,
     handleRenameDocument,
     handleDeleteDocument,
@@ -205,6 +206,14 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
     allowedDocumentIds,
     syncHasDetail: detailView === 'own',
   })
+
+  // 文档双链「被引用」：只在切到该侧栏页时才打 IPC 全库扫描，避免每次切文档都扫 2000+ 篇正文。
+  const backlinksEnabled = isActive && detailSidebarTab === 'backlinks' && Boolean(activeTopoDocumentId)
+  const {
+    items: backlinks,
+    loading: backlinksLoading,
+    refresh: refreshBacklinks,
+  } = useDocumentBacklinks(activeTopoDocumentId, backlinksEnabled)
 
   const [detailSidebarCollapsed, setDetailSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('topomind_detail_sidebar_collapsed')
@@ -325,6 +334,81 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
     }, 350)
   }, [tabId, kbPath, setDetailViewForNode, graphStoreApi])
 
+  /**
+   * 点击正文 docLink chip / 「被引用」列表项：按全库稳定 docId 打开目标文档。
+   * 不信任 chip 上缓存的标题或位置，一律 resolveDocumentById 反查真实 cardPath；
+   * 目标已删除 / 在回收站时给出明确提示，而不是把内容写到当前节点。
+   */
+  const openDocumentByDocId = useCallback(async (docId: string) => {
+    const id = docId.trim()
+    if (!id || !selectedNodeId || !isActive) return
+    try {
+      const resolution = await storage.resolveDocumentById(id)
+      if (resolution.status !== 'ok' || !resolution.cardPath) {
+        toast({
+          level: 'warn',
+          title: '无法打开引用',
+          message: resolution.status === 'trashed' ? '引用的文档在回收站中' : '引用的文档已不存在',
+        })
+        return
+      }
+      // 切换文档前先把当前草稿落盘，否则新文档的 session 会继承旧 draft。
+      await flushDocumentSave()
+      const targetPath = topoDocumentPath(id)
+      setDetailSidebarTabSafe('documents')
+
+      if (resolution.cardPath === nodePath) {
+        // 同一节点：先切回「本节点文档」视图，再设置激活项；关联视图的 setter
+        // 只会改 activeLinkedDocId，不能用来打开节点自身文档树里的文档。
+        setDetailViewForNode(selectedNodeId, 'own')
+        setViewOverride(null)
+        setActiveDocumentPathSafe(targetPath)
+        return
+      }
+
+      if (resolution.cardPath === '__ROOT__') {
+        toast({ level: 'warn', title: '无法打开引用', message: '目标文档位于工作区根节点，请先切换到根节点' })
+        return
+      }
+      if (lockedNodeId) {
+        toast({ level: 'warn', title: '无法打开引用', message: '右栏已锁定到当前节点，请先解锁' })
+        return
+      }
+
+      const parts = resolution.cardPath.split('/').filter(Boolean)
+      const targetNodeId = parts.pop()
+      if (!targetNodeId) return
+      const roomPath = parts.join('/') || kbPath
+      // 房间异步重载后再由主 effect 读到这个激活项；先写 store 才不会丢。
+      useDetailPanelStore.getState().setActiveDocumentPathForNode(targetNodeId, targetPath)
+      setDetailViewForNode(targetNodeId, 'own')
+      tabStore.getState().enterRoomInTab(tabId, { path: roomPath, kbPath, name: resolution.nodeName || targetNodeId })
+      window.setTimeout(() => {
+        const state = graphStoreApi.getState()
+        if (!state.nodesMap.has(targetNodeId)) return
+        state.setNodes(Array.from(state.nodesMap.values()).map((node) => ({
+          ...node,
+          selected: node.id === targetNodeId,
+        })))
+      }, 350)
+    } catch (error) {
+      toast({ level: 'error', title: '打开引用失败', message: (error as Error)?.message || String(error) })
+    }
+  }, [
+    storage, flushDocumentSave, isActive, selectedNodeId, nodePath, kbPath, tabId,
+    lockedNodeId, graphStoreApi, setDetailSidebarTabSafe, setDetailViewForNode,
+    setActiveDocumentPathSafe,
+  ])
+
+  const backlinksTabContent = useMemo(() => (
+    <DocumentBacklinkList
+      items={backlinks}
+      loading={backlinksLoading}
+      onOpen={(docId) => { void openDocumentByDocId(docId) }}
+      onRefresh={refreshBacklinks}
+    />
+  ), [backlinks, backlinksLoading, openDocumentByDocId, refreshBacklinks])
+
   const linkedSidebarContent = useMemo(() => (detailView === 'linked' ? (
     <LinkedDocumentList
       links={resolvedLinks}
@@ -383,6 +467,25 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
                           <FolderOpen className="h-3.5 w-3.5" />
                         </button>
                       )}
+                      {activeTopoDocumentId && (
+                        <button
+                          type="button"
+                          data-tm-backlinks-header=""
+                          className={`shrink-0 p-1 rounded hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-primary)] cursor-pointer border-none bg-transparent flex items-center justify-center transition-opacity ${
+                            detailSidebarTab === 'backlinks' && !detailSidebarCollapsed
+                              ? 'opacity-100 text-[var(--color-primary)]'
+                              : 'opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)]'
+                          }`}
+                          title="被引用：查看全库中引用了当前文档的文档"
+                          aria-label="被引用"
+                          onClick={() => {
+                            setDetailSidebarTabSafe('backlinks')
+                            handleDetailSidebarCollapsedChange(false)
+                          }}
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       {childCount > 0 && (
                         <span className="py-0.5 px-[7px] rounded-lg bg-[var(--color-hover-bg)] text-[10px] text-[var(--color-text-muted)] shrink-0" title="含有子概念">
                           {childCount} 子
@@ -432,12 +535,13 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
             </div>
           )}
           documentsTabContent={linkedSidebarContent}
+          backlinksTabContent={backlinksTabContent}
           topoDocuments={topoDocuments}
           activeDocumentPath={activeDocumentPath}
           detailSidebarTab={detailSidebarTab}
           onDetailSidebarTabChange={setDetailSidebarTabSafe}
           onSelectDocument={(documentPath: string) => { void handleSelectDocument(documentPath) }}
-          onOpenDetailDocumentLink={(documentPath: string) => { void handleOpenDetailDocumentLink(documentPath) }}
+          onOpenDocumentByDocId={(docId: string) => { void openDocumentByDocId(docId) }}
           onCreateTopoDocument={detailView === 'linked'
             ? () => toast({ level: 'warn', title: '关联视图不新建文档', message: '请切换回「本节点文档」后新建' })
             : (type, name: string, parentId?: string | null) => { void handleCreateTopoDocument(type, name, parentId) }}

@@ -25,7 +25,10 @@ interface DocumentWorkspaceProps {
   onDetailSidebarCollapsedChange: (collapsed: boolean) => void
   onSidebarHoverChange: (hovered: boolean) => void
   onSelectDocument: (documentPath: string) => void
-  onOpenDetailDocumentLink: (documentPath: string) => void
+  /** 正文 docLink chip 点击：按 docId 在右栏打开目标文档。 */
+  onOpenDocumentByDocId: (docId: string) => void
+  /** 「被引用」侧栏页内容。 */
+  backlinksTabContent?: ReactNode
   onCreateTopoDocument: (type: TopoDocumentType, name: string, parentId?: string | null) => void
   onExportTopoDocument: (documentPath: string) => void
   onRenameDocument: (documentPath: string, name: string) => void
@@ -55,7 +58,8 @@ export function DocumentWorkspace({
   onDetailSidebarCollapsedChange,
   onSidebarHoverChange,
   onSelectDocument,
-  onOpenDetailDocumentLink,
+  onOpenDocumentByDocId,
+  backlinksTabContent,
   onCreateTopoDocument,
   onExportTopoDocument,
   onRenameDocument,
@@ -100,7 +104,8 @@ export function DocumentWorkspace({
       detailSidebarFloating={detailSidebarFloating}
       onDetailSidebarCollapsedChange={onDetailSidebarCollapsedChange}
       onSidebarHoverChange={onSidebarHoverChange}
-      onOpenDetailDocumentLink={onOpenDetailDocumentLink}
+      onOpenDocumentByDocId={onOpenDocumentByDocId}
+      backlinksTabContent={backlinksTabContent}
       onCreateTopoDocument={onCreateTopoDocument}
       isDetailDocumentBusy={isDocumentBusy}
       topoDocuments={topoDocuments}

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 export type DocumentType = 'detail' | 'card' | 'canvas'
-export type DetailSidebarTab = 'documents' | 'attachments'
+export type DetailSidebarTab = 'documents' | 'attachments' | 'backlinks'
 export type DocumentSaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
 export interface TocItem {
@@ -39,6 +39,8 @@ export interface DocumentWorkspaceLayoutProps {
   onSidebarHoverChange?: (hovered: boolean) => void
   detailHeader?: ReactNode
   documentsTabContent?: ReactNode
+  /** 文档双链「被引用」页内容（按需扫描，只有切到该页才渲染）。 */
+  backlinksTabContent?: ReactNode
   activeDetailDocumentPath?: string
   detailSidebarTab?: DetailSidebarTab
   onDetailSidebarTabChange?: (tab: DetailSidebarTab) => void

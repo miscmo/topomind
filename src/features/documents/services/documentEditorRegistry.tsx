@@ -221,6 +221,8 @@ export interface DocumentEditorAdapterProps {
   onWordCountChange: (stats: { characters: number; words: number; blocks: number } | null) => void
   // 当前选中块的「最后修改时间」(epoch 毫秒)，无选中块时为 null；由底部状态栏展示
   onBlockLastModifiedChange?: (timestamp: number | null) => void
+  /** 智能文档正文里的 docLink chip 点击：按全库稳定 docId 在右栏打开目标文档。 */
+  onOpenDocumentByDocId?: (docId: string) => void
 }
 
 interface DocumentEditorTypeAdapter {
@@ -241,6 +243,7 @@ function SmartDocumentAdapter({
   attachmentInsertTargetKey,
   onWordCountChange,
   onBlockLastModifiedChange,
+  onOpenDocumentByDocId,
 }: DocumentEditorAdapterProps) {
   const store = useStorage()
   const persistedValue = React.useMemo(
@@ -411,6 +414,7 @@ function SmartDocumentAdapter({
           resolveFileUrl={resolveFileUrl}
           onWordCountChange={onWordCountChange}
           onBlockLastModifiedChange={onBlockLastModifiedChange}
+          onOpenDocumentByDocId={onOpenDocumentByDocId}
           attachmentInsertTargetKey={attachmentInsertTargetKey}
         />
       </ErrorBoundary>
