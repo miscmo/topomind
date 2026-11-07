@@ -1603,7 +1603,8 @@ const linkedDocumentWriter = createLinkedDocumentWriter({
   writeGraphMeta: graphMetaService.writeGraphMeta,
 });
 
-// A 阶段：docId 全库解析 / 关联记录规范化。不建常驻索引，按需扫描 _docs/tree.json。
+// A 阶段：docId 全库解析 / 关联记录规范化。关系索引是派生缓存，靠文件签名自愈，
+// 因此这里只需注入 statSync，任何写库入口都不必挂钩维护索引。
 const documentIndexService = createDocumentIndexService({
   fs: nodeFs,
   path: nodePath,
@@ -1617,6 +1618,7 @@ const documentIndexService = createDocumentIndexService({
   writeGraphMeta: graphMetaService.writeGraphMeta,
   readJsonFile: _fs_readJsonFile,
   writeJsonFile: _fs_writeJsonFile,
+  statSync: function(filePath) { return nodeFs.statSync(filePath); },
   listTrashItems: trashService.listTrashItems,
 });
 
@@ -2183,9 +2185,18 @@ Object.assign(fileService, {
     return documentIndexService.resolveDocumentById(_fs_requireValidWorkDir(rootDir), docId, cardRef);
   },
 
-  /** 文档双链：按需扫描全库正文，列出引用了 docId 的文档（反向链接）。 */
+  /** 文档双链（兼容入口）：只取入链，走关系索引，不再每次读全库正文。 */
   listDocumentBacklinks: function(rootDir, docId) {
     return documentIndexService.listDocumentBacklinks(_fs_requireValidWorkDir(rootDir), docId);
+  },
+
+  /**
+   * 文档双链：一次返回「引用了本页」与「本页引用了」，两栏共用一次索引校验。
+   * force=true 时忽略缓存强制重建（右栏刷新按钮 / 排查用）。
+   */
+  listDocumentRelations: function(rootDir, docId, force) {
+    return documentIndexService.listDocumentRelations(
+      _fs_requireValidWorkDir(rootDir), docId, { force: Boolean(force) });
   },
 
   /**

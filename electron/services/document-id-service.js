@@ -7,10 +7,13 @@
  *   - 生成 / 校验 docId，给正文补自描述 id；
  *   - 规划「只给冲突项重新分配 id」的重映射（移动 / 导入共用）；
  *   - 按需全库扫描 _docs/tree.json 做 docId → cardPath 反查与自愈（不建常驻索引）；
- *   - 关联记录规范化（去重、字段白名单、上限）。
+ *   - 关联记录规范化（去重、字段白名单、上限）；
+ *   - 文档双链的出入链查询：落盘「派生关系索引」+ 文件签名自愈。
  *
- * 不建常驻索引的理由：create/delete/move/restore/import 六处都要维护一致性，
- * 是新的 bug 源；当前 191 个房间 / 2143 篇文档的规模按需扫一遍是毫秒级。
+ * 不建「权威常驻索引」的理由：create/delete/move/restore/import 六处都要维护一致性，
+ * 是新的 bug 源。关系索引因此只做派生缓存：每篇正文记录 stat 签名，查询时只重新
+ * 解析签名变化的文档，其余直接复用索引里的出链表；索引丢了或坏了会自动重建。
+ * 这样既不用在任何写入口挂钩，也不会出现「改了内容但索引没跟上」的静默错误。
  * 本模块不 import electron，回归脚本可以用内存 fs 直接真跑。
  */
 import { randomUUID } from 'crypto'
@@ -27,6 +30,12 @@ export const TOPO_DOCUMENT_DIR = '_docs'
 export const TOPO_DOCUMENT_MANIFEST = 'tree.json'
 /** 文档双链的行内引用类型名，必须与渲染层 docLinkModel.ts 保持一致。 */
 export const DOC_LINK_INLINE_TYPE = 'docLink'
+/** 派生关系索引放在工作区根下，不进 kbs，避免被房间 / _docs 目录扫描误判。 */
+export const DOCUMENT_RELATIONS_DIR = '.topomind'
+export const DOCUMENT_RELATIONS_INDEX = 'doc-relations.json'
+export const DOCUMENT_RELATIONS_VERSION = 1
+/** 单次索引遍历的递归深度上限，与 countDocumentLinks 保持一致。 */
+const LINK_SCAN_MAX_DEPTH = 64
 
 const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value)
 
@@ -53,6 +62,43 @@ export function countDocumentLinks(content, docId, depth = 0) {
     total += countDocumentLinks(child, docId, depth + 1)
   }
   return total
+}
+
+/**
+ * 一次遍历提取正文里全部 docLink 目标：{ [docId]: { count, title } }。
+ * 关系索引构建用这个而不是对每个目标各跑一次 countDocumentLinks，避免 O(N*M)。
+ * title 是 chip 上的显示快照，目标文档被删除后仍能显示「当时引用的是什么」。
+ * 与 countDocumentLinks 一样递归到 columnList / column / 表格 / children 任意层级。
+ */
+export function collectDocumentLinkTargets(content, depth = 0) {
+  const targets = {}
+  const visit = (node, currentDepth) => {
+    if (!node || currentDepth > LINK_SCAN_MAX_DEPTH) return
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, currentDepth + 1)
+      return
+    }
+    if (!isPlainObject(node)) return
+    if (
+      node.type === DOC_LINK_INLINE_TYPE &&
+      isPlainObject(node.props) &&
+      typeof node.props.docId === 'string'
+    ) {
+      const id = node.props.docId.trim()
+      if (id) {
+        const previous = targets[id]
+        const rawTitle = node.props.title
+        const title = typeof rawTitle === 'string' ? rawTitle.trim().slice(0, 200) : ''
+        targets[id] = {
+          count: (previous?.count ?? 0) + 1,
+          title: previous?.title || title,
+        }
+      }
+    }
+    for (const child of Object.values(node)) visit(child, currentDepth + 1)
+  }
+  visit(content, depth)
+  return targets
 }
 
 /**
@@ -240,7 +286,8 @@ function collectDocsDirs(fs, path, startDir, maxDepth = 32) {
  * @param deps 注入：fs / path / requireValidWorkDir / resolveKbsPath /
  *             readTopoManifest(rootDir, cardPath) / readGraphMeta(rootDir, roomPath) /
  *             writeGraphMeta(rootDir, roomPath, meta) / readJsonFile(abs) /
- *             writeJsonFile(abs, value) / listTrashItems(rootDir, category)
+ *             writeJsonFile(abs, value) / listTrashItems(rootDir, category) /
+ *             statSync(abs)（关系索引的文件签名；缺省回落到 fs.statSync）
  */
 export function createDocumentIndexService(deps) {
   const {
@@ -254,6 +301,7 @@ export function createDocumentIndexService(deps) {
     readJsonFile,
     writeJsonFile,
     listTrashItems,
+    statSync = (filePath) => fs.statSync(filePath),
   } = deps
 
   const docsDirsOf = (rootDir) => {
@@ -451,16 +499,76 @@ export function createDocumentIndexService(deps) {
     return { remappedCount }
   }
 
+  // ---- 文档双链关系索引 ----------------------------------------------------
+  // 派生缓存，不是权威数据：只记录每篇正文的 stat 签名与出链表。查询时逐个校验
+  // 签名，命中的直接复用、只有变化的那一篇才重新读 JSON + 递归解析。索引写在
+  // 工作区根下的 .topomind/，不进 kbs，房间扫描不会把它当成节点或 _docs。
+  // 这样 create/delete/move/restore/import/外部改档 全部无需挂钩，不会漏维护。
+
+  /** 文件签名：mtimeMs + size + ctimeMs；不存在 / 不可读返回空串。 */
+  const signatureOf = (filePath) => {
+    try {
+      const stat = statSync(filePath)
+      return `${Math.round(Number(stat.mtimeMs) || 0)}:${Number(stat.size) || 0}:${Math.round(Number(stat.ctimeMs) || 0)}`
+    } catch { return '' }
+  }
+
+  const relationsIndexPath = (validRoot) => path.join(
+    validRoot, DOCUMENT_RELATIONS_DIR, DOCUMENT_RELATIONS_INDEX,
+  )
+
+  // 进程内缓存索引对象；仍校验索引文件自身签名，外部删除/改写索引能自愈。
+  const relationsCache = new Map()
+
+  const loadRelationsIndex = (validRoot) => {
+    const indexPath = relationsIndexPath(validRoot)
+    const signature = signatureOf(indexPath)
+    const cached = relationsCache.get(validRoot)
+    if (cached && cached.signature === signature) return cached.index
+    let index = { version: DOCUMENT_RELATIONS_VERSION, rooms: {} }
+    try {
+      const raw = readJsonFile(indexPath)
+      if (
+        isPlainObject(raw) &&
+        raw.version === DOCUMENT_RELATIONS_VERSION &&
+        isPlainObject(raw.rooms)
+      ) {
+        index = { version: DOCUMENT_RELATIONS_VERSION, rooms: raw.rooms }
+      }
+    } catch { /* 缺失 / 损坏一律按空索引重建，不阻断查询 */ }
+    relationsCache.set(validRoot, { signature, index })
+    return index
+  }
+
+  const saveRelationsIndex = (validRoot, index) => {
+    const indexPath = relationsIndexPath(validRoot)
+    try {
+      writeJsonFile(indexPath, index)
+      relationsCache.set(validRoot, { signature: signatureOf(indexPath), index })
+    } catch {
+      // 索引只是派生缓存：磁盘异常时不阻断本次查询（结果已在内存算好），
+      // 丢掉内存缓存让下次自动全量重建即可。
+      relationsCache.delete(validRoot)
+    }
+  }
+
   /**
-   * 被引用（反向链接）：按需扫描全库正文里的 docLink 行内引用，返回引用者列表。
-   * 与 resolveDocumentById 一样不建常驻索引，只在右栏切到「被引用」时跑一次。
+   * 校验并按需增量重建关系索引。
+   * @returns {{ index, parsed, indexed }} parsed = 本轮真正读正文解析的篇数，
+   *          0 表示完全命中索引（不再做全文查找）；indexed = 索引覆盖的文档数。
    */
-  const listDocumentBacklinks = (rootDir, docId) => {
-    const id = String(docId ?? '').trim()
-    if (!id) return []
+  const refreshRelationsIndex = (rootDir, options = {}) => {
+    const force = Boolean(options.force)
     const { validRoot, kbsDir, dirs } = docsDirsOf(rootDir)
+    const index = force
+      ? { version: DOCUMENT_RELATIONS_VERSION, rooms: {} }
+      : loadRelationsIndex(validRoot)
+    const nextRooms = {}
     const nameCache = new Map()
-    const results = []
+    let parsed = 0
+    let indexed = 0
+    let changed = force
+
     for (const docsDir of dirs) {
       const cardPath = normalizeCardPath(cardPathOf(kbsDir, docsDir, validRoot))
       if (!cardPath) continue
@@ -468,30 +576,122 @@ export function createDocumentIndexService(deps) {
       try { manifest = readTopoManifest(validRoot, cardPath) } catch { continue }
       const documents = manifest && manifest.documents
       if (!isPlainObject(documents)) continue
+
+      const previousRoom = force ? null : index.rooms[cardPath]
+      const previousDocuments = isPlainObject(previousRoom?.documents)
+        ? previousRoom.documents : {}
       const nodeName = nodeNameOf(validRoot, cardPath, nameCache)
+      const breadcrumb = formatDocumentSource(cardPath, nodeName)
+      const nextDocuments = {}
+
       for (const sourceId of Object.keys(documents)) {
-        if (sourceId === id) continue // 自引用不算反向链接
         const item = documents[sourceId]
         if (!isPlainObject(item)) continue
         const fileName = path.basename(String(item.path || ''))
         if (!fileName) continue
-        let body
-        try { body = readJsonFile(path.join(docsDir, fileName)) } catch { continue }
-        const references = countDocumentLinks(body, id)
-        if (!references) continue
-        results.push({
-          docId: sourceId,
-          title: String(item.title || '未命名文档'),
-          type: String(item.type || 'smart'),
+        const bodySignature = signatureOf(path.join(docsDir, fileName))
+        if (!bodySignature) continue // 正文文件缺失：不进索引，也不展示为引用者
+
+        const title = String(item.title || '未命名文档')
+        const type = String(item.type || 'smart')
+        const previous = previousDocuments[sourceId]
+        const metaChanged = !previous || previous.title !== title ||
+          previous.type !== type || previous.breadcrumb !== breadcrumb
+        let outLinks = isPlainObject(previous?.outLinks) ? previous.outLinks : null
+        if (force || !previous || previous.signature !== bodySignature || !outLinks) {
+          let body
+          try { body = readJsonFile(path.join(docsDir, fileName)) } catch { continue }
+          outLinks = collectDocumentLinkTargets(body)
+          parsed += 1
+          changed = true
+        }
+        if (metaChanged) changed = true
+        nextDocuments[sourceId] = {
+          signature: bodySignature,
+          title,
+          type,
           cardPath,
           nodeName,
-          breadcrumb: formatDocumentSource(cardPath, nodeName),
-          references,
-        })
+          breadcrumb,
+          outLinks,
+        }
+        indexed += 1
+      }
+
+      if (Object.keys(nextDocuments).length !== Object.keys(previousDocuments).length) changed = true
+      nextRooms[cardPath] = { documents: nextDocuments }
+    }
+
+    // 房间被删除 / 新增时裁剪索引，避免已删文档继续出现在引用列表里。
+    if (Object.keys(nextRooms).length !== Object.keys(index.rooms).length) changed = true
+    else if (Object.keys(nextRooms).some((key) => !index.rooms[key])) changed = true
+
+    const nextIndex = { version: DOCUMENT_RELATIONS_VERSION, rooms: nextRooms }
+    if (changed) saveRelationsIndex(validRoot, nextIndex)
+    return { index: nextIndex, parsed, indexed }
+  }
+
+  /** 索引里的文档元数据展平成 docId → entry，供出入链两侧 O(1) 查。 */
+  const flattenRelationsIndex = (index) => {
+    const byId = new Map()
+    for (const room of Object.values(index.rooms)) {
+      const documents = isPlainObject(room?.documents) ? room.documents : {}
+      for (const [sourceId, entry] of Object.entries(documents)) {
+        if (isPlainObject(entry)) byId.set(sourceId, entry)
       }
     }
-    return results
+    return byId
   }
+
+  const relationItem = (entry, docId, references, status) => ({
+    docId,
+    title: String(entry.title || ''),
+    type: String(entry.type || 'smart'),
+    cardPath: String(entry.cardPath || ''),
+    nodeName: String(entry.nodeName || ''),
+    breadcrumb: String(entry.breadcrumb || ''),
+    references,
+    status,
+  })
+
+  /**
+   * 一次查询同时给出「引用了本页」和「本页引用了」，上下两栏共用一次索引校验，
+   * 不再各扫一遍全库。出链只读当前文档在索引里的出链表；入链在内存里遍历出链表。
+   * 目标文档已被删除时 outgoing 仍保留条目并标 status='missing'，用 chip 的标题快照兜底。
+   */
+  const listDocumentRelations = (rootDir, docId, options = {}) => {
+    const id = String(docId ?? '').trim()
+    if (!id) return { incoming: [], outgoing: [], parsed: 0, indexed: 0 }
+    const { index, parsed, indexed } = refreshRelationsIndex(rootDir, options)
+    const byId = flattenRelationsIndex(index)
+
+    const incoming = []
+    for (const [sourceId, entry] of byId) {
+      if (sourceId === id) continue // 自引用不算「引用了本页」
+      const links = isPlainObject(entry.outLinks) ? entry.outLinks : {}
+      const references = Number(links[id]?.count) || 0
+      if (!references) continue
+      incoming.push(relationItem(entry, sourceId, references, 'ok'))
+    }
+
+    const own = byId.get(id)
+    const ownLinks = own && isPlainObject(own.outLinks) ? own.outLinks : {}
+    const outgoing = Object.keys(ownLinks).map((targetId) => {
+      const references = Number(ownLinks[targetId]?.count) || 0
+      const target = byId.get(targetId)
+      if (target) return relationItem(target, targetId, references, 'ok')
+      return relationItem({
+        title: ownLinks[targetId]?.title || '未命名文档',
+        type: 'smart',
+        breadcrumb: '文档已不存在',
+      }, targetId, references, 'missing')
+    })
+
+    return { incoming, outgoing, parsed, indexed }
+  }
+
+  /** 兼容入口：旧通道 / 旧调用方只关心入链。 */
+  const listDocumentBacklinks = (rootDir, docId) => listDocumentRelations(rootDir, docId).incoming
 
   /** 递归列出所有持有 _graph.json 的房间（含 kbs 根），用于改写节点上的关联记录。 */
   const collectGraphRoomPaths = (validRoot, kbsDir) => {
@@ -586,6 +786,7 @@ export function createDocumentIndexService(deps) {
     resolveDocumentById,
     remapImportedDocumentIds,
     listDocumentBacklinks,
+    listDocumentRelations,
     rewriteDocumentIdReferences,
   }
 }

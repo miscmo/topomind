@@ -388,6 +388,9 @@ function registerIPC() {
   ipcMain.handle('fs:listDocumentBacklinks', function(e, rootDir, docId) {
     return fileService.listDocumentBacklinks(requireActiveWorkDir(rootDir), docId);
   });
+  ipcMain.handle('fs:listDocumentRelations', function(e, rootDir, docId, force) {
+    return fileService.listDocumentRelations(requireActiveWorkDir(rootDir), docId, force);
+  });
   ipcMain.handle('fs:updateNodeLinkedDocuments', function(e, rootDir, nodePath, links) {
     return fileService.updateNodeLinkedDocuments(requireActiveWorkDir(rootDir), nodePath, links);
   });
