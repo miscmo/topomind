@@ -1994,6 +1994,38 @@ const edge = (
   assert.ok(editorComponent.includes("'--topomind-smart-content-margin-split': layout.marginRatio"), '必须注入留白比例变量')
   assert.ok(editorComponent.includes('maxWidth: defaultEditorStyle.contentWidth'), '已提交版面必须取自全局 contentWidth')
 
+  // 4b) 顶部工具栏折叠/展开：按钮常驻最右侧、偏好持久化、控件层只隐藏不卸载。
+  // 断言的是具体字段与 DOM 顺序，不是「文件里出现过折叠两个字」——按钮挪到左侧、
+  // 状态不落盘、折叠时把编辑器整条干掉都会在这里挂掉。
+  const topToolbar = await readFile(
+    new URL('../src/features/documents/SmartDocumentEditor/components/EditorTopToolbar.tsx', import.meta.url),
+    'utf-8',
+  )
+  // 精确到带引号的完整属性：只查前缀会被 `...-toggle-legacy` 之类的改名蒙混过去
+  assert.ok(topToolbar.includes('data-tm-editor-top-toolbar-toggle=""'), '顶部工具栏必须有折叠/展开按钮')
+  assert.ok(topToolbar.includes('data-collapsed={collapsed'), '折叠态必须暴露可断言的状态属性')
+  assert.ok(topToolbar.includes("'topomind_editor_top_toolbar_collapsed'"), '折叠偏好必须持久化到 localStorage')
+  assert.ok(topToolbar.includes('useSyncExternalStore'), '折叠偏好必须在同窗口多编辑器实例间同步')
+  assert.ok(topToolbar.includes('setCollapsed(!collapsedState)'), '点击按钮必须真的切换并广播折叠状态')
+  assert.ok(topToolbar.includes('aria-expanded={!collapsed}'), '折叠按钮必须暴露 aria-expanded')
+  assert.ok(topToolbar.includes('height: collapsed ? 24 : 36'), '折叠必须是同一容器的高度 morph，不能卸载工具栏')
+  assert.ok(topToolbar.includes('aria-hidden={collapsed || undefined}'), '折叠时控件层必须对辅助技术隐藏')
+  const toolbarContentIndex = topToolbar.indexOf('tm-editor-top-toolbar__content')
+  const toolbarToggleIndex = topToolbar.indexOf('data-tm-editor-top-toolbar-toggle=""')
+  assert.ok(
+    toolbarContentIndex > 0 && toolbarToggleIndex > toolbarContentIndex,
+    '折叠按钮必须排在控件层之后（视觉上落在最右侧）',
+  )
+  const toolbarCollapseCss = await readFile(
+    new URL('../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.css', import.meta.url),
+    'utf-8',
+  )
+  assert.ok(toolbarCollapseCss.includes('transition: height 220ms'), '工具栏高度必须带过渡')
+  assert.ok(
+    toolbarCollapseCss.includes("[data-collapsed='true'] .tm-editor-top-toolbar__content"),
+    '折叠态必须隐藏控件层而不是把它从 DOM 里删掉',
+  )
+
   const controls = await readFile(
     new URL('../src/features/documents/SmartDocumentEditor/components/ContentLayoutControls.tsx', import.meta.url),
     'utf-8',

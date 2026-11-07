@@ -14,7 +14,8 @@
  *       一键直达右栏关联视图 → SegmentedControl 切换 → ownerCardPath 写入隔离 →
  *       关联列表 / 在所属节点打开 / 移除关联；以及文档双链：
  *       `[[` 触发选择器 → 行内 chip 落盘 → 点击跨节点打开 → 引用关系上下两栏 →
- *       关系索引二次命中（parsed=0）→ 复制粘贴结构保真；以及连线关系：
+ *       关系索引二次命中（parsed=0）→ 复制粘贴结构保真；顶部工具栏：
+ *       右侧按钮折叠/展开往返 → 高度收缩、正文变高、偏好落盘；以及连线关系：
  *       右栏打开「连线关系」→ 内置四种齐全 → 新增自定义关系与标签开关写进 _config.json。
  */
 import puppeteer from 'puppeteer'
@@ -481,7 +482,67 @@ async function main() {
     check('下栏条目按 docId 跳回目标文档 doc_b', await waitFor(page, () => [...document.querySelectorAll('button')]
       .some((b) => (b.getAttribute('title') || '').includes('node-b/_docs/doc_b.tdoc.json')), 9000))
 
-    // ===== 阶段 I：连线关系管理（全局 _config.json） =====
+    // ===== 阶段 I：顶部工具栏折叠/展开 =====
+    await sleep(600)
+    const toolbarReady = await waitFor(page, () => !!document.querySelector('[data-tm-editor-top-toolbar-toggle]'), 8000)
+    // 隔离 profile 可能复用上一次的折叠偏好，先归一到展开态再验证往返
+    await page.evaluate(() => {
+      const bar = document.querySelector('[data-tm-editor-top-toolbar]')
+      if (bar?.getAttribute('data-collapsed') === 'true') {
+        document.querySelector('[data-tm-editor-top-toolbar-toggle]')?.click()
+      }
+    })
+    const expandedReady = await waitFor(page, () =>
+      document.querySelector('[data-tm-editor-top-toolbar]')?.getAttribute('data-collapsed') === 'false', 5000)
+    const readToolbar = () => page.evaluate(() => {
+      const bar = document.querySelector('[data-tm-editor-top-toolbar]')
+      const toggle = document.querySelector('[data-tm-editor-top-toolbar-toggle]')
+      const content = bar?.querySelector('.tm-editor-top-toolbar__content')
+      const scroller = document.querySelector('.tm-smart-editor-scroll')
+      if (!bar || !toggle || !content) return null
+      const barRect = bar.getBoundingClientRect()
+      const toggleRect = toggle.getBoundingClientRect()
+      return {
+        collapsed: bar.getAttribute('data-collapsed'),
+        height: Math.round(barRect.height),
+        toggleOnRight: toggleRect.left > barRect.left + barRect.width / 2 && toggleRect.right <= barRect.right + 1,
+        controlsVisible: getComputedStyle(content).visibility === 'visible',
+        hasNumbering: !!bar.querySelector('[aria-label="自动编号"]'),
+        scrollerHeight: Math.round(scroller?.getBoundingClientRect().height ?? 0),
+        stored: localStorage.getItem('topomind_editor_top_toolbar_collapsed'),
+        ariaExpanded: toggle.getAttribute('aria-expanded'),
+      }
+    })
+    await sleep(300)
+    const expandedToolbar = await readToolbar()
+    check('顶部工具栏默认展开且折叠按钮在右侧', toolbarReady && expandedReady && !!expandedToolbar
+      && expandedToolbar.collapsed === 'false' && expandedToolbar.height >= 34 && expandedToolbar.height <= 38
+      && expandedToolbar.toggleOnRight && expandedToolbar.controlsVisible
+      && expandedToolbar.hasNumbering && expandedToolbar.ariaExpanded === 'true', JSON.stringify(expandedToolbar))
+
+    await page.evaluate(() => document.querySelector('[data-tm-editor-top-toolbar-toggle]')?.click())
+    const didCollapse = await waitFor(page, () =>
+      document.querySelector('[data-tm-editor-top-toolbar]')?.getAttribute('data-collapsed') === 'true', 5000)
+    await sleep(320)
+    const collapsedToolbar = await readToolbar()
+    check('点击右侧按钮后工具栏折叠（高度收缩 / 控件隐藏 / 偏好落盘）', didCollapse && !!collapsedToolbar
+      && collapsedToolbar.height >= 22 && collapsedToolbar.height <= 26 && !collapsedToolbar.controlsVisible
+      && collapsedToolbar.ariaExpanded === 'false' && collapsedToolbar.stored === 'true'
+      && collapsedToolbar.toggleOnRight, JSON.stringify(collapsedToolbar))
+    check('折叠后正文滚动区确实多出垂直空间', !!expandedToolbar && !!collapsedToolbar
+      && collapsedToolbar.scrollerHeight > expandedToolbar.scrollerHeight,
+      `${expandedToolbar?.scrollerHeight} → ${collapsedToolbar?.scrollerHeight}`)
+
+    await page.evaluate(() => document.querySelector('[data-tm-editor-top-toolbar-toggle]')?.click())
+    const didExpand = await waitFor(page, () =>
+      document.querySelector('[data-tm-editor-top-toolbar]')?.getAttribute('data-collapsed') === 'false', 5000)
+    await sleep(320)
+    const restoredToolbar = await readToolbar()
+    check('再次点击恢复展开且控件仍可用', didExpand && !!restoredToolbar
+      && restoredToolbar.height >= 34 && restoredToolbar.height <= 38 && restoredToolbar.controlsVisible
+      && restoredToolbar.hasNumbering && restoredToolbar.stored === 'false', JSON.stringify(restoredToolbar))
+
+    // ===== 阶段 J：连线关系管理（全局 _config.json） =====
     await page.evaluate(() => {
       const group = document.querySelector('[role="radiogroup"][aria-label="右侧面板分区"]')
       const button = Array.from(group?.querySelectorAll('button') ?? [])

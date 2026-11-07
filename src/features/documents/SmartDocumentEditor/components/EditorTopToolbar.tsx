@@ -1,3 +1,5 @@
+import { useCallback, useSyncExternalStore } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import type { HeadingNumberingConfig } from '../headingNumbering'
 import type { EditorLayout } from '../editorLayout'
 import { HeadingNumberingToolbar } from './HeadingNumberingToolbar'
@@ -13,8 +15,56 @@ interface EditorTopToolbarProps {
 }
 
 /**
- * 编辑器顶部工具栏（单行）：左＝标题编号（文档级配置），右＝内容最大宽度 / 左右留白（全局配置）。
- * 右栏很窄时允许横向滚动，滚动条隐藏以免影响 36px 行高（样式见 SmartDocumentEditor.css）。
+ * 折叠态是纯 UI 偏好，按工作区全局记一份（与目录固定、侧栏宽度同一套约定）。
+ * 模块级订阅让同窗口内的多个编辑器实例（右栏 / 独立窗口）保持一致；
+ * storage 事件补上跨窗口同步。纯 Node 回归脚本加载本模块时 localStorage 不存在，
+ * 读初值走 try/catch + typeof 守卫，不会炸。
+ */
+const COLLAPSED_KEY = 'topomind_editor_top_toolbar_collapsed'
+const listeners = new Set<() => void>()
+let collapsedState = readCollapsed()
+
+function readCollapsed(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(COLLAPSED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => { listeners.delete(listener) }
+}
+
+function getCollapsedSnapshot(): boolean {
+  return collapsedState
+}
+
+function setCollapsed(next: boolean): void {
+  if (collapsedState === next) return
+  collapsedState = next
+  try {
+    localStorage.setItem(COLLAPSED_KEY, String(next))
+  } catch { /* 隐私模式下写盘失败不影响本次切换 */ }
+  listeners.forEach((listener) => listener())
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== COLLAPSED_KEY) return
+    const next = event.newValue === 'true'
+    if (next === collapsedState) return
+    collapsedState = next
+    listeners.forEach((listener) => listener())
+  })
+}
+
+/**
+ * 编辑器顶部工具栏：左＝标题编号（文档级配置），右＝内容最大宽度 / 左右留白（全局配置），
+ * 最右侧＝折叠/展开按钮。折叠时同一条容器把高度从 36px 收到 24px（morph），控件层只做
+ * 显隐过渡而不卸载——滑杆的本地草稿与拖动预览状态不会因折叠丢失。
+ * 内容区自己横向滚动（窄右栏时），根容器 overflow-hidden 才能在收起时裁掉控件。
  */
 export function EditorTopToolbar({
   numbering,
@@ -24,19 +74,41 @@ export function EditorTopToolbar({
   onLayoutCommit,
   disabled = false,
 }: EditorTopToolbarProps) {
+  const collapsed = useSyncExternalStore(subscribe, getCollapsedSnapshot, () => false)
+  const toggleCollapsed = useCallback(() => setCollapsed(!collapsedState), [])
+
   return (
     <div
       role="toolbar"
       aria-label="编辑器顶部设置"
-      className="tm-editor-top-toolbar flex h-9 shrink-0 items-center gap-3 overflow-x-auto border-b border-[var(--color-border-light)] bg-[var(--color-surface)] px-3 text-[12px] text-[var(--color-text-secondary)] box-border"
+      data-tm-editor-top-toolbar=""
+      data-collapsed={collapsed ? 'true' : 'false'}
+      className="tm-editor-top-toolbar flex shrink-0 items-center gap-2 overflow-hidden border-b border-[var(--color-border-light)] bg-[var(--color-surface)] px-3 text-[12px] text-[var(--color-text-secondary)] box-border"
+      style={{ height: collapsed ? 24 : 36 }}
     >
-      <HeadingNumberingToolbar config={numbering} onChange={onNumberingChange} disabled={disabled} />
-      <ContentLayoutControls
-        layout={layout}
-        onPreview={onLayoutPreview}
-        onCommit={onLayoutCommit}
-        disabled={disabled}
-      />
+      <div
+        className="tm-editor-top-toolbar__content flex min-w-0 flex-1 items-center gap-3 overflow-x-auto"
+        aria-hidden={collapsed || undefined}
+      >
+        <HeadingNumberingToolbar config={numbering} onChange={onNumberingChange} disabled={disabled} />
+        <ContentLayoutControls
+          layout={layout}
+          onPreview={onLayoutPreview}
+          onCommit={onLayoutCommit}
+          disabled={disabled}
+        />
+      </div>
+      <button
+        type="button"
+        data-tm-editor-top-toolbar-toggle=""
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? '展开顶部工具栏' : '收起顶部工具栏'}
+        title={collapsed ? '展开顶部工具栏' : '收起顶部工具栏'}
+        onClick={toggleCollapsed}
+        className="tm-editor-top-toolbar__toggle flex h-5 w-6 shrink-0 items-center justify-center rounded-md border-none bg-transparent text-[var(--color-text-muted)] cursor-pointer transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]"
+      >
+        {collapsed ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
+      </button>
     </div>
   )
 }

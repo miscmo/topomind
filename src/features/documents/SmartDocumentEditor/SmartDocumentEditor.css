@@ -1456,13 +1456,28 @@ html[data-theme='dark'], .dark {
   -webkit-user-select: none;
 }
 
-/* 顶部工具栏：右栏很窄时允许横向滚动，但隐藏滚动条，避免经典的 15px 横向滚动条
-   吃掉 36px 行高、把控件挤扁。 */
+/* 顶部工具栏：折叠/展开是同一个容器的高度 morph（36px ↔ 24px，高度由组件 inline style 给），
+   控件层只淡出、不卸载，滑杆草稿与拖动预览状态因此不会丢。折叠按钮常驻最右侧。
+   右栏很窄时由内容区自己横向滚动，滚动条隐藏，避免经典的 15px 横向滚动条
+   吃掉行高、把控件挤扁；根容器必须 overflow:hidden 才能在收起时裁掉控件层。 */
 .tm-editor-top-toolbar {
   scrollbar-width: none;
+  transition: height 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 .tm-editor-top-toolbar::-webkit-scrollbar {
   height: 0;
+}
+.tm-editor-top-toolbar__content {
+  scrollbar-width: none;
+  transition: opacity 160ms ease, visibility 160ms ease;
+}
+.tm-editor-top-toolbar__content::-webkit-scrollbar {
+  height: 0;
+}
+.tm-editor-top-toolbar[data-collapsed='true'] .tm-editor-top-toolbar__content {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* ---------- 文档双链：正文行内引用 chip ----------
