@@ -14,6 +14,7 @@ import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 
 import type { GraphSession } from '../../stores/tabs/tabStore'
+import { useGraphUiStore } from '../../stores/graphUiStore'
 
 export interface StorageApi {
   saveGraphDebounced: (dirPath: string, buildMeta: () => GraphMeta, onSaved: (() => void) | undefined) => Promise<void>
@@ -108,6 +109,9 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     saveNow,
       saveLater,
     storeApi,
+    // 关系定义来自全局 _config.json 的 hydrate 结果；注入 getter 而不是让
+    // 纯操作层直接依赖 store，回归脚本可以直接注入自定义定义真跑。
+    getEdgeRelations: () => useGraphUiStore.getState().edgeRelations,
   })
 
   // ===== Node position changes =====

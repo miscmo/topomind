@@ -12,6 +12,7 @@ import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../../../../domain/style/styleConstraints'
 import type { EdgeStylePatch, KnowledgeEdge } from '../../../../types'
 import { normalizeEdgeAnchor, type EdgeAnchorPatch } from '../../../../domain/graph/edgeAnchors'
+import { findEdgeRelationDefinition } from '../../../../domain/graph/edgeRelations'
 import {
   DEFAULT_CURVE_CONTROL,
   hasCustomCurve,
@@ -68,9 +69,11 @@ function FloatingEdge({
   // 选中态以 data.selected 为唯一来源（setSelectedEdgeInGraph 维护）
   const isSelected = edgeData?.selected === true
   const connectingSourceId = useGraphUiStore((s) => s.connectingSourceId)
+  const edgeRelations = useGraphUiStore((s) => s.edgeRelations)
+  const showRelationLabels = useGraphUiStore((s) => s.showEdgeRelationLabels)
   const isNodeFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
   const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
-  const { updateEdgeStyle, updateEdgeAnchor, deleteEdge } = useGraphContext()
+  const { updateEdgeStyle, updateEdgeAnchor, updateEdgeRelation, deleteEdge } = useGraphContext()
   const confirm = useConfirmStore((s) => s.open)
   // 拖动锚点 / 弯曲控制柄时只在这里做路径预览，松手才写 store：一次拖动 = 一条撤销记录、一次落盘
   const [anchorPreview, setAnchorPreview] = useState<EdgeAnchorPreview | null>(null)
@@ -96,6 +99,11 @@ function FloatingEdge({
   const handleStyleChange = useCallback((patch: EdgeStylePatch) => {
     void updateEdgeStyle(id, patch)
   }, [updateEdgeStyle, id])
+
+  /** 切换关系会套用该关系的默认样式，之后仍可用样式面板单条覆盖 */
+  const handleRelationChange = useCallback((relationId: string) => {
+    void updateEdgeRelation(id, relationId)
+  }, [updateEdgeRelation, id])
 
   // 删除是不可逆的破坏性操作，且按钮就在工具栏最右、hover 变红，误触成本高：
   // 走全局统一模态确认框（App.tsx 已挂载），取消则什么都不做。
@@ -226,6 +234,16 @@ function FloatingEdge({
 
   const isSolid = arrowShape === 'solid'
 
+  // 关系名小标签：旧存档的中文值（相关/依赖/演进）在读取侧映射成内置 id，
+  // 磁盘上保持原值。选中 / 连线中 / 格式刷激活时让位给工具栏，避免两层浮层叠在中点。
+  const relationDefinition = findEdgeRelationDefinition(edgeData?.relation, edgeRelations)
+  const showRelationLabel =
+    showRelationLabels
+    && !isSelected
+    && connectingSourceId === null
+    && !isNodeFormatPainterActive
+    && !isEdgeFormatPainterActive
+
   return (
     <>
       {arrowEnabled && (
@@ -263,8 +281,21 @@ function FloatingEdge({
         markerEnd={showEnd ? `url(#${markerId})` : undefined}
         style={style}
       />
-      {(showToolbar || showAnchorHandles) && (
+      {(showToolbar || showAnchorHandles || showRelationLabel) && (
         <EdgeLabelRenderer>
+          {showRelationLabel && (
+            <div
+              data-tm-edge-relation-label={relationDefinition.id}
+              className="nodrag nopan absolute rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-[3px] text-[10px] leading-none text-[var(--color-text-secondary)] shadow-[var(--shadow-sm)]"
+              style={{
+                transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                pointerEvents: 'none',
+                zIndex: 5,
+              }}
+            >
+              {relationDefinition.name}
+            </div>
+          )}
           {/* 手柄贴在边框交点上，线头在其外侧 6px；工具栏按手柄位置避让 */}
           {showAnchorHandles && (
             <EdgeAnchorHandles
@@ -303,6 +334,9 @@ function FloatingEdge({
                 hasCustomAnchors={hasCustomAnchors}
                 hasCustomCurve={isCurve && hasCurveCustomized}
                 onStyleChange={handleStyleChange}
+                relations={edgeRelations}
+                currentRelationId={relationDefinition.id}
+                onRelationChange={handleRelationChange}
                 onToggleFormatPainter={toggleFormatPainter}
                 onResetAnchors={handleAnchorReset}
                 onResetCurve={handleCurveReset}

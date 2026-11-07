@@ -46,7 +46,8 @@ export interface GraphContextValue {
   createEdge: (source: string, target: string) => Promise<string | null>
 
   // Edge operations
-  updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => void
+  /** weight 省略时沿用该边原权重；切换关系会套用关系自带的默认样式 */
+  updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight?: EdgeWeight) => void
   updateEdgeStyle: (edgeId: string, style: EdgeStylePatch & { selected?: boolean }) => void
   updateEdgeAnchor: (edgeId: string, patch: EdgeAnchorPatch) => void
   deleteEdge: (edgeId: string) => Promise<boolean>

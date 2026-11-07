@@ -9,12 +9,24 @@ import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../../domain/style/styleConstraints'
 import { normalizeEdgeAnchor, type EdgeAnchor, type EdgeAnchorPatch } from '../../domain/graph/edgeAnchors'
 import { CURVE_MODE_DEFAULT_CONTROL, normalizeCurveControl, sameCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
+import {
+  DEFAULT_EDGE_RELATION_ID,
+  edgeRelationStylePatch,
+  findEdgeRelationDefinition,
+  normalizeEdgeRelationDefinitions,
+  type EdgeRelationDefinition,
+} from '../../domain/graph/edgeRelations'
 
 export interface EdgeOperationsDeps {
   getActiveGraphSession: () => GraphSession | undefined
   saveNow: (dirPath: string) => Promise<void>
   saveLater: (dirPath: string) => Promise<void>
   storeApi: StoreApi<GraphState>
+  /**
+   * 注入当前全局连线关系定义。缺省时回退到内置 4 种，让纯 Node 回归脚本
+   * 不必加载 zustand / localStorage 也能直接真跑本模块。
+   */
+  getEdgeRelations?: () => readonly EdgeRelationDefinition[]
 }
 
 function sameAnchor(a: EdgeAnchor | null | undefined, b: EdgeAnchor | null | undefined) {
@@ -94,23 +106,34 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     storeApi,
   } = deps
 
+  const getRelations = deps.getEdgeRelations ?? (() => normalizeEdgeRelationDefinitions(undefined))
+
   const addEdge = async (
     connection: Connection,
     edgeId: string,
-    defaultStyle?: EdgeStylePatch
+    defaultStyle?: EdgeStylePatch,
+    relationId?: string
   ) => {
-    const lineMode = defaultStyle?.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
-    const lineStyle = defaultStyle?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
-    const color = defaultStyle?.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
-    const lineWidth = defaultStyle?.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth
-    const arrow = defaultStyle?.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
-    const arrowSize = defaultStyle?.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize
-    const arrowShape = defaultStyle?.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape
-    const arrowPosition = defaultStyle?.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition
+    const definition = findEdgeRelationDefinition(relationId ?? DEFAULT_EDGE_RELATION_ID, getRelations())
+    // 显式指定非基础关系时才用关系样式覆盖；默认「关联」仍然继承右栏的
+    // 「默认连线样式」，避免用户已配置的 defaultEdgeStyle 在一夜之间失效。
+    // 切换已有边的关系由 updateEdgeRelation 统一套用关系样式。
+    const relationStyle = relationId && relationId !== DEFAULT_EDGE_RELATION_ID
+      ? edgeRelationStylePatch(definition.style)
+      : undefined
+    const effectiveStyle: EdgeStylePatch = { ...defaultStyle, ...relationStyle }
+    const lineMode = effectiveStyle.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
+    const lineStyle = effectiveStyle.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle
+    const color = effectiveStyle.color ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.color
+    const lineWidth = effectiveStyle.lineWidth ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineWidth
+    const arrow = effectiveStyle.arrow ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrow
+    const arrowSize = effectiveStyle.arrowSize ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowSize
+    const arrowShape = effectiveStyle.arrowShape ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowShape
+    const arrowPosition = effectiveStyle.arrowPosition ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.arrowPosition
     // 默认样式为曲线时，新建连线继承默认控制点；控制点缺失时给一个可见的默认弧度，
     // 否则「默认线型=曲线」新建出来的仍是一条直线。显式存了 v=0 的直线形态会被尊重。
     const curveControl = normalizeCurveControl(
-      defaultStyle?.curveControl ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.curveControl
+      effectiveStyle.curveControl ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.curveControl
     ) ?? (lineMode === 'curve' ? { ...CURVE_MODE_DEFAULT_CONTROL } : null)
     const newEdge: KnowledgeEdge = {
       id: edgeId,
@@ -120,7 +143,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       targetHandle: connection.targetHandle,
       ...buildEdgeView({ lineMode, lineStyle, color, lineWidth, arrow, arrowSize, arrowShape, arrowPosition }),
       data: {
-        relation: '相关',
+        relation: definition.id,
         weight: 'minor',
         lineMode,
         lineStyle,
@@ -163,32 +186,41 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     return true
   }
 
-  const updateEdgeRelation = async (edgeId: string, relation: EdgeRelation, weight: EdgeWeight) => {
+  const updateEdgeRelation = async (edgeId: string, relation: EdgeRelation, weight?: EdgeWeight) => {
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     const store = storeApi.getState()
-    store.setEdges(store.edges.map((e) =>
-      e.id === edgeId
-        ? {
-            ...e,
-            ...buildEdgeView({
-              lineMode: e.data?.lineMode,
-              lineStyle: e.data?.lineStyle,
-              color: e.data?.color,
-              lineWidth: e.data?.lineWidth,
-              arrow: e.data?.arrow,
-              arrowSize: e.data?.arrowSize,
-              arrowShape: e.data?.arrowShape,
-              arrowPosition: e.data?.arrowPosition,
-              weight,
-              selected: e.data?.selected,
-            }),
-            data: { ...e.data, relation, weight },
-          }
-        : e
-    ))
+    // 关系按稳定 id 落盘；旧中文值 / 已删除的自定义 id 在这里解析回当前定义。
+    // 用户决策「切换即套用，可单条覆盖」：套用该关系的默认样式，之后仍可用
+    // updateEdgeStyle 单独微调，不锁死。
+    const definition = findEdgeRelationDefinition(relation, getRelations())
+    const stylePatch = edgeRelationStylePatch(definition.style)
+    let changed = false
+    const nextEdges = store.edges.map((e) => {
+      if (e.id !== edgeId) return e
+      changed = true
+      const nextWeight = weight ?? e.data?.weight ?? 'minor'
+      return {
+        ...e,
+        ...buildEdgeView({
+          lineMode: stylePatch.lineMode,
+          lineStyle: stylePatch.lineStyle,
+          color: stylePatch.color,
+          lineWidth: stylePatch.lineWidth,
+          arrow: stylePatch.arrow,
+          arrowSize: stylePatch.arrowSize,
+          arrowShape: stylePatch.arrowShape,
+          arrowPosition: stylePatch.arrowPosition,
+          weight: nextWeight,
+          selected: e.data?.selected,
+        }),
+        data: { ...e.data, ...stylePatch, relation: definition.id, weight: nextWeight },
+      } as KnowledgeEdge
+    })
+    if (!changed) return
+    store.setEdges(nextEdges)
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('连线:更新关系', 'graphOperations', { edgeId, relation, weight })
+    logAction('连线:更新关系', 'graphOperations', { edgeId, relation: definition.id, weight })
   }
 
   const updateEdgeStyle = async (
