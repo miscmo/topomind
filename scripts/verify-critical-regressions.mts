@@ -2737,4 +2737,183 @@ const edge = (
   assert.ok(fileAdapterSrc.includes('await FSB.writeTopoDocument(requireRootDir(), cardPath, documentId, content)'), 'backend 层不得筛选正文字段')
 }
 
+// 文档双链：行内引用 spec / `[[` 触发 / 反向链接扫描 / docId 重映射闭环 / 右栏打开链路。
+// 与「关联文档」那一节同理：纯函数与 createDocumentIndexService 一律真跑，
+// 只在最后用源码断言守住跨进程接线，避免「只改了返回类型、没改写入口」蒙混过关。
+{
+  const idService = await import(
+    new URL('../electron/services/document-id-service.js', import.meta.url).href
+  ) as Record<string, any>
+  const docLinkModel = await import(
+    new URL('../src/features/documents/SmartDocumentEditor/docLinkModel.ts', import.meta.url).href
+  ) as Record<string, any>
+
+  // 渲染层与主进程必须是同一个行内类型名，否则反向链接会永远扫不到。
+  assert.equal(idService.DOC_LINK_INLINE_TYPE, docLinkModel.DOC_LINK_INLINE_TYPE, '渲染层与主进程的 docLink 类型名必须一致')
+  assert.equal(docLinkModel.DOC_LINK_TRIGGER_PATTERN.test('前文[['), true, '[[ 必须触发文档选择器')
+  assert.equal(docLinkModel.DOC_LINK_TRIGGER_PATTERN.test('前文['), false, '单个 [ 不得触发')
+  assert.equal(docLinkModel.DOC_LINK_TRIGGER_PATTERN.test('[[ 后面还有字'), false, '触发器必须锚定输入末尾')
+
+  const ref = docLinkModel.createDocumentLinkInlineContent('doc_target', '  目标文档  ')
+  assert.deepEqual(ref, { type: 'docLink', props: { docId: 'doc_target', title: '目标文档' } }, '引用只写稳定 docId + 显示标题快照')
+  assert.equal(docLinkModel.isDocumentLinkInlineContent(ref), true, '必须能识别自身行内引用')
+  assert.equal(docLinkModel.isDocumentLinkInlineContent({ type: 'text', text: 'x' }), false, '普通文本不得误判为引用')
+  const linkHtml = docLinkModel.createDocumentLinkHtml('doc_target', 'A & B')
+  assert.ok(linkHtml.includes('data-inline-content-type="docLink"'), '外部 HTML 必须带 inline content 类型')
+  assert.ok(linkHtml.includes('data-doc-id="doc_target"'), '外部 HTML 必须带稳定 docId')
+  assert.ok(linkHtml.includes('data-title="A &amp; B"'), '外部 HTML 标题必须转义')
+
+  // 引用可能嵌在 columnList / 表格 / 任意嵌套层级，扫描必须递归而不是只看顶层 content。
+  const nestedBody = {
+    schema: 'topomind.smart-document',
+    version: 1,
+    id: 'doc_src',
+    blocks: [
+      { type: 'paragraph', content: [{ type: 'text', text: '前置' }, ref] },
+      { type: 'columnList', children: [
+        { type: 'column', children: [
+          { type: 'paragraph', content: [ref, docLinkModel.createDocumentLinkInlineContent('doc_other', '其它')] },
+        ] },
+      ] },
+    ],
+    metadata: { keepMe: { nested: [1, 2, 3] } },
+  }
+  assert.equal(idService.countDocumentLinks(nestedBody, 'doc_target'), 2, '嵌套分栏里的引用必须被统计')
+  assert.equal(idService.countDocumentLinks(nestedBody, 'doc_other'), 1, '同一文档引用不同目标要分别统计')
+  assert.equal(idService.countDocumentLinks(nestedBody, 'doc_none'), 0, '无关 docId 不得命中')
+
+  const mapped = idService.mapDocumentLinkIds(nestedBody, (id: string) => (id === 'doc_target' ? 'doc_new' : id))
+  assert.equal(idService.countDocumentLinks(mapped, 'doc_new'), 2, '重映射必须改写所有命中引用')
+  assert.equal(idService.countDocumentLinks(mapped, 'doc_target'), 0, '重映射后旧 id 不得残留')
+  assert.equal(idService.countDocumentLinks(mapped, 'doc_other'), 1, '未命中的引用必须原样保留')
+  assert.deepEqual(mapped.metadata, nestedBody.metadata, '重映射必须整体展开正文，不得按字段白名单重建')
+  assert.equal(idService.mapDocumentLinkIds(nestedBody, (id: string) => id) === nestedBody, true, '无改动必须返回原引用，避免无谓写盘')
+
+  // 正文 normalize 不得吞掉自定义行内内容（历史上「只在返回类型加字段」踩过坑）。
+  const normalizedDocLink = normalizeSmartDocumentContent(
+    { schema: 'topomind.smart-document', version: 1, blocks: nestedBody.blocks },
+    '标题',
+  )
+  // normalize 会给块补 children: undefined，不做整体深比较；只断言引用真的活着。
+  assert.equal(idService.countDocumentLinks(normalizedDocLink, 'doc_target'), 2, 'normalizeSmartDocumentContent 不得剥掉 docLink 行内引用')
+  assert.equal(idService.countDocumentLinks(normalizedDocLink, 'doc_other'), 1, 'normalize 不得改写引用目标')
+
+  // 内存文件系统真跑反向链接 + idRemap 闭环。
+  const posix = (await import('node:path')).posix
+  const dirs = new Map<string, string[]>()
+  const fileContents = new Map<string, string>()
+  const graphs: Record<string, any> = {
+    KB1: {
+      children: {
+        'card-a': {
+          name: '节点 A',
+          linkedDocuments: [{ docId: 'doc_target', cardRef: 'KB1/card-a', title: '目标文档' }],
+        },
+      },
+      edges: [],
+    },
+  }
+  const put = (p: string, value: unknown) => fileContents.set(p, JSON.stringify(value))
+  const fsMock = {
+    existsSync: (p: string) => fileContents.has(p) || dirs.has(p),
+    readdirSync: (p: string) => (dirs.get(p) ?? []).map((name) => ({
+      name,
+      isDirectory: () => dirs.has(`${p}/${name}`),
+    })),
+  }
+  dirs.set('/kb', ['KB1'])
+  dirs.set('/kb/KB1', ['_graph.json', 'card-a'])
+  dirs.set('/kb/KB1/card-a', ['_docs'])
+  dirs.set('/kb/KB1/card-a/_docs', ['tree.json', 'doc_src.tdoc.json', 'doc_target.tdoc.json', 'doc_other.tdoc.json'])
+  put('/kb/KB1/_graph.json', { version: 2, zoom: 1, pan: { x: 0, y: 0 } })
+  put('/kb/KB1/card-a/_docs/tree.json', {
+    version: 2,
+    documents: {
+      doc_src: { id: 'doc_src', type: 'smart', title: '引用者', path: 'doc_src.tdoc.json' },
+      doc_target: { id: 'doc_target', type: 'smart', title: '目标文档', path: 'doc_target.tdoc.json' },
+      doc_other: { id: 'doc_other', type: 'smart', title: '另一篇', path: 'doc_other.tdoc.json' },
+    },
+  })
+  put('/kb/KB1/card-a/_docs/doc_src.tdoc.json', nestedBody)
+  const targetBody = { schema: 'topomind.smart-document', id: 'doc_target', blocks: [{ type: 'paragraph', content: [ref] }] }
+  const otherBody = {
+    schema: 'topomind.smart-document', id: 'doc_other',
+    blocks: [{ type: 'paragraph', content: [docLinkModel.createDocumentLinkInlineContent('doc_target', '目标文档')] }],
+  }
+  put('/kb/KB1/card-a/_docs/doc_target.tdoc.json', targetBody)
+  put('/kb/KB1/card-a/_docs/doc_other.tdoc.json', otherBody)
+
+  const service = idService.createDocumentIndexService({
+    fs: fsMock,
+    path: posix,
+    requireValidWorkDir: (d: string) => d,
+    resolveKbsPath: (_root: string, rel: string) => (rel ? `/kb/${rel}` : '/kb'),
+    readTopoManifest: (_root: string, cardPath: string) => (
+      JSON.parse(fileContents.get(`/kb/${cardPath}/_docs/tree.json`) ?? '{}')
+    ),
+    readGraphMeta: (_root: string, roomPath: string) => graphs[roomPath] ?? { children: {} },
+    writeGraphMeta: (_root: string, roomPath: string, meta: unknown) => { graphs[roomPath] = meta },
+    readJsonFile: (p: string) => JSON.parse(fileContents.get(p) ?? '{}'),
+    writeJsonFile: (p: string, value: unknown) => put(p, value),
+    listTrashItems: () => [],
+  })
+
+  const backlinks = service.listDocumentBacklinks('/root', 'doc_target')
+  assert.equal(backlinks.length, 2, '反向链接只列引用者，不含目标文档自身')
+  assert.equal(backlinks.reduce((sum: number, item: any) => sum + item.references, 0), 3, '引用次数必须按出现次数累计')
+  assert.equal(backlinks[0].docId, 'doc_src', '引用者必须按文档维度去重')
+  assert.equal(backlinks[0].references, 2, '同一文档多处引用只出一条，带次数')
+  assert.equal(backlinks[0].breadcrumb, 'KB1 / 节点 A', '反向链接面包屑必须走 formatDocumentSource（末段换成节点名）')
+  assert.equal(service.listDocumentBacklinks('/root', 'doc_no_such').length, 0, '无引用时返回空列表')
+  assert.deepEqual(service.listDocumentBacklinks('/root', ''), [], '空 docId 不得触发全库扫描')
+
+  // 历史上 moveTopoDocumentToCard 只返回 idRemap 不消费，引用一次移动全部失效。
+  const rewrite = service.rewriteDocumentIdReferences('/root', { doc_target: 'doc_renamed' })
+  assert.equal(rewrite.linkedDocuments, 1, '节点 linkedDocuments 必须跟随 idRemap 改写')
+  assert.equal(rewrite.documents, 3, '三篇含引用的正文都必须回写')
+  assert.equal(graphs.KB1.children['card-a'].linkedDocuments[0].docId, 'doc_renamed', '关联记录的 docId 必须换成新 id')
+  assert.equal(graphs.KB1.children['card-a'].linkedDocuments[0].title, '目标文档', '改写关联不得丢掉其它字段')
+  assert.equal(graphs.KB1.children['card-a'].name, '节点 A', '改写关联不得丢掉节点其它字段')
+  const srcAfter = JSON.parse(fileContents.get('/kb/KB1/card-a/_docs/doc_src.tdoc.json') as string)
+  assert.equal(idService.countDocumentLinks(srcAfter, 'doc_renamed'), 2, '正文引用必须跟随 idRemap 改写')
+  assert.deepEqual(srcAfter.metadata, nestedBody.metadata, '正文改写不得丢未知顶层字段')
+  assert.deepEqual(service.rewriteDocumentIdReferences('/root', {}), { linkedDocuments: 0, documents: 0 }, '空 remap 不得写盘')
+
+  // 跨进程接线：白名单 / IPC / 存储四层 / 编辑器注册 / 右栏打开 / 被引用页。
+  const preloadSource = await readFile(new URL('../electron/preload.js', import.meta.url), 'utf-8')
+  const mainSource = await readFile(new URL('../electron/main.js', import.meta.url), 'utf-8')
+  const fsSource = await readFile(new URL('../electron/file-service.js', import.meta.url), 'utf-8')
+  const fsbSource = await readFile(new URL('../src/core/fs-backend.ts', import.meta.url), 'utf-8')
+  const fileAdapterSource = await readFile(new URL('../src/core/storage/file.ts', import.meta.url), 'utf-8')
+  const storeSource = await readFile(new URL('../src/core/storage/service.ts', import.meta.url), 'utf-8')
+  const typesSource = await readFile(new URL('../src/core/storage/types.ts', import.meta.url), 'utf-8')
+  const schemaSource = await readFile(new URL('../src/features/documents/SmartDocumentEditor/smartDocumentSchema.tsx', import.meta.url), 'utf-8')
+  const editorModelSource = await readFile(new URL('../src/features/documents/SmartDocumentEditor/model/useSmartDocumentEditorModel.ts', import.meta.url), 'utf-8')
+  const pasteSource = await readFile(new URL('../src/features/documents/SmartDocumentEditor/mathPaste.ts', import.meta.url), 'utf-8')
+  const registrySource = await readFile(new URL('../src/features/documents/services/documentEditorRegistry.tsx', import.meta.url), 'utf-8')
+  const hostSource = await readFile(new URL('../src/features/documents/DocumentEditorHost.tsx', import.meta.url), 'utf-8')
+  const workspaceLayoutSource = await readFile(new URL('../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx', import.meta.url), 'utf-8')
+  const detailPanelSource = await readFile(new URL('../src/features/right-panel/components/DetailTab/DetailPanel.tsx', import.meta.url), 'utf-8')
+
+  assert.ok(preloadSource.includes("'fs:listDocumentBacklinks'"), '反向链接通道必须在 preload 白名单里')
+  assert.ok(mainSource.includes("ipcMain.handle('fs:listDocumentBacklinks'"), '反向链接通道必须注册 IPC handler')
+  assert.ok(fsSource.includes('documentIndexService.listDocumentBacklinks('), '主进程入口必须委托可注入的扫描服务')
+  assert.ok(fsSource.includes('documentIndexService.rewriteDocumentIdReferences(rootDir, idRemap)'), '跨节点移动冲突改名时必须闭环改写引用')
+  assert.ok(fsbSource.includes("'fs:listDocumentBacklinks'"), 'fs-backend 必须发出反向链接 IPC')
+  assert.ok(fileAdapterSource.includes('FSB.listDocumentBacklinks(requireRootDir(), docId)'), 'file backend 必须注入 rootDir')
+  assert.ok(storeSource.includes('backend.listDocumentBacklinks(docId)'), 'store 层必须透传反向链接调用')
+  assert.ok(typesSource.includes('listDocumentBacklinks: (docId: string)'), 'StorageBackend 契约必须声明反向链接')
+  assert.ok(schemaSource.includes('docLink: DocumentLink'), 'smartDocumentSchema 必须注册 docLink 行内 spec')
+  assert.ok(editorModelSource.includes('inlineMathInputRuleExtension, docLinkInputRuleExtension'), '[[ InputRule 必须真的挂到编辑器')
+  assert.ok(pasteSource.includes("'data-doc-id'") && pasteSource.includes("'data-title'"), '粘贴消毒白名单必须放行 docLink 属性')
+  assert.ok(registrySource.includes('onOpenDocumentByDocId={onOpenDocumentByDocId}'), 'adapter 必须把打开回调透传给编辑器')
+  assert.ok(hostSource.includes('onOpenDocumentByDocId,'), 'DocumentEditorHost 不得再把打开回调吞掉')
+  assert.equal(hostSource.includes('onOpenDetailDocumentLink'), false, '历史死链 onOpenDetailDocumentLink 必须清除')
+  assert.ok(workspaceLayoutSource.includes("'backlinks'"), '右栏必须有「被引用」侧栏页')
+  assert.ok(detailPanelSource.includes('backlinksTabContent={backlinksTabContent}'), '右栏必须挂载被引用列表')
+  assert.ok(detailPanelSource.includes('storage.resolveDocumentById(id)'), '点击引用必须按 docId 反查真实归属，不信任 chip 缓存')
+  assert.ok(detailPanelSource.includes('await flushDocumentSave()'), '跨文档跳转前必须先落盘当前草稿')
+  assert.ok(detailPanelSource.includes('onOpenDocumentByDocId={(docId: string)'), '右栏必须把按 docId 打开接到编辑器链路')
+}
+
 console.log('Critical regression checks verified')

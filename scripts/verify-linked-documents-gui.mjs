@@ -12,7 +12,8 @@
  *
  * 覆盖：右键菜单 → 选择对话框 → 上限 8 → 保存落盘 → 节点链环语义标记 →
  *       一键直达右栏关联视图 → SegmentedControl 切换 → ownerCardPath 写入隔离 →
- *       关联列表 / 在所属节点打开 / 移除关联。
+ *       关联列表 / 在所属节点打开 / 移除关联；以及文档双链：
+ *       `[[` 触发选择器 → 行内 chip 落盘 → 点击跨节点打开 → 反向链接侧栏页。
  */
 import puppeteer from 'puppeteer'
 import fs from 'node:fs'
@@ -363,6 +364,81 @@ async function main() {
     const onDisk = JSON.parse(fs.readFileSync(DOC_B, 'utf8'))
     check('分栏正文落盘后仍完整',
       JSON.stringify(onDisk.blocks) === JSON.stringify(columnBody.blocks) && onDisk.id === 'doc_b')
+
+    // ---- 阶段 H：文档双链（[[ 触发 → 行内 chip → 落盘 → 点击跨节点打开 → 反向链接）----
+    await waitFor(page, () => !!document.querySelector('.bn-editor[contenteditable="true"]'), 8000)
+    const docLinkEditor = await page.$('.bn-editor[contenteditable="true"]')
+    if (docLinkEditor) {
+      await docLinkEditor.click()
+      await page.keyboard.type('[[')
+    }
+    check('输入 [[ 弹出全库文档选择器',
+      await waitFor(page, () => !!document.querySelector('[data-tm-doc-link-picker]'), 6000))
+    check('选择器列出目标文档 doc_b',
+      await page.evaluate(() => !!document.querySelector('[data-tm-doc-link-item="doc_b"]')))
+    await page.evaluate(() => document.querySelector('[data-tm-doc-link-item="doc_b"]')?.click())
+    await sleep(900)
+    const chip = await page.evaluate(() => {
+      const el = document.querySelector('.tm-doc-link-chip')
+      return { exists: !!el, docId: el?.getAttribute('data-doc-id') || '', text: el?.innerText || '' }
+    })
+    check('选中后插入行内引用 chip（带稳定 docId）',
+      chip.exists && chip.docId === 'doc_b' && chip.text.includes(LINK_TITLE), JSON.stringify(chip))
+    await page.evaluate(() => document.querySelector('.bn-editor')?.blur?.())
+    await sleep(4500)
+    const aBodyAfter = JSON.parse(fs.readFileSync(DOC_A, 'utf8'))
+    const aRaw = JSON.stringify(aBodyAfter)
+    check('双链引用落盘且只写 docId / 标题快照',
+      aRaw.includes('"docLink"') && aRaw.includes('"doc_b"') && aBodyAfter.id === 'doc_a')
+
+    // 直接真跑主进程反向链接 IPC（渲染层 store 之外的一条独立验证）。
+    const backlinksFromIpc = await page.evaluate(async (dir) => (
+      window.electronAPI.invoke('fs:listDocumentBacklinks', dir, 'doc_b')
+    ), WORKDIR)
+    check('主进程反向链接 IPC 返回引用者与引用次数',
+      Array.isArray(backlinksFromIpc) &&
+      backlinksFromIpc.some((item) => item.docId === 'doc_a' && item.references >= 1) &&
+      !backlinksFromIpc.some((item) => item.docId === 'doc_b'),
+      JSON.stringify(backlinksFromIpc))
+
+    // chip 点击必须按 docId 反查真实归属节点，不能把内容写进当前节点。
+    await page.evaluate(() => {
+      document.querySelector('.tm-doc-link-chip')?.dispatchEvent(new MouseEvent('mousedown', {
+        bubbles: true, cancelable: true, button: 0, buttons: 1,
+      }))
+    })
+    const openedByChip = await waitFor(page, () => [...document.querySelectorAll('button')]
+      .some((b) => (b.getAttribute('title') || '').includes('node-b/_docs/doc_b.tdoc.json')), 9000)
+    check('点击 chip 在右栏跨节点打开 doc_b', openedByChip)
+
+    await page.evaluate(() => document.querySelector('[data-tm-backlinks-header]')?.click())
+    await sleep(1200)
+    const backlinksPanel = await waitFor(page, () => !!document.querySelector('[data-tm-backlinks-panel]'), 6000)
+    const backlinkItem = await waitFor(page, () => !!document.querySelector('[data-tm-backlink-item="doc_a"]'), 9000)
+    check('「被引用」侧栏页列出引用了 doc_b 的 doc_a', backlinksPanel && backlinkItem)
+    await page.evaluate(() => document.querySelector('[data-tm-backlink-item="doc_a"]')?.click())
+    await sleep(1600)
+    check('反向链接条目跳回引用者 doc_a', await waitFor(page, () => [...document.querySelectorAll('button')]
+      .some((b) => (b.getAttribute('title') || '').includes('node-a/_docs/doc_a.tdoc.json')), 9000))
+
+    // 复制/粘贴结构保真：外部 HTML 带 data-doc-id 时必须还原成 docLink 节点，
+    // 不能退化成纯文本（DOMPurify 白名单漏一项就会出现这个静默丢失）。
+    await waitFor(page, () => !!document.querySelector('.bn-editor[contenteditable="true"]'), 8000)
+    const pasteEditor = await page.$('.bn-editor[contenteditable="true"]')
+    if (pasteEditor) {
+      await pasteEditor.click()
+      await page.evaluate(() => {
+        const dt = new DataTransfer()
+        dt.setData('text/html', '<span data-inline-content-type="docLink" data-doc-id="doc_extra_0" data-title="备用文档 1">备用文档 1</span>')
+        dt.setData('text/plain', '备用文档 1')
+        document.querySelector('.bn-editor')?.dispatchEvent(new ClipboardEvent('paste', {
+          clipboardData: dt, bubbles: true, cancelable: true,
+        }))
+      })
+      await sleep(900)
+      check('粘贴含 data-doc-id 的引用 HTML 后仍是可点击 chip', await page.evaluate(() =>
+        !!document.querySelector('.tm-doc-link-chip[data-doc-id="doc_extra_0"]')))
+    }
   } finally {
     browser.disconnect()
     if (spawned) spawned.kill()
