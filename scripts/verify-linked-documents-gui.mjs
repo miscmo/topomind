@@ -14,7 +14,8 @@
  *       一键直达右栏关联视图 → SegmentedControl 切换 → ownerCardPath 写入隔离 →
  *       关联列表 / 在所属节点打开 / 移除关联；以及文档双链：
  *       `[[` 触发选择器 → 行内 chip 落盘 → 点击跨节点打开 → 引用关系上下两栏 →
- *       关系索引二次命中（parsed=0）→ 复制粘贴结构保真。
+ *       关系索引二次命中（parsed=0）→ 复制粘贴结构保真；以及连线关系：
+ *       右栏打开「连线关系」→ 内置四种齐全 → 新增自定义关系与标签开关写进 _config.json。
  */
 import puppeteer from 'puppeteer'
 import fs from 'node:fs'
@@ -479,6 +480,65 @@ async function main() {
     await sleep(1600)
     check('下栏条目按 docId 跳回目标文档 doc_b', await waitFor(page, () => [...document.querySelectorAll('button')]
       .some((b) => (b.getAttribute('title') || '').includes('node-b/_docs/doc_b.tdoc.json')), 9000))
+
+    // ===== 阶段 I：连线关系管理（全局 _config.json） =====
+    await page.evaluate(() => {
+      const group = document.querySelector('[role="radiogroup"][aria-label="右侧面板分区"]')
+      const button = Array.from(group?.querySelectorAll('button') ?? [])
+        .find((item) => item.textContent?.trim() === '样式')
+      button?.click()
+    })
+    await sleep(500)
+    await page.evaluate(() => {
+      const group = document.querySelector('[role="radiogroup"][aria-label="样式面板分区"]')
+      const button = Array.from(group?.querySelectorAll('button') ?? [])
+        .find((item) => item.textContent?.trim() === '连线关系')
+      button?.click()
+    })
+    check('右栏「连线关系」管理面板可打开', await waitFor(page, () =>
+      !!document.querySelector('[data-tm-edge-relations-panel]'), 8000))
+    check('内置四种连线关系齐全（关联/从属/组成/推导）', await page.evaluate(() =>
+      ['related', 'is-a', 'part-of', 'inference'].every((id) =>
+        !!document.querySelector(`[data-tm-edge-relation-item="${id}"]`))))
+
+    // 受控输入要用原生 setter + input 事件，直接赋值不会触发 React onChange。
+    await page.evaluate(() => {
+      const input = document.querySelector('[data-tm-edge-relation-new-name]')
+      if (!input) return
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, '测试自定义关系')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await page.evaluate(() => document.querySelector('[data-tm-edge-relation-add]')?.click())
+    check('新增自定义关系后面板出现新项', await waitFor(page, () =>
+      [...document.querySelectorAll('[data-tm-edge-relation-item]')]
+        .some((item) => (item.textContent || '').includes('测试自定义关系')), 8000))
+
+    const configPath = path.join(WORKDIR, '_config.json')
+    let relationWritten = false
+    for (let attempt = 0; attempt < 20 && !relationWritten; attempt += 1) {
+      try {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+        relationWritten = Array.isArray(config.edgeRelations)
+          && config.edgeRelations.some((item) => item.name === '测试自定义关系' && /^rel_/.test(item.id))
+      } catch { /* 写盘尚未完成 */ }
+      if (!relationWritten) await sleep(200)
+    }
+    check('自定义关系以稳定 id 写进工作区 _config.json', relationWritten)
+
+    await page.evaluate(() => {
+      const buttons = [...document.querySelectorAll('[data-tm-edge-relations-panel] button')]
+      buttons.find((item) => item.textContent?.trim() === '隐藏')?.click()
+    })
+    let labelToggleWritten = false
+    for (let attempt = 0; attempt < 20 && !labelToggleWritten; attempt += 1) {
+      try {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+        labelToggleWritten = config.showEdgeRelationLabels === false
+      } catch { /* 写盘尚未完成 */ }
+      if (!labelToggleWritten) await sleep(200)
+    }
+    check('关系标签显隐开关写进工作区 _config.json', labelToggleWritten)
   } finally {
     browser.disconnect()
     if (spawned) spawned.kill()

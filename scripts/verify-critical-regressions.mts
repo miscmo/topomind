@@ -88,6 +88,15 @@ import {
 import { normalizeDefaultEdgeStyle } from '../src/domain/style/normalizeStyleConfig.ts'
 import { normalizeGraphMeta } from '../src/domain/graph/normalizeGraphMeta.ts'
 import {
+  BUILTIN_EDGE_RELATIONS,
+  DEFAULT_EDGE_RELATION_ID,
+  LEGACY_EDGE_RELATION_MAP,
+  edgeRelationStylePatch,
+  normalizeEdgeRelationDefinitions,
+  resolveEdgeRelationId,
+} from '../src/domain/graph/edgeRelations.ts'
+import { normalizeConfig } from '../src/core/storage/normalizeConfig.ts'
+import {
   clampEdgeAnchor,
   isBorderAnchor,
   normalizeEdgeAnchor,
@@ -3187,6 +3196,147 @@ const edge = (
   assert.ok(mathRenderSource.includes('katex.renderToString(normalizeMathSource(latex)'), '渲染入口必须真的调用规范化')
   const renderFnBody = mathRenderSource.slice(mathRenderSource.indexOf('export function renderMathToHtml'))
   assert.equal(/\bstrict\s*:/.test(renderFnBody), false, '渲染入口不得用 strict 忽略档屏蔽警告，否则零警告断言会失效')
+}
+
+// --- 连线关系：自定义关系、旧值读时映射、配置往返与写库入口 ---
+{
+  const builtinIds = BUILTIN_EDGE_RELATIONS.map((item) => item.id)
+  assert.deepEqual(builtinIds, ['related', 'is-a', 'part-of', 'inference'], '内置四种关系必须齐全且 id 稳定')
+  assert.deepEqual(
+    BUILTIN_EDGE_RELATIONS.map((item) => item.name),
+    ['关联', '从属', '组成', '推导'],
+    '内置关系显示名必须与需求一致',
+  )
+  assert.equal(new Set(BUILTIN_EDGE_RELATIONS.map((item) => item.style.color)).size, 4, '四种关系颜色必须可区分')
+  assert.equal(
+    BUILTIN_EDGE_RELATIONS.find((item) => item.id === 'part-of')?.style.lineStyle,
+    'dashed',
+    '组成关系用虚线与其它关系区分',
+  )
+
+  const fallback = normalizeEdgeRelationDefinitions(undefined)
+  assert.deepEqual(fallback.map((item) => item.id), builtinIds, '空配置必须回落到纯内置列表')
+
+  const custom = normalizeEdgeRelationDefinitions([
+    { id: 'my-rel', name: '  我的关系  ', description: '说明', style: { color: '#123456', lineStyle: 'dashed' } },
+    { id: 'my-rel', name: '重复', style: {} },
+    { id: 'bad id!', name: '非法 id', style: {} },
+    { id: 'is-a', name: '属于' }, // 只改内置名，不得把内置样式冲成全局默认
+  ])
+  const myRel = custom.find((item) => item.id === 'my-rel')
+  assert.equal(myRel?.name, '我的关系', '自定义关系名必须去空白后保留')
+  assert.equal(myRel?.style.color, '#123456', '自定义关系样式必须保留')
+  assert.equal(myRel?.style.lineStyle, 'dashed')
+  assert.equal(custom.filter((item) => item.id === 'my-rel').length, 1, '关系 id 必须去重')
+  assert.equal(custom.some((item) => item.id === 'bad id!'), false, '非法 id 必须过滤')
+  const isA = custom.find((item) => item.id === 'is-a')
+  assert.equal(isA?.name, '属于', '内置关系允许改名')
+  assert.equal(isA?.builtin, true, '内置标记不可被配置篡改')
+  assert.equal(
+    isA?.style.color,
+    BUILTIN_EDGE_RELATIONS.find((item) => item.id === 'is-a')?.style.color,
+    '只改名不得把内置关系的差异化样式冲成全局默认',
+  )
+
+  // 旧存档：读时映射、磁盘不动。
+  assert.equal(resolveEdgeRelationId('相关', fallback), DEFAULT_EDGE_RELATION_ID)
+  assert.equal(resolveEdgeRelationId('依赖', fallback), 'inference')
+  assert.equal(resolveEdgeRelationId('演进', fallback), 'inference')
+  assert.equal(resolveEdgeRelationId('my-rel', custom), 'my-rel')
+  assert.equal(resolveEdgeRelationId('已删除的自定义', fallback), DEFAULT_EDGE_RELATION_ID, '已删关系必须优雅回退')
+  assert.equal(resolveEdgeRelationId('', fallback), DEFAULT_EDGE_RELATION_ID)
+  assert.equal(LEGACY_EDGE_RELATION_MAP['依赖'], 'inference', '前提/依赖/因果必须合并进「推导」')
+
+  // 落盘边界：既不能改写旧中文值（会变成批量改档），也不能吞掉自定义 id。
+  const metaWithRelations = normalizeGraphMeta({
+    nodes: {},
+    edges: [
+      { id: 'e1', source: { ref: 'a' }, target: { ref: 'b' }, relation: '依赖' },
+      { id: 'e2', source: { ref: 'b' }, target: { ref: 'c' }, relation: 'my-rel' },
+    ],
+    viewport: {},
+  })
+  assert.equal(metaWithRelations.edges[0].relation, '依赖', '旧中文值必须原样保留（磁盘不动）')
+  assert.equal(metaWithRelations.edges[1].relation, 'my-rel', '自定义关系 id 不得被打回「相关」')
+
+  // 配置往返：normalizeConfig 会重建对象，漏列字段就会让自定义关系写完即丢。
+  const configOut = normalizeConfig({ edgeRelations: custom, showEdgeRelationLabels: false })
+  assert.equal(configOut.showEdgeRelationLabels, false, '标签开关必须写进配置')
+  assert.equal(configOut.edgeRelations?.find((item) => item.id === 'my-rel')?.name, '我的关系', '自定义关系必须能从配置读回')
+  assert.deepEqual(
+    normalizeConfig(configOut).edgeRelations,
+    configOut.edgeRelations,
+    '配置归一化必须幂等',
+  )
+  const patch = edgeRelationStylePatch(myRel!.style)
+  for (const key of ['lineMode', 'lineStyle', 'color', 'lineWidth', 'arrow', 'arrowSize', 'arrowShape', 'arrowPosition', 'curveControl']) {
+    assert.ok(key in patch, `关系样式 patch 必须含 ${key}`)
+  }
+
+  // 【核心】真跑写库入口：切换关系必须写稳定 id + 套用该关系样式并触发落盘。
+  const { build: esbuildBuild } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundleResult = await esbuildBuild({
+    entryPoints: [fileURLToPath(new URL('../src/hooks/useGraph/edgeOperations.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    banner: { js: 'globalThis.window = globalThis.window || {};' },
+  })
+  const relModule = await import(
+    `data:text/javascript;base64,${Buffer.from(bundleResult.outputFiles[0].text).toString('base64')}`
+  ) as unknown as {
+    buildEdgeOperations: (deps: Record<string, unknown>) => {
+      addEdge: (connection: Record<string, unknown>, edgeId: string, defaultStyle?: Record<string, unknown>, relationId?: string) => Promise<boolean>
+      updateEdgeRelation: (edgeId: string, relation: string, weight?: string) => Promise<void>
+    }
+  }
+  let relEdges: Array<Record<string, unknown>> = [{
+    id: 'e1', source: 'a', target: 'b',
+    data: { relation: '依赖', weight: 'main', color: '#111111', lineStyle: 'solid', lineWidth: 1.2 },
+  }]
+  let relSaveCalls = 0
+  const relOps = relModule.buildEdgeOperations({
+    getActiveGraphSession: () => ({ roomPath: 'room-a' }),
+    saveNow: async () => {},
+    saveLater: async () => { relSaveCalls += 1 },
+    storeApi: {
+      getState: () => ({ edges: relEdges, setEdges: (next: Array<Record<string, unknown>>) => { relEdges = next } }),
+    },
+    getEdgeRelations: () => custom,
+  })
+  await relOps.updateEdgeRelation('e1', 'my-rel')
+  const relData = relEdges[0].data as Record<string, unknown>
+  assert.equal(relData.relation, 'my-rel', '切换关系必须写入稳定 id')
+  assert.equal(relData.color, '#123456', '切换关系必须套用该关系的默认样式')
+  assert.equal(relData.weight, 'main', '未指定 weight 时必须沿用原权重')
+  assert.equal(relSaveCalls, 1, '切换关系必须触发一次落盘')
+
+  await relOps.addEdge({ source: 'a', target: 'c', sourceHandle: null, targetHandle: null }, 'e2', undefined, 'my-rel')
+  const addedData = relEdges.find((edge) => edge.id === 'e2')?.data as Record<string, unknown> | undefined
+  assert.equal(addedData?.relation, 'my-rel', '指定关系新建边必须写该关系 id')
+  assert.equal(addedData?.color, '#123456', '指定关系新建边必须套用关系样式')
+
+  // 跨进程接线：配置 / hydrate / 操作层 / 画布标签 / 两个 UI 入口。
+  const normalizeConfigSource = await readFile(new URL('../src/core/storage/normalizeConfig.ts', import.meta.url), 'utf-8')
+  const storeServiceSource = await readFile(new URL('../src/core/storage/service.ts', import.meta.url), 'utf-8')
+  const configServiceSource = await readFile(new URL('../src/application/config/configService.ts', import.meta.url), 'utf-8')
+  const graphOperationsSource = await readFile(new URL('../src/hooks/useGraph/graphOperations.ts', import.meta.url), 'utf-8')
+  const relationOpsSource = await readFile(new URL('../src/hooks/useGraph/edgeOperations.ts', import.meta.url), 'utf-8')
+  const normalizeMetaSource = await readFile(new URL('../src/domain/graph/normalizeGraphMeta.ts', import.meta.url), 'utf-8')
+  const floatingEdgeSource = await readFile(new URL('../src/features/graph/GraphCanvas/edges/FloatingEdge.tsx', import.meta.url), 'utf-8')
+  const toolbarSource = await readFile(new URL('../src/features/graph/GraphCanvas/edges/QuickEdgeToolbar.tsx', import.meta.url), 'utf-8')
+  const relationPanelSource = await readFile(new URL('../src/features/right-panel/components/StyleTab/EdgeRelationPanel.tsx', import.meta.url), 'utf-8')
+  const styleSectionSource = await readFile(new URL('../src/features/right-panel/components/StyleTab/StyleSection.tsx', import.meta.url), 'utf-8')
+
+  assert.ok(normalizeConfigSource.includes('normalizeEdgeRelationDefinitions(c.edgeRelations)'), 'normalizeConfig 必须显式保留关系定义')
+  assert.ok(storeServiceSource.includes('nextConfig.edgeRelations = config.edgeRelations'), 'writeConfig 必须显式透传关系数组')
+  assert.ok(configServiceSource.includes('graphUi.setEdgeRelations('), '配置 hydration 必须注入关系定义')
+  assert.ok(graphOperationsSource.includes('getEdgeRelations: () => useGraphUiStore.getState().edgeRelations'), '操作层必须拿到全局关系定义')
+  assert.ok(relationOpsSource.includes('findEdgeRelationDefinition(relation, getRelations())'), '切换关系必须走定义解析')
+  assert.equal(normalizeMetaSource.includes("value === '演进'"), false, '落盘边界不得再用三值白名单吞掉自定义关系')
+  assert.ok(floatingEdgeSource.includes('data-tm-edge-relation-label') && floatingEdgeSource.includes('updateEdgeRelation(id, relationId)'), '画布必须有关系标签并接通切换')
+  assert.ok(toolbarSource.includes('data-tm-edge-relation-trigger') && toolbarSource.includes('data-tm-edge-relation-item'), '选中边工具栏必须有关系下拉')
+  assert.ok(relationPanelSource.includes('data-tm-edge-relations-panel') && relationPanelSource.includes('data-tm-edge-relation-add'), '右栏必须有可新增关系的管理面板')
+  assert.ok(styleSectionSource.includes("value: 'relations'"), '样式页必须有「连线关系」分区')
 }
 
 console.log('Critical regression checks verified')
