@@ -147,6 +147,9 @@ export function createStore(backend: StorageBackend) {
       const safeLinks = normalizeLinkedDocuments(links) ?? []
       try { return await backend.updateNodeLinkedDocuments(nodePath, safeLinks) } catch (e) { logger.catch('Store.updateNodeLinkedDocuments', `更新节点关联失败: ${nodePath}`, e); throw e }
     },
+    async listDocumentBacklinks(docId: string) {
+      try { return await backend.listDocumentBacklinks(docId) } catch (e) { logger.catch('Store.listDocumentBacklinks', `扫描反向链接失败: ${docId}`, e); throw e }
+    },
     async listTopoDocuments(cardPath: string) {
       try { return await backend.listTopoDocuments(cardPath) } catch (e) { logger.catch('Store.listTopoDocuments', `列出多类型文档失败: ${cardPath}`, e); throw e }
     },

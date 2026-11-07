@@ -3,7 +3,7 @@ import type { CardInfo } from '../../domain/graph/model'
 import type { KBListItem } from '../../types'
 import type { DefaultEdgeStyle, DefaultEditorStyle } from '../../domain/style/styleTypes'
 import type { FSBTrashItem, FSBTrashTopoDocumentItem, FSBDocumentCandidate } from '../fs-backend'
-import type { LinkedDocumentRef, DocumentResolution } from '../../domain/graph/linkedDocuments'
+import type { LinkedDocumentRef, DocumentResolution, DocumentBacklink } from '../../domain/graph/linkedDocuments'
 import type { TopoDocumentType } from '../topoDocumentTypes'
 
 export interface VaultConfig {
@@ -162,6 +162,8 @@ export interface LinkedDocumentStorageBackend {
   listDocumentCandidates: () => Promise<FSBDocumentCandidate[]>
   resolveDocumentById: (docId: string, cardRef?: string) => Promise<DocumentResolution>
   updateNodeLinkedDocuments: (nodePath: string, links: LinkedDocumentRef[]) => Promise<LinkedDocumentRef[]>
+  /** 文档双链：按需扫描全库正文，列出引用了 docId 的文档。 */
+  listDocumentBacklinks: (docId: string) => Promise<DocumentBacklink[]>
 }
 
 export interface AttachmentStorageBackend {

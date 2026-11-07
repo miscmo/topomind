@@ -38,6 +38,21 @@ export interface DocumentResolution {
   sourceLabel?: string
 }
 
+/**
+ * 文档双链的「被引用」条目：另一篇文档的正文中出现了指向本 docId 的 docLink。
+ * breadcrumb 由主进程 formatDocumentSource 统一生成，右栏不得自行拼接。
+ */
+export interface DocumentBacklink {
+  docId: string
+  title: string
+  type: string
+  cardPath: string
+  nodeName: string
+  breadcrumb: string
+  /** 该文档中指向目标的引用次数 */
+  references: number
+}
+
 /** 返回 undefined 表示「没有关联」：写盘时省略该键，旧档零迁移、不撑大 _graph.json。 */
 export function normalizeLinkedDocuments(raw: unknown, max = MAX_LINKED_DOCUMENTS): LinkedDocumentRef[] | undefined {
   if (!Array.isArray(raw)) return undefined

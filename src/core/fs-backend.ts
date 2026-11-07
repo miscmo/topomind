@@ -7,7 +7,7 @@ import type { ElectronAPI } from '../types/electron-api'
 import type { EdgeRelation, EdgeWeight } from '../types'
 import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentRepairResult, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './storage/service'
 import type { TopoDocumentType } from './topoDocumentTypes'
-import type { LinkedDocumentRef, DocumentResolution } from '../domain/graph/linkedDocuments'
+import type { LinkedDocumentRef, DocumentResolution, DocumentBacklink } from '../domain/graph/linkedDocuments'
 
 const getApi = (): ElectronAPI | null => {
   const w = window as Window
@@ -101,7 +101,7 @@ export interface FSBTrashTopoDocumentItem extends FSBTrashItem {
   type: TopoDocumentType
 }
 
-/** 全库文档候选项（选择关联文档时用）。 */
+/** 全库文档候选项（选择关联文档 / 插入文档引用时用）。 */
 export interface FSBDocumentCandidate {
   docId: string
   title: string
@@ -110,6 +110,9 @@ export interface FSBDocumentCandidate {
   nodeName: string
   breadcrumb: string
 }
+
+/** 反向链接条目：形状与 domain 层一致，避免在渲染层再造一份 DTO。 */
+export type FSBDocumentBacklink = DocumentBacklink
 
 export interface FSB {
   listKBs: (rootDir: string) => Promise<FSBKBInfo[]>
@@ -142,6 +145,7 @@ export interface FSB {
   listDocumentCandidates: (rootDir: string) => Promise<FSBDocumentCandidate[]>
   resolveDocumentById: (rootDir: string, docId: string, cardRef?: string) => Promise<DocumentResolution>
   updateNodeLinkedDocuments: (rootDir: string, nodePath: string, links: LinkedDocumentRef[]) => Promise<LinkedDocumentRef[]>
+  listDocumentBacklinks: (rootDir: string, docId: string) => Promise<FSBDocumentBacklink[]>
   listAttachments: (rootDir: string, cardPath: string) => Promise<Array<{ name: string, path: string, isImage: boolean, size: number, mtime: number }>>
   importAttachment: (rootDir: string, cardPath: string, sourceFilePath: string, targetFileName?: string) => Promise<string>
   deleteAttachment: (rootDir: string, cardPath: string, attachmentName: string) => Promise<void>
@@ -217,6 +221,8 @@ const FSBImpl: FSB = {
     _call('fs:resolveDocumentById', rootDir, docId, cardRef ?? '') as Promise<DocumentResolution>,
   updateNodeLinkedDocuments: (rootDir, nodePath, links) =>
     _call('fs:updateNodeLinkedDocuments', rootDir, nodePath, links) as Promise<LinkedDocumentRef[]>,
+  listDocumentBacklinks: (rootDir, docId) =>
+    _call('fs:listDocumentBacklinks', rootDir, docId) as Promise<FSBDocumentBacklink[]>,
   repairTopoDocuments: (rootDir, cardPath) =>
     _call('fs:repairTopoDocuments', rootDir, cardPath) as Promise<TopoDocumentRepairResult>,
   exportTopoDocument: (rootDir, cardPath, documentId) =>
