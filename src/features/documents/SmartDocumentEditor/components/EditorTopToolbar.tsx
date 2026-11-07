@@ -68,10 +68,11 @@ if (typeof window !== 'undefined') {
 /**
  * 编辑器顶部工具栏：左＝标题编号（文档级配置），右＝内容最大宽度 / 左右留白（全局配置），
  * 「样式」按钮＝编辑器全部外观设置的入口（portal 浮层），最右侧＝折叠/展开按钮。
- * 折叠时同一条容器把高度从 36px 收到 24px（morph），控件层只做显隐过渡而不卸载——
- * 滑杆的本地草稿与拖动预览状态不会因折叠丢失。
- * 内容区自己横向滚动（窄右栏时），根容器 overflow-hidden 才能在收起时裁掉控件，
- * 也正因如此样式浮层必须 portal 到 body。
+ * 展开：36px 一整条（控件 + 样式 + 折叠按钮）。
+ * 折叠：整条高度收到 0、不留任何控件条，只留一个展开按钮绝对定位贴住顶部边界
+ * （紧贴上方标题栏的分界线），把全部垂直空间让给正文。
+ * 内容区自己横向滚动（窄右栏时），展开态根容器 overflow-hidden 才能裁掉控件，
+ * 也正因如此样式浮层必须 portal 到 body；折叠态改 overflow-visible 让贴边按钮不被裁。
  */
 export function EditorTopToolbar({
   numbering,
@@ -112,12 +113,13 @@ export function EditorTopToolbar({
       aria-label="编辑器顶部设置"
       data-tm-editor-top-toolbar=""
       data-collapsed={collapsed ? 'true' : 'false'}
-      className="tm-editor-top-toolbar flex shrink-0 items-center gap-2 overflow-hidden border-b border-[var(--color-border-light)] bg-[var(--color-surface)] px-3 text-[12px] text-[var(--color-text-secondary)] box-border"
-      style={{ height: collapsed ? 24 : 36 }}
+      className="tm-editor-top-toolbar relative flex shrink-0 items-center gap-2 border-b border-[var(--color-border-light)] bg-[var(--color-surface)] px-3 text-[12px] text-[var(--color-text-secondary)] box-border"
+      style={{ height: collapsed ? 0 : 36, overflow: collapsed ? 'visible' : 'hidden' }}
     >
       <div
         className="tm-editor-top-toolbar__content flex min-w-0 flex-1 items-center gap-3 overflow-x-auto"
         aria-hidden={collapsed || undefined}
+        style={collapsed ? { display: 'none' } : undefined}
       >
         <HeadingNumberingToolbar config={numbering} onChange={onNumberingChange} disabled={disabled} />
         <ContentLayoutControls
@@ -136,6 +138,7 @@ export function EditorTopToolbar({
         title="编辑器样式设置"
         onClick={toggleStylePopover}
         className="tm-editor-top-toolbar__style-trigger flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-md border-none bg-transparent px-1.5 text-[11px] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]"
+        style={collapsed ? { display: 'none' } : undefined}
       >
         <Palette size={13} aria-hidden="true" />
         样式
@@ -148,6 +151,7 @@ export function EditorTopToolbar({
         title={collapsed ? '展开顶部工具栏' : '收起顶部工具栏'}
         onClick={handleToggleCollapsed}
         className="tm-editor-top-toolbar__toggle flex h-5 w-6 shrink-0 items-center justify-center rounded-md border-none bg-transparent text-[var(--color-text-muted)] cursor-pointer transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]"
+        style={collapsed ? { position: 'absolute', top: 0, right: 8 } : undefined}
       >
         {collapsed ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
       </button>

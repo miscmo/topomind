@@ -500,6 +500,7 @@ async function main() {
       const bar = document.querySelector('[data-tm-editor-top-toolbar]')
       const toggle = document.querySelector('[data-tm-editor-top-toolbar-toggle]')
       const content = bar?.querySelector('.tm-editor-top-toolbar__content')
+      const styleTrigger = bar?.querySelector('[data-tm-editor-style-trigger]')
       const scroller = document.querySelector('.tm-smart-editor-scroll')
       if (!bar || !toggle || !content) return null
       const barRect = bar.getBoundingClientRect()
@@ -509,6 +510,7 @@ async function main() {
         height: Math.round(barRect.height),
         toggleOnRight: toggleRect.left > barRect.left + barRect.width / 2 && toggleRect.right <= barRect.right + 1,
         controlsVisible: getComputedStyle(content).visibility === 'visible',
+        styleVisible: !!styleTrigger && getComputedStyle(styleTrigger).display !== 'none',
         hasNumbering: !!bar.querySelector('[aria-label="自动编号"]'),
         scrollerHeight: Math.round(scroller?.getBoundingClientRect().height ?? 0),
         stored: localStorage.getItem('topomind_editor_top_toolbar_collapsed'),
@@ -527,9 +529,9 @@ async function main() {
       document.querySelector('[data-tm-editor-top-toolbar]')?.getAttribute('data-collapsed') === 'true', 5000)
     await sleep(320)
     const collapsedToolbar = await readToolbar()
-    check('点击右侧按钮后工具栏折叠（高度收缩 / 控件隐藏 / 偏好落盘）', didCollapse && !!collapsedToolbar
-      && collapsedToolbar.height >= 22 && collapsedToolbar.height <= 26 && !collapsedToolbar.controlsVisible
-      && collapsedToolbar.ariaExpanded === 'false' && collapsedToolbar.stored === 'true'
+    check('点击右侧按钮后工具栏折叠（高度归零 / 不留控件条 / 仅留展开按钮 / 偏好落盘）', didCollapse && !!collapsedToolbar
+      && collapsedToolbar.height >= 0 && collapsedToolbar.height <= 2 && !collapsedToolbar.controlsVisible
+      && !collapsedToolbar.styleVisible && collapsedToolbar.ariaExpanded === 'false' && collapsedToolbar.stored === 'true'
       && collapsedToolbar.toggleOnRight, JSON.stringify(collapsedToolbar))
     check('折叠后正文滚动区确实多出垂直空间', !!expandedToolbar && !!collapsedToolbar
       && collapsedToolbar.scrollerHeight > expandedToolbar.scrollerHeight,

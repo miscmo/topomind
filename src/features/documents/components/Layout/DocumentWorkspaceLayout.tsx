@@ -633,6 +633,9 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                   style={{
                     // 触发条在底部时，展开的面板自动上移贴住正文区底边；切换形态时平滑滑过去，
                     // 拖动中则去掉 top 过渡保证跟手（否则每帧缓动会明显滞后）。
+                    // 注意：竖直位置 top 不挂过渡——它的真实值来自 ResizeObserver 逐帧量正文滚动区，
+                    // 工具栏展开/收起时正文随 flex 平滑移动，若这里再加自身缓动会永远滞后一截
+                    // （表现为目录相对正文「慢半拍」）。去掉过渡即可每帧跟住，与正文同步。
                     top: tocExpanded ? tocPanelTop : tocRailTop,
                     right: tocRightInset,
                     width: tocExpanded ? tocPanelWidth : TOC_RAIL_WIDTH,
@@ -647,7 +650,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
                     transition: [
                       `width ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
                       `height ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
-                      `top ${tocDragging ? 0 : TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
+                      'top 0ms',
                       `border-radius ${TOC_MORPH_MS}ms ${TOC_MORPH_EASING}`,
                       `background-color ${TOC_MORPH_MS}ms ease`,
                       `border-color ${TOC_MORPH_MS}ms ease`,

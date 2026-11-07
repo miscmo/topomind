@@ -2025,7 +2025,7 @@ const edge = (
   assert.ok(topToolbar.includes('useSyncExternalStore'), '折叠偏好必须在同窗口多编辑器实例间同步')
   assert.ok(topToolbar.includes('setCollapsed(!collapsedState)'), '点击按钮必须真的切换并广播折叠状态')
   assert.ok(topToolbar.includes('aria-expanded={!collapsed}'), '折叠按钮必须暴露 aria-expanded')
-  assert.ok(topToolbar.includes('height: collapsed ? 24 : 36'), '折叠必须是同一容器的高度 morph，不能卸载工具栏')
+  assert.ok(topToolbar.includes('height: collapsed ? 0 : 36'), '折叠必须收成 0 高度（不留控件条），只留贴边界的展开按钮')
   assert.ok(topToolbar.includes('aria-hidden={collapsed || undefined}'), '折叠时控件层必须对辅助技术隐藏')
   const toolbarContentIndex = topToolbar.indexOf('tm-editor-top-toolbar__content')
   const toolbarToggleIndex = topToolbar.indexOf('data-tm-editor-top-toolbar-toggle=""')
