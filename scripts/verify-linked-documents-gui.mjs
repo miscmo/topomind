@@ -13,7 +13,8 @@
  * 覆盖：右键菜单 → 选择对话框 → 上限 8 → 保存落盘 → 节点链环语义标记 →
  *       一键直达右栏关联视图 → SegmentedControl 切换 → ownerCardPath 写入隔离 →
  *       关联列表 / 在所属节点打开 / 移除关联；以及文档双链：
- *       `[[` 触发选择器 → 行内 chip 落盘 → 点击跨节点打开 → 反向链接侧栏页。
+ *       `[[` 触发选择器 → 行内 chip 落盘 → 点击跨节点打开 → 引用关系上下两栏 →
+ *       关系索引二次命中（parsed=0）→ 复制粘贴结构保真。
  */
 import puppeteer from 'puppeteer'
 import fs from 'node:fs'
@@ -374,8 +375,9 @@ async function main() {
     }
     check('输入 [[ 弹出全库文档选择器',
       await waitFor(page, () => !!document.querySelector('[data-tm-doc-link-picker]'), 6000))
+    // 选择器浮层是 portal 且候选列表异步加载：必须等目标项出现，不能只等浮层挂载。
     check('选择器列出目标文档 doc_b',
-      await page.evaluate(() => !!document.querySelector('[data-tm-doc-link-item="doc_b"]')))
+      await waitFor(page, () => !!document.querySelector('[data-tm-doc-link-item="doc_b"]'), 9000))
     await page.evaluate(() => document.querySelector('[data-tm-doc-link-item="doc_b"]')?.click())
     await sleep(900)
     const chip = await page.evaluate(() => {
@@ -401,6 +403,25 @@ async function main() {
       !backlinksFromIpc.some((item) => item.docId === 'doc_b'),
       JSON.stringify(backlinksFromIpc))
 
+    // 关系索引：强制重建时真读正文，二次查询必须完全命中索引（parsed=0）。
+    const forceRelations = await page.evaluate(async (dir) => (
+      window.electronAPI.invoke('fs:listDocumentRelations', dir, 'doc_b', true)
+    ), WORKDIR)
+    check('统一查询一次返回入链 / 出链与索引统计',
+      Array.isArray(forceRelations?.incoming) && Array.isArray(forceRelations?.outgoing) &&
+      forceRelations.incoming.some((item) => item.docId === 'doc_a') &&
+      forceRelations.parsed > 0,
+      JSON.stringify({ incoming: forceRelations?.incoming?.length, outgoing: forceRelations?.outgoing?.length, parsed: forceRelations?.parsed }))
+    check('强制重建时落盘关系索引文件',
+      fs.existsSync(path.join(WORKDIR, '.topomind', 'doc-relations.json')))
+    const cachedRelations = await page.evaluate(async (dir) => (
+      window.electronAPI.invoke('fs:listDocumentRelations', dir, 'doc_b', false)
+    ), WORKDIR)
+    check('二次查询完全命中索引（parsed=0，不再读全库正文）',
+      cachedRelations?.parsed === 0 && cachedRelations?.indexed > 0 &&
+      cachedRelations.incoming.some((item) => item.docId === 'doc_a'),
+      JSON.stringify({ parsed: cachedRelations?.parsed, indexed: cachedRelations?.indexed }))
+
     // chip 点击必须按 docId 反查真实归属节点，不能把内容写进当前节点。
     await page.evaluate(() => {
       document.querySelector('.tm-doc-link-chip')?.dispatchEvent(new MouseEvent('mousedown', {
@@ -415,7 +436,12 @@ async function main() {
     await sleep(1200)
     const backlinksPanel = await waitFor(page, () => !!document.querySelector('[data-tm-backlinks-panel]'), 6000)
     const backlinkItem = await waitFor(page, () => !!document.querySelector('[data-tm-backlink-item="doc_a"]'), 9000)
-    check('「被引用」侧栏页列出引用了 doc_b 的 doc_a', backlinksPanel && backlinkItem)
+    check('「引用了本页」上栏列出引用了 doc_b 的 doc_a', backlinksPanel && backlinkItem)
+    check('引用关系页拆成上下两个栏', await page.evaluate(() =>
+      !!document.querySelector('[data-tm-relations-incoming]') &&
+      !!document.querySelector('[data-tm-relations-outgoing]')))
+    check('doc_a 条目确实落在上栏内', await page.evaluate(() =>
+      !!document.querySelector('[data-tm-relations-incoming] [data-tm-backlink-item="doc_a"]')))
     await page.evaluate(() => document.querySelector('[data-tm-backlink-item="doc_a"]')?.click())
     await sleep(1600)
     check('反向链接条目跳回引用者 doc_a', await waitFor(page, () => [...document.querySelectorAll('button')]
@@ -439,6 +465,20 @@ async function main() {
       check('粘贴含 data-doc-id 的引用 HTML 后仍是可点击 chip', await page.evaluate(() =>
         !!document.querySelector('.tm-doc-link-chip[data-doc-id="doc_extra_0"]')))
     }
+
+    // 跳回 doc_a 后打开引用关系页：下栏「本页引用了」必须列出 doc_a 正文里的目标。
+    await page.evaluate(() => document.querySelector('[data-tm-backlinks-header]')?.click())
+    await sleep(1300)
+    check('「本页引用了」下栏列出 doc_a 引用的 doc_b', await waitFor(page, () =>
+      !!document.querySelector('[data-tm-relations-outgoing] [data-tm-outgoing-item="doc_b"]'), 9000))
+    check('下栏条目状态可点击（目标文档仍存在）', await page.evaluate(() => {
+      const item = document.querySelector('[data-tm-relations-outgoing] [data-tm-outgoing-item="doc_b"]')
+      return !!item && !item.hasAttribute('disabled')
+    }))
+    await page.evaluate(() => document.querySelector('[data-tm-relations-outgoing] [data-tm-outgoing-item="doc_b"]')?.click())
+    await sleep(1600)
+    check('下栏条目按 docId 跳回目标文档 doc_b', await waitFor(page, () => [...document.querySelectorAll('button')]
+      .some((b) => (b.getAttribute('title') || '').includes('node-b/_docs/doc_b.tdoc.json')), 9000))
   } finally {
     browser.disconnect()
     if (spawned) spawned.kill()

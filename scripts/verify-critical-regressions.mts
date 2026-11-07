@@ -2789,6 +2789,18 @@ const edge = (
   assert.deepEqual(mapped.metadata, nestedBody.metadata, '重映射必须整体展开正文，不得按字段白名单重建')
   assert.equal(idService.mapDocumentLinkIds(nestedBody, (id: string) => id) === nestedBody, true, '无改动必须返回原引用，避免无谓写盘')
 
+  // 关系索引构建靠一次遍历拿到全部出链目标（不能对每个目标各扫一遍正文）。
+  const targets = idService.collectDocumentLinkTargets(nestedBody)
+  assert.deepEqual(
+    { doc_target: targets.doc_target, doc_other: targets.doc_other },
+    {
+      doc_target: { count: 2, title: '目标文档' },
+      doc_other: { count: 1, title: '其它' },
+    },
+    'collectDocumentLinkTargets 必须一次遍历给出目标次数与标题快照',
+  )
+  assert.equal(idService.collectDocumentLinkTargets(nestedBody).doc_none, undefined, '不存在的目标不得进索引')
+
   // 正文 normalize 不得吞掉自定义行内内容（历史上「只在返回类型加字段」踩过坑）。
   const normalizedDocLink = normalizeSmartDocumentContent(
     { schema: 'topomind.smart-document', version: 1, blocks: nestedBody.blocks },
@@ -2813,13 +2825,25 @@ const edge = (
       edges: [],
     },
   }
-  const put = (p: string, value: unknown) => fileContents.set(p, JSON.stringify(value))
+  const statVersions = new Map<string, number>()
+  let statSeq = 0
+  const put = (p: string, value: unknown) => {
+    fileContents.set(p, JSON.stringify(value))
+    statVersions.set(p, ++statSeq)
+  }
   const fsMock = {
     existsSync: (p: string) => fileContents.has(p) || dirs.has(p),
     readdirSync: (p: string) => (dirs.get(p) ?? []).map((name) => ({
       name,
       isDirectory: () => dirs.has(`${p}/${name}`),
     })),
+    // 关系索引用 mtimeMs/size/ctimeMs 做签名；put 一次视为一次真实写盘。
+    statSync: (p: string) => {
+      const body = fileContents.get(p)
+      if (body === undefined) throw new Error('ENOENT: ' + p)
+      const version = statVersions.get(p) ?? 0
+      return { mtimeMs: version, ctimeMs: version, size: body.length }
+    },
   }
   dirs.set('/kb', ['KB1'])
   dirs.set('/kb/KB1', ['_graph.json', 'card-a'])
@@ -2855,6 +2879,7 @@ const edge = (
     writeGraphMeta: (_root: string, roomPath: string, meta: unknown) => { graphs[roomPath] = meta },
     readJsonFile: (p: string) => JSON.parse(fileContents.get(p) ?? '{}'),
     writeJsonFile: (p: string, value: unknown) => put(p, value),
+    statSync: fsMock.statSync,
     listTrashItems: () => [],
   })
 
@@ -2879,7 +2904,140 @@ const edge = (
   assert.deepEqual(srcAfter.metadata, nestedBody.metadata, '正文改写不得丢未知顶层字段')
   assert.deepEqual(service.rewriteDocumentIdReferences('/root', {}), { linkedDocuments: 0, documents: 0 }, '空 remap 不得写盘')
 
-  // 跨进程接线：白名单 / IPC / 存储四层 / 编辑器注册 / 右栏打开 / 被引用页。
+  // ---- 关系索引真跑：首次全扫 → 二次命中 → 增量重解析 → 强制重建 → 损坏自愈 ----
+  // 独立 fixture，避免与上面的 idRemap 场景相互干扰。
+  const relDirs = new Map<string, string[]>()
+  const relFiles = new Map<string, string>()
+  const relVersions = new Map<string, number>()
+  let relSeq = 1000
+  const relPut = (p: string, value: unknown) => {
+    relFiles.set(p, JSON.stringify(value))
+    relVersions.set(p, ++relSeq)
+  }
+  const relStat = (p: string) => {
+    const body = relFiles.get(p)
+    if (body === undefined) throw new Error('ENOENT: ' + p)
+    const version = relVersions.get(p) ?? 0
+    return { mtimeMs: version, ctimeMs: version, size: body.length }
+  }
+  const relFs = {
+    existsSync: (p: string) => relFiles.has(p) || relDirs.has(p),
+    readdirSync: (p: string) => (relDirs.get(p) ?? []).map((name) => ({
+      name, isDirectory: () => relDirs.has(`${p}/${name}`),
+    })),
+    statSync: relStat,
+  }
+  const relGraphs: Record<string, any> = {
+    Alpha: { children: { 'card-x': { name: '节点 X' } }, edges: [] },
+  }
+  relDirs.set('/kb', ['Alpha'])
+  relDirs.set('/kb/Alpha', ['_graph.json', 'card-x'])
+  relDirs.set('/kb/Alpha/card-x', ['_docs'])
+  relDirs.set('/kb/Alpha/card-x/_docs', ['tree.json', 'doc_p.tdoc.json', 'doc_q.tdoc.json', 'doc_r.tdoc.json'])
+  relPut('/kb/Alpha/_graph.json', { version: 2, zoom: 1, pan: { x: 0, y: 0 } })
+  const relManifest = {
+    version: 2,
+    documents: {
+      doc_p: { id: 'doc_p', type: 'smart', title: 'P 文档', path: 'doc_p.tdoc.json' },
+      doc_q: { id: 'doc_q', type: 'smart', title: 'Q 文档', path: 'doc_q.tdoc.json' },
+      doc_r: { id: 'doc_r', type: 'smart', title: 'R 文档', path: 'doc_r.tdoc.json' },
+    },
+  }
+  const relDocsDir = '/kb/Alpha/card-x/_docs'
+  relPut(`${relDocsDir}/tree.json`, relManifest)
+  const pBody = (withExtra: boolean) => ({
+    schema: 'topomind.smart-document',
+    id: 'doc_p',
+    blocks: [{ type: 'paragraph', content: [
+      docLinkModel.createDocumentLinkInlineContent('doc_q', 'Q 文档'),
+      docLinkModel.createDocumentLinkInlineContent('doc_q', 'Q 文档'),
+      docLinkModel.createDocumentLinkInlineContent('doc_gone', '已删除的文档'),
+      ...(withExtra ? [docLinkModel.createDocumentLinkInlineContent('doc_r', 'R 文档')] : []),
+    ] }],
+  })
+  relPut(`${relDocsDir}/doc_p.tdoc.json`, pBody(false))
+  relPut(`${relDocsDir}/doc_q.tdoc.json`, {
+    schema: 'topomind.smart-document', id: 'doc_q',
+    blocks: [{ type: 'paragraph', content: [docLinkModel.createDocumentLinkInlineContent('doc_r', 'R 文档')] }],
+  })
+  relPut(`${relDocsDir}/doc_r.tdoc.json`, { schema: 'topomind.smart-document', id: 'doc_r', blocks: [] })
+
+  const makeRelService = (
+    statSync: (p: string) => any = relStat,
+    writer: (p: string, value: unknown) => void = relPut,
+  ) => idService.createDocumentIndexService({
+    fs: relFs,
+    path: posix,
+    requireValidWorkDir: (d: string) => d,
+    resolveKbsPath: (_root: string, rel: string) => (rel ? `/kb/${rel}` : '/kb'),
+    readTopoManifest: () => relManifest,
+    readGraphMeta: (_root: string, roomPath: string) => relGraphs[roomPath] ?? { children: {} },
+    writeGraphMeta: () => {},
+    readJsonFile: (p: string) => JSON.parse(relFiles.get(p) ?? '{}'),
+    writeJsonFile: writer,
+    statSync,
+    listTrashItems: () => [],
+  })
+  const relService = makeRelService()
+
+  const first = relService.listDocumentRelations('/root', 'doc_q')
+  assert.equal(first.parsed, 3, '首次查询必须真读并解析 3 篇正文以构建关系索引')
+  assert.equal(first.indexed, 3, '索引必须覆盖全部 3 篇文档')
+  assert.equal(relFiles.has('/root/.topomind/doc-relations.json'), true, '关系索引必须落盘到工作区根 .topomind/')
+  assert.equal(first.incoming.length, 1, 'doc_q 的入链只应来自 doc_p')
+  assert.equal(first.incoming[0].docId, 'doc_p', '入链条目必须指向引用者')
+  assert.equal(first.incoming[0].references, 2, '同一文档两处引用要累计')
+  assert.equal(first.incoming[0].status, 'ok', '入链条目状态必须为 ok')
+  assert.equal(first.outgoing.length, 1, 'doc_q 的出链只应指向 doc_r')
+  assert.equal(first.outgoing[0].docId, 'doc_r', '出链必须取当前文档正文里的目标')
+  assert.equal(first.outgoing[0].breadcrumb, 'Alpha / 节点 X', '出链面包屑必须走主进程统一格式')
+
+  const second = relService.listDocumentRelations('/root', 'doc_q')
+  assert.equal(second.parsed, 0, '二次查询必须完全命中关系索引，不再读任何正文（性能回归防线）')
+  assert.equal(second.indexed, 3, '命中索引时数据仍完整')
+  assert.equal(second.incoming[0].references, 2, '命中索引不得丢失引用次数')
+
+  // 只改一篇正文：签名自愈应只重解析那一篇，其余继续复用索引。
+  relPut(`${relDocsDir}/doc_p.tdoc.json`, pBody(true))
+  const incremental = relService.listDocumentRelations('/root', 'doc_r')
+  assert.equal(incremental.parsed, 1, '只有签名变化的那一篇才重新读正文')
+  assert.equal(incremental.incoming.length, 2, '新增引用必须立刻出现在入链里（doc_q 与 doc_p）')
+
+  const forced = relService.listDocumentRelations('/root', 'doc_q', { force: true })
+  assert.equal(forced.parsed, 3, 'force=true 必须忽略缓存全量重建')
+
+  const gone = relService.listDocumentRelations('/root', 'doc_p').outgoing
+    .find((item: any) => item.docId === 'doc_gone')
+  assert.equal(gone?.status, 'missing', '引用了不存在文档时必须标 missing')
+  assert.equal(gone?.title, '已删除的文档', 'missing 条目要用 chip 上的标题快照')
+  assert.equal(gone?.references, 1, 'missing 条目仍要保留引用次数')
+
+  // 索引损坏 / 版本不符必须自动重建，不能静默返回空关系。
+  relPut('/root/.topomind/doc-relations.json', { version: 999, rooms: {} })
+  const recovered = relService.listDocumentRelations('/root', 'doc_q')
+  assert.equal(recovered.parsed, 3, '索引损坏必须自动全量重建')
+  assert.equal(recovered.incoming.length, 1, '重建后关系必须完整')
+
+  // 反向验证：签名恒变（等价于「不做缓存」）时每次都必须全量重解析，
+  // 证明上面 parsed=0 的断言确实测到了索引命中，而不是根本没扫到文档。
+  let unstableSeq = 50000
+  const unstable = makeRelService((p: string) => {
+    const body = relFiles.get(p)
+    if (body === undefined) throw new Error('ENOENT: ' + p)
+    unstableSeq += 1
+    return { mtimeMs: unstableSeq, ctimeMs: unstableSeq, size: body.length }
+  })
+  unstable.listDocumentRelations('/root', 'doc_q')
+  const unstableSecond = unstable.listDocumentRelations('/root', 'doc_q')
+  assert.equal(unstableSecond.parsed, 3, '反向验证：签名恒变时每次都必须全量读正文')
+
+  // 索引只是派生缓存：写盘失败不得阻断本次查询。
+  const noWriteService = makeRelService(relStat, () => { throw new Error('EACCES: index read-only') })
+  const resilient = noWriteService.listDocumentRelations('/root', 'doc_q', { force: true })
+  assert.equal(resilient.parsed, 3, '索引写盘失败时仍必须真跑解析')
+  assert.equal(resilient.incoming.length, 1, '索引写盘失败时查询仍必须返回正确关系')
+
+  // 跨进程接线：白名单 / IPC / 存储四层 / 编辑器注册 / 右栏打开 / 引用关系页。
   const preloadSource = await readFile(new URL('../electron/preload.js', import.meta.url), 'utf-8')
   const mainSource = await readFile(new URL('../electron/main.js', import.meta.url), 'utf-8')
   const fsSource = await readFile(new URL('../electron/file-service.js', import.meta.url), 'utf-8')
@@ -2894,6 +3052,9 @@ const edge = (
   const hostSource = await readFile(new URL('../src/features/documents/DocumentEditorHost.tsx', import.meta.url), 'utf-8')
   const workspaceLayoutSource = await readFile(new URL('../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx', import.meta.url), 'utf-8')
   const detailPanelSource = await readFile(new URL('../src/features/right-panel/components/DetailTab/DetailPanel.tsx', import.meta.url), 'utf-8')
+  const idSource = await readFile(new URL('../electron/services/document-id-service.js', import.meta.url), 'utf-8')
+  const relationPanelSource = await readFile(new URL('../src/features/right-panel/components/DetailTab/DocumentRelationPanel.tsx', import.meta.url), 'utf-8')
+  const relationHookSource = await readFile(new URL('../src/features/right-panel/model/useDocumentRelations.ts', import.meta.url), 'utf-8')
 
   assert.ok(preloadSource.includes("'fs:listDocumentBacklinks'"), '反向链接通道必须在 preload 白名单里')
   assert.ok(mainSource.includes("ipcMain.handle('fs:listDocumentBacklinks'"), '反向链接通道必须注册 IPC handler')
@@ -2909,11 +3070,37 @@ const edge = (
   assert.ok(registrySource.includes('onOpenDocumentByDocId={onOpenDocumentByDocId}'), 'adapter 必须把打开回调透传给编辑器')
   assert.ok(hostSource.includes('onOpenDocumentByDocId,'), 'DocumentEditorHost 不得再把打开回调吞掉')
   assert.equal(hostSource.includes('onOpenDetailDocumentLink'), false, '历史死链 onOpenDetailDocumentLink 必须清除')
-  assert.ok(workspaceLayoutSource.includes("'backlinks'"), '右栏必须有「被引用」侧栏页')
-  assert.ok(detailPanelSource.includes('backlinksTabContent={backlinksTabContent}'), '右栏必须挂载被引用列表')
+  assert.ok(workspaceLayoutSource.includes("'backlinks'"), '右栏必须有引用关系侧栏页')
+  assert.ok(detailPanelSource.includes('backlinksTabContent={backlinksTabContent}'), '右栏必须挂载引用关系面板')
   assert.ok(detailPanelSource.includes('storage.resolveDocumentById(id)'), '点击引用必须按 docId 反查真实归属，不信任 chip 缓存')
   assert.ok(detailPanelSource.includes('await flushDocumentSave()'), '跨文档跳转前必须先落盘当前草稿')
   assert.ok(detailPanelSource.includes('onOpenDocumentByDocId={(docId: string)'), '右栏必须把按 docId 打开接到编辑器链路')
+
+  // 关系索引 / 出入链优化：必须真有落盘索引与签名自愈，不能退回每次全库读正文。
+  assert.ok(idSource.includes('export function collectDocumentLinkTargets('), '必须一次遍历提取全部出链目标')
+  assert.ok(idSource.includes('const saveRelationsIndex = '), '关系索引必须落盘复用')
+  assert.ok(idSource.includes('previous.signature !== bodySignature'), '必须按文件签名只重解析变化过的正文')
+  assert.ok(idSource.includes('const listDocumentBacklinks = (rootDir, docId) => listDocumentRelations('), '兼容入口必须委托统一查询，不得再全库读正文')
+  assert.ok(idSource.includes('const listDocumentRelations = '), '必须有出入链统一查询')
+  assert.ok(fsSource.includes('statSync: function(filePath)'), '主进程必须注入 statSync 供索引计算签名')
+  assert.ok(fsSource.includes('documentIndexService.listDocumentRelations('), 'file-service 必须暴露出入链统一查询')
+  assert.ok(preloadSource.includes("'fs:listDocumentRelations'"), 'fs:listDocumentRelations 必须在 preload 白名单里')
+  assert.ok(mainSource.includes("ipcMain.handle('fs:listDocumentRelations'"), '新通道必须注册 IPC handler')
+  assert.ok(fsbSource.includes("'fs:listDocumentRelations'"), 'fs-backend 必须发出新 IPC')
+  assert.ok(fileAdapterSource.includes('FSB.listDocumentRelations(requireRootDir(), docId, force)'), 'file backend 必须注入 rootDir 与 force')
+  assert.ok(storeSource.includes('backend.listDocumentRelations(docId, force)'), 'store 层必须透传统一查询')
+  assert.ok(typesSource.includes('listDocumentRelations: (docId: string, force?: boolean)'), 'StorageBackend 契约必须声明统一查询')
+
+  // 上下两栏：都要有独立容器、独立空态、独立 data 属性供 GUI 断言。
+  assert.ok(relationPanelSource.includes('data-tm-relations-incoming'), '必须有「引用了本页」上栏')
+  assert.ok(relationPanelSource.includes('data-tm-relations-outgoing'), '必须有「本页引用了」下栏')
+  assert.ok(relationPanelSource.includes('data-tm-backlinks-panel=""'), '必须保留兼容的面板根标识')
+  assert.ok(relationPanelSource.includes("title=\"引用了本页\"") && relationPanelSource.includes("title=\"本页引用了\""), '两栏标题必须语义清晰、避免「被引用」歧义')
+  assert.ok(relationPanelSource.includes('item.status === \'missing\''), '出链目标已删除时必须禁用跳转')
+  assert.ok(relationHookSource.includes('storage.listDocumentRelations(docId)'), '两栏必须共用一次 IPC 查询')
+  assert.ok(detailPanelSource.includes('useDocumentRelations('), '右栏必须挂到新的关系 hook')
+  assert.equal(detailPanelSource.includes('useDocumentBacklinks('), false, '旧的逐篇全扫 hook 必须清除')
+  assert.equal(workspaceLayoutSource.includes("'被引用'"), false, '侧栏标题不得再用有歧义的「被引用」')
 }
 
 console.log('Critical regression checks verified')
