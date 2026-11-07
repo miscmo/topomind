@@ -1,5 +1,6 @@
 import type { GraphMeta } from '../../domain/graph/model'
 import type { CardInfo } from '../../domain/graph/model'
+import type { EdgeRelationDefinition } from '../../domain/graph/edgeRelations'
 import type { KBListItem } from '../../types'
 import type { DefaultEdgeStyle, DefaultEditorStyle } from '../../domain/style/styleTypes'
 import type { FSBTrashItem, FSBTrashTopoDocumentItem, FSBDocumentCandidate } from '../fs-backend'
@@ -26,6 +27,10 @@ export interface VaultConfig {
   defaultEditorStyle?: Partial<DefaultEditorStyle>
   nodeSizeLimits?: { minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number }
   nodeBadgeSize?: number
+  /** 连线关系定义（内置 4 种 + 用户自定义），全局工作区共用 */
+  edgeRelations?: EdgeRelationDefinition[]
+  /** 是否在连线上显示关系名小标签 */
+  showEdgeRelationLabels?: boolean
   kbCovers?: Record<string, string>
   kbCoverOffsets?: Record<string, number>
   kbOrder?: string[]

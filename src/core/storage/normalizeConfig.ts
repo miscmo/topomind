@@ -1,4 +1,5 @@
-import { normalizeStyleConfig } from '../../domain/style/normalizeStyleConfig'
+import { normalizeStyleConfig } from '../../domain/style/normalizeStyleConfig.ts'
+import { normalizeEdgeRelationDefinitions } from '../../domain/graph/edgeRelations.ts'
 import type { VaultConfig } from './types'
 
 export function normalizeConfig(configRaw: unknown): VaultConfig {
@@ -21,6 +22,10 @@ export function normalizeConfig(configRaw: unknown): VaultConfig {
 
   return {
     ...styleConfig,
+    // 关系定义必须在这里显式重建：normalizeConfig 会丢弃所有未列出的字段，
+    // 漏一个就会让自定义关系写进 _config.json 后读回来凭空消失（字段白名单铁律）。
+    edgeRelations: normalizeEdgeRelationDefinitions(c.edgeRelations),
+    showEdgeRelationLabels: typeof c.showEdgeRelationLabels === 'boolean' ? c.showEdgeRelationLabels : true,
     kbCovers,
     kbCoverOffsets,
     kbOrder,

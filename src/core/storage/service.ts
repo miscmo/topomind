@@ -329,6 +329,14 @@ export function createStore(backend: StorageBackend) {
         if (config.kbCoverOffsets !== undefined) {
           nextConfig.kbCoverOffsets = config.kbCoverOffsets
         }
+        // 关系定义是数组，不能被上面的对象浅合并规则吞掉；显式透传后再交给
+        // normalizeConfig 做去除非法项 / 补齐内置项的归一化。
+        if (config.edgeRelations !== undefined) {
+          nextConfig.edgeRelations = config.edgeRelations
+        }
+        if (config.showEdgeRelationLabels !== undefined) {
+          nextConfig.showEdgeRelationLabels = config.showEdgeRelationLabels
+        }
         const next = normalizeConfig(nextConfig)
         cachedConfig = next
         await backend.writeConfig(next)

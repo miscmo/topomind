@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import type { DefaultEdgeStyle, DefaultNodeSize, DefaultNodeStyle, NodeSizeLimits, DefaultEditorStyle } from '../types/uiStoreTypes'
 import { STYLE_CONFIG_DEFAULTS } from '../domain/style/styleDefaults'
 import type { EdgeStylePatch, KnowledgeNodeStyle } from '../types'
+import { normalizeEdgeRelationDefinitions, type EdgeRelationDefinition } from '../domain/graph/edgeRelations'
 
 interface MiniMapSize {
   width: number
@@ -31,6 +32,10 @@ interface GraphUiStore {
   defaultEditorStyle: DefaultEditorStyle
   nodeSizeLimits: NodeSizeLimits
   nodeBadgeSize: number
+  /** 全局连线关系定义（由 _config.json hydrate，不进 localStorage） */
+  edgeRelations: EdgeRelationDefinition[]
+  /** 是否在连线上显示关系名小标签 */
+  showEdgeRelationLabels: boolean
   setShowMiniMap: (showMiniMap: boolean) => void
   setMiniMapSize: (miniMapSize: MiniMapSize) => void
   setSelectedEdgeId: (edgeId: string | null) => void
@@ -50,10 +55,12 @@ interface GraphUiStore {
   setNodeSizeLimits: (limits: Partial<NodeSizeLimits>) => void
   replaceNodeSizeLimits: (limits: NodeSizeLimits) => void
   setNodeBadgeSize: (size: number) => void
+  setEdgeRelations: (relations: EdgeRelationDefinition[]) => void
+  setShowEdgeRelationLabels: (visible: boolean) => void
   resetGraphUi: () => void
 }
 
-export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMap' | 'miniMapSize' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'edgeFormatPainterStyle' | 'isViewportZooming' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize'> = {
+export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMap' | 'miniMapSize' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'edgeFormatPainterStyle' | 'isViewportZooming' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize' | 'edgeRelations' | 'showEdgeRelationLabels'> = {
   showGrid: true,
   showMiniMap: true,
   miniMapSize: {
@@ -67,6 +74,8 @@ export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMa
   edgeFormatPainterStyle: null,
   isViewportZooming: false,
   ...STYLE_CONFIG_DEFAULTS,
+  edgeRelations: normalizeEdgeRelationDefinitions(undefined),
+  showEdgeRelationLabels: true,
 }
 
 export const useGraphUiStore = create<GraphUiStore>()(
@@ -102,6 +111,8 @@ export const useGraphUiStore = create<GraphUiStore>()(
       })),
       replaceNodeSizeLimits: (nodeSizeLimits) => set({ nodeSizeLimits }),
       setNodeBadgeSize: (nodeBadgeSize) => set({ nodeBadgeSize }),
+      setEdgeRelations: (edgeRelations) => set({ edgeRelations: normalizeEdgeRelationDefinitions(edgeRelations) }),
+      setShowEdgeRelationLabels: (showEdgeRelationLabels) => set({ showEdgeRelationLabels }),
       resetGraphUi: () => set({ ...GRAPH_UI_INITIAL_STATE }),
     }),
     {

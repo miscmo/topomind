@@ -1,5 +1,6 @@
 import type { Store } from '../../core/storage'
 import { normalizeStyleConfig } from '../../domain/style/normalizeStyleConfig'
+import { normalizeEdgeRelationDefinitions } from '../../domain/graph/edgeRelations'
 import { useGraphUiStore } from '../../stores/graphUiStore'
 
 type AppConfig = Awaited<ReturnType<Store['readConfig']>>
@@ -13,4 +14,6 @@ export function hydrateGraphUiConfig(config: AppConfig): void {
   graphUi.replaceDefaultEditorStyle(styleConfig.defaultEditorStyle)
   graphUi.replaceNodeSizeLimits(styleConfig.nodeSizeLimits)
   graphUi.setNodeBadgeSize(styleConfig.nodeBadgeSize)
+  graphUi.setEdgeRelations(normalizeEdgeRelationDefinitions(config.edgeRelations))
+  graphUi.setShowEdgeRelationLabels(config.showEdgeRelationLabels !== false)
 }
