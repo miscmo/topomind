@@ -1,5 +1,4 @@
-import type { DefaultEdgeStyle, DefaultEditorStyle, DefaultNodeStyle } from '../../../../types/uiStoreTypes'
-import { resolveEditorFontFamily } from '../../../../domain/style/styleDefaults'
+import type { DefaultEdgeStyle, DefaultNodeStyle } from '../../../../types/uiStoreTypes'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT } from '../../../../domain/style/styleConstraints'
 import { DEFAULT_CURVE_CONTROL, normalizeCurveControl } from '../../../../domain/graph/edgeCurve'
 
@@ -135,30 +134,6 @@ export function EdgeStylePreview({ style }: { style: DefaultEdgeStyle }) {
             markerEnd={showEnd ? 'url(#style-preview-arrow)' : undefined}
           />
         </svg>
-      </div>
-    </div>
-  )
-}
-
-export function EditorStylePreview({ style }: { style: DefaultEditorStyle }) {
-  return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-3 shadow-[var(--shadow-sm)]">
-      <div className="text-[12px] font-semibold text-[var(--color-text-secondary)] mb-2 flex items-center justify-between">
-        <span>智能文档预览</span>
-        <span className={`block h-5 w-9 tm-paper-thumb tm-paper-thumb--${style.paperBackground ?? 'plain'}`} />
-      </div>
-      <div
-        className="rounded-lg border border-[var(--color-border-subtle)] p-4 min-h-[132px]"
-        style={{
-          backgroundColor: style.backgroundColor,
-          color: style.textColor,
-          fontFamily: resolveEditorFontFamily(style.fontFamily),
-          fontSize: style.fontSize,
-          lineHeight: style.lineHeight,
-        }}
-      >
-        <div className="font-semibold mb-2">标题示例</div>
-        <p className="m-0">这是一段智能文档正文预览，用于确认字体、颜色、背景和行高。</p>
       </div>
     </div>
   )

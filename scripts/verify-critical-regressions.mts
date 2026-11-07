@@ -1992,11 +1992,6 @@ const edge = (
     assert.equal(source.includes('contentWidthRatio'), false, `${rel} 不得残留废弃的比例字段`)
   }
 
-  const editorStylePanel = await readFile(
-    new URL('../src/features/right-panel/components/StyleTab/EditorStylePanel.tsx', import.meta.url),
-    'utf-8',
-  )
-  assert.equal(editorStylePanel.includes('label="内容线宽"'), false, '右侧样式面板的旧配置入口必须移除')
   const vaultConfigTypes = await readFile(new URL('../src/core/storage/types.ts', import.meta.url), 'utf-8')
   assert.ok(
     vaultConfigTypes.includes('defaultEditorStyle?: Partial<DefaultEditorStyle>'),
@@ -2108,14 +2103,12 @@ const edge = (
   )
   assert.ok(styleControls.includes("export { PAPER_BACKGROUND_OPTIONS }"), '纸张选项必须只有一份定义')
 
-  const migratedPanel = await readFile(
-    new URL('../src/features/right-panel/components/StyleTab/EditorStylePanel.tsx', import.meta.url), 'utf-8',
+  const styleSection = await readFile(
+    new URL('../src/features/right-panel/components/StyleTab/StyleSection.tsx', import.meta.url), 'utf-8',
   )
-  assert.ok(migratedPanel.includes('data-tm-editor-style-migrated-hint'), '右栏必须留下迁移指引')
-  assert.ok(migratedPanel.includes('EditorStylePreview'), '右栏保留效果预览，但不保留设置入口')
-  for (const duplicate of ['NumberField', 'ColorField', 'PaperBackgroundGrid', 'PresetButtonGrid']) {
-    assert.equal(migratedPanel.includes(duplicate), false, `右栏不得再保留重复的 ${duplicate} 控件`)
-  }
+  assert.equal(styleSection.includes("'文档编辑器'"), false, '右栏样式面板必须移除「文档编辑器」分区入口')
+  assert.equal(styleSection.includes('EditorStylePanel'), false, '右栏不得再引用已删除的 EditorStylePanel')
+  assert.equal(styleSection.includes("activeTab === 'editor'"), false, '右栏不得再渲染编辑器样式面板')
 
   assert.ok(topToolbar.includes('data-tm-editor-style-trigger=""'), '顶部工具栏必须有样式入口按钮')
   assert.ok(topToolbar.includes('onChange={onStyleChange}'), '样式浮层必须接到全局写盘回调')

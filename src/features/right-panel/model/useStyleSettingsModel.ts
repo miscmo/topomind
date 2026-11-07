@@ -42,7 +42,6 @@ export function useStyleSettingsModel(active = true) {
   const setDefaultNodeSize = useGraphUiStore((s) => s.setDefaultNodeSize)
   const setNodeSizeLimits = useGraphUiStore((s) => s.setNodeSizeLimits)
   const setNodeBadgeSize = useGraphUiStore((s) => s.setNodeBadgeSize)
-  const defaultEditorStyle = useGraphUiStore((s) => s.defaultEditorStyle)
 
   const graph = useGraphContext()
 
@@ -270,7 +269,6 @@ export function useStyleSettingsModel(active = true) {
       nodeSizeLimits,
       nodeBadgeSize,
       defaultEdgeStyle,
-      defaultEditorStyle,
       currentNodeStyle,
       currentNodeWidth,
       currentNodeHeight,

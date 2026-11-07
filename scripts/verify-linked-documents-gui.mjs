@@ -623,21 +623,16 @@ async function main() {
       button?.click()
     })
     await sleep(500)
-    // 右栏「文档编辑器」分区现在只剩预览 + 迁移指引，不能再有重复的设置控件
-    await page.evaluate(() => {
+    // 右栏「文档编辑器」分区入口已整体移除：编辑器样式设置全部在顶部工具栏「样式」浮层
+    const editorTabExists = await page.evaluate(() => {
       const group = document.querySelector('[role="radiogroup"][aria-label="样式面板分区"]')
-      const button = Array.from(group?.querySelectorAll('button') ?? [])
-        .find((item) => item.textContent?.trim() === '文档编辑器')
-      button?.click()
+      return Array.from(group?.querySelectorAll('button') ?? [])
+        .some((item) => item.textContent?.trim() === '文档编辑器')
     })
-    const migratedHint = await waitFor(page, () => !!document.querySelector('[data-tm-editor-style-migrated-hint]'), 6000)
-    const duplicateControls = await page.evaluate(() => {
-      const hint = document.querySelector('[data-tm-editor-style-migrated-hint]')
-      if (!hint) return -1
-      return hint.parentElement?.querySelectorAll('input[type="number"], input[type="color"], select').length ?? -1
-    })
-    check('右栏「文档编辑器」只剩迁移指引与预览', migratedHint && duplicateControls === 0,
-      `duplicate=${duplicateControls}`)
+    check('右栏「文档编辑器」入口已移除', editorTabExists === false)
+    check('右栏迁移指引已移除', await page.evaluate(
+      () => !document.querySelector('[data-tm-editor-style-migrated-hint]'),
+    ))
 
     await page.evaluate(() => {
       const group = document.querySelector('[role="radiogroup"][aria-label="样式面板分区"]')

@@ -1,7 +1,6 @@
 import { memo } from 'react'
 import { NodeStylePanel } from './NodeStylePanel'
 import { EdgeStylePanel } from './EdgeStylePanel'
-import { EditorStylePanel } from './EditorStylePanel'
 import { EdgeRelationPanel } from './EdgeRelationPanel'
 import { useStyleSettingsModel } from '../../model/useStyleSettingsModel'
 import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
@@ -24,7 +23,6 @@ export default memo(function StyleSection({ active = true }: { active?: boolean 
     nodeSizeLimits,
     nodeBadgeSize,
     defaultEdgeStyle,
-    defaultEditorStyle,
     currentNodeStyle,
     currentNodeWidth,
     currentNodeHeight,
@@ -62,7 +60,6 @@ export default memo(function StyleSection({ active = true }: { active?: boolean 
           options={[
             { label: '节点卡片', value: 'nodes' },
             { label: '连线样式', value: 'edges' },
-            { label: '文档编辑器', value: 'editor' },
             { label: '连线关系', value: 'relations' },
           ]}
           value={activeTab}
@@ -126,10 +123,6 @@ export default memo(function StyleSection({ active = true }: { active?: boolean 
 
         {activeTab === 'relations' && (
           <EdgeRelationPanel />
-        )}
-
-        {activeTab === 'editor' && (
-          <EditorStylePanel defaultEditorStyle={defaultEditorStyle} />
         )}
       </div>
     </div>
