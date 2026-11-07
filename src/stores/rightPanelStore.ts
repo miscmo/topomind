@@ -15,8 +15,8 @@ import type { RightPanelTab } from '../types/uiStoreTypes'
 /** 右侧面板宽度下限兜底（像素），防止出现极小值/损坏值。真正可拖拽范围按窗口比例在容器层计算。 */
 const RIGHT_PANEL_WIDTH_FLOOR = 280
 
-/** 样式面板内部的小 Tab（节点 / 连线 / 编辑器） */
-export type StylePanelTab = 'nodes' | 'edges' | 'editor'
+/** 样式面板内部的小 Tab（节点 / 连线 / 编辑器 / 连线关系） */
+export type StylePanelTab = 'nodes' | 'edges' | 'editor' | 'relations'
 
 interface RightPanelStore {
   rightPanelCollapsed: boolean
