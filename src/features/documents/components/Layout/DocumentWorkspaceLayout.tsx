@@ -540,8 +540,8 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               type="button"
               className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'backlinks' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-inset-highlight)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
               onClick={() => handleRailTabClick('backlinks')}
-              title="被引用：查看全库中引用了当前文档的文档"
-              aria-label="被引用"
+              title="引用关系：谁引用了本页 / 本页引用了谁"
+              aria-label="引用关系"
               data-tm-backlinks-rail=""
             >
               引
@@ -565,7 +565,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               {showSidebarContent ? (
                 <div className="w-full min-w-0 flex items-center justify-center h-[30px] text-center">
                   <span className="text-[14px] font-bold text-[var(--color-text-primary)] truncate">
-                    {detailSidebarTab === 'documents' ? (detailNodeTitle || '文档') : detailSidebarTab === 'attachments' ? '附件' : '被引用'}
+                    {detailSidebarTab === 'documents' ? (detailNodeTitle || '文档') : detailSidebarTab === 'attachments' ? '附件' : '引用关系'}
                   </span>
                 </div>
               ) : (

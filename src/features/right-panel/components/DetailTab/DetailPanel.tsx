@@ -27,8 +27,8 @@ import { syncLinkedDocumentsToGraph, useLinkedDocumentStore } from '../../../gra
 import { DocumentBreadcrumb } from './DocumentBreadcrumb'
 import { DocumentMoveToNodeDialog } from '../../../documents/components/DocumentMoveToNodeDialog'
 import { LinkedDocumentList } from './LinkedDocumentList'
-import { DocumentBacklinkList } from './DocumentBacklinkList'
-import { useDocumentBacklinks } from '../../model/useDocumentBacklinks'
+import { DocumentRelationPanel } from './DocumentRelationPanel'
+import { useDocumentRelations } from '../../model/useDocumentRelations'
 
 interface DetailPanelProps {
   tabId: string
@@ -207,13 +207,17 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
     syncHasDetail: detailView === 'own',
   })
 
-  // 文档双链「被引用」：只在切到该侧栏页时才打 IPC 全库扫描，避免每次切文档都扫 2000+ 篇正文。
-  const backlinksEnabled = isActive && detailSidebarTab === 'backlinks' && Boolean(activeTopoDocumentId)
+  // 「引用关系」：只在切到该侧栏页时才打 IPC。主进程走关系索引 + 签名自愈，
+  // 出入链由一次查询同时返回，上下两栏共用，不再每次读全库 2000+ 篇正文。
+  const relationsEnabled = isActive && detailSidebarTab === 'backlinks' && Boolean(activeTopoDocumentId)
   const {
-    items: backlinks,
-    loading: backlinksLoading,
-    refresh: refreshBacklinks,
-  } = useDocumentBacklinks(activeTopoDocumentId, backlinksEnabled)
+    incoming,
+    outgoing,
+    parsed,
+    indexed,
+    loading: relationsLoading,
+    refresh: refreshRelations,
+  } = useDocumentRelations(activeTopoDocumentId, relationsEnabled)
 
   const [detailSidebarCollapsed, setDetailSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('topomind_detail_sidebar_collapsed')
@@ -401,13 +405,16 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
   ])
 
   const backlinksTabContent = useMemo(() => (
-    <DocumentBacklinkList
-      items={backlinks}
-      loading={backlinksLoading}
+    <DocumentRelationPanel
+      incoming={incoming}
+      outgoing={outgoing}
+      loading={relationsLoading}
+      parsed={parsed}
+      indexed={indexed}
       onOpen={(docId) => { void openDocumentByDocId(docId) }}
-      onRefresh={refreshBacklinks}
+      onRefresh={refreshRelations}
     />
-  ), [backlinks, backlinksLoading, openDocumentByDocId, refreshBacklinks])
+  ), [incoming, outgoing, parsed, indexed, relationsLoading, openDocumentByDocId, refreshRelations])
 
   const linkedSidebarContent = useMemo(() => (detailView === 'linked' ? (
     <LinkedDocumentList
@@ -476,8 +483,8 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
                               ? 'opacity-100 text-[var(--color-primary)]'
                               : 'opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)]'
                           }`}
-                          title="被引用：查看全库中引用了当前文档的文档"
-                          aria-label="被引用"
+                          title="引用关系：查看谁引用了本页，以及本页引用了谁"
+                          aria-label="引用关系"
                           onClick={() => {
                             setDetailSidebarTabSafe('backlinks')
                             handleDetailSidebarCollapsedChange(false)
