@@ -75,6 +75,10 @@ import {
   stripClipboardMetaTags,
   convertMarkdownWithMathToHtml,
 } from '../src/features/documents/SmartDocumentEditor/mathPaste.ts'
+import {
+  normalizeMathSource,
+  renderMathToHtml,
+} from '../src/features/documents/SmartDocumentEditor/mathRender.ts'
 import { SaveCoordinator } from '../src/domain/persistence/saveCoordinator.ts'
 import {
   flushTabs,
@@ -3101,6 +3105,88 @@ const edge = (
   assert.ok(detailPanelSource.includes('useDocumentRelations('), '右栏必须挂到新的关系 hook')
   assert.equal(detailPanelSource.includes('useDocumentBacklinks('), false, '旧的逐篇全扫 hook 必须清除')
   assert.equal(workspaceLayoutSource.includes("'被引用'"), false, '侧栏标题不得再用有歧义的「被引用」')
+}
+
+// --- 公式渲染：中文 / 全角字符不得再刷 KaTeX unicodeTextInMathMode 警告 ---
+// 这些是磁盘真实笔记里出现过的公式源码：既有合法写法（\text{}、全角标点、中文
+// 当变量名），也有粘贴时把中文正文误判成 $...$ 公式的产物。它们已经落盘，
+// 只能靠渲染前规范化解决，改写入口救不回来。
+{
+  const realMathSamples: Array<[string, boolean]> = [
+    ['SCR = \\frac{\\text{符合苏格拉底引导原则的轮数}}{\\text{总回复轮数}}', true],
+    ['（R = k_1 \\cdot \\lambda / NA）', false],
+    ['量比=当日每分钟平均成交量/过去5日每分钟平均成交量', true],
+    ['P（B／A）＝P（AB）／P（A）＝（1／4）／（3／4）＝1／3', false],
+    ['2^{树深度 - 1}', false],
+    ['grid[i][j][k] = min(grid[i][k][k - 1] + grid[k][j][k - 1]， grid[i][j][k - 1])', false],
+    ['长 * 宽', false],
+    ['O(m + n)）', false],
+    ['拆解i - j的最大乘积 * 拆解j的最大乘积', false],
+    ['（y+z）', false],
+    ['HOME/src/目录下的所有文件复制到远程主机的', false],
+    ['n，n代表一个数字，0为执行的文件名，1为第一个参数，2为第二个参数，以此类推...大于等于10的参数，需要加大括号，如', false],
+    ['((1 + 2))|计算 1+2 赋值给 num，使用 bash 独有的 ', false],
+    ['|检测字符串是否为空，不为空返回true|[ ', false],
+  ]
+
+  const originalWarn = console.warn
+  const capturedWarnings: string[] = []
+  console.warn = (...args: unknown[]): void => {
+    capturedWarnings.push(args.map(String).join(' '))
+  }
+  try {
+    for (const [source, displayMode] of realMathSamples) {
+      renderMathToHtml(source, displayMode)
+    }
+  } finally {
+    console.warn = originalWarn
+  }
+  const unicodeWarnings = capturedWarnings.filter((line) => line.includes('unicodeTextInMathMode'))
+  assert.equal(
+    unicodeWarnings.length,
+    0,
+    `真实公式渲染不得再逐字刷 unicodeTextInMathMode 警告: ${unicodeWarnings[0] ?? ''}`,
+  )
+  assert.equal(
+    capturedWarnings.length,
+    0,
+    `真实公式渲染不得产生任何 KaTeX 严格警告: ${capturedWarnings[0] ?? ''}`,
+  )
+
+  // 规范化语义：全角转半角保住公式结构、裸中文整体进 text mode、已有 \text 不二次包装。
+  assert.equal(normalizeMathSource('P（B／A）＝P（AB）'), 'P(B/A)=P(AB)', '全角标点必须映射成半角等价形式')
+  assert.equal(normalizeMathSource('长 * 宽'), '\\text{长} * \\text{宽}', '裸中文必须包进 \\text{}')
+  assert.equal(normalizeMathSource('2^{树深度 - 1}'), '2^{\\text{树深度} - 1}', '上标里的中文变量名不得破坏 ^ 结构')
+  assert.equal(
+    normalizeMathSource('\\text{符合苏格拉底引导原则的轮数}'),
+    '\\text{符合苏格拉底引导原则的轮数}',
+    '已有的 text-mode 分组必须原样保留',
+  )
+  assert.equal(
+    normalizeMathSource('\\frac{1}{2} + \\alpha \\leq \\beta'),
+    '\\frac{1}{2} + \\alpha \\leq \\beta',
+    '纯 ASCII 与 Unicode 数学符号不得被改写',
+  )
+  assert.equal(normalizeMathSource(''), '', '空公式不得报错或凭空造内容')
+  for (const [source] of realMathSamples) {
+    const once = normalizeMathSource(source)
+    assert.equal(normalizeMathSource(once), once, `规范化必须幂等: ${source}`)
+  }
+
+  // 渲染入口真的把中文放进了 text mode（不是靠 strict:'ignore' 把警告藏起来）。
+  assert.ok(
+    renderMathToHtml('长 * 宽', false).includes('mtext'),
+    '中文必须渲染成 KaTeX text mode，不能停在 math mode 的缺字方框',
+  )
+
+  const mathSupportSource = await readFile(new URL('../src/features/documents/SmartDocumentEditor/mathSupport.tsx', import.meta.url), 'utf-8')
+  const mathRenderSource = await readFile(new URL('../src/features/documents/SmartDocumentEditor/mathRender.ts', import.meta.url), 'utf-8')
+  assert.ok(mathSupportSource.includes("from './mathRender'"), '行内 / 块级公式必须共用唯一渲染入口')
+  assert.equal(mathSupportSource.includes('katex.renderToString'), false, '编辑器组件不得再直接调 KaTeX（会绕过规范化）')
+  assert.equal(mathSupportSource.includes("from 'katex'"), false, '编辑器组件不得再直接依赖 katex')
+  assert.ok(mathRenderSource.includes('katex.renderToString(normalizeMathSource(latex)'), '渲染入口必须真的调用规范化')
+  const renderFnBody = mathRenderSource.slice(mathRenderSource.indexOf('export function renderMathToHtml'))
+  assert.equal(/\bstrict\s*:/.test(renderFnBody), false, '渲染入口不得用 strict 忽略档屏蔽警告，否则零警告断言会失效')
 }
 
 console.log('Critical regression checks verified')
