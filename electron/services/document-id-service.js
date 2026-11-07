@@ -25,8 +25,72 @@ export const DOCUMENT_EXTENSIONS = {
 }
 export const TOPO_DOCUMENT_DIR = '_docs'
 export const TOPO_DOCUMENT_MANIFEST = 'tree.json'
+/** 文档双链的行内引用类型名，必须与渲染层 docLinkModel.ts 保持一致。 */
+export const DOC_LINK_INLINE_TYPE = 'docLink'
 
 const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value)
+
+/**
+ * 统计正文中指向 docId 的 docLink 行内引用数量。
+ * 正文是 BlockNote 的 blocks 数组，引用可能嵌在 columnList / 表格 / 列表的任意层级，
+ * 因此必须递归遍历而不是只看顶层 content。JSON 无环，仍用深度上限兜住异常档。
+ */
+export function countDocumentLinks(content, docId, depth = 0) {
+  if (!content || depth > 64) return 0
+  if (Array.isArray(content)) {
+    return content.reduce((total, item) => total + countDocumentLinks(item, docId, depth + 1), 0)
+  }
+  if (!isPlainObject(content)) return 0
+  let total = 0
+  if (
+    content.type === DOC_LINK_INLINE_TYPE &&
+    isPlainObject(content.props) &&
+    content.props.docId === docId
+  ) {
+    total += 1
+  }
+  for (const child of Object.values(content)) {
+    total += countDocumentLinks(child, docId, depth + 1)
+  }
+  return total
+}
+
+/**
+ * 批量改写正文里的 docLink 目标 id（docId 因冲突被重新分配时使用）。
+ * 整体展开、只改命中项，绝不按字段白名单重建正文；无改动时返回原对象引用。
+ */
+export function mapDocumentLinkIds(content, mapper, depth = 0) {
+  if (!content || depth > 64) return content
+  if (Array.isArray(content)) {
+    let changed = false
+    const next = content.map((item) => {
+      const mapped = mapDocumentLinkIds(item, mapper, depth + 1)
+      if (mapped !== item) changed = true
+      return mapped
+    })
+    return changed ? next : content
+  }
+  if (!isPlainObject(content)) return content
+  let changed = false
+  const next = {}
+  for (const [key, child] of Object.entries(content)) {
+    const mapped = mapDocumentLinkIds(child, mapper, depth + 1)
+    if (mapped !== child) changed = true
+    next[key] = mapped
+  }
+  if (
+    content.type === DOC_LINK_INLINE_TYPE &&
+    isPlainObject(next.props) &&
+    typeof next.props.docId === 'string'
+  ) {
+    const mappedId = mapper(next.props.docId)
+    if (mappedId && mappedId !== next.props.docId) {
+      next.props = { ...next.props, docId: mappedId }
+      changed = true
+    }
+  }
+  return changed ? next : content
+}
 
 export function newDocumentId() {
   return DOCUMENT_ID_PREFIX + randomUUID().replace(/-/g, '')
@@ -175,7 +239,8 @@ function collectDocsDirs(fs, path, startDir, maxDepth = 32) {
 /**
  * @param deps 注入：fs / path / requireValidWorkDir / resolveKbsPath /
  *             readTopoManifest(rootDir, cardPath) / readGraphMeta(rootDir, roomPath) /
- *             readJsonFile(abs) / writeJsonFile(abs, value) / listTrashItems(rootDir, category)
+ *             writeGraphMeta(rootDir, roomPath, meta) / readJsonFile(abs) /
+ *             writeJsonFile(abs, value) / listTrashItems(rootDir, category)
  */
 export function createDocumentIndexService(deps) {
   const {
@@ -185,6 +250,7 @@ export function createDocumentIndexService(deps) {
     resolveKbsPath,
     readTopoManifest,
     readGraphMeta,
+    writeGraphMeta,
     readJsonFile,
     writeJsonFile,
     listTrashItems,
@@ -385,10 +451,141 @@ export function createDocumentIndexService(deps) {
     return { remappedCount }
   }
 
+  /**
+   * 被引用（反向链接）：按需扫描全库正文里的 docLink 行内引用，返回引用者列表。
+   * 与 resolveDocumentById 一样不建常驻索引，只在右栏切到「被引用」时跑一次。
+   */
+  const listDocumentBacklinks = (rootDir, docId) => {
+    const id = String(docId ?? '').trim()
+    if (!id) return []
+    const { validRoot, kbsDir, dirs } = docsDirsOf(rootDir)
+    const nameCache = new Map()
+    const results = []
+    for (const docsDir of dirs) {
+      const cardPath = normalizeCardPath(cardPathOf(kbsDir, docsDir, validRoot))
+      if (!cardPath) continue
+      let manifest
+      try { manifest = readTopoManifest(validRoot, cardPath) } catch { continue }
+      const documents = manifest && manifest.documents
+      if (!isPlainObject(documents)) continue
+      const nodeName = nodeNameOf(validRoot, cardPath, nameCache)
+      for (const sourceId of Object.keys(documents)) {
+        if (sourceId === id) continue // 自引用不算反向链接
+        const item = documents[sourceId]
+        if (!isPlainObject(item)) continue
+        const fileName = path.basename(String(item.path || ''))
+        if (!fileName) continue
+        let body
+        try { body = readJsonFile(path.join(docsDir, fileName)) } catch { continue }
+        const references = countDocumentLinks(body, id)
+        if (!references) continue
+        results.push({
+          docId: sourceId,
+          title: String(item.title || '未命名文档'),
+          type: String(item.type || 'smart'),
+          cardPath,
+          nodeName,
+          breadcrumb: formatDocumentSource(cardPath, nodeName),
+          references,
+        })
+      }
+    }
+    return results
+  }
+
+  /** 递归列出所有持有 _graph.json 的房间（含 kbs 根），用于改写节点上的关联记录。 */
+  const collectGraphRoomPaths = (validRoot, kbsDir) => {
+    const rooms = []
+    const skip = new Set(['.trash', '_graph', '_attach', '_docs', 'node_modules', '.git'])
+    const walk = (dir, rel, depth) => {
+      if (depth > 32) return
+      try {
+        if (fs.existsSync(path.join(dir, '_graph.json'))) rooms.push(rel)
+      } catch { /* best-effort：单项探测失败按「不存在」处理 */ }
+      let entries
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+      for (const entry of entries) {
+        if (!entry.isDirectory() || skip.has(entry.name)) continue
+        walk(path.join(dir, entry.name), rel ? `${rel}/${entry.name}` : entry.name, depth + 1)
+      }
+    }
+    walk(kbsDir, '', 0)
+    return [...new Set(rooms)]
+  }
+
+  /**
+   * docId 因冲突被重新分配时（跨节点移动 / 导入副本），把两处引用同步改到新 id：
+   *   1. 节点 child.linkedDocuments[].docId（一律经 graphMetaService 逻辑读写，兼容 v2 分片）；
+   *   2. 所有正文里的 docLink inline content 的 props.docId。
+   * 历史上只返回 idRemap 而不消费，引用会一次移动全部失效。
+   */
+  const rewriteDocumentIdReferences = (rootDir, remap) => {
+    const mapping = isPlainObject(remap) ? remap : {}
+    const mapper = (id) => mapping[id] || id
+    if (!Object.keys(mapping).length) return { linkedDocuments: 0, documents: 0 }
+    const validRoot = requireValidWorkDir(rootDir)
+    const kbsDir = resolveKbsPath(validRoot, '')
+    let linkedDocuments = 0
+    let documents = 0
+
+    for (const roomPath of collectGraphRoomPaths(validRoot, kbsDir)) {
+      let meta
+      try { meta = readGraphMeta(validRoot, roomPath) } catch { continue }
+      const children = meta && meta.children
+      if (!isPlainObject(children)) continue
+      let changed = false
+      const nextChildren = {}
+      for (const [key, child] of Object.entries(children)) {
+        if (!isPlainObject(child) || !Array.isArray(child.linkedDocuments)) {
+          nextChildren[key] = child
+          continue
+        }
+        let linkChanged = false
+        const nextLinks = child.linkedDocuments.map((link) => {
+          if (!isPlainObject(link) || typeof link.docId !== 'string') return link
+          const nextId = mapper(link.docId)
+          if (nextId === link.docId) return link
+          linkChanged = true
+          linkedDocuments += 1
+          return { ...link, docId: nextId }
+        })
+        if (!linkChanged) {
+          nextChildren[key] = child
+          continue
+        }
+        changed = true
+        nextChildren[key] = { ...child, linkedDocuments: nextLinks }
+      }
+      if (changed) writeGraphMeta(validRoot, roomPath, { ...meta, children: nextChildren })
+    }
+
+    const { dirs } = docsDirsOf(rootDir)
+    for (const docsDir of dirs) {
+      let entries
+      try { entries = fs.readdirSync(docsDir, { withFileTypes: true }) } catch { continue }
+      for (const entry of entries) {
+        if (entry.isDirectory && entry.isDirectory()) continue
+        if (!/\.(tdoc|tmind|tflow)\.json$/i.test(entry.name)) continue
+        const filePath = path.join(docsDir, entry.name)
+        let body
+        try { body = readJsonFile(filePath) } catch { continue }
+        const rewritten = mapDocumentLinkIds(body, mapper)
+        if (rewritten === body) continue
+        try {
+          writeJsonFile(filePath, rewritten)
+          documents += 1
+        } catch { /* best-effort：单项写回失败不阻断其余文档 */ }
+      }
+    }
+    return { linkedDocuments, documents }
+  }
+
   return {
     collectDocumentIds,
     listDocumentCandidates,
     resolveDocumentById,
     remapImportedDocumentIds,
+    listDocumentBacklinks,
+    rewriteDocumentIdReferences,
   }
 }

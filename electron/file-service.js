@@ -1399,13 +1399,20 @@ function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetC
     });
   }
 
+  // 只在真的发生冲突改名时改写引用：节点 linkedDocuments 与正文 docLink 都按 docId
+  // 寻址，不跟着改会让「关联文档 / 文档双链」一次移动全部失效。返回一个 idRemap
+  // 而不消费是历史遗漏，这里在主进程内就地闭环（仍然把 idRemap 返回给渲染层）。
+  if (Object.keys(idRemap).length) {
+    documentIndexService.rewriteDocumentIdReferences(rootDir, idRemap);
+  }
+
   return {
     moved: movedItems,
     targetCardPath: targetCardPath,
     movedCount: movedItems.length,
     attachmentCount: attachmentCount,
     attachmentCleaned: attachmentCleaned,
-    // 真正被改名的 id（通常为空对象）。引用方可据此更新自身记录。
+    // 真正被改名的 id（通常为空对象）。引用方仍可据此更新自身内存记录。
     idRemap: idRemap,
   };
 }
@@ -1607,6 +1614,7 @@ const documentIndexService = createDocumentIndexService({
     return _fs_loadTopoDocumentManifest(rootDir, cardPath).manifest;
   },
   readGraphMeta: graphMetaService.readGraphMeta,
+  writeGraphMeta: graphMetaService.writeGraphMeta,
   readJsonFile: _fs_readJsonFile,
   writeJsonFile: _fs_writeJsonFile,
   listTrashItems: trashService.listTrashItems,
@@ -2173,6 +2181,11 @@ Object.assign(fileService, {
   /** docId → 当前所属 cardPath；cardRef 失效时全库自愈，删除时返回 trashed/missing。 */
   resolveDocumentById: function(rootDir, docId, cardRef) {
     return documentIndexService.resolveDocumentById(_fs_requireValidWorkDir(rootDir), docId, cardRef);
+  },
+
+  /** 文档双链：按需扫描全库正文，列出引用了 docId 的文档（反向链接）。 */
+  listDocumentBacklinks: function(rootDir, docId) {
+    return documentIndexService.listDocumentBacklinks(_fs_requireValidWorkDir(rootDir), docId);
   },
 
   /**
