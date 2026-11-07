@@ -116,8 +116,12 @@ export interface GraphMeta {
 
 // ============== 边类型 ==============
 
-/** 关系类型 */
-export type EdgeRelation = '演进' | '依赖' | '相关'
+/**
+ * 连线关系的稳定 id（见 domain/graph/edgeRelations.ts）。
+ * 早先是硬编码三值联合，自定义关系会被归一化打回「相关」；现在放开为字符串，
+ * 合法值由关系定义列表决定。旧存档的中文值原样保留，读取时才映射。
+ */
+export type EdgeRelation = string
 
 /** 边权重（决定主线/次线） */
 export type EdgeWeight = 'main' | 'minor'

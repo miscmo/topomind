@@ -30,7 +30,13 @@ function normalizePoint(value: unknown, fallback: { x: number; y: number }) {
 }
 
 function normalizeRelation(value: unknown): EdgeRelation {
-  return value === '演进' || value === '依赖' || value === '相关' ? value : '相关'
+  if (typeof value !== 'string') return '相关'
+  const trimmed = value.trim()
+  // 只做形状校验，绝不把未知值打回「相关」——否则自定义关系一落盘再读回来就丢了。
+  // 也绝不在这里把旧中文值（相关/依赖/演进）改写成新 id：本函数是读写共用的
+  // 落盘边界，改写会让保存房间时顺手批量改档，违背「读时映射、磁盘不动」。
+  if (!trimmed || trimmed.length > 64) return '相关'
+  return trimmed
 }
 
 function normalizeWeight(value: unknown): EdgeWeight {
