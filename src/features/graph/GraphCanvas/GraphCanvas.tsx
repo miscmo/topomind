@@ -164,11 +164,15 @@ export default memo(function GraphCanvas({
   const hiddenNodeCount = lod.visibility.hiddenNodeIds.size
   const readOnlyState = computeCanvasReadOnly(zoomLevel, hiddenNodeCount)
   const canvasReadOnly = readOnlyState.readOnly
-  // 多选镜像菜单：选区 >=2 且画布可写才出现（缩小即只读，位置信息失真时禁止编辑）。
+  // 选中操作菜单：选区 >=1 且画布可写才出现；镜像区另要求 >=2。
+  // 只读时整块收起，避免与 top-center 的只读提示条叠在一起（隐藏节点也不该被批量选中）。
   const selectedNodeCount = useGraphStore((s) => s.selectedNodeCount)
+  const selectedNodeIds = useGraphStore((s) => s.selectedNodeIds)
   const showSelectionMirror = selectedNodeCount >= MIRROR_MIN_SELECTED_NODES && !canvasReadOnly
-  // 【密度自适应 2026-11-11】渐隐区按节点数 / 树深度放慢每格滚轮，避免大图
-  // 「轻轻一动消失一片」；紧凑区不限速（d3 等比缩放本身边际递减、且不再隐藏节点）。
+  const showSelectionMenu = selectedNodeCount >= 1 && !canvasReadOnly
+  // 【恢复固定步进 2026-11-11 晚】灵敏度统一取 zoomScale 规则源：当前配置关闭密度
+  // 自适应，渐隐区与紧凑区都恒为 1（一格约 10 个百分点）。保留这个调用点，
+  // 开关切回 true 即恢复大图限速，无需改接线。
   const compactZoom = isCompactZoom(zoomLevel)
   const wheelSensitivity = wheelSensitivityForZoom(
     zoomLevel,
@@ -309,9 +313,9 @@ export default memo(function GraphCanvas({
         </>
       )}
 
-      {/* 已框选出多个节点时改显示多选操作菜单，避免两个 top-center 浮层叠在一起。 */}
+      {/* 已有选中节点时改显示选中操作菜单，避免两个 top-center 浮层叠在一起。 */}
       {isShiftPressed && state.isMouseOverCanvas && !isFormatPainterActive && !state.isInputFocused
-        && !canvasReadOnly && !showSelectionMirror && (
+        && !canvasReadOnly && !showSelectionMirror && !showSelectionMenu && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] bg-[var(--color-surface)] text-[var(--color-text)] border border-[var(--color-border-strong)] px-4 py-2.5 rounded-full shadow-[var(--shadow-popover)] flex items-center gap-2.5 pointer-events-none transition-all">
           <div className="bg-[var(--color-primary)] text-[var(--color-text-inverse)] p-1 px-2 rounded flex items-center justify-center font-bold text-[12px]">
             Shift
@@ -395,13 +399,17 @@ export default memo(function GraphCanvas({
       >
         <SmartGuidesRenderer guideLines={guideLines} />
         <CanvasReadOnlyBanner state={readOnlyState} zoomLevel={zoomLevel} />
-        {showSelectionMirror && (
+        {showSelectionMenu && (
           <SelectionMirrorMenu
             selectedCount={selectedNodeCount}
+            selectedIds={selectedNodeIds}
+            canMirror={showSelectionMirror}
+            onSelectSubtree={graph.selectSubtree}
             onFlip={graph.flipSelectionHorizontally}
           />
         )}
         <LodControl
+          tabId={tabId}
           visibility={lod.visibility}
           readOnlyState={readOnlyState}
           zoomLevel={zoomLevel}

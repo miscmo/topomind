@@ -4,7 +4,7 @@ import type { EdgeRelationDefinition } from '../../domain/graph/edgeRelations'
 import type { GraphProfileId } from '../../domain/graph/graphProfiles'
 import type { KBListItem } from '../../types'
 import type { DefaultEdgeStyle, DefaultEditorStyle } from '../../domain/style/styleTypes'
-import type { FSBTrashItem, FSBTrashTopoDocumentItem, FSBDocumentCandidate } from '../fs-backend'
+import type { FSBTrashItem, FSBTrashTopoDocumentItem, FSBDocumentCandidate, UnifiedTreeLevel } from '../fs-backend'
 import type { LinkedDocumentRef, DocumentResolution, DocumentBacklink, DocumentRelations } from '../../domain/graph/linkedDocuments'
 import type { TopoDocumentType } from '../topoDocumentTypes'
 
@@ -165,9 +165,15 @@ export interface TopoDocumentStorageBackend {
   openTopoDocumentFolder: (cardPath: string, documentId: string) => Promise<boolean>
 }
 
-/** 节点关联已有文档：全库候选 / docId 反查 / 原子写回节点字段。 */
+/** 节点关联已有文档：全库候选 / 统一树按需查询 / docId 反查 / 原子写回节点字段。 */
 export interface LinkedDocumentStorageBackend {
   listDocumentCandidates: () => Promise<FSBDocumentCandidate[]>
+  /** 统一资源树：只取 parentKey 的直接子层，默认不扫描全库。 */
+  listUnifiedTreeLevel: (parentKey: string) => Promise<UnifiedTreeLevel>
+  /** 全库搜索：空 query 不扫描，有 query 才走派生索引。 */
+  searchUnifiedDocuments: (query: string, options?: { limit?: number; force?: boolean }) => Promise<FSBDocumentCandidate[]>
+  /** docId → 从根到该文档的 key 链，用于树自动展开。 */
+  resolveUnifiedDocumentPath: (docId: string) => Promise<string[]>
   resolveDocumentById: (docId: string, cardRef?: string) => Promise<DocumentResolution>
   updateNodeLinkedDocuments: (nodePath: string, links: LinkedDocumentRef[]) => Promise<LinkedDocumentRef[]>
   /** 文档双链（兼容入口）：只取入链，走关系索引。 */

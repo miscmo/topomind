@@ -244,7 +244,7 @@ export function createLinkedDocumentWriter({ readGraphMeta, writeGraphMeta }) {
   }
 }
 
-function normalizeCardPath(value) {
+export function normalizeCardPath(value) {
   return String(value ?? '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/')
 }
 
@@ -293,8 +293,8 @@ export function formatDocumentInNodePath(documents, docId) {
   return titles.join(' / ')
 }
 
-/** 递归找出所有 _docs 目录（含 tree.json 才算有文档）。 */
-function collectDocsDirs(fs, path, startDir, maxDepth = 32) {
+/** 递归找出所有 _docs 目录（含 tree.json 才算有文档）。统一文档树服务也复用本函数。 */
+export function collectDocsDirs(fs, path, startDir, maxDepth = 32) {
   const found = []
   const skip = new Set(['.trash', '_graph', '_attach', 'node_modules', '.git'])
   const walk = (dir, depth) => {

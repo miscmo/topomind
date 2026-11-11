@@ -33,6 +33,7 @@ import {
   createDocumentIndexService,
   createLinkedDocumentWriter,
 } from './services/document-id-service.js';
+import { createUnifiedDocumentTreeService } from './services/unified-document-tree-service.js';
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_TEXT_FILE_BYTES = 5 * 1024 * 1024;
@@ -1622,6 +1623,19 @@ const documentIndexService = createDocumentIndexService({
   listTrashItems: trashService.listTrashItems,
 });
 
+// 统一资源树：节点树 + 节点内文档树，按层查询；搜索/定位走派生索引。
+// 与 documentIndexService 共用同一套只读 IO，不额外引入任何写库挂钩。
+const unifiedTreeService = createUnifiedDocumentTreeService({
+  fs: nodeFs,
+  path: nodePath,
+  requireValidWorkDir: _fs_requireValidWorkDir,
+  resolveKbsPath: _fs_resolveKbsPath,
+  readGraphMeta: graphMetaService.readGraphMeta,
+  readJsonFile: _fs_readJsonFile,
+  writeJsonFile: _fs_writeJsonFile,
+  statSync: function(filePath) { return nodeFs.statSync(filePath); },
+});
+
 const kbService = createKbService({
   clearTrashItems: trashService.clearTrashItems,
   collectDocumentIds: documentIndexService.collectDocumentIds,
@@ -2175,9 +2189,24 @@ const fileService = {
 // ===== 节点关联已有文档（A 阶段全局解析 + B 阶段原子写入） =====
 // 单独 Object.assign，保持上方 fileService 字面量的既有区域不动。
 Object.assign(fileService, {
-  /** 全库文档候选：选择关联文档时一次性列出，带所属节点面包屑。 */
+  /** 全库文档候选：兼容入口（旧调用方 / 回归脚本），新选择器一律走统一树按需加载。 */
   listDocumentCandidates: function(rootDir) {
     return documentIndexService.listDocumentCandidates(_fs_requireValidWorkDir(rootDir));
+  },
+
+  /** 统一资源树：只返回 parentKey 的直接子层，绝不递归子孙。 */
+  listUnifiedTreeLevel: function(rootDir, parentKey) {
+    return unifiedTreeService.listTreeLevel(_fs_requireValidWorkDir(rootDir), parentKey);
+  },
+
+  /** 全库搜索：空 query 不扫描；有 query 才走 .topomind 派生索引。 */
+  searchUnifiedDocuments: function(rootDir, query, options) {
+    return unifiedTreeService.searchDocuments(_fs_requireValidWorkDir(rootDir), query, options);
+  },
+
+  /** docId → 从根到该文档的 key 链，供树自动展开 / 定位。 */
+  resolveUnifiedDocumentPath: function(rootDir, docId) {
+    return unifiedTreeService.resolveDocumentPath(_fs_requireValidWorkDir(rootDir), docId);
   },
 
   /** docId → 当前所属 cardPath；cardRef 失效时全库自愈，删除时返回 trashed/missing。 */

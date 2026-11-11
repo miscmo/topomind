@@ -19,7 +19,12 @@
  *   骨架之间会更靠近甚至叠住；可见集合已冻结、碰撞抽稀在紧凑区跳过，
  *   因此不会因此触发隐藏/闪烁。这是用户明确选择的「可读性优先于零重叠」。
  *
- * 【密度自适应，2026-11-11】用户问「节点多、树深时，一格滚轮就消失一片怎么办」。
+ * 【恢复固定步进，2026-11-11 晚】用户实测「鼠标缩放的步进感觉有些慢」，要求恢复到
+ * 上一版配置：滚轮 / 按钮一律固定步进（灵敏度恒 1，一格 ≈ 10 个百分点）。
+ * 下面的密度自适应公式是之后才加的限速，现已默认关闭（DENSITY_STEP_SCALING_ENABLED
+ * = false），公式本身保留以便一键切回；zoom→显示比换算与 LOD 阈值公式始终不变。
+ *
+ * 【密度自适应（当前关闭），2026-11-11】用户问「节点多、树深时，一格滚轮就消失一片怎么办」。
  * 渐隐行程固定 80 个百分点、要收起 N 个节点，平均 1% 就要收 N/80 个：
  *   - 按节点数分位（原实现）：格数固定，每格隐藏数 ∝ N → 大图跳变；
  *   - 按绝对数限速：每格隐藏数固定，格数 ∝ N → 大图要滚几百格，同样难用。
@@ -178,17 +183,30 @@ export const LOD_DENSITY_DEPTH_RELAX = 0.06
 export const MIN_ZOOM_STEP_SENSITIVITY = 0.12
 
 /**
- * 「一次操作改变的显示比」的倍率，只取决于静态的图规模 / 树深度。
+ * 【用户决策 2026-11-11 晚】恢复上一版固定步进：关掉密度自适应限速。
+ * 需要恢复「大图不跳变」行为时，把这里改回 true 即可，公式与回归断言都在。
+ */
+export const DENSITY_STEP_SCALING_ENABLED = false
+
+/**
+ * 密度自适应公式（当前未启用，保留供切回与回归真跑）：
+ * 「一次操作改变的显示比」的倍率只取决于静态的图规模 / 树深度。
  * n <= 60 → 1；n 越大按 1/√n 衰减，深度越大再温和放慢。
  * 于是每格隐藏数 ∝ √N、走完渐隐行程的格数 ∝ √N（详见文件头权衡说明）。
  */
-export function zoomStepSensitivityForGraph(nodeCount: number, treeMaxDepth = 1): number {
+export function densityStepSensitivityForGraph(nodeCount: number, treeMaxDepth = 1): number {
   const n = Number.isFinite(nodeCount) ? Math.max(0, nodeCount) : 0
   if (n <= LOD_DENSITY_REFERENCE_NODES) return 1
   const byCount = Math.sqrt(LOD_DENSITY_REFERENCE_NODES / n)
   const depth = Number.isFinite(treeMaxDepth) ? Math.max(1, treeMaxDepth) : 1
   const byDepth = 1 / (1 + LOD_DENSITY_DEPTH_RELAX * Math.max(0, depth - 2))
   return Math.min(1, Math.max(MIN_ZOOM_STEP_SENSITIVITY, byCount * byDepth))
+}
+
+/** 实际生效的步进灵敏度：关闭密度自适应时恒为 1（固定步进）。 */
+export function zoomStepSensitivityForGraph(nodeCount: number, treeMaxDepth = 1): number {
+  if (!DENSITY_STEP_SCALING_ENABLED) return 1
+  return densityStepSensitivityForGraph(nodeCount, treeMaxDepth)
 }
 
 /**
@@ -199,7 +217,7 @@ export function isCompactZoom(rawZoom: number): boolean {
   return toDisplayRatio(clampRawZoom(rawZoom)) < COMPACT_START_RATIO
 }
 
-/** 滚轮灵敏度：紧凑区不隐藏节点，d3 的等比缩放本身已足够慢，无需再限速。 */
+/** 滚轮灵敏度：恢复固定步进后渐隐区恒 1；紧凑区不隐藏节点也不叠加限速。 */
 export function wheelSensitivityForZoom(rawZoom: number, nodeCount: number, treeMaxDepth = 1): number {
   return isCompactZoom(rawZoom) ? 1 : zoomStepSensitivityForGraph(nodeCount, treeMaxDepth)
 }

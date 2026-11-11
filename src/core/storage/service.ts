@@ -140,6 +140,15 @@ export function createStore(backend: StorageBackend) {
     async listDocumentCandidates() {
       try { return await backend.listDocumentCandidates() } catch (e) { logger.catch('Store.listDocumentCandidates', '列出全库文档失败', e); throw e }
     },
+    async listUnifiedTreeLevel(parentKey: string) {
+      try { return await backend.listUnifiedTreeLevel(parentKey) } catch (e) { logger.catch('Store.listUnifiedTreeLevel', `读取统一树层失败: ${parentKey}`, e); throw e }
+    },
+    async searchUnifiedDocuments(query: string, options?: { limit?: number; force?: boolean }) {
+      try { return await backend.searchUnifiedDocuments(query, options) } catch (e) { logger.catch('Store.searchUnifiedDocuments', `检索全库文档失败: ${query}`, e); throw e }
+    },
+    async resolveUnifiedDocumentPath(docId: string) {
+      try { return await backend.resolveUnifiedDocumentPath(docId) } catch (e) { logger.catch('Store.resolveUnifiedDocumentPath', `解析文档树路径失败: ${docId}`, e); throw e }
+    },
     async resolveDocumentById(docId: string, cardRef?: string) {
       try { return await backend.resolveDocumentById(docId, cardRef) } catch (e) { logger.catch('Store.resolveDocumentById', `解析文档失败: ${docId}`, e); throw e }
     },

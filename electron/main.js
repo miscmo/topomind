@@ -382,6 +382,15 @@ function registerIPC() {
   ipcMain.handle('fs:listDocumentCandidates', function(e, rootDir) {
     return fileService.listDocumentCandidates(requireActiveWorkDir(rootDir));
   });
+  ipcMain.handle('fs:listUnifiedTreeLevel', function(e, rootDir, parentKey) {
+    return fileService.listUnifiedTreeLevel(requireActiveWorkDir(rootDir), parentKey);
+  });
+  ipcMain.handle('fs:searchUnifiedDocuments', function(e, rootDir, query, options) {
+    return fileService.searchUnifiedDocuments(requireActiveWorkDir(rootDir), query, options);
+  });
+  ipcMain.handle('fs:resolveUnifiedDocumentPath', function(e, rootDir, docId) {
+    return fileService.resolveUnifiedDocumentPath(requireActiveWorkDir(rootDir), docId);
+  });
   ipcMain.handle('fs:resolveDocumentById', function(e, rootDir, docId, cardRef) {
     return fileService.resolveDocumentById(requireActiveWorkDir(rootDir), docId, cardRef);
   });

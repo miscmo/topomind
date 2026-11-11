@@ -357,9 +357,87 @@ const appendSessionHours = (buckets: number[], session: LearningSession) => {
   }
 }
 
-export const buildDayHourBuckets = (sessions: LearningSession[]) => {
-  const buckets = Array.from({ length: 24 }, () => 0)
-  sessions.forEach(session => appendSessionHours(buckets, session))
+/** 一天按半小时切成 48 格，供「当天学习记录」方块图使用。 */
+export const HALF_HOUR_SECONDS = 1800
+export const DAY_HALF_HOUR_BUCKETS = 48
+
+export interface DayHalfHourBucket {
+  index: number
+  hour: number
+  half: 0 | 1
+  label: string
+  duration: number
+  sessionIds: string[]
+}
+
+const padClock = (value: number) => String(value).padStart(2, '0')
+
+const halfHourIndexOf = (timestamp: number) => {
+  const date = new Date(timestamp)
+  return (date.getHours() * 2 + (date.getMinutes() >= 30 ? 1 : 0)) % DAY_HALF_HOUR_BUCKETS
+}
+
+/**
+ * 与 appendSessionHours 同源：按 session 的墙钟跨度分摊到所覆盖的半格。
+ * 起止相同（例如进行中的实时计时）没有跨度，整段计入起始半格。
+ * 跨午夜的时间点按小时折回当天，与本文件其它时段统计口径一致。
+ */
+export const buildDayHalfHourBuckets = (sessions: LearningSession[]): DayHalfHourBucket[] => {
+  const buckets: DayHalfHourBucket[] = Array.from({ length: DAY_HALF_HOUR_BUCKETS }, (_, index) => {
+    const hour = Math.floor(index / 2)
+    const half = (index % 2) as 0 | 1
+    return {
+      index,
+      hour,
+      half,
+      label: half === 0
+        ? `${padClock(hour)}:00 - ${padClock(hour)}:30`
+        : `${padClock(hour)}:30 - ${padClock((hour + 1) % 24)}:00`,
+      duration: 0,
+      sessionIds: [],
+    }
+  })
+
+  const safeSessions = Array.isArray(sessions) ? sessions : []
+  safeSessions.forEach((session) => {
+    if (!session) return
+    const start = Number.isFinite(session.startTime) ? session.startTime : 0
+    const end = Math.max(start, Number.isFinite(session.endTime) ? session.endTime : start)
+    const fallback = Number.isFinite(session.duration) ? Math.max(0, session.duration) : 0
+    const id = session.id || ''
+
+    const addTo = (index: number, seconds: number) => {
+      const bucket = buckets[index]
+      bucket.duration += seconds
+      if (seconds > 0 && !bucket.sessionIds.includes(id)) {
+        bucket.sessionIds.push(id)
+      }
+    }
+
+    if (end === start) {
+      addTo(halfHourIndexOf(start), fallback)
+      return
+    }
+
+    let cursor = start
+    while (cursor < end) {
+      const date = new Date(cursor)
+      const halfStart = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        date.getHours(),
+        date.getMinutes() >= 30 ? 30 : 0,
+        0,
+        0,
+      ).getTime()
+      const segmentEnd = Math.min(halfStart + HALF_HOUR_SECONDS * 1000, end)
+      if (segmentEnd <= cursor) break
+      addTo(halfHourIndexOf(cursor), Math.max(0, Math.round((segmentEnd - cursor) / 1000)))
+      cursor = segmentEnd
+    }
+  })
+
   return buckets
 }
 

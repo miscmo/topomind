@@ -1,5 +1,5 @@
 import { FSB } from '../fs-backend'
-import type { FSBDocumentCandidate } from '../fs-backend'
+import type { FSBDocumentCandidate, UnifiedTreeLevel } from '../fs-backend'
 import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem, TopoDocumentMetaPatch, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, EdgeAnchor, GraphNodeKind } from '../../types'
@@ -333,6 +333,18 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
 
     listDocumentCandidates: async (): Promise<FSBDocumentCandidate[]> => {
       return FSB.listDocumentCandidates(requireRootDir())
+    },
+
+    listUnifiedTreeLevel: async (parentKey: string): Promise<UnifiedTreeLevel> => {
+      return FSB.listUnifiedTreeLevel(requireRootDir(), parentKey)
+    },
+
+    searchUnifiedDocuments: async (query: string, options?: { limit?: number; force?: boolean }): Promise<FSBDocumentCandidate[]> => {
+      return FSB.searchUnifiedDocuments(requireRootDir(), query, options)
+    },
+
+    resolveUnifiedDocumentPath: async (docId: string): Promise<string[]> => {
+      return FSB.resolveUnifiedDocumentPath(requireRootDir(), docId)
     },
 
     resolveDocumentById: async (docId: string, cardRef?: string): Promise<DocumentResolution> => {

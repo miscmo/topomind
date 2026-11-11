@@ -46,6 +46,8 @@ export interface GraphContextValue {
   createEdge: (source: string, target: string) => Promise<string | null>
   /** 多选 >=2 个节点时沿选区中轴水平镜像；只读 / 选区不足时返回 false */
   flipSelectionHorizontally: () => Promise<boolean>
+  /** 以传入节点（省略则用当前选中）为根选中整棵从属子树；返回 false = 无有效根 */
+  selectSubtree: (rootIds?: readonly string[]) => boolean
 
   // Edge operations
   /** weight 省略时沿用该边原权重；切换关系会套用关系自带的默认样式 */
@@ -94,6 +96,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     deselectNode: graph.deselectNode,
     createEdge: graph.createEdge,
     flipSelectionHorizontally: graph.flipSelectionHorizontally,
+    selectSubtree: graph.selectSubtree,
     updateEdgeRelation: graph.updateEdgeRelation,
     updateEdgeStyle: graph.updateEdgeStyle,
     updateEdgeAnchor: graph.updateEdgeAnchor,

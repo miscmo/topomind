@@ -1,46 +1,13 @@
-import { KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Clock, History } from 'lucide-react'
+/**
+ * 「最近打开」功能区内容：只负责列表渲染与激活，折叠状态由画布状态抽屉统一管。
+ * 列表高度自带上限，房间再长也不会把抽屉撑高。
+ */
+import { KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, memo, useCallback, useMemo, useRef } from 'react'
+import { History } from 'lucide-react'
 import { useRoomHistoryList, type RoomHistoryRecord } from '../../../hooks/useRoomHistory'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { useTabStore } from '../../../stores/tabs/tabStore'
 import { logAction } from '../../../core/log-backend'
-
-interface RoomHistoryProps {
-  tabId: string
-}
-
-const COLLAPSED_STORAGE_KEY = 'topomind_room_history_collapsed'
-
-function usePersistedCollapsed(): [boolean, (next: boolean) => void] {
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(COLLAPSED_STORAGE_KEY) === 'true'
-    } catch {
-      return false
-    }
-  })
-
-  const update = useCallback((next: boolean) => {
-    setCollapsed(next)
-    try {
-      localStorage.setItem(COLLAPSED_STORAGE_KEY, String(next))
-    } catch {
-      // 忽略持久化失败
-    }
-  }, [])
-
-  // 跨 tab 同步折叠状态
-  useEffect(() => {
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key !== COLLAPSED_STORAGE_KEY) return
-      setCollapsed(event.newValue === 'true')
-    }
-    window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
-  }, [])
-
-  return [collapsed, update]
-}
 
 function activateOnEnterOrSpace(handler: () => void) {
   return (event: KeyboardEvent<HTMLElement>) => {
@@ -51,35 +18,37 @@ function activateOnEnterOrSpace(handler: () => void) {
   }
 }
 
-interface RoomHistoryHeaderProps {
-  collapsed: boolean
-  count: number
-  onToggle: () => void
-}
+/** 抽屉只订阅一次：数量给分区徽标，激活回调给列表。 */
+export function useRecentRooms(tabId: string) {
+  const graph = useGraphContext()
+  const tab = useTabStore(s => s.getTabById(tabId))
+  const kbPath = tab?.type === 'kb' ? tab.kbPath : null
+  const kbLabel = tab?.type === 'kb' ? tab.label : null
+  const currentRoomPath = tab?.type === 'kb' ? tab.currentRoomPath : null
+  const items = useRoomHistoryList(kbPath, kbLabel, currentRoomPath)
 
-const RoomHistoryHeader = memo(function RoomHistoryHeader({ collapsed, count, onToggle }: RoomHistoryHeaderProps) {
-  const onKeyDown = useMemo(() => activateOnEnterOrSpace(onToggle), [onToggle])
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-expanded={!collapsed}
-      className="flex items-center gap-1.5 px-3 py-1.5 border-b border-[var(--color-border-subtle)] text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider shrink-0 bg-black/5 cursor-pointer select-none hover:bg-[var(--color-hover-bg)] transition-colors whitespace-nowrap"
-      onClick={onToggle}
-      onKeyDown={onKeyDown}
-      title={collapsed ? '展开最近打开' : '折叠最近打开'}
-    >
-      {collapsed ? (
-        <ChevronRight className="w-3 h-3 opacity-70" />
-      ) : (
-        <ChevronDown className="w-3 h-3 opacity-70" />
-      )}
-      <Clock className="w-3 h-3 opacity-70" />
-      <span>最近打开</span>
-      <span className="text-[10px] font-normal opacity-60">{count}</span>
-    </div>
-  )
-})
+  const onActivate = useCallback(async (item: RoomHistoryRecord) => {
+    if (!kbPath) return
+    logAction('房间历史:快捷导航', 'RoomHistory', {
+      targetPath: item.path,
+      targetName: item.name,
+      tabId,
+    })
+    if (item.path === kbPath) {
+      await graph.navigateToRoot()
+    } else {
+      useTabStore.getState().restoreRoomStateToTab(tabId, {
+        kbPath,
+        roomHistory: item.historyStack || [],
+        currentRoomPath: item.path,
+        currentRoomName: item.name,
+      })
+      await graph.loadRoom(item.path)
+    }
+  }, [kbPath, tabId, graph])
+
+  return { items, activePath: currentRoomPath, onActivate }
+}
 
 function useDragAwareClick<T>(onActivate: (item: T) => void, threshold = 4) {
   const dragStateRef = useRef<{ x: number; y: number; moved: boolean } | null>(null)
@@ -94,9 +63,7 @@ function useDragAwareClick<T>(onActivate: (item: T) => void, threshold = 4) {
     if (!state || state.moved) return
     const dx = event.clientX - state.x
     const dy = event.clientY - state.y
-    if (dx * dx + dy * dy > threshold * threshold) {
-      state.moved = true
-    }
+    if (dx * dx + dy * dy > threshold * threshold) state.moved = true
   }, [threshold])
 
   const endDrag = useCallback((): boolean => {
@@ -127,17 +94,17 @@ interface RoomHistoryItemProps {
 const RoomHistoryItem = memo(function RoomHistoryItem({ item, active, onActivate }: RoomHistoryItemProps) {
   const { onPointerDown, onPointerMove, endDrag, onClick } = useDragAwareClick(onActivate)
   const onKeyDown = useMemo(() => activateOnEnterOrSpace(() => onActivate(item)), [onActivate, item])
-
   const display = item.display || item.name
 
   return (
     <div
       role="button"
       tabIndex={0}
-      className={`flex items-center gap-2 w-full px-2 py-1.5 text-left text-xs rounded-md transition-colors cursor-pointer border-none bg-transparent group ${
+      data-tm-recent-room={item.path}
+      className={`nodrag nowheel flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] transition-colors group ${
         active
-          ? 'text-[var(--color-accent)] bg-[var(--color-hover-bg)] font-semibold'
-          : 'text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-hover-bg)]'
+          ? 'bg-[var(--color-hover-bg)] font-semibold text-[var(--color-accent)]'
+          : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'
       }`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -147,88 +114,31 @@ const RoomHistoryItem = memo(function RoomHistoryItem({ item, active, onActivate
       onKeyDown={onKeyDown}
       title={display}
     >
-      <History className={`w-3.5 h-3.5 shrink-0 ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
-      <span className="flex-1 font-medium select-text break-all leading-5">{display}</span>
+      <History className={`h-3 w-3 shrink-0 ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate leading-4">{display}</span>
     </div>
   )
 })
 
-interface RoomHistoryListProps {
+interface RoomHistoryProps {
   items: RoomHistoryRecord[]
   activePath: string | null
   onActivate: (item: RoomHistoryRecord) => void
 }
 
-const RoomHistoryList = memo(function RoomHistoryList({ items, activePath, onActivate }: RoomHistoryListProps) {
-  return (
-    <div className="flex-1 overflow-y-auto py-1 px-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--color-border)] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[var(--color-text-muted)]">
-      <div className="flex flex-col gap-0.5">
-        {items.map((item) => (
-          <RoomHistoryItem
-            key={item.path}
-            item={item}
-            active={item.path === activePath}
-            onActivate={onActivate}
-          />
-        ))}
-      </div>
-    </div>
-  )
-})
-
-export default memo(function RoomHistory({ tabId }: RoomHistoryProps) {
-  const graph = useGraphContext()
-  const tab = useTabStore(s => s.getTabById(tabId))
-
-  const kbPath = tab?.type === 'kb' ? tab.kbPath : null
-  const kbLabel = tab?.type === 'kb' ? tab.label : null
-  const currentRoomPath = tab?.type === 'kb' ? tab.currentRoomPath : null
-
-  const historyList = useRoomHistoryList(kbPath, kbLabel, currentRoomPath)
-  const [collapsed, setCollapsed] = usePersistedCollapsed()
-
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed(!collapsed)
-  }, [collapsed, setCollapsed])
-
-  const handleActivate = useCallback(async (item: RoomHistoryRecord) => {
-    if (!kbPath) return
-    logAction('房间历史:快捷导航', 'RoomHistory', {
-      targetPath: item.path,
-      targetName: item.name,
-      tabId,
-    })
-
-    if (item.path === kbPath) {
-      await graph.navigateToRoot()
-    } else {
-      useTabStore.getState().restoreRoomStateToTab(tabId, {
-        kbPath,
-        roomHistory: item.historyStack || [],
-        currentRoomPath: item.path,
-        currentRoomName: item.name
-      })
-      await graph.loadRoom(item.path)
-    }
-  }, [kbPath, tabId, graph])
-
-  if (historyList.length === 0) {
-    return null
+export default memo(function RoomHistory({ items, activePath, onActivate }: RoomHistoryProps) {
+  if (items.length === 0) {
+    return <div className="px-1 py-1 text-[11px] text-[var(--color-text-secondary)]">暂无最近打开的房间</div>
   }
-
-  // 折叠态：自适应宽度；展开态：固定 240px 以容纳较长路径
-  const widthClass = collapsed ? 'w-auto min-w-[160px]' : 'w-[240px] max-h-[260px]'
 
   return (
     <div
-      className={`flex flex-col ${widthClass} overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-md)] backdrop-blur-xl`}
-      onPointerDownCapture={(event) => event.stopPropagation()}
-      onMouseDownCapture={(event) => event.stopPropagation()}
+      data-tm-recent-room-list=""
+      className="flex max-h-44 flex-col gap-0.5 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--color-border)]"
     >
-      <RoomHistoryHeader collapsed={collapsed} count={historyList.length} onToggle={toggleCollapsed} />
-      {!collapsed && (
-        <RoomHistoryList items={historyList} activePath={currentRoomPath} onActivate={handleActivate} />
-      )}
+      {items.map((item) => (
+        <RoomHistoryItem key={item.path} item={item} active={item.path === activePath} onActivate={onActivate} />
+      ))}
     </div>
   )
 })

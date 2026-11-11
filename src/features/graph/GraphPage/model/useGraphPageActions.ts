@@ -116,6 +116,10 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
       targetId: contextMenu.targetId,
       onNewChild: handleContextMenuNewChild,
       onEnterNode: handleEnterNode,
+      onSelectSubtree: (nodeId: string) => {
+        // 右键指定了明确的根：即使画布当前选中了别的节点，也只选中这一棵子树。
+        graph.selectSubtree([nodeId])
+      },
       onDelete: handleDelete,
       onEdgeDelete: handleEdgeDelete,
       onEdgeStyle: handleEdgeStyle,

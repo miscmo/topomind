@@ -1,49 +1,68 @@
-# TopoMind 长期约定（逐轮细节见 .workbuddy/memory/2026-11-*.md）
+# TopoMind 长期约定（逐轮细节见 .workbuddy/memory/YYYY-MM-DD.md）
 
 ## 验证
-- **用户 2026-11-11 约定：只测核心，不反复全套测试**。核心＝`npm run typecheck`、两验证脚本 `node --check`、`verify:critical`（末行 `Critical regression checks verified`；`save failed` 是 close-guard 预期）、`npx vite build --outDir /tmp/<新> --emptyOutDir` → `cp -r .../. dist/`、一次 `verify:linked:gui`（读 dist，改源码必重建）。按需才加 `verify:graph-store`/`verify:plugins`/`verify:lint:baseline`。
-- 改能力必同步 `scripts/verify-critical-regressions.mts` 断言具体字段 + **反向验证**（旧实现→exit 1→原子恢复）；须 esbuild 打包真跑数据往返/写库入口，勿只查字面量。
-- EPERM 打包→Defender 排除目录；个人目录删除→回收站 API+备份+sha256+每批 10 个。
+- **只测核心**（用户 11-11）：`typecheck`、两验证脚本 `node --check`、`verify:critical`（末行 `Critical regression checks verified`，`save failed` 是 close-guard 预期）、`vite build --outDir /tmp/<新> → cp 到 dist/`、一次 `verify:linked:gui`（读 dist，改源码必重建）。
+- 改能力必同步 `verify-critical-regressions.mts` 断言具体字段 + **反向验证**（旧实现 exit 1 → 原子恢复）；纯函数须 esbuild 真跑，勿只查字面量。EPERM 打包→Defender 排除；个人目录删除→回收站+备份+sha256+每批 10 个。
 
 ## 存储 / 字段
-- 唯一格式边界 `electron/services/graph-meta-service.js` 的 `read/writeGraphMeta`；禁主进程直读 `_graph.json.children`。v2＝索引 `{version:2,zoom,pan}` + `nodes-0..15.json`(对象)/`edges-0..15.json`(数组)，FNV-1a%16、空桶不落盘、索引最后写；未知 version 抛错，v1 不改写。迁移 `scripts/migrate-graph-shards.mts`，比较 `graphMetaComparisonKey`。
-- **字段白名单 7 处**：`types/graph.ts`、`domain/graph/model.ts`、`graphMapper` 双向、`normalizeGraphMeta.ts`、`core/storage/file.ts`(含 `convertGraphToFSB`)、`core/fs-backend.ts`、`graphBuilder`；只加返回类型不算数。配置顶层字段另须 `normalizeConfig` 重建 + `service.writeConfig` 透传 + hydrate。
-- 草稿正文绝不进 localStorage（partialize 只存 cardDrafts）。`GraphPage.tsx` 在 JSX 前调 `useGraphPageActions({graph})`；链内 hook 不可在 Provider 外用 `useGraphContext()`。Vite OOM 由 `optimizeDeps.entries:['index.html']` 根治。
+- 唯一格式边界 `graph-meta-service.js` 的 `read/writeGraphMeta`；禁主进程直读 `_graph.json.children`。v2＝索引 `{version:2,zoom,pan}` + `nodes/edges-0..15.json`（FNV-1a%16、空桶不落盘、索引最后写）；未知 version 抛错，v1 不改写。
+- **字段白名单 7 处**：`types/graph.ts`、`domain/graph/model.ts`、`graphMapper` 双向、`normalizeGraphMeta.ts`、`core/storage/file.ts`、`core/fs-backend.ts`、`graphBuilder`；只加返回类型不算。配置顶层字段另须 `normalizeConfig` + `writeConfig` 透传 + hydrate。
+- 草稿正文绝不进 localStorage；`GraphPage` 在 JSX 前调 `useGraphPageActions`；链内 hook 不可在 Provider 外用 `useGraphContext()`；Vite OOM 由 `optimizeDeps.entries:['index.html']` 根治。
 
 ## 文档 / 双链
-- docId 全库主键 `doc_`+32hex；关联 `{docId,cardRef,title}`≤8 只记 `child.linkedDocuments`；物理 `card-<id>/_docs/<docId>.tdoc.json`+`tree.json`，写库必经 `createLinkedDocumentWriter`。
-- **ownerCardPath 铁律**：右栏/草稿/附件/缓存键一律 `documentCardPath`；面包屑唯一 `formatDocumentSource`。docLink inline 只存 `{docId,title}`；`[[` 用 Tiptap `InputRule(/\[\[$/)`+`queueMicrotask` 开 portal。开 chip 先 `flushDocumentSave()`→查锁→`enterRoomInTab`。
-- `fs:listDocumentRelations` 返 `{incoming,outgoing,parsed,indexed}`；索引 `rootDir/.topomind/doc-relations.json` 按 statSync 签名增量重解析，不挂钩写库入口、丢失自愈。`file-service.js` 依赖 electron.shell 不可纯 Node import；idRemap 必须消费；`mathPaste.ts` ALLOWED_ATTR 须含 `data-doc-id`/`data-doc-title`/`data-title`。GUI 候选异步须 waitFor 具体 item、右键须 `dispatchEvent(contextmenu)`。
-- **节点内文档路径消歧**：唯一格式源 `formatDocumentInNodePath`（主进程 `document-id-service.js`），沿 `tree.json` 的 `parentId` 返回祖先标题链（不含自身、`' / '`、顶层空串），带缺失/自环/互环/64 层保护；`scanDocumentEntries` 给 `FSBDocumentCandidate.documentPathLabel`，`LinkDocumentDialog`/`DocumentLinkPicker` 在面包屑下以 `↳ 路径` 单独成行且参与检索。勿在渲染层重写上溯，勿顶替 `formatDocumentSource`。
+- docId＝`doc_`+32hex；关联 `{docId,cardRef,title}`≤8 只记 `child.linkedDocuments`；物理 `card-<id>/_docs/<docId>.tdoc.json`+`tree.json`，写库必经 `createLinkedDocumentWriter`。
+- **ownerCardPath 铁律**：右栏/草稿/附件/缓存键一律 `documentCardPath`；面包屑唯一 `formatDocumentSource`；docLink inline 只存 `{docId,title}`；`[[` 用 InputRule+queueMicrotask；开 chip 先 `flushDocumentSave()`→查锁→`enterRoomInTab`。
+- `fs:listDocumentRelations` 返 `{incoming,outgoing,parsed,indexed}`；索引 `doc-relations.json` 按 stat 签名增量、丢失自愈。`file-service.js` 依赖 electron.shell；idRemap 必须消费；`mathPaste` ALLOWED_ATTR 含 `data-doc-*`。GUI 候选异步须 waitFor 具体 item、右键须 `dispatchEvent(contextmenu)`。
+- 节点内文档路径唯一源 `formatDocumentInNodePath`（沿 `tree.json` 的 parentId 上溯，防缺父/环/64 层）；`documentPathLabel` 在两个选择器里「↳ 路径」单独成行且参与检索；勿顶替 `formatDocumentSource`。
 
 ## 编辑器 / 节点
-- 勿在 `appendTransaction` 同步改文档：只记脏块 id+return null，`Plugin({view})` 存 EditorView，停输入~1s/blur/destroy 批量 flush。浮层一律 portal 到 body。公式唯一入口 `mathRender.ts`（先 `normalizeMathSource` 再 katex）。图片对齐 `ImageAlignToolbar.tsx` 自监听+fixed 浮层。顶部工具栏折叠 36↔0、收起只留贴边按钮(right:24/z-50)。
-- `titleDecorations.ts` 是装饰唯一事实来源，`KnowledgeCard.tsx` 与 `autoSize.ts` 消费同一份 `decorations`；`signature=JSON.stringify(renderInputs)`。`cardSizeLimits.ts` MAX_TITLE_LINES=4/MAX_TITLE_WIDTH_CHARS=20，DOM line-clamp 与测量同源。
+- 勿在 `appendTransaction` 同步改文档：只记脏块 id，停输入~1s/blur/destroy 批量 flush；浮层 portal 到 body；公式唯一入口 `mathRender.ts`；图片对齐 `ImageAlignToolbar` 自监听；顶部工具栏折叠 36↔0、收起只留贴边按钮(right:24/z-50)。
+- `titleDecorations.ts` 是装饰唯一事实来源（KnowledgeCard/autoSize 同消费，`signature=JSON.stringify(renderInputs)`）；`cardSizeLimits` MAX_TITLE_LINES=4 / MAX_TITLE_WIDTH_CHARS=20。
 
 ## 连线 / 树
-- 锚点归「边」：`sourceAnchor/targetAnchor`=`EdgeAnchor{u,v}`，边框交点经 `offsetBorderPoints` 外推 6px。字段白名单/子集类型是高频 bug：构造 nextData 后遍历字段并集浅比较+通用透传，子集一律 `Partial<X>`。`EdgeLabelRenderer` zIndex:10、手柄 11>工具栏 10；滑杆只组件内 preview、pointerup 一次落盘。Electron 勿 `window.confirm`（用 `useConfirmStore.getState().open()`）。
-- 关系仅 `related`/`subordinate`，方向 source=父→target=子；规则源 `edgeRelations.ts`（`readEdgeRelationId()` 唯一读盘入口），定义在 `_config.json` 显式保留。迁移 `scripts/migrate-edge-relations.mts`（真实 KB 已迁移）。
-- **从属连线样式（2026-11-09 晚回滚，勿再加回）**：用户明确不要双线轨道/层级徽标；从属边只走 `BaseEdge style={style}`，由 `BUILTIN_EDGE_RELATIONS`+右栏样式面板+格式刷决定；关系名标签由 `showEdgeRelationLabels` 控制。**保留**关联边强契约：`describeEdgeSemantic.mandatoryLabel` 让「关联」恒显示，`data-tm-edge-relation-mandatory` 只在关联标签上为 true。
-- 树强校验唯一 `graphHierarchy.ts`：深度单调 O(1)、唯一父/无环/深度≤100，违规边降级 related 不删边，depth 派生不落盘。新建连线必须选关系，onConnect 未选不落盘、addEdge 过强校验。`parseStrictEdgeRelation`（只认显式两值）用于创建期、`assertEdgeRelationForCreate` 还要求关联边非空显示名；`readEdgeRelationId` 只用于读盘兼容，勿混。
+- 锚点归边 `EdgeAnchor{u,v}`，边框交点经 `offsetBorderPoints` 外推 6px；nextData 遍历字段并集浅比较+透传，子集一律 `Partial<X>`；`EdgeLabelRenderer` z10、手柄 11；滑杆只 preview、pointerup 一次落盘；Electron 勿 `window.confirm`。
+- 关系仅 `related`/`subordinate`，source=父→target=子；规则源 `edgeRelations.ts`（`readEdgeRelationId` 只读盘兼容），`_config.json` 显式保留。树强校验唯一 `graphHierarchy.ts`（唯一父/无环/≤100，违规降级 related 不删边，depth 派生不落盘）；新建连线必须选关系。
+- **从属边样式（11-09 回滚，勿加回）**：不要双线轨道/层级徽标，只 `BaseEdge style`；标签由 `showEdgeRelationLabels` 控制。关联边强契约：`mandatoryLabel` 恒显示 + `data-tm-edge-relation-mandatory`。
 
-## 缩放 / LOD（详见 2026-11-09~11.md）
-- `zoomScale.ts` 唯一比例尺源：100%＝raw 0.65、**5%~100%**（上限 100%=`MAX_RAW_ZOOM≡ZOOM_REFERENCE`，下限 5%，20% 分两段）；`rebaseViewportZoom` 复位历史 raw 1/0.5；滚轮 `clampWheelDelta`(80)+`wheelDeltaStep`(τ62ms) 由 rAF 逐帧派发；**禁用 CSS transition:transform**。端点判定唯一源 `isAtMaxZoom/isAtMinZoom` 按显示百分比。左下角 `ZoomResetButton` 常驻 `CanvasMiniMap` bottom-left，只 `zoomTo(ZOOM_REFERENCE)` 不改 pan、必须 `pointer-events-auto`；与左上角 `data-tm-zoom-reset` 同源。
-- **P0 语义缩放铁律**：视觉变量按**连续 zoom** 用 `containerRef.style.setProperty` 写画布最外层（零 React 重渲染），绝不用 2% 台阶的 `lodZoom`。`KnowledgeCard` 两层壳：`data-tm-card-anchor` 外层尺寸/Handle/测量/落盘全不动，`data-tm-glyph-layer` 内层唯一 `scale(var(--tm-glyph-comp,1))`；**禁止** `scale(1/zoom)` 改节点尺寸。装饰常驻由 `.tm-card-detail` 连续淡出。
-- **P1.5 字形**：唯一源 `glyphScaleForRatio`（近景放大分支已删；`safe>=1→1`；<100% `1+(1.3-1)*(1-smoothstep(0.2,1,r))`，`GLYPH_FAR_SCALE=1.3`）；越界 ratio 先 clamp [0.2,1]；`glyphCompensationForZoom` 供 LOD 压力复用。**文字仍保持（2026-11-11 晚，取代「紧凑区冻结 6.5」）**：紧凑区 `comp = GLYPH_FAR_SCALE/ratio`（20% 连续 6.5、5% 约 26），屏幕倍率恒 1.3 → 标题字号不缩到 2.4px；代价是节点间距继续收紧、骨架可能靠得更近，可见集合冻结且跳过碰撞抽稀故不触发隐藏；用户明确选「可读性优先于零重叠」。5% 端点有按钮保底步长残差（实测 5.22%），断言只锁 `comp×镜头比例` 恒定，勿断言 comp 恰为 26。
-- **LOD `lod.ts`**：`revealRatioForRank(rank,count)` 按退场序列（游离→深叶→浅主干→树根，父不先于子）的分位铺满 100%→20%；判据 `ratio>=reveal`，**阈值越高越早消失**；滞回 1.5%、树根恒留、pin/reveal/选中强制、无树或覆盖<25% 关闭。渐隐渐显用 `tm-lod-exit`/`tm-lod-enter` 关键帧+`both`(240ms)，勿退回 transition。`hidden` 只渲染不落盘。**禁止离散档位表 / 按深度级数分配**。
-- **自定义永久显示层数**：`LOD_DEFAULT_PRESERVED_DEPTH=2`、`LOD_MAX_PRESERVED_DEPTH=MAX_HIERARCHY_DEPTH(100)`、`normalizePreservedDepth()`；`LodVisibilityInput.preservedDepth` → `skeletonIds`＝**所有** `!free && !root && depth<=N` 树节点（**只依赖层级、禁读坐标**），树根恒留、游离不保；仍占 `exitOrder` rank、不分配 `revealOf` → 其它阈值逐值不变；与根同进碰撞 `protectedIds`/`priority` 最前，**层数优先于零重叠**，保护节点间重叠只计 `collisionProtectedOverlapPairs`。`LodVisibility.preservedDepth` 回吐生效值。偏好 `lodPreferences.ts` 增 `preservedDepth`+`setLodPreservedDepth`（commit 先写快照再通知）；`useSemanticLod` 传入 `common` 并写进 signature → 改配置立即重算；`LodControl` 下拉 1~8 层 + 「全部层级」，`data-tm-lod-preserved-depth-select`。GUI 夹具 `lod-c1`(60,660)、`lod-c2`(700,700) 拉开零重叠，`lod-g1`(130,405) 贴根承担碰撞抽稀。
-- **P1 几何压力 `lodPressure.ts`**：`collectNodeSpacings` 空间哈希（cell=`sqrt(area/n)*1.5`、3×3 邻格、孤立哨兵、24 probes），`overlapPressureForRatio` 需求 `base*glyphScale(r)/r`，`lodProgressForRatio=0.72*linear+0.28*geometric`，2% 台阶查表求逆。**三铁律**：只依赖静态布局+ratio（绝不依赖可见集合，否则自激）/ w=0.28 有界 / 两端固定。lod.ts 只把 reveal 经 `pressure.ratioFor` 求逆，**退场顺序仍由语义树唯一决定**。`useSemanticLod` signature 刻意不含 position。
-- **P1.75 折叠徽标**：`computeCollapsedCounts` 把隐藏节点归到最近可见祖先（不重复、游离单列、防环），`总+游离=隐藏数`；**绝不写 nodes[].data**，走 `lodCollapseStore.ts` 外部 store（roomPath 隔离+按 nodeId 精确通知），`KnowledgeCard` 用 `useSyncExternalStore`。**外部 store 先写快照再通知**。
-- 图型 `graphProfiles.ts`：auto/tree/flow/network，用户 off/force 压过图型。总览 `roomOverview.ts` 三铁律：`useGraphSession`（裸 selector 新对象让 React 19 挂）、独立 `ReactFlowProvider`、卡片带隐藏 Handle。返回上个视野 `viewportReturn.ts`+store（TTL 12s/settle 340ms/最小 24px，按 tab 隔离不落盘），只在程序化跳转埋点；viewport.x/y 是屏幕像素。Puppeteer 组合键须 `down('Control')+press('f')+up('Control')`。
-- **P1.9 碰撞硬约束 `lodCollision.ts`**：根因＝P0 钉住视觉壳屏幕尺寸但坐标仍随 viewport 收缩。**不改坐标**，改成「紧凑到重叠就渐隐」：碰撞盒＝锚点壳×`glyphCompensationForZoom`×1.06，100%→85% smoothstep 启用且 **100% 恒等点绝不裁剪**；按保留优先级贪心，**障碍必须是「所有更高优先级节点」而非「已保留节点」**（否则低优先级闪回、破坏单调）。树根/pin/选中/reveal 恒定保留、父被裁连带裁子树。`LodNodeLike` 只加只读 `width/height/measured?`，不进白名单。P1 回归 `positionedNodes` 稀疏布局隔离压力节奏。
-- **P2 多级布局插值 / 坐标随 zoom 变：不做**（撞手摆位置落盘 / viewport 返回视野 / hidden 不落盘三条铁律）。P1.9 是安全替代：用抽稀代替重排。
-- **画布只读（2026-11-11）**：唯一判定 `computeCanvasReadOnly(zoom, hiddenNodeCount)`（`src/domain/graph/canvasReadOnly.ts`）＝`!isAtMaxZoom(zoom) || hidden>0`（缩小即锁；100% 有隐藏也不解锁）。状态在 `src/stores/canvasReadOnlyStore.ts` 外部 store 按 tabId 隔离，GraphCanvas 用 `useLayoutEffect` 发布；**先写快照再通知**，叶子组件只 `useActiveCanvasReadOnly()` 订阅布尔。**唯一写闸门在 `src/hooks/useGraph.ts` 的 `guardCanvasEdit`**（不能只包 GraphContext：`useGraphPageActions` 在 Provider 外持有同一 graph）：包住全部 CRUD/连接/样式/锚点方法，`onNodesChange` 只过滤 position/remove/add/replace + 手动 resize 的 dimensions，**放行 select 与测量/auto-size 的 dimensions**。绕闸门四条捷径单独拦：`graphEventHandlers.onConnect` 的 `onConfirm`、格式刷 `onEdgeClick`、`useEdgeActions.deleteElements`、撤销/重做与 Enter/Tab 快捷键。UI 层 `nodesDraggable/nodesConnectable/nodesFocusable={!readOnly}`、右键菜单不弹、卡片标题/resize/加号/工具栏/emoji、连线工具栏与锚点全收；`elementsSelectable` 保留。提示条 `CanvasReadOnlyBanner`+LodControl 徽标+右栏样式面板提示，`data-tm-canvas-readonly*`。只读是纯视图态，绝不落盘。
-- **两段镜头 + 密度自适应（2026-11-11 晚）**：`MIN_DISPLAY_PERCENT=5`、`COMPACT_START_PERCENT=20`(=`COMPACT_START_RATIO`)，**`lod.LOD_FLOOR_RATIO` 必须从 `COMPACT_START_RATIO` 派生**（`lodPressure.DEFAULT_LOD_PRESSURE_BOUNDS.floorRatio` 同源），禁三处各写 0.2。100%~20% 渐隐、20%~5% 紧凑：紧凑区 `computeLodVisibility` 用 `lodRatio=max(LOD_FLOOR_RATIO, ratio)` → 可见集合严格冻结、`displayPercent` 回吐真实读数、**跳过碰撞抽稀**；`quantizeLodZoom` 也钳 0.2 → 零重算；`glyphScaleForRatio` clamp 下界 0.2。**一行坐标都不改**（P2 不做）。滚轮紧凑区靠 d3 等比缩放边际递减；按钮 `stepGraphZoom`（渐隐区 ±10%×灵敏度且 20% 停靠，紧凑区 `5+(p-5)*0.72-0.5` 保底步长、放大越过 20% 必须回线性否则卡死）。**密度自适应**：固定 80 个百分点藏 N 个节点，按分位每格隐藏 ∝N、按绝对数每格格数 ∝N，折中让步进量 ∝1/√N → `zoomStepSensitivityForGraph(n,d)=min(1,√(60/n)/(1+0.06·max(0,d-2)))`，n≤60 恒 1、下限 0.12；`wheelSensitivityForZoom` 紧凑区恒 1；只改操作量、**不改 zoom→显示比换算与 LOD 阈值公式**。诊断 `data-tm-lod-compact*`/`data-tm-canvas-compact*`。GUI 阶段 N：8 格到 20% 做全部 LOD/只读/字形断言 → 12 格到 5% 做紧凑断言 → 重置；`wheelOnPane` helper 在 CDP `Input.dispatchMouseEvent` 超时时用合成 WheelEvent 兜底。
+## 缩放 / LOD（详见 11-09~11 日志）
+- `zoomScale.ts` 唯一比例尺：100%＝raw 0.65、5%~100%、`COMPACT_START_PERCENT=20`；滚轮 `clampWheelDelta`+`wheelDeltaStep` 由 rAF 派发；**禁 CSS transition:transform**；端点按显示百分比判定；左下 `ZoomResetButton` 常驻、只 zoomTo、`pointer-events-auto`。
+- **P0**：视觉变量按连续 zoom 写画布最外层 CSS 变量（零重渲染），绝不用 `lodZoom` 台阶；`KnowledgeCard` 两层壳（anchor 外层尺寸/Handle/测量/落盘全不动，glyph-layer 内层唯一 `scale(var(--tm-glyph-comp))`）；禁 `scale(1/zoom)` 改节点尺寸。
+- 字形唯一源 `glyphScaleForRatio`；紧凑区 `comp=1.3/ratio` → 屏幕倍率恒 1.3（**文字仍保持**，用户选可读性优先于零重叠）。`lod.ts` 按退场序列（游离→深叶→浅主干→树根，父不先于子）分位铺 100%→20%，滞回/树根恒留/pin/选中强制，渐隐关键帧 240ms `both`；`hidden` 只渲染不落盘；**禁离散档位/按深度分配**。
+- **永久显示层数**：默认 2、上限 100（`normalizePreservedDepth`）；`skeletonIds` 只依赖层级、禁读坐标，**层数优先于零重叠**；`lodPreferences.ts` 持久化，`useSemanticLod` 写进 signature。
+- `lodPressure.ts` 三铁律＝只依赖静态布局+ratio（不看可见集合，否则自激）/ w 有界 / 两端固定；退场顺序仍由语义树唯一决定。折叠徽标 `computeCollapsedCounts` 绝不写 `nodes[].data`，走 `lodCollapseStore`（先写快照再通知）。
+- **P1.9 碰撞抽稀**：不改坐标；100% 恒等点绝不裁剪；障碍必须是**所有更高优先级节点**；父被裁连带裁子树。**P2 多级布局插值 / 坐标随 zoom 变：不做**。
+- **画布只读**：`computeCanvasReadOnly(zoom,hidden)`＝`!isAtMaxZoom || hidden>0`；`canvasReadOnlyStore` 按 tabId 隔离；**唯一写闸门 `useGraph.ts` 的 `guardCanvasEdit`** 包全部 CRUD/连接/样式/锚点；四条捷径另拦（onConnect onConfirm、格式刷 onEdgeClick、deleteElements、undo/redo+Enter/Tab）；`elementsSelectable` 保留、只读纯视图不落盘。
+- **两段镜头**：`LOD_FLOOR_RATIO` 必须从 `COMPACT_START_RATIO` 派生；紧凑区可见集合冻结+跳过碰撞抽稀+`displayPercent` 回吐真实值，**一行坐标都不改**。`DENSITY_STEP_SCALING_ENABLED=false`（用户 20:46「步进慢，恢复上次配置」）→ 应用入口 `zoomStepSensitivityForGraph` 恒 1，滚轮/按钮固定步进；公式保留可一键切回，**禁擅自改回 true**；另一旋钮 `MAX_WHEEL_DELTA=80`。
+- **缩放滑动条**：`CanvasZoomSlider.tsx` 与 `CanvasReadOnlyBanner` 同挂 top-center Panel，提示条在上、slider 在下；显隐**只**由 banner 的 `!state.readOnly` 判定（slider 禁自己判只读）；5~100% step1 受控 range → `zoomTo(fromDisplayPercent(p), {duration:0})` 保持 pan、不 fitView、不写坐标。
+- 图型 `graphProfiles.ts`（auto/tree/flow/network，用户 off/force 压过图型）；`roomOverview` 三铁律（独立 session/Provider/隐藏 Handle）；`viewportReturn` 按 tab 不落盘。
 
 ## 多选 / 布局变换
-- **水平镜像（2026-11-11 晚）**：唯一规则源 `domain/graph/mirrorSelection.ts` 纯函数 `computeHorizontalMirror`/`applyHorizontalMirror`（esbuild 可真跑）。中轴＝选中节点包围盒 `(minLeft+maxRight)/2`；节点 `x' = 2*axis-(x+width)`、y/尺寸/data 全不动；**锚点只翻落在选中端的 `u→1-u`（v 不变）**；`curveControl` 两端全选中时 `v→-v`（法向 `(dy,-dx)` 决定，含垂直线），只有一端选中时按两端中心连线 `dx` 是否变号决定，避免跨界连线莫名变形；source/target 语义方向不变。未选中对象保持原引用、边 data 用展开语法透传（不进 7 处字段白名单）；连续两次严格幂等；选中 <2 返回 null。宽度取 `width ?? measured.width ?? initialWidth ?? 120`。
-- 接线：`hooks/useGraph/selectionMirrorOperations.ts` 把结果一次写回（`setNodesPreservingSelection`+`setEdges`，temporal `pause→set→resume→commitGraphHistorySnapshot` 合并成**一条 undo 历史**，再 `saveLater`）；`useGraph` 过 `guardCanvasEdit`、`GraphContext` 暴露；`components/SelectionMirrorMenu.tsx` 是 React Flow `<Panel position="top-center">`，仅 `selectedNodeCount>=2 && !canvasReadOnly` 时由 GraphCanvas 挂载，与 Shift 提示条互斥，内层必须 `pointer-events-auto`。**按钮不要做忙碌禁用**（异步保存会让连点第二下被吞，纯函数每次读最新 store 天然支持来回翻）。诊断 `data-tm-selection-mirror-menu/-count/-flip`。
+- **水平镜像**唯一规则源 `mirrorSelection.ts`：中轴＝选中包围盒中点，`x'=2*axis-(x+width)`、y/尺寸/data 不动；**锚点只翻选中端 `u→1-u`**；`curveControl` 两端全选中 `v→-v`；未选中保持引用、两次幂等、<2 返回 null。
+- 接线 `selectionMirrorOperations.ts` 一次写回（pause→set→resume→commit 合成一条 undo）；`useGraph` 过 `guardCanvasEdit`；`SelectionMirrorMenu` 是 top-center Panel、**按钮不要忙碌禁用**。
+- **选中子树** `selectSubtree.ts`（复用 `buildHierarchy` 沿 subordinate BFS、含根、替换式选中、幂等）；`selectionSubtreeOperations` 只写 `nodes[].selected`，不落盘/不进 undo/**不过写闸门**。菜单单选≥1 即出现，镜像区仍只在≥2 可写时渲染；右键另有「选中子树」。
+
+## 统一资源树（2026-11-11，后续整合查看入口的底座）
+- 唯一实现 `electron/services/unified-document-tree-service.js`（纯 ESM、IO 由 deps 注入）：`root / kb:<cardPath> / doc:<cardPath>:<docId> / group:orphans`；**key 对渲染层不透明**，只由 `parseUnifiedTreeKey`/`cardTreeKey`/`documentTreeKey` 编解码，UI 只按 `kind`/`hasChildren`/`origin` 递归。加新分组只改主进程。
+- **按层 + 只列有文档的节点**：房间层读父房间 meta（连线子节点）+ 自身 meta（房间森林第一层）+ 自身 tree.json，每层最多 2 份 meta；深层留到下次展开。`buildSubordinateForest(meta)` 是模块级导出纯函数（source=父→target=子、旧值兼容、多父/环/自环/超 100 层降级、related 不入）。
+- **剪枝铁律**：`documentPresence` 一次 TTL 缓存的目录级探测，只读 tree.json 清单（`rooms` 自身有文档 / `prefixes` 物理祖先），**不读 .tdoc 正文、不写索引**；`isRelevant` 必须同时判物理后代与**沿 forest 下溯的连线子树**——连线子节点和父是同级目录，前缀判断覆盖不到，否则深层文档点不到。空节点不列；仅作路径的保留并标 `origin='path'`。离散分组同样剪枝。
+- **来源区分**：`origin='room'`（房间包含）/ `'subordinate'`（从属连线）/ `'path'`（仅路径），DTO 在 `fs-backend.ts`，视图用 GitBranch 图标 + 副标题行徽标「房间/从属/仅路径」（**徽标必须在第二行**，标题行文本供 GUI 精确匹配）、path 灰显但可展开；诊断 `data-tm-unified-tree-origin/-has-docs`。
+- `resolveDocumentPath` 必须按 `forest.parentOf` 补**连线祖先链**，否则 `expandPath` 展开到一半断链；房间子节点的物理链不变。
+- 搜索/定位走派生索引 `.topomind/document-tree-index.json`（stat 签名增量、丢失自愈、首次搜索才建），`if (!q) return []` 是硬约束；服务里**禁回灌** `scanDocumentEntries`/`listDocumentCandidates` 全量扫描。
+- IPC 四层同步：`preload.js` 白名单与 `main.js` 三通道 → `file-service.js` → `fs-backend.ts`（类型+`_call`）→ `storage/file.ts`（`requireRootDir()`）→ `service.ts`（logger 后 throw）→ `types.ts`。漏一层即回归失败。
+- 前端分层 `src/features/documents/unifiedTree/`：`TreeDataSource` 协议 / 适配 / `useUnifiedTree`（惰性、按 key 缓存、inflight 合并、expandPath/refresh、loadCount）/ 搜索 hook / `UnifiedTreeView`+`DocumentCandidateRow`。两个弹窗默认只加载 root 层，输入 query 才 debounce 切平铺。
+- **旧契约不得丢**：「↳ 路径」单独成行且参与检索、面包屑唯一源 `formatDocumentSource`、8 篇上限、`excludeDocId`、`dialog.links` 兜底回显、`data-tm-link-document-id/-path`、`data-tm-doc-link-item/-path`。第 27/28 组回归 + GUI 阶段 T/U 锁「默认 1 层 / 连线树逐层」。
+
+## 画布状态抽屉（2026-11-11）
+- 面包屑/最近打开/镜头状态三块融合进 `LodControl.tsx` 的 top-left Panel 抽屉；`GraphPage` 不再挂绝对定位层。
+- 整体 + 4 区（path/view/recent/details）独立折叠；偏好 `canvasStatusPreferences.ts`（`topomind_canvas_status_v1`、useSyncExternalStore、先写快照再通知）；`CanvasStatusSection` 用 max-height/opacity 折叠且 **DOM 常驻**（GUI 要读隐藏诊断 textContent）。
+- **长路径**：控件宽度固定；标题栏只显示「首段 / … / 当前段」+ tooltip；完整链路在「位置」区纵向滚动、逐段可点；折叠态只留标题胶囊。所有 `data-tm-lod-*` 诊断属性与关键文案必须留在 DOM，精简 UI 不得删。
+
+## 学习统计面板（2026-11-11 精简）
+- 算法唯一源 `analytics.ts`→`shared/utils/learningAnalytics.ts`，`runtime.ts`/`useLearningRuntimeState.ts` 不动；只改视图。
+- 信息架构固定「头部 + 一行筛选 → 今日 Hero → 4 KPI → 热力图/趋势两图 → 按需分布或当日明细」；**禁回灌**英文 eyebrow、功能自述、目标分析/范围观察/结论段、24 小时网格、重复指标卡；5 个关键指标各只出现一次。
+- 共用原语 `LearningStatisticsParts.tsx`：**所有热力图共用 `HEAT_CELL_SIZE=13` + `HeatCell` + `heatCellStyle`**（正方形格/gap-1/选中 ring/悬停读数），色阶只用 accent 的 `color-mix`，禁硬编码橙红 hex、禁 `w-full` 拉伸长条。
+- `<h1>学习统计</h1>` 必须在 loading 首屏可见（SSR 守卫）。**当天明细是与每日记录同款的半小时热力图**（2×24=48 格，上 :00–:30 / 下 :30–:00，点击有色格才展开 ≤3 条）；唯一算法源 `buildDayHalfHourBuckets`（48 桶/1800s/墙钟分摊/跨午夜折回/防死循环），`appendSessionHours` 仍供范围统计复用，禁回灌 session 长列表。
 
 ## 设计 / CSS / 门禁
-- 单色制：浅色 `--color-primary`==`--color-accent`(`#0969da`) 勿"修复"，颜色只在 `tokens.css`。卡片三层通道：装饰/结构/语义；边框色 显式>domainColor>默认。CSS 变量不配透明度修饰符（用 color-mix）；改 BlockNote 内部写进 `SmartDocumentEditor.css` 按 `.smart-document-content .bn-X`+`!important`；SVG `style={{fill:'var(--x)'}}`。
+- 单色制：浅色 `--color-primary`==`--color-accent`(`#0969da`) 勿"修复"，颜色只在 `tokens.css`；CSS 变量不配透明度修饰符（用 color-mix）；BlockNote 内部样式写 `SmartDocumentEditor.css` + `!important`；SVG `style={{fill:'var(--x)'}}`。
 - 插件门禁禁 builtin/`shared/` 引用 `@/stores/*`；共享状态放 `src/shared/ui/<Comp>/xxxStore.ts` 或 `src/plugins/public/xxxStore.ts`；runtime guards 用 `loadModuleWithVite()`。

@@ -2945,12 +2945,21 @@ const edge = (
     ['节点关联对话框', await readFile(new URL('../src/features/graph/components/LinkDocumentDialog.tsx', import.meta.url), 'utf-8')],
     ['编辑器文档引用选择器', await readFile(new URL('../src/features/documents/SmartDocumentEditor/components/DocumentLinkPicker.tsx', import.meta.url), 'utf-8')],
   ] as const
+  // 统一树改造后：检索下沉到主进程派生索引，展示下沉到两个共用行组件；
+  // 两个弹窗只负责接线，且不得再调全量候选接口。
+  const unifiedSearchSrc = await readFile(new URL('../electron/services/unified-document-tree-service.js', import.meta.url), 'utf-8')
+  const treeViewSrc = await readFile(new URL('../src/features/documents/unifiedTree/UnifiedTreeView.tsx', import.meta.url), 'utf-8')
+  const candidateRowSrc = await readFile(new URL('../src/features/documents/unifiedTree/DocumentCandidateRow.tsx', import.meta.url), 'utf-8')
+  assert.ok(unifiedSearchSrc.includes('entry.documentPathLabel'),
+    '统一树搜索必须支持按节点内文档路径检索（不能只搜标题）')
+  assert.ok(treeViewSrc.includes('candidate.documentPathLabel') && candidateRowSrc.includes('candidate.documentPathLabel'),
+    '树行与搜索结果行都必须展示节点内文档路径以区分同名文档')
   for (const [name, source] of pickerSources) {
-    assert.ok(
-      source.includes('item.documentPathLabel.toLowerCase().includes(q)'),
-      `${name}必须支持按节点内文档路径检索`
-    )
-    assert.ok(source.includes('{item.documentPathLabel && ('), `${name}必须展示节点内文档路径`)
+    assert.ok(!source.includes('listDocumentCandidates('),
+      `${name}不得再全量加载候选列表（必须走统一树按需加载）`)
+    assert.ok(source.includes('useUnifiedTree(') && source.includes('useUnifiedTreeSearch(')
+      && source.includes('createStorageTreeDataSource('),
+      `${name}必须接入按层加载 + 搜索的通用树底座`)
     assert.ok(source.includes('data-tm-link-document-path') || source.includes('data-tm-doc-link-path'),
       `${name}必须暴露节点内路径供 GUI 断言`)
   }
@@ -6026,7 +6035,8 @@ const edge = (
     COMPACT_START_RATIO, COMPACT_STEP_DECAY, COMPACT_STEP_MIN_PERCENT,
     ZOOM_STEP_PERCENT, LOD_DENSITY_REFERENCE_NODES, MIN_ZOOM_STEP_SENSITIVITY,
     toDisplayPercent, fromDisplayPercent, isCompactZoom,
-    zoomStepSensitivityForGraph, wheelSensitivityForZoom, stepGraphZoom,
+    zoomStepSensitivityForGraph, densityStepSensitivityForGraph,
+    DENSITY_STEP_SCALING_ENABLED, wheelSensitivityForZoom, stepGraphZoom,
     glyphCompensationForZoom, quantizeLodZoom, GLYPH_FAR_SCALE,
   } = z
 
@@ -6059,37 +6069,41 @@ const edge = (
   assert.ok(Math.abs(glyphCompensationForZoom(MIN_RAW_ZOOM) - GLYPH_FAR_SCALE / 0.05) < 1e-9,
     '【文字保持】5% 补偿必须是 1.3/0.05 = 26，屏幕字号不缩水')
 
-  // 3) 密度自适应：小图逐值不变、大图按 1/√N 放慢、树深再温和放慢、有下限。
-  assert.equal(zoomStepSensitivityForGraph(0), 1, '空图不得改变缩放手感')
-  assert.equal(zoomStepSensitivityForGraph(8, 3), 1, '所有既有小图夹具必须逐值不变')
-  assert.equal(zoomStepSensitivityForGraph(LOD_DENSITY_REFERENCE_NODES, 20), 1,
-    '不超过参考规模的图灵敏度恒为 1')
-  const s240 = zoomStepSensitivityForGraph(240, 2)
-  const s1000 = zoomStepSensitivityForGraph(1000, 2)
-  const s10000 = zoomStepSensitivityForGraph(10000, 2)
-  assert.ok(s240 < 1 && s1000 < s240 && s10000 < s1000,
-    '【密度自适应】图越大每格缩放幅度必须越小')
-  assert.ok(Math.abs(s240 - Math.sqrt(60 / 240)) < 1e-9,
-    '【密度自适应】灵敏度必须严格等于 1/√(N/60)（深度为 2 时）')
-  assert.ok(zoomStepSensitivityForGraph(1000, 20) < s1000,
-    '【密度自适应】同样节点数下树越深还要再放慢一点')
-  assert.equal(zoomStepSensitivityForGraph(1e9, 100), MIN_ZOOM_STEP_SENSITIVITY,
-    '【密度自适应】万级大图也必须保留可操作的下限，不能慢到滚不动')
-  assert.equal(zoomStepSensitivityForGraph(Number.NaN, Number.NaN), 1,
-    '【密度自适应】脏数据必须回落到 1')
-  // 权衡真跑：线性分位下每格隐藏数 ∝ N；放慢后 ∝ √N（两头都不爆炸）。
-  const hiddenPerNotch = (n: number) => n * ZOOM_STEP_PERCENT * zoomStepSensitivityForGraph(n, 1) / (100 - COMPACT_START_PERCENT)
+  // 3) 【恢复固定步进 2026-11-11 晚】用户实测密度限速让鼠标步进偏慢，要求恢复上一版
+  //    配置：应用入口恒为 1。旧 1/√N 公式保留在 densityStepSensitivityForGraph，
+  //    仍按原样真跑，便于把开关切回 true 时无需重写断言。
+  assert.equal(DENSITY_STEP_SCALING_ENABLED, false, '【恢复固定步进】密度自适应必须关闭')
+  for (const [n, d] of [[0, 1], [8, 3], [240, 2], [1000, 20], [1e9, 100]]) {
+    assert.equal(zoomStepSensitivityForGraph(n, d), 1,
+      `【恢复固定步进】任意图规模都必须回到上一版固定步进（n=${n}）`)
+  }
+  assert.equal(wheelSensitivityForZoom(ZOOM_REFERENCE, 1000, 2), 1,
+    '【恢复固定步进】大图滚轮不得再被密度限速')
+  assert.equal(wheelSensitivityForZoom(MIN_RAW_ZOOM, 1000, 2), 1,
+    '【恢复固定步进】紧凑区同样不再叠加限速')
+  // 旧公式真跑（当前未生效）：小图=1、大图 1/√N、树深再放慢、有下限、脏数据回落 1。
+  assert.equal(densityStepSensitivityForGraph(0), 1, '旧公式：空图不改变手感')
+  assert.equal(densityStepSensitivityForGraph(8, 3), 1, '旧公式：小图逐值不变')
+  assert.equal(densityStepSensitivityForGraph(LOD_DENSITY_REFERENCE_NODES, 20), 1,
+    '旧公式：不超过参考规模恒为 1')
+  const s240 = densityStepSensitivityForGraph(240, 2)
+  const s1000 = densityStepSensitivityForGraph(1000, 2)
+  const s10000 = densityStepSensitivityForGraph(10000, 2)
+  assert.ok(s240 < 1 && s1000 < s240 && s10000 < s1000, '旧公式：图越大每格幅度越小')
+  assert.ok(Math.abs(s240 - Math.sqrt(60 / 240)) < 1e-9, '旧公式：严格等于 1/√(N/60)')
+  assert.ok(densityStepSensitivityForGraph(1000, 20) < s1000, '旧公式：树越深再放慢一点')
+  assert.equal(densityStepSensitivityForGraph(1e9, 100), MIN_ZOOM_STEP_SENSITIVITY,
+    '旧公式：万级大图仍保留操作下限')
+  assert.equal(densityStepSensitivityForGraph(Number.NaN, Number.NaN), 1,
+    '旧公式：脏数据回落 1')
+  const hiddenPerNotch = (n: number) => n * ZOOM_STEP_PERCENT * densityStepSensitivityForGraph(n, 1) / (100 - COMPACT_START_PERCENT)
   const linearPerNotch = (n: number) => n * ZOOM_STEP_PERCENT / (100 - COMPACT_START_PERCENT)
   assert.ok(Math.abs(hiddenPerNotch(60) - linearPerNotch(60)) < 1e-9,
-    '【密度自适应】小图与原实现逐值一致')
+    '旧公式：小图与原实现逐值一致')
   assert.ok(hiddenPerNotch(1000) < linearPerNotch(1000) / 3,
-    '【密度自适应】1000 节点时每格隐藏数必须压到线性的 1/3 以下，不再「轻轻一动消失一片」')
+    '旧公式：1000 节点时每格隐藏数压到线性 1/3 以下')
   assert.ok(Math.abs(hiddenPerNotch(1000) / hiddenPerNotch(60) - Math.sqrt(1000 / 60)) < 0.01,
-    '【密度自适应】每格隐藏数按 √N 增长（而非 N），走完全程的格数同样按 √N 增长')
-  assert.equal(wheelSensitivityForZoom(ZOOM_REFERENCE, 8, 3), 1, '小图滚轮不降速')
-  assert.equal(wheelSensitivityForZoom(ZOOM_REFERENCE, 1000, 2), s1000, '大图滚轮按密度降速')
-  assert.equal(wheelSensitivityForZoom(MIN_RAW_ZOOM, 1000, 2), 1,
-    '紧凑区不隐藏节点，d3 等比缩放已边际递减，不再叠加限速')
+    '旧公式：每格隐藏数按 √N 增长')
 
   // 4) 按钮步进：渐隐区每格 -10% 并稳定停靠 20%；紧凑区等比衰减（越接近下限幅度越小）、
   //    保底步长确保真能到 5%；放大是逆运算，能一路回到 20% 以上。
@@ -6130,7 +6144,7 @@ const edge = (
   assert.ok(canvasSource19.includes('wheelSensitivityForZoom(')
     && canvasSource19.includes('clampWheelDelta(native.deltaY) * wheelSensitivity')
     && canvasSource19.includes('data-tm-canvas-compact='),
-    '【密度自适应】滚轮必须在唯一规则源上按图规模降速，并暴露紧凑诊断')
+    '【恢复固定步进】滚轮仍走唯一规则源（当前配置为恒 1），并暴露紧凑诊断')
   const controlSource19 = await readSrc19('src/features/graph/GraphCanvas/components/LodControl.tsx')
   assert.ok(controlSource19.includes('stepGraphZoom(reactFlow.getZoom()')
     && controlSource19.includes('zoomStepSensitivityForGraph(')
@@ -6324,6 +6338,801 @@ const edge = (
     && guiSource20.includes('水平镜像翻转：节点左右互换')
     && guiSource20.includes('5% 紧凑镜头：文字保持可读字号'),
     '【多选镜像 / 文字保持】GUI 必须端到端实测')
+}
+
+// --- 第 21 组：画布状态抽屉融合（2026-11-11）---
+// 房间路径 / 最近打开 / 镜头状态原本三层 UI 都压在画布同一角。现在统一成一个
+// 抽屉式面板：整体 + 每个功能区独立折叠；长路径用固定宽度 + 首尾压缩 +
+// 「位置」区纵向滚动解决，绝不把控件越撑越长。GUI 实测量关键交互。
+{
+  const readSrc21 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const pageSrc21 = await readSrc21('src/features/graph/GraphPage/GraphPage.tsx')
+  const canvasSrc21 = await readSrc21('src/features/graph/GraphCanvas/GraphCanvas.tsx')
+  const controlSrc21 = await readSrc21('src/features/graph/GraphCanvas/components/LodControl.tsx')
+  const sectionSrc21 = await readSrc21('src/features/graph/GraphCanvas/components/CanvasStatusSection.tsx')
+  const prefsSrc21 = await readSrc21('src/features/graph/GraphCanvas/model/canvasStatusPreferences.ts')
+  const pathSrc21 = await readSrc21('src/features/layout/Breadcrumb/Breadcrumb.tsx')
+  const recentSrc21 = await readSrc21('src/features/layout/RoomHistory/RoomHistory.tsx')
+  const guiSrc21 = await readSrc21('scripts/verify-linked-documents-gui.mjs')
+
+  assert.ok(!pageSrc21.includes('<Breadcrumb') && !pageSrc21.includes('<RoomHistory')
+    && !pageSrc21.includes('absolute top-3 left-3'),
+    '【状态抽屉】旧面包屑 / 历史的绝对定位层必须移除，否则仍与 top-left Panel 重叠')
+  assert.ok(/<LodControl\s+tabId=\{tabId\}/.test(canvasSrc21),
+    '【状态抽屉】抽屉必须按 tabId 取房间路径与最近打开')
+  assert.ok(controlSrc21.includes('data-tm-canvas-status-drawer')
+    && controlSrc21.includes('data-tm-canvas-status-title')
+    && controlSrc21.includes('data-tm-room-path-full')
+    && controlSrc21.includes('setCanvasStatusDrawerOpen('),
+    '【状态抽屉】标题栏必须是房间路径面包屑，且整体可折叠')
+  for (const id of ['path', 'view', 'recent', 'details']) {
+    assert.ok(controlSrc21.includes(`<CanvasStatusSection\n              id="${id}"`),
+      `【状态抽屉】缺少独立功能区：${id}`)
+  }
+  assert.ok(controlSrc21.includes('useRoomPathItems(tabId)') && controlSrc21.includes('useRecentRooms(tabId)')
+    && controlSrc21.includes('toggleCanvasStatusSection(id)'),
+    '【状态抽屉】路径 / 历史 / 分区折叠必须接到统一偏好源')
+  assert.ok(controlSrc21.includes('data-tm-lod-depth-panel') && controlSrc21.includes('data-tm-graph-profile-select')
+    && controlSrc21.includes('data-tm-lod-preserved-depth-select') && controlSrc21.includes('data-tm-room-overview-open='),
+    '【状态抽屉】融合不得丢掉镜头 / 诊断 / 总览控件')
+  assert.ok(sectionSrc21.includes('data-tm-status-section={id}')
+    && sectionSrc21.includes('data-tm-status-section-open={open ? \'true\' : \'false\'}')
+    && sectionSrc21.includes('max-h-0 opacity-0 pointer-events-none'),
+    '【状态抽屉】分区折叠只改高度 / 透明度，DOM 常驻（GUI 仍要读诊断文本）')
+  assert.ok(prefsSrc21.includes('topomind_canvas_status_v1') && prefsSrc21.includes('useSyncExternalStore')
+    && prefsSrc21.includes('LEGACY_RECENT_KEY')
+    && ['path', 'view', 'recent', 'details'].every((id) => prefsSrc21.includes(`${id}:`)),
+    '【状态抽屉】四个分区开关必须独立持久化并兼容旧「最近打开」折叠键')
+  assert.ok(pathSrc21.includes('compactRoomPath') && pathSrc21.includes('hasMiddle')
+    && pathSrc21.includes('max-h-40') && pathSrc21.includes('data-tm-room-path-list=""'),
+    '【长路径】标题只留首段 + 省略 + 当前段，完整链路放进限高滚动区')
+  assert.ok(!recentSrc21.includes('usePersistedCollapsed') && recentSrc21.includes('useRecentRooms')
+    && recentSrc21.includes('max-h-44'),
+    '【状态抽屉】历史列表不再自带折叠壳，改由抽屉统一管')
+  assert.ok(guiSrc21.includes('画布状态抽屉：') && guiSrc21.includes('data-tm-canvas-status-toggle'),
+    '【状态抽屉】GUI 必须端到端实测融合 / 分区独立折叠 / 整体折叠')
+}
+
+// --- 第 22 组：选中子树（2026-11-11）---
+// 以选中节点为根，沿从属边选中整棵子树。esbuild 真跑纯函数（树校验 / 旧关系值 /
+// related 边 / 脏数据 / 幂等 / 引用复用），另加源码守卫确认菜单、右键与接线。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundle = await build({
+    entryPoints: [fileURLToPath(new URL('../src/domain/graph/selectSubtree.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    banner: { js: 'globalThis.window = globalThis.window || {};' },
+  })
+  const m = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const { collectSubtreeNodeIds, applySubtreeSelection } = m
+  const sorted = (ids: string[]) => [...ids].sort()
+
+  const nodes22 = [
+    { id: 'root', data: { label: '根' }, selected: false },
+    { id: 'a', data: { label: 'A' }, selected: false },
+    { id: 'b', selected: false },
+    { id: 'a1', selected: false },
+    { id: 'a2', selected: false },
+    { id: 'free1', selected: true },
+    { id: 'free2', selected: false },
+    { id: 'other', selected: false },
+  ]
+  const edges22 = [
+    { id: 'e1', source: 'root', target: 'a', relation: 'subordinate' },
+    { id: 'e2', source: 'root', target: 'b', relation: 'subordinate' },
+    // 旧中文关系值必须在读盘兼容层映射回 subordinate。
+    { id: 'e3', source: 'a', target: 'a1', relation: '从属' },
+    { id: 'e4', source: 'a1', target: 'a2', relation: 'subordinate' },
+    { id: 'e5', source: 'free1', target: 'free2', relation: 'related' },
+    // a2 → root 会成环；other → a1 违反唯一父：两条都应被树校验器降级，且不死循环。
+    { id: 'e6', source: 'a2', target: 'root', relation: 'subordinate' },
+    { id: 'e7', source: 'other', target: 'a1', relation: 'subordinate' },
+  ]
+
+  assert.deepEqual(sorted(collectSubtreeNodeIds(nodes22, edges22, ['root'])),
+    ['a', 'a1', 'a2', 'b', 'root'],
+    '【选中子树】根的子树含全部后代；related 边与降级边不得进入')
+  assert.deepEqual(sorted(collectSubtreeNodeIds(nodes22, edges22, ['a'])), ['a', 'a1', 'a2'],
+    '【选中子树】从中间节点展开不得把父节点 / 兄弟分支带上')
+  assert.deepEqual(collectSubtreeNodeIds(nodes22, edges22, ['free1']), ['free1'],
+    '【选中子树】related 弱关系不构成父子')
+  assert.deepEqual(collectSubtreeNodeIds(nodes22, edges22, ['a2']), ['a2'],
+    '【选中子树】成环的从属边必须降级，遍历不能回卷')
+  const multi = collectSubtreeNodeIds(nodes22, edges22, ['a', 'b', 'a'])
+  assert.equal(multi[0], 'a', '【选中子树】多个根按入参顺序展开')
+  assert.deepEqual(sorted(multi), ['a', 'a1', 'a2', 'b'], '【选中子树】多个根取并集并去重')
+  assert.deepEqual(collectSubtreeNodeIds(nodes22, edges22, ['nope']), [],
+    '【选中子树】脏 rootId 不得凭空造出节点')
+  assert.equal(applySubtreeSelection(nodes22, edges22, ['nope']), null,
+    '【选中子树】没有有效根时不产出补丁')
+
+  const patch22 = applySubtreeSelection(nodes22, edges22, ['a'])
+  assert.ok(patch22, '【选中子树】必须产出选中补丁')
+  assert.deepEqual(sorted(patch22.subtreeIds), ['a', 'a1', 'a2'])
+  assert.deepEqual(sorted(patch22.addedIds), ['a', 'a1', 'a2'])
+  assert.equal(patch22.changed, true)
+  assert.deepEqual(sorted(patch22.nodes.filter((n: any) => n.selected).map((n: any) => n.id)),
+    ['a', 'a1', 'a2'],
+    '【选中子树】是替换式选中：原选中的游离节点必须取消')
+  assert.equal(patch22.nodes[1].data.label, 'A', '【选中子树】其它字段展开透传')
+  assert.ok(patch22.nodes[7] === nodes22[7], '【选中子树】选中态没变的节点保持原引用')
+  const patch22b = applySubtreeSelection(patch22.nodes, edges22, ['a'])
+  assert.ok(patch22b)
+  assert.equal(patch22b.changed, false, '【选中子树】连点两次必须幂等')
+  assert.ok(patch22b.nodes.every((n: any, i: number) => n === patch22.nodes[i]),
+    '【选中子树】幂等调用不得产生新节点对象')
+  assert.equal(applySubtreeSelection(nodes22, edges22, ['free1']).changed, false,
+    '【选中子树】叶子根且已选中时是空操作')
+
+  // 渲染层把 relation 放在 data 上；磁盘边放在顶层，两条读盘路径都要通。
+  const dataNodes22 = [{ id: 'p' }, { id: 'q' }, { id: 'r' }]
+  const dataEdges22 = [
+    { id: 'd1', source: 'p', target: 'q', data: { relation: 'subordinate' } },
+    { id: 'd2', source: 'q', target: 'r', data: { relation: 'related' } },
+  ]
+  assert.deepEqual(collectSubtreeNodeIds(dataNodes22, dataEdges22, ['p']), ['p', 'q'],
+    '【选中子树】渲染层 data.relation 与顶层 relation 同源')
+
+  const readSrc22 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const domainSrc22 = await readSrc22('src/domain/graph/selectSubtree.ts')
+  assert.ok(domainSrc22.includes('buildHierarchy(') && domainSrc22.includes('readEdgeRelationId(')
+    && domainSrc22.includes('isSubordinate('),
+    '【选中子树】必须复用 graphHierarchy 的唯一树规则，不另写深度推断')
+  const opsSrc22 = await readSrc22('src/hooks/useGraph/selectionSubtreeOperations.ts')
+  assert.ok(opsSrc22.includes('applySubtreeSelection(') && opsSrc22.includes('store.setNodes(patch.nodes)')
+    && opsSrc22.includes('selectedNodeIds') && !opsSrc22.includes('saveLater('),
+    '【选中子树】只写运行时 selected 字段：不落盘、不进 undo')
+  const graphOpsSrc22 = await readSrc22('src/hooks/useGraph/graphOperations.ts')
+  assert.ok(graphOpsSrc22.includes('buildSelectionSubtreeOperations('),
+    '【选中子树】操作必须挂在 graphOperations 上')
+  const useGraphSrc22 = await readSrc22('src/hooks/useGraph.ts')
+  assert.ok(useGraphSrc22.includes('selectSubtree: ops.selectSubtree')
+    && !useGraphSrc22.includes('selectSubtree: edit('),
+    '【选中子树】选中是视图态，不得被只读写闸门误拦')
+  const contextSrc22 = await readSrc22('src/contexts/GraphContext.tsx')
+  assert.ok(contextSrc22.includes('selectSubtree: graph.selectSubtree'),
+    '【选中子树】方法必须经 GraphContext 暴露给画布与右键菜单')
+  const canvasSrc22 = await readSrc22('src/features/graph/GraphCanvas/GraphCanvas.tsx')
+  assert.ok(canvasSrc22.includes('showSelectionMenu') && canvasSrc22.includes('selectedIds={selectedNodeIds}')
+    && canvasSrc22.includes('onSelectSubtree={graph.selectSubtree}'),
+    '【选中子树】单选就要出菜单，且必须传真实选中 id 列表')
+  const menuSrc22 = await readSrc22('src/features/graph/GraphCanvas/components/SelectionMirrorMenu.tsx')
+  assert.ok(menuSrc22.includes('Panel position="top-center"')
+    && menuSrc22.includes('data-tm-selection-menu') && menuSrc22.includes('data-tm-selection-subtree')
+    && menuSrc22.includes('data-tm-selection-ids') && menuSrc22.includes('data-tm-selection-mirror-menu')
+    && menuSrc22.includes('data-tm-selection-mirror-flip'),
+    '【选中子树】上方菜单同时保留镜像诊断契约，并暴露选中 ids 供 GUI 断言')
+  const ctxMenuSrc22 = await readSrc22('src/features/graph/GraphPage/components/GraphPageContextMenu.tsx')
+  assert.ok(ctxMenuSrc22.includes("label: '选中子树'") && ctxMenuSrc22.includes('onSelectSubtree(targetId)'),
+    '【选中子树】节点右键菜单必须有独立入口')
+  const pageActionsSrc22 = await readSrc22('src/features/graph/GraphPage/model/useGraphPageActions.ts')
+  assert.ok(pageActionsSrc22.includes('graph.selectSubtree([nodeId])'),
+    '【选中子树】右键入口必须以被右键的节点为根')
+  const guiSrc22 = await readSrc22('scripts/verify-linked-documents-gui.mjs')
+  assert.ok(guiSrc22.includes('选中子树：') && guiSrc22.includes('data-tm-selection-subtree')
+    && guiSrc22.includes('data-tm-selection-ids'),
+    '【选中子树】GUI 必须端到端实测单选菜单 / 整树选中 / 幂等 / 右键入口')
+}
+
+// --- 第 23 组：学习统计面板信息架构精简（2026-11-11）---
+// 重构目标：一屏看全貌（今日 / 4 个核心 KPI / 热力图 / 趋势），细节按需展开；
+// 删除复述型结论、功能自述、重复指标卡与硬编码色阶。这里是源码级守卫，
+// 防止旧版 20+ 区块 / 40+ 指标卡回灌。
+{
+  const readSrc23 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const root23 = 'src/plugins/builtin/learning-statistics/'
+  const [page23, overview23, detail23, parts23, preview23] = await Promise.all([
+    readSrc23(root23 + 'LearningStatisticsPage.tsx'),
+    readSrc23(root23 + 'LearningOverviewPanel.tsx'),
+    readSrc23(root23 + 'LearningDetailPanel.tsx'),
+    readSrc23(root23 + 'LearningStatisticsParts.tsx'),
+    readSrc23(root23 + 'LearningQuickPreview.tsx'),
+  ])
+  const views23 = [page23, overview23, detail23].join('\n')
+  const all23 = [views23, parts23, preview23].join('\n')
+  const count23 = (source: string, needle: string) => source.split(needle).length - 1
+
+  // SSR 断言（verify-plugin-runtime-guards）依赖首屏含「学习统计」；loading 态也必须可见。
+  assert.ok(page23.includes('>学习统计</h1>'),
+    '【学习统计精简】页面标题必须保留，插件运行时守卫以 renderToStaticMarkup 断言')
+  assert.ok(page23.includes('data-tm-learning-filter') && count23(page23, '<select') === 2,
+    '【学习统计精简】上下文筛选压成一行工具栏：两个下拉，不再是大卡片 + 9 个 pill')
+
+  // 新信息架构的四层：今日 Hero / 唯一 KPI 行 / 两张主图 / 按需明细。
+  assert.ok(overview23.includes('data-tm-learning-overview') && overview23.includes('data-tm-learning-hero')
+    && overview23.includes('data-tm-learning-kpi') && overview23.includes('testId="heatmap"')
+    && overview23.includes('testId="trend"'),
+    '【学习统计精简】核心概览 = 今日 Hero + KPI + 热力图 + 趋势图')
+  assert.ok(detail23.includes('testId="distribution"') && detail23.includes('data-tm-learning-day-detail')
+    && detail23.includes('onBackToSummary'),
+    '【学习统计精简】未选日期只看分布，选日期才展开当天明细并可返回')
+  assert.ok(parts23.includes('export function MetricTile') && parts23.includes('export function DistributionCard')
+    && overview23.includes("from './LearningStatisticsParts.tsx'")
+    && detail23.includes("from './LearningStatisticsParts.tsx'"),
+    '【学习统计精简】两个面板共用一套展示原语，不各写一份指标卡 / 分布卡')
+
+  // 每个关键指标只出现一次，杜绝左右栏互相复述。
+  for (const label of ['范围总时长', '日均时长', '活跃天数', '达标天数', '今日学习']) {
+    assert.equal(count23(views23, label), 1,
+      `【学习统计精简】「${label}」在主视图只能出现 1 次`)
+  }
+  assert.equal(count23(views23, 'goalAnalytics'), 0,
+    '【学习统计精简】多套达标率 / 本周目标节奏已删除，不再计算 goalAnalytics')
+  assert.equal(count23(views23, 'computeGoalAnalytics'), 0,
+    '【学习统计精简】页面不得再引入目标分析派生数据')
+
+  // 冗余文案清单：功能自述、英文 eyebrow、复述型结论段落、旧版独立大区块。
+  const removed23 = [
+    'Learning Center', 'Now Learning', 'Range Summary', 'Day Detail',
+    '已接入概览区', '当前范围汇总', '范围观察', '目标结论',
+    '本周累计目标', '学习节奏', '目标完成情况', 'Session 时间轴',
+    '当日时段分布', '当前未启用上下文筛选', 'grid-cols-12',
+    '正在整理', '点击热力图日期可在右侧',
+  ]
+  for (const text of removed23) {
+    assert.equal(count23(all23, text), 0,
+      `【学习统计精简】冗余文案「${text}」不得回灌`)
+  }
+
+  // 单色制：热力色阶改用 accent 的 color-mix，删除硬编码橙红（含暗色缺失的 hex）。
+  assert.ok(parts23.includes('export function heatColorStyle') && parts23.includes('color-mix(in srgb, var(--color-accent)')
+    && parts23.includes('export function heatCellStyle') && preview23.includes('heatCellStyle(')
+    && !all23.includes('#fdd9c9') && !all23.includes('#c63d34'),
+    '【学习统计精简】热力色阶统一到 accent 单色，页面与速览共用')
+}
+
+// --- 第 24 组：当天学习记录半小时方块图（2026-11-11）---
+// 把冗长的 session 列表换成 48 格半小时方块图。esbuild 真跑切分纯函数
+// （半小时边界 / 跨小时 / 跨午夜折回 / 起止相同 / 重叠 session / 脏数据），
+// 另加源码守卫确认 UI 已换成方块图、旧死代码已清理。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundle24 = await build({
+    entryPoints: [fileURLToPath(new URL('../src/shared/utils/learningAnalytics.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    banner: { js: 'globalThis.window = globalThis.window || {};' },
+  })
+  const m24 = await import(`data:text/javascript;base64,${Buffer.from(bundle24.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const { buildDayHalfHourBuckets, DAY_HALF_HOUR_BUCKETS, HALF_HOUR_SECONDS } = m24
+
+  const at24 = (day: number, hour: number, minute = 0) => new Date(2026, 10, day, hour, minute, 0, 0).getTime()
+  const session24 = (id: string, sh: number, sm: number, eh: number, em: number, day = 11, endDay = day) => {
+    const startTime = at24(day, sh, sm)
+    const endTime = at24(endDay, eh, em)
+    return { id, startTime, endTime, duration: Math.round((endTime - startTime) / 1000) }
+  }
+  const total24 = (buckets: Array<{ duration: number }>) => buckets.reduce((sum, bucket) => sum + bucket.duration, 0)
+
+  assert.equal(DAY_HALF_HOUR_BUCKETS, 48, '【半小时方块】一天固定 48 格')
+  assert.equal(HALF_HOUR_SECONDS, 1800, '【半小时方块】每格容量 30 分钟')
+
+  const empty24 = buildDayHalfHourBuckets([])
+  assert.equal(empty24.length, 48, '【半小时方块】空输入也返回 48 格')
+  assert.equal(total24(empty24), 0, '【半小时方块】空输入全为 0')
+  assert.equal(empty24[0].label, '00:00 - 00:30', '【半小时方块】首格标签')
+  assert.equal(empty24[1].label, '00:30 - 01:00', '【半小时方块】同小时下半格标签')
+  assert.equal(empty24[47].label, '23:30 - 00:00', '【半小时方块】末格跨日标签回绕到 00:00')
+  assert.equal(empty24[41].hour, 20, '【半小时方块】index 41 属于 20 点')
+  assert.equal(empty24[41].half, 1, '【半小时方块】index 41 是下半格')
+  assert.equal(empty24[41].label, '20:30 - 21:00', '【半小时方块】index 41 标签')
+
+  const cross24 = buildDayHalfHourBuckets([session24('a', 20, 0, 20, 45)])
+  assert.equal(cross24[40].duration, 1800, '【半小时方块】20:00–20:30 整格填满')
+  assert.equal(cross24[41].duration, 900, '【半小时方块】20:30–20:45 只占下半格 15 分钟')
+  assert.equal(total24(cross24), 2700, '【半小时方块】各格合计等于 session 墙钟跨度')
+  assert.deepEqual(cross24[40].sessionIds, ['a'], '【半小时方块】记录该格来源 session')
+  assert.deepEqual(cross24[41].sessionIds, ['a'], '【半小时方块】同一 session 跨两格分别记录')
+
+  const boundary24 = buildDayHalfHourBuckets([session24('b', 20, 30, 21, 0)])
+  assert.equal(boundary24[40].duration, 0, '【半小时方块】20:30 起不得溢出到上半格')
+  assert.equal(boundary24[41].duration, 1800, '【半小时方块】恰好 30 分钟只落一格')
+  assert.equal(boundary24[42].duration, 0, '【半小时方块】21:00 边界不落到下一小时')
+
+  const instant24 = buildDayHalfHourBuckets([{
+    id: 'live', startTime: at24(11, 20, 10), endTime: at24(11, 20, 10), duration: 600,
+  }])
+  assert.equal(instant24[40].duration, 600, '【半小时方块】起止相同的进行中 session 整段计入起始半格')
+  assert.equal(total24(instant24), 600, '【半小时方块】零跨度 session 不丢时长')
+
+  const overlap24 = buildDayHalfHourBuckets([
+    session24('a', 20, 0, 20, 20),
+    session24('b', 20, 10, 20, 30),
+  ])
+  assert.equal(overlap24[40].duration, 2400, '【半小时方块】重叠 session 的格内时长累加')
+  assert.deepEqual(overlap24[40].sessionIds, ['a', 'b'], '【半小时方块】格内 sessionIds 去重且按时间顺序')
+
+  const midnight24 = buildDayHalfHourBuckets([session24('n', 23, 45, 0, 15, 11, 12)])
+  assert.equal(midnight24[47].duration, 900, '【半小时方块】跨午夜前半段落 23:30–00:00')
+  assert.equal(midnight24[0].duration, 900, '【半小时方块】跨午夜后半段按小时折回 00:00–00:30')
+  assert.equal(total24(midnight24), 1800, '【半小时方块】跨午夜总时长不丢')
+
+  const dirty24 = buildDayHalfHourBuckets([
+    { id: 'nan', startTime: NaN, endTime: NaN, duration: NaN },
+    { id: 'rev', startTime: at24(11, 9, 0), endTime: at24(11, 8, 0), duration: 300 },
+    null,
+  ])
+  assert.equal(dirty24.length, 48, '【半小时方块】脏数据仍返回 48 格且不抛错')
+  assert.ok(dirty24.every((bucket: any) => Number.isFinite(bucket.duration)),
+    '【半小时方块】脏数据不得把 NaN 写进格子')
+  assert.equal(dirty24[18].duration, 300, '【半小时方块】end < start 按零跨度处理')
+  assert.equal(buildDayHalfHourBuckets(null).length, 48, '【半小时方块】非数组输入安全降级')
+
+  const readSrc24 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const analyticsSrc24 = await readSrc24('src/shared/utils/learningAnalytics.ts')
+  assert.ok(analyticsSrc24.includes('export const buildDayHalfHourBuckets')
+    && analyticsSrc24.includes('export const HALF_HOUR_SECONDS')
+    && !analyticsSrc24.includes('export const buildDayHourBuckets'),
+    '【半小时方块】半小时切分是算法层唯一入口，旧的小时桶死代码已清理')
+  assert.ok(analyticsSrc24.includes('if (segmentEnd <= cursor) break'),
+    '【半小时方块】分摊循环必须有防死循环保护')
+  assert.ok(analyticsSrc24.includes('appendSessionHours(hourTotals, session)'),
+    '【半小时方块】范围趋势的小时统计仍复用 appendSessionHours，不得误删')
+  const blocksSrc24 = await readSrc24('src/plugins/builtin/learning-statistics/DayHalfHourBlocks.tsx')
+  assert.ok(blocksSrc24.includes('buildDayHalfHourBuckets(sessions)')
+    && blocksSrc24.includes('HALF_HOUR_SECONDS')
+    && blocksSrc24.includes('heatCellStyle(')
+    && blocksSrc24.includes('grid-flow-col')
+    && blocksSrc24.includes('repeat(24, ${HEAT_CELL_SIZE}px)')
+    && blocksSrc24.includes('repeat(2, ${HEAT_CELL_SIZE}px)'),
+    '【半小时方块】2 行 × 24 列共用热力格子，色深按 30 分钟容量归一')
+  assert.ok(blocksSrc24.includes('data-tm-learning-half-hour')
+    && blocksSrc24.includes('data-tm-learning-half-hour-block')
+    && blocksSrc24.includes('data-tm-half-hour-duration')
+    && blocksSrc24.includes('data-tm-learning-half-hour-detail'),
+    '【半小时方块】方块与按需展开明细都要暴露诊断属性')
+  const detailSrc24 = await readSrc24('src/plugins/builtin/learning-statistics/LearningDetailPanel.tsx')
+  assert.ok(detailSrc24.includes('<DayHalfHourBlocks') && detailSrc24.includes('key={selectedDate}'),
+    '【半小时方块】日明细接入方块图，切日期用 key 收起上次展开')
+  assert.ok(!detailSrc24.includes('sessions.map(') && !detailSrc24.includes('divide-y divide-')
+    && !detailSrc24.includes('这一天没有符合当前筛选条件的学习记录'),
+    '【半小时方块】冗长的 session 列表与旧空状态必须移除')
+}
+
+// --- 第 25 组：当天热力图与「每日记录」共用同一视觉（2026-11-11）---
+// 用户要求当天记录「就是跟每日记录一样的热力图」：13px 正方形格、4px 间距、
+// 同一 accent 色阶、悬停读数、点击选中，全部收敛到 HeatCell 唯一原语。
+{
+  const readSrc25 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const parts25 = await readSrc25('src/plugins/builtin/learning-statistics/LearningStatisticsParts.tsx')
+  const overview25 = await readSrc25('src/plugins/builtin/learning-statistics/LearningOverviewPanel.tsx')
+  const blocks25 = await readSrc25('src/plugins/builtin/learning-statistics/DayHalfHourBlocks.tsx')
+  const preview25 = await readSrc25('src/plugins/builtin/learning-statistics/LearningQuickPreview.tsx')
+
+  assert.ok(parts25.includes('export const HEAT_CELL_SIZE = 13')
+    && parts25.includes('export function HeatCell')
+    && parts25.includes('export function heatCellStyle')
+    && parts25.includes('heatColorStyle(duration, capacity)'),
+    '【热力图统一】格子尺寸 / 组件 / 色阶必须在共用原语里唯一定义')
+  assert.ok(parts25.includes('width: HEAT_CELL_SIZE, height: HEAT_CELL_SIZE'),
+    '【热力图统一】格子必须是正方形，不再有拉伸长条')
+  assert.ok(overview25.includes('<HeatCell') && !overview25.includes('const CELL_SIZE')
+    && overview25.includes('grid-flow-col')
+    && overview25.includes('repeat(7, ${HEAT_CELL_SIZE}px)'),
+    '【热力图统一】每日记录热力图消费共用格子，7 行日历布局不变')
+  assert.ok(blocks25.includes('<HeatCell') && blocks25.includes('grid-flow-col')
+    && blocks25.includes('repeat(2, ${HEAT_CELL_SIZE}px)')
+    && blocks25.includes('repeat(24, ${HEAT_CELL_SIZE}px)')
+    && !blocks25.includes('minmax(0, 1fr)') && !blocks25.includes('h-[18px]'),
+    '【热力图统一】当天 48 格为 2 行 × 24 列同款正方形格')
+  assert.ok(blocks25.includes('data-tm-learning-half-hour-aside')
+    && blocks25.includes('hoveredBucket')
+    && blocks25.includes('data-tm-learning-half-hour-block')
+    && blocks25.includes('data-tm-half-hour-index')
+    && blocks25.includes('data-tm-half-hour-duration'),
+    '【热力图统一】悬停读数与格子诊断属性保留')
+  assert.ok(blocks25.includes('[0, 0.3, 0.55, 0.8, 1.2]')
+    && blocks25.includes('点击方块查看该时段'),
+    '【热力图统一】图例与每日记录一致（少 → 多 5 档 + 操作提示）')
+  assert.ok(preview25.includes('HEAT_CELL_SIZE') && preview25.includes('heatCellStyle('),
+    '【热力图统一】标题栏速览也用同一尺寸与色阶')
+  assert.ok(!blocks25.includes('每格 30 分钟 · 上排') && !overview25.includes('heatColorStyle('),
+    '【热力图统一】删除拉伸长条说明条与面板内重复色阶调用')
+}
+
+// --- 第 26 组：恢复固定步进 + 只读提示条下方的缩放滑动条（2026-11-11 晚）---
+// 用户：鼠标步进偏慢 → 回到上一版固定步进；只读提示条下方加 range 滑动条，
+// 拖动可快速改比例，显隐与提示条完全同源（不自己判定 readOnly）。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundle26 = await build({
+    entryPoints: [fileURLToPath(new URL('../src/domain/graph/zoomScale.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const z26 = await import(`data:text/javascript;base64,${Buffer.from(bundle26.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const {
+    DENSITY_STEP_SCALING_ENABLED: enabled26, MIN_RAW_ZOOM: minRaw26,
+    ZOOM_REFERENCE: ref26, MIN_DISPLAY_PERCENT: minPct26, MAX_DISPLAY_PERCENT: maxPct26,
+    fromDisplayPercent: fromPct26, toDisplayPercent: toPct26,
+    zoomStepSensitivityForGraph: stepSens26, wheelSensitivityForZoom: wheelSens26,
+  } = z26
+
+  assert.equal(enabled26, false, '【恢复固定步进】缩放配置必须停在上一次的固定步进')
+  assert.equal(stepSens26(1000, 20), 1, '【恢复固定步进】步进灵敏度恒 1')
+  assert.equal(wheelSens26(ref26, 1000, 20), 1, '【恢复固定步进】滚轮不再被密度降速')
+  assert.equal(minPct26, 5, '【缩放滑动条】左端点 5%')
+  assert.equal(maxPct26, 100, '【缩放滑动条】右端点 100%')
+  assert.equal(fromPct26(minPct26), minRaw26, '【缩放滑动条】5% 换算到 raw 下限')
+  assert.equal(fromPct26(maxPct26), ref26, '【缩放滑动条】100% 换算到 raw 上限')
+  assert.equal(fromPct26(0), minRaw26, '【缩放滑动条】越界低值要钳到 5%')
+  assert.equal(fromPct26(200), ref26, '【缩放滑动条】超过 100% 要钳到 100%')
+  for (const p of [5, 20, 50, 85, 100]) {
+    assert.equal(toPct26(fromPct26(p)), p, `【缩放滑动条】${p}% 往返换算无损`)
+  }
+
+  const readSrc26 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const slider26 = await readSrc26('src/features/graph/GraphCanvas/components/CanvasZoomSlider.tsx')
+  assert.ok(slider26.includes('type="range"')
+    && slider26.includes('min={MIN_DISPLAY_PERCENT}')
+    && slider26.includes('max={MAX_DISPLAY_PERCENT}')
+    && slider26.includes('step={1}')
+    && slider26.includes('value={percent}')
+    && slider26.includes('fromDisplayPercent(next)')
+    && slider26.includes('duration: 0'),
+    '【缩放滑动条】5~100% 受控 range，拖动即时 zoomTo 且钳制在合法区间')
+  assert.ok(slider26.includes('nodrag nowheel')
+    && slider26.includes('accentColor')
+    && !slider26.includes('fitView('),
+    '【缩放滑动条】不吃画布拖拽/滚轮手势、单色 accent、不重排视野')
+  assert.ok(slider26.includes('data-tm-canvas-zoom-slider=')
+    && slider26.includes('data-tm-canvas-zoom-slider-input=')
+    && slider26.includes('data-tm-canvas-zoom-slider-value=')
+    && slider26.includes('data-tm-canvas-zoom-slider-readout='),
+    '【缩放滑动条】诊断属性与读数必须暴露给 GUI')
+  assert.ok(!slider26.includes('CanvasReadOnlyState')
+    && !slider26.includes('computeCanvasReadOnly')
+    && !slider26.includes('state.readOnly'),
+    '【缩放滑动条】不得自己判定只读，显隐必须完全由提示条托管')
+  const banner26 = await readSrc26('src/features/graph/GraphCanvas/components/CanvasReadOnlyBanner.tsx')
+  assert.ok(banner26.includes('if (!state.readOnly) return null')
+    && banner26.includes('<CanvasZoomSlider zoomLevel={zoomLevel} />')
+    && banner26.includes('flex flex-col')
+    && banner26.includes('pointer-events-none'),
+    '【缩放滑动条】挂在提示条同一 Panel 下方，显隐复用同一个 readOnly 判定')
+  const canvas26 = await readSrc26('src/features/graph/GraphCanvas/GraphCanvas.tsx')
+  assert.ok(canvas26.includes('<CanvasReadOnlyBanner state={readOnlyState} zoomLevel={zoomLevel} />'),
+    '【缩放滑动条】挂载点仍是画布的只读提示组件')
+  const gui26 = await readSrc26('scripts/verify-linked-documents-gui.mjs')
+  assert.ok(gui26.includes('阶段 S') && gui26.includes('data-tm-canvas-zoom-slider'),
+    '【缩放滑动条】GUI 阶段 S 必须实测出现/隐藏与拖动')
+}
+
+// 任务 #76~#79：统一资源树（节点树 + 节点内文档树）——按层加载、离散节点分组、
+// 派生索引搜索 / 定位。主进程服务用内存 fs 真跑，不靠源码字面量蒙混。
+{
+  const posix = (await import('node:path')).posix
+  const treeService = await import(
+    new URL('../electron/services/unified-document-tree-service.js', import.meta.url).href
+  ) as Record<string, any>
+
+  const dirs = new Map<string, string[]>()
+  const files = new Map<string, string>()
+  const stats = new Map<string, { mtimeMs: number, size: number, ctimeMs: number }>()
+  let writes = 0
+  const putFile = (p: string, value: unknown, mtimeMs = 1) => {
+    const text = JSON.stringify(value)
+    files.set(p, text)
+    stats.set(p, { mtimeMs, size: text.length, ctimeMs: 1 })
+  }
+  const addDir = (p: string, names: string[]) => dirs.set(p, names)
+  const fsMock = {
+    existsSync: (p: string) => files.has(p) || dirs.has(p),
+    readdirSync: (p: string) => (dirs.get(p) ?? []).map((name) => ({
+      name,
+      isDirectory: () => dirs.has(`${p}/${name}`),
+    })),
+    statSync: (p: string) => {
+      const stat = stats.get(p)
+      if (!stat) throw new Error('ENOENT ' + p)
+      return stat
+    },
+  }
+  const docsOf = (spec: Record<string, { title: string, parentId?: string }>) => ({
+    version: 2,
+    documents: Object.fromEntries(Object.entries(spec).map(([id, item], index) => [id, {
+      id, type: 'smart', title: item.title, path: `${id}.tdoc.json`,
+      parentId: item.parentId ?? null, sortOrder: index,
+    }])),
+  })
+  // 房间与从属连线两种层级同时存在：room 是连线树根，free 是它的 subordinate
+  // 子节点，empty 无文档应被剪掉，bridge 自身无文档但 leaf 有文档 → 仅路径容器。
+  const graphMetas: Record<string, any> = {
+    '': { children: {} },
+    KB1: {
+      children: {
+        room: { name: '房间一' },
+        free: { name: '离散画布节点' },
+        empty: { name: '空节点' },
+        bridge: { name: '路径容器' },
+      },
+      edges: [
+        { id: 'e1', source: 'room', target: 'free', relation: 'subordinate' },
+        { id: 'e2', source: 'empty', target: 'free', relation: 'subordinate' },
+        { id: 'e3', source: 'free', target: 'room', relation: 'subordinate' },
+        { id: 'e4', source: 'room', target: 'empty', relation: 'related' },
+        { id: 'e5', source: 'room', target: 'bridge', relation: '从属' },
+      ],
+    },
+    'KB1/room': { children: { 'card-a': { name: '节点 A' } } },
+    'KB1/bridge': { children: { leaf: { name: '叶子节点' } } },
+    KB2: { children: {} },
+  }
+
+  addDir('/root', ['kbs', '_docs'])
+  addDir('/root/kbs', ['KB1', 'KB2'])
+  addDir('/root/kbs/KB1', ['_docs', 'room', 'free', 'bridge'])
+  addDir('/root/kbs/KB1/room', ['_docs', 'card-a', 'stray'])
+  addDir('/root/kbs/KB1/room/card-a', ['_docs'])
+  addDir('/root/kbs/KB1/room/stray', ['_docs'])
+  addDir('/root/kbs/KB1/free', ['_docs'])
+  addDir('/root/kbs/KB1/bridge', ['_docs', 'leaf'])
+  addDir('/root/kbs/KB1/bridge/leaf', ['_docs'])
+  addDir('/root/kbs/KB2', ['_docs'])
+  for (const d of [
+    '/root/_docs', '/root/kbs/KB1/_docs', '/root/kbs/KB1/room/_docs',
+    '/root/kbs/KB1/room/card-a/_docs', '/root/kbs/KB1/room/stray/_docs',
+    '/root/kbs/KB1/free/_docs', '/root/kbs/KB1/bridge/leaf/_docs', '/root/kbs/KB2/_docs',
+  ]) addDir(d, ['tree.json'])
+  putFile('/root/_docs/tree.json', docsOf({ doc_root: { title: '工作区根文档' } }))
+  putFile('/root/kbs/KB1/_docs/tree.json', docsOf({
+    doc_kb_root: { title: 'KB 根文档' },
+    doc_kb_child: { title: 'KB 子文档', parentId: 'doc_kb_root' },
+  }))
+  putFile('/root/kbs/KB1/room/_docs/tree.json', docsOf({ doc_room: { title: '房间文档' } }))
+  putFile('/root/kbs/KB1/room/card-a/_docs/tree.json', docsOf({
+    doc_a: { title: '文档 A' },
+    doc_a_child: { title: 'A 的子文档', parentId: 'doc_a' },
+    doc_orphan: { title: '孤儿文档', parentId: 'doc_missing' },
+    doc_cycle1: { title: '环一', parentId: 'doc_cycle2' },
+    doc_cycle2: { title: '环二', parentId: 'doc_cycle1' },
+  }))
+  putFile('/root/kbs/KB1/room/stray/_docs/tree.json', docsOf({ doc_stray: { title: '离散节点文档' } }))
+  putFile('/root/kbs/KB1/free/_docs/tree.json', docsOf({ doc_free: { title: '连线子文档' } }))
+  putFile('/root/kbs/KB1/bridge/leaf/_docs/tree.json', docsOf({ doc_leaf: { title: '叶子文档' } }))
+  putFile('/root/kbs/KB2/_docs/tree.json', docsOf({ doc_b: { title: '文档 B' } }))
+
+  const service = treeService.createUnifiedDocumentTreeService({
+    fs: fsMock,
+    path: posix,
+    requireValidWorkDir: (d: string) => d,
+    resolveKbsPath: (_root: string, rel: string) => (rel ? `/root/kbs/${rel}` : '/root/kbs'),
+    readGraphMeta: (_root: string, roomPath: string) => graphMetas[roomPath] ?? { children: {} },
+    readJsonFile: (p: string) => (files.has(p) ? JSON.parse(files.get(p) as string) : {}),
+    writeJsonFile: (p: string, value: unknown) => { writes += 1; putFile(p, value, 2) },
+    statSync: (p: string) => fsMock.statSync(p),
+  })
+
+  // 1) key 协议：对渲染层不透明、可往返、恶意 key 一律拒绝。
+  const cardKey = treeService.cardTreeKey('KB1/room/card-a')
+  const docKey = treeService.documentTreeKey('KB1/room/card-a', 'doc_a')
+  assert.equal(treeService.parseUnifiedTreeKey(cardKey).cardPath, 'KB1/room/card-a', '【统一树】card key 必须可往返')
+  assert.equal(treeService.parseUnifiedTreeKey(docKey).docId, 'doc_a', '【统一树】document key 必须可往返')
+  assert.equal(treeService.parseUnifiedTreeKey(treeService.UNIFIED_TREE_ROOT_KEY).kind, 'root', '【统一树】root key')
+  for (const bad of ['kb:..%2F..', 'doc:KB1:', 'kb:', 'garbage', 'doc:..%2Fetc:x']) {
+    assert.equal(treeService.parseUnifiedTreeKey(bad).kind, 'unknown', `【统一树】非法 key 必须拒绝: ${bad}`)
+  }
+
+  // 2) 默认只加载顶层根：绝不返回任何文档、绝不读 tree.json、绝不建索引。
+  const rootLevel = service.listTreeLevel('/root', treeService.UNIFIED_TREE_ROOT_KEY)
+  assert.equal(rootLevel.nodes.length, 4, '【统一树】顶层＝工作区根 + 2 个知识库 + 离散节点分组')
+  assert.ok(rootLevel.nodes.every((n: any) => n.kind !== 'document'),
+    '【统一树】默认层不得平铺任何文档（这是打开不再全量加载的核心）')
+  assert.equal(writes, 0, '【统一树】打开树视图不得写搜索索引')
+  assert.ok(rootLevel.nodes.some((n: any) => n.kind === 'group' && n.key === treeService.UNIFIED_TREE_ORPHANS_KEY),
+    '【统一树】离散节点必须有独立分组入口')
+
+  // 3) 房间层＝从属森林第一层（只列有文档的节点）+ 该节点的文档树根文档。
+  const kbLevel = service.listTreeLevel('/root', treeService.cardTreeKey('KB1'))
+  const kbCards = kbLevel.nodes.filter((n: any) => n.kind === 'card')
+  const kbDocs = kbLevel.nodes.filter((n: any) => n.kind === 'document')
+  assert.deepEqual(kbCards.map((n: any) => n.cardPath), ['KB1/room'],
+    '【统一树】房间第一层只留连线树根：空节点 / 无文档 related 目标 / 连线子节点都不出现')
+  assert.equal(kbCards[0].label, '房间一', '【统一树】子节点必须显示 graph meta 里的可读名称')
+  assert.equal(kbCards[0].origin, 'subordinate', '【统一树】带 subordinate 出边的树根标为从属来源')
+  assert.equal(kbCards[0].hasDocuments, true, '【统一树】有文档的节点显式标记 hasDocuments')
+  assert.equal(kbDocs.length, 1, '【统一树】节点层只给根文档，子文档留给下一层')
+  assert.equal(kbDocs[0].candidate?.docId, 'doc_kb_root', '【统一树】根文档节点携带完整候选 DTO')
+  assert.equal(kbDocs[0].candidate?.documentPathLabel, '', '【统一树】顶层文档没有节点内路径')
+  assert.equal(kbDocs[0].hasChildren, true, '【统一树】有子文档的文档节点才可展开')
+
+  const childLevel = service.listTreeLevel('/root', treeService.documentTreeKey('KB1', 'doc_kb_root'))
+  assert.equal(childLevel.nodes.length, 1, '【统一树】文档层只返回直接子文档')
+  assert.equal(childLevel.nodes[0].candidate?.documentPathLabel, 'KB 根文档',
+    '【统一树】子文档路径按祖先标题链生成')
+  assert.equal(childLevel.nodes[0].subtitle, 'KB1', '【统一树】文档行仍显示所属节点面包屑')
+
+  // 3b) 展开连线树根：同一层里「从属连线子节点 / 房间子节点 / 仅路径容器」用 origin 区分。
+  const roomLevel = service.listTreeLevel('/root', treeService.cardTreeKey('KB1/room'))
+  const roomCard = (p: string) => roomLevel.nodes.find((n: any) => n.cardPath === p)
+  assert.equal(roomCard('KB1/free')?.origin, 'subordinate',
+    '【统一树】父房间连线边指下来的子节点标为从属来源')
+  assert.equal(roomCard('KB1/room/card-a')?.origin, 'room',
+    '【统一树】本节点房间画布里的子节点标为房间来源')
+  assert.equal(roomCard('KB1/bridge')?.origin, 'path',
+    '【统一树】自身无文档、仅靠后代有文档保留的容器标为仅路径')
+  assert.equal(roomCard('KB1/bridge')?.hasDocuments, false,
+    '【统一树】仅路径容器必须显式标记自身没有文档')
+  assert.equal(roomLevel.nodes.filter((n: any) => n.kind === 'document').length, 1,
+    '【统一树】房间层仍带该节点自己的根文档')
+  assert.ok(!roomLevel.nodes.some((n: any) => n.cardPath === 'KB1/empty'),
+    '【统一树】无文档且无有文档后代的节点一律不列')
+  const bridgeLevel = service.listTreeLevel('/root', treeService.cardTreeKey('KB1/bridge'))
+  assert.equal(bridgeLevel.nodes.filter((n: any) => n.cardPath === 'KB1/bridge/leaf').length, 1,
+    '【统一树】仅路径容器仍能展开到真正挂文档的后代')
+  assert.equal(bridgeLevel.nodes[0]?.origin, 'room',
+    '【统一树】路径容器的后代按自己的房间关系标注')
+
+  // 4) 文档树坏数据：父缺失 / 互相成环一律降级为根，任何文档都不会丢失。
+  const deepLevel = service.listTreeLevel('/root', treeService.cardTreeKey('KB1/room/card-a'))
+  const deepIds = deepLevel.nodes.filter((n: any) => n.kind === 'document').map((n: any) => n.candidate?.docId)
+  assert.deepEqual(deepIds.sort(), ['doc_a', 'doc_cycle1', 'doc_cycle2', 'doc_orphan'].sort(),
+    '【统一树】父缺失 / 成环文档降级为根，子文档不提前出现')
+
+  // 5) 工作区根节点只展示自己的文档，不把知识库当子节点重复一遍。
+  const rootDocsLevel = service.listTreeLevel('/root', treeService.cardTreeKey('__ROOT__'))
+  assert.equal(rootDocsLevel.nodes.length, 1, '【统一树】__ROOT__ 层只给自己的文档')
+  assert.equal(rootDocsLevel.nodes[0].candidate?.docId, 'doc_root', '【统一树】工作区根文档可被找到')
+
+  // 6) 离散节点：物理存在但父房间未登记，展开分组才全库扫描，且能继续展开出文档。
+  const orphanLevel = service.listTreeLevel('/root', treeService.UNIFIED_TREE_ORPHANS_KEY)
+  assert.equal(orphanLevel.nodes.length, 1, '【统一树】离散分组只收真正未登记的节点')
+  assert.equal(orphanLevel.nodes[0].cardPath, 'KB1/room/stray', '【统一树】离散节点保留真实物理路径')
+  assert.equal(orphanLevel.nodes[0].orphan, true, '【统一树】离散节点带标记供 UI 区分')
+  const orphanDocs = service.listTreeLevel('/root', treeService.cardTreeKey('KB1/room/stray'))
+  assert.equal(orphanDocs.nodes[0].candidate?.docId, 'doc_stray', '【统一树】离散节点的文档仍可逐层读到')
+
+  // 7) 搜索：空 query 不扫描；有 query 走派生索引，签名变化才重解析，损坏可自愈。
+  assert.deepEqual(service.searchDocuments('/root', ''), [], '【统一树】空 query 直接返回，不扫描全库')
+  assert.equal(writes, 0, '【统一树】空 query 不得创建搜索索引')
+  const byNode = service.searchDocuments('/root', '节点 A')
+  assert.ok(byNode.some((c: any) => c.docId === 'doc_a'), '【统一树】可按所属节点面包屑检索')
+  assert.equal(writes, 1, '【统一树】首次搜索才落盘派生索引')
+  // 关键字是父文档标题：既命中该父文档自身，也命中子文档的 documentPathLabel，
+  // 而子文档标题「KB 子文档」并不含关键字 —— 这才能证明路径参与了检索。
+  const byPath = service.searchDocuments('/root', 'KB 根文档')
+  assert.deepEqual(byPath.map((c: any) => c.docId).sort(), ['doc_kb_child', 'doc_kb_root'].sort(),
+    '【统一树】可按节点内文档路径检索到标题不含关键字的子文档')
+  assert.equal(writes, 1, '【统一树】无变化的搜索必须完全命中索引，不重复写盘')
+  putFile('/root/kbs/KB2/_docs/tree.json', docsOf({ doc_b: { title: '文档 B 改名' } }), 9)
+  const renamed = service.searchDocuments('/root', '改名')
+  assert.equal(renamed[0]?.title, '文档 B 改名', '【统一树】tree.json 签名变化必须增量重解析')
+  assert.equal(writes, 2, '【统一树】只重建变化的房间')
+  putFile('/root/.topomind/document-tree-index.json', { version: 999 }, 77)
+  const healed = service.searchDocuments('/root', '文档 A')
+  assert.ok(healed.some((c: any) => c.docId === 'doc_a'), '【统一树】索引损坏必须自动重建且结果正确')
+
+  // 8) 定位：docId → 从根到该文档的 key 链（节点树分段 + 文档祖先链）。
+  const pathKeys = service.resolveDocumentPath('/root', 'doc_a_child')
+  assert.deepEqual(pathKeys, [
+    treeService.UNIFIED_TREE_ROOT_KEY,
+    treeService.cardTreeKey('KB1'),
+    treeService.cardTreeKey('KB1/room'),
+    treeService.cardTreeKey('KB1/room/card-a'),
+    treeService.documentTreeKey('KB1/room/card-a', 'doc_a'),
+    treeService.documentTreeKey('KB1/room/card-a', 'doc_a_child'),
+  ], '【统一树】定位链必须同时覆盖节点树与文档树')
+  const freePathKeys = service.resolveDocumentPath('/root', 'doc_free')
+  assert.deepEqual(freePathKeys, [
+    treeService.UNIFIED_TREE_ROOT_KEY,
+    treeService.cardTreeKey('KB1'),
+    treeService.cardTreeKey('KB1/room'),
+    treeService.cardTreeKey('KB1/free'),
+    treeService.documentTreeKey('KB1/free', 'doc_free'),
+  ], '【统一树】连线子节点的定位链必须插入 subordinate 祖先，不能只给物理路径')
+  assert.deepEqual(service.resolveDocumentPath('/root', 'no_such'), [], '【统一树】不存在的文档返回空链')
+  assert.ok(service.listTreeLevel('/root', 'kb:..%2F..').nodes.length === 0,
+    '【统一树】路径穿越 key 必须返回空层')
+
+  // 9) 接线守卫：三层 IPC + 存储透传 + 通用 hook/视图 + 两弹窗不再全量加载。
+  const readSrc27 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const preload27 = await readSrc27('electron/preload.js')
+  const main27 = await readSrc27('electron/main.js')
+  const fileService27 = await readSrc27('electron/file-service.js')
+  const fsBackend27 = await readSrc27('src/core/fs-backend.ts')
+  const file27 = await readSrc27('src/core/storage/file.ts')
+  const service27 = await readSrc27('src/core/storage/service.ts')
+  const types27 = await readSrc27('src/core/storage/types.ts')
+  const treeSrc27 = await readSrc27('electron/services/unified-document-tree-service.js')
+  const hook27 = await readSrc27('src/features/documents/unifiedTree/useUnifiedTree.ts')
+  const view27 = await readSrc27('src/features/documents/unifiedTree/UnifiedTreeView.tsx')
+  const ds27 = await readSrc27('src/features/documents/unifiedTree/createStorageTreeDataSource.ts')
+  for (const channel of ['fs:listUnifiedTreeLevel', 'fs:searchUnifiedDocuments', 'fs:resolveUnifiedDocumentPath']) {
+    assert.ok(preload27.includes(`'${channel}'`) && main27.includes(`ipcMain.handle('${channel}'`)
+      && fileService27.includes(`${channel.split(':')[1]}: function`),
+      `【统一树】${channel} 必须贯通 preload / main / file-service`)
+  }
+  assert.ok(fsBackend27.includes('listUnifiedTreeLevel:')
+    && file27.includes('listUnifiedTreeLevel: async')
+    && service27.includes('async listUnifiedTreeLevel(')
+    && types27.includes('listUnifiedTreeLevel:'),
+    '【统一树】FSB / backend / store / types 四层必须同步透传')
+  assert.ok(!treeSrc27.includes('scanDocumentEntries(') && !treeSrc27.includes('listDocumentCandidates('),
+    '【统一树】按层服务不得回灌全量扫描')
+  assert.ok(hook27.includes('loadLevel(UNIFIED_TREE_ROOT_KEY)') && hook27.includes('inflight')
+    && hook27.includes('expandPath') && hook27.includes('refresh'),
+    '【统一树】hook 必须惰性加载、合并并发、支持定位与刷新')
+  assert.ok(view27.includes('data-tm-unified-tree') && view27.includes('data-tm-unified-tree-levels')
+    && view27.includes('data-tm-unified-tree-node'),
+    '【统一树】视图必须暴露按需加载诊断属性')
+  assert.ok(ds27.includes('storage.listUnifiedTreeLevel') && ds27.includes('storage.searchUnifiedDocuments')
+    && ds27.includes('storage.resolveUnifiedDocumentPath'),
+    '【统一树】数据源适配器必须覆盖层查询 / 搜索 / 定位')
+  const gui27 = await readSrc27('scripts/verify-linked-documents-gui.mjs')
+  assert.ok(gui27.includes('阶段 T')
+    && gui27.includes('data-tm-link-document-levels')
+    && gui27.includes('data-tm-doc-link-levels')
+    && gui27.includes('data-tm-unified-tree-node'),
+    '【统一树】GUI 必须实测「默认只加载一层 / 展开才加载下一层」')
+}
+
+// 任务 #81~#84：只列有文档的节点 + 按 subordinate 连线树构造层级 + 房间/从属来源区分。
+// 连线森林是模块级纯函数，用真实 import 直接跑，不靠源码字面量蒙混。
+{
+  const treeService28 = await import(
+    new URL('../electron/services/unified-document-tree-service.js', import.meta.url).href
+  ) as Record<string, any>
+  const forestOf = treeService28.buildSubordinateForest
+  assert.equal(typeof forestOf, 'function', '【统一树连线】森林构造必须是可独立真跑的导出纯函数')
+
+  const forest = forestOf({
+    children: { a: {}, b: {}, c: {}, d: {}, e: {}, f: {} },
+    edges: [
+      { id: 'e1', source: 'a', target: 'b', relation: 'subordinate' },
+      { id: 'e2', source: 'c', target: 'b', relation: 'subordinate' },
+      { id: 'e3', source: 'b', target: 'a', relation: 'subordinate' },
+      { id: 'e4', source: 'a', target: 'c', relation: 'related' },
+      { id: 'e5', source: 'a', target: 'd', relation: '从属' },
+      { id: 'e6', source: 'a', target: 'e', data: { relation: 'subordinate' } },
+      { id: 'e7', source: 'a', target: 'a', relation: 'subordinate' },
+      { id: 'e8', source: 'a', target: 'missing', relation: 'subordinate' },
+    ],
+  })
+  assert.deepEqual(forest.topLevel.slice().sort(), ['a', 'c', 'f'].sort(),
+    '【统一树连线】related 目标 / 无入边节点都是第一层，成环边不得把树根吞掉')
+  assert.deepEqual(forest.childrenOf('a').slice().sort(), ['b', 'd', 'e'].sort(),
+    '【统一树连线】只认第一条从属入边（多父降级），旧中文值与 data.relation 都要兼容')
+  assert.equal(forest.childrenOf('b').length, 0, '【统一树连线】成环边必须降级')
+  assert.equal(forest.hasSubordinateChildren('a'), true, '【统一树连线】树根判定只数生效的从属边')
+  assert.equal(forest.hasSubordinateChildren('c'), false, '【统一树连线】related 边不算从属出边')
+
+  // 深度上限：102 个节点串成 101 条从属边，最后一条必须被拒（降级为游离）。
+  const deepChildren = Object.fromEntries(Array.from({ length: 102 }, (_, i) => [`n${i}`, {}]))
+  const deepEdges = Array.from({ length: 101 }, (_, i) => ({
+    id: `d${i}`, source: `n${i}`, target: `n${i + 1}`, relation: 'subordinate',
+  }))
+  const deepForest = forestOf({ children: deepChildren, edges: deepEdges })
+  assert.equal(deepForest.topLevel.length, 2,
+    '【统一树连线】超过 100 层的边必须降级，绝不无限生长')
+  assert.deepEqual(deepForest.topLevel.slice().sort(), ['n0', 'n101'].sort(),
+    '【统一树连线】超深降级只影响越界那条边，其余链完整保留')
+
+  const readSrc28 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const treeSrc28 = await readSrc28('electron/services/unified-document-tree-service.js')
+  const viewSrc28 = await readSrc28('src/features/documents/unifiedTree/UnifiedTreeView.tsx')
+  const dtoSrc28 = await readSrc28('src/core/fs-backend.ts')
+  const guiSrc28 = await readSrc28('scripts/verify-linked-documents-gui.mjs')
+  assert.ok(treeSrc28.includes('if (!isRelevant(roomPath, nodeId, forest)) return')
+    && treeSrc28.includes('forest.childrenOf(nodeId)')
+    && treeSrc28.includes("origin: ownDocs ? origin : 'path'")
+    && treeSrc28.includes('buildSubordinateForest(parentMeta)')
+    && treeSrc28.includes('buildSubordinateForest(selfMeta)'),
+    '【统一树连线】房间层必须同时消费剪枝（含连线子树下溯）、来源标注与父/自身两份连线森林')
+  assert.ok(treeSrc28.includes('forest.parentOf(cursor)') && treeSrc28.includes('ancestors.unshift(parent)'),
+    '【统一树连线】定位链必须按连线祖先补齐，避免 expandPath 展开到一半断链')
+  assert.ok(!treeSrc28.includes('registered.has(entry.name)'),
+    '【统一树连线】不得回灌「物理游离子目录全量平铺」（离散节点统一归分组）')
+  assert.ok(!treeSrc28.includes('readTopoDocument') && !treeSrc28.includes('readFileSync'),
+    '【统一树连线】存在性探测只解析 tree.json 清单，不得读文档正文')
+  assert.ok(viewSrc28.includes('data-tm-unified-tree-origin')
+    && viewSrc28.includes('data-tm-unified-tree-has-docs')
+    && viewSrc28.includes('ORIGIN_LABEL') && viewSrc28.includes('GitBranch'),
+    '【统一树连线】视图必须用不同图标/徽标区分房间、从属与仅路径')
+  assert.ok(dtoSrc28.includes("origin?: 'room' | 'subordinate' | 'path'"),
+    '【统一树连线】来源字段必须落在 FSB DTO 上，不能只靠前端猜')
+  assert.ok(guiSrc28.includes('阶段 U') && guiSrc28.includes('data-tm-unified-tree-origin'),
+    '【统一树连线】GUI 必须实测只列有文档的节点与两类来源标签')
 }
 
 console.log('Critical regression checks verified')

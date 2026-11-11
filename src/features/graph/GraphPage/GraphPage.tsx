@@ -6,8 +6,6 @@ import { memo, useEffect } from 'react'
 import { GraphContextProvider } from '../../../contexts/GraphContext'
 import { useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
 import { registerGraphApi } from '../linkedDocumentStore'
-import Breadcrumb from '../../layout/Breadcrumb/Breadcrumb'
-import RoomHistory from '../../layout/RoomHistory/RoomHistory'
 import { useLearningTrackerContextStore } from '../../learning-tracker/model/learningTrackerContextStore'
 import RightPanelContainer from '../../right-panel/RightPanelContainer'
 import GraphCanvas from '../GraphCanvas'
@@ -66,10 +64,8 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
       <div id="graph-page" className="w-full h-full overflow-clip bg-[var(--color-canvas-bg)] pt-0">
         <div id="app-layout" className="flex w-full h-full relative">
           <div id="graph-panel" className="flex-1 h-full relative overflow-clip bg-[var(--color-canvas-bg)]">
-            <div className="absolute top-3 left-3 z-[11] flex flex-col items-start gap-2 max-w-[min(560px,calc(100%-24px))]">
-              <Breadcrumb tabId={tabId} />
-              <RoomHistory tabId={tabId} />
-            </div>
+            {/* 房间路径 / 最近打开 / 镜头状态全部融合进 GraphCanvas 的画布状态抽屉，
+                这里不再叠一层绝对定位组件，避免与 top-left Panel 互相遮挡。 */}
 
             {isActive ? (
               <GraphCanvas tabId={tabId} {...canvasProps} />

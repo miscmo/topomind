@@ -11,6 +11,7 @@ import { buildEdgeOperations } from './edgeOperations'
 import { buildNodeChangeOperations } from './nodeChangeOperations'
 import { buildSelectionOperations } from './selectionOperations'
 import { buildSelectionMirrorOperations } from './selectionMirrorOperations'
+import { buildSelectionSubtreeOperations } from './selectionSubtreeOperations'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 
@@ -140,6 +141,10 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     storeApi,
   })
 
+  // ===== 选中子树（纯视图态：不过写闸门、不落盘） =====
+
+  const selectionSubtreeOps = buildSelectionSubtreeOperations({ storeApi })
+
   return {
     // Node CRUD
     ...nodeCrudOps,
@@ -151,6 +156,8 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     ...selectionOps,
     // Multi-selection horizontal mirror
     ...selectionMirrorOps,
+    // Select whole subtree(s) rooted at the selected nodes
+    ...selectionSubtreeOps,
     updateNodeEmojis: nodeCrudOps.updateNodeEmojis,
     // Internal
     captureSaveSnapshot,

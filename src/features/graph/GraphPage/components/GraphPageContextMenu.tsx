@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2 } from 'lucide-react'
+import { Plus, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree } from 'lucide-react'
 
 interface MenuItem {
   label: string
@@ -31,6 +31,7 @@ interface GraphPageContextMenuProps {
   targetId: string | null
   onNewChild: (position?: { x: number; y: number }) => void
   onEnterNode: (nodeId: string) => void
+  onSelectSubtree: (nodeId: string) => void
   onDelete: (nodeId: string) => void
   onEdgeDelete: (edgeId: string) => void
   onEdgeStyle: (edgeId: string) => void
@@ -48,6 +49,7 @@ export default memo(function GraphPageContextMenu({
   targetId,
   onNewChild,
   onEnterNode,
+  onSelectSubtree,
   onDelete,
   onEdgeDelete,
   onEdgeStyle,
@@ -104,6 +106,14 @@ export default memo(function GraphPageContextMenu({
             shortcut: 'Enter',
             action: async () => {
               if (targetId) await onEnterNode(targetId)
+              onClose()
+            },
+          },
+          {
+            label: '选中子树',
+            icon: <ListTree className="w-4 h-4" />,
+            action: () => {
+              if (targetId) onSelectSubtree(targetId)
               onClose()
             },
           },

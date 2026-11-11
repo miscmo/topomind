@@ -114,6 +114,43 @@ export interface FSBDocumentCandidate {
   documentPathLabel: string
 }
 
+/**
+ * 统一资源树节点（节点树 + 节点内文档树合成一棵树）。
+ * key 由主进程唯一编解码，对渲染层不透明；UI 只按 kind / hasChildren 递归，
+ * 以后新增分组或其它资源类型都不需要改组件。
+ */
+export interface UnifiedTreeNode {
+  key: string
+  kind: 'card' | 'document' | 'group'
+  label: string
+  /** card：节点路径；document：所属节点面包屑；group：分组说明。 */
+  subtitle: string
+  /** 是否有可展开的直接子层（card 为乐观值，展开空层后由 hook 回填）。 */
+  hasChildren: boolean
+  /** 本层已知的直接子节点数，不递归统计。 */
+  childCount: number
+  /** 只有 document 能被勾选 / 插入。 */
+  selectable: boolean
+  /** 物理存在但未被父房间 graph meta 登记的离散节点。 */
+  orphan?: boolean
+  /**
+   * 这一行是通过哪种层级关系挂到父行的：
+   * room=房间包含 / subordinate=从属连线 / path=自身无文档，仅作通往后代的路径。
+   */
+  origin?: 'room' | 'subordinate' | 'path'
+  /** 该节点自身是否挂有文档（false 且仍出现，说明只是必经路径容器）。 */
+  hasDocuments?: boolean
+  cardPath?: string
+  group?: string
+  candidate?: FSBDocumentCandidate
+}
+
+/** 一次按层查询的结果：只含 parentKey 的直接子节点。 */
+export interface UnifiedTreeLevel {
+  parentKey: string
+  nodes: UnifiedTreeNode[]
+}
+
 /** 引用关系条目：形状与 domain 层一致，避免在渲染层再造一份 DTO。 */
 export type FSBDocumentBacklink = DocumentBacklink
 export type FSBDocumentRelations = DocumentRelations
@@ -147,6 +184,9 @@ export interface FSB {
   exportTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
   openTopoDocumentFolder: (rootDir: string, cardPath: string, documentId: string) => Promise<boolean>
   listDocumentCandidates: (rootDir: string) => Promise<FSBDocumentCandidate[]>
+  listUnifiedTreeLevel: (rootDir: string, parentKey: string) => Promise<UnifiedTreeLevel>
+  searchUnifiedDocuments: (rootDir: string, query: string, options?: { limit?: number; force?: boolean }) => Promise<FSBDocumentCandidate[]>
+  resolveUnifiedDocumentPath: (rootDir: string, docId: string) => Promise<string[]>
   resolveDocumentById: (rootDir: string, docId: string, cardRef?: string) => Promise<DocumentResolution>
   updateNodeLinkedDocuments: (rootDir: string, nodePath: string, links: LinkedDocumentRef[]) => Promise<LinkedDocumentRef[]>
   listDocumentBacklinks: (rootDir: string, docId: string) => Promise<FSBDocumentBacklink[]>
@@ -222,6 +262,12 @@ const FSBImpl: FSB = {
     _call('fs:moveTopoNodesToRoom', rootDir, sourceRoomPath, nodeIds, targetRoomPath) as Promise<MoveTopoNodesToRoomResult>,
   listDocumentCandidates: (rootDir) =>
     _call('fs:listDocumentCandidates', rootDir) as Promise<FSBDocumentCandidate[]>,
+  listUnifiedTreeLevel: (rootDir, parentKey) =>
+    _call('fs:listUnifiedTreeLevel', rootDir, parentKey) as Promise<UnifiedTreeLevel>,
+  searchUnifiedDocuments: (rootDir, query, options) =>
+    _call('fs:searchUnifiedDocuments', rootDir, query, options ?? {}) as Promise<FSBDocumentCandidate[]>,
+  resolveUnifiedDocumentPath: (rootDir, docId) =>
+    _call('fs:resolveUnifiedDocumentPath', rootDir, docId) as Promise<string[]>,
   resolveDocumentById: (rootDir, docId, cardRef) =>
     _call('fs:resolveDocumentById', rootDir, docId, cardRef ?? '') as Promise<DocumentResolution>,
   updateNodeLinkedDocuments: (rootDir, nodePath, links) =>

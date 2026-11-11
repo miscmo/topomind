@@ -108,6 +108,13 @@ function setupWorkDir() {
     { id: 'doc_sub', title: '子分组', parentId: 'doc_group' },
     { id: 'doc_nested', title: LINK_TITLE, parentId: 'doc_sub' },
   ])
+  // 物理存在但父房间 _graph.json 未登记：离散节点分组的夹具。
+  writeDocs('stray-node', [{ id: 'doc_stray', title: '离散节点文档' }])
+  // 连线树夹具：只给树根和三级节点挂文档，一级 A 自身无文档但连线后代有文档，
+  // 用来验证「只列有文档的节点」+「仅路径容器」+ 逐层下钻（不动 edges / 节点数，
+  // 免得影响阶段 K 的 LOD 覆盖率与深度断言）。
+  writeDocs('lod-root', [{ id: 'doc_lod_root', title: 'LOD 树根文档' }])
+  writeDocs('lod-g1', [{ id: 'doc_lod_leaf', title: 'LOD 三级文档' }])
 }
 
 async function cdpReachable() {
@@ -223,26 +230,108 @@ async function main() {
     check('隔离测试库构造完成', fs.existsSync(DOC_A) && fs.existsSync(DOC_B))
     check('进入工作空间并渲染两个节点', await enterWorkspace(page))
 
-    // ---- 阶段 A：对话框上限 8 ----
+    // ---- 阶段 A / T：统一树按需加载 + 文档树路径 + 上限 8 ----
     check('右键菜单含「关联已有文档…」', await openLinkDialog(page) &&
       await page.evaluate(() => (document.body.innerText || '').includes('关联已有文档')))
-    const dialogInfo = await page.evaluate(() => {
-      const dlg = document.querySelector('[role="dialog"]')
-      return dlg ? { text: dlg.innerText || '', candidates: [...dlg.querySelectorAll('button')].filter((b) => (b.innerText || '').includes('\n')).length } : null
-    })
-    check('对话框列出候选文档与面包屑', !!dialogInfo && dialogInfo.candidates >= 9 &&
-      dialogInfo.text.includes(LINK_TITLE) && dialogInfo.text.includes('测试库 / 节点 B'),
-      dialogInfo ? `${dialogInfo.candidates} 个候选` : 'dialog missing')
 
-    // 节点内文档树路径：同名文档消歧 + 按路径检索（本次需求）。
-    const candidateRows = await page.evaluate(() => {
+    const treeRead = () => page.evaluate(() => {
       const dlg = document.querySelector('[role="dialog"]')
-      return [...(dlg?.querySelectorAll('[data-tm-link-document-id]') ?? [])].map((b) => ({
-        docId: b.getAttribute('data-tm-link-document-id') || '',
-        path: b.getAttribute('data-tm-link-document-path') || '',
-        text: b.innerText || '',
-      }))
+      return {
+        levels: Number(dlg?.getAttribute('data-tm-link-document-levels') || '0'),
+        searching: dlg?.getAttribute('data-tm-link-document-search') === 'true',
+        rows: [...(dlg?.querySelectorAll('[data-tm-unified-tree-node]') ?? [])].map((el) => ({
+          kind: el.getAttribute('data-tm-unified-tree-node') || '',
+          text: el.innerText || '',
+          depth: Number(el.getAttribute('data-tm-unified-tree-depth') || '0'),
+          origin: el.getAttribute('data-tm-unified-tree-origin') || '',
+          hasDocs: el.getAttribute('data-tm-unified-tree-has-docs') || '',
+        })),
+        docs: [...(dlg?.querySelectorAll('[data-tm-link-document-id]') ?? [])].map((el) => ({
+          docId: el.getAttribute('data-tm-link-document-id') || '',
+          path: el.getAttribute('data-tm-link-document-path') || '',
+          text: el.innerText || '',
+        })),
+      }
     })
+    // 第一个按钮是展开箭头：对 card / group / document 都只展开，不会误勾选文档。
+    const expandTreeNode = (label) => page.evaluate((text) => {
+      const dlg = document.querySelector('[role="dialog"]')
+      const row = [...(dlg?.querySelectorAll('[data-tm-unified-tree-node]') ?? [])]
+        .find((el) => (el.innerText || '').split('\n')[0].trim() === text)
+      const button = row?.querySelector('button')
+      button?.click()
+      return !!button
+    }, label)
+
+    // 根层按层查询是异步 IPC：等树真正渲染出行，再断言默认视图。
+    await waitFor(page, () => Number(document.querySelector('[role="dialog"] [data-tm-unified-tree-rows]')?.getAttribute('data-tm-unified-tree-rows') || '0') > 0, 8000)
+    const initialTree = await treeRead()
+    check('【阶段 T】对话框默认只加载顶层根（1 层、不平铺文档）',
+      initialTree.levels === 1 && initialTree.rows.length >= 2 &&
+      initialTree.rows.every((r) => r.kind !== 'document') && initialTree.docs.length === 0,
+      JSON.stringify({ levels: initialTree.levels, rows: initialTree.rows.length, docs: initialTree.docs.length }))
+    check('【阶段 T】顶层含知识库与离散节点分组',
+      initialTree.rows.some((r) => r.text.includes(KB_NAME)) &&
+      initialTree.rows.some((r) => r.text.includes('离散节点')),
+      JSON.stringify(initialTree.rows.map((r) => r.text.split('\n')[0])))
+
+    check('【阶段 T】展开知识库才加载第 2 层', await expandTreeNode(KB_NAME) &&
+      await waitFor(page, () => Number(document.querySelector('[role="dialog"]')?.getAttribute('data-tm-link-document-levels') || '0') === 2, 6000))
+    const kbTree = await treeRead()
+    const level2 = kbTree.rows.filter((r) => r.depth === 1 && r.kind === 'card')
+    // ---- 阶段 U：只列有文档的节点 + 连线树逐层下钻 + 房间/从属/仅路径来源区分 ----
+    check('【阶段 U】第 2 层只列出有文档的节点（空节点全部剪掉）',
+      level2.length === 3 &&
+      ['节点 A', '节点 B', 'LOD 树根'].every((name) =>
+        level2.some((r) => r.text.split('\n')[0].trim() === name)) &&
+      level2.every((r) => r.hasDocs === 'true') &&
+      !kbTree.rows.some((r) => /LOD 一级 B|LOD 三级|LOD 游离|stray-node/.test(r.text)),
+      JSON.stringify(level2.map((r) => `${r.text.split('\n')[0]}:${r.origin}:${r.hasDocs}`)))
+    const originLabels = await page.evaluate(() => document.querySelector('[role="dialog"]')?.innerText || '')
+    check('【阶段 U】房间与从属两种来源在树里可区分',
+      level2.some((r) => r.origin === 'room') && level2.some((r) => r.origin === 'subordinate') &&
+      originLabels.includes('从属') && originLabels.includes('房间'),
+      JSON.stringify(level2.map((r) => r.origin)))
+    check('【阶段 U】展开连线树根才加载下一层（不一次性平铺连线子节点）',
+      await expandTreeNode('LOD 树根') &&
+      await waitFor(page, () => [...document.querySelectorAll('[role="dialog"] [data-tm-unified-tree-node="card"]')]
+        .some((el) => (el.innerText || '').split('\n')[0].trim() === 'LOD 一级 A'), 6000))
+    const bridgeTree = await treeRead()
+    const bridgeRow = bridgeTree.rows.find((r) => r.text.split('\n')[0].trim() === 'LOD 一级 A')
+    check('【阶段 U】自身无文档、仅靠连线后代保留的容器标「仅路径」且仍可展开',
+      bridgeRow?.depth === 2 && bridgeRow.origin === 'path' && bridgeRow.hasDocs === 'false' &&
+      bridgeTree.rows.some((r) => r.text.includes('仅路径')),
+      JSON.stringify(bridgeRow))
+    check('【阶段 U】无文档的连线兄弟节点仍不列出',
+      !bridgeTree.rows.some((r) => r.text.includes('LOD 一级 B')),
+      JSON.stringify(bridgeTree.rows.map((r) => r.text.split('\n')[0])))
+    check('【阶段 U】展开仅路径容器才到达真正挂文档的连线叶子',
+      await expandTreeNode('LOD 一级 A') &&
+      await waitFor(page, () => [...document.querySelectorAll('[role="dialog"] [data-tm-unified-tree-node="card"]')]
+        .some((el) => (el.innerText || '').split('\n')[0].trim() === 'LOD 三级'), 6000))
+    const leafTree = await treeRead()
+    const leafRow = leafTree.rows.find((r) => r.text.split('\n')[0].trim() === 'LOD 三级')
+    check('【阶段 U】连线叶子是更深一层的从属行且自身有文档',
+      leafRow?.depth === 3 && leafRow.origin === 'subordinate' && leafRow.hasDocs === 'true',
+      JSON.stringify(leafRow))
+    check('【阶段 T】离散节点分组展开后列出未登记节点', await expandTreeNode('离散节点') &&
+      await waitFor(page, () => [...document.querySelectorAll('[role="dialog"] [data-tm-unified-tree-orphan="true"]')]
+        .some((el) => (el.innerText || '').includes('stray-node')), 6000))
+
+    check('【阶段 T】展开节点 B 才加载第 3 层文档', await expandTreeNode('节点 B') &&
+      await waitFor(page, () => [...document.querySelectorAll('[role="dialog"] [data-tm-link-document-id]')].length >= 9, 6000))
+    const nodeTree = await treeRead()
+    check('对话框列出候选文档与面包屑', nodeTree.docs.length >= 9 &&
+      nodeTree.docs.some((r) => r.text.includes(LINK_TITLE)) &&
+      nodeTree.docs.some((r) => r.text.includes('测试库 / 节点 B')),
+      `${nodeTree.docs.length} 个候选 / ${nodeTree.levels} 层`)
+
+    check('【阶段 T】文档树逐层展开到同名文档', await expandTreeNode('需求分组') &&
+      await waitFor(page, () => [...document.querySelectorAll('[role="dialog"] [data-tm-unified-tree-node]')]
+        .some((el) => (el.innerText || '').split('\n')[0].trim() === '子分组'), 6000) &&
+      await expandTreeNode('子分组') &&
+      await waitFor(page, () => !!document.querySelector('[role="dialog"] [data-tm-link-document-id="doc_nested"]'), 6000))
+    const candidateRows = (await treeRead()).docs
     const nestedRow = candidateRows.find((r) => r.docId === 'doc_nested')
     const topRow = candidateRows.find((r) => r.docId === 'doc_b')
     const sameTitleRows = candidateRows.filter((r) => r.text.split('\n')[0]?.trim() === LINK_TITLE)
@@ -266,19 +355,25 @@ async function main() {
     }, value)
     // 用完整的多级路径做关键字：它不是任何文档标题，只有 documentPathLabel 能命中。
     await setDialogQuery('需求分组 / 子分组')
-    await sleep(450)
+    await sleep(650)
     const byPath = await page.evaluate(() => [
       ...(document.querySelector('[role="dialog"]')?.querySelectorAll('[data-tm-link-document-id]') ?? []),
     ].map((b) => b.getAttribute('data-tm-link-document-id') || ''))
     check('可按节点内文档路径检索候选',
       byPath.includes('doc_nested') && !byPath.includes('doc_b') && !byPath.includes('doc_group'),
       JSON.stringify(byPath))
+    check('【阶段 T】输入搜索才切换为跨层结果（默认仍是树）',
+      (await treeRead()).searching === true && byPath.length > 0)
     await setDialogQuery('')
     await sleep(450)
 
+    // 清空 query 回到树浏览，展开状态保留；点所有可见文档行验证 8 篇上限。
     await page.evaluate(() => {
       const dlg = document.querySelector('[role="dialog"]')
-      ;[...dlg.querySelectorAll('button')].filter((b) => (b.innerText || '').includes('\n')).forEach((b) => b.click())
+      ;[...dlg.querySelectorAll('[data-tm-link-document-id]')].forEach((el) => {
+        const button = el.matches('button') ? el : el.querySelectorAll('button')[1]
+        button?.click()
+      })
     })
     await sleep(500)
     const over = await page.evaluate(() => {
@@ -292,12 +387,13 @@ async function main() {
     await clickByDialogText(page, '取消')
     await sleep(500)
 
-    // ---- 阶段 B：保存 1 篇关联 ----
+    // ---- 阶段 B：搜索直达 + 保存 1 篇关联 ----
     await openLinkDialog(page)
-    await page.evaluate((title) => {
-      const dlg = document.querySelector('[role="dialog"]')
-      ;[...dlg.querySelectorAll('button')].find((b) => (b.innerText || '').includes(title))?.click()
-    }, LINK_TITLE)
+    await setDialogQuery(LINK_TITLE)
+    await waitFor(page, () => !!document.querySelector('[role="dialog"] [data-tm-link-document-id="doc_b"]'), 6000)
+    await page.evaluate(() => {
+      document.querySelector('[role="dialog"] [data-tm-link-document-id="doc_b"]')?.click()
+    })
     await sleep(400)
     const counter1 = await page.evaluate(() => (document.querySelector('[role="dialog"]')?.innerText || '').match(/已选 \d+ \/ 8/)?.[0])
     check('单选后计数为 已选 1 / 8', counter1 === '已选 1 / 8', counter1)
@@ -465,6 +561,27 @@ async function main() {
     }
     check('输入 [[ 弹出全库文档选择器',
       await waitFor(page, () => !!document.querySelector('[data-tm-doc-link-picker]'), 6000))
+    await waitFor(page, () => Number(document.querySelector('[data-tm-doc-link-picker] [data-tm-unified-tree-rows]')?.getAttribute('data-tm-unified-tree-rows') || '0') > 0, 8000)
+    const pickerInitial = await page.evaluate(() => {
+      const p = document.querySelector('[data-tm-doc-link-picker]')
+      return {
+        levels: Number(p?.getAttribute('data-tm-doc-link-levels') || '0'),
+        docs: p?.querySelectorAll('[data-tm-doc-link-item]').length ?? 0,
+        rows: p?.querySelectorAll('[data-tm-unified-tree-node]').length ?? 0,
+      }
+    })
+    check('【阶段 T】编辑器选择器同样默认只加载顶层根',
+      pickerInitial.levels === 1 && pickerInitial.docs === 0 && pickerInitial.rows >= 2,
+      JSON.stringify(pickerInitial))
+    // 输入搜索才跨层检索（派生索引），结果行与旧契约保持同款诊断属性。
+    await page.evaluate((title) => {
+      const input = document.querySelector('[data-tm-doc-link-picker] input')
+      if (!input) return
+      input.focus()
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, title)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }, LINK_TITLE)
     // 选择器浮层是 portal 且候选列表异步加载：必须等目标项出现，不能只等浮层挂载。
     check('选择器列出目标文档 doc_b',
       await waitFor(page, () => !!document.querySelector('[data-tm-doc-link-item="doc_b"]'), 9000))
@@ -1766,6 +1883,42 @@ async function main() {
       document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
     await page.mouse.click(500, 800)
     await sleep(250)
+    // 阶段 O 的搜索 / 滚轮可能把视口留在远处：onlyRenderVisibleElements 会把夹具
+    // 节点裁掉。先用搜索把视野带回 LOD 夹具（顺带 revealNode），再做多选。
+    // waitFor 会把这个函数序列化到浏览器上下文执行，里面不能再引用 page。
+    const lodFixtureVisible = () =>
+      ['lod-c1', 'lod-c2'].every((id) => !!document.querySelector(`.react-flow__node[data-id="${id}"]`))
+    if (!await waitFor(page, lodFixtureVisible, 2500)) {
+      await page.keyboard.down('Control')
+      await page.keyboard.press('f')
+      await page.keyboard.up('Control')
+      await waitFor(page, () => !!document.querySelector('input[placeholder="搜索画布中的节点..."]'), 5000)
+      await page.evaluate(() => {
+        const input = document.querySelector('input[placeholder="搜索画布中的节点..."]')
+        if (!input) return
+        input.focus()
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+        setter?.call(input, 'LOD 一级 A')
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await sleep(450)
+      await page.keyboard.press('Enter')
+      await waitFor(page, lodFixtureVisible, 8000)
+    }
+    const mirrorDiag = await page.evaluate(() => {
+      const control = document.querySelector('[data-tm-lod-control]')
+      return {
+        tier: control?.getAttribute('data-tm-lod-tier'),
+        active: control?.getAttribute('data-tm-lod-active'),
+        visibleCount: control?.getAttribute('data-tm-lod-visible-count'),
+        zoom: document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent'),
+        zoomOutDisabled: document.querySelector('[data-tm-zoom-out]')?.disabled,
+        nodeIds: [...document.querySelectorAll('.react-flow__node')].map((n) => n.getAttribute('data-id')),
+        edgeCount: document.querySelectorAll('.react-flow__edge').length,
+        transform: document.querySelector('.react-flow__viewport')?.style.transform,
+        readOnly: document.querySelector('[data-shortcut-scope="canvas"]')?.getAttribute('data-tm-canvas-readonly'),
+      }
+    })
     const mirrorRects = () => page.evaluate(() => ['lod-c1', 'lod-c2'].map((id) => {
       const el = document.querySelector(`.react-flow__node[data-id="${id}"]`)
       if (!el) return null
@@ -1790,7 +1943,7 @@ async function main() {
       const menu = document.querySelector('[data-tm-selection-mirror-menu]')
       return menu?.getAttribute('data-tm-selection-mirror-count') === '2'
         && !!document.querySelector('[data-tm-selection-mirror-flip]')
-    }, 6000), JSON.stringify(beforeMirror))
+    }, 6000), JSON.stringify({ beforeMirror, diag: mirrorDiag }))
 
     const flipRect = await page.evaluate(() => {
       const el = document.querySelector('[data-tm-selection-mirror-flip]')
@@ -1854,6 +2007,193 @@ async function main() {
     await page.mouse.click(500, 800)
     check('取消多选后菜单收起', await waitFor(page, () =>
       !document.querySelector('[data-tm-selection-mirror-menu]'), 4000))
+
+    // ===== 阶段 Q：画布状态抽屉（房间路径 / 最近打开 / 镜头状态融合） =====
+    // 不假设 localStorage 里的持久化初值：所有断言都读「点击前后」的相对变化。
+    const statusRead = () => page.evaluate(() => {
+      const drawer = document.querySelector('[data-tm-canvas-status-drawer]')
+      const sections = {}
+      document.querySelectorAll('[data-tm-status-section]').forEach((el) => {
+        sections[el.getAttribute('data-tm-status-section')] = el.getAttribute('data-tm-status-section-open')
+      })
+      return {
+        open: drawer?.getAttribute('data-tm-canvas-status-open') || '',
+        width: Math.round(drawer?.getBoundingClientRect().width || 0),
+        sections,
+        pathFull: document.querySelector('[data-tm-canvas-status-title]')?.getAttribute('data-tm-room-path-full') || '',
+        oldBreadcrumb: !!document.querySelector('#breadcrumb'),
+        controlCount: document.querySelectorAll('[data-tm-lod-control]').length,
+        pathList: !!document.querySelector('[data-tm-room-path-list]'),
+        diagnosticsDom: !!document.querySelector('[data-tm-lod-depth-panel]'),
+      }
+    })
+    let status0 = await statusRead()
+    if (status0.open !== 'true') {
+      await page.evaluate(() => document.querySelector('[data-tm-canvas-status-toggle]')?.click())
+      await sleep(250)
+      status0 = await statusRead()
+    }
+    check('画布状态抽屉：三块 UI 融合成单一面板、旧面包屑悬浮层已移除',
+      status0.controlCount === 1 && !status0.oldBreadcrumb && status0.open === 'true'
+      && status0.pathFull.length > 0 && status0.pathList,
+      JSON.stringify(status0))
+
+    await page.evaluate(() => document.querySelector('[data-tm-status-section-toggle="recent"]')?.click())
+    await sleep(220)
+    const statusRecent = await statusRead()
+    check('画布状态抽屉：功能区可独立展开折叠（最近打开）',
+      statusRecent.sections.recent !== status0.sections.recent
+      && ['path', 'view', 'details'].every((id) => statusRecent.sections[id] === status0.sections[id]),
+      JSON.stringify({ before: status0.sections, after: statusRecent.sections }))
+
+    await page.evaluate(() => document.querySelector('[data-tm-status-section-toggle="path"]')?.click())
+    await sleep(220)
+    const statusPath = await statusRead()
+    check('画布状态抽屉：完整路径展开不撑宽面板，且不影响其它分区',
+      statusPath.width === statusRecent.width && statusPath.width > 0
+      && statusPath.sections.path !== status0.sections.path
+      && statusPath.sections.recent === statusRecent.sections.recent,
+      JSON.stringify({ width: [statusRecent.width, statusPath.width], sections: statusPath.sections }))
+
+    const statusStored = await page.evaluate(() => localStorage.getItem('topomind_canvas_status_v1') || '')
+    check('画布状态抽屉：整体与分区折叠状态持久化',
+      /"drawerOpen"/.test(statusStored) && /"sections"/.test(statusStored),
+      statusStored.slice(0, 140))
+
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-status-toggle]')?.click())
+    await sleep(250)
+    const statusCollapsed = await statusRead()
+    check('画布状态抽屉：整体折叠成标题栏但诊断 DOM 常驻',
+      statusCollapsed.open === 'false' && statusCollapsed.controlCount === 1 && statusCollapsed.diagnosticsDom,
+      JSON.stringify(statusCollapsed))
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-status-toggle]')?.click())
+    await sleep(250)
+    check('画布状态抽屉：再次点击恢复展开', (await statusRead()).open === 'true')
+
+    // ===== 阶段 R：选中子树（单选根 / 整树 / 幂等 / 右键入口） =====
+    // 阶段 P/Q 可能把视口留在远处：用搜索把树根带回视野，顺带完成「单选一个节点」。
+    const searchNode = async (keyword) => {
+      await page.keyboard.down('Control')
+      await page.keyboard.press('f')
+      await page.keyboard.up('Control')
+      await waitFor(page, () => !!document.querySelector('input[placeholder="搜索画布中的节点..."]'), 5000)
+      await page.evaluate((text) => {
+        const input = document.querySelector('input[placeholder="搜索画布中的节点..."]')
+        if (!input) return
+        input.focus()
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+        setter?.call(input, text)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      }, keyword)
+      await sleep(450)
+      await page.keyboard.press('Enter')
+    }
+    const selectionIds = () => page.evaluate(() =>
+      (document.querySelector('[data-tm-selection-menu]')?.getAttribute('data-tm-selection-ids') || '')
+        .split('|').filter(Boolean).sort().join('|'))
+    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    await waitFor(page, () =>
+      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
+    await waitFor(page, () =>
+      document.querySelector('[data-shortcut-scope="canvas"]')?.getAttribute('data-tm-canvas-readonly') === 'false', 8000)
+    await page.mouse.click(500, 800)
+    await sleep(200)
+    await searchNode('LOD 树根')
+    const singleMenu = await waitFor(page, () =>
+      document.querySelector('[data-tm-selection-menu]')?.getAttribute('data-tm-selection-count') === '1'
+      && !!document.querySelector('[data-tm-selection-subtree]')
+      && !document.querySelector('[data-tm-selection-mirror-menu]'), 8000)
+    check('选中子树：单选节点也出现选中操作菜单（镜像区仍要求多选）', singleMenu,
+      JSON.stringify(await selectionIds()))
+
+    await page.evaluate(() => document.querySelector('[data-tm-selection-subtree]')?.click())
+    const subtreeDone = await waitFor(page, () =>
+      (document.querySelector('[data-tm-selection-menu]')?.getAttribute('data-tm-selection-ids') || '')
+        .split('|').filter(Boolean).sort().join('|') === 'lod-c1|lod-c2|lod-g1|lod-root', 6000)
+    const domSelected = await page.evaluate(() =>
+      [...document.querySelectorAll('.react-flow__node.selected')].map((n) => n.getAttribute('data-id')))
+    const subtreeCount = await page.evaluate(() =>
+      document.querySelector('[data-tm-selection-menu]')?.getAttribute('data-tm-selection-count'))
+    check('选中子树：整棵从属树被选中，related / 游离 / 其它节点不入',
+      subtreeDone && subtreeCount === '4' && domSelected.includes('lod-root')
+      && domSelected.every((id) => ['lod-root', 'lod-c1', 'lod-c2', 'lod-g1'].includes(id)),
+      JSON.stringify({ domSelected, subtreeCount, ids: await selectionIds() }))
+
+    await page.evaluate(() => document.querySelector('[data-tm-selection-subtree]')?.click())
+    await sleep(300)
+    check('选中子树：再次点击幂等，且多选镜像区随选区出现', await waitFor(page, () =>
+      document.querySelector('[data-tm-selection-mirror-menu]')?.getAttribute('data-tm-selection-mirror-count') === '4'
+      && document.querySelector('[data-tm-selection-menu]')?.getAttribute('data-tm-selection-count') === '4', 6000),
+      JSON.stringify(await selectionIds()))
+
+    await searchNode('LOD 一级 A')
+    await waitFor(page, () => !!document.querySelector('.react-flow__node[data-id="lod-c1"]'), 8000)
+    await openNodeMenu(page, 'lod-c1')
+    const ctxItem = await page.evaluate(() => {
+      const btn = [...document.querySelectorAll('[data-context-menu-item]')]
+        .find((b) => (b.textContent || '').trim() === '选中子树')
+      btn?.click()
+      return !!btn
+    })
+    check('选中子树：右键菜单以该节点为根（不含父节点）',
+      ctxItem && await waitFor(page, () =>
+        (document.querySelector('[data-tm-selection-menu]')?.getAttribute('data-tm-selection-ids') || '')
+          .split('|').filter(Boolean).sort().join('|') === 'lod-c1|lod-g1', 6000),
+      JSON.stringify(await selectionIds()))
+
+    // ===== 阶段 S：只读提示条下方的缩放滑动条（显隐同源 / 拖动即时改比例） =====
+    const zoomReadout = () => page.evaluate(() =>
+      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') || '')
+    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    await waitFor(page, () =>
+      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
+    check('缩放滑动条：100% 时与只读提示条一起隐藏', await waitFor(page, () =>
+      !document.querySelector('[data-tm-canvas-readonly-banner]')
+      && !document.querySelector('[data-tm-canvas-zoom-slider]'), 6000))
+
+    await page.evaluate(() => document.querySelector('[data-tm-zoom-out]')?.click())
+    const sliderAttached = await waitFor(page, () => {
+      const banner = document.querySelector('[data-tm-canvas-readonly-banner]')
+      const slider = document.querySelector('[data-tm-canvas-zoom-slider]')
+      if (!banner || !slider || banner.nextElementSibling !== slider) return false
+      return slider.getBoundingClientRect().top >= banner.getBoundingClientRect().bottom
+    }, 8000)
+    check('缩放滑动条：缩小后与提示条同时出现，且紧贴其下方', sliderAttached)
+
+    const sliderRange = await page.evaluate(() => {
+      const input = document.querySelector('[data-tm-canvas-zoom-slider-input]')
+      return input ? { min: input.min, max: input.max, step: input.step } : null
+    })
+    check('缩放滑动条：范围 5%~100%、步进 1%',
+      sliderRange?.min === '5' && sliderRange.max === '100' && sliderRange.step === '1',
+      JSON.stringify(sliderRange))
+
+    await page.evaluate(() => {
+      const input = document.querySelector('[data-tm-canvas-zoom-slider-input]')
+      if (!input) return
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, '60')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const atSixty = await waitFor(page, () =>
+      document.querySelector('[data-tm-canvas-zoom-slider]')?.getAttribute('data-tm-canvas-zoom-slider-value') === '60'
+      && document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '60%', 8000)
+    check('缩放滑动条：拖到 60% 即时改变画布比例', atSixty, await zoomReadout())
+
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-zoom-slider-input]')?.focus())
+    await page.keyboard.press('Home')
+    const atFive = await waitFor(page, () =>
+      document.querySelector('[data-tm-canvas-zoom-slider]')?.getAttribute('data-tm-canvas-zoom-slider-value') === '5'
+      && document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '5%', 8000)
+    check('缩放滑动条：键盘拖到 5% 下端点', atFive, await zoomReadout())
+
+    await page.keyboard.press('End')
+    const restoredBySlider = await waitFor(page, () =>
+      !document.querySelector('[data-tm-canvas-readonly-banner]')
+      && !document.querySelector('[data-tm-canvas-zoom-slider]')
+      && document.querySelector('[data-shortcut-scope="canvas"]')?.getAttribute('data-tm-canvas-readonly') === 'false', 8000)
+    check('缩放滑动条：回到 100% 时与提示条一起隐藏并解除只读', restoredBySlider, await zoomReadout())
   } finally {
     browser.disconnect()
     if (spawned) spawned.kill()

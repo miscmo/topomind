@@ -162,6 +162,8 @@ export function useGraph(tabId: string) {
     updateNodeEmojis: edit(ops.updateNodeEmojis, noAsync),
     selectNode: ops.selectNode,
     deselectNode: ops.deselectNode,
+    // 选中子树只改运行时 selected 字段：与 selectNode 一样放行，只读远景下也能查看。
+    selectSubtree: ops.selectSubtree,
     createEdge: edit(createEdge, noId),
     // 【多选镜像 2026-11-11】与其余写操作一样过唯一闸门：缩小/有隐藏节点时禁写。
     flipSelectionHorizontally: edit(ops.flipSelectionHorizontally, noResult),
@@ -200,6 +202,7 @@ export function useGraph(tabId: string) {
     ops.updateNodeEmojis,
     ops.selectNode,
     ops.deselectNode,
+    ops.selectSubtree,
     createEdge,
     ops.flipSelectionHorizontally,
     ops.updateEdgeRelation,
