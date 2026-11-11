@@ -10,6 +10,7 @@ import { buildNodeCrudOperations } from './nodeCrudOperations'
 import { buildEdgeOperations } from './edgeOperations'
 import { buildNodeChangeOperations } from './nodeChangeOperations'
 import { buildSelectionOperations } from './selectionOperations'
+import { buildSelectionMirrorOperations } from './selectionMirrorOperations'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
 
@@ -131,6 +132,14 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     storeApi,
   })
 
+  // ===== 多选区域水平镜像（写闸门在 useGraph 统一包住） =====
+
+  const selectionMirrorOps = buildSelectionMirrorOperations({
+    getActiveGraphSession,
+    saveLater,
+    storeApi,
+  })
+
   return {
     // Node CRUD
     ...nodeCrudOps,
@@ -140,6 +149,8 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     ...nodeChangeOps,
     // Selection
     ...selectionOps,
+    // Multi-selection horizontal mirror
+    ...selectionMirrorOps,
     updateNodeEmojis: nodeCrudOps.updateNodeEmojis,
     // Internal
     captureSaveSnapshot,

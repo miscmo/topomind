@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
+import { formatZoomPercent } from '../../../domain/graph/zoomScale'
 
 interface ToolbarProps {
   zoomLevel: number
@@ -54,7 +55,7 @@ export default memo(function Toolbar({ zoomLevel, inline = false }: ToolbarProps
             : 'min-w-[54px] h-7 rounded-full border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--titlebar-menu-bg)_84%,transparent)] px-2.5 text-[11px] shadow-[var(--shadow-sm)]'
         }`}
       >
-        {`${Math.round(zoomLevel * 100)}%`}
+        {formatZoomPercent(zoomLevel)}
       </div>
     </div>
   )

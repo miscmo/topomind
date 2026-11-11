@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, type Viewport, type NodeChange, type Node, type Edge } from '@xyflow/react'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
+import { isCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { useGraphStore, useGraphStoreApi } from '../../../../stores/graphStore'
 import { useTabStore } from '../../../../stores/tabs/tabStore'
 import { useGraphContext } from '../../../../contexts/GraphContext'
@@ -9,7 +10,14 @@ import { logAction } from '../../../../core/log-backend'
 import { useSmartGuides } from '../useSmartGuides'
 import { buildRectSpatialIndex, distanceToRect, getNodeRect, queryRectSpatialIndex } from '../utils/math'
 import { CARD_CONNECT_SNAP_DISTANCE, KEYBOARD_NEW_NODE_HORIZONTAL_GAP, KEYBOARD_NEW_NODE_VERTICAL_GAP } from '../constants'
+import {
+  ZOOM_REFERENCE,
+  quantizeLodZoom,
+  rebaseViewport,
+  resolveLodStage,
+} from '../../../../domain/graph/zoomScale'
 import type { KnowledgeNode } from '../../../../types'
+import { rememberViewportJump } from './viewportReturnStore'
 
 export interface UseGraphCanvasModelProps {
   tabId: string
@@ -36,9 +44,22 @@ export function useGraphCanvasModel({
   const setStoredViewport = useGraphStore((s) => s.setViewport)
   const graphStoreApi = useGraphStoreApi()
   const activeTabId = useTabStore((s) => s.activeTabId)
-  
-  const [zoomLevel, setZoomLevel] = useState(1)
-  const zoomLevelRef = useRef(1)
+  const selectedNodeId = useGraphStore((s) => s.selectedNodeId)
+  // pin 偏好按房间隔离，避免同名节点 id 跨房间串味。
+  // 必须用官方 getGraphSession（会话不一定挂在 tabs 数组元素上），否则 roomPath 恒为空 → pin 写不进去。
+  const roomPath = useTabStore((s) => s.getGraphSession(tabId)?.roomPath ?? '')
+
+  // zoomLevel 是 raw 变换系数（缩略图算可见框用），显示百分比由 zoomScale 统一换算。
+  const [zoomLevel, setZoomLevel] = useState(ZOOM_REFERENCE)
+  const zoomLevelRef = useRef(ZOOM_REFERENCE)
+  // LOD 吃量化后的连续 zoom：滚轮每帧变，但只有跨 2% 显示比台阶才 setState。
+  const [lodZoom, setLodZoom] = useState(() => quantizeLodZoom(ZOOM_REFERENCE))
+  const lodZoomRef = useRef(lodZoom)
+  // 粗档位只用来清空「搜索临时显示」，不参与可见性裁剪。
+  const [lodTier, setLodTier] = useState(() => resolveLodStage(ZOOM_REFERENCE))
+  const lodTierRef = useRef(lodTier)
+  // 落盘值不改写：仅在交给 ReactFlow 时把两个历史默认镜头（raw 1 / 0.5）重定基到新的 100%，并钳到上下限。
+  const renderViewport = useMemo(() => rebaseViewport(storedViewport), [storedViewport])
   const [isShiftPressed, setIsShiftPressed] = useState(false)
   const [isMouseOverCanvas, setIsMouseOverCanvas] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -202,6 +223,16 @@ export function useGraphCanvasModel({
   }, [graph, onCloseContextMenu])
 
   const updateZoomLevel = useCallback((nextZoom: number) => {
+    const nextLodZoom = quantizeLodZoom(nextZoom)
+    if (Math.abs(nextLodZoom - lodZoomRef.current) > 0.0001) {
+      lodZoomRef.current = nextLodZoom
+      setLodZoom(nextLodZoom)
+    }
+    const nextStage = resolveLodStage(nextZoom)
+    if (nextStage !== lodTierRef.current) {
+      lodTierRef.current = nextStage
+      setLodTier(nextStage)
+    }
     if (Math.abs(zoomLevelRef.current - nextZoom) <= 0.001) return
     zoomLevelRef.current = nextZoom
     setZoomLevel(nextZoom)
@@ -272,11 +303,13 @@ export function useGraphCanvasModel({
   }, { scope: 'canvas', preventDefault: false })
 
   useEffect(() => {
-    updateZoomLevel(storedViewport.zoom)
-  }, [storedViewport.zoom, updateZoomLevel])
+    updateZoomLevel(renderViewport.zoom)
+  }, [renderViewport.zoom, updateZoomLevel])
 
   useShortcut(['Control+z', 'Meta+z'], (event) => {
     if (activeTabId !== tabId) return
+    // 撤销/重做会直接写回 graphStore（绕过 useGraph 闸门），只读期同样禁止改图。
+    if (isCanvasReadOnly(tabId)) return
     event.preventDefault()
     ;graphStoreApi.temporal.getState().undo()
     const tab = useTabStore.getState().tabs.find(t => t.id === tabId && t.type === 'kb')
@@ -288,6 +321,7 @@ export function useGraphCanvasModel({
 
   useShortcut(['Control+y', 'Meta+y', 'Control+Shift+Z', 'Meta+Shift+Z'], (event) => {
     if (activeTabId !== tabId) return
+    if (isCanvasReadOnly(tabId)) return
     event.preventDefault()
     ;graphStoreApi.temporal.getState().redo()
     const tab = useTabStore.getState().tabs.find(t => t.id === tabId && t.type === 'kb')
@@ -299,6 +333,8 @@ export function useGraphCanvasModel({
 
   useShortcut(['Enter', 'NumpadEnter', 'Tab'], (event) => {
     if (activeTabId !== tabId) return
+    // 快捷键新建节点 + 自动连线属于编辑，只读期不落盘（底层闸门也会拦，这里省掉确认框）。
+    if (isCanvasReadOnly(tabId)) return
     const isTab = event.key === 'Tab'
 
     const selectedNode = nodes.find((node) => node.selected)
@@ -332,38 +368,56 @@ export function useGraphCanvasModel({
   useEffect(() => {
     const currentViewport = reactFlow.getViewport()
     const viewportChanged =
-      Math.abs(currentViewport.x - storedViewport.x) > 0.5 ||
-      Math.abs(currentViewport.y - storedViewport.y) > 0.5 ||
-      Math.abs(currentViewport.zoom - storedViewport.zoom) > 0.001
+      Math.abs(currentViewport.x - renderViewport.x) > 0.5 ||
+      Math.abs(currentViewport.y - renderViewport.y) > 0.5 ||
+      Math.abs(currentViewport.zoom - renderViewport.zoom) > 0.001
 
     if (!viewportChanged) return
 
     const frame = requestAnimationFrame(() => {
-      reactFlow.setViewport(storedViewport, { duration: 0 })
+      reactFlow.setViewport(renderViewport, { duration: 0 })
     })
 
     return () => cancelAnimationFrame(frame)
-  }, [reactFlow, storedViewport])
+  }, [reactFlow, renderViewport])
 
   const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    // 右键菜单里全是新建 / 删除 / 样式 / 移动 / 关联等编辑项：只读时干脆不弹出，
+    // 顺手关掉可能残留的旧菜单，避免「菜单可见但点了没反应」。
+    if (isCanvasReadOnly(tabId)) {
+      event.preventDefault()
+      event.stopPropagation()
+      onCloseContextMenu?.()
+      return
+    }
     graph.onNodeContextMenu(event, node as KnowledgeNode)
     onNodeContextMenu?.(node.id, event)
-  }, [graph, onNodeContextMenu])
+  }, [graph, onNodeContextMenu, onCloseContextMenu, tabId])
 
   const handleEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     graph.onEdgeClick(event, edge)
   }, [graph])
 
   const handleEdgeContextMenu = useCallback((event: React.MouseEvent, edge: Edge) => {
+    if (isCanvasReadOnly(tabId)) {
+      event.preventDefault()
+      event.stopPropagation()
+      onCloseContextMenu?.()
+      return
+    }
     graph.onEdgeClick(event, edge)
     onEdgeContextMenu?.(edge.id, event)
-  }, [graph, onEdgeContextMenu])
+  }, [graph, onEdgeContextMenu, onCloseContextMenu, tabId])
 
   const handlePaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
+    if (isCanvasReadOnly(tabId)) {
+      onCloseContextMenu?.()
+      return
+    }
     onPaneContextMenu?.(event.clientX, event.clientY)
-  }, [onPaneContextMenu])
+  }, [onPaneContextMenu, onCloseContextMenu, tabId])
 
   const flushConnectionTargetSearch = useCallback(() => {
     if (!connectingSourceId || !snapCandidateIndex) return
@@ -452,6 +506,8 @@ export function useGraphCanvasModel({
   const handleSearchSelectNode = useCallback((node: Node) => {
     graph.selectNode(node.id)
     setIsSearchOpen(false)
+    // 程序化跳转前记下当前视野；手动平移 / 滚轮缩放不经过这里，不会污染返回历史。
+    rememberViewportJump(reactFlow, String(node.data?.label ?? node.id))
     const nodeRect = {
       x: node.position.x,
       y: node.position.y,
@@ -469,7 +525,12 @@ export function useGraphCanvasModel({
       nodes,
       edges,
       storedViewport,
+      renderViewport,
       zoomLevel: deferredZoomLevel,
+      lodZoom,
+      lodTier,
+      roomPath,
+      selectedNodeId,
       guideLines,
       isFormatPainterActive,
       isEdgeFormatPainterActive,

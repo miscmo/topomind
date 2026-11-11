@@ -51,7 +51,10 @@ export const LinkDocumentDialog = memo(function LinkDocumentDialog() {
     const q = query.trim().toLowerCase()
     if (!q) return candidates
     return candidates.filter((item) => (
-      item.title.toLowerCase().includes(q) || item.breadcrumb.toLowerCase().includes(q)
+      item.title.toLowerCase().includes(q)
+      || item.breadcrumb.toLowerCase().includes(q)
+      // 同名文档靠节点内文档树路径区分，路径本身也要可被检索。
+      || item.documentPathLabel.toLowerCase().includes(q)
     ))
   }, [candidates, query])
 
@@ -119,7 +122,7 @@ export const LinkDocumentDialog = memo(function LinkDocumentDialog() {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索文档标题或所属节点…"
+            placeholder="搜索文档标题、所属节点或节点内文档路径…"
             className="flex-1 bg-transparent border-none outline-none px-2 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] min-w-0"
           />
         </div>
@@ -136,6 +139,8 @@ export const LinkDocumentDialog = memo(function LinkDocumentDialog() {
                 <button
                   key={`${item.cardPath}/${item.docId}`}
                   type="button"
+                  data-tm-link-document-id={item.docId}
+                  data-tm-link-document-path={item.documentPathLabel}
                   onClick={() => toggle(item.docId)}
                   className={`flex items-start gap-2.5 w-full px-3 py-2 text-left text-[13px] transition-colors ${
                     isSelected ? 'bg-[var(--color-accent-soft)]' : 'hover:bg-[var(--color-bg-muted)]'
@@ -154,6 +159,16 @@ export const LinkDocumentDialog = memo(function LinkDocumentDialog() {
                     <span className="block truncate text-[11px] text-[var(--color-text-muted)]">
                       {isSelf ? '本节点 · ' : ''}{item.breadcrumb}
                     </span>
+                    {/* 同一节点内可以有多篇同名文档，只有节点内树路径能区分引用的是哪一篇。 */}
+                    {item.documentPathLabel && (
+                      <span
+                        className="block truncate text-[11px] text-[var(--color-text-secondary)]"
+                        title={`节点内文档路径：${item.documentPathLabel}`}
+                        data-tm-link-document-path-label=""
+                      >
+                        ↳ {item.documentPathLabel}
+                      </span>
+                    )}
                   </span>
                 </button>
               )

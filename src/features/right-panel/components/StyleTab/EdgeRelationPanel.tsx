@@ -1,11 +1,9 @@
 import { useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
 import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
 import { useStorage } from '../../../../core/storage'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import {
   DEFAULT_EDGE_RELATION_ID,
-  newEdgeRelationId,
   normalizeEdgeRelationDefinitions,
   type EdgeRelationDefinition,
 } from '../../../../domain/graph/edgeRelations'
@@ -20,9 +18,11 @@ import { EdgeStylePreview } from './StylePreviews'
 /**
  * 「连线关系」管理页（全局配置）。
  *
- * 关系用稳定 id 落盘，显示名可以随便改；删除自定义关系不会改写磁盘上已有的边，
- * 那些边在读取侧回退显示为「关联」（见 resolveEdgeRelationId）。
- * 每种关系自带一套完整连线样式，选中 / 切换关系时套用到边，之后仍可单条覆盖。
+ * 【用户决策 2026-11-08】关系收敛为两类、磁盘已物理迁移，不再支持自定义关系：
+ *   - 关联 related：弱关系，不参与层级树；
+ *   - 从属 subordinate：强关系，方向 source=父 → target=子，唯一父 / 无环 / 深度 ≤100。
+ * 每次手动画线都会强制选择关系；这里只能改两种内置关系的显示名与默认样式，
+ * id 恒定不变，改名不会让已有连线失效。
  */
 export function EdgeRelationPanel() {
   const storage = useStorage()
@@ -31,14 +31,13 @@ export function EdgeRelationPanel() {
   const setEdgeRelations = useGraphUiStore((s) => s.setEdgeRelations)
   const setShowLabels = useGraphUiStore((s) => s.setShowEdgeRelationLabels)
   const [selectedId, setSelectedId] = useState<string>(DEFAULT_EDGE_RELATION_ID)
-  const [newName, setNewName] = useState('')
   const [nameDraft, setNameDraft] = useState<string | null>(null)
   const [saveError, setSaveError] = useState('')
 
   const current = relations.find((item) => item.id === selectedId) ?? relations[0]
 
   const write = (next: EdgeRelationDefinition[], extra: Record<string, unknown> = {}) => {
-    // 走同一份归一化再写盘：非法项被过滤、内置项被补齐，store 与 _config.json 一致。
+    // 走同一份归一化再写盘：恒为两种内置关系，非法项被过滤，store 与 _config.json 一致。
     const normalized = normalizeEdgeRelationDefinitions(next)
     setEdgeRelations(normalized)
     setSaveError('')
@@ -60,23 +59,6 @@ export function EdgeRelationPanel() {
     setNameDraft(null)
     if (!name || name === current.name) return
     write(relations.map((item) => (item.id === current.id ? { ...item, name } : item)))
-  }
-
-  const addRelation = () => {
-    const customCount = relations.filter((item) => !item.builtin).length
-    const name = newName.trim() || `自定义关系 ${customCount + 1}`
-    const id = newEdgeRelationId()
-    write([...relations, { id, name, style: { ...STYLE_CONFIG_DEFAULTS.defaultEdgeStyle } }])
-    setSelectedId(id)
-    setNameDraft(null)
-    setNewName('')
-  }
-
-  const removeRelation = () => {
-    if (!current || current.builtin) return
-    write(relations.filter((item) => item.id !== current.id))
-    setSelectedId(DEFAULT_EDGE_RELATION_ID)
-    setNameDraft(null)
   }
 
   const toggleLabels = (visible: boolean) => {
@@ -104,8 +86,16 @@ export function EdgeRelationPanel() {
       <StyleCard>
         <div className="text-[13px] font-medium text-[var(--color-text-primary)]">连线关系</div>
         <p className="mt-1 text-[11px] leading-[1.5] text-[var(--color-text-muted)]">
-          关系定义保存在工作区配置里，所有知识库共用。新建连线默认是「关联」并继承默认连线样式；
-          选中连线后切换关系会套用该关系的样式，之后仍可单独调整。
+          关系定义保存在工作区配置里，所有知识库共用，共两种：「关联」是弱关系、不参与层级树；
+          「从属」是强关系，方向固定为父 → 子，且强校验唯一父、无环、深度 1~100。
+          每次新建连线都必须选择关系；选中连线后切换关系会套用该关系的样式，之后仍可单独调整。
+        </p>
+        <p
+          className="mt-2 text-[10px] leading-[1.5] text-[var(--color-text-muted)]"
+          data-tm-edge-relation-semantic-note=""
+        >
+          关联连线始终显示关系名（未写时显示「关联」），不受下方开关影响；从属连线的颜色 / 线型 / 粗细 / 箭头
+          完全由下方配置决定，也可用单条边的格式刷自由调整，没有额外的固定视觉标记。
         </p>
         <div className="mt-3 flex items-center justify-between gap-2">
           <span className="text-[12px] text-[var(--color-text-secondary)]">在连线上显示关系名</span>
@@ -141,32 +131,11 @@ export function EdgeRelationPanel() {
                     style={{ backgroundColor: item.style.color }}
                   />
                   <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                  {item.builtin && <span className="shrink-0 text-[10px] text-[var(--color-text-muted)]">内置</span>}
+                  <span className="shrink-0 text-[10px] text-[var(--color-text-muted)]">内置</span>
                 </button>
               ))}
             </div>
           </StyleCard>
-
-          <div className="flex gap-1.5">
-            <input
-              data-tm-edge-relation-new-name=""
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter') addRelation() }}
-              placeholder="新关系名称"
-              className="h-8 min-w-0 flex-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 text-[12px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
-            />
-            <button
-              type="button"
-              data-tm-edge-relation-add=""
-              onClick={addRelation}
-              title="新增连线关系"
-              aria-label="新增连线关系"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--color-border-strong)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
         </div>
 
         {current && (
@@ -183,18 +152,6 @@ export function EdgeRelationPanel() {
                     onKeyDown={(event) => { if (event.key === 'Enter') commitName() }}
                     className="h-8 min-w-0 flex-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 text-[12px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
                   />
-                  {!current.builtin && (
-                    <button
-                      type="button"
-                      data-tm-edge-relation-delete={current.id}
-                      onClick={removeRelation}
-                      title="删除这个自定义关系"
-                      aria-label="删除这个自定义关系"
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--color-border-strong)] text-[var(--color-text-muted)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
                 </div>
                 <p className="text-[10px] leading-[1.5] text-[var(--color-text-muted)]">
                   稳定标识 {current.id} · 改名不会让已有连线失效{current.description ? ` · ${current.description}` : ''}

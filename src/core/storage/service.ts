@@ -337,6 +337,11 @@ export function createStore(backend: StorageBackend) {
         if (config.showEdgeRelationLabels !== undefined) {
           nextConfig.showEdgeRelationLabels = config.showEdgeRelationLabels
         }
+        // 房间图型是对象映射，必须显式透传：normalizeConfig 会丢弃所有未列出的字段，
+        // 漏列就会让 UI 切换生效但 _config.json 永远读不回来（写完即丢）。
+        if (config.roomProfiles !== undefined) {
+          nextConfig.roomProfiles = config.roomProfiles
+        }
         const next = normalizeConfig(nextConfig)
         cachedConfig = next
         await backend.writeConfig(next)

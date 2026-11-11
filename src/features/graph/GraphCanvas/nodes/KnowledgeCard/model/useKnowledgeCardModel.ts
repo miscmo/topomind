@@ -3,10 +3,13 @@ import { useReactFlow, type NodeChange } from '@xyflow/react'
 import type { KnowledgeNode, KnowledgeNodeStyle } from '../../../../../../types'
 import { resolveRoomChildRef } from '../../../../../../domain/graph/path-utils'
 import { useGraphUiStore } from '../../../../../../stores/graphUiStore'
+import { useActiveCanvasReadOnly } from '../../../../../../stores/canvasReadOnlyStore'
 import { useGraphStore, useGraphStoreApi } from '../../../../../../stores/graphStore'
 import { useGraphContext } from '../../../../../../contexts/GraphContext'
-import { calculateKnowledgeCardAutoSize, getKnowledgeCardAccessoryWidth } from './autoSize'
+import { calculateKnowledgeCardAutoSize } from './autoSize'
+import { describeKnowledgeCardTitle } from './titleDecorations'
 import { useConfirmStore } from '../../../../../../shared/ui/ConfirmModal/confirmStore'
+import { rememberViewportJump } from '../../../model/viewportReturnStore'
 
 const activeResizePointerListeners = new Set<() => void>()
 let resizePointerEventsAttached = false
@@ -39,6 +42,9 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const storeApi = useGraphStoreApi()
   const graph = useGraphContext()
   const reactFlow = useReactFlow()
+  // 【画布只读】远景下所有节点内编辑入口（标题 / 格式刷 / 快捷工具栏 / emoji）统一关掉；
+  // 只订阅布尔，缩放过程中 hiddenNodeCount 变化不会让所有卡片重渲染。
+  const canvasReadOnly = useActiveCanvasReadOnly()
   const showQuickToolbarForNode = useGraphStore((state) => (
     state.selectedNodeCount === 1 && state.selectedNodeId === id
   ))
@@ -86,32 +92,31 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   // 但全代码库没有任何写入者（已核实），属死字段，已从 KnowledgeNodeData 移除。
   const visuallyHovered = isHovered
   const showHoverControls = !isConnecting && (visuallyHovered || visuallySelected || isConnectTarget || isConnectSource)
-  const contentInteractionsEnabled = selected
+  // 双击标题的入口：只读时置 false，已打开的 input 也会被下方 effect 立刻收起。
+  const contentInteractionsEnabled = selected && !canvasReadOnly
   const nodeStyle = useMemo(
     () => ({ ...defaultNodeStyle, ...(data.nodeStyle ?? {}) }),
     [data.nodeStyle, defaultNodeStyle],
   )
   const widthMode = data.widthMode ?? 'auto'
   const heightMode = data.heightMode ?? 'auto'
-  // 依赖只列真正影响尺寸的业务字段，不能用整个 data：
-  // data 上还挂着 titleEditRequested 这类运行时字段，它的写入会重建 data 引用，
-  // 若把整个 data 当依赖就会白白重跑一遍 canvas 文本测量（每个节点 3~5 次 measureText）。
-  // 悬停走组件本地 isHovered、连线目标高亮走 graphUiStore，两者都不经过 data。
-  const emojiCount = data.emojis?.length ?? 0
-  const hasDetail = data.hasDetail === true
-  const childCount = data.childCount ?? 0
+  // 标题栏装饰的唯一事实来源：渲染侧与测量侧都消费同一份 decorations。
+  // 这一步很廉价（只读几个字段 + 拼字符串），所以放心依赖整个 data；任何装饰写入
+  // （含 linkedDocuments）都会重建描述，不会像旧实现那样因为「漏列依赖」而命中旧缓存。
+  const decorations = useMemo(
+    () => describeKnowledgeCardTitle(data, nodeStyle, nodeBadgeSize),
+    [data, nodeStyle, nodeBadgeSize],
+  )
+  // 昂贵的 Canvas 文本测量只在 signature / label / 字体变化时重跑。
+  // signature 由全部渲染输入序列化而来：以后新增装饰字段会自动进入签名，
+  // 无需再手工往依赖数组里补字段（这正是关联文档链环丢失自适应能力的根因）。
   const autoSize = useMemo(
-    () => calculateKnowledgeCardAutoSize(data.label, nodeStyle, data),
+    () => calculateKnowledgeCardAutoSize(data.label, nodeStyle, decorations),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.label, emojiCount, hasDetail, childCount, nodeStyle],
+    [data.label, nodeStyle, decorations.signature],
   )
   const displayWidth = widthMode === 'auto' ? autoSize.width : nodeWidth
   const displayHeight = heightMode === 'auto' ? autoSize.height : nodeHeight
-  const accessoryWidth = useMemo(
-    () => getKnowledgeCardAccessoryWidth(data),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hasDetail, childCount],
-  )
   
   const cardPath = useMemo(() => {
     const parent = typeof data.parent === 'string' ? data.parent : ''
@@ -194,6 +199,13 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   }, [cardPath, data.label, data.parent, data.cardRef, id, graph])
 
   const confirmTitleEdit = useCallback(async (options?: { restoreFocus?: boolean }) => {
+    // 用户可能先双击进入编辑、再缩小镜头；input 的 onBlur / Enter 仍会走到这里，
+    // 必须在写库前丢弃草稿（底层 renameNode 闸门也会拦，但要先把界面收回非编辑态）。
+    if (canvasReadOnly) {
+      titleDraftRef.current = data.label
+      setTitleEditing(false)
+      return
+    }
     if (titleSavingRef.current) return
     titleSavingRef.current = true
     const nextTitle = (titleInputRef.current?.value ?? titleDraftRef.current).trim()
@@ -235,6 +247,8 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
                   height: duplicateNode.height ?? 52
                 }
                 const zoom = reactFlow.getZoom()
+                // 「查看已存在节点」会把镜头跳到同名节点，先记下当前视野好一键返回。
+                rememberViewportJump(reactFlow, nextTitle)
                 reactFlow.setCenter(nodeRect.x + nodeRect.width / 2, nodeRect.y + nodeRect.height / 2, { zoom, duration: 300 })
               }, 50)
             }
@@ -266,7 +280,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
     if (canvas && options?.restoreFocus !== false) {
       requestAnimationFrame(() => canvas.focus())
     }
-  }, [data.label, graph, id, storeApi])
+  }, [data.label, graph, id, storeApi, canvasReadOnly])
 
   const cancelTitleEdit = useCallback((options?: { restoreFocus?: boolean }) => {
     const canvas = titleInputRef.current?.closest('[data-shortcut-scope="canvas"]') as HTMLElement | null
@@ -280,12 +294,12 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   }, [data.label])
 
   const startTitleEdit = useCallback((event: React.MouseEvent) => {
-    if (!contentInteractionsEnabled) return
+    if (!contentInteractionsEnabled || canvasReadOnly) return
     event.preventDefault()
     event.stopPropagation()
     titleDraftRef.current = data.label
     setTitleEditing(true)
-  }, [contentInteractionsEnabled, data.label])
+  }, [contentInteractionsEnabled, canvasReadOnly, data.label])
 
   useEffect(() => {
     if (contentInteractionsEnabled) return
@@ -337,6 +351,8 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
   const isFormatPainterActive = useGraphUiStore((state) => state.formatPainterStyle !== null)
   
   const toggleFormatPainter = useCallback(() => {
+    // 只读期不允许启动「点击即写样式」的模式；已在激活态时允许点一次关掉。
+    if (canvasReadOnly && useGraphUiStore.getState().formatPainterStyle === null) return
     const uiStore = useGraphUiStore.getState()
     if (uiStore.formatPainterStyle !== null) {
       uiStore.setFormatPainterStyle(null)
@@ -345,7 +361,7 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       uiStore.setEdgeFormatPainterStyle(null)
       uiStore.setFormatPainterStyle(nodeStyle)
     }
-  }, [nodeStyle])
+  }, [nodeStyle, canvasReadOnly])
 
   return {
     state: {
@@ -369,8 +385,8 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       cardPath,
       widthMode,
       heightMode,
-      showQuickToolbar: showQuickToolbarForNode && !titleEditing && !isFormatPainterActive && !isConnecting,
-      accessoryWidth,
+      showQuickToolbar: showQuickToolbarForNode && !titleEditing && !isFormatPainterActive && !isConnecting && !canvasReadOnly,
+      decorations,
       isFormatPainterActive,
     },
     actions: {
@@ -389,7 +405,8 @@ export function useKnowledgeCardModel(id: string, data: KnowledgeNode['data'], s
       toggleFormatPainter,
       selectNode: (e: React.PointerEvent) => {
         const uiStore = useGraphUiStore.getState()
-        if (uiStore.formatPainterStyle !== null) {
+        // 只读期格式刷不生效，也不吞掉点击：用户仍能选中节点看右栏信息。
+        if (uiStore.formatPainterStyle !== null && !canvasReadOnly) {
           e.preventDefault()
           e.stopPropagation()
           

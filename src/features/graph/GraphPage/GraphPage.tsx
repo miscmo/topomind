@@ -13,6 +13,7 @@ import RightPanelContainer from '../../right-panel/RightPanelContainer'
 import GraphCanvas from '../GraphCanvas'
 import GraphPageContextMenu from './components/GraphPageContextMenu'
 import { NodeMoveToRoomDialog } from './components/NodeMoveToRoomDialog'
+import RoomOverview from './components/RoomOverview'
 import { useGraphPageController } from './model/useGraphPageController'
 import { useGraphPageActions } from './model/useGraphPageActions'
 import { useShortcut } from '../../../hooks/useShortcut'
@@ -75,6 +76,7 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
             ) : (
               <div className="h-full w-full bg-[var(--color-canvas-bg)]" aria-hidden="true" />
             )}
+            {isActive && <RoomOverview tabId={tabId} />}
           </div>
           <RightPanelContainer tabId={tabId} isActive={isActive} />
         </div>

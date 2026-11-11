@@ -15,6 +15,7 @@ export const ConfirmModal = memo(function ConfirmModal() {
   const cancelText = useConfirmStore((s) => s.cancelText)
   const extraButtonText = useConfirmStore((s) => s.extraButtonText)
   const onExtraAction = useConfirmStore((s) => s.onExtraAction)
+  const confirmVariant = useConfirmStore((s) => s.confirmVariant)
   const confirm = useConfirmStore((s) => s.confirm)
   const cancel = useConfirmStore((s) => s.cancel)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
@@ -79,7 +80,7 @@ export const ConfirmModal = memo(function ConfirmModal() {
           <Button variant="outline" onClick={cancel}>
             {cancelText || '取消'}
           </Button>
-          <Button variant="destructive" onClick={confirm} ref={confirmButtonRef}>
+          <Button variant={confirmVariant === 'default' ? 'default' : 'destructive'} onClick={confirm} ref={confirmButtonRef}>
             {confirmText || '确定'}
           </Button>
         </div>

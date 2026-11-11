@@ -80,7 +80,10 @@ export const DocumentLinkPicker = memo(function DocumentLinkPicker({
     return candidates.filter((item) => {
       if (excludeDocId && item.docId === excludeDocId) return false
       if (!q) return true
-      return item.title.toLowerCase().includes(q) || item.breadcrumb.toLowerCase().includes(q)
+      return item.title.toLowerCase().includes(q)
+        || item.breadcrumb.toLowerCase().includes(q)
+        // 同名文档靠节点内文档树路径区分，路径本身也要可被检索。
+        || item.documentPathLabel.toLowerCase().includes(q)
     }).slice(0, 80)
   }, [candidates, query, excludeDocId])
 
@@ -136,7 +139,7 @@ export const DocumentLinkPicker = memo(function DocumentLinkPicker({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="搜索要引用的文档…"
+          placeholder="搜索标题、所属节点或节点内文档路径…"
           className="min-w-0 flex-1 border-none bg-transparent text-[12px] text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
         />
       </div>
@@ -151,6 +154,7 @@ export const DocumentLinkPicker = memo(function DocumentLinkPicker({
               key={`${item.cardPath}/${item.docId}`}
               type="button"
               data-tm-doc-link-item={item.docId}
+              data-tm-doc-link-path={item.documentPathLabel}
               className={`flex w-full items-start gap-2 px-3 py-1.5 text-left transition-colors ${
                 index === activeIndex ? 'bg-[var(--color-accent-soft)]' : 'hover:bg-[var(--color-hover-bg)]'
               }`}
@@ -161,6 +165,16 @@ export const DocumentLinkPicker = memo(function DocumentLinkPicker({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[12px] text-[var(--color-text-primary)]">{item.title}</span>
                 <span className="block truncate text-[11px] text-[var(--color-text-muted)]">{item.breadcrumb}</span>
+                {/* 同一节点内可以有多篇同名文档，只有节点内树路径能区分引用的是哪一篇。 */}
+                {item.documentPathLabel && (
+                  <span
+                    className="block truncate text-[11px] text-[var(--color-text-secondary)]"
+                    title={`节点内文档路径：${item.documentPathLabel}`}
+                    data-tm-doc-link-path-label=""
+                  >
+                    ↳ {item.documentPathLabel}
+                  </span>
+                )}
               </span>
             </button>
           ))

@@ -14,6 +14,8 @@ interface ConfirmState {
   cancelText?: string
   extraButtonText?: string
   onExtraAction?: () => void
+  /** 主按钮语义：破坏性操作用 destructive（默认），纯提示用 default */
+  confirmVariant?: 'default' | 'destructive'
   resolve: ((value: boolean) => void) | null
 }
 
@@ -25,6 +27,7 @@ interface ConfirmActions {
     cancelText?: string;
     extraButtonText?: string;
     onExtraAction?: () => void;
+    confirmVariant?: 'default' | 'destructive';
   }) => Promise<boolean>
   confirm: () => void
   cancel: () => void
@@ -40,13 +43,14 @@ export const useConfirmStore = create<ConfirmStore>((set, get) => ({
   cancelText: undefined,
   extraButtonText: undefined,
   onExtraAction: undefined,
+  confirmVariant: 'destructive',
   resolve: null,
 
-  open: ({ title = '确认', message = '', confirmText, cancelText, extraButtonText, onExtraAction } = {}) => {
+  open: ({ title = '确认', message = '', confirmText, cancelText, extraButtonText, onExtraAction, confirmVariant = 'destructive' } = {}) => {
     return new Promise<boolean>((resolve) => {
       const previousResolve = get().resolve
       previousResolve?.(false)
-      set({ visible: true, title, message, confirmText, cancelText, extraButtonText, onExtraAction, resolve })
+      set({ visible: true, title, message, confirmText, cancelText, extraButtonText, onExtraAction, confirmVariant, resolve })
     })
   },
 

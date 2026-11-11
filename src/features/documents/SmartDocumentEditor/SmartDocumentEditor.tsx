@@ -12,6 +12,7 @@ import type { SmartDocumentEditorProps } from './types'
 import { useSmartDocumentEditorModel } from './model/useSmartDocumentEditorModel'
 import { useSmartDocumentAttachmentInsert, type SmartDocumentAttachmentEditor } from './useSmartDocumentAttachmentInsert'
 import { SmartDocumentFormattingToolbar } from './components/SmartDocumentFormattingToolbar'
+import { ImageAlignToolbar } from './components/ImageAlignToolbar'
 import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
 import { EditorTopToolbar } from './components/EditorTopToolbar'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
@@ -912,6 +913,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
               },
             }}
           />
+          <ImageAlignToolbar />
         </BlockNoteView>
         {hoveredCodeBlock && toolbarPosition ? (
           <div

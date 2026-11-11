@@ -44,10 +44,13 @@ export interface GraphContextValue {
   selectNode: (nodeId: string, multiSelect?: boolean) => void
   deselectNode: () => void
   createEdge: (source: string, target: string) => Promise<string | null>
+  /** 多选 >=2 个节点时沿选区中轴水平镜像；只读 / 选区不足时返回 false */
+  flipSelectionHorizontally: () => Promise<boolean>
 
   // Edge operations
   /** weight 省略时沿用该边原权重；切换关系会套用关系自带的默认样式 */
-  updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight?: EdgeWeight) => void
+  /** 返回 false 表示被从属关系强校验拒绝（唯一父 / 无环 / 深度 ≤100） */
+  updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight?: EdgeWeight) => Promise<boolean>
   updateEdgeStyle: (edgeId: string, style: EdgeStylePatch & { selected?: boolean }) => void
   updateEdgeAnchor: (edgeId: string, patch: EdgeAnchorPatch) => void
   deleteEdge: (edgeId: string) => Promise<boolean>
@@ -90,6 +93,7 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     selectNode: graph.selectNode,
     deselectNode: graph.deselectNode,
     createEdge: graph.createEdge,
+    flipSelectionHorizontally: graph.flipSelectionHorizontally,
     updateEdgeRelation: graph.updateEdgeRelation,
     updateEdgeStyle: graph.updateEdgeStyle,
     updateEdgeAnchor: graph.updateEdgeAnchor,

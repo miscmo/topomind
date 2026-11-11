@@ -9,7 +9,9 @@ import { DEFAULT_CURVE_CONTROL, normalizeCurveControl } from '../../../../domain
 import { getCurvedEdgePath } from '../edges/floatingUtils'
 import type { KnowledgeEdge, KnowledgeNode } from '../../../../types'
 import Toolbar from '../../../layout/Toolbar/Toolbar'
+import ZoomResetButton from './ZoomResetButton'
 import { getNodeRect } from '../utils/math'
+import { rememberViewportJump } from '../model/viewportReturnStore'
 
 const MINI_MAP_MIN_WIDTH = 180
 const MINI_MAP_MAX_WIDTH = 340
@@ -685,6 +687,8 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
   const handleMiniMapNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const width = node.width ?? 120
     const height = node.height ?? 52
+    // 缩略图点节点是一次性跳转，记下跳转前视野；拖动缩略图连续定位不记（那是手动镜头操作）。
+    rememberViewportJump(reactFlow, String(node.data?.label ?? node.id))
     reactFlow.setCenter(node.position.x + width / 2, node.position.y + height / 2, {
       zoom: reactFlow.getZoom(),
       duration: 180,
@@ -810,6 +814,12 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
             <Toolbar zoomLevel={zoomLevel} inline />
 
             <div className="flex flex-col items-center gap-0.5 rounded-2xl border border-[var(--color-border)] bg-[color:color-mix(in_srgb,var(--titlebar-menu-bg)_90%,transparent)] p-0.5 shadow-[var(--shadow-sm)] backdrop-blur-xl">
+              {/* 常驻的一键回到 100%：100% 已是放大上限，远景看完主干后需要顺手的回程入口。
+                  与缩略图尺寸控件用分隔线隔开，避免把「画布比例」和「缩略图大小」混成一组。 */}
+              <ZoomResetButton zoomLevel={zoomLevel} />
+
+              <div className="h-px w-3.5 bg-[var(--color-border)] opacity-70" />
+
               {isMiniMapVisible && (
                 <>
                   <button
@@ -834,8 +844,6 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
                   </button>
                 </>
               )}
-
-              <div className="h-px w-3.5 bg-[var(--color-border)] opacity-70" />
 
               <button
                 type="button"

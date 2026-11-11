@@ -36,6 +36,8 @@ export const DOCUMENT_RELATIONS_INDEX = 'doc-relations.json'
 export const DOCUMENT_RELATIONS_VERSION = 1
 /** 单次索引遍历的递归深度上限，与 countDocumentLinks 保持一致。 */
 const LINK_SCAN_MAX_DEPTH = 64
+/** 节点内文档树的上溯深度上限，与渲染层 buildDocumentTree 的环保护同口径。 */
+const DOCUMENT_PATH_MAX_DEPTH = 64
 
 const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value)
 
@@ -258,6 +260,39 @@ export function formatDocumentSource(cardPath, nodeName) {
   return [...parts.slice(0, -1), leaf].join(' / ') || '根节点'
 }
 
+/**
+ * 节点内文档树路径的唯一格式化规则：沿 tree.json 的 parentId 上溯，
+ * 返回「祖先文档标题链」（根 → 直接父级，不含自身），用 ' / ' 连接。
+ *
+ * 选择器是全库扫描，一份坏档不能拖死整次检索，因此和渲染层 buildDocumentTree /
+ * DocumentBreadcrumb 一样做三重保护：父节点缺失、自环/互相成环、超深一律截断。
+ * 顶层文档没有节点内路径，返回空串（渲染层据此不显示多余一行）。
+ * 不含自身是因为标题已在候选项首行单独展示，避免同名文档再重复一遍标题。
+ *
+ * @param documents tree.json 的 documents 映射（键为 docId，值含 title / parentId）
+ * @param docId 目标文档 id
+ */
+export function formatDocumentInNodePath(documents, docId) {
+  if (!isPlainObject(documents)) return ''
+  const startId = String(docId ?? '')
+  if (!startId || !isPlainObject(documents[startId])) return ''
+  const titles = []
+  const visited = new Set([startId])
+  let currentId = startId
+  for (let depth = 0; depth < DOCUMENT_PATH_MAX_DEPTH; depth += 1) {
+    const item = documents[currentId]
+    const parentId = isPlainObject(item) && typeof item.parentId === 'string'
+      ? item.parentId.trim() : ''
+    if (!parentId || visited.has(parentId)) break
+    const parent = documents[parentId]
+    if (!isPlainObject(parent)) break
+    visited.add(parentId)
+    titles.unshift(String(parent.title || '未命名文档').trim() || '未命名文档')
+    currentId = parentId
+  }
+  return titles.join(' / ')
+}
+
 /** 递归找出所有 _docs 目录（含 tree.json 才算有文档）。 */
 function collectDocsDirs(fs, path, startDir, maxDepth = 32) {
   const found = []
@@ -337,7 +372,7 @@ export function createDocumentIndexService(deps) {
     return name
   }
 
-  /** 全库文档条目：{ docId, title, type, cardPath, nodeName } */
+  /** 全库文档条目：{ docId, title, type, cardPath, nodeName, documentPathLabel } */
   const scanDocumentEntries = (rootDir) => {
     const { validRoot, kbsDir, dirs } = docsDirsOf(rootDir)
     const nameCache = new Map()
@@ -359,6 +394,8 @@ export function createDocumentIndexService(deps) {
           type: String(item.type || 'smart'),
           cardPath,
           nodeName,
+          // 只在同一份 manifest 内上溯，跨节点 parentId 天然被「父节点缺失」挡掉。
+          documentPathLabel: formatDocumentInNodePath(documents, id),
         })
       }
     }

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Check, Copy, Sigma } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Check, Copy, Sigma } from 'lucide-react'
 import {
   BasicTextStyleButton,
   ColorStyleButton,
@@ -33,6 +33,28 @@ function useSelectedTextState(): SmartDocumentSelectedTextState | undefined {
       const rawText = editor.prosemirrorState.doc.textBetween(selection.from, selection.to, '\n')
       const selectedBlocks = editor.getSelection()?.blocks || [editor.getTextCursorPosition().block]
       return getSmartDocumentSelectedTextState(rawText, selectedBlocks)
+    },
+  })
+}
+
+// 当前所选块的对齐方式（图片 / 文件 / 段落 / 标题等支持 textAlignment 的块都返回，
+// 不含该属性的自定义块如 codeBlock/mermaid/math 返回 null）。用于恢复「选中图片后
+// 在图片上方弹出对齐工具条」这一能力：原本由 BlockNote 默认格式化工具条提供，
+// 项目改用自定义工具条（formattingToolbar={false}）后丢失了对齐按钮。
+function useCurrentTextAlignment(): 'left' | 'center' | 'right' | null {
+  const editor = useSmartBlockNoteEditor()
+  return useEditorState({
+    editor,
+    selector: ({ editor }) => {
+      if (!editor.isEditable) return null
+      const selection = editor.prosemirrorState.selection
+      if (selection.empty) return null
+      const blocks = editor.getSelection()?.blocks
+      if (!blocks || blocks.length === 0) return null
+      const props = (blocks[0].props ?? {}) as Record<string, unknown>
+      if (!('textAlignment' in props)) return null
+      const value = props.textAlignment
+      return value === 'center' || value === 'right' ? value : 'left'
     },
   })
 }
@@ -131,20 +153,75 @@ function SelectionMathButton({ state }: { state: SmartDocumentSelectedTextState 
   )
 }
 
+function TextAlignmentButton({
+  value,
+  active,
+  onSelect,
+}: {
+  value: 'left' | 'center' | 'right'
+  active: boolean
+  onSelect: (value: 'left' | 'center' | 'right') => void
+}) {
+  const Components = useComponentsContext()
+  if (!Components) return null
+
+  const icon = value === 'left'
+    ? <AlignLeft size={16} strokeWidth={2} />
+    : value === 'center'
+      ? <AlignCenter size={16} strokeWidth={2} />
+      : <AlignRight size={16} strokeWidth={2} />
+  const label = value === 'left' ? '左对齐' : value === 'center' ? '居中' : '右对齐'
+
+  return (
+    <Components.FormattingToolbar.Button
+      className="bn-button"
+      isSelected={active}
+      label={label}
+      mainTooltip={label}
+      icon={icon}
+      onClick={() => onSelect(value)}
+    />
+  )
+}
+
 export function SmartDocumentFormattingToolbar() {
   const selectionState = useSelectedTextState()
+  const alignment = useCurrentTextAlignment()
+  const editor = useSmartBlockNoteEditor()
+
+  const handleAlign = useCallback((value: 'left' | 'center' | 'right') => {
+    const blocks = editor.getSelection()?.blocks
+    if (!blocks) return
+    for (const block of blocks) {
+      const props = (block.props ?? {}) as Record<string, unknown>
+      if ('textAlignment' in props) {
+        editor.updateBlock(block, { props: { textAlignment: value } })
+      }
+    }
+  }, [editor])
 
   return (
     <FormattingToolbar>
-      <BasicTextStyleButton basicTextStyle="bold" key="boldStyleButton" />
-      <BasicTextStyleButton basicTextStyle="italic" key="italicStyleButton" />
-      <BasicTextStyleButton basicTextStyle="underline" key="underlineStyleButton" />
-      <BasicTextStyleButton basicTextStyle="strike" key="strikeStyleButton" />
-      <ColorStyleButton key="colorStyleButton" />
-      {selectionState ? <CopySelectionButton key="copySelectionButton" state={selectionState} /> : null}
-      <BasicTextStyleButton basicTextStyle="code" key="codeStyleButton" />
-      {selectionState ? <SelectionMathButton key="inlineMathButton" state={selectionState} /> : null}
-      <CreateLinkButton key="createLinkButton" />
+      {selectionState ? (
+        <>
+          <BasicTextStyleButton basicTextStyle="bold" key="boldStyleButton" />
+          <BasicTextStyleButton basicTextStyle="italic" key="italicStyleButton" />
+          <BasicTextStyleButton basicTextStyle="underline" key="underlineStyleButton" />
+          <BasicTextStyleButton basicTextStyle="strike" key="strikeStyleButton" />
+          <ColorStyleButton key="colorStyleButton" />
+          <CopySelectionButton key="copySelectionButton" state={selectionState} />
+          <BasicTextStyleButton basicTextStyle="code" key="codeStyleButton" />
+          <SelectionMathButton key="inlineMathButton" state={selectionState} />
+          <CreateLinkButton key="createLinkButton" />
+        </>
+      ) : null}
+      {alignment ? (
+        <>
+          <TextAlignmentButton value="left" active={alignment === 'left'} onSelect={handleAlign} />
+          <TextAlignmentButton value="center" active={alignment === 'center'} onSelect={handleAlign} />
+          <TextAlignmentButton value="right" active={alignment === 'right'} onSelect={handleAlign} />
+        </>
+      ) : null}
     </FormattingToolbar>
   )
 }

@@ -12,7 +12,11 @@ import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
 import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../../../../domain/style/styleConstraints'
 import type { EdgeStylePatch, KnowledgeEdge } from '../../../../types'
 import { normalizeEdgeAnchor, type EdgeAnchorPatch } from '../../../../domain/graph/edgeAnchors'
-import { findEdgeRelationDefinition } from '../../../../domain/graph/edgeRelations'
+import {
+  describeEdgeSemantic,
+  findEdgeRelationDefinition,
+  readEdgeRelationId,
+} from '../../../../domain/graph/edgeRelations'
 import {
   DEFAULT_CURVE_CONTROL,
   hasCustomCurve,
@@ -21,6 +25,7 @@ import {
 } from '../../../../domain/graph/edgeCurve'
 import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
+import { useActiveCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { useConfirmStore } from '../../../../shared/ui/ConfirmModal/confirmStore'
 import { getEdgeParams, getInternalNodeRect, getCurvedEdgePath } from './floatingUtils'
 import QuickEdgeToolbar from './QuickEdgeToolbar'
@@ -75,6 +80,8 @@ function FloatingEdge({
   const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
   const { updateEdgeStyle, updateEdgeAnchor, updateEdgeRelation, deleteEdge } = useGraphContext()
   const confirm = useConfirmStore((s) => s.open)
+  // 只读时收起连线工具栏 / 锚点 / 弯曲控制柄，避免「拖了却不落盘」的假交互。
+  const canvasReadOnly = useActiveCanvasReadOnly()
   // 拖动锚点 / 弯曲控制柄时只在这里做路径预览，松手才写 store：一次拖动 = 一条撤销记录、一次落盘
   const [anchorPreview, setAnchorPreview] = useState<EdgeAnchorPreview | null>(null)
   const [curvePreview, setCurvePreview] = useState<CurveControl | null>(null)
@@ -101,9 +108,18 @@ function FloatingEdge({
   }, [updateEdgeStyle, id])
 
   /** 切换关系会套用该关系的默认样式，之后仍可用样式面板单条覆盖 */
-  const handleRelationChange = useCallback((relationId: string) => {
-    void updateEdgeRelation(id, relationId)
-  }, [updateEdgeRelation, id])
+  const handleRelationChange = useCallback(async (relationId: string) => {
+    const accepted = await updateEdgeRelation(id, readEdgeRelationId(relationId))
+    if (!accepted) {
+      void confirm({
+        title: '无法切换为「从属」',
+        message: '从属是强关系：一个节点只能从属于一个父节点，且不能构成环或超过 100 层深度。本次切换已取消；如需保留这条线，请选择「关联」。',
+        confirmText: '知道了',
+        cancelText: '关闭',
+        confirmVariant: 'default',
+      })
+    }
+  }, [updateEdgeRelation, id, confirm])
 
   // 删除是不可逆的破坏性操作，且按钮就在工具栏最右、hover 变红，误触成本高：
   // 走全局统一模态确认框（App.tsx 已挂载），取消则什么都不做。
@@ -126,6 +142,8 @@ function FloatingEdge({
   }, [updateEdgeStyle, id])
 
   const toggleFormatPainter = useCallback(() => {
+    // 只读期不允许启动「点击即写样式」的模式；已激活时允许点一次关掉。
+    if (canvasReadOnly && useGraphUiStore.getState().edgeFormatPainterStyle === null) return
     const uiStore = useGraphUiStore.getState()
     if (uiStore.edgeFormatPainterStyle !== null) {
       uiStore.setEdgeFormatPainterStyle(null)
@@ -134,7 +152,7 @@ function FloatingEdge({
     // 与节点格式刷互斥：启用连线格式刷时先关掉节点格式刷
     uiStore.setFormatPainterStyle(null)
     uiStore.setEdgeFormatPainterStyle(readEdgeStyleSnapshot(edgeData))
-  }, [edgeData])
+  }, [edgeData, canvasReadOnly])
 
   // 节点格式刷激活时进入"应用到节点"模式，隐藏连线工具栏避免误点；
   // 连线格式刷激活时保留本条连线的工具栏，方便再点一次取消。
@@ -142,12 +160,14 @@ function FloatingEdge({
     isSelected
     && connectingSourceId === null
     && !isNodeFormatPainterActive
+    && !canvasReadOnly
   // 格式刷/连线中隐藏手柄，避免挡住「点击连线应用样式」
   const showAnchorHandles =
     isSelected
     && connectingSourceId === null
     && !isNodeFormatPainterActive
     && !isEdgeFormatPainterActive
+    && !canvasReadOnly
   const hasCustomAnchors =
     normalizeEdgeAnchor(edgeData?.sourceAnchor) != null
     || normalizeEdgeAnchor(edgeData?.targetAnchor) != null
@@ -234,15 +254,19 @@ function FloatingEdge({
 
   const isSolid = arrowShape === 'solid'
 
-  // 关系名小标签：旧存档的中文值（相关/依赖/演进）在读取侧映射成内置 id，
-  // 磁盘上保持原值。选中 / 连线中 / 格式刷激活时让位给工具栏，避免两层浮层叠在中点。
-  const relationDefinition = findEdgeRelationDefinition(edgeData?.relation, edgeRelations)
-  const showRelationLabel =
-    showRelationLabels
-    && !isSelected
+  // 【用户决策 2026-11-09】语义契约只约束「关系名文字」（唯一规则源 edgeRelations.ts）：
+  //   - 关联边：关系名恒显示（没写默认「关联」），不受「显示关系名」开关影响；
+  //   - 从属边：恢复原样式，线条只走 BaseEdge 的 style（关系配置 / 单条边 / 格式刷可改），
+  //     不加任何额外视觉标记；关系名是否显示仍由「显示关系名」开关控制。
+  // 选中 / 连线中 / 格式刷时，中点浮层让位给工具栏。
+  const semantic = describeEdgeSemantic(edgeData?.relation, edgeRelations)
+  const relationDefinition = findEdgeRelationDefinition(semantic.kind, edgeRelations)
+  const midpointAvailable =
+    !isSelected
     && connectingSourceId === null
     && !isNodeFormatPainterActive
     && !isEdgeFormatPainterActive
+  const showRelationLabel = (semantic.mandatoryLabel || showRelationLabels) && midpointAvailable
 
   return (
     <>
@@ -286,6 +310,7 @@ function FloatingEdge({
           {showRelationLabel && (
             <div
               data-tm-edge-relation-label={relationDefinition.id}
+              data-tm-edge-relation-mandatory={semantic.mandatoryLabel ? 'true' : undefined}
               className="nodrag nopan absolute rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-[3px] text-[10px] leading-none text-[var(--color-text-secondary)] shadow-[var(--shadow-sm)]"
               style={{
                 transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
@@ -293,7 +318,8 @@ function FloatingEdge({
                 zIndex: 5,
               }}
             >
-              {relationDefinition.name}
+              {/* 关联边没写关系名时恒兜底「关联」；从属边沿用配置名，由开关决定是否显示 */}
+              {semantic.label}
             </div>
           )}
           {/* 手柄贴在边框交点上，线头在其外侧 6px；工具栏按手柄位置避让 */}

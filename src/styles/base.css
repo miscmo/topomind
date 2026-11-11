@@ -136,3 +136,41 @@ textarea:focus-visible,
 .react-flow__viewport{
   will-change:transform;
 }
+
+/* 语义缩放 LOD：节点/边先播放渐隐再真正卸载，重新挂载时播放渐显。
+   两个方向都用 inline animation（见 lod.ts 的 desiredFadeStyle），
+   不依赖「挂载前已有 opacity」的 CSS transition，避免首帧被浏览器跳过。 */
+@keyframes tm-lod-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes tm-lod-exit {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* 语义缩放：标题恒可读，装饰随镜头连续淡入淡出（放大时「从缝隙里长出来」）。
+   数值由 GraphCanvas 按连续 zoom 写进最外层容器的 CSS 变量，节点零重渲染继承；
+   pointer-events 单独用字符串变量，CSS 无法把数值直接映射成 auto / none。 */
+.tm-card-detail {
+  opacity: var(--tm-detail-alpha, 1);
+  pointer-events: var(--tm-detail-hit, auto);
+}
+
+/* 【P1.75】折叠子树徽标与细节淡出互补：镜头越远、卡片细节越淡，主干上的 +N
+   越清晰；放大回去时计数归零、徽标随之卸载。max() 保证中景半淡出时仍可读。
+   pointer-events 恒为 none（组件里也声明了），徽标绝不抢节点的拖拽 / 点击。 */
+.tm-lod-collapse-badge {
+  opacity: max(0.55, calc(1 - var(--tm-detail-alpha, 1)));
+  pointer-events: none;
+}
+
+/* 【画布只读 2026-11-11】缩小镜头下位置失真，React Flow 手势层已关掉拖拽 / 连线，
+   这里再收掉残留的 grab 光标与连线手柄命中，让「只读」在视觉上也是确定的。
+   handle 的几何测量走 getBoundingClientRect，不受 pointer-events 影响。 */
+.tm-canvas-readonly .react-flow__node {
+  cursor: default !important;
+}
+.tm-canvas-readonly .react-flow__handle {
+  pointer-events: none !important;
+}

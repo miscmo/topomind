@@ -1,5 +1,5 @@
 import type { Connection } from '@xyflow/react'
-import type { EdgeRelation, EdgeStylePatch, EdgeWeight, KnowledgeEdge } from '../../types'
+import type { EdgeStylePatch, EdgeWeight, KnowledgeEdge } from '../../types'
 import { logAction } from '../../core/log-backend'
 import { buildEdgeView } from './edgeView'
 import type { GraphSession } from '../../stores/tabs/tabStore'
@@ -11,11 +11,21 @@ import { normalizeEdgeAnchor, type EdgeAnchor, type EdgeAnchorPatch } from '../.
 import { CURVE_MODE_DEFAULT_CONTROL, normalizeCurveControl, sameCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
 import {
   DEFAULT_EDGE_RELATION_ID,
+  SUBORDINATE_EDGE_RELATION_ID,
+  assertEdgeRelationForCreate,
   edgeRelationStylePatch,
   findEdgeRelationDefinition,
   normalizeEdgeRelationDefinitions,
+  readEdgeRelationId,
   type EdgeRelationDefinition,
 } from '../../domain/graph/edgeRelations'
+import {
+  buildHierarchy,
+  toHierarchyEdge,
+  validateSubordinateEdge,
+  type GraphHierarchy,
+  type HierarchyEdgeLike,
+} from '../../domain/graph/graphHierarchy'
 
 export interface EdgeOperationsDeps {
   getActiveGraphSession: () => GraphSession | undefined
@@ -27,6 +37,23 @@ export interface EdgeOperationsDeps {
    * 不必加载 zustand / localStorage 也能直接真跑本模块。
    */
   getEdgeRelations?: () => readonly EdgeRelationDefinition[]
+}
+
+/**
+ * 从当前 store 的边构建层级索引。权威始终是边数据本身，索引可随时全量重建、
+ * 丢了自愈；**故意不挂钩任何写库入口**（create/delete/move/restore/import/
+ * 外部改档六处必然漏维护，见 doc-relations.json 的同一条教训）。
+ */
+function hierarchyFromStoreEdges(edges: readonly KnowledgeEdge[]): GraphHierarchy {
+  const projected: HierarchyEdgeLike[] = edges.map((edge) => toHierarchyEdge({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    relation: edge.data?.relation,
+    weight: edge.data?.weight,
+  }))
+  const nodeIds = projected.flatMap((edge) => [edge.source, edge.target])
+  return buildHierarchy(nodeIds, projected).hierarchy
 }
 
 function sameAnchor(a: EdgeAnchor | null | undefined, b: EdgeAnchor | null | undefined) {
@@ -85,7 +112,7 @@ function withEdgeSelection(edge: KnowledgeEdge, selected: boolean): KnowledgeEdg
     }),
     data: {
       ...edge.data,
-      relation: edge.data?.relation ?? '相关',
+      relation: readEdgeRelationId(edge.data?.relation),
       weight,
       color,
       lineStyle,
@@ -113,12 +140,43 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     edgeId: string,
     defaultStyle?: EdgeStylePatch,
     relationId?: string
-  ) => {
-    const definition = findEdgeRelationDefinition(relationId ?? DEFAULT_EDGE_RELATION_ID, getRelations())
+  ): Promise<boolean> => {
+    // 【用户决策 2026-11-09】新建连线必须显式指定两类关系之一，且关联边必须能
+    // 解析出非空的关系名（连线上要写清楚是什么关系）。这是最后一道强校验：
+    // 浮层负责收集选择，这里挡住程序化调用漏传 / 传未知值 / 旧值直接落盘。
+    // 与宽容的 readEdgeRelationId 不同，创建期只认 'related' / 'subordinate'。
+    const creation = assertEdgeRelationForCreate(relationId, getRelations())
+    if (!creation.ok) {
+      logAction('连线:强校验拒绝', 'graphOperations', {
+        edgeId, source: connection.source, target: connection.target, reason: creation.reason,
+      })
+      return false
+    }
+    const relation = creation.relation
+    const store = storeApi.getState()
+    if (relation === SUBORDINATE_EDGE_RELATION_ID) {
+      // 从属是强关系：唯一父、无环、深度 ≤100。用深度单调不变量做增量校验，
+      // 不遍历全树（见 graphHierarchy.ts）。校验不过直接拒绝，不降级、不落盘。
+      const hierarchy = hierarchyFromStoreEdges(store.edges)
+      const check = validateSubordinateEdge(hierarchy, toHierarchyEdge({
+        id: edgeId,
+        source: connection.source,
+        target: connection.target,
+        relation,
+        weight: 'minor',
+      }))
+      if (!check.ok) {
+        logAction('连线:从属校验拒绝', 'graphOperations', {
+          edgeId, source: connection.source, target: connection.target, reason: check.reason,
+        })
+        return false
+      }
+    }
+    const definition = findEdgeRelationDefinition(relation, getRelations())
     // 显式指定非基础关系时才用关系样式覆盖；默认「关联」仍然继承右栏的
     // 「默认连线样式」，避免用户已配置的 defaultEdgeStyle 在一夜之间失效。
     // 切换已有边的关系由 updateEdgeRelation 统一套用关系样式。
-    const relationStyle = relationId && relationId !== DEFAULT_EDGE_RELATION_ID
+    const relationStyle = relation !== DEFAULT_EDGE_RELATION_ID
       ? edgeRelationStylePatch(definition.style)
       : undefined
     const effectiveStyle: EdgeStylePatch = { ...defaultStyle, ...relationStyle }
@@ -143,7 +201,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       targetHandle: connection.targetHandle,
       ...buildEdgeView({ lineMode, lineStyle, color, lineWidth, arrow, arrowSize, arrowShape, arrowPosition }),
       data: {
-        relation: definition.id,
+        relation,
         weight: 'minor',
         lineMode,
         lineStyle,
@@ -159,7 +217,6 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       },
     }
 
-    const store = storeApi.getState()
     const alreadyExists = store.edges.some((edge) => (
       edge.source === connection.source
       && edge.target === connection.target
@@ -186,14 +243,34 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     return true
   }
 
-  const updateEdgeRelation = async (edgeId: string, relation: EdgeRelation, weight?: EdgeWeight) => {
+  const updateEdgeRelation = async (edgeId: string, relation: string, weight?: EdgeWeight): Promise<boolean> => {
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     const store = storeApi.getState()
-    // 关系按稳定 id 落盘；旧中文值 / 已删除的自定义 id 在这里解析回当前定义。
+    // 关系按稳定 id 落盘；旧中文值 / 已删除的自定义 id 在这里解析回两值之一。
     // 用户决策「切换即套用，可单条覆盖」：套用该关系的默认样式，之后仍可用
     // updateEdgeStyle 单独微调，不锁死。
-    const definition = findEdgeRelationDefinition(relation, getRelations())
+    const nextRelation = readEdgeRelationId(relation)
+    const targetEdge = store.edges.find((edge) => edge.id === edgeId)
+    if (!targetEdge) return false
+    // 切换成「从属」等价于新建一条强关系：排除自身后做同样的唯一父/无环/深度校验。
+    if (nextRelation === SUBORDINATE_EDGE_RELATION_ID) {
+      const hierarchy = hierarchyFromStoreEdges(store.edges.filter((edge) => edge.id !== edgeId))
+      const check = validateSubordinateEdge(hierarchy, toHierarchyEdge({
+        id: edgeId,
+        source: targetEdge.source,
+        target: targetEdge.target,
+        relation: nextRelation,
+        weight: weight ?? targetEdge.data?.weight,
+      }))
+      if (!check.ok) {
+        logAction('连线:关系切换被从属校验拒绝', 'graphOperations', {
+          edgeId, relation: nextRelation, reason: check.reason,
+        })
+        return false
+      }
+    }
+    const definition = findEdgeRelationDefinition(nextRelation, getRelations())
     const stylePatch = edgeRelationStylePatch(definition.style)
     let changed = false
     const nextEdges = store.edges.map((e) => {
@@ -214,13 +291,14 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
           weight: nextWeight,
           selected: e.data?.selected,
         }),
-        data: { ...e.data, ...stylePatch, relation: definition.id, weight: nextWeight },
+        data: { ...e.data, ...stylePatch, relation: nextRelation, weight: nextWeight },
       } as KnowledgeEdge
     })
-    if (!changed) return
+    if (!changed) return false
     store.setEdges(nextEdges)
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('连线:更新关系', 'graphOperations', { edgeId, relation: definition.id, weight })
+    logAction('连线:更新关系', 'graphOperations', { edgeId, relation: nextRelation, weight })
+    return true
   }
 
   const updateEdgeStyle = async (
@@ -269,7 +347,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       const nextData = {
         ...d,
         ...style,
-        relation: d.relation ?? '相关',
+        relation: readEdgeRelationId(d.relation),
         weight: nextWeight,
         lineMode: nextLineMode,
         color: nextColor,
@@ -339,7 +417,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
         ...e,
         data: {
           ...nextData,
-          relation: e.data?.relation ?? '相关',
+          relation: readEdgeRelationId(e.data?.relation),
           weight: e.data?.weight ?? 'minor',
         },
       } as KnowledgeEdge

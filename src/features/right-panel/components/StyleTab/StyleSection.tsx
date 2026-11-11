@@ -3,10 +3,14 @@ import { NodeStylePanel } from './NodeStylePanel'
 import { EdgeStylePanel } from './EdgeStylePanel'
 import { EdgeRelationPanel } from './EdgeRelationPanel'
 import { useStyleSettingsModel } from '../../model/useStyleSettingsModel'
+import { useActiveCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
 
 export default memo(function StyleSection({ active = true }: { active?: boolean }) {
   const { state, actions } = useStyleSettingsModel(active)
+  // 样式面板写的是画布上的节点 / 连线数据，同样过 useGraph 只读闸门；
+  // 这里给一条明确提示，避免用户以为「点了没反应」是应用坏了。
+  const canvasReadOnly = useActiveCanvasReadOnly()
 
   const {
     activeTab,
@@ -65,6 +69,14 @@ export default memo(function StyleSection({ active = true }: { active?: boolean 
           value={activeTab}
           onChange={setActiveTab}
         />
+        {canvasReadOnly && (
+          <div
+            data-tm-style-panel-readonly=""
+            className="mt-2 rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-[11px] text-[var(--color-accent)]"
+          >
+            画布只读中 · 恢复到 100% 后可修改节点 / 连线样式
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 min-h-0">

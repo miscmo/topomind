@@ -90,11 +90,39 @@ import { normalizeGraphMeta } from '../src/domain/graph/normalizeGraphMeta.ts'
 import {
   BUILTIN_EDGE_RELATIONS,
   DEFAULT_EDGE_RELATION_ID,
+  SUBORDINATE_EDGE_RELATION_ID,
+  DEFAULT_RELATED_DISPLAY_NAME,
+  EDGE_RELATION_IDS,
   LEGACY_EDGE_RELATION_MAP,
+  assertEdgeRelationForCreate,
+  describeEdgeSemantic,
   edgeRelationStylePatch,
   normalizeEdgeRelationDefinitions,
+  parseStrictEdgeRelation,
+  readEdgeRelationId,
   resolveEdgeRelationId,
+  isSubordinate,
 } from '../src/domain/graph/edgeRelations.ts'
+import {
+  VIEWPORT_RETURN_TTL_MS,
+  VIEWPORT_RETURN_ANIMATION_MS,
+  hasUserMovedAway,
+  isViewportReturnExpired,
+  shouldOfferViewportReturn,
+  viewportJumpDistance,
+  viewportPanDistance,
+  viewportReturnRemainingMs,
+  viewportZoomDistance,
+} from '../src/domain/graph/viewportReturn.ts'
+import {
+  buildHierarchy,
+  normalizeTree,
+  planEdgeRelationMigration,
+  validateSubordinateEdge,
+  toHierarchyEdge,
+  MAX_HIERARCHY_DEPTH,
+  SUBORDINATE_EDGE_DIRECTION,
+} from '../src/domain/graph/graphHierarchy.ts'
 import { normalizeConfig } from '../src/core/storage/normalizeConfig.ts'
 import {
   clampEdgeAnchor,
@@ -1344,7 +1372,8 @@ const edge = (
     '非曲线默认样式不应凭空生成控制点')
 
   // 9) 批次 A：新建曲线边继承默认样式时同样不能退化成直线（操作层真跑）
-  const created = await ops.addEdge({ source: 'x', target: 'y' }, 'e-new', { lineMode: 'curve' })
+  // 新建连线必须显式带关系类型（用户决策：每次新建强制选择，未选不落盘）。
+  const created = await ops.addEdge({ source: 'x', target: 'y' }, 'e-new', { lineMode: 'curve' }, 'related')
   assert.equal(created, true, '新建曲线边应成功')
   const createdEdge = edges.find((edge) => edge.id === 'e-new')
   assert.ok(createdEdge, '新建边必须进入 store')
@@ -2813,6 +2842,120 @@ const edge = (
   assert.ok(resolvedHookSource.includes('nodeName: result.nodeName'), '解析结果必须透传 nodeName')
 }
 
+// 关联文档检索列表：节点内文档树路径（同名文档消歧）。
+// 纯函数真跑 + 内存文件系统真跑全库扫描，确保字段真的从 tree.json 流到候选项，
+// 而不是只在 FSBDocumentCandidate 里加一个返回类型。
+{
+  const posix = (await import('node:path')).posix
+  const idService = await import(
+    new URL('../electron/services/document-id-service.js', import.meta.url).href
+  ) as Record<string, any>
+
+  const documents: Record<string, any> = {
+    doc_root: { id: 'doc_root', type: 'smart', title: '需求', parentId: null },
+    doc_mid: { id: 'doc_mid', type: 'smart', title: '设计', parentId: 'doc_root' },
+    doc_leaf1: { id: 'doc_leaf1', type: 'smart', title: '同名文档', parentId: 'doc_mid' },
+    doc_leaf2: { id: 'doc_leaf2', type: 'smart', title: '同名文档', parentId: 'doc_root' },
+    doc_top: { id: 'doc_top', type: 'smart', title: '顶层文档', parentId: null },
+    doc_orphan: { id: 'doc_orphan', type: 'smart', title: '孤儿文档', parentId: 'doc_missing' },
+    doc_cycle1: { id: 'doc_cycle1', type: 'smart', title: '环一', parentId: 'doc_cycle2' },
+    doc_cycle2: { id: 'doc_cycle2', type: 'smart', title: '环二', parentId: 'doc_cycle1' },
+    doc_self: { id: 'doc_self', type: 'smart', title: '自环文档', parentId: 'doc_self' },
+  }
+  assert.equal(
+    idService.formatDocumentInNodePath(documents, 'doc_leaf1'), '需求 / 设计',
+    '深层文档的节点内路径必须是完整祖先链（根 → 直接父级，不含自身）'
+  )
+  assert.equal(idService.formatDocumentInNodePath(documents, 'doc_mid'), '需求', '中间层文档路径只到直接父级')
+  assert.equal(idService.formatDocumentInNodePath(documents, 'doc_leaf2'), '需求',
+    '同名文档必须落在不同节点内路径上，选择器才能区分引用的是哪一篇')
+  assert.notEqual(
+    idService.formatDocumentInNodePath(documents, 'doc_leaf1'),
+    idService.formatDocumentInNodePath(documents, 'doc_leaf2'),
+    '两篇同名文档的节点内路径不得相同'
+  )
+  assert.equal(idService.formatDocumentInNodePath(documents, 'doc_top'), '', '顶层文档没有节点内路径（列表不显示多余一行）')
+  assert.equal(idService.formatDocumentInNodePath(documents, 'doc_orphan'), '', '父节点缺失必须安全截断')
+  assert.equal(idService.formatDocumentInNodePath(documents, 'doc_self'), '', '自环文档必须安全截断')
+  assert.equal(idService.formatDocumentInNodePath(documents, 'doc_cycle1'), '环二', '互相成环必须截断且不死循环')
+  assert.equal(idService.formatDocumentInNodePath({}, 'doc_any'), '', '空 manifest 必须返回空串')
+  const deep: Record<string, any> = {}
+  for (let i = 0; i < 80; i += 1) {
+    deep[`d${i}`] = { title: `层${i}`, parentId: i === 0 ? null : `d${i - 1}` }
+  }
+  assert.equal(
+    idService.formatDocumentInNodePath(deep, 'd79').split(' / ').length, 64,
+    '超深文档树必须按上限截断，不得无限上溯'
+  )
+
+  // 真跑 createDocumentIndexService.listDocumentCandidates：字段必须真的过 IPC 边界。
+  const dirs = new Map<string, string[]>()
+  const files = new Map<string, string>()
+  const put = (p: string, value: unknown) => files.set(p, JSON.stringify(value))
+  dirs.set('/kb', ['KB1'])
+  dirs.set('/kb/KB1', ['card'])
+  dirs.set('/kb/KB1/card', ['_docs'])
+  dirs.set('/kb/KB1/card/_docs', ['tree.json'])
+  put('/kb/KB1/card/_docs/tree.json', { version: 2, documents })
+  const fsMock = {
+    existsSync: (p: string) => files.has(p) || dirs.has(p),
+    readdirSync: (p: string) => (dirs.get(p) ?? []).map((name) => ({
+      name, isDirectory: () => dirs.has(`${p}/${name}`),
+    })),
+  }
+  const service = idService.createDocumentIndexService({
+    fs: fsMock,
+    path: posix,
+    requireValidWorkDir: (d: string) => d,
+    resolveKbsPath: (_root: string, rel: string) => (rel ? `/kb/${rel}` : '/kb'),
+    readTopoManifest: (_root: string, cardPath: string) => (
+      JSON.parse(files.get(`/kb/${cardPath}/_docs/tree.json`) ?? '{}')
+    ),
+    readGraphMeta: () => ({ children: {} }),
+    writeGraphMeta: () => {},
+    readJsonFile: (p: string) => JSON.parse(files.get(p) ?? '{}'),
+    writeJsonFile: (p: string, value: unknown) => put(p, value),
+    listTrashItems: () => [],
+  })
+  const candidates = service.listDocumentCandidates('/root') as Array<Record<string, any>>
+  const byId = new Map(candidates.map((item) => [String(item.docId), item]))
+  assert.equal(candidates.length, Object.keys(documents).length, '全库扫描必须列出文档树里的每篇文档')
+  assert.equal(byId.get('doc_leaf1')?.documentPathLabel, '需求 / 设计', '候选项必须携带节点内文档树路径')
+  assert.equal(byId.get('doc_leaf2')?.documentPathLabel, '需求', '同名候选项各自携带自己的节点内路径')
+  assert.equal(byId.get('doc_top')?.documentPathLabel, '', '顶层候选项的路径必须是空串而不是 undefined')
+  assert.equal(byId.get('doc_leaf1')?.title, byId.get('doc_leaf2')?.title, '这两篇文档确实同名')
+  assert.notEqual(
+    byId.get('doc_leaf1')?.documentPathLabel, byId.get('doc_leaf2')?.documentPathLabel,
+    '同名候选项必须能靠节点内路径区分'
+  )
+  assert.ok(byId.get('doc_leaf1')?.breadcrumb.includes('KB1'), '节点内路径不得顶替所属知识库 / 节点面包屑')
+
+  // 接线守卫：字段不落到「展示 + 可检索」上，用户依旧没法区分同名文档。
+  const idServiceSource = await readFile(new URL('../electron/services/document-id-service.js', import.meta.url), 'utf-8')
+  const fsBackendSource = await readFile(new URL('../src/core/fs-backend.ts', import.meta.url), 'utf-8')
+  assert.ok(
+    idServiceSource.includes('documentPathLabel: formatDocumentInNodePath(documents, id)'),
+    '全库扫描必须真算节点内路径，不得只在类型里声明字段'
+  )
+  assert.ok(
+    fsBackendSource.includes('documentPathLabel: string'),
+    'FSBDocumentCandidate 必须声明节点内路径字段（主进程与渲染层同一份 DTO）'
+  )
+  const pickerSources = [
+    ['节点关联对话框', await readFile(new URL('../src/features/graph/components/LinkDocumentDialog.tsx', import.meta.url), 'utf-8')],
+    ['编辑器文档引用选择器', await readFile(new URL('../src/features/documents/SmartDocumentEditor/components/DocumentLinkPicker.tsx', import.meta.url), 'utf-8')],
+  ] as const
+  for (const [name, source] of pickerSources) {
+    assert.ok(
+      source.includes('item.documentPathLabel.toLowerCase().includes(q)'),
+      `${name}必须支持按节点内文档路径检索`
+    )
+    assert.ok(source.includes('{item.documentPathLabel && ('), `${name}必须展示节点内文档路径`)
+    assert.ok(source.includes('data-tm-link-document-path') || source.includes('data-tm-doc-link-path'),
+      `${name}必须暴露节点内路径供 GUI 断言`)
+  }
+}
+
 // 任务 #58：topo 正文序列化兼容性 —— columnList / column 等自定义块不得被剥掉。
 // file-service.js 顶层 import 了 electron 的 shell，纯 Node 无法整模块加载；
 // 因此真跑「写入路径唯一的变换函数 + 整体 JSON 往返」，再用源码断言守住三层透传接线。
@@ -3309,82 +3452,159 @@ const edge = (
   assert.equal(/\bstrict\s*:/.test(renderFnBody), false, '渲染入口不得用 strict 忽略档屏蔽警告，否则零警告断言会失效')
 }
 
-// --- 连线关系：自定义关系、旧值读时映射、配置往返与写库入口 ---
+// --- 连线关系：两类语义、旧值兼容、树强校验、配置往返与写库入口 ---
+// 【用户决策 2026-11-08】关系物理收敛为 related / subordinate，方向 source=父→target=子，
+// 从属强校验唯一父 / 无环 / 深度 ≤100，每次新建连线必须强制选择类型。
 {
+  // 1) 定义层：恰好两值、id 稳定、方向钉死。
   const builtinIds = BUILTIN_EDGE_RELATIONS.map((item) => item.id)
-  assert.deepEqual(builtinIds, ['related', 'is-a', 'part-of', 'inference'], '内置四种关系必须齐全且 id 稳定')
-  assert.deepEqual(
-    BUILTIN_EDGE_RELATIONS.map((item) => item.name),
-    ['关联', '从属', '组成', '推导'],
-    '内置关系显示名必须与需求一致',
-  )
-  assert.equal(new Set(BUILTIN_EDGE_RELATIONS.map((item) => item.style.color)).size, 4, '四种关系颜色必须可区分')
+  assert.deepEqual(builtinIds, ['related', 'subordinate'], '【P0】内置关系必须恰好两种且 id 稳定')
+  assert.deepEqual([...EDGE_RELATION_IDS], ['related', 'subordinate'], '【P0】落盘合法值必须恰好两值')
+  assert.deepEqual(BUILTIN_EDGE_RELATIONS.map((item) => item.name), ['关联', '从属'], '内置显示名必须与需求一致')
+  assert.equal(SUBORDINATE_EDGE_DIRECTION, 'source=parent,target=child', '【P0】从属方向必须钉死父→子')
+  assert.equal(SUBORDINATE_EDGE_RELATION_ID, 'subordinate')
+  assert.equal(MAX_HIERARCHY_DEPTH, 100, '深度上限必须是 100')
+  assert.equal(new Set(BUILTIN_EDGE_RELATIONS.map((item) => item.style.color)).size, 2, '两种关系颜色必须可区分')
   assert.equal(
-    BUILTIN_EDGE_RELATIONS.find((item) => item.id === 'part-of')?.style.lineStyle,
-    'dashed',
-    '组成关系用虚线与其它关系区分',
+    BUILTIN_EDGE_RELATIONS.find((item) => item.id === 'subordinate')?.style.lineWidth,
+    1.5,
+    '从属关系必须用加粗实线与关联区分',
   )
 
   const fallback = normalizeEdgeRelationDefinitions(undefined)
   assert.deepEqual(fallback.map((item) => item.id), builtinIds, '空配置必须回落到纯内置列表')
+  assert.equal(fallback.every((item) => item.builtin === true), true, '两项都是内置，不可删除')
 
-  const custom = normalizeEdgeRelationDefinitions([
-    { id: 'my-rel', name: '  我的关系  ', description: '说明', style: { color: '#123456', lineStyle: 'dashed' } },
-    { id: 'my-rel', name: '重复', style: {} },
-    { id: 'bad id!', name: '非法 id', style: {} },
-    { id: 'is-a', name: '属于' }, // 只改内置名，不得把内置样式冲成全局默认
+  // 自定义关系必须被彻底丢弃，配置只能改内置 name/description/style。
+  const withCustom = normalizeEdgeRelationDefinitions([
+    { id: 'rel_x', name: '自定义', style: {} },
+    { id: 'related', name: '关联线' },
+    { id: 'subordinate', name: '父子' },
+    { id: 'bad id!', name: '非法', style: {} },
   ])
-  const myRel = custom.find((item) => item.id === 'my-rel')
-  assert.equal(myRel?.name, '我的关系', '自定义关系名必须去空白后保留')
-  assert.equal(myRel?.style.color, '#123456', '自定义关系样式必须保留')
-  assert.equal(myRel?.style.lineStyle, 'dashed')
-  assert.equal(custom.filter((item) => item.id === 'my-rel').length, 1, '关系 id 必须去重')
-  assert.equal(custom.some((item) => item.id === 'bad id!'), false, '非法 id 必须过滤')
-  const isA = custom.find((item) => item.id === 'is-a')
-  assert.equal(isA?.name, '属于', '内置关系允许改名')
-  assert.equal(isA?.builtin, true, '内置标记不可被配置篡改')
-  assert.equal(
-    isA?.style.color,
-    BUILTIN_EDGE_RELATIONS.find((item) => item.id === 'is-a')?.style.color,
-    '只改名不得把内置关系的差异化样式冲成全局默认',
-  )
+  assert.deepEqual(withCustom.map((item) => item.id), ['related', 'subordinate'], '【P0】自定义关系必须丢弃')
+  assert.equal(withCustom.find((item) => item.id === 'related')?.name, '关联线', '内置关系允许改名')
+  assert.equal(withCustom.find((item) => item.id === 'subordinate')?.builtin, true, 'builtin 标记不可被配置篡改')
+  assert.deepEqual(normalizeEdgeRelationDefinitions(withCustom), withCustom, '配置归一化必须幂等')
 
-  // 旧存档：读时映射、磁盘不动。
-  assert.equal(resolveEdgeRelationId('相关', fallback), DEFAULT_EDGE_RELATION_ID)
-  assert.equal(resolveEdgeRelationId('依赖', fallback), 'inference')
-  assert.equal(resolveEdgeRelationId('演进', fallback), 'inference')
-  assert.equal(resolveEdgeRelationId('my-rel', custom), 'my-rel')
-  assert.equal(resolveEdgeRelationId('已删除的自定义', fallback), DEFAULT_EDGE_RELATION_ID, '已删关系必须优雅回退')
-  assert.equal(resolveEdgeRelationId('', fallback), DEFAULT_EDGE_RELATION_ID)
-  assert.equal(LEGACY_EDGE_RELATION_MAP['依赖'], 'inference', '前提/依赖/因果必须合并进「推导」')
+  // 2) 旧值全量兼容映射（导入外部旧档 / 恢复备份自愈），未知值恒回退 related。
+  for (const old of ['相关', '关联', 'related']) {
+    assert.equal(readEdgeRelationId(old), 'related', `${old} 必须映射到关联`)
+  }
+  for (const old of ['依赖', '演进', '从属', '组成', '推导', 'is-a', 'part-of', 'inference', 'subordinate']) {
+    assert.equal(readEdgeRelationId(old), 'subordinate', `${old} 必须映射到从属`)
+  }
+  assert.equal(readEdgeRelationId('rel_deleted'), 'related', '被删自定义关系必须回退关联')
+  assert.equal(readEdgeRelationId(''), 'related')
+  assert.equal(readEdgeRelationId(undefined), 'related')
+  assert.equal(resolveEdgeRelationId('part-of', fallback), 'subordinate')
+  assert.equal(isSubordinate('相关'), false)
+  assert.equal(isSubordinate('part-of'), true)
+  assert.equal(LEGACY_EDGE_RELATION_MAP['依赖'], 'subordinate', '前提/依赖/因果必须合并进从属')
 
-  // 落盘边界：既不能改写旧中文值（会变成批量改档），也不能吞掉自定义 id。
+  // 3) 落盘边界：任何输入写出来恒为两值，磁盘上不再可能出现旧值。
   const metaWithRelations = normalizeGraphMeta({
     nodes: {},
     edges: [
       { id: 'e1', source: { ref: 'a' }, target: { ref: 'b' }, relation: '依赖' },
-      { id: 'e2', source: { ref: 'b' }, target: { ref: 'c' }, relation: 'my-rel' },
+      { id: 'e2', source: { ref: 'b' }, target: { ref: 'c' }, relation: 'part-of' },
+      { id: 'e3', source: { ref: 'c' }, target: { ref: 'd' }, relation: 'rel_gone' },
     ],
     viewport: {},
   })
-  assert.equal(metaWithRelations.edges[0].relation, '依赖', '旧中文值必须原样保留（磁盘不动）')
-  assert.equal(metaWithRelations.edges[1].relation, 'my-rel', '自定义关系 id 不得被打回「相关」')
-
-  // 配置往返：normalizeConfig 会重建对象，漏列字段就会让自定义关系写完即丢。
-  const configOut = normalizeConfig({ edgeRelations: custom, showEdgeRelationLabels: false })
-  assert.equal(configOut.showEdgeRelationLabels, false, '标签开关必须写进配置')
-  assert.equal(configOut.edgeRelations?.find((item) => item.id === 'my-rel')?.name, '我的关系', '自定义关系必须能从配置读回')
   assert.deepEqual(
-    normalizeConfig(configOut).edgeRelations,
-    configOut.edgeRelations,
-    '配置归一化必须幂等',
+    metaWithRelations.edges.map((edge) => edge.relation),
+    ['subordinate', 'subordinate', 'related'],
+    '【P0】落盘边界必须把旧值自愈成两值',
   )
-  const patch = edgeRelationStylePatch(myRel!.style)
+
+  // 4) 配置往返：normalizeConfig 会重建对象，漏列字段就会「写完即丢」。
+  const configOut = normalizeConfig({ edgeRelations: withCustom, showEdgeRelationLabels: false })
+  assert.equal(configOut.showEdgeRelationLabels, false, '标签开关必须写进配置')
+  assert.equal(configOut.edgeRelations?.length, 2, '配置里必须只剩两项关系')
+  assert.deepEqual(normalizeConfig(configOut).edgeRelations, configOut.edgeRelations, '配置归一化必须幂等')
+  const patch = edgeRelationStylePatch(fallback[1].style)
   for (const key of ['lineMode', 'lineStyle', 'color', 'lineWidth', 'arrow', 'arrowSize', 'arrowShape', 'arrowPosition', 'curveControl']) {
     assert.ok(key in patch, `关系样式 patch 必须含 ${key}`)
   }
 
-  // 【核心】真跑写库入口：切换关系必须写稳定 id + 套用该关系样式并触发落盘。
+  // 5) 树强校验真跑（纯函数，不是源码字面量）。
+  const E = (id: string, source: string, target: string, relation = 'subordinate', weight = 'minor') => (
+    { id, source, target, relation, weight }
+  )
+  const clean = normalizeTree(['A', 'B', 'C', 'D'], [
+    E('e1', 'A', 'B'), E('e2', 'B', 'C'), E('e3', 'A', 'D'), E('e4', 'C', 'D', 'related'),
+  ])
+  assert.equal(clean.downgrades.length, 0, '合规树不得降级任何边')
+  assert.equal(clean.edges.length, 4, '整理不得删边')
+  assert.deepEqual(clean.hierarchy.roots, ['A'], 'A 必须是唯一树根')
+  assert.equal(clean.hierarchy.depth.get('A'), 1)
+  assert.equal(clean.hierarchy.depth.get('B'), 2)
+  assert.equal(clean.hierarchy.depth.get('C'), 3, '【P0】深度必须自动推导为父深度+1')
+  assert.equal(clean.hierarchy.depth.get('D'), 2)
+
+  const multi = normalizeTree(['A', 'B', 'C'], [
+    E('e2', 'B', 'C', 'subordinate', 'minor'),
+    E('e1', 'A', 'C', 'subordinate', 'main'),
+    E('e3', 'A', 'B'),
+  ])
+  assert.equal(multi.downgrades.length, 1, '【P0】多父必须降级多余边')
+  assert.equal(multi.downgrades[0].reason, 'multiple-parents')
+  assert.equal(multi.downgrades[0].edgeId, 'e2', 'main 权重优先，其次 id 字典序')
+  assert.equal(multi.edges.find((edge) => edge.id === 'e2')?.relation, 'related', '降级为关联而非删除')
+  assert.equal(multi.edges.length, 3, '降级不得改变边总数')
+
+  const cyc = normalizeTree(['A', 'B', 'C'], [E('e1', 'A', 'B'), E('e2', 'B', 'C'), E('e3', 'C', 'A')])
+  assert.equal(cyc.downgrades.length, 1, '【P0】必须检出环')
+  assert.equal(cyc.downgrades[0].reason, 'cycle')
+  assert.equal(cyc.downgrades[0].edgeId, 'e3', '环上 id 最大那条被降级')
+  assert.equal(normalizeTree(['A'], [E('e1', 'A', 'A')]).downgrades[0].reason, 'self-loop', '自环必须检出')
+
+  const chainIds: string[] = []
+  const chain: Array<ReturnType<typeof E>> = []
+  for (let i = 0; i < 101; i += 1) {
+    chainIds.push(`n${i}`)
+    chain.push(E(`e${String(i).padStart(3, '0')}`, `n${i}`, `n${i + 1}`))
+  }
+  chainIds.push('n101')
+  const deep = normalizeTree(chainIds, chain)
+  assert.ok(deep.downgrades.some((item) => item.reason === 'depth-limit'), '【P0】超过 100 层必须降级')
+  assert.equal(deep.edges.length, chain.length, '深度降级不得删边')
+  assert.ok(Math.max(...deep.hierarchy.depth.values()) <= 100, '整理后最大深度不得超过 100')
+
+  // 增量环检测：深度单调不变量（平级/更深挂载 O(1) 直接接受，祖先链成环必须拒绝）。
+  const base = buildHierarchy(['A', 'B', 'C'], [E('e1', 'A', 'B'), E('e2', 'B', 'C')]).hierarchy
+  assert.equal(validateSubordinateEdge(base, toHierarchyEdge(E('e3', 'C', 'A'))).ok, false, '【P0】必须检出祖先环')
+  assert.equal(validateSubordinateEdge(base, toHierarchyEdge(E('e4', 'A', 'C'))).ok, false, '唯一父')
+  assert.equal(validateSubordinateEdge(base, toHierarchyEdge(E('e5', 'A', 'A'))).ok, false, '自环')
+  assert.equal(validateSubordinateEdge(base, toHierarchyEdge(E('e6', 'A', 'D'))).ok, true, '新增叶子应 O(1) 接受')
+
+  // 树根与游离节点必须分离（否则一缩小整棵树连根消失）。
+  const mixed = normalizeTree(['A', 'B', 'X'], [E('e1', 'A', 'B')])
+  assert.deepEqual(mixed.hierarchy.roots, ['A'], '无入边但有出边 = 树根')
+  assert.deepEqual(mixed.hierarchy.free, ['X'], '无从属关联 = 最边缘节点')
+
+  // 6) 迁移计划（脚本与回归共用同一纯函数）：只改 relation，逐字段保真。
+  const legacyEdges = [
+    { id: 'x1', source: 'A', target: 'B', relation: '相关', weight: 'minor', color: '#111111' },
+    { id: 'x2', source: 'B', target: 'C', relation: 'part-of', weight: 'main', color: '#222222' },
+    { id: 'x3', source: 'B', target: 'C', relation: '依赖', weight: 'minor', color: '#333333' },
+    { id: 'x4', source: 'C', target: 'A', relation: 'is-a', weight: 'minor', color: '#444444' },
+  ]
+  const plan = planEdgeRelationMigration(['A', 'B', 'C'], legacyEdges)
+  assert.equal(plan.edges.length, legacyEdges.length, '【P0】迁移不得删边')
+  assert.deepEqual(plan.changes.map((item) => item.to), ['related', 'subordinate', 'subordinate', 'subordinate'])
+  for (let i = 0; i < legacyEdges.length; i += 1) {
+    const before = { ...legacyEdges[i] }
+    const after = { ...plan.edges[i] }
+    delete (before as Record<string, unknown>).relation
+    delete (after as Record<string, unknown>).relation
+    assert.deepEqual(after, before, `【P0】迁移除 relation 外必须逐字段原样: ${legacyEdges[i].id}`)
+    assert.ok(['related', 'subordinate'].includes(String(plan.edges[i].relation)), '落盘值必须合法')
+  }
+  assert.equal(Math.max(...plan.hierarchy.depth.values()) <= 100, true)
+
+  // 7) 【核心】esbuild 打包真跑写库入口：新建必须显式关系，从属切换必须强校验。
   const { build: esbuildBuild } = await import('esbuild')
   const { fileURLToPath } = await import('node:url')
   const bundleResult = await esbuildBuild({
@@ -3397,12 +3617,12 @@ const edge = (
   ) as unknown as {
     buildEdgeOperations: (deps: Record<string, unknown>) => {
       addEdge: (connection: Record<string, unknown>, edgeId: string, defaultStyle?: Record<string, unknown>, relationId?: string) => Promise<boolean>
-      updateEdgeRelation: (edgeId: string, relation: string, weight?: string) => Promise<void>
+      updateEdgeRelation: (edgeId: string, relation: string, weight?: string) => Promise<boolean>
     }
   }
   let relEdges: Array<Record<string, unknown>> = [{
     id: 'e1', source: 'a', target: 'b',
-    data: { relation: '依赖', weight: 'main', color: '#111111', lineStyle: 'solid', lineWidth: 1.2 },
+    data: { relation: 'related', weight: 'main', color: '#111111', lineStyle: 'solid', lineWidth: 1.2 },
   }]
   let relSaveCalls = 0
   const relOps = relModule.buildEdgeOperations({
@@ -3412,21 +3632,53 @@ const edge = (
     storeApi: {
       getState: () => ({ edges: relEdges, setEdges: (next: Array<Record<string, unknown>>) => { relEdges = next } }),
     },
-    getEdgeRelations: () => custom,
+    getEdgeRelations: () => fallback,
   })
-  await relOps.updateEdgeRelation('e1', 'my-rel')
+
+  // 未选关系：一条边都不许落盘。
+  assert.equal(
+    await relOps.addEdge({ source: 'a', target: 'z' }, 'e-no-rel'),
+    false,
+    '【P0】新建连线未选关系必须拒绝',
+  )
+  assert.equal(relEdges.length, 1, '未选关系不得写 store / 落盘')
+  assert.equal(relSaveCalls, 0, '未选关系不得触发保存')
+
+  // 显式关联 → 成功；显式从属 → 成功；再从属指向同一子节点 → 唯一父拒绝。
+  assert.equal(await relOps.addEdge({ source: 'a', target: 'c' }, 'e-rel', undefined, 'related'), true)
+  assert.equal((relEdges.find((edge) => edge.id === 'e-rel')?.data as Record<string, unknown>).relation, 'related')
+  assert.equal(await relOps.addEdge({ source: 'a', target: 'd' }, 'e-sub', undefined, 'subordinate'), true)
+  assert.equal((relEdges.find((edge) => edge.id === 'e-sub')?.data as Record<string, unknown>).relation, 'subordinate')
+  assert.equal(
+    await relOps.addEdge({ source: 'b', target: 'd' }, 'e-sub-dup', undefined, 'subordinate'),
+    false,
+    '【P0】从属边必须强校验唯一父，违规不落盘',
+  )
+  assert.equal(relEdges.some((edge) => edge.id === 'e-sub-dup'), false, '被拒绝的边不得进入 store')
+
+  // 【强校验】创建期只认显式两值：旧值 / 未知值 / 空值一律拒绝，且不写 store、不落盘。
+  const savesBeforeStrict = relSaveCalls
+  const invalidRelations: Array<string | undefined> = [undefined, '', '依赖', 'part-of', 'rel_gone', 'RELATED']
+  for (let i = 0; i < invalidRelations.length; i += 1) {
+    assert.equal(
+      await relOps.addEdge({ source: 'a', target: `q${i}` }, `e-bad-${i}`, undefined, invalidRelations[i]),
+      false,
+      `【P0】创建期非法关系必须拒绝: ${String(invalidRelations[i])}`,
+    )
+  }
+  assert.equal(relEdges.length, 3, '非法关系不得写入 store')
+  assert.equal(relSaveCalls, savesBeforeStrict, '非法关系不得触发保存')
+
+  // 切换已有边为从属：成功时写稳定 id + 套用样式 + 触发一次落盘。
+  const savesBefore = relSaveCalls
+  assert.equal(await relOps.updateEdgeRelation('e1', 'subordinate'), true)
   const relData = relEdges[0].data as Record<string, unknown>
-  assert.equal(relData.relation, 'my-rel', '切换关系必须写入稳定 id')
-  assert.equal(relData.color, '#123456', '切换关系必须套用该关系的默认样式')
+  assert.equal(relData.relation, 'subordinate', '切换关系必须写入稳定 id')
+  assert.equal(relData.color, fallback[1].style.color, '切换关系必须套用该关系的默认样式')
   assert.equal(relData.weight, 'main', '未指定 weight 时必须沿用原权重')
-  assert.equal(relSaveCalls, 1, '切换关系必须触发一次落盘')
+  assert.equal(relSaveCalls, savesBefore + 1, '切换关系必须触发一次落盘')
 
-  await relOps.addEdge({ source: 'a', target: 'c', sourceHandle: null, targetHandle: null }, 'e2', undefined, 'my-rel')
-  const addedData = relEdges.find((edge) => edge.id === 'e2')?.data as Record<string, unknown> | undefined
-  assert.equal(addedData?.relation, 'my-rel', '指定关系新建边必须写该关系 id')
-  assert.equal(addedData?.color, '#123456', '指定关系新建边必须套用关系样式')
-
-  // 跨进程接线：配置 / hydrate / 操作层 / 画布标签 / 两个 UI 入口。
+  // 8) 跨进程接线（源码字面量兜底）+ 迁移脚本安全约束。
   const normalizeConfigSource = await readFile(new URL('../src/core/storage/normalizeConfig.ts', import.meta.url), 'utf-8')
   const storeServiceSource = await readFile(new URL('../src/core/storage/service.ts', import.meta.url), 'utf-8')
   const configServiceSource = await readFile(new URL('../src/application/config/configService.ts', import.meta.url), 'utf-8')
@@ -3437,17 +3689,2641 @@ const edge = (
   const toolbarSource = await readFile(new URL('../src/features/graph/GraphCanvas/edges/QuickEdgeToolbar.tsx', import.meta.url), 'utf-8')
   const relationPanelSource = await readFile(new URL('../src/features/right-panel/components/StyleTab/EdgeRelationPanel.tsx', import.meta.url), 'utf-8')
   const styleSectionSource = await readFile(new URL('../src/features/right-panel/components/StyleTab/StyleSection.tsx', import.meta.url), 'utf-8')
+  const eventHandlersSource = await readFile(new URL('../src/hooks/useGraph/graphEventHandlers.ts', import.meta.url), 'utf-8')
+  const pickerSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/EdgeRelationPicker.tsx', import.meta.url), 'utf-8')
+  const migrationSource = await readFile(new URL('../scripts/migrate-edge-relations.mts', import.meta.url), 'utf-8')
 
   assert.ok(normalizeConfigSource.includes('normalizeEdgeRelationDefinitions(c.edgeRelations)'), 'normalizeConfig 必须显式保留关系定义')
   assert.ok(storeServiceSource.includes('nextConfig.edgeRelations = config.edgeRelations'), 'writeConfig 必须显式透传关系数组')
   assert.ok(configServiceSource.includes('graphUi.setEdgeRelations('), '配置 hydration 必须注入关系定义')
   assert.ok(graphOperationsSource.includes('getEdgeRelations: () => useGraphUiStore.getState().edgeRelations'), '操作层必须拿到全局关系定义')
-  assert.ok(relationOpsSource.includes('findEdgeRelationDefinition(relation, getRelations())'), '切换关系必须走定义解析')
-  assert.equal(normalizeMetaSource.includes("value === '演进'"), false, '落盘边界不得再用三值白名单吞掉自定义关系')
-  assert.ok(floatingEdgeSource.includes('data-tm-edge-relation-label') && floatingEdgeSource.includes('updateEdgeRelation(id, relationId)'), '画布必须有关系标签并接通切换')
+  assert.ok(relationOpsSource.includes('findEdgeRelationDefinition(nextRelation, getRelations())'), '切换关系必须走定义解析')
+  assert.ok(relationOpsSource.includes('assertEdgeRelationForCreate(relationId, getRelations())')
+    && relationOpsSource.includes('if (!creation.ok)'),
+  '【P0】操作层必须有「显式两值关系 + 关联关系名」强校验的最后防线')
+  // 【用户决策 2026-11-09 晚】从属连线恢复原样式：不再有双线轨道 / 层级徽标 /
+  // 硬编码几何 / 专用语义色。这里做反向守卫，防止以后又被加回来。
+  for (const forbidden of [
+    'data-tm-edge-subordinate-rail',
+    'data-tm-edge-subordinate-mark',
+    'SUBORDINATE_VISUAL',
+    'var(--color-edge-subordinate)',
+    'GitBranch',
+  ]) {
+    assert.equal(floatingEdgeSource.includes(forbidden), false,
+      `【P0】从属连线必须保持原样式，不得出现 ${forbidden}`)
+  }
+  assert.ok(floatingEdgeSource.includes('style={style}'),
+    '【P0】从属连线必须与其它边一样走可配置的 BaseEdge style')
+  assert.ok(floatingEdgeSource.includes(
+    'const showRelationLabel = (semantic.mandatoryLabel || showRelationLabels) && midpointAvailable'),
+  '【P0】关联边关系名恒显示，从属边仍由「显示关系名」开关控制')
+  assert.ok(floatingEdgeSource.includes('{semantic.label}'), '关系名文字必须走兜底后的语义名')
+  assert.ok(relationPanelSource.includes('data-tm-edge-relation-semantic-note')
+    && relationPanelSource.includes('没有额外的固定视觉标记')
+    && relationPanelSource.includes('在连线上显示关系名'),
+  '样式配置面板必须声明从属连线沿用可配置样式、无额外固定标记')
+  assert.ok(pickerSource.includes('data-tm-edge-relation-mandatory'), '关联选项必须标注强制关系名')
+  assert.ok(relationOpsSource.includes('validateSubordinateEdge(hierarchy'), '【P0】新建从属边必须走强校验')
+  assert.equal(normalizeMetaSource.includes("value === '演进'"), false, '落盘边界不得再用三值白名单')
+  assert.ok(normalizeMetaSource.includes('readEdgeRelationId(value)'), '落盘边界必须统一走两值解析')
+  assert.ok(floatingEdgeSource.includes('data-tm-edge-relation-label') && floatingEdgeSource.includes('updateEdgeRelation(id, readEdgeRelationId(relationId))'), '画布必须有关系标签并接通切换')
   assert.ok(toolbarSource.includes('data-tm-edge-relation-trigger') && toolbarSource.includes('data-tm-edge-relation-item'), '选中边工具栏必须有关系下拉')
-  assert.ok(relationPanelSource.includes('data-tm-edge-relations-panel') && relationPanelSource.includes('data-tm-edge-relation-add'), '右栏必须有可新增关系的管理面板')
+  assert.ok(relationPanelSource.includes('data-tm-edge-relations-panel'), '右栏必须有关系管理面板')
+  assert.equal(relationPanelSource.includes('data-tm-edge-relation-add'), false, '【P0】彻底迁移后不得再有自定义关系新增入口')
+  assert.equal(relationPanelSource.includes('newEdgeRelationId'), false, '【P0】自定义关系 id 生成器必须清除')
   assert.ok(styleSectionSource.includes("value: 'relations'"), '样式页必须有「连线关系」分区')
+  assert.ok(eventHandlersSource.includes('useEdgeRelationPickerStore'), '【P0】新建连线必须打开必选关系浮层')
+  assert.ok(pickerSource.includes('data-tm-edge-relation-picker') && pickerSource.includes('data-tm-edge-relation-choice'), '浮层必须提供两个关系选项')
+  assert.ok(migrationSource.includes('planEdgeRelationMigration'), '【P0】迁移脚本必须复用同一份迁移计划函数')
+  assert.ok(migrationSource.includes('--ack-app-closed') && migrationSource.includes('graphMetaComparisonKey'), '迁移脚本必须有退出应用确认与往返校验')
+  assert.ok(migrationSource.includes('restoreRoom(room)'), '迁移失败必须能逐房间回滚')
+}
+
+// --- 从属连线原样式守卫 / 关联强校验 / 返回上个视野策略 ---
+// 【用户决策 2026-11-09 晚】从属边恢复原来的可配置样式（双线轨道与层级徽标已移除）；
+// 关联边仍必须在连线上写清楚关系（默认「关联」）并强校验；跳转远处节点后可一键返回。
+{
+  const builtins = normalizeEdgeRelationDefinitions(undefined)
+
+  // 1) 从属连线的视觉完全由可配置样式决定：不得残留硬编码几何 / 专用语义色。
+  assert.equal(DEFAULT_RELATED_DISPLAY_NAME, '关联')
+  for (const definition of BUILTIN_EDGE_RELATIONS) {
+    const serialized = JSON.stringify(definition)
+    assert.ok(!serialized.includes('railOffset') && !serialized.includes('hierarchyMark'),
+      '【P0】可配置的关系样式里不得混入硬编码语义标记')
+  }
+  const tokensSource = await readFile(new URL('../src/styles/tokens.css', import.meta.url), 'utf-8')
+  assert.equal((tokensSource.match(/--color-edge-subordinate:/g) ?? []).length, 0,
+    '【P0】专用语义色必须随双线轨道一起移除')
+  const edgeRelationsSource = await readFile(new URL('../src/domain/graph/edgeRelations.ts', import.meta.url), 'utf-8')
+  assert.equal(edgeRelationsSource.includes('SUBORDINATE_VISUAL'), false,
+    '【P0】语义规则源里不得残留已废弃的视觉常量')
+
+  // 2) 关联边显示名恒非空且强制显示；从属边不强制显示关系名。
+  const relatedSemantic = describeEdgeSemantic('related', builtins)
+  const subordinateSemantic = describeEdgeSemantic('subordinate', builtins)
+  assert.equal(relatedSemantic.label, '关联')
+  assert.equal(relatedSemantic.mandatoryLabel, true, '【P0】关联边必须显示关系名')
+  assert.equal(subordinateSemantic.label, '从属')
+  assert.equal(subordinateSemantic.mandatoryLabel, false, '【P0】从属边不强制写关系名')
+  assert.equal(
+    describeEdgeSemantic('related', normalizeEdgeRelationDefinitions([{ id: 'related', name: '   ' }])).label,
+    '关联',
+    '【P0】关系名写成空白必须兜底「关联」',
+  )
+  assert.equal(
+    describeEdgeSemantic('related', normalizeEdgeRelationDefinitions([{ id: 'related', name: '引用' }])).label,
+    '引用',
+    '配置改名仍允许写清楚具体关系',
+  )
+
+  // 3) 创建期严格解析：旧值 / 未知值 / 空值一律拒绝，只有显式两值放行。
+  assert.equal(parseStrictEdgeRelation('related'), 'related')
+  assert.equal(parseStrictEdgeRelation('subordinate'), 'subordinate')
+  for (const bad of [undefined, null, '', '  ', '依赖', 'part-of', 'rel_gone', 42, {}, 'RELATED']) {
+    assert.equal(parseStrictEdgeRelation(bad), null, `【P0】创建期不得宽容兜底: ${String(bad)}`)
+  }
+  assert.equal(readEdgeRelationId('依赖'), 'subordinate', '读盘侧仍保持旧值兼容，与创建期分工')
+  assert.deepEqual(assertEdgeRelationForCreate(undefined, builtins), { ok: false, reason: 'missing-relation' })
+  assert.deepEqual(assertEdgeRelationForCreate('', builtins), { ok: false, reason: 'missing-relation' })
+  assert.deepEqual(assertEdgeRelationForCreate('rel_gone', builtins), { ok: false, reason: 'unknown-relation' })
+  assert.equal(assertEdgeRelationForCreate('related', builtins).ok, true)
+  assert.equal(assertEdgeRelationForCreate('subordinate', builtins).ok, true)
+  const relatedCheck = assertEdgeRelationForCreate('related', builtins)
+  assert.ok(relatedCheck.ok && relatedCheck.display.label.trim().length > 0,
+    '【P0】创建关联边必须保证连线上有可显示的关系名')
+
+  // 4) 返回上个视野：esbuild 打包真跑同一份纯函数（不是只看源码字面量）。
+  const { build: vpBuild } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const vpBundle = await vpBuild({
+    entryPoints: [fileURLToPath(new URL('../src/domain/graph/viewportReturn.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const vp = await import(
+    `data:text/javascript;base64,${Buffer.from(vpBundle.outputFiles[0].text).toString('base64')}`
+  ) as Record<string, (...args: unknown[]) => unknown>
+  assert.equal(VIEWPORT_RETURN_TTL_MS, 12000)
+  assert.ok(VIEWPORT_RETURN_ANIMATION_MS > 0)
+  const origin = { x: 0, y: 0, zoom: 0.5 }
+  assert.equal(viewportPanDistance(origin, { x: 30, y: 40, zoom: 0.5 }), 50,
+    'viewport.x/y 是屏幕像素，无需再换算 flow 坐标')
+  assert.ok(Math.abs(viewportZoomDistance(origin, { x: 0, y: 0, zoom: 0.6 }) - 60) < 1e-9)
+  assert.equal(viewportJumpDistance(origin, origin), 0)
+  assert.equal(shouldOfferViewportReturn(origin, { x: 5, y: 5, zoom: 0.5 }), false, '几乎没动不弹')
+  assert.equal(shouldOfferViewportReturn(origin, { x: 900, y: 300, zoom: 0.5 }), true, '远处跳转必须弹')
+  assert.equal(shouldOfferViewportReturn(origin, { x: 0, y: 0, zoom: 0.7 }), true, '纯缩放跳变也算跳转')
+  const vpEntry = { from: origin, to: { x: 900, y: 300, zoom: 0.5 }, label: '节点 A', createdAt: 1000 }
+  assert.equal(isViewportReturnExpired(vpEntry, 1000 + VIEWPORT_RETURN_TTL_MS - 1), false)
+  assert.equal(isViewportReturnExpired(vpEntry, 1000 + VIEWPORT_RETURN_TTL_MS), true, '【P0】超时必须自动消失')
+  assert.equal(viewportReturnRemainingMs(vpEntry, 1000 + 3000), VIEWPORT_RETURN_TTL_MS - 3000)
+  assert.equal(hasUserMovedAway(vpEntry, vpEntry.to), false)
+  assert.equal(hasUserMovedAway(vpEntry, { x: 900, y: 360, zoom: 0.5 }), true,
+    '【P0】用户拖走镜头后提示必须消失')
+  assert.equal(vp.shouldOfferViewportReturn(origin, { x: 0, y: 0, zoom: 0.5 }), false,
+    '打包后的实现必须与源码同一份规则')
+  assert.equal(vp.isViewportReturnExpired(vpEntry, 1000 + VIEWPORT_RETURN_TTL_MS), true)
+
+  // 5) 接线：只在程序化跳转埋点、按钮挂在画布内、策略齐全、不落盘。
+  const modelSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts', import.meta.url), 'utf-8')
+  const minimapSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx', import.meta.url), 'utf-8')
+  const cardModelSource = await readFile(new URL('../src/features/graph/GraphCanvas/nodes/KnowledgeCard/model/useKnowledgeCardModel.ts', import.meta.url), 'utf-8')
+  const canvasSource = await readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8')
+  const vpButtonSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/ViewportReturnButton.tsx', import.meta.url), 'utf-8')
+  const vpStoreSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/viewportReturnStore.ts', import.meta.url), 'utf-8')
+  assert.ok(modelSource.includes('rememberViewportJump(reactFlow, String(node.data?.label ?? node.id))'),
+    '【P0】搜索选中节点跳转必须埋点')
+  assert.ok(minimapSource.includes('rememberViewportJump('), '缩略图点节点必须埋点')
+  assert.ok(cardModelSource.includes('rememberViewportJump('), '查看已存在节点跳转必须埋点')
+  const focusBody = minimapSource.slice(
+    minimapSource.indexOf('const focusMiniMapPoint'),
+    minimapSource.indexOf('const flushPendingFocusPoint'),
+  )
+  assert.ok(focusBody.length > 0 && !focusBody.includes('rememberViewportJump('),
+    '【P0】手动拖动缩略图定位不得污染返回历史')
+  assert.ok(canvasSource.includes('<ViewportReturnButton tabId={tabId} />'), '按钮必须挂在画布内')
+  assert.ok(vpButtonSource.includes('data-tm-viewport-back') && vpButtonSource.includes('setViewport(from'),
+    '按钮必须可断言且能平滑返回')
+  assert.ok(vpButtonSource.includes('hovered') && vpButtonSource.includes('remainingMs <= 0')
+    && vpButtonSource.includes('movedAway') && vpButtonSource.includes('pointerdown'),
+  '【P0】超时 / hover 暂停 / 移开 / 手动交互四类消失策略必须齐全')
+  assert.ok(vpStoreSource.includes('jumpTokenByTab'), '连续跳转只认最后一次')
+  assert.ok(!vpStoreSource.includes('persist(')
+    && !vpStoreSource.includes('createJSONStorage(')
+    && !/\blocalStorage\s*\(/.test(vpStoreSource),
+  '【P0】返回历史是纯运行时状态，不得落盘')
+}
+
+// --- 节点标题栏自适应：装饰必须与测量同源，任何装饰变化都要驱动宽度重算 ---
+// 历史 bug：加了「关联文档」链环后节点宽度不再自适应、标题折行被裁。根因是
+// 渲染（JSX）与测量（Canvas + 手工常量）两套事实来源，且 useMemo 手工枚举依赖漏了
+// linkedDocuments。这里用 esbuild 打包真跑纯函数，逐项验证 width/signature/height。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const loadBundled = async (relative: string) => {
+    const entry = fileURLToPath(new URL(relative, import.meta.url))
+    const bundle = await build({
+      entryPoints: [entry],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`)
+  }
+  const modelPath = '../src/features/graph/GraphCanvas/nodes/KnowledgeCard/model/'
+  const autoSizeMod = await loadBundled(`${modelPath}autoSize.ts`) as unknown as {
+    calculateKnowledgeCardAutoSize: (
+      label: string,
+      style: Record<string, unknown>,
+      decorations: Record<string, unknown>,
+    ) => {
+      width: number
+      height: number
+      maxTextWidth: number
+      maxAutoWidth: number
+      lines: number
+      clamped: boolean
+    }
+  }
+  const limitsMod = await loadBundled(`${modelPath}cardSizeLimits.ts`) as unknown as {
+    MAX_TITLE_LINES: number
+    MAX_TITLE_WIDTH_CHARS: number
+    getTitleClampStyle: () => Record<string, unknown>
+  }
+  const decorationsMod = await loadBundled(`${modelPath}titleDecorations.ts`) as unknown as {
+    describeKnowledgeCardTitle: (
+      data: Record<string, unknown>,
+      style: Record<string, unknown>,
+      badgeSize: number,
+    ) => {
+      signature: string
+      leadingWidth: number
+      trailingWidth: number
+      horizontalPadding: number
+      linkedDocumentCount: number
+      emojis: string[]
+      hasDetail: boolean
+      childCount: number
+    }
+  }
+  const measure = autoSizeMod.calculateKnowledgeCardAutoSize
+  const describe = decorationsMod.describeKnowledgeCardTitle
+
+  const style = { headerFontSize: 11 }
+  const badgeSize = 14
+  const LABEL = '关联文档测试节点'
+  const baseData: Record<string, unknown> = { label: LABEL }
+  const base = describe(baseData, style, badgeSize)
+  const baseWidth = measure(LABEL, style, base).width
+
+  const linkData = (count: number): Record<string, unknown> => ({
+    label: LABEL,
+    linkedDocuments: Array.from({ length: count }, (_, i) => ({
+      docId: `doc_${i}`, cardRef: `card-${i}`, title: `文档${i}`,
+    })),
+  })
+
+  // P0：直接复现「加关联文档后宽度不自适应」——签名必须失效、链环必须计入宽度。
+  const withOne = describe(linkData(1), style, badgeSize)
+  assert.notEqual(withOne.signature, base.signature,
+    '【P0】linkedDocuments 必须进入 signature，否则 autoSize 命中旧缓存、宽度永不重算')
+  assert.ok(withOne.leadingWidth > base.leadingWidth,
+    '【P0】关联文档链环是标题左侧 flex item，必须计入 leadingWidth')
+  const withOneWidth = measure(LABEL, style, withOne).width
+  assert.ok(withOneWidth > baseWidth,
+    '【P0】加关联文档后节点必须变宽，否则标题被挤成多行')
+  assert.ok(withOneWidth - baseWidth >= withOne.leadingWidth - base.leadingWidth - 1,
+    '【P0】宽度增量必须覆盖链环占位')
+
+  const withMany = describe(linkData(8), style, badgeSize)
+  assert.ok(withMany.leadingWidth >= withOne.leadingWidth, '多篇关联文档的数字标记不应让宽度变窄')
+  assert.notEqual(withMany.signature, withOne.signature, '关联文档数量变化必须让 signature 失效')
+
+  // 装饰矩阵：每种装饰都必须「签名变化 + 宽度增加」，防止未来新增装饰只改渲染、忘了测量。
+  const decorationCases: Array<[string, Record<string, unknown>, number]> = [
+    ['emoji', { label: LABEL, emojis: ['🧭'] }, badgeSize],
+    ['hasDetail', { label: LABEL, hasDetail: true }, badgeSize],
+    ['childCount', { label: LABEL, childCount: 3 }, badgeSize],
+    ['linkedDocuments', linkData(1), badgeSize],
+    ['badgeSize', { label: LABEL, childCount: 3 }, 28],
+  ]
+  for (const [name, data, size] of decorationCases) {
+    const decorations = describe(data, style, size)
+    assert.notEqual(decorations.signature, base.signature, `${name} 必须改变 signature（自动失效）`)
+    const width = measure(LABEL, style, decorations).width
+    assert.ok(width > baseWidth, `${name} 的占位必须撑宽节点`)
+  }
+  assert.ok(
+    describe({ label: LABEL, childCount: 3 }, style, 28).trailingWidth
+      > describe({ label: LABEL, childCount: 3 }, style, 14).trailingWidth,
+    '右槽位宽度必须跟随 nodeBadgeSize，不能再写死常量',
+  )
+
+  // 「最多 4 行 + 省略号」+「保留节点最大长度」：
+  // DOM 的 -webkit-line-clamp 与 Canvas 高度/宽度上限必须同源于 cardSizeLimits，
+  // 否则会回到「测量封顶但 DOM 不截断」被裁掉，或「DOM 截断但测量不封顶」底部留白。
+  assert.equal(limitsMod.MAX_TITLE_LINES, 4, '标题最多渲染 4 行')
+  assert.equal(limitsMod.MAX_TITLE_WIDTH_CHARS, 20, '自动宽度天花板：20 个汉字宽')
+  const clampStyle = limitsMod.getTitleClampStyle()
+  assert.equal(clampStyle.display, '-webkit-box', '省略号需要 -webkit-box')
+  assert.equal(clampStyle.WebkitBoxOrient, 'vertical', 'line-clamp 需要纵向 box-orient')
+  assert.equal(clampStyle.WebkitLineClamp, limitsMod.MAX_TITLE_LINES,
+    '【P0】DOM 的 line-clamp 必须与 autoSize 的高度封顶共用同一个 MAX_TITLE_LINES')
+  assert.equal(clampStyle.overflow, 'hidden', 'line-clamp 需要 overflow:hidden')
+
+  const longLabel = '汉'.repeat(120)
+  const longSize = measure(longLabel, style, base)
+  const shortSize = measure('汉'.repeat(20), style, base)
+
+  // 节点最大长度：任何长标题都不能把自动宽度撑过天花板。
+  assert.ok(longSize.maxAutoWidth > baseWidth, '最大长度上限必须存在且大于普通节点宽度')
+  assert.ok(longSize.width <= longSize.maxAutoWidth,
+    '【P1】自动宽度不得超过节点最大长度上限')
+  assert.equal(longSize.width, longSize.maxAutoWidth,
+    '【P1】超长单行标题应恰好撑到最大长度上限，而不是无限变宽')
+  assert.ok(measure('汉'.repeat(400), style, base).width <= longSize.maxAutoWidth,
+    '【P1】再长的标题也不得突破最大长度上限')
+
+  assert.ok(longSize.height > shortSize.height, '长标题高度必须跟随行数增长')
+  assert.equal(longSize.lines, limitsMod.MAX_TITLE_LINES, '【P0】超长标题行数必须封顶 4 行')
+  assert.equal(longSize.clamped, true, '【P0】超长标题必须标记为被截断')
+  const maxClampedHeight = Math.max(
+    36,
+    Math.ceil(Math.max(24, limitsMod.MAX_TITLE_LINES * Math.round(11 * 1.3)) + 12),
+  )
+  assert.equal(longSize.height, maxClampedHeight,
+    '【P0】高度必须等于 4 行 clamp 后的高度，与 DOM 实际渲染一致')
+  assert.equal(shortSize.clamped, false, '短标题不应被截断')
+
+  // 接线保障：渲染侧与测量侧必须消费同一份 decorations，不得各读各的 data。
+  const cardSource = await readFile(new URL('../src/features/graph/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx', import.meta.url), 'utf-8')
+  const modelSource = await readFile(new URL(`${modelPath}useKnowledgeCardModel.ts`, import.meta.url), 'utf-8')
+  const autoSizeSource = await readFile(new URL(`${modelPath}autoSize.ts`, import.meta.url), 'utf-8')
+  const decorationsSource = await readFile(new URL(`${modelPath}titleDecorations.ts`, import.meta.url), 'utf-8')
+  assert.ok(cardSource.includes('state.decorations'), '节点渲染必须消费同一份 decorations')
+  assert.equal(cardSource.includes('data.linkedDocuments?.length'), false, '渲染侧不得再自己读 data.linkedDocuments')
+  assert.equal(cardSource.includes('data.emojis'), false, '渲染侧不得再自己读 data.emojis')
+  assert.equal(cardSource.includes('data.childCount'), false, '渲染侧不得再自己读 data.childCount')
+  assert.equal(cardSource.includes('data.hasDetail'), false, '渲染侧不得再自己读 data.hasDetail')
+  assert.ok(modelSource.includes('decorations.signature'), 'autoSize 必须依赖 signature 自动失效')
+  assert.equal(modelSource.includes('emojiCount, hasDetail, childCount, nodeStyle'), false, '不得再手工枚举装饰依赖')
+  assert.ok(cardSource.includes('style={TITLE_CLAMP_STYLE}'),
+    '【P0】渲染侧必须把同源 clamp 样式应用到标题，否则 DOM 不会真正截断')
+  assert.ok(cardSource.includes('getTitleClampStyle'), '渲染侧必须从共享常量模块取截断样式')
+  assert.ok(autoSizeSource.includes('MAX_TITLE_LINES'), '测量侧必须消费同一个行数上限')
+  assert.ok(autoSizeSource.includes('MAX_TITLE_WIDTH_CHARS'), '最大长度上限必须来自共享常量')
+  assert.equal(autoSizeSource.includes('MAX_AUTO_LINES'), false, '不得再出现独立的行数封顶常量')
+  assert.equal(autoSizeSource.includes('MAX_AUTO_CHINESE_CHARS'), false, '不得再出现独立的最大宽度常量')
+  for (const field of ['data.linkedDocuments', 'data.emojis', 'data.hasDetail', 'data.childCount']) {
+    assert.ok(decorationsSource.includes(field), `装饰单一事实来源必须读取 ${field}`)
+  }
+}
+
+// --- 语义缩放：字形尺寸上下限 + 连续细节（P0，2026-11-09）---
+// 【用户决策】「缩到最后文字小得看不清，缩放就没意义；节点和内容要有上下限，
+//  超过阈值的缩放只驱动布局」。用 esbuild 打包真跑纯函数，不是查源码字面量。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundled = await build({
+    entryPoints: [fileURLToPath(new URL('../src/domain/graph/zoomScale.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const zs = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const {
+    ZOOM_REFERENCE, MIN_RAW_ZOOM, MAX_RAW_ZOOM,
+    GLYPH_MIN_SCALE, GLYPH_FAR_SCALE,
+    DETAIL_START_RATIO, DETAIL_FULL_RATIO, DETAIL_HIT_THRESHOLD,
+    glyphScaleForZoom, glyphScaleForRatio, glyphCompensationForZoom,
+    detailAlphaForZoom, detailTierForZoom, semanticZoomVarsForZoom, toDisplayRatio,
+  } = zs
+
+  // 1) 100% 必须完全恒等：用户点「复位」时卡片与旧版逐像素一致。
+  assert.equal(glyphScaleForZoom(ZOOM_REFERENCE), 1, '【P0】100% 的屏幕尺寸倍率必须恒等于 1')
+  assert.ok(Math.abs(glyphCompensationForZoom(ZOOM_REFERENCE) - 1) < 1e-9, '【P0】100% 不得施加任何补偿')
+  assert.equal(detailAlphaForZoom(ZOOM_REFERENCE), 1, '【P0】100% 细节必须完整')
+  assert.equal(detailTierForZoom(ZOOM_REFERENCE), 2)
+
+  // 2) 屏幕尺寸 = base × compensation × zoom = base × glyphScale，与间距解耦。
+  //    【2026-11-10】放大上限收到 100%：近景放大分支已删，100% 起恒等 1；
+  //    只有远景 <100% 平滑放大到 GLYPH_FAR_SCALE。
+  for (const percent of [30, 45, 60, 80, 100]) {
+    const raw = (percent / 100) * ZOOM_REFERENCE
+    const glyph = glyphScaleForZoom(raw)
+    const comp = glyphCompensationForZoom(raw)
+    assert.ok(Math.abs(comp * toDisplayRatio(raw) - glyph) < 1e-9, `【P0】屏幕尺寸必须等于 glyphScale（${percent}%）`)
+    assert.ok(glyph >= GLYPH_MIN_SCALE && glyph <= GLYPH_FAR_SCALE + 1e-9, `【P0】字形倍率必须被上下限钳住（${percent}%）`)
+    assert.ok(Math.abs(glyphScaleForRatio(toDisplayRatio(raw)) - glyph) < 1e-9,
+      '【P1.5】LOD 压力与画布补偿必须消费同一个字形倍率函数')
+  }
+  assert.equal(zs.GLYPH_MAX_SCALE, undefined, '【2026-11-10】100% 上限后不得再保留近景放大常量')
+  assert.equal(zs.GLYPH_SCALE_EXPONENT, undefined, '【2026-11-10】近景 pow 放大分支必须彻底删除')
+  assert.ok(GLYPH_FAR_SCALE > GLYPH_MIN_SCALE && GLYPH_FAR_SCALE <= 1.5,
+    '【P1.5】远景放大必须克制，否则重叠压力会逼 LOD 把主干也藏掉')
+  assert.equal(glyphScaleForZoom(MIN_RAW_ZOOM), GLYPH_FAR_SCALE, '【P1.5】渐隐终点的目标倍率必须钳在 1.3')
+  // 【文字仍保持 2026-11-11 晚】紧凑区不冻结补偿，而是继续按 1/ratio 撑大：
+  // 屏幕倍率 = compensation × ratio 恒为 1.3 → 标题字号不随镜头缩到 2.4px。
+  assert.ok(Math.abs(glyphCompensationForZoom(MIN_RAW_ZOOM) - GLYPH_FAR_SCALE / 0.05) < 1e-9,
+    '【文字保持】5% 补偿必须撑到 glyphScale/0.05，而不是冻结在 /0.2')
+  const compactCompensations = [0.2, 0.15, 0.1, 0.05].map((r: number) =>
+    glyphCompensationForZoom(r * ZOOM_REFERENCE))
+  for (let i = 1; i < compactCompensations.length; i += 1) {
+    assert.ok(compactCompensations[i] > compactCompensations[i - 1],
+      '【文字保持】越缩越小必须靠 1/ratio 补偿抵消，补偿严格递增')
+  }
+  const screenAt = (r: number) => glyphCompensationForZoom(r * ZOOM_REFERENCE) * r
+  for (const r of [0.2, 0.15, 0.1, 0.05]) {
+    assert.ok(Math.abs(screenAt(r) - GLYPH_FAR_SCALE) < 1e-9,
+      `【文字保持】${Math.round(r * 100)}% 屏幕字号倍率必须恒为 1.3（与 20% 端点一致）`)
+  }
+  assert.ok(screenAt(0.05) > GLYPH_FAR_SCALE * 0.25 * 3,
+    '【文字保持】5% 屏幕字号不再是 20% 的 1/4，用户明确选择可读性优先于零重叠')
+  assert.equal(glyphScaleForZoom(MAX_RAW_ZOOM), GLYPH_MIN_SCALE, '【2026-11-10】上限就是 100%，恒等不虚胖')
+  assert.equal(glyphCompensationForZoom(MAX_RAW_ZOOM), 1, '【2026-11-10】上限处不施加任何补偿')
+  // 越界输入（旧房间存的 154% / 曾允许的 200%）必须先被钳到 100%，再按恒等点算，
+  // 否则旧镜头一打开节点就会虚胖 15%。
+  for (const percent of [110, 130, 154, 200]) {
+    const raw = (percent / 100) * ZOOM_REFERENCE
+    assert.equal(glyphScaleForZoom(raw), GLYPH_MIN_SCALE, `【2026-11-10】${percent}% 越界输入必须钳到恒等点`)
+    assert.equal(glyphCompensationForZoom(raw), 1, `【2026-11-10】${percent}% 越界补偿必须恒等 1`)
+    assert.equal(glyphScaleForRatio(percent / 100), GLYPH_MIN_SCALE,
+      `【2026-11-10】glyphScaleForRatio(${percent / 100}) 必须钳回 1`)
+  }
+  const comps = [30, 45, 60, 80, 100].map((p) => glyphCompensationForZoom((p / 100) * ZOOM_REFERENCE))
+  for (let i = 1; i < comps.length; i += 1) {
+    assert.ok(comps[i] < comps[i - 1], '【P0】补偿必须随镜头拉近单调下降，不允许反折')
+  }
+
+  // 2b) 【P1.5】远景放大：100% 是唯一恒等点；两侧各自单调、平滑无跳档。
+  assert.equal(glyphScaleForRatio(1), 1, '【P1.5】100% 必须仍是逐像素恒等点')
+  const farRatios = Array.from({ length: 36 }, (_, i) => 0.3 + i * 0.02)
+  const farGlyphs = farRatios.map((r: number) => glyphScaleForRatio(r))
+  for (let i = 1; i < farGlyphs.length; i += 1) {
+    assert.ok(farGlyphs[i] <= farGlyphs[i - 1] + 1e-9, '【P1.5】放大时远景倍率必须单调不增')
+    assert.ok(farGlyphs[i - 1] - farGlyphs[i] < 0.05, '【P1.5】远景倍率不得出现骤降档位')
+  }
+  assert.ok(Math.abs(farGlyphs[farGlyphs.length - 1] - 1) < 1e-9, '【P1.5】远景曲线必须平滑接到 100%')
+  assert.ok(glyphScaleForRatio(0.3) / glyphScaleForRatio(1) >= 1.25,
+    '【P1.5】远景屏幕字号必须比 100% 明显更大，主干才真的更清晰')
+  // 【2026-11-10】100% 是缩放上限：任何 >100% 的输入都钳回恒等点，不再有近景放大段。
+  const nearGlyphs = [1, 1.2, 1.5, 1.8, 2].map((r: number) => glyphScaleForRatio(r))
+  assert.ok(nearGlyphs.every((g: number) => Math.abs(g - 1) < 1e-9),
+    '【2026-11-10】超过 100% 的输入必须一律恒等 1，节点不虚胖')
+  assert.ok(farGlyphs.every((g: number) => g >= 1),
+    '【P0】100% 必须是全局最小屏幕尺寸，任何镜头都不得更小')
+
+  // 3) 细节连续显隐：两端平滑、单调、无骤变档位；挂载档位与 alpha 同源。
+  assert.equal(detailAlphaForZoom(MIN_RAW_ZOOM), 0, '【P0】最远镜头只剩骨架')
+  assert.equal(detailAlphaForZoom(DETAIL_START_RATIO * ZOOM_REFERENCE), 0)
+  assert.equal(detailAlphaForZoom(DETAIL_FULL_RATIO * ZOOM_REFERENCE), 1)
+  const alphas = Array.from({ length: 15 }, (_, i) => detailAlphaForZoom((0.4 + i * 0.045) * ZOOM_REFERENCE))
+  for (let i = 1; i < alphas.length; i += 1) {
+    assert.ok(alphas[i] >= alphas[i - 1], '【P0】细节显现度必须随放大单调不减')
+    assert.ok(alphas[i] - alphas[i - 1] < 0.2, '【P0】细节不得出现骤变档位')
+  }
+  assert.equal(DETAIL_HIT_THRESHOLD, 0.5)
+  assert.equal(semanticZoomVarsForZoom(MIN_RAW_ZOOM).detailHit, 'none', '【P0】远景淡出的装饰不得吃鼠标事件')
+  assert.equal(semanticZoomVarsForZoom(ZOOM_REFERENCE).detailHit, 'auto')
+  assert.deepEqual(
+    [detailTierForZoom(MIN_RAW_ZOOM), detailTierForZoom(0.65 * ZOOM_REFERENCE), detailTierForZoom(ZOOM_REFERENCE)],
+    [0, 1, 2],
+    '【P0】昂贵部件的档位必须由同一份 alpha 派生',
+  )
+
+  // 4) 接线守卫：视觉变量必须按连续 zoom 写、两层壳必须分离、装饰必须连续淡出。
+  const semanticCanvasSource = await readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8')
+  const semanticCardSource = await readFile(new URL('../src/features/graph/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx', import.meta.url), 'utf-8')
+  const semanticCssSource = await readFile(new URL('../src/styles/base.css', import.meta.url), 'utf-8')
+  assert.ok(semanticCanvasSource.includes('semanticZoomVarsForZoom(zoomLevel)'),
+    '【P0】视觉变量必须按连续 zoomLevel 写，不能用 2% 台阶的 lodZoom（会在远景跳成 20%+ 一格）')
+  assert.ok(semanticCanvasSource.includes("setProperty('--tm-glyph-comp'"), '【P0】画布必须下发字形补偿变量')
+  assert.ok(semanticCanvasSource.includes("setProperty('--tm-detail-alpha'"), '【P0】画布必须下发细节显现度变量')
+  assert.ok(semanticCardSource.includes('data-tm-glyph-layer="true"') && semanticCardSource.includes('data-tm-card-anchor="true"'),
+    '【P0】锚点壳与视觉壳必须分离，否则 transform 会污染 handleBounds')
+  assert.ok(semanticCardSource.includes('scale(var(--tm-glyph-comp, 1))'),
+    '【P0】只有视觉壳做缩放，锚点壳尺寸不得随镜头变化')
+  assert.ok(semanticCardSource.includes('detailTierForZoom(s.transform[2])'),
+    '【P0】昂贵部件档位必须与连续 alpha 同源，不得再各写一套 raw 阈值')
+  assert.equal(semanticCardSource.includes('isMinimalDetail ? null'), false,
+    '【P0】远景不得再把标题整块卸载成纯色块（现在有字形补偿，文字恒可读）')
+  assert.ok(semanticCardSource.includes('tm-card-detail') && semanticCssSource.includes('.tm-card-detail'),
+    '【P0】装饰必须由连续 alpha 淡出，而不是硬切条件渲染')
+  assert.ok(semanticCssSource.includes('opacity: var(--tm-detail-alpha, 1)'),
+    '【P0】CSS 必须消费细节显现度变量')
+}
+
+// --- 语义缩放 LOD（按节点数分位数）+ 缩放比例尺（P2-B）---
+// 【用户决策 2026-11-08】「50% 该叫 100%、不能放太大」；「深度要随缩放平滑进出，不许骤降」。
+// 【用户决策 2026-11-09】「旧 130% 该叫 100%、放大到 200%、缩小到 30%」。
+// 【用户决策 2026-11-10】「再放大没有意义，节点已全部展示」→ 上限收到 100%；
+//   「前期隐藏少、后期突然变多」→ 阈值改为按累计节点数分位数铺满整个行程；
+//   「缩放/显隐动画要平滑」→ 滚轮逐帧缓动 + 双向渐隐渐出。
+// 用 esbuild 打包真跑纯函数（不是查源码字面量），并验证 hidden 只作用于渲染副本。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const loadBundled = async (relative: string) => {
+    const bundled = await build({
+      entryPoints: [fileURLToPath(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  }
+  const lod = await loadBundled('../src/domain/graph/lod.ts')
+  const zs = await loadBundled('../src/domain/graph/zoomScale.ts')
+
+  const {
+    LOD_TREE_COVERAGE_THRESHOLD, LOD_FULL_RATIO, LOD_FLOOR_RATIO,
+    LOD_DEFAULT_PRESERVED_DEPTH, LOD_MAX_PRESERVED_DEPTH, normalizePreservedDepth,
+    LOD_HYSTERESIS, LOD_FADE_MS, revealRatioForRank,
+    computeLodVisibility, applyLodNodeHidden, applyLodEdgeHidden,
+    buildLodHierarchyKey, describeLodReason,
+  } = lod
+  const {
+    ZOOM_REFERENCE, MIN_RAW_ZOOM, MAX_RAW_ZOOM, LEGACY_DEFAULT_RAW_ZOOM,
+    LEGACY_REFERENCE_RAW_ZOOM, MIN_DISPLAY_PERCENT, MAX_DISPLAY_PERCENT,
+    MAX_WHEEL_DELTA, MAX_PENDING_WHEEL_DELTA, ZOOM_TRANSITION_MS,
+    WHEEL_SMOOTH_TAU_MS, LOD_ZOOM_QUANTUM,
+    clampRawZoom, clampWheelDelta, clampPendingWheelDelta, wheelDeltaStep,
+    rebaseViewportZoom, rebaseViewport, toDisplayRatio, toDisplayPercent,
+    formatZoomPercent, fromDisplayPercent, stepDisplayZoom, quantizeLodZoom,
+    resolveLodStage, describeLodStage, LOD_STAGE_LABELS,
+  } = zs
+
+  // 1) 比例尺：旧 130% 重定基为 100%，可用区间 5%~100%，两个历史默认镜头复位。
+  //    100% 同时是「常规阅读比例 / LOD 全显示端点 / 语义缩放恒等点 / 放大上限」；
+  //    20% 是渐隐终点 / 紧凑起点（COMPACT_START_PERCENT），5% 是紧凑终点。
+  assert.equal(ZOOM_REFERENCE, 0.65, '【P0】旧基准 130%（raw 0.65）必须重定基为新的 100%')
+  assert.equal(LEGACY_REFERENCE_RAW_ZOOM, 0.5, '旧基准 100% 的 raw 必须留档供重定基')
+  assert.equal(toDisplayPercent(LEGACY_REFERENCE_RAW_ZOOM * 1.3), 100, '【P0】旧 130% 的观感现在必须读作 100%')
+  assert.equal(MIN_DISPLAY_PERCENT, 5, '【2026-11-11】最小比例必须是 5%')
+  assert.equal(MAX_DISPLAY_PERCENT, 100, '【2026-11-10】放大上限必须是 100%，再放大不产生新信息')
+  assert.ok(Math.abs(MIN_RAW_ZOOM - ZOOM_REFERENCE * 0.05) < 1e-9, '下限必须由 5% 派生')
+  assert.ok(Math.abs(MAX_RAW_ZOOM - ZOOM_REFERENCE) < 1e-9, '【2026-11-10】上限必须恒等于 ZOOM_REFERENCE')
+  assert.equal(toDisplayPercent(MIN_RAW_ZOOM), 5, '【P0】最小比例必须读作 5%')
+  assert.equal(toDisplayPercent(MAX_RAW_ZOOM), 100, '【2026-11-10】最大比例必须读作 100%')
+  assert.equal(toDisplayPercent(ZOOM_REFERENCE), 100, '常规阅读视图必须显示 100%')
+  assert.equal(toDisplayPercent(LEGACY_DEFAULT_RAW_ZOOM), 154, '远古默认 raw 1 在新基准下读作 154%')
+  assert.equal(formatZoomPercent(ZOOM_REFERENCE / 2), '50%')
+  assert.equal(clampRawZoom(4), MAX_RAW_ZOOM, '【P0】程序化放大也不能越过上限')
+  assert.equal(clampRawZoom(0.01), MIN_RAW_ZOOM)
+  assert.equal(rebaseViewportZoom(LEGACY_DEFAULT_RAW_ZOOM), ZOOM_REFERENCE, '【P0】远古默认镜头必须重定基')
+  assert.equal(rebaseViewportZoom(LEGACY_REFERENCE_RAW_ZOOM), ZOOM_REFERENCE, '【P0】老房间默认 0.5 必须回到新的 100%，否则一打开掉进 LOD 收起区间')
+  assert.equal(rebaseViewportZoom(0.3), 0.3, '用户保存过的镜头不得被擅自改写')
+  assert.equal(rebaseViewportZoom(9), MAX_RAW_ZOOM)
+  assert.deepEqual(rebaseViewport({ x: 12, y: 34, zoom: 1 }), { x: 12, y: 34, zoom: ZOOM_REFERENCE }, '重定基只改 zoom，pan 原样保留')
+  assert.equal(fromDisplayPercent(100), ZOOM_REFERENCE)
+  assert.equal(fromDisplayPercent(999), MAX_RAW_ZOOM)
+  assert.equal(fromDisplayPercent(1), MIN_RAW_ZOOM)
+  assert.equal(fromDisplayPercent(150), ZOOM_REFERENCE, '【2026-11-10】150% 必须钳回 100% 上限')
+  assert.equal(stepDisplayZoom(ZOOM_REFERENCE, 10), ZOOM_REFERENCE, '【2026-11-10】100% 处继续放大必须停住')
+  assert.equal(stepDisplayZoom(ZOOM_REFERENCE, -10), fromDisplayPercent(90))
+  assert.equal(stepDisplayZoom(MAX_RAW_ZOOM, 10), MAX_RAW_ZOOM, '上限处继续放大必须停住')
+  assert.equal(stepDisplayZoom(MAX_RAW_ZOOM, -10), fromDisplayPercent(90), '上限处缩小仍可用')
+  assert.equal(MAX_WHEEL_DELTA, 80, '【P0】滚轮单格必须阻尼，否则一格跳 26% 会让节点成批进出')
+  assert.equal(clampWheelDelta(220), 80)
+  assert.equal(clampWheelDelta(-220), -80)
+  assert.equal(clampWheelDelta(12), 12, '触控板细粒度事件必须原样放行')
+  assert.equal(ZOOM_TRANSITION_MS, 240, '按钮过渡与 LOD 淡入淡出必须同节奏')
+  assert.ok(WHEEL_SMOOTH_TAU_MS > 0 && WHEEL_SMOOTH_TAU_MS < 120, '滚轮缓动时间常数必须在可感知但不拖沓的区间')
+  // 逐帧缓动真跑：拆分后的总 delta 必须收敛到原值，单帧不过冲、方向不翻转。
+  const consumeWheel = (initial: number, frames: number) => {
+    let remaining = initial
+    let dispatched = 0
+    let maxStep = 0
+    for (let i = 0; i < frames; i += 1) {
+      const step = wheelDeltaStep(remaining, 16)
+      assert.ok(Math.abs(step) <= Math.abs(remaining) + 1e-9, '【P0】单帧增量不得过冲')
+      assert.ok(initial >= 0 ? step >= 0 : step <= 0, '缓动方向不得翻转')
+      remaining -= step
+      dispatched += step
+      maxStep = Math.max(maxStep, Math.abs(step))
+    }
+    return { remaining, dispatched, maxStep }
+  }
+  const posWheel = consumeWheel(MAX_WHEEL_DELTA, 22)
+  assert.ok(posWheel.dispatched > MAX_WHEEL_DELTA * 0.97 && posWheel.dispatched <= MAX_WHEEL_DELTA + 1e-9,
+    `【P0】逐帧拆分后总缩放量必须等价于原来一格（实际 ${posWheel.dispatched}）`)
+  assert.ok(posWheel.remaining < MAX_WHEEL_DELTA * 0.03, '缓动必须收敛')
+  assert.ok(posWheel.maxStep < MAX_WHEEL_DELTA * 0.3, '【P0】首帧最多派发约 1/4 格，禁止一格跳完')
+  const negWheel = consumeWheel(-MAX_WHEEL_DELTA, 22)
+  assert.ok(negWheel.dispatched < -MAX_WHEEL_DELTA * 0.97, '反向滚轮也必须缓动收敛')
+  assert.equal(wheelDeltaStep(0, 16), 0)
+  assert.equal(wheelDeltaStep(80, 0), 0, 'dt=0 时不得凭空消费增量')
+  assert.equal(clampPendingWheelDelta(999), MAX_PENDING_WHEEL_DELTA)
+  assert.equal(clampPendingWheelDelta(-999), -MAX_PENDING_WHEEL_DELTA)
+  const halfStepRaw = (ZOOM_REFERENCE * LOD_ZOOM_QUANTUM) / 2
+  // 100% 上限后不再测 0.91（旧 140%）；改成上限内的中景值 + 越界钳制单独验证。
+  for (const raw of [0.26, 0.39, 0.52, ZOOM_REFERENCE, MAX_RAW_ZOOM]) {
+    const q = quantizeLodZoom(raw)
+    assert.ok(Math.abs(q - raw) <= halfStepRaw + 1e-9, `量化不得跳超过半个台阶（raw=${raw}）`)
+    assert.equal(toDisplayPercent(q) % 2, 0, '量化必须落在 2% 台阶上')
+  }
+  // 【紧凑区】5%~20% 一律吸附到 20% 渐隐终点：可见集合冻结，不必每 2% 重建整树。
+  for (const raw of [MIN_RAW_ZOOM, 0.05 * ZOOM_REFERENCE, 0.1 * ZOOM_REFERENCE, 0.15 * ZOOM_REFERENCE]) {
+    assert.equal(quantizeLodZoom(raw), 0.2 * ZOOM_REFERENCE,
+      '【紧凑区】LOD 量化必须冻结在 20%，紧凑缩放不触发可见性重算')
+  }
+  // 非台阶上的值必须被吸附；否则等于没量化，滚轮每帧都会重算可见性。
+  const offStep = 0.53
+  const snapped = quantizeLodZoom(offStep)
+  assert.ok(Math.abs(snapped - offStep) > 0.001, '【P0】非整台阶 zoom 必须吸附到 2% 台阶')
+  assert.equal(toDisplayPercent(snapped) % 2, 0, '【P0】量化结果必须落在偶数百分比上')
+  assert.deepEqual([1, 0.85, 0.5, 0.2].map((r) => resolveLodStage(r * ZOOM_REFERENCE)), [0, 1, 2, 3])
+  assert.deepEqual(LOD_STAGE_LABELS, ['完整图谱', '渐进收起', '主干轮廓', '仅骨架'])
+  assert.equal(describeLodStage(3), '仅骨架')
+
+  // 2) 按节点数分位数分配 reveal：不得再按深度级数 / 游离排名分档位。
+  assert.equal(lod.LOD_TIERS, undefined, '【P0】不得再出现离散档位表（会成批隐藏节点）')
+  assert.equal(lod.resolveLodTier, undefined, '【P0】不得再按离散档位裁剪')
+  assert.equal(lod.revealRatioForDepth, undefined, '【P0】按深度级数分阈值会让偏斜树整层骤降')
+  assert.equal(lod.revealRatioForFree, undefined, '【P0】按游离排名分阈值会让前 30% 行程几乎不隐藏')
+  assert.equal(lod.LOD_FREE_END_RATIO, undefined, '【P0】固定 70% 分界会重新制造「前期隐藏少」')
+  assert.equal(LOD_FULL_RATIO, 1, '≥100% 必须全图可见')
+  assert.equal(LOD_FLOOR_RATIO, 0.2, '【2026-11-11】渐隐终点 / 紧凑起点必须是 20%')
+  assert.equal(LOD_FLOOR_RATIO, zs.COMPACT_START_RATIO,
+    'LOD_FLOOR_RATIO 必须由 zoomScale.COMPACT_START_RATIO 唯一派生')
+  assert.equal(LOD_DEFAULT_PRESERVED_DEPTH, 2, '【默认两层】永久显示默认到 depth 2（root=1 / 一级子=2）')
+  assert.equal(LOD_MAX_PRESERVED_DEPTH, 100, '「全部层级」必须与 hierarchy 深度上限同源')
+  assert.equal(normalizePreservedDepth(undefined), 2, '旧偏好没有该字段时必须回落默认两层')
+  assert.equal(normalizePreservedDepth('3'), 3, '面板传来的字符串层数也要归一化')
+  assert.equal(normalizePreservedDepth(0), 2, '0 不是合法层数，回落默认')
+  assert.equal(normalizePreservedDepth(-4), 1, '负数钳到 1 层（仅树根）')
+  assert.equal(normalizePreservedDepth(999), LOD_MAX_PRESERVED_DEPTH, '越界层数钳到最大')
+  assert.equal(normalizePreservedDepth(Number.NaN), 2, '脏数据回落默认')
+  assert.ok(LOD_HYSTERESIS > 0 && LOD_HYSTERESIS < 0.05, '临界点必须有滞回但带宽不能过大')
+  assert.equal(LOD_FADE_MS, 240, '渐隐渐出必须比旧的 170ms 更柔和')
+  assert.equal(LOD_TREE_COVERAGE_THRESHOLD, 0.25, '无树保护的覆盖率阈值必须恒定')
+  const rankThresholds = Array.from({ length: 60 }, (_, i) => revealRatioForRank(i, 60))
+  // 判据是 ratio >= reveal，阈值越高越早消失；退场序列越靠后阈值必须越低。
+  for (let i = 1; i < rankThresholds.length; i += 1) {
+    assert.ok(rankThresholds[i] < rankThresholds[i - 1], '【P0】退场序列阈值必须单调递减')
+    assert.ok(rankThresholds[i - 1] - rankThresholds[i] < 0.02, '【P0】相邻节点阈值必须足够密')
+  }
+  assert.ok(rankThresholds[0] < 1 && rankThresholds[0] > 0.98, '首个节点在 100% 之下立刻开始退场')
+  assert.ok(rankThresholds[59] > LOD_FLOOR_RATIO && rankThresholds[59] < LOD_FLOOR_RATIO + 0.02,
+    '末个节点必须在 20% 之上退场完毕')
+  assert.equal(revealRatioForRank(0, 0), LOD_FULL_RATIO, '无可隐藏节点时不得产生阈值')
+
+  // 3) 一棵 4 节点合规树 + 2 个游离节点（覆盖 4/6 = 0.667，LOD 应启用）。
+  const treeNodes = [
+    { id: 'root' }, { id: 'c1' }, { id: 'c2' }, { id: 'g1' },
+    { id: 'free1' }, { id: 'free2' },
+  ]
+  const treeEdges = [
+    { id: 'e1', source: 'root', target: 'c1', relation: 'subordinate' },
+    { id: 'e2', source: 'root', target: 'c2', relation: 'subordinate' },
+    { id: 'e3', source: 'c1', target: 'g1', relation: 'subordinate' },
+    { id: 'e4', source: 'free1', target: 'free2', relation: 'related' },
+  ]
+  const base = { nodes: treeNodes, edges: treeEdges }
+
+  const full = computeLodVisibility({ ...base, zoom: ZOOM_REFERENCE })
+  assert.equal(full.active, true, '有树且覆盖足够时必须启用')
+  assert.equal(full.reason, 'active')
+  assert.equal(full.hiddenNodeIds.size, 0, '【P0】100% 常规视图必须全图可见')
+  assert.equal(full.hiddenEdgeIds.size, 0, '常规视图不得隐藏任何边')
+  assert.equal(full.displayPercent, 100)
+  assert.equal(full.tier, 0)
+  const zoomedIn = computeLodVisibility({ ...base, zoom: MAX_RAW_ZOOM })
+  assert.equal(zoomedIn.hiddenNodeIds.size, 0, '放到最大仍然是全图，不该反而藏节点')
+
+  const mid = computeLodVisibility({ ...base, zoom: 0.8 * ZOOM_REFERENCE })
+  assert.equal(mid.active, true)
+  assert.equal(mid.displayPercent, 80)
+  assert.ok(mid.hiddenNodeIds.size >= 1 && mid.hiddenNodeIds.size <= 2, '【P0】80% 只该收起 1~2 个节点，不能成批消失')
+  assert.ok(mid.visibleNodeIds.has('root') && mid.visibleNodeIds.has('g1'), '80% 仍应看得见深层节点')
+  assert.ok(mid.visibleNodeIds.has('c1') && mid.visibleNodeIds.has('c2'), '【P0】80% 一级主干必须全在')
+  assert.ok(!mid.hiddenNodeIds.has('c1') && !mid.hiddenNodeIds.has('c2'), '【P0】80% 先退场的只能是游离节点，不能是主干')
+
+  const tiny = computeLodVisibility({ ...base, zoom: MIN_RAW_ZOOM })
+  assert.deepEqual([...tiny.visibleNodeIds].sort(), ['c1', 'c2', 'root'],
+    '【默认两层】最远镜头 depth 1 / 2 的**全部**节点都保留，不能只留一个一级主干')
+  assert.ok(!tiny.visibleNodeIds.has('g1') && !tiny.visibleNodeIds.has('free1'))
+  assert.equal(tiny.preservedDepth, 2, '可见性计划必须回吐实际生效层数，面板与裁剪同源')
+  assert.equal(tiny.displayPercent, 5, '【紧凑区】诊断必须回吐真实读数 5%，不能被钳成 20%')
+  // 【2026-11-11 紧凑行程】20%→5% 可见集合严格冻结：不再隐藏也不再显示任何节点。
+  const compactPlan = computeLodVisibility({ ...base, zoom: 0.2 * ZOOM_REFERENCE })
+  for (const ratio of [0.2, 0.15, 0.1, 0.05]) {
+    const step = computeLodVisibility({ ...base, zoom: ratio * ZOOM_REFERENCE })
+    assert.deepEqual([...step.visibleNodeIds].sort(), [...compactPlan.visibleNodeIds].sort(),
+      `【紧凑区】${Math.round(ratio * 100)}% 可见集合必须与 20% 端点完全一致`)
+    assert.equal(step.hiddenNodeIds.size, compactPlan.hiddenNodeIds.size,
+      `【紧凑区】${Math.round(ratio * 100)}% 不得再隐藏/放出节点`)
+    assert.equal(step.collisionHiddenCount, 0,
+      `【紧凑区】${Math.round(ratio * 100)}% 不得再跑碰撞抽稀`)
+    assert.equal(step.visibleDepthLevelCount, 2,
+      `【紧凑区】${Math.round(ratio * 100)}% 仍至少保留两层深度`)
+    assert.equal(step.displayPercent, Math.round(ratio * 100),
+      '紧凑区每档仍回吐真实显示比')
+  }
+
+  // 3b) 【P0 方向铁律】真实逐档缩放验证「谁先消失」。默认永久显示 2 层时，
+  //     depth 1 / 2 的**全部**节点恒定显示，退场只由游离 + depth 3 承担；
+  //     为继续验证「游离 → 深层 → 浅层主干 → 树根」的顺序没被改坏，
+  //     再把层数调到 1 真跑一遍，让 depth 2 主干也参与退场。
+  const runOrder = (preservedDepth: number) => {
+    const firstHiddenRatio = new Map<string, number>()
+    const snapshots: Array<{ ratio: number; visible: Set<string> }> = []
+    let rootEverHidden = false
+    let previous: Set<string> | undefined
+    for (let ratioStep = 1; ratioStep >= 0.2 - 1e-9; ratioStep -= 0.02) {
+      const snapshot = computeLodVisibility({
+        ...base, preservedDepth, zoom: ratioStep * ZOOM_REFERENCE, previousVisibleNodeIds: previous,
+      })
+      snapshots.push({ ratio: ratioStep, visible: snapshot.visibleNodeIds })
+      for (const node of treeNodes) {
+        if (!snapshot.visibleNodeIds.has(node.id) && !firstHiddenRatio.has(node.id)) {
+          firstHiddenRatio.set(node.id, ratioStep)
+        }
+      }
+      if (!snapshot.visibleNodeIds.has('root')) rootEverHidden = true
+      previous = snapshot.visibleNodeIds
+    }
+    return { firstHiddenRatio, snapshots, rootEverHidden }
+  }
+  const defaultOrder = runOrder(LOD_DEFAULT_PRESERVED_DEPTH)
+  assert.equal(defaultOrder.rootEverHidden, false, '【P0】树根任何倍率都不能隐藏')
+  assert.equal(defaultOrder.firstHiddenRatio.get('c1'), undefined,
+    '【默认两层】depth 2 的第一个一级主干必须恒定显示')
+  assert.equal(defaultOrder.firstHiddenRatio.get('c2'), undefined,
+    '【默认两层】depth 2 的第二个一级主干也必须恒定显示（不能只留其中一个）')
+  assert.ok(defaultOrder.firstHiddenRatio.has('g1') && defaultOrder.firstHiddenRatio.has('free1'),
+    '默认两层时退场由游离节点与 depth 3 深层承担')
+  const oneLevelOrder = runOrder(1)
+  assert.equal(oneLevelOrder.rootEverHidden, false, '【自定义 1 层】只保树根时树根仍恒定显示')
+  const deepGoneRatio = oneLevelOrder.firstHiddenRatio.get('g1')
+  const trunkGoneRatio = oneLevelOrder.firstHiddenRatio.get('c2')
+  const freeGoneRatio = oneLevelOrder.firstHiddenRatio.get('free1')
+  assert.ok(deepGoneRatio !== undefined && trunkGoneRatio !== undefined && freeGoneRatio !== undefined,
+    '自定义 1 层时游离 / 深层 / 主干节点都必须经历隐藏')
+  assert.ok((freeGoneRatio as number) >= (deepGoneRatio as number), '【P0】游离节点不得晚于深层叶子消失')
+  assert.ok((deepGoneRatio as number) > (trunkGoneRatio as number),
+    `【P0】深度 3 必须先于深度 2 消失（深层 ${deepGoneRatio} / 主干 ${trunkGoneRatio}）`)
+  const deepGoneSnapshot = oneLevelOrder.snapshots.find((item) => !item.visible.has('g1'))
+  assert.ok(deepGoneSnapshot?.visible.has('c1') && deepGoneSnapshot?.visible.has('c2'),
+    '【P0】深层叶子刚消失时，一级主干必须仍然可见')
+
+  // 3c) 左上角层级诊断：字段必须来自同一份 hierarchy，且随缩放真实变化。
+  assert.equal(full.treeMaxDepth, 3, '【P0】深度推断必须是 root=1 / c1,c2=2 / g1=3')
+  assert.equal(full.rootCount, 1)
+  assert.equal(full.freeCount, 2)
+  assert.deepEqual(full.depthLevels, [
+    { depth: 1, total: 1, visible: 1 },
+    { depth: 2, total: 2, visible: 2 },
+    { depth: 3, total: 1, visible: 1 },
+  ], '【P0】完整档每级可见数必须等于总数')
+  assert.deepEqual(tiny.depthLevels, [
+    { depth: 1, total: 1, visible: 1 },
+    { depth: 2, total: 2, visible: 2 },
+    { depth: 3, total: 1, visible: 0 },
+  ], '【默认两层】最远镜头深层归零，depth 1 / 2 的全部节点都还在')
+  assert.equal(tiny.visibleDepthLevelCount, 2, '【默认两层】最远镜头两层深度都可见')
+  for (let ratioStep = 1; ratioStep >= 0.2 - 1e-9; ratioStep -= 0.02) {
+    const step = computeLodVisibility({ ...base, zoom: ratioStep * ZOOM_REFERENCE })
+    const d1 = step.depthLevels.find((l: { depth: number }) => l.depth === 1)?.visible ?? 0
+    const d2 = step.depthLevels.find((l: { depth: number }) => l.depth === 2)?.visible ?? 0
+    assert.ok(step.visibleDepthLevelCount >= LOD_DEFAULT_PRESERVED_DEPTH && d1 >= 1 && d2 >= 2,
+      `【默认两层】缩放全程 depth 1 / 2 必须全部保留（${ratioStep.toFixed(2)}：${d1}/${d2}）`)
+  }
+  assert.equal(full.selectedNode, null, '未选中节点时不得伪造诊断')
+  // 默认两层下 c1 / c2 已是永久显示，诊断阈值改用 depth 3 的 g1 验证「读数与裁剪同源」。
+  const selectedForDepth = computeLodVisibility({
+    ...base,
+    nodes: treeNodes.map((node) => node.id === 'g1' ? { ...node, selected: true } : node),
+    zoom: MIN_RAW_ZOOM,
+  })
+  assert.equal(selectedForDepth.selectedNode?.id, 'g1')
+  assert.equal(selectedForDepth.selectedNode?.depth, 3)
+  assert.equal(selectedForDepth.selectedNode?.kind, 'tree')
+  assert.equal(selectedForDepth.selectedNode?.visible, true, '选中节点本身会被强制显示')
+  assert.equal(selectedForDepth.selectedNode?.forced, true)
+  const g1Reveal = selectedForDepth.selectedNode?.revealRatio
+  assert.ok(typeof g1Reveal === 'number' && g1Reveal > LOD_FLOOR_RATIO && g1Reveal < LOD_FULL_RATIO,
+    '树节点的诊断阈值必须落在收起区间内')
+  // 诊断读数必须与实际隐藏时机同源：刚好低于该阈值时 g1 就该被藏。
+  const justBelowG1 = computeLodVisibility({ ...base, zoom: ((g1Reveal as number) - 0.03) * ZOOM_REFERENCE })
+  assert.ok(!justBelowG1.visibleNodeIds.has('g1'), '【P0】层级诊断的阈值必须与实际裁剪同源')
+  assert.equal(selectedForDepth.selectedNode?.label, 'g1', '读不到 data.label 时退回 id')
+  const permanentNode = computeLodVisibility({ ...base, zoom: ZOOM_REFERENCE, selectedNodeId: 'c2' })
+  assert.equal(permanentNode.selectedNode?.revealRatio, null,
+    '【默认两层】depth 2 永久显示节点的诊断必须读作「始终显示」')
+  const labeled = computeLodVisibility({
+    ...base,
+    nodes: treeNodes.map((node) => node.id === 'c2' ? { ...node, selected: true, data: { label: '一级 B' } } : node),
+    zoom: ZOOM_REFERENCE,
+  })
+  assert.equal(labeled.selectedNode?.label, '一级 B', '诊断面板必须显示节点标题而不是裸 id')
+  // React Flow 的选中态不保证同步进 nodes[].selected；面板与置顶按钮必须共用 store 来源。
+  const storeSelected = computeLodVisibility({ ...base, zoom: MIN_RAW_ZOOM, selectedNodeId: 'g1' })
+  assert.equal(storeSelected.selectedNode?.id, 'g1', '【P0】store 选中而 nodes 未标 selected 时，诊断仍要生效')
+  assert.equal(storeSelected.selectedNode?.depth, 3)
+  assert.equal(storeSelected.selectedNode?.kind, 'tree')
+  assert.ok(storeSelected.visibleNodeIds.has('g1'), '【P0】store 选中的深层节点也必须被强制显示')
+  assert.deepEqual(storeSelected.selectedNodeIds, [], 'nodes 派生的选中集合不得被 store 字段伪造')
+  const staleSelected = computeLodVisibility({ ...base, zoom: MIN_RAW_ZOOM, selectedNodeId: 'not-in-room' })
+  assert.equal(staleSelected.selectedNode, null, '房间切换后的陈旧 id 不得产生假诊断')
+
+  // 树根保护必须**独立于** depth 上限：把上限压到 0 单独验证 roots 初始化。
+  const hierarchyMod = await import('../src/domain/graph/graphHierarchy.ts')
+  const builtHierarchy = hierarchyMod.buildHierarchy(
+    treeNodes.map((node) => node.id),
+    treeEdges.filter((edge) => edge.relation === 'subordinate').map((edge) => hierarchyMod.toHierarchyEdge(edge)),
+  )
+  assert.deepEqual(
+    [...hierarchyMod.computeLodVisibleNodes(builtHierarchy.hierarchy, 0, new Set<string>())],
+    ['root'],
+    '【P0】树根保护必须独立于 maxDepth，否则缩小到骨架档整棵树连根消失',
+  )
+
+  // 3d) 【自定义永久显示层数，2026-11-11】同一棵树分别按 1 / 2 / 3 / 全部层数跑最远镜头：
+  //     depth <= N 的**全部**节点都要在、更深的都不在，树根恒留、游离节点不受层数保护。
+  const deepTreeNodes = [
+    { id: 'R' }, { id: 'A' }, { id: 'B' }, { id: 'A1' }, { id: 'B1' }, { id: 'A1a' }, { id: 'zfree' },
+  ]
+  const deepTreeEdges = [
+    { id: 't1', source: 'R', target: 'A', relation: 'subordinate' },
+    { id: 't2', source: 'R', target: 'B', relation: 'subordinate' },
+    { id: 't3', source: 'A', target: 'A1', relation: 'subordinate' },
+    { id: 't4', source: 'B', target: 'B1', relation: 'subordinate' },
+    { id: 't5', source: 'A1', target: 'A1a', relation: 'subordinate' },
+  ]
+  const deepTreeBase = { nodes: deepTreeNodes, edges: deepTreeEdges, zoom: MIN_RAW_ZOOM }
+  const expectedPreserved: Array<[number, string[]]> = [
+    [1, ['R']],
+    [2, ['A', 'B', 'R']],
+    [3, ['A', 'A1', 'B', 'B1', 'R']],
+    [LOD_MAX_PRESERVED_DEPTH, ['A', 'A1', 'A1a', 'B', 'B1', 'R']],
+  ]
+  for (const [depth, expected] of expectedPreserved) {
+    const step = computeLodVisibility({ ...deepTreeBase, preservedDepth: depth })
+    assert.deepEqual([...step.visibleNodeIds].sort(), expected,
+      `【自定义 ${depth} 层】最远镜头必须保留 depth <= ${depth} 的全部树节点`)
+    assert.equal(step.preservedDepth, normalizePreservedDepth(depth), '生效层数必须归一化后回吐')
+    assert.equal(step.visibleDepthLevelCount, Math.min(depth, 4), '可见深度层数必须跟着配置变')
+    assert.ok(!step.visibleNodeIds.has('zfree'), '游离节点没有树深度，任何层数都不永久显示')
+  }
+  // 随时变更：同一份输入连续切换层数，结果必须立刻跟着变（不依赖刷新 / 换房间）。
+  const switching = [1, 3, 2, LOD_MAX_PRESERVED_DEPTH].map((depth) =>
+    computeLodVisibility({ ...deepTreeBase, preservedDepth: depth }).visibleNodeIds.size)
+  assert.deepEqual(switching, [1, 5, 3, 6], '【随时变更】改层数必须立即改变可见集合')
+
+  // 4) 平滑性：一条 12 级长树 + 30 个游离节点，逐 2% 缩放时可见数必须单调且小步。
+  const chainNodes = [
+    { id: 'r' },
+    ...Array.from({ length: 12 }, (_, i) => ({ id: `d${i + 1}` })),
+    ...Array.from({ length: 30 }, (_, i) => ({ id: `f${i}` })),
+  ]
+  const chainEdges = [
+    { id: 's0', source: 'r', target: 'd1', relation: 'subordinate' },
+    ...Array.from({ length: 11 }, (_, i) => ({ id: `s${i + 1}`, source: `d${i + 1}`, target: `d${i + 2}`, relation: 'subordinate' })),
+    ...Array.from({ length: 10 }, (_, i) => ({ id: `w${i}`, source: `f${i}`, target: `f${i + 1}`, relation: 'related' })),
+  ]
+  let previousVisible: Set<string> | undefined
+  const counts: number[] = []
+  for (let ratio = 1; ratio >= 0.2 - 1e-9; ratio -= 0.02) {
+    const step = computeLodVisibility({
+      nodes: chainNodes, edges: chainEdges, zoom: ratio * ZOOM_REFERENCE,
+      previousVisibleNodeIds: previousVisible,
+    })
+    counts.push(step.visibleNodeIds.size)
+    assert.ok(step.visibleDepthLevelCount >= LOD_DEFAULT_PRESERVED_DEPTH,
+      '【默认两层】长链树缩放全程至少两层深度可见')
+    previousVisible = step.visibleNodeIds
+  }
+  assert.equal(counts[0], chainNodes.length, '100% 必须全图可见')
+  assert.equal(counts[counts.length - 1], 2, '【默认两层】最远镜头必须还有树根 + 一级主干')
+  for (let i = 1; i < counts.length; i += 1) {
+    assert.ok(counts[i] <= counts[i - 1], `【P0】缩小过程中可见节点数不得回升（第 ${i} 步）`)
+    assert.ok(counts[i - 1] - counts[i] <= 4, `【P0】单步最多隐藏少数节点，禁止骤降（第 ${i} 步掉了 ${counts[i - 1] - counts[i]} 个）`)
+  }
+  assert.ok(new Set(counts).size >= 10, '【P0】缩放全程必须有足够多中间状态，而不是 4 个离散档位')
+
+  // 4b) 【P0 按节点数分位数，2026-11-09 三次优化】偏斜树：60 个叶子全挤在 depth 3。
+  // 旧的「按深度级数分阈值」实现会在跨过 0.5 的一帧里整层隐藏 60 个节点，
+  // 正是用户说的「前期缩放节点隐藏少，后期突然变多」。新实现按累计节点数
+  // 铺阈值，不管某层有多少节点，每段缩放行程隐藏的数量都≈恒定。
+  const skewedNodes = [
+    { id: 'sr' }, { id: 'sa' },
+    ...Array.from({ length: 60 }, (_, i) => ({ id: `sl${i}` })),
+  ]
+  const skewedEdges = [
+    { id: 'ss0', source: 'sr', target: 'sa', relation: 'subordinate' },
+    ...Array.from({ length: 60 }, (_, i) => ({ id: `ss${i + 1}`, source: 'sa', target: `sl${i}`, relation: 'subordinate' })),
+  ]
+  let skewedPrevious: Set<string> | undefined
+  const skewedCounts: number[] = []
+  for (let ratio = 1; ratio >= 0.2 - 1e-9; ratio -= 0.02) {
+    const step = computeLodVisibility({
+      nodes: skewedNodes, edges: skewedEdges, zoom: ratio * ZOOM_REFERENCE,
+      previousVisibleNodeIds: skewedPrevious,
+    })
+    skewedCounts.push(step.visibleNodeIds.size)
+    skewedPrevious = step.visibleNodeIds
+  }
+  assert.equal(skewedCounts[0], skewedNodes.length, '100% 必须全图可见')
+  assert.equal(skewedCounts[skewedCounts.length - 1], 2, '【保底两层】偏斜树最远镜头也必须还有两层')
+  const skewedDrops = skewedCounts.slice(1).map((count, i) => skewedCounts[i] - count)
+  const maxSkewedDrop = Math.max(...skewedDrops)
+  const avgSkewedDrop = (skewedNodes.length - 2) / skewedDrops.length
+  assert.ok(maxSkewedDrop <= 4, `【P0】偏斜深度分布不得整层骤降（单步最多 ${maxSkewedDrop} 个）`)
+  assert.ok(skewedDrops.filter((drop) => drop > 0).length >= 20,
+    `【P0】隐藏必须摊到整段行程，不能集中在两三档（实际 ${skewedDrops.filter((d) => d > 0).length} 档有变化）`)
+  assert.ok(maxSkewedDrop <= avgSkewedDrop * 2.5 + 1,
+    `【P0】单步隐藏量不得显著高于平均值（max ${maxSkewedDrop} / avg ${avgSkewedDrop.toFixed(2)}）`)
+  // 前 1/3 行程与后 1/3 行程隐藏量必须接近，不能「前期少、后期突然变多」。
+  const firstThird = skewedDrops.slice(0, 12).reduce((a, b) => a + b, 0)
+  const lastThird = skewedDrops.slice(-12).reduce((a, b) => a + b, 0)
+  assert.ok(firstThird > 0 && lastThird > 0 && lastThird <= firstThird * 2 + 4,
+    `【P0】前后段隐藏量不能失衡（前 ${firstThird} / 后 ${lastThird}）`)
+
+  // 5) 滞回：临界点附近已显示/已隐藏的节点不能随滚轮微抖来回闪。
+  // 三个节点：r(根) → c1(depth 2，默认永久显示) → c2(唯一参与退场的深层节点)。
+  const smallNodes = [{ id: 'r' }, { id: 'c1' }, { id: 'c2' }]
+  const smallEdges = [
+    { id: 's0', source: 'r', target: 'c1', relation: 'subordinate' },
+    { id: 's1', source: 'c1', target: 'c2', relation: 'subordinate' },
+  ]
+  const edgeRatio = revealRatioForRank(0, 2)
+  const nearZoom = (edgeRatio - LOD_HYSTERESIS / 2) * ZOOM_REFERENCE
+  const stayed = computeLodVisibility({ nodes: smallNodes, edges: smallEdges, zoom: nearZoom, previousVisibleNodeIds: new Set(['r', 'c1', 'c2']) })
+  const stayedHidden = computeLodVisibility({ nodes: smallNodes, edges: smallEdges, zoom: nearZoom, previousVisibleNodeIds: new Set(['r', 'c1']) })
+  assert.ok(stayed.visibleNodeIds.has('c2'), '【P0】滞回：临界点已显示的节点不能立刻闪掉')
+  assert.ok(!stayedHidden.visibleNodeIds.has('c2'), '【P0】滞回：临界点已隐藏的节点不能立刻冒出')
+
+  // 6) pin / 临时 reveal / 当前选中都要绕开裁剪，且不改树与 depth。
+  const pinned = computeLodVisibility({ ...base, zoom: MIN_RAW_ZOOM, pinned: new Set(['free2']) })
+  assert.deepEqual([...pinned.visibleNodeIds].sort(), ['c1', 'c2', 'free2', 'root'],
+    '【P0】pin 节点始终显示，且不得顺带放出别的游离节点（depth 2 全部常驻）')
+  assert.equal(pinned.subordinateEdgeCount, 3, 'pin 不参与树，从属边数量不变')
+  const revealed = computeLodVisibility({ ...base, zoom: MIN_RAW_ZOOM, revealed: new Set(['g1']) })
+  assert.ok(revealed.visibleNodeIds.has('g1'), '搜索定位的临时显示必须生效')
+  const selectedNodes = treeNodes.map((node) => node.id === 'c1' ? { ...node, selected: true } : node)
+  const selected = computeLodVisibility({ ...base, nodes: selectedNodes, zoom: MIN_RAW_ZOOM })
+  assert.ok(selected.visibleNodeIds.has('c1'), '【P0】当前选中节点不能被 LOD 突然藏掉')
+  assert.deepEqual(selected.selectedNodeIds, ['c1'], '选中节点必须由可见性计划直接派生（pin 控件依赖它）')
+
+  // 7) 三条保护：无树 / 低覆盖 / 用户关闭；force 可跳过保护。
+  const noTree = computeLodVisibility({ nodes: treeNodes, edges: [{ id: 'w1', source: 'root', target: 'c1', relation: 'related' }], zoom: MIN_RAW_ZOOM })
+  assert.equal(noTree.active, false, '【P0】纯关联图必须自动关闭 LOD')
+  assert.equal(noTree.reason, 'no-tree')
+  assert.equal(noTree.hiddenNodeIds.size, 0, '保护生效时一个节点都不许隐藏')
+  const manyFree = [
+    { id: 'r' }, { id: 'k' },
+    ...Array.from({ length: 18 }, (_, i) => ({ id: `f${i}` })),
+  ]
+  const lowCoverage = computeLodVisibility({
+    nodes: manyFree, edges: [{ id: 's1', source: 'r', target: 'k', relation: 'subordinate' }], zoom: MIN_RAW_ZOOM,
+  })
+  assert.equal(lowCoverage.active, false, '【P0】树覆盖率过低必须自动关闭 LOD')
+  assert.equal(lowCoverage.reason, 'low-coverage')
+  const forced = computeLodVisibility({
+    nodes: manyFree, edges: [{ id: 's1', source: 'r', target: 'k', relation: 'subordinate' }], zoom: MIN_RAW_ZOOM, mode: 'force',
+  })
+  assert.equal(forced.active, true, '强制模式必须能跳过保护')
+  assert.equal(forced.reason, 'forced')
+  // k 是这棵树唯一的 depth 2 节点 → 默认两层内永久显示；裁剪由 18 个游离节点承担。
+  assert.ok(forced.visibleNodeIds.has('r') && forced.hiddenNodeIds.size > 0
+    && !forced.visibleNodeIds.has('f0'), '强制模式仍要按连续阈值裁剪')
+  const turnedOff = computeLodVisibility({ ...base, zoom: MIN_RAW_ZOOM, mode: 'off' })
+  assert.equal(turnedOff.active, false, '用户关闭后必须全部显示')
+  assert.equal(turnedOff.hiddenEdgeIds.size, 0)
+  assert.equal(describeLodReason('no-tree'), '本房间没有从属关系，已自动关闭')
+
+  // 8) 旧值兼容：磁盘残留的中文 / 旧 id 仍要读成同一棵从属树。
+  const legacy = computeLodVisibility({
+    nodes: treeNodes,
+    edges: treeEdges.map((edge) => edge.relation === 'subordinate'
+      ? { ...edge, relation: 'part-of' }
+      : { ...edge, relation: '相关' }),
+    zoom: 0.2,
+  })
+  assert.equal(legacy.subordinateEdgeCount, 3, '旧关系值必须经唯一读取入口映射进树')
+  assert.ok(!legacy.visibleNodeIds.has('g1') && legacy.hiddenNodeIds.has('free1'), '旧关系值也要按连续阈值裁剪')
+
+  // 9) 淡入淡出：淡出中的节点先保持挂载并降透明度，到时再真 hidden；回来时挂 animation。
+  const fading = applyLodNodeHidden(treeNodes.map((n) => ({ ...n })), tiny, {
+    out: new Set(['g1']), in: new Set(['root']),
+  })
+  const fadingNode = fading.find((n: any) => n.id === 'g1')
+  assert.equal(fadingNode.hidden, false, '【P0】淡出中的节点必须先保持挂载')
+  assert.equal(fadingNode.style.opacity, 0)
+  assert.ok(String(fadingNode.style.animation).includes('tm-lod-exit'), '【P0】渐隐必须走 exit 关键帧')
+  assert.ok(String(fadingNode.style.animation).includes(`${LOD_FADE_MS}ms`), '渐隐时长必须来自唯一常量')
+  assert.ok(String(fadingNode.style.animation).includes('both'), '淡出结束前必须保持 opacity 0，不能弹回')
+  assert.equal(fadingNode.style.pointerEvents, 'none', '淡出节点不得继续吃鼠标事件')
+  const entering = String(fading.find((n: any) => n.id === 'root').style.animation)
+  assert.ok(entering.includes('tm-lod-enter') && entering.includes(`${LOD_FADE_MS}ms`) && entering.includes('both'),
+    '【P0】重新出现的节点必须渐显，且与渐隐同节奏')
+  const settled = applyLodNodeHidden(fading, tiny)
+  assert.equal(settled.find((n: any) => n.id === 'g1').hidden, true, '【P0】淡出结束后必须真正 hidden')
+  assert.equal(settled.find((n: any) => n.id === 'root').style, undefined, '淡入结束后不得残留过渡样式')
+
+  // 10) hidden 只作用于渲染副本：未变对象复用引用、重复调用返回同一数组。
+  const renderedNodes = applyLodNodeHidden(treeNodes.map((n) => ({ ...n })), tiny)
+  assert.notEqual(renderedNodes, treeNodes, '必须返回渲染副本而不是改 store 原数组')
+  assert.equal(renderedNodes.find((n: any) => n.id === 'root')?.hidden, undefined, '可见节点不得被写 hidden')
+  assert.equal(renderedNodes.find((n: any) => n.id === 'g1')?.hidden, true, '隐藏节点必须带 hidden')
+  assert.equal(applyLodNodeHidden(renderedNodes, tiny), renderedNodes, '【P0】hidden 不变时必须零拷贝复用原数组')
+  const renderedEdges = applyLodEdgeHidden(treeEdges.map((e) => ({ ...e })), tiny)
+  assert.equal(renderedEdges.find((e: any) => e.id === 'e4')?.hidden, true, '边也要带 hidden')
+  // e1/e2(root→c1/c2) 两端现在都可见（depth 2 全部永久显示）；e3(c1→g1) 才是「一端已隐藏」。
+  assert.equal(renderedEdges.find((e: any) => e.id === 'e3')?.hidden, true, '两端有隐藏节点时边必须隐藏')
+  assert.equal(renderedEdges.find((e: any) => e.id === 'e1')?.hidden, undefined, '两端都可见的边不得隐藏')
+  assert.equal(renderedEdges.find((e: any) => e.id === 'e2')?.hidden, undefined,
+    '【默认两层】第二个一级主干的连线也必须保留，不能只保一个骨架')
+  assert.equal(applyLodEdgeHidden(renderedEdges, tiny), renderedEdges, '边 hidden 不变时零拷贝')
+
+  // 11) hierarchy 签名：拖动改位置不能让签名失效，改关系必须失效。
+  const keyA = buildLodHierarchyKey(treeNodes, treeEdges)
+  const moved = treeNodes.map((n, i) => ({ ...n, position: { x: i * 100, y: 0 }, selected: i === 1 }))
+  assert.equal(buildLodHierarchyKey(moved, treeEdges), keyA, '【P0】拖动 / 选中变化不得触发整树重建')
+  const changedRelationEdges = treeEdges.map((e) => e.id === 'e1' ? { ...e, relation: 'related' } : e)
+  assert.notEqual(buildLodHierarchyKey(treeNodes, changedRelationEdges), keyA, '关系变化必须重建树')
+  assert.notEqual(buildLodHierarchyKey(treeNodes.slice(1), treeEdges), keyA, '增删节点必须重建树')
+
+  // 12) 接线保障：比例尺唯一源、滚轮阻尼、连续 zoom、淡入淡出、渲染副本。
+  const canvasSource = await readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8')
+  const modelSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts', import.meta.url), 'utf-8')
+  const hookSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/useSemanticLod.ts', import.meta.url), 'utf-8')
+  const controlSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/LodControl.tsx', import.meta.url), 'utf-8')
+  const toolbarSource = await readFile(new URL('../src/features/layout/Toolbar/Toolbar.tsx', import.meta.url), 'utf-8')
+  const prefsSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/lodPreferences.ts', import.meta.url), 'utf-8')
+  const lodSource = await readFile(new URL('../src/domain/graph/lod.ts', import.meta.url), 'utf-8')
+  const cssSource = await readFile(new URL('../src/styles/base.css', import.meta.url), 'utf-8')
+  assert.ok(canvasSource.includes('nodes={lod.visibleNodes as Node[]}') && canvasSource.includes('edges={lod.visibleEdges as Edge[]}'), '【P0】ReactFlow 必须消费 LOD 过滤副本')
+  assert.ok(canvasSource.includes('nodes={nodes as Node[]}') && canvasSource.includes('edges={edges}'), '【P0】缩略图与搜索必须继续用全量节点/边')
+  assert.ok(canvasSource.includes('maxZoom={MAX_RAW_ZOOM}') && canvasSource.includes('minZoom={MIN_RAW_ZOOM}'), '【P0】画布缩放边界必须来自唯一规则源')
+  assert.ok(canvasSource.includes('defaultViewport={renderViewport}'), '【P0】落盘旧默认必须经重定基后才交给 ReactFlow')
+  assert.ok(canvasSource.includes('onWheelCapture={handleWheelCapture}') && canvasSource.includes('clampWheelDelta(native.deltaY)'), '【P0】滚轮必须阻尼，否则一格跳过多个 LOD 台阶')
+  assert.ok(canvasSource.includes('wheelDeltaStep(anim.remaining, dt)') && canvasSource.includes('requestAnimationFrame'),
+    '【P0】滚轮必须逐帧缓动派发，不能一格直接跳到终值')
+  assert.ok(canvasSource.includes('clampPendingWheelDelta') && canvasSource.includes('anim.pane.dispatchEvent(normalized)'),
+    '【P0】连续滚轮必须追加剩余增量并派发到 pane（保留朝光标缩放）')
+  assert.ok(!cssSource.includes('transition: transform'),
+    '【P0】不得用 CSS transform 过渡：内部 viewport 会先跳到终值、画面滞后导致点击错位')
+  assert.ok(canvasSource.includes('<LodControl') && canvasSource.includes('lod.revealNode(node.id)'), '控件与搜索临时显示必须接线')
+  assert.ok(canvasSource.includes('lod.visibility.selectedNodeIds[0]'), '【P0】pin 目标必须回退到可见性计划派生的选中节点')
+  assert.ok(modelSource.includes('getGraphSession(tabId)?.roomPath'), '【P0】房间路径必须走官方会话查询，否则 pin 偏好写不进去')
+  assert.ok(modelSource.includes('quantizeLodZoom(nextZoom)') && modelSource.includes('setLodZoom(nextLodZoom)'), '【P0】必须把连续 zoom 量化后再喂给 LOD，不能每帧重算')
+  assert.ok(modelSource.includes('rebaseViewport(storedViewport)'), '【P0】重定基必须在模型层完成')
+  assert.ok(toolbarSource.includes('formatZoomPercent(zoomLevel)')
+    && toolbarSource.includes("from '../../../domain/graph/zoomScale'")
+    && !toolbarSource.includes('Math.round(zoomLevel * 100)'), '【P0】百分比显示必须走唯一换算，不得再直乘 100')
+  assert.ok(controlSource.includes('data-tm-zoom-control') && controlSource.includes('data-tm-zoom-reset') && controlSource.includes('ZOOM_REFERENCE'), '镜头控件必须提供比例尺读数与 100% 复位')
+  assert.ok(controlSource.includes('data-tm-lod-control') && controlSource.includes('data-tm-lod-tier=')
+    && controlSource.includes('data-tm-lod-mode={option.value}') && controlSource.includes('data-tm-lod-pin-toggle'), '控件必须暴露可断言的档位/模式/pin 标识')
+  assert.ok(controlSource.includes('data-tm-lod-depth-panel')
+    && controlSource.includes('data-tm-lod-depth-histogram')
+    && controlSource.includes('data-tm-lod-selected-depth')
+    && controlSource.includes('visibility.depthLevels')
+    && controlSource.includes('visibility.treeMaxDepth'),
+  '【P0】左上角控件必须显示每级深度的可见数与当前选中节点的深度')
+  assert.ok(lodSource.includes('treeMaxDepth') && lodSource.includes('depthLevels')
+    && lodSource.includes('selectedNode') && lodSource.includes('buildHierarchy('),
+  '【P0】深度诊断必须由同一份 hierarchy 派生，不得另写一套推断')
+  assert.ok(canvasSource.includes('selectedNodeId,') && hookSource.includes('selectedNodeId,')
+    && lodSource.includes('externalSelectedId'),
+  '【P0】深度诊断与置顶按钮必须共用 graph store 的选中节点来源')
+  const depthPanelTag = controlSource.match(/data-tm-lod-depth-panel=""[\s\S]*?className=/)?.[0] ?? ''
+  assert.ok(depthPanelTag.includes('data-tm-lod-selected-depth')
+    && depthPanelTag.includes('data-tm-lod-selected-kind')
+    && depthPanelTag.includes('data-tm-lod-tree-max-depth'),
+  '【P0】选中节点深度属性必须挂在层级诊断面板节点本身，GUI 直接读面板节点')
+  assert.ok(hookSource.includes('computeLodVisibility(') && hookSource.includes('buildLodHierarchyKey(nodes, edges)'), 'hook 必须复用纯函数层并缓存 hierarchy')
+  assert.ok(hookSource.includes('previousVisibleNodeIds') && hookSource.includes('LOD_FADE_MS'), '【P0】hook 必须传入滞回输入并驱动淡入淡出')
+  assert.ok(hookSource.includes('applyLodNodeHidden') && hookSource.includes('applyLodEdgeHidden'), 'hook 必须只派发 hidden')
+  assert.ok(cssSource.includes('@keyframes tm-lod-enter') && cssSource.includes('@keyframes tm-lod-exit'),
+    '【P0】渐显 / 渐隐两个关键帧都必须在全局样式里')
+  assert.ok(lodSource.includes('tm-lod-exit') && lodSource.includes('LOD_FADE_MS') && lodSource.includes('revealRatioForRank'),
+    '【P0】渐隐渐显与按节点数分位数的阈值必须由纯函数层统一产出')
+  assert.ok(lodSource.includes('exitOrder') && lodSource.includes('lodRatio <= LOD_FLOOR_RATIO')
+    && lodSource.includes('Math.max(LOD_FLOOR_RATIO, ratio)')
+    && lodSource.includes('ratio >= LOD_FLOOR_RATIO && ratio < LOD_FULL_RATIO'),
+    '【P0】必须保留退场序列、渐隐终点强制只剩骨架；紧凑区可见集合冻结且跳过碰撞抽稀')
+  assert.ok(lodSource.includes('LOD_DEFAULT_PRESERVED_DEPTH') && lodSource.includes('normalizePreservedDepth')
+    && lodSource.includes('skeletonIds')
+    && lodSource.includes('skeletonIds.has(id)) return true')
+    && lodSource.includes('...skeletonIds, ...forced')
+    && lodSource.includes('freeIds.has(id) || rootIds.has(id)'),
+    '【自定义永久层数】depth <= N 的全部树节点必须恒定显示并进入碰撞保护，游离节点不得混入')
+  assert.ok(controlSource.includes('data-tm-lod-visible-depth-levels={visibility.visibleDepthLevelCount}'),
+    '【默认两层】控件必须暴露可见深度层数供 GUI 实测')
+  assert.ok(controlSource.includes('data-tm-lod-preserved-depth-select')
+    && controlSource.includes('onPreservedDepthChange(Number(event.target.value))')
+    && controlSource.includes('LOD_MAX_PRESERVED_DEPTH')
+    && controlSource.includes('data-tm-lod-preserved-depth={visibility.preservedDepth}'),
+    '【自定义永久层数】左侧状态面板必须提供可随时变更的层数下拉，并暴露生效层数')
+  assert.ok(hookSource.includes('preservedDepth: prefs.preservedDepth')
+    && hookSource.includes('prefs.preservedDepth,')
+    && hookSource.includes('setPreservedDepth: setLodPreservedDepth')
+    && prefsSource.includes('export function setLodPreservedDepth')
+    && prefsSource.includes('normalizePreservedDepth(value.preservedDepth)')
+    && canvasSource.includes('onPreservedDepthChange={lod.setPreservedDepth}'),
+    '【自定义永久层数】偏好变更必须进 signature 立即重算、持久化并接到控件回调')
+  assert.ok(controlSource.includes('ZOOM_TRANSITION_MS'), '【P0】按钮 / 复位过渡时长必须来自唯一规则源')
+  assert.ok(prefsSource.includes('topomind_semantic_lod_preferences_v1') && prefsSource.includes('prunePinned'), '偏好必须持久化且可剪枝')
+  assert.equal(lodSource.includes('writeConfig') || lodSource.includes('window.api'), false, '【P0】LOD 纯函数层不得写盘 / 不得碰 IPC')
+
+  // 13) 【P1 几何重叠压力，2026-11-09】节点屏幕尺寸恒定后，缝隙收拢与边缘渐隐
+  //     应由真实布局的拥挤程度驱动，而不是继续按固定分位匀速隐藏。
+  //     真跑纯函数 + 真跑带坐标的 computeLodVisibility，验证「节奏变了、铁律没变」。
+  const pm = await loadBundled('../src/domain/graph/lodPressure.ts')
+  const {
+    LOD_PRESSURE_WEIGHT, LOD_PRESSURE_SOFTNESS, LOD_PRESSURE_STEP,
+    collectNodeSpacings, overlapPressureForRatio, lodProgressForRatio,
+    buildLodPressureCurve,
+  } = pm
+  const bounds = { fullRatio: LOD_FULL_RATIO, floorRatio: LOD_FLOOR_RATIO }
+  assert.ok(LOD_PRESSURE_WEIGHT > 0 && LOD_PRESSURE_WEIGHT < 0.5,
+    '【P1】几何项必须有界，否则单步隐藏量会失控（禁阶段性排班）')
+  assert.ok(LOD_PRESSURE_SOFTNESS > 0.5, '【P1】重叠贡献必须平滑过渡，禁止硬阈值成批跳变')
+  assert.equal(LOD_PRESSURE_STEP, LOD_ZOOM_QUANTUM, '【P1】压力查找表步长必须与 LOD 2% 台阶对齐')
+  assert.equal(lod.LOD_PRESSURE_PHASES, undefined, '【P1】不得引入「渐隐段/紧凑段」硬编码阶段表')
+  assert.equal(collectNodeSpacings([]).length, 0, '无坐标时不得凭空造出压力')
+  assert.equal(collectNodeSpacings([{ x: 0, y: 0 }, { x: 10, y: 0 }]).length, 0, '节点 <3 个时退回恒等')
+
+  // 单尺度均匀网格：最近邻间距恒为 200。
+  const gridPoints = Array.from({ length: 36 }, (_, i) => ({ x: (i % 6) * 200, y: Math.floor(i / 6) * 200 }))
+  const gridSpacings = collectNodeSpacings(gridPoints)
+  assert.equal(gridSpacings.length, 36)
+  assert.ok(gridSpacings.every((d: number) => Math.abs(d - 200) < 1e-9), '【P1】空间哈希必须求出真实最近邻间距')
+  // 多尺度布局：31 对节点，对间距循环 100 / 200 / 400，对间 y 相隔 1000。
+  // 三种尺度让重叠过渡铺满整段行程，与单尺度网格的节奏明显不同。
+  const pairSpacings = [100, 200, 400]
+  const multiPoints = Array.from({ length: 62 }, (_, i) => {
+    const pair = Math.floor(i / 2)
+    return { x: i % 2 === 0 ? 0 : pairSpacings[pair % 3], y: pair * 1000 }
+  })
+  const multiSpacings = collectNodeSpacings(multiPoints)
+  assert.equal(multiSpacings.length, 62)
+  assert.ok(new Set(multiSpacings.map((d: number) => Math.round(d))).size >= 3,
+    '【P1】测试布局必须真的含有多尺度间距')
+
+  // 单调性 / 两端固定 / 有界偏离：三项都是「不能自我震荡、不能骤降」的硬约束。
+  for (const spacings of [gridSpacings, multiSpacings]) {
+    let previousOverlap = -Infinity
+    let previousProgress = Infinity
+    for (let ratio = 1; ratio >= 0.2 - 1e-9; ratio -= 0.02) {
+      const overlap = overlapPressureForRatio(ratio, spacings, bounds)
+      assert.ok(overlap >= previousOverlap - 1e-9, '【P1】缩小过程中重叠压力不得回落')
+      previousOverlap = overlap
+      const progress = lodProgressForRatio(ratio, spacings, bounds)
+      assert.ok(progress <= previousProgress + 1e-9, '【P1】行程进度必须单调，放大时永不取消已显示节点')
+      previousProgress = progress
+    }
+    assert.ok(Math.abs(lodProgressForRatio(1, spacings, bounds) - 1) < 1e-9, '【P1】100% 必须仍是全显示端点')
+    assert.ok(Math.abs(lodProgressForRatio(0.2, spacings, bounds) - 0.2) < 1e-9, '【P1】20% 必须仍是渐隐终点')
+  }
+  const identity = buildLodPressureCurve([], bounds)
+  assert.equal(identity.active, false, '无坐标时必须完全退回旧的按节点数分位节奏')
+  for (const p of [1, 0.9, 0.7, 0.5, 0.3]) assert.equal(identity.ratioFor(p), p)
+  const gridCurve = buildLodPressureCurve(gridPoints, bounds)
+  const multiCurve = buildLodPressureCurve(multiPoints, bounds)
+  assert.ok(gridCurve.active && multiCurve.active)
+  assert.equal(gridCurve.sampleCount, 36)
+  assert.equal(multiCurve.sampleCount, 62)
+  for (const curve of [gridCurve, multiCurve]) {
+    assert.equal(curve.ratioFor(1), 1)
+    assert.equal(curve.ratioFor(0.2), 0.2)
+    let previous = Infinity
+    for (const p of [0.98, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.32]) {
+      const ratio = curve.ratioFor(p)
+      assert.ok(ratio <= previous + 1e-9, '【P1】阈值求逆必须保持单调（退场顺序不变）')
+      assert.ok(Math.abs(ratio - p) <= 0.7 * LOD_PRESSURE_WEIGHT + 0.02,
+        '【P1】几何重参数化偏离必须有界，否则单步隐藏会骤增')
+      assert.ok(Math.abs(curve.progressFor(ratio) - p) < 0.02, '【P1】求逆必须与进度曲线自洽')
+      previous = ratio
+    }
+  }
+  // 核心语义：相同分位阈值，不同布局应落到不同真实倍率 —— 这就是地图式节奏。
+  let layoutSensitive = false
+  for (const p of [0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4]) {
+    if (Math.abs(gridCurve.ratioFor(p) - multiCurve.ratioFor(p)) > 0.02) { layoutSensitive = true; break }
+  }
+  assert.ok(layoutSensitive, '【P1】渐隐节奏必须随真实布局改变，不能仍是与坐标无关的匀速分位')
+
+  // 真跑 computeLodVisibility：带坐标的偏斜树与不带坐标的同图，节奏必须不同，
+  // 但 100% / 20% / 单调 / 小步 / 树根保护这些既有铁律一个都不能破。
+  // 【P1.9 隔离变量】本组只验证「几何压力改变渐隐节奏」，因此坐标按真实卡片尺寸
+  // 拉开到绝不会碰撞的间距（x×5 + 显式 width/height）。密集布局下的碰撞抽稀
+  // 由第 16 组独立构造验证，避免把两个能力混在同一条曲线上断言。
+  const positionedNodes = skewedNodes.map((node, index) => ({
+    ...node,
+    position: { x: multiPoints[index].x * 5, y: multiPoints[index].y },
+    width: 80,
+    height: 36,
+  }))
+  const geometricFull = computeLodVisibility({ nodes: positionedNodes, edges: skewedEdges, zoom: ZOOM_REFERENCE })
+  const plainFull = computeLodVisibility({ nodes: skewedNodes, edges: skewedEdges, zoom: ZOOM_REFERENCE })
+  assert.equal(geometricFull.pressureActive, true, '【P1】真实图谱带坐标必须启用几何压力')
+  assert.equal(geometricFull.pressureSampleCount, positionedNodes.length)
+  assert.equal(plainFull.pressureActive, false, '【P1】无坐标构造必须恒等退回')
+  assert.equal(plainFull.pressureSampleCount, 0)
+  assert.equal(geometricFull.hiddenNodeIds.size, 0, '【P1】100% 端点不得被压力曲线提前藏节点')
+  const geometricTiny = computeLodVisibility({ nodes: positionedNodes, edges: skewedEdges, zoom: MIN_RAW_ZOOM })
+  assert.deepEqual([...geometricTiny.visibleNodeIds], ['sr', 'sa'], '【保底两层】P1 的 20% 端点仍保留树根 + 一级主干')
+  let rhythmDiffers = false
+  for (let ratio = 0.95; ratio >= 0.35; ratio -= 0.05) {
+    const a = computeLodVisibility({ nodes: positionedNodes, edges: skewedEdges, zoom: ratio * ZOOM_REFERENCE })
+    const b = computeLodVisibility({ nodes: skewedNodes, edges: skewedEdges, zoom: ratio * ZOOM_REFERENCE })
+    if (a.visibleNodeIds.size !== b.visibleNodeIds.size) { rhythmDiffers = true; break }
+  }
+  assert.ok(rhythmDiffers, '【P1】真实布局必须改变「哪些倍率隐藏多少」，而不是只改内部字段')
+  // 稀疏布局下压力曲线在 100% 端点附近非常平缓，只取第一个叶子（rank≈0）会把
+  // 差异压到 1e-6 量级；取首/中/末三个 rank 才能真正验证「诊断读的是同一条曲线」。
+  const diagnosticDiffs = ['sl0', 'sl30', 'sl59'].map((nodeId) => {
+    const a = computeLodVisibility({ nodes: positionedNodes, edges: skewedEdges, zoom: ZOOM_REFERENCE, selectedNodeId: nodeId })
+    const b = computeLodVisibility({ nodes: skewedNodes, edges: skewedEdges, zoom: ZOOM_REFERENCE, selectedNodeId: nodeId })
+    return Math.abs((a.selectedNode?.revealRatio as number) - (b.selectedNode?.revealRatio as number))
+  })
+  assert.ok(Math.max(...diagnosticDiffs) > 1e-4,
+    `【P1】诊断阈值必须来自同一条压力曲线，不能与裁剪各说一套（${diagnosticDiffs.map((d) => d.toExponential(2)).join('/')}）`)
+  let pressurePrevious: Set<string> | undefined
+  const pressureCounts: number[] = []
+  for (let ratio = 1; ratio >= 0.2 - 1e-9; ratio -= 0.02) {
+    const step = computeLodVisibility({
+      nodes: positionedNodes, edges: skewedEdges, zoom: ratio * ZOOM_REFERENCE,
+      previousVisibleNodeIds: pressurePrevious,
+    })
+    pressureCounts.push(step.visibleNodeIds.size)
+    pressurePrevious = step.visibleNodeIds
+  }
+  assert.equal(pressureCounts[0], positionedNodes.length)
+  assert.equal(pressureCounts[pressureCounts.length - 1], 2, '【保底两层】带几何压力时 20% 端点仍保留两层')
+  const pressureDrops = pressureCounts.slice(1).map((count, i) => pressureCounts[i] - count)
+  for (let i = 1; i < pressureCounts.length; i += 1) {
+    assert.ok(pressureCounts[i] <= pressureCounts[i - 1], '【P1】带几何压力时缩小仍不得让节点回升')
+  }
+  assert.ok(Math.max(...pressureDrops) <= 6,
+    `【P1】几何重参数化后单步隐藏仍必须有界（实际最大 ${Math.max(...pressureDrops)}）`)
+  assert.ok(pressureDrops.filter((drop: number) => drop > 0).length >= 20, '【P1】隐藏仍须摊到整段行程')
+
+  assert.ok(lodSource.includes('buildLodPressureCurve(') && lodSource.includes('pressure.ratioFor('),
+    '【P1】LOD 必须把分位阈值经压力曲线求逆，不能只算不用')
+  assert.ok(lodSource.includes('nodes.map((node) => node.position)'), '【P1】压力曲线必须消费真实 flow 坐标')
+  assert.ok(lodSource.includes('pressureActive')
+    && controlSource.includes("data-tm-lod-pressure={visibility.pressureActive ? 'on' : 'off'}")
+    && controlSource.includes('data-tm-lod-pressure-samples={visibility.pressureSampleCount}'),
+  '【P1】控件必须同时暴露压力开关与样本数，供 GUI 实测')
+  assert.ok(!hookSource.includes('position') || hookSource.includes('buildLodHierarchyKey(nodes, edges)'),
+    '【P1】拖动改坐标不得进 hierarchy 签名（否则每帧重建整树）')
+
+  // 14) 【P1.5 远景字形放大 × 重叠压力，2026-11-09】节点变大必须让 LOD 知道，
+  //     否则「主干更清晰」会退化成「一堆互相压住的大方块」。
+  const zsFar = await loadBundled('../src/domain/graph/zoomScale.ts')
+  const { glyphScaleForRatio: farGlyphScale } = zsFar
+  const glyphBounds = { ...bounds, glyphScaleForRatio: farGlyphScale }
+  const gridFar = buildLodPressureCurve(gridPoints, glyphBounds)
+  const multiFar = buildLodPressureCurve(multiPoints, glyphBounds)
+  assert.ok(gridFar.glyphAware && multiFar.glyphAware,
+    '【P1.5】真实布局的压力曲线必须标记已计入字形放大')
+  assert.equal(identity.glyphAware, false, '【P1.5】无坐标恒等退回时不得谎报字形感知')
+  assert.equal(gridCurve.glyphAware, false, '【P1.5】不传字形函数时必须逐值保持旧行为')
+  // 同一 ratio 下，计入字形放大后的重叠需求分子更大 → 压力不得下降。
+  for (const ratio of [0.95, 0.9, 0.8, 0.7, 0.6, 0.45, 0.3]) {
+    const plain = overlapPressureForRatio(ratio, gridSpacings, bounds)
+    const aware = overlapPressureForRatio(ratio, gridSpacings, glyphBounds)
+    assert.ok(aware >= plain - 1e-9, '【P1.5】节点变大不得让重叠压力反而下降')
+  }
+  assert.ok(overlapPressureForRatio(0.8, gridSpacings, glyphBounds)
+    > overlapPressureForRatio(0.8, gridSpacings, bounds) + 1e-4,
+  '【P1.5】中景必须真的因字形放大而更拥挤')
+  // 铁律不破：单调、两端固定、有界偏离。
+  for (const curve of [gridFar, multiFar]) {
+    assert.equal(curve.ratioFor(1), 1)
+    assert.equal(curve.ratioFor(0.2), 0.2)
+    let previous = Infinity
+    for (const p of [0.98, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.32]) {
+      const ratio = curve.ratioFor(p)
+      assert.ok(ratio <= previous + 1e-9, '【P1.5】字形放大不得破坏阈值单调')
+      assert.ok(Math.abs(ratio - p) <= 0.7 * LOD_PRESSURE_WEIGHT + 0.03,
+        '【P1.5】字形放大不得让单步隐藏失控')
+      previous = ratio
+    }
+  }
+  // 核心因果：压力更高 → 同一分位阈值出现在更靠近 100% 的位置 → 渐隐提前。
+  let earlierHide = false
+  for (const p of [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4]) {
+    if (gridFar.ratioFor(p) > gridCurve.ratioFor(p) + 1e-4
+      || multiFar.ratioFor(p) > multiCurve.ratioFor(p) + 1e-4) { earlierHide = true; break }
+  }
+  assert.ok(earlierHide, '【P1.5】字形放大必须让渐隐提前，否则节点会挤成一堆')
+  // 真跑 computeLodVisibility：字形感知只在真实坐标下开启，两端保护不变。
+  assert.equal(geometricFull.pressureGlyphAware, true, '【P1.5】真实图谱必须启用字形感知压力')
+  assert.equal(plainFull.pressureGlyphAware, false, '【P1.5】无坐标构造必须恒等退回')
+  assert.equal(geometricFull.hiddenNodeIds.size, 0, '【P1.5】100% 端点不得因字形放大提前藏节点')
+  assert.deepEqual([...geometricTiny.visibleNodeIds], ['sr', 'sa'], '【保底两层】P1.5 的 20% 端点仍保留两层')
+  assert.ok(Math.max(...pressureDrops) <= 6,
+    `【P1.5】计入字形放大后单步隐藏仍必须有界（实际最大 ${Math.max(...pressureDrops)}）`)
+
+  const lodPressureSource = await readFile(new URL('../src/domain/graph/lodPressure.ts', import.meta.url), 'utf-8')
+  assert.ok(/glyphScaleForRatio,\s*\}/.test(lodSource),
+    '【P1.5】LOD 必须把字形倍率函数真正传给压力曲线（不是只 import 不用）')
+  assert.ok(lodPressureSource.includes('base * glyph / safeRatio'),
+    '【P1.5】重叠需求必须计入远景字形放大')
+  assert.ok(controlSource.includes('data-tm-lod-pressure-glyph={visibility.pressureGlyphAware'),
+    '【P1.5】控件必须暴露压力是否感知字形，供 GUI 实测')
+
+  // 15) 【P1.75 折叠子树计数徽标，2026-11-09】远景只留主干时，主干卡片要显示「底下收了多少」。
+  //     真跑纯函数 + computeLodVisibility 集成 + 运行时 store 数据往返 + 源码接线守卫。
+  const { computeCollapsedCounts: collapseCounts } = lod
+  const ch = await loadBundled('../src/domain/graph/graphHierarchy.ts')
+  const { hierarchy: collapseTree } = ch.buildHierarchy(
+    treeNodes.map((node: { id: string }) => node.id), treeEdges,
+  )
+  const asSet = (...ids: string[]) => new Set(ids)
+  assert.equal(collapseCounts(collapseTree, asSet('root', 'c1', 'c2', 'g1', 'free1', 'free2'), asSet()).size, 0,
+    '【P1.75】没有隐藏节点时不得产生任何徽标')
+  const rootOnly = collapseCounts(collapseTree, asSet('root'), asSet('c1', 'c2', 'g1', 'free1', 'free2'))
+  assert.equal(rootOnly.get('root'), 3, '【P1.75】只剩树根时，三个下级节点必须全部折进树根')
+  assert.equal([...rootOnly.values()].reduce((a: number, b: number) => a + b, 0), 3,
+    '【P1.75】游离节点不得冒充树根的下级')
+  const branchVisible = collapseCounts(collapseTree, asSet('root', 'c1'), asSet('c2', 'g1', 'free1', 'free2'))
+  assert.equal(branchVisible.get('c1'), 1, '【P1.75】中间节点仍可见时，计数必须落在中间节点')
+  assert.equal(branchVisible.get('root'), 1, '【P1.75】树根只收自己直接折掉的下级')
+  assert.equal([...branchVisible.values()].reduce((a: number, b: number) => a + b, 0), 2,
+    '【P1.75】同一隐藏节点不得被祖先链上的每个节点重复计数')
+  const orphanParent = collapseCounts(collapseTree, asSet('c1'), asSet('root', 'c2', 'g1', 'free1', 'free2'))
+  assert.equal(orphanParent.get('c1'), 1, '【P1.75】父节点已隐藏时，计数不能挂到隐藏节点上')
+  assert.equal(orphanParent.get('root'), undefined, '【P1.75】隐藏节点不得成为徽标持有者')
+  // 脏数据成环也不能死循环（seen + 深度上限双保护）。
+  const cyclicHierarchy = {
+    nodes: ['a', 'b', 'c'],
+    parentEdge: new Map([
+      ['a', { id: 'x1', source: 'b', target: 'a' }],
+      ['b', { id: 'x2', source: 'a', target: 'b' }],
+    ]),
+    children: new Map(), depth: new Map(), roots: [], free: [], subordinateEdges: [],
+  }
+  assert.equal(collapseCounts(cyclicHierarchy, asSet('c'), asSet('a', 'b')).size, 0,
+    '【P1.75】父链成环必须安全退出且不产生计数')
+
+  // 集成：100% 无徽标；20% 默认两层全保后，只有 depth 3 的 g1 折进 c1，游离单列。
+  assert.equal(full.collapsedTotal, 0, '【P1.75】100% 全图可见时不得有折叠徽标')
+  assert.equal(full.collapsedCounts.size, 0)
+  assert.equal(full.collapsedFreeCount, 0)
+  assert.equal(tiny.collapsedCounts.get('root') ?? 0, 0,
+    '【默认两层】c2 也常驻，树根名下没有折起的下级（不能重复计数）')
+  assert.equal(tiny.collapsedCounts.get('c1'), 1, '【默认两层】g1 折进仍可见的一级主干 c1')
+  assert.equal(tiny.collapsedTotal, 1)
+  assert.equal(tiny.collapsedFreeCount, 2, '【P1.75】游离节点必须单独计数，不能塞进卡片徽标')
+  // 50%：游离先走、g1 已藏但 c1 还在 → +1 只能落在 c1，树根必须是 0（不重复计数）。
+  // 渐隐终点由 30% 收到 20% 后，g1 的阈值从 65% 变成 60%，构造点相应下移。
+  const branchSnapshot = computeLodVisibility({ ...base, zoom: 0.5 * ZOOM_REFERENCE })
+  assert.ok(branchSnapshot.hiddenNodeIds.has('g1') && branchSnapshot.visibleNodeIds.has('c1'),
+    '【P1.75】50% 必须是「中间节点仍可见、深层已隐藏」的构造')
+  assert.equal(branchSnapshot.collapsedCounts.get('c1'), 1, '【P1.75】+1 必须挂在最近的可见祖先 c1')
+  assert.equal(branchSnapshot.collapsedCounts.get('root') ?? 0, 0,
+    '【P1.75】祖先链不得重复计数（树根此时必须是 0）')
+  assert.equal(branchSnapshot.collapsedTotal, 1)
+  assert.equal(branchSnapshot.collapsedFreeCount, 2)
+  let previousCollapsed = -1
+  for (let ratioStep = 1; ratioStep >= 0.2 - 1e-9; ratioStep -= 0.02) {
+    const step = computeLodVisibility({ ...base, zoom: ratioStep * ZOOM_REFERENCE })
+    assert.equal(step.collapsedTotal + step.collapsedFreeCount, step.hiddenNodeIds.size,
+      '【P1.75】折叠合计 + 游离合计必须恰好等于隐藏节点数')
+    assert.ok(step.collapsedTotal <= step.hiddenNodeIds.size)
+    assert.ok([...step.collapsedCounts.keys()].every((id: string) => step.visibleNodeIds.has(id)),
+      '【P1.75】徽标只能挂在可见节点上')
+    assert.ok(step.collapsedTotal >= previousCollapsed, '【P1.75】越缩小，折叠数不得反向变少')
+    previousCollapsed = step.collapsedTotal
+  }
+
+  // 运行时 store 数据往返：按 nodeId 精确通知、换房间作废旧 scope、清理只清当前 scope。
+  const collapseStore = await loadBundled('../src/features/graph/GraphCanvas/model/lodCollapseStore.ts')
+  const {
+    publishCollapsedCounts, clearCollapsedCounts,
+    subscribeCollapsedCount, getCollapsedCount,
+  } = collapseStore
+  const notified: string[] = []
+  const unsubscribeA = subscribeCollapsedCount('a', () => notified.push('a'))
+  const unsubscribeB = subscribeCollapsedCount('b', () => notified.push('b'))
+  publishCollapsedCounts('room-1', new Map([['a', 2], ['b', 1]]))
+  assert.equal(getCollapsedCount('a'), 2)
+  assert.equal(getCollapsedCount('b'), 1)
+  assert.equal(getCollapsedCount('c'), 0)
+  assert.deepEqual(notified.slice().sort(), ['a', 'b'], '【P1.75】发布必须通知到计数变化的卡片')
+  notified.length = 0
+  publishCollapsedCounts('room-1', new Map([['a', 3], ['b', 1]]))
+  assert.deepEqual(notified, ['a'], '【P1.75】计数未变的卡片不得被广播重渲染')
+  notified.length = 0
+  publishCollapsedCounts('room-2', new Map([['x', 7]]))
+  assert.equal(getCollapsedCount('a'), 0, '【P1.75】换房间必须作废旧房间的计数')
+  assert.ok(notified.includes('a') && notified.includes('b'))
+  assert.equal(getCollapsedCount('x'), 7)
+  clearCollapsedCounts('room-1')
+  assert.equal(getCollapsedCount('x'), 7, '【P1.75】清理旧 scope 不得误清当前房间')
+  clearCollapsedCounts('room-2')
+  assert.equal(getCollapsedCount('x'), 0)
+  // 顺序铁律：通知监听器时快照必须已经是新值。useSyncExternalStore 会在通知当场
+  // 读 getSnapshot；先通知后写会让 React 判定「快照没变」并丢掉这次重渲染。
+  const observed: number[] = []
+  const unsubscribeObserved = subscribeCollapsedCount('obs', () => observed.push(getCollapsedCount('obs')))
+  publishCollapsedCounts('room-order', new Map([['obs', 4]]))
+  assert.deepEqual(observed, [4], '【P1.75】通知时 store 快照必须已更新，否则徽标会漏更新')
+  publishCollapsedCounts('room-order', new Map([['obs', 9]]))
+  assert.deepEqual(observed, [4, 9], '【P1.75】连续缩放每一格都必须读到当格的新计数')
+  unsubscribeObserved()
+  unsubscribeA()
+  unsubscribeB()
+
+  const collapseStoreSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/lodCollapseStore.ts', import.meta.url), 'utf-8')
+  const collapseCardSource = await readFile(new URL('../src/features/graph/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx', import.meta.url), 'utf-8')
+  const collapseCssSource = await readFile(new URL('../src/styles/base.css', import.meta.url), 'utf-8')
+  assert.ok(lodSource.includes('computeCollapsedCounts(hierarchy, visibleNodeIds, hiddenNodeIds)'),
+    '【P1.75】computeLodVisibility 必须真跑折叠计数，不是只导出函数')
+  assert.ok(lodSource.includes('hierarchy.parentEdge.get(cursor)?.source')
+    && lodSource.includes('chain.length <= MAX_HIERARCHY_DEPTH'),
+  '【P1.75】必须沿从属父链上溯且带防环 / 深度保护')
+  assert.ok(!collapseStoreSource.includes('localStorage(')
+    && !collapseStoreSource.includes('persist(') && !collapseStoreSource.includes('createJSONStorage('),
+  '【P1.75】折叠计数是派生渲染信息，绝不落盘')
+  assert.ok(!collapseStoreSource.includes('node.data') && !collapseStoreSource.includes('.data ='),
+    '【P1.75】折叠计数不得写节点 data（绕开 7 处字段白名单）')
+  assert.ok(collapseStoreSource.indexOf('activeCounts = next') > 0
+    && collapseStoreSource.indexOf('activeCounts = next') < collapseStoreSource.indexOf('notifyChanges(previous, next)'),
+  '【P1.75】必须先写快照再通知，否则 useSyncExternalStore 会读到旧值并丢弃重渲染')
+  assert.ok(hookSource.includes('publishCollapsedCounts(roomPath, visibility.collapsedCounts)')
+    && hookSource.includes('clearCollapsedCounts(roomPath)'),
+  '【P1.75】画布必须按房间发布计数并在卸载时清理')
+  assert.ok(collapseCardSource.includes('useSyncExternalStore')
+    && collapseCardSource.includes('subscribeCollapsedCount(nodeId, listener)')
+    && collapseCardSource.includes('getCollapsedCount(nodeId)')
+    && collapseCardSource.includes('<LodCollapseBadge nodeId={id} />')
+    && collapseCardSource.includes('data-tm-lod-collapse-badge={nodeId}')
+    && collapseCardSource.includes('data-tm-lod-collapse-count={count}'),
+  '【P1.75】卡片必须按 nodeId 精确订阅并渲染 +N 徽标')
+  assert.ok(collapseCssSource.includes('.tm-lod-collapse-badge')
+    && collapseCssSource.includes('max(0.55, calc(1 - var(--tm-detail-alpha, 1)))')
+    && collapseCssSource.includes('pointer-events: none;'),
+  '【P1.75】徽标必须随细节淡出而渐显、且不吃鼠标事件')
+  assert.ok(controlSource.includes('data-tm-lod-collapsed-total={visibility.collapsedTotal}')
+    && controlSource.includes('data-tm-lod-collapsed-free={visibility.collapsedFreeCount}')
+    && controlSource.includes('data-tm-lod-collapsed-holders={visibility.collapsedCounts.size}'),
+  '【P1.75】控件必须暴露折叠统计供 GUI 实测')
+  // 字段白名单守卫：新增计数不得渗进任何落盘 / mapper 层。
+  const whitelistFiles = [
+    'src/types/graph.ts', 'src/domain/graph/model.ts', 'src/domain/graph/graphMapper.ts',
+    'src/domain/graph/normalizeGraphMeta.ts', 'src/core/storage/file.ts',
+    'src/core/fs-backend.ts', 'src/hooks/useGraph/graphBuilder.ts',
+  ]
+  for (const file of whitelistFiles) {
+    const source = await readFile(new URL('../' + file, import.meta.url), 'utf-8')
+    assert.ok(!source.includes('collapsedCount'),
+      `【P1.75】${file} 不得出现折叠计数字段（不得污染节点字段白名单）`)
+  }
+}
+
+// --- 【P1.9】碰撞感知的 LOD 硬约束：紧凑到重叠就渐隐（2026-11-09） ---
+// 铁律：只查源码字面量不够，必须 esbuild 打包真跑纯函数 + computeLodVisibility 集成，
+// 并用 GUI 的真实 DOM AABB 断言守住「缩放后节点不再重合」。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const loadBundled = async (relative: string) => {
+    const bundled = await build({
+      entryPoints: [fileURLToPath(new URL(relative, import.meta.url))],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      write: false,
+      logLevel: 'silent',
+      banner: { js: 'globalThis.window = globalThis.window || {};' },
+    })
+    return await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  }
+  const cm = await loadBundled('../src/domain/graph/lodCollision.ts')
+  const lm = await loadBundled('../src/domain/graph/lod.ts')
+  const zm = await loadBundled('../src/domain/graph/zoomScale.ts')
+  const compensationAt = (ratio: number) => zm.glyphCompensationForZoom(ratio * zm.ZOOM_REFERENCE)
+
+  // 1) 100% 恒等 / 85% 完全生效 / 全程单调 / 盒倍数与 guard 同源。
+  assert.equal(cm.collisionGuardForRatio(1), 0, '【P1.9】100% 必须完全不裁剪（用户手摆的重叠保持原样）')
+  assert.equal(cm.collisionGuardForRatio(1.2), 0)
+  assert.equal(cm.collisionGuardForRatio(0.85), 1)
+  assert.equal(cm.collisionGuardForRatio(0.3), 1)
+  let guardPrevious = -1
+  for (let ratio = 1; ratio >= 0.2 - 1e-9; ratio -= 0.02) {
+    const guard = cm.collisionGuardForRatio(ratio)
+    assert.ok(guard >= guardPrevious - 1e-9, '【P1.9】缩小过程中碰撞约束强度不得回落')
+    guardPrevious = guard
+  }
+  assert.equal(cm.collisionBoxScaleFor(4.33, 0), 1, '【P1.9】guard=0 时盒尺寸必须是锚点壳原尺寸')
+  assert.equal(cm.collisionBoxScaleFor(4.33, 1), 4.33)
+  assert.ok(cm.collisionBoxScaleFor(4.33, 0.5) < 4.33 && cm.collisionBoxScaleFor(4.33, 0.5) > 1)
+
+  // 2) 密集构造：一排贴在一起的卡片（80×36，间距 40），树根受保护。
+  const denseNodes = [
+    { id: 'root', position: { x: 0, y: 0 }, width: 80, height: 36 },
+    { id: 'a', position: { x: 40, y: 0 }, width: 80, height: 36 },
+    { id: 'b', position: { x: 80, y: 0 }, width: 80, height: 36 },
+    { id: 'c', position: { x: 120, y: 0 }, width: 80, height: 36 },
+    { id: 'd', position: { x: 160, y: 0 }, width: 80, height: 36 },
+  ]
+  const denseIds = new Set(denseNodes.map((node) => node.id))
+  const denseChildren = new Map<string, readonly string[]>([['root', ['a', 'b', 'c', 'd']]])
+  const denseOptions = (ratio: number) => ({
+    ratio,
+    compensation: compensationAt(ratio),
+    protectedIds: new Set(['root']),
+    priority: ['root', 'a', 'b', 'c', 'd'],
+    children: denseChildren,
+    maxDepth: 100,
+  })
+  const denseFull = cm.resolveLodCollisions(denseNodes, denseIds, denseOptions(1))
+  assert.equal(denseFull.hiddenIds.size, 0, '【P1.9】100% 端点不得因碰撞裁掉任何节点')
+  assert.equal(denseFull.active, false)
+  const denseMid = cm.resolveLodCollisions(denseNodes, denseIds, denseOptions(0.5))
+  assert.ok(denseMid.active && denseMid.hiddenIds.size > 0, '【P1.9】远景密集布局必须真的抽稀')
+  assert.ok(!denseMid.hiddenIds.has('root'), '【P1.9】树根恒定保留，不能被碰撞裁掉')
+  const denseKept = new Set([...denseIds].filter((id) => !denseMid.hiddenIds.has(id)))
+  assert.ok(cm.countOverlapPairs(denseNodes, denseIds, denseMid.boxScale) > 0,
+    '【P1.9】构造必须真的发生过重叠，否则后续断言是空跑')
+  assert.equal(cm.countOverlapPairs(denseNodes, denseKept, denseMid.boxScale), 0,
+    '【P1.9】裁剪后保留节点的放大盒必须两两不重叠')
+
+  // 3) 单调：已因碰撞收起的节点不能在继续缩小时又回来（不自激震荡）。
+  let previousHidden = new Set<string>()
+  for (let ratio = 1; ratio >= 0.2 - 1e-9; ratio -= 0.02) {
+    const step = cm.resolveLodCollisions(denseNodes, denseIds, denseOptions(ratio))
+    for (const id of previousHidden) {
+      assert.ok(step.hiddenIds.has(id),
+        `【P1.9】碰撞抽稀必须单调，不允许已收起的节点又出现（ratio=${ratio.toFixed(2)} gone=${id} prev=${[...previousHidden].join(',')} now=${[...step.hiddenIds].join(',')} box=${step.boxScale.toFixed(3)}）`)
+    }
+    previousHidden = step.hiddenIds
+  }
+
+  // 4) 断链保护：父被裁时整棵子树一起裁；用户强制显示是唯一例外。
+  const chainNodes = [
+    { id: 'root', position: { x: 0, y: 0 }, width: 80, height: 36 },
+    { id: 'p', position: { x: 40, y: 0 }, width: 80, height: 36 },
+    { id: 'leaf', position: { x: 600, y: 600 }, width: 80, height: 36 },
+  ]
+  const chainIds = new Set(['root', 'p', 'leaf'])
+  const chainChildren = new Map<string, readonly string[]>([['root', ['p']], ['p', ['leaf']]])
+  const chainBase = {
+    ratio: 0.5,
+    compensation: compensationAt(0.5),
+    priority: ['root', 'p', 'leaf'],
+    children: chainChildren,
+    maxDepth: 100,
+  }
+  const chainResult = cm.resolveLodCollisions(chainNodes, chainIds, {
+    ...chainBase, protectedIds: new Set(['root']),
+  })
+  assert.ok(chainResult.hiddenIds.has('p'), '【P1.9】贴着树根的父节点应被抽稀')
+  assert.ok(chainResult.hiddenIds.has('leaf'),
+    '【P1.9】父被裁必须连带裁掉整棵子树，即便子节点在远处不重叠')
+  const forcedChain = cm.resolveLodCollisions(chainNodes, chainIds, {
+    ...chainBase, protectedIds: new Set(['root', 'leaf']),
+  })
+  assert.ok(!forcedChain.hiddenIds.has('leaf'), '【P1.9】pin / 选中等强制显示优先于碰撞避让')
+
+  // 4b) 强制保留节点即使与**普通**节点重叠也不得被裁（保护优先级 > 视觉避让）。
+  // 这条专门守住 `!isProtected` 判定：树根总排第一、前面没有障碍，只测树根会漏抓。
+  const protectNodes = [
+    { id: 'x', position: { x: 0, y: 0 }, width: 80, height: 36 },
+    { id: 'p', position: { x: 40, y: 0 }, width: 80, height: 36 },
+    { id: 'q', position: { x: 400, y: 400 }, width: 80, height: 36 },
+  ]
+  const protectResult = cm.resolveLodCollisions(protectNodes, new Set(['x', 'p', 'q']), {
+    ratio: 0.5,
+    compensation: compensationAt(0.5),
+    protectedIds: new Set(['p']),
+    priority: ['x', 'p', 'q'],
+    children: new Map(),
+    maxDepth: 100,
+  })
+  assert.ok(protectResult.hiddenIds.has('x') === false && !protectResult.hiddenIds.has('p'),
+    '【P1.9】强制保留节点即便与普通节点重叠也不得被裁')
+  assert.equal(protectResult.protectedOverlapPairs, 0)
+
+  // 5) 稀疏布局 / 无坐标：必须安全退回，不误裁。
+  const sparseNodes = [
+    { id: 'root', position: { x: 0, y: 0 }, width: 80, height: 36 },
+    { id: 'a', position: { x: 900, y: 900 }, width: 80, height: 36 },
+  ]
+  assert.equal(cm.resolveLodCollisions(sparseNodes, new Set(['root', 'a']), denseOptions(0.3)).hiddenIds.size, 0,
+    '【P1.9】稀疏布局不该触发抽稀')
+  const noPosition = [{ id: 'root' }, { id: 'a' }]
+  assert.equal(cm.resolveLodCollisions(noPosition, new Set(['root', 'a']), denseOptions(0.3)).hiddenIds.size, 0,
+    '【P1.9】无坐标构造必须退回恒等（回归脚本最小构造逐值不变）')
+
+  // 6) 集成真跑：computeLodVisibility 必须消费碰撞结果，且全程树根 / 父子链 / 无重叠。
+  const ciNodes = [
+    { id: 'cr', position: { x: 0, y: 0 }, width: 80, height: 36 },
+    { id: 'cp', position: { x: 100, y: 0 }, width: 80, height: 36 },
+    { id: 'cl0', position: { x: 40, y: 40 }, width: 80, height: 36 },
+    { id: 'cl1', position: { x: 140, y: 40 }, width: 80, height: 36 },
+    { id: 'cf', position: { x: 600, y: 600 }, width: 80, height: 36 },
+  ]
+  const ciEdges = [
+    { id: 'ce0', source: 'cr', target: 'cp', relation: 'subordinate' },
+    { id: 'ce1', source: 'cp', target: 'cl0', relation: 'subordinate' },
+    { id: 'ce2', source: 'cp', target: 'cl1', relation: 'subordinate' },
+  ]
+  const ciFull = lm.computeLodVisibility({ nodes: ciNodes, edges: ciEdges, zoom: zm.ZOOM_REFERENCE })
+  assert.equal(ciFull.visibleNodeIds.size, ciNodes.length, '【P1.9】100% 集成端点必须全图可见')
+  assert.equal(ciFull.collisionHiddenCount, 0)
+  assert.equal(ciFull.collisionActive, false)
+  const ciMid = lm.computeLodVisibility({ nodes: ciNodes, edges: ciEdges, zoom: 0.6 * zm.ZOOM_REFERENCE })
+  assert.equal(ciMid.collisionActive, true, '【P1.9】远景必须启用碰撞约束')
+  // 60% 时贴着树根的一级主干属于默认永久显示层数（protected），不再被抽稀；
+  // 改用整段行程验证「非保护节点仍会因重叠被裁」。
+  let ciPruned = false
+  for (let ratio = 0.95; ratio >= 0.2 - 1e-9; ratio -= 0.02) {
+    const probe = lm.computeLodVisibility({ nodes: ciNodes, edges: ciEdges, zoom: ratio * zm.ZOOM_REFERENCE })
+    if (probe.collisionHiddenCount > 0) { ciPruned = true; break }
+  }
+  assert.ok(ciPruned, '【P1.9】远景必须真的抽掉重叠节点')
+  const ciFar = lm.computeLodVisibility({ nodes: ciNodes, edges: ciEdges, zoom: zm.MIN_RAW_ZOOM })
+  assert.deepEqual([...ciFar.visibleNodeIds], ['cr', 'cp'], '【保底两层】P1.9 的 20% 端点仍保留两层')
+  let ciPrevious: Set<string> | undefined
+  const ciCounts: number[] = []
+  for (let ratio = 1; ratio >= 0.2 - 1e-9; ratio -= 0.02) {
+    const step = lm.computeLodVisibility({
+      nodes: ciNodes, edges: ciEdges, zoom: ratio * zm.ZOOM_REFERENCE,
+      previousVisibleNodeIds: ciPrevious,
+    })
+    ciCounts.push(step.visibleNodeIds.size)
+    assert.ok(step.visibleNodeIds.has('cr'), '【P1.9】树根任何档位都不得被碰撞裁掉')
+    assert.ok(step.visibleNodeIds.has('cp'), '【保底两层】保底一级主干任何档位都不得被碰撞裁掉')
+    assert.ok(step.hiddenNodeIds.size >= step.collisionHiddenCount,
+      '【P1.9】碰撞隐藏数不得大于总隐藏数')
+    if (step.collisionActive) {
+      assert.equal(
+        cm.countOverlapPairs(ciNodes, step.visibleNodeIds, step.collisionBoxScale),
+        step.collisionProtectedOverlapPairs,
+        '【P1.9】集成后可见节点必须两两不重叠（用户强制保留的节点之间除外）',
+      )
+    }
+    for (const [child, parent] of [['cp', 'cr'], ['cl0', 'cp'], ['cl1', 'cp']]) {
+      if (step.visibleNodeIds.has(child)) {
+        assert.ok(step.visibleNodeIds.has(parent), '【P1.9】集成路径不得出现子可见、父已隐藏的断链')
+      }
+    }
+    ciPrevious = step.visibleNodeIds
+  }
+  assert.equal(ciCounts[0], ciNodes.length)
+  assert.equal(ciCounts[ciCounts.length - 1], 2, '【保底两层】P1.9 集成路径 20% 端点保留两层')
+  for (let i = 1; i < ciCounts.length; i += 1) {
+    assert.ok(ciCounts[i] <= ciCounts[i - 1], '【P1.9】集成路径可见数必须单调不回升')
+  }
+
+  // 7) 源码接线守卫 + 7 处字段白名单守卫。
+  const collisionSource = await readFile(new URL('../src/domain/graph/lodCollision.ts', import.meta.url), 'utf-8')
+  const collisionLodSource = await readFile(new URL('../src/domain/graph/lod.ts', import.meta.url), 'utf-8')
+  const collisionControlSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/LodControl.tsx', import.meta.url), 'utf-8')
+  const collisionGuiSource = await readFile(new URL('./verify-linked-documents-gui.mjs', import.meta.url), 'utf-8')
+  assert.ok(collisionLodSource.includes('resolveLodCollisions(nodes, visibleNodeIds,')
+    && collisionLodSource.includes('glyphCompensationForZoom(rawZoom)')
+    && collisionLodSource.includes('children: hierarchy.children')
+    && collisionLodSource.includes('for (const id of collision.hiddenIds) visibleNodeIds.delete(id)'),
+  '【P1.9】LOD 必须真跑碰撞裁剪并消费结果，不是只 import')
+  assert.ok(collisionSource.includes('boxesOverlap') && collisionSource.includes('protectedIds')
+    && collisionSource.includes('collisionBoxScaleFor'),
+  '【P1.9】碰撞模块必须按几何盒与保护优先级判定')
+  assert.ok(!collisionSource.includes('localStorage(') && !collisionSource.includes('node.data')
+    && !collisionSource.includes('.position ='),
+  '【P1.9】碰撞裁剪绝不落盘 / 不改坐标 / 不写节点 data')
+  assert.ok(collisionControlSource.includes('data-tm-lod-collision={visibility.collisionActive')
+    && collisionControlSource.includes('data-tm-lod-collision-hidden={visibility.collisionHiddenCount}')
+    && collisionControlSource.includes('data-tm-lod-collision-guard=')
+    && collisionControlSource.includes('data-tm-lod-collision-protected-pairs='),
+  '【P1.9】控件必须暴露碰撞诊断供 GUI 直读')
+  assert.ok(collisionGuiSource.includes('overlapSteps.every((pairs) => pairs === 0)')
+    && collisionGuiSource.includes('data-tm-lod-collision-hidden'),
+  '【P1.9】GUI 必须用真实 DOM AABB 断言逐档无重叠')
+  const collisionWhitelistFiles = [
+    'src/types/graph.ts', 'src/domain/graph/model.ts', 'src/domain/graph/graphMapper.ts',
+    'src/domain/graph/normalizeGraphMeta.ts', 'src/core/storage/file.ts',
+    'src/core/fs-backend.ts', 'src/hooks/useGraph/graphBuilder.ts',
+  ]
+  for (const file of collisionWhitelistFiles) {
+    const source = await readFile(new URL('../' + file, import.meta.url), 'utf-8')
+    assert.ok(!source.includes('collisionHidden') && !source.includes('collisionGuard')
+      && !source.includes('collisionBoxScale'),
+    `【P1.9】${file} 不得出现碰撞派生字段（不得污染节点字段白名单）`)
+  }
+}
+
+// --- 房间级图型分类（P3-A）：定义表 / 归一化 / 自动推断 / LOD 策略 / 关系推荐 / 写库入口 ---
+// 铁律：只查源码字面量不够，必须 esbuild 打包真跑纯函数 + normalizeConfig + backend.writeConfig。
+// 图型存全局 _config.json 的 roomProfiles，漏列 normalizeConfig 或 writeConfig 就会「写完即丢」。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const loadBundled = async (relative: string) => {
+    const bundled = await build({
+      entryPoints: [fileURLToPath(new URL(relative, import.meta.url))],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      write: false,
+      logLevel: 'silent',
+      banner: { js: 'globalThis.window = globalThis.window || {};' },
+    })
+    return await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  }
+  const gp = await loadBundled('../src/domain/graph/graphProfiles.ts')
+  const lodMod = await loadBundled('../src/domain/graph/lod.ts')
+  const storageService = await loadBundled('../src/core/storage/service.ts')
+
+  // 1) 唯一定义表：恰好 4 项，语义字段不允许漂移。
+  assert.deepEqual([...gp.GRAPH_PROFILE_IDS], ['auto', 'tree', 'flow', 'network'], '【P0】图型 id 集合必须恒定')
+  assert.equal(gp.GRAPH_PROFILE_DEFINITIONS.length, 4, '【P0】定义表必须恰好 4 项')
+  assert.deepEqual(gp.GRAPH_PROFILE_DEFINITIONS.map((d: any) => d.id), ['auto', 'tree', 'flow', 'network'])
+  for (const def of gp.GRAPH_PROFILE_DEFINITIONS) {
+    assert.ok(typeof def.label === 'string' && def.label.length > 0, '图型必须有显示名')
+    assert.ok(typeof def.description === 'string' && def.description.length > 0, '图型必须有说明')
+    assert.ok(def.lodMode === 'auto' || def.lodMode === 'off', '图型 LOD 模式只能是 auto/off')
+    assert.ok(def.preferredRelation === null || def.preferredRelation === 'related' || def.preferredRelation === 'subordinate',
+      '推荐关系只能是两值之一或 null')
+  }
+  assert.equal(gp.resolveGraphProfileDefinition('auto').preferredRelation, null, '自动识别本身不推荐关系')
+  assert.equal(gp.resolveGraphProfileDefinition('tree').lodMode, 'auto')
+  assert.equal(gp.resolveGraphProfileDefinition('tree').skipCoverageProtection, true, '【P0】层级图必须跳过低覆盖保护')
+  assert.equal(gp.resolveGraphProfileDefinition('tree').preferredRelation, 'subordinate')
+  assert.equal(gp.resolveGraphProfileDefinition('flow').lodMode, 'off', '【P0】流程图必须关闭语义缩放')
+  assert.equal(gp.resolveGraphProfileDefinition('flow').skipCoverageProtection, false)
+  assert.equal(gp.resolveGraphProfileDefinition('network').skipCoverageProtection, false)
+  assert.equal(gp.describeGraphProfile('tree'), '知识结构树')
+
+  // 2) 归一化：非法值收敛为 auto，大小写/空白容错，幂等。
+  for (const bad of [undefined, null, 123, {}, 'bogus', 'REL_XXX', '']) {
+    assert.equal(gp.normalizeGraphProfileId(bad), 'auto', `非法图型 ${String(bad)} 必须收敛为 auto`)
+  }
+  assert.equal(gp.normalizeGraphProfileId(' TREE '), 'tree', '大小写与空白必须容错')
+  const rawProfiles = { 'kb/a': 'tree', 'kb/b': 'BOGUS', 'kb/c': ' Flow ', '': 'tree' }
+  const normalizedProfiles = gp.normalizeRoomProfiles(rawProfiles)
+  assert.deepEqual(normalizedProfiles, { 'kb/a': 'tree', 'kb/b': 'auto', 'kb/c': 'flow' }, '【P0】房间映射必须逐项归一化且丢弃空 key')
+  assert.equal(rawProfiles['kb/b'], 'BOGUS', '归一化不得修改原对象')
+  assert.deepEqual(gp.normalizeRoomProfiles(normalizedProfiles), normalizedProfiles, '房间映射归一化必须幂等')
+  for (const bad of [null, 42, [], 'x']) {
+    assert.deepEqual(gp.normalizeRoomProfiles(bad), {}, '非法房间映射必须收敛为空对象')
+  }
+
+  // 3) 自动推断：保守、可解释，只作建议。
+  assert.equal(gp.inferGraphProfile({ nodeCount: 3, edgeCount: 2, subordinateEdgeCount: 0, treeCoverage: 0 }), 'flow',
+    '【P0】无从属边且稀疏链状 → 流程图')
+  assert.equal(gp.inferGraphProfile({ nodeCount: 5, edgeCount: 10, subordinateEdgeCount: 0, treeCoverage: 0 }), 'network',
+    '【P0】无从属边且稠密网状 → 自由关联图')
+  assert.equal(gp.inferGraphProfile({ nodeCount: 6, edgeCount: 3, subordinateEdgeCount: 3, treeCoverage: 0.8 }), 'tree',
+    '【P0】从属边多且覆盖率高 → 知识结构树')
+  assert.equal(gp.inferGraphProfile({ nodeCount: 20, edgeCount: 3, subordinateEdgeCount: 3, treeCoverage: 0.2 }), 'network',
+    '【P0】树覆盖率低不能冒充结构树')
+  assert.equal(gp.inferGraphProfile({ nodeCount: Number.NaN, edgeCount: -1, subordinateEdgeCount: Number.NaN, treeCoverage: Number.NaN }), 'network',
+    '异常统计不得让推断崩溃')
+  assert.equal(gp.resolveEffectiveGraphProfileId('auto', 'tree'), 'tree', 'auto 必须解析成推断结果')
+  assert.equal(gp.resolveEffectiveGraphProfileId('flow', 'tree'), 'flow', '手动指定必须压过推断')
+  assert.equal(gp.resolveEffectiveGraphProfileId('bogus', 'network'), 'network')
+
+  // 4) LOD 策略：用户手动选择永远压过图型。
+  assert.deepEqual(gp.resolveGraphProfileLodPolicy('flow', 'auto'), { mode: 'off', skipCoverageProtection: false, source: 'profile' })
+  assert.deepEqual(gp.resolveGraphProfileLodPolicy('tree', 'auto'), { mode: 'auto', skipCoverageProtection: true, source: 'profile' })
+  assert.deepEqual(gp.resolveGraphProfileLodPolicy('network', 'auto'), { mode: 'auto', skipCoverageProtection: false, source: 'profile' })
+  assert.deepEqual(gp.resolveGraphProfileLodPolicy('flow', 'force'), { mode: 'force', skipCoverageProtection: false, source: 'user' },
+    '【P0】用户强制必须压过流程图的关闭策略')
+  assert.deepEqual(gp.resolveGraphProfileLodPolicy('tree', 'off'), { mode: 'off', skipCoverageProtection: false, source: 'user' },
+    '【P0】用户关闭必须压过层级图的跳过保护')
+
+  // 5) 新建连线浮层：只排序/标记，两个选项恒在，绝不自动落盘。
+  assert.equal(gp.recommendedRelationForProfile('tree'), 'subordinate')
+  assert.equal(gp.recommendedRelationForProfile('flow'), 'related')
+  assert.equal(gp.recommendedRelationForProfile('network'), 'related')
+  assert.equal(gp.recommendedRelationForProfile('auto'), null, '未解析的 auto 不推荐')
+  const relationIds = ['related', 'subordinate']
+  assert.deepEqual(gp.orderEdgeRelationOptions(relationIds, 'subordinate'), ['subordinate', 'related'])
+  assert.deepEqual(gp.orderEdgeRelationOptions(relationIds, 'related'), ['related', 'subordinate'])
+  assert.deepEqual(gp.orderEdgeRelationOptions(relationIds, null), ['related', 'subordinate'])
+  assert.deepEqual(gp.orderEdgeRelationOptions(relationIds, 'bogus'), ['related', 'subordinate'], '未知推荐不得吞掉选项')
+  assert.deepEqual(relationIds, ['related', 'subordinate'], '排序不得修改原数组')
+
+  // 6) 与 lod.ts 真联动：tree 跳过低覆盖保护，但绝不能越过无树保护。
+  const manyFree = [
+    { id: 'r' }, { id: 'k' },
+    ...Array.from({ length: 18 }, (_, i) => ({ id: `f${i}` })),
+  ]
+  const oneSubEdge = [{ id: 's1', source: 'r', target: 'k', relation: 'subordinate' }]
+  const lowCoverage = lodMod.computeLodVisibility({ nodes: manyFree, edges: oneSubEdge, zoom: 0.2 })
+  assert.equal(lowCoverage.reason, 'low-coverage', '【P0】默认仍要按覆盖率保护')
+  const treePolicy = gp.resolveGraphProfileLodPolicy('tree', 'auto')
+  const treeVis = lodMod.computeLodVisibility({
+    nodes: manyFree, edges: oneSubEdge, zoom: 0.2,
+    mode: treePolicy.mode, skipCoverageProtection: treePolicy.skipCoverageProtection,
+  })
+  assert.equal(treeVis.active, true, '【P0】层级图必须能跳过低覆盖保护')
+  assert.equal(treeVis.reason, 'active', '跳过保护时不能退化成 forced')
+  assert.ok(treeVis.hiddenNodeIds.size > 0, '跳过保护后游离节点必须真的被隐藏')
+  const noTreeEvenForTree = lodMod.computeLodVisibility({
+    nodes: manyFree,
+    edges: [{ id: 'w', source: 'r', target: 'k', relation: 'related' }],
+    zoom: 0.2, mode: 'auto', skipCoverageProtection: true,
+  })
+  assert.equal(noTreeEvenForTree.reason, 'no-tree', '【P0】图型不得越过「一条从属边都没有」的保护')
+  assert.equal(noTreeEvenForTree.hiddenNodeIds.size, 0)
+  const flowPolicy = gp.resolveGraphProfileLodPolicy('flow', 'auto')
+  const flowVis = lodMod.computeLodVisibility({ nodes: manyFree, edges: oneSubEdge, zoom: 0.2, mode: flowPolicy.mode })
+  assert.equal(flowVis.reason, 'off', '【P0】流程图图型必须真的关掉 LOD')
+  assert.equal(flowVis.hiddenNodeIds.size, 0)
+
+  // 7) 配置往返：normalizeConfig 会重建对象，漏列字段「写完即丢」。
+  const cfg = normalizeConfig({
+    roomProfiles: { 'kb/a': ' TREE ', 'kb/b': 'bogus', '': 'flow' },
+    showEdgeRelationLabels: false,
+  })
+  assert.deepEqual(cfg.roomProfiles, { 'kb/a': 'tree', 'kb/b': 'auto' }, '【P0】normalizeConfig 必须显式保留房间图型')
+  assert.equal(cfg.showEdgeRelationLabels, false, '新增字段不得挤掉已有配置')
+  assert.equal(cfg.edgeRelations?.length, 2, '新增字段不得挤掉两类关系定义')
+  assert.deepEqual(normalizeConfig(cfg).roomProfiles, cfg.roomProfiles, '配置归一化必须幂等')
+
+  // 8) 【核心】真跑写库入口，断言 backend.writeConfig 收到的对象。
+  const calls: Array<Record<string, any>> = []
+  const backend = { writeConfig: async (config: Record<string, any>) => { calls.push(config) } }
+  const store = storageService.createStore(backend) as { writeConfig: (config: any) => Promise<void> }
+  const roomMap = { 'kb/a': 'tree', 'kb/b': 'flow' }
+  await store.writeConfig({ roomProfiles: roomMap })
+  assert.deepEqual(calls[0].roomProfiles, roomMap, '【P0】房间图型必须真的写进 _config.json')
+  await store.writeConfig({ showEdgeRelationLabels: false })
+  assert.deepEqual(calls[1].roomProfiles, roomMap, '【P0】后续写入别的配置不得把图型冲掉')
+  await store.writeConfig({ roomProfiles: { 'kb/c': 'BOGUS' } })
+  assert.deepEqual(calls[2].roomProfiles, { 'kb/c': 'auto' }, '写库入口必须走同一份归一化')
+
+  // 9) 接线保障：纯函数层不写盘，UI 四层都必须消费规则源。
+  const profilesSource = await readFile(new URL('../src/domain/graph/graphProfiles.ts', import.meta.url), 'utf-8')
+  const normalizeSource = await readFile(new URL('../src/core/storage/normalizeConfig.ts', import.meta.url), 'utf-8')
+  const serviceSource = await readFile(new URL('../src/core/storage/service.ts', import.meta.url), 'utf-8')
+  const configServiceSource = await readFile(new URL('../src/application/config/configService.ts', import.meta.url), 'utf-8')
+  const lodHookSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/useSemanticLod.ts', import.meta.url), 'utf-8')
+  const canvasSource = await readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8')
+  const controlSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/LodControl.tsx', import.meta.url), 'utf-8')
+  const pickerSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/EdgeRelationPicker.tsx', import.meta.url), 'utf-8')
+  assert.equal(profilesSource.includes('writeConfig') || profilesSource.includes('window.api'), false,
+    '【P0】图型纯函数层不得写盘 / 不得碰 IPC')
+  assert.ok(normalizeSource.includes('roomProfiles: normalizeRoomProfiles(c.roomProfiles)'), 'normalizeConfig 必须显式保留图型')
+  assert.ok(serviceSource.includes('nextConfig.roomProfiles = config.roomProfiles'), 'writeConfig 必须显式透传图型映射')
+  assert.ok(configServiceSource.includes('setRoomProfiles(normalizeRoomProfiles(config.roomProfiles))'), '启动时必须 hydrate 图型')
+  assert.ok(lodHookSource.includes('resolveGraphProfileLodPolicy') && lodHookSource.includes('inferGraphProfile('),
+    'LOD hook 必须消费图型策略与自动推断')
+  assert.ok(lodHookSource.includes("mode: 'auto'") && lodHookSource.includes('base.subordinateEdgeCount'),
+    '【P0】图型推断必须复用第一次可见性计划的树统计，不得重新遍历全图')
+  assert.ok(canvasSource.includes('storage.writeConfig({ roomProfiles: map })'), '画布切换图型必须真写盘')
+  assert.ok(canvasSource.includes('configuredProfileId'), '画布必须按当前房间取图型')
+  assert.ok(controlSource.includes('data-tm-graph-profile-select') && controlSource.includes('data-tm-graph-profile-effective'),
+    '控件必须暴露可断言的图型选择器与生效图型')
+  assert.ok(pickerSource.includes('orderEdgeRelationOptions') && pickerSource.includes('data-tm-edge-relation-choice={option.id}'),
+    '【P0】关系浮层按图型推荐但仍保留两个必选项')
+}
+
+// --- 知识库总览（P3-B）：只读房间树 / 上限与防环 / 层级布局 / 懒加载接线 ---
+// 铁律：esbuild 打包真跑纯函数（假 storage 天然没有写方法）+ 源码接线断言。
+// 总览绝不写盘、绝不读文档正文；进入房间仍走既有 enterRoomInTab → loadRoomGraph。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const loadBundled = async (relative: string) => {
+    const bundled = await build({
+      entryPoints: [fileURLToPath(new URL(relative, import.meta.url))],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      write: false,
+      logLevel: 'silent',
+      banner: { js: 'globalThis.window = globalThis.window || {};' },
+    })
+    return await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  }
+  const ro = await loadBundled('../src/domain/graph/roomOverview.ts')
+
+  // 1) 路径防护：房间路径只能是 kbs 根下的相对路径。
+  assert.equal(ro.isSafeRoomPath(''), false, '【P0】空房间路径必须拒绝')
+  assert.equal(ro.isSafeRoomPath('../evil'), false, '【P0】.. 越界路径必须拒绝')
+  assert.equal(ro.isSafeRoomPath('kb/a/../evil'), false, '【P0】中段 .. 越界路径必须拒绝')
+  assert.equal(ro.isSafeRoomPath('C:/Windows'), false, '【P0】盘符绝对路径必须拒绝')
+  assert.equal(ro.isSafeRoomPath('kb/a'), true, '合法的房间相对路径必须通过')
+  assert.deepEqual(await ro.collectRoomOverviews(
+    { readLayout: async () => ({ nodes: {}, edges: [] }), readRoomNodeSummaries: async () => ({}) },
+    { path: '../outside', name: '越界' },
+  ), { items: [], truncated: false, readCount: 0 }, '【P0】越界根节点一律不读盘')
+
+  // 2) 假 storage：三层房间树 + 未物化节点 + 越界引用 + 自引用环 + 读取失败。
+  const metas: Record<string, any> = {
+    kb: {
+      nodes: {
+        a: { card: { ref: 'a', name: '房间 A' } },
+        b: { card: { ref: 'b', name: '房间 B' } },
+        ghost: { card: { ref: 'ghost', name: '未物化' } },
+        bad: { card: { ref: '../evil', name: '越界' } },
+      },
+      edges: [{}, {}, {}],
+    },
+    'kb/a': {
+      nodes: {
+        x: { card: { ref: 'x', name: '房间 A-X' } },
+        self: { card: { ref: 'kb/a', name: '自引用' } },
+      },
+      edges: [{}],
+    },
+    'kb/b': { nodes: {}, edges: [] },
+  }
+  const summaryMap: Record<string, any> = {
+    'kb/a': { childCount: 2, hasDetail: false },
+    'kb/b': { childCount: 0, hasDetail: true },
+    'kb/ghost': { childCount: 0, hasDetail: false },
+    'kb/a/x': { childCount: 1, hasDetail: false },
+  }
+  const layoutCalls: string[] = []
+  const summaryCalls: string[][] = []
+  const fakeStorage = {
+    readLayout: async (path: string) => {
+      layoutCalls.push(path)
+      if (path === 'kb/a/x') throw new Error('模拟读取失败')
+      return metas[path] ?? null
+    },
+    readRoomNodeSummaries: async (paths: string[]) => {
+      summaryCalls.push(paths)
+      return Object.fromEntries(paths.map((path) => [path, summaryMap[path]]))
+    },
+  }
+  const result = await ro.collectRoomOverviews(fakeStorage, { path: 'kb', name: '测试库' })
+  assert.deepEqual(result.items.map((i: any) => i.path), ['kb', 'kb/a', 'kb/b', 'kb/a/x'],
+    '【P0】只展开确实有内容（子节点或文档）的子房间，且自引用不成环')
+  assert.equal(result.items.some((i: any) => i.path.includes('ghost') || i.path.includes('evil')), false,
+    '【P0】未物化的 P0 轻量节点与越界路径不能变成房间卡片')
+  assert.equal(result.readCount, 4, '【P0】每个房间只读一次 readLayout，不得逐节点读小文件')
+  assert.equal(layoutCalls.length, 4, '【P0】假 storage 的读盘次数必须与房间数一致')
+  assert.equal(summaryCalls.length <= 4, true, '【P0】子房间摘要必须批量读取，不能逐房间往返')
+  assert.equal(result.truncated, false, '小房间树不应触发上限')
+  const rootItem = result.items.find((i: any) => i.path === 'kb')
+  assert.equal(rootItem.nodeCount, 4, '【P0】根房间节点数必须来自真实 meta')
+  assert.equal(rootItem.edgeCount, 3, '【P0】根房间边数必须来自真实 meta')
+  assert.equal(rootItem.childRoomCount, 2, '【P0】子房间数只统计有内容的房间')
+  assert.equal(rootItem.status, 'ready', '正常房间状态必须是 ready')
+  assert.equal(result.items.find((i: any) => i.path === 'kb/a/x').status, 'unavailable',
+    '【P0】单个房间读取失败必须降级为 unavailable，不能让整个总览崩掉')
+  assert.equal(result.items.find((i: any) => i.path === 'kb/a/x').depth, 2, '层级深度必须正确')
+
+  // 3) 上限保护：房间数与深度都必须封顶，避免大知识库打爆 IPC。
+  const capped = await ro.collectRoomOverviews(fakeStorage, { path: 'kb', name: '测试库' }, { maxRooms: 2 })
+  assert.equal(capped.items.length, 2, '【P0】maxRooms 必须真的截断')
+  assert.equal(capped.truncated, true, '截断时必须标记，UI 才能提示')
+  const shallow = await ro.collectRoomOverviews(fakeStorage, { path: 'kb', name: '测试库' }, { maxDepth: 1 })
+  assert.equal(shallow.items.length, 3, '【P0】maxDepth 必须真的截断深层房间')
+  assert.equal(shallow.items.every((i: any) => i.depth <= 1), true)
+
+  // 4) 布局：稳定网格 + 父子层级边（不是聚合边）。
+  const layout = ro.layoutRoomOverview(result.items)
+  assert.equal(layout.cards.length, 4, '每张房间摘要都必须有卡片')
+  assert.equal(new Set(layout.cards.map((c: any) => c.id)).size, 4, '卡片 id 必须唯一（用房间路径）')
+  assert.deepEqual(layout.links.map((l: any) => `${l.source}->${l.target}`).sort(), [
+    'kb->kb/a', 'kb->kb/b', 'kb/a->kb/a/x',
+  ], '【P0】层级边只能连真实存在的父房间')
+  assert.deepEqual(ro.layoutRoomOverview(result.items), layout, '布局必须稳定，刷新后位置不跳')
+  assert.ok(layout.cards.find((c: any) => c.id === 'kb/a').position.y > layout.cards.find((c: any) => c.id === 'kb').position.y,
+    '【P0】子房间卡片必须落在父房间下方')
+  const orphan = { ...result.items[1], parentPath: 'not-in-result' }
+  assert.equal(ro.layoutRoomOverview([orphan]).links.length, 0, '父房间不在结果里时不得凭空造边')
+
+  // 5) 接线保障：总览只读、双击懒加载、入口与挂载齐全。
+  const overviewSource = await readFile(new URL('../src/features/graph/GraphPage/components/RoomOverview.tsx', import.meta.url), 'utf-8')
+  const cardSource = await readFile(new URL('../src/features/graph/GraphPage/components/RoomSummaryCard.tsx', import.meta.url), 'utf-8')
+  const pageSource = await readFile(new URL('../src/features/graph/GraphPage/GraphPage.tsx', import.meta.url), 'utf-8')
+  const controlSource2 = await readFile(new URL('../src/features/graph/GraphCanvas/components/LodControl.tsx', import.meta.url), 'utf-8')
+  const pureSource = await readFile(new URL('../src/domain/graph/roomOverview.ts', import.meta.url), 'utf-8')
+  assert.equal(pureSource.includes('writeConfig') || pureSource.includes('window.api') || pureSource.includes('writeLayout'), false,
+    '【P0】总览纯函数层不得写盘 / 不得碰 IPC')
+  assert.equal(overviewSource.includes('writeConfig') || overviewSource.includes('saveGraph') || overviewSource.includes('readTopoDocument'), false,
+    '【P0】总览 UI 不得写盘、不得读文档正文')
+  assert.ok(overviewSource.includes('collectRoomOverviews(storage, { path: kbPath, name: rootName })'),
+    '【P0】总览必须消费唯一纯函数层，且以 kbPath 为根')
+  assert.ok(overviewSource.includes('enterRoomInTab(tabId, {'), '【P0】双击必须走既有进入房间链路（懒加载）')
+  assert.ok(overviewSource.includes('onNodeDoubleClick={handleEnter}'), '进入房间必须绑在双击上，避免误触')
+  assert.ok(overviewSource.includes('<ReactFlowProvider>') && overviewSource.includes('</ReactFlowProvider>'),
+    '【P0】总览必须包独立 ReactFlowProvider，否则会复用 App 级 store 画出底层房间节点')
+  assert.ok(overviewSource.includes('useGraphSession(tabId)')
+    && !overviewSource.includes('useTabStore((state) => state.getGraphSession(tabId))'),
+    '【P0】getGraphSession 每次派生新对象，必须走 useShallow 版 hook，否则 React 19 snapshot 不稳定会让总览整个挂掉')
+  assert.ok(overviewSource.includes('data-tm-room-overview=') && overviewSource.includes('data-tm-room-overview-count={items.length}'),
+    '总览必须暴露可断言的挂载与房间计数')
+  assert.ok(cardSource.includes('data-tm-room-summary-card={item.path}'), '卡片必须暴露房间路径')
+  assert.ok(cardSource.includes('type="target"') && cardSource.includes('type="source"'),
+    '【P0】卡片必须提供隐藏 Handle，否则 ReactFlow 无法计算父子层级边端点')
+  assert.ok(pageSource.includes('{isActive && <RoomOverview tabId={tabId} />}'), '【P0】总览必须挂在 graph-panel 内且仅活跃标签渲染')
+  assert.ok(controlSource2.includes('data-tm-room-overview-open=') && controlSource2.includes('useRoomOverviewStore.getState().open()'),
+    '【P0】镜头控件必须能打开总览')
+}
+
+// --- 第 17 组：放大上限收敛到 100% + 左下角一键重置视角（2026-11-10）---
+// 【用户决策】「再放大没有意义了，节点已经全部展示」→ 上限 100%；
+// 「左下角可以增加一键重置视角到 100% 的按钮」→ 常驻、只改比例、不动平移。
+// 纯函数用 esbuild 打包真跑；UI 接线用源码守卫（DOM 行为由 GUI 端到端覆盖）。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundled = await build({
+    entryPoints: [fileURLToPath(new URL('../src/domain/graph/zoomScale.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const zs = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const {
+    ZOOM_REFERENCE, MIN_RAW_ZOOM, MAX_RAW_ZOOM, MIN_DISPLAY_PERCENT, MAX_DISPLAY_PERCENT,
+    clampRawZoom, rebaseViewportZoom, fromDisplayPercent, stepDisplayZoom,
+    toDisplayPercent, glyphScaleForRatio, glyphScaleForZoom, glyphCompensationForZoom,
+    quantizeLodZoom, detailAlphaForZoom, semanticZoomVarsForZoom,
+    isAtMaxZoom, isAtMinZoom,
+  } = zs
+
+  // 1) 上限 = 100% = ZOOM_REFERENCE，四重身份重合。
+  assert.equal(MAX_DISPLAY_PERCENT, 100, '【100% 上限】最大显示比例必须是 100%')
+  assert.equal(MAX_RAW_ZOOM, ZOOM_REFERENCE, '【100% 上限】最大 raw 必须恒等于 100% 的 raw')
+  assert.equal(toDisplayPercent(MAX_RAW_ZOOM), 100)
+  assert.equal(MIN_DISPLAY_PERCENT, 5, '【2026-11-11】最小比例放开到 5%')
+  assert.equal(MIN_RAW_ZOOM, ZOOM_REFERENCE * 0.05)
+  assert.equal(zs.COMPACT_START_PERCENT, 20, '【2026-11-11】20% 是渐隐终点 / 紧凑起点')
+
+  // 2) 所有曾经能超过 100% 的入口都必须被钳住（真跑，不是查字面量）。
+  for (const over of [ZOOM_REFERENCE * 1.1, 0.8, 0.91, 1, 1.3, 4, 999]) {
+    assert.equal(clampRawZoom(over), ZOOM_REFERENCE, `【100% 上限】clampRawZoom(${over}) 必须钳到 100%`)
+    assert.equal(quantizeLodZoom(over), quantizeLodZoom(ZOOM_REFERENCE),
+      `【100% 上限】quantizeLodZoom(${over}) 必须与 100% 完全同档`)
+  }
+  assert.equal(rebaseViewportZoom(9), ZOOM_REFERENCE, '【100% 上限】远古超大镜头必须落到 100%')
+  assert.equal(fromDisplayPercent(999), ZOOM_REFERENCE)
+  assert.equal(fromDisplayPercent(150), ZOOM_REFERENCE)
+  assert.equal(stepDisplayZoom(ZOOM_REFERENCE, 10), ZOOM_REFERENCE, '【100% 上限】放大按钮在 100% 停住')
+  assert.equal(stepDisplayZoom(MAX_RAW_ZOOM, -10), fromDisplayPercent(90), '缩小仍可用，行程没被截断')
+
+  // 3) 语义缩放：100% 是唯一恒等点兼上限，越界输入一律恒等 1，节点不虚胖。
+  assert.equal(glyphScaleForRatio(1), 1)
+  for (const r of [1.01, 1.2, 1.5, 1.8, 2, 3]) {
+    assert.equal(glyphScaleForRatio(r), 1, `【100% 上限】glyphScaleForRatio(${r}) 必须钳回 1`)
+    assert.equal(glyphScaleForZoom(r * ZOOM_REFERENCE), 1, `【100% 上限】${r * 100}% 屏幕倍率必须恒等 1`)
+    assert.equal(glyphCompensationForZoom(r * ZOOM_REFERENCE), 1, `【100% 上限】${r * 100}% 不得施加补偿`)
+  }
+  assert.equal(glyphScaleForZoom(MAX_RAW_ZOOM), 1)
+  assert.equal(glyphCompensationForZoom(MAX_RAW_ZOOM), 1)
+  assert.equal(detailAlphaForZoom(MAX_RAW_ZOOM), 1, '【100% 上限】细节必须完整')
+  assert.equal(semanticZoomVarsForZoom(MAX_RAW_ZOOM).detailHit, 'auto')
+  assert.equal(zs.GLYPH_MAX_SCALE, undefined, '【100% 上限】近景放大常量必须删除')
+  assert.equal(zs.GLYPH_SCALE_EXPONENT, undefined, '【100% 上限】近景 pow 分支必须删除')
+
+  // 4) 下限与远景行为完全不变，避免「收上限」顺手把地图式远景弄坏。
+  assert.equal(glyphScaleForZoom(MIN_RAW_ZOOM), zs.GLYPH_FAR_SCALE)
+  assert.equal(detailAlphaForZoom(MIN_RAW_ZOOM), 0)
+  assert.equal(semanticZoomVarsForZoom(MIN_RAW_ZOOM).detailHit, 'none')
+  assert.equal(toDisplayPercent(MIN_RAW_ZOOM), 5)
+
+  // 4b) 端点判定必须按显示百分比：滚轮缓动 / 按钮过渡结束后 raw 会带 1e-3 级残差，
+  //     用浮点相等会导致「读数已是 100%，放大按钮却没禁用」。
+  assert.equal(isAtMaxZoom(ZOOM_REFERENCE), true)
+  assert.equal(isAtMaxZoom(MIN_RAW_ZOOM), false)
+  assert.equal(isAtMinZoom(MIN_RAW_ZOOM), true)
+  assert.equal(isAtMinZoom(ZOOM_REFERENCE), false)
+  assert.equal(isAtMaxZoom(ZOOM_REFERENCE - 0.002), true, '100% 前的过渡残差必须仍算到达上限')
+  assert.equal(isAtMinZoom(MIN_RAW_ZOOM + 0.0008), true, '5% 附近的过渡残差必须仍算到达下限')
+  assert.equal(isAtMaxZoom(0.5 * ZOOM_REFERENCE), false)
+  assert.equal(isAtMinZoom(0.5 * ZOOM_REFERENCE), false)
+  assert.equal(isAtMaxZoom(1.3), true, '越界 zoom 也钳到上限')
+
+  // 5) 源码接线守卫：画布边界、按钮禁用、左下角重置按钮、只改比例不改平移。
+  const canvasSource17 = await readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8')
+  const controlSource17 = await readFile(new URL('../src/features/graph/GraphCanvas/components/LodControl.tsx', import.meta.url), 'utf-8')
+  const resetSource17 = await readFile(new URL('../src/features/graph/GraphCanvas/components/ZoomResetButton.tsx', import.meta.url), 'utf-8')
+  const miniMapSource17 = await readFile(new URL('../src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx', import.meta.url), 'utf-8')
+  const scaleSource17 = await readFile(new URL('../src/domain/graph/zoomScale.ts', import.meta.url), 'utf-8')
+  assert.ok(canvasSource17.includes('maxZoom={MAX_RAW_ZOOM}') && canvasSource17.includes('minZoom={MIN_RAW_ZOOM}'),
+    '【100% 上限】ReactFlow 的缩放边界必须来自唯一规则源')
+  assert.ok(controlSource17.includes('data-tm-zoom-max-percent={formatZoomPercent(MAX_RAW_ZOOM)}')
+    && controlSource17.includes('data-tm-zoom-min-percent={formatZoomPercent(MIN_RAW_ZOOM)}'),
+    '【100% 上限】控件必须暴露上下限供 GUI 直读')
+  assert.ok(controlSource17.includes('const atMaxZoom = isAtMaxZoom(zoomLevel)')
+    && controlSource17.includes('const atMinZoom = isAtMinZoom(zoomLevel)')
+    // 精确匹配：data-disabled={atMaxZoom} 也含子串 disabled={atMaxZoom}，必须带前置空白。
+    && /\sdisabled=\{atMaxZoom\}/.test(controlSource17)
+    && /\sdisabled=\{atMinZoom\}/.test(controlSource17),
+    '【100% 上限】到端点的方向按钮必须禁用，且判定必须来自唯一规则源')
+  assert.ok(controlSource17.includes('reactFlow.zoomTo(ZOOM_REFERENCE, { duration: ZOOM_TRANSITION_MS })'),
+    '【100% 上限】左上角 100% 复位必须消费唯一常量与过渡时长')
+  assert.ok(resetSource17.includes('data-tm-zoom-reset-view=')
+    && resetSource17.includes('data-tm-zoom-at-reference={atReference')
+    && resetSource17.includes('aria-label="一键重置视角到 100%"'),
+    '【左下角重置】按钮必须暴露可断言的挂载与状态属性')
+  assert.ok(resetSource17.includes('reactFlow.zoomTo(ZOOM_REFERENCE, { duration: ZOOM_TRANSITION_MS })'),
+    '【左下角重置】必须与左上角复位完全同源，只改比例')
+  assert.ok(!resetSource17.includes('fitView(') && !resetSource17.includes('setViewport(')
+    && !resetSource17.includes('setCenter('),
+    '【左下角重置】不得 fitView / 改 pan，否则会重算比例并牵动落盘视野')
+  assert.ok(resetSource17.includes('ZOOM_REFERENCE') && resetSource17.includes('ZOOM_TRANSITION_MS')
+    && resetSource17.includes('formatZoomPercent(zoomLevel)')
+    && resetSource17.includes('const atReference = isAtMaxZoom(zoomLevel)'),
+    '【左下角重置】目标比例 / 过渡时长 / 当前读数 / 端点判定必须全部来自规则源')
+  assert.ok(miniMapSource17.includes("import ZoomResetButton from './ZoomResetButton'")
+    && miniMapSource17.includes('<ZoomResetButton zoomLevel={zoomLevel} />')
+    && miniMapSource17.includes('position="bottom-left"'),
+    '【左下角重置】必须常驻挂在 bottom-left 面板的按钮组里')
+  assert.ok(scaleSource17.includes('export const MAX_DISPLAY_PERCENT = 100')
+    && !scaleSource17.includes('GLYPH_MAX_SCALE') && !scaleSource17.includes('GLYPH_SCALE_EXPONENT')
+    && !scaleSource17.includes('Math.pow(safe')
+    && scaleSource17.includes('if (safe >= GLYPH_FAR_START_RATIO) return GLYPH_MIN_SCALE'),
+    '【100% 上限】规则源不得残留 200%、近景放大常量或 pow 放大分支')
+
+  // 6) GUI 端到端断言守卫：改了上限 / 撤了左下角按钮，必须能被静态回归先拦下。
+  const zoomGuiSource = await readFile(new URL('./verify-linked-documents-gui.mjs', import.meta.url), 'utf-8')
+  assert.ok(zoomGuiSource.includes("atReferenceControl.max === '100%'")
+    && zoomGuiSource.includes("atReferenceControl.min === '5%'")
+    && zoomGuiSource.includes("=== '200%'") === false,
+    '【100% 上限】GUI 必须断言上限读作 100% / 下限 5%，且不得再等 200%')
+  assert.ok(zoomGuiSource.includes('data-tm-lod-visible-depth-levels')
+    && zoomGuiSource.includes('至少保留两层深度'),
+    '【默认两层】GUI 必须实测最远镜头至少两层深度')
+  assert.ok(zoomGuiSource.includes('data-tm-lod-preserved-depth-select')
+    && zoomGuiSource.includes('"preservedDepth":2')
+    && zoomGuiSource.includes("page.select('[data-tm-lod-preserved-depth-select]', '1')"),
+    '【自定义永久层数】GUI 必须实测面板随时变更层数、立即生效并持久化')
+  assert.ok(zoomGuiSource.includes('atReferenceControl.resetViewInBottomLeft')
+    && zoomGuiSource.includes('resetViewHittable')
+    && zoomGuiSource.includes('page.mouse.click(resetViewRect.x, resetViewRect.y)'),
+    '【左下角重置】GUI 必须用真实鼠标点击验证按钮可命中且能回到 100%')
+  assert.ok(zoomGuiSource.includes('viewportCenterFlow')
+    && zoomGuiSource.includes('一键重置只改比例、不平移视野'),
+    '【左下角重置】GUI 必须断言重置只改比例、不平移视野')
+  const scaleWhitelistFiles = [
+    'src/types/graph.ts', 'src/domain/graph/model.ts', 'src/domain/graph/graphMapper.ts',
+    'src/domain/graph/normalizeGraphMeta.ts', 'src/core/storage/file.ts',
+    'src/core/fs-backend.ts', 'src/hooks/useGraph/graphBuilder.ts',
+  ]
+  for (const file of scaleWhitelistFiles) {
+    const source = await readFile(new URL('../' + file, import.meta.url), 'utf-8')
+    assert.ok(!source.includes('zoomResetView') && !source.includes('maxDisplayPercent'),
+      `【100% 上限】${file} 不得出现缩放控件字段（不得污染节点字段白名单）`)
+  }
+}
+
+// --- 第 18 组：缩小 / 有隐藏节点时整张画布只读（2026-11-11）---
+// 【用户决策】「缩放后位置等信息失真，移动节点、移动连线、增删连线、重命名等
+// 一律禁止，只有比例恢复 100% 之后才可编辑」。
+// 铁律：判定与 change 过滤用 esbuild 打包真跑；所有写操作必须在唯一汇聚点
+// useGraph() 过闸门，UI 层另有手势 / 浮层禁用，静态守卫防止日后被悄悄摘掉。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundled = await build({
+    entryPoints: [fileURLToPath(new URL('../src/domain/graph/canvasReadOnly.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const ro = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const {
+    computeCanvasReadOnly, filterReadOnlyNodeChanges, filterReadOnlyEdgeChanges,
+    isViewOnlyNodeChange, isViewOnlyEdgeChange,
+  } = ro
+  const zsBundle = await build({
+    entryPoints: [fileURLToPath(new URL('../src/domain/graph/zoomScale.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const zs = await import(`data:text/javascript;base64,${Buffer.from(zsBundle.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const { ZOOM_REFERENCE, MIN_RAW_ZOOM } = zs
+
+  // 1) 100% + 零隐藏是唯一可编辑态；端点判定必须复用 isAtMaxZoom 的显示百分比语义。
+  const editable = computeCanvasReadOnly(ZOOM_REFERENCE, 0)
+  assert.equal(editable.readOnly, false, '【只读】100% 且无隐藏节点必须可编辑')
+  assert.equal(editable.reason, 'editable')
+  assert.equal(editable.atMaxZoom, true)
+  assert.equal(computeCanvasReadOnly(ZOOM_REFERENCE - 0.002, 0).readOnly, false,
+    '【只读】100% 附近的过渡残差按读数算已到端点，不得误锁')
+  assert.equal(computeCanvasReadOnly(1.3, 0).readOnly, false,
+    '【只读】越界 zoom 由 isAtMaxZoom 钳到上限，与按钮判定同源')
+
+  // 2) 缩小即锁（哪怕零隐藏，坐标依然失真）；100% 但仍有隐藏节点也锁。
+  for (const ratio of [0.99, 0.9, 0.7, 0.5, 0.3]) {
+    const state = computeCanvasReadOnly(ZOOM_REFERENCE * ratio, 0)
+    assert.equal(state.readOnly, true, `【只读】${ratio * 100}% 零隐藏也必须禁写`)
+    assert.equal(state.reason, 'zoomed-out', `【只读】${ratio * 100}% 的原因必须是缩小`)
+  }
+  assert.equal(computeCanvasReadOnly(MIN_RAW_ZOOM, 5).readOnly, true, '【只读】5% + 隐藏节点必须禁写')
+  assert.equal(computeCanvasReadOnly(MIN_RAW_ZOOM, 5).hiddenNodeCount, 5)
+  const hiddenAtFull = computeCanvasReadOnly(ZOOM_REFERENCE, 3)
+  assert.equal(hiddenAtFull.readOnly, true, '【只读】100% 却仍有隐藏节点的异常态不得解锁')
+  assert.equal(hiddenAtFull.reason, 'hidden-nodes')
+  assert.equal(computeCanvasReadOnly(ZOOM_REFERENCE, Number.NaN).hiddenNodeCount, 0,
+    '【只读】脏隐藏数必须归零，不得 NaN 传染')
+  assert.equal(computeCanvasReadOnly(ZOOM_REFERENCE, -7).hiddenNodeCount, 0)
+
+  // 3) change 过滤真跑：写操作全拦，select / 自动测量放行，手动 resize 拦。
+  const nodeChanges: any[] = [
+    { type: 'position', id: 'a', position: { x: 12, y: 34 }, dragging: true },
+    { type: 'position', id: 'a', dragging: false },
+    { type: 'remove', id: 'b' },
+    { type: 'add', item: { id: 'c' } },
+    { type: 'replace', id: 'd', item: { id: 'd' } },
+    { type: 'select', id: 'e', selected: true },
+    { type: 'dimensions', id: 'f', dimensions: { width: 120, height: 60 } },
+    { type: 'dimensions', id: 'f', dimensions: { width: 130, height: 70 }, resizing: true },
+    { type: 'dimensions', id: 'f', dimensions: { width: 130, height: 70 }, origin: 'manual' },
+    { type: 'dimensions', id: 'f', dimensions: { width: 130, height: 70 }, origin: 'auto-size' },
+  ]
+  const keptNodes = filterReadOnlyNodeChanges(nodeChanges)
+  assert.deepEqual(keptNodes.map((c: any) => c.type), ['select', 'dimensions', 'dimensions'],
+    '【只读】只保留 select 与「自动测量 / auto-size」的 dimensions')
+  assert.equal(keptNodes[1].id, 'f')
+  assert.equal(keptNodes[2].origin, 'auto-size')
+  assert.equal(isViewOnlyNodeChange({ type: 'position', id: 'a' } as any), false)
+  assert.equal(isViewOnlyNodeChange({ type: 'remove', id: 'a' } as any), false)
+  const edgeChanges: any[] = [
+    { type: 'remove', id: 'e1' },
+    { type: 'add', item: { id: 'e2' } },
+    { type: 'replace', id: 'e3', item: { id: 'e3' } },
+    { type: 'select', id: 'e4', selected: true },
+  ]
+  const keptEdges = filterReadOnlyEdgeChanges(edgeChanges)
+  assert.deepEqual(keptEdges.map((c: any) => c.type), ['select'],
+    '【只读】边的 remove / add / replace 必须拦，select 放行')
+  assert.equal(isViewOnlyEdgeChange({ type: 'remove', id: 'e1' } as any), false)
+
+  // 4) 外部 store 真跑：按 tab 隔离 + 先写快照再通知（顺序反了 React 会丢重渲染）。
+  const storeBundle = await build({
+    entryPoints: [fileURLToPath(new URL('../src/stores/canvasReadOnlyStore.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const store = await import(`data:text/javascript;base64,${Buffer.from(storeBundle.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  store.publishCanvasReadOnly('tab-a', ZOOM_REFERENCE, 0)
+  assert.equal(store.isCanvasReadOnly('tab-a'), false, '【只读 store】100% tab 可编辑')
+  store.publishCanvasReadOnly('tab-a', MIN_RAW_ZOOM, 4)
+  assert.equal(store.isCanvasReadOnly('tab-a'), true, '【只读 store】缩小立即合上闸门')
+  assert.equal(store.isActiveCanvasReadOnly(), true)
+  assert.equal(store.getActiveCanvasReadOnly().hiddenNodeCount, 4)
+  store.publishCanvasReadOnly('tab-b', ZOOM_REFERENCE, 0)
+  assert.equal(store.isCanvasReadOnly('tab-b'), false, '【只读 store】活动 tab 回到 100% 必须解锁')
+  assert.equal(store.isCanvasReadOnly('tab-a'), true, '【只读 store】非活动 tab 的状态不被串改')
+  assert.equal(store.isActiveCanvasReadOnly(), false, '【只读 store】切 tab 后 active 快照必须跟着换')
+  store.clearCanvasReadOnly('tab-a')
+  assert.equal(store.isActiveCanvasReadOnly(), false, '【只读 store】清理非活动 tab 不得误锁当前 tab')
+  store.clearCanvasReadOnly('tab-b')
+  assert.equal(store.isActiveCanvasReadOnly(), false, '【只读 store】卸载后必须回到可编辑默认态')
+
+  // 5) 源码接线守卫：唯一写闸门、手势禁用、快捷键 / 菜单 / 浮层 / 提示。
+  const readSrc = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const graphSource18 = await readSrc('src/hooks/useGraph.ts')
+  assert.ok(graphSource18.includes('function guardCanvasEdit<')
+    && graphSource18.includes('guardCanvasEdit(tabId, fn, blocked)')
+    && graphSource18.includes('filterReadOnlyNodeChanges(changes)')
+    && graphSource18.includes('filterReadOnlyEdgeChanges(changes)'),
+    '【只读】所有写操作必须在 useGraph 唯一汇聚点过闸门')
+  for (const method of [
+    'onConnect:', 'onConnectStart:', 'onConnectEnd:', 'createChildNode:', 'deleteChildNode:',
+    'renameNode:', 'updateNodeStyle:', 'updateNodesStyle:', 'clearNodesStyle:',
+    'updateNodeSizingMode:', 'updateNodeEmojis:', 'createEdge:', 'updateEdgeRelation:',
+    'updateEdgeStyle:', 'updateEdgeAnchor:', 'deleteEdge:',
+  ]) {
+    assert.ok(graphSource18.includes(`${method} edit(`),
+      `【只读】${method} 必须被 edit() 包住，否则该编辑入口会漏过去`)
+  }
+  assert.ok(graphSource18.includes('selectNode: ops.selectNode')
+    && graphSource18.includes('onNodeClick: graphEvents.onNodeClick'),
+    '【只读】选中 / 查看类操作必须保持放行')
+
+  const canvasSource18 = await readSrc('src/features/graph/GraphCanvas/GraphCanvas.tsx')
+  assert.ok(canvasSource18.includes('computeCanvasReadOnly(zoomLevel, hiddenNodeCount)')
+    && canvasSource18.includes('publishCanvasReadOnly(tabId, zoomLevel, hiddenNodeCount)')
+    && canvasSource18.includes('useLayoutEffect(() => {'),
+    '【只读】画布必须按同源判定发布只读状态，且在绘制前生效')
+  assert.ok(canvasSource18.includes('nodesDraggable={!canvasReadOnly}')
+    && canvasSource18.includes('nodesConnectable={!canvasReadOnly}'),
+    '【只读】React Flow 手势层必须关掉拖节点 / 拉连线')
+  assert.ok(canvasSource18.includes('data-tm-canvas-readonly={canvasReadOnly')
+    && canvasSource18.includes('<CanvasReadOnlyBanner state={readOnlyState}'),
+    '【只读】必须暴露诊断属性与只读横幅')
+  assert.ok(canvasSource18.includes('elementsSelectable'),
+    '【只读】仍要允许选中节点查看信息')
+
+  const modelSource18 = await readSrc('src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts')
+  assert.equal((modelSource18.match(/if \(isCanvasReadOnly\(tabId\)\) return/g) ?? []).length, 3,
+    '【只读】撤销 / 重做 / 快捷键新建节点三处都必须拦')
+  assert.equal((modelSource18.match(/if \(isCanvasReadOnly\(tabId\)\) \{/g) ?? []).length, 3,
+    '【只读】节点 / 连线 / 画布三种右键菜单都必须不弹出')
+
+  const handlersSource18 = await readSrc('src/hooks/useGraph/graphEventHandlers.ts')
+  assert.ok(handlersSource18.includes('if (isCanvasReadOnly(tabId)) return')
+    && handlersSource18.includes('onConfirm: (relation) => {'),
+    '【只读】连线关系浮层的异步确认与格式刷捷径都必须兜底')
+  const edgeActionsSource18 = await readSrc('src/features/graph/GraphPage/model/useEdgeActions.ts')
+  assert.ok(edgeActionsSource18.includes('if (isActiveCanvasReadOnly()) return'),
+    '【只读】React Flow deleteElements 绕过写闸门，必须单独拦')
+
+  const cardModelSource18 = await readSrc('src/features/graph/GraphCanvas/nodes/KnowledgeCard/model/useKnowledgeCardModel.ts')
+  assert.ok(cardModelSource18.includes('selected && !canvasReadOnly')
+    && cardModelSource18.includes('&& !canvasReadOnly')
+    && cardModelSource18.includes('if (canvasReadOnly) {'),
+    '【只读】双击重命名 / 快捷工具栏 / 草稿提交都必须关掉')
+  const cardSource18 = await readSrc('src/features/graph/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx')
+  assert.ok(cardSource18.includes('!isMultiSelected && !canvasReadOnly')
+    && cardSource18.includes('showHoverControls && !canvasReadOnly'),
+    '【只读】手动 resize 与连线加号手柄必须卸载')
+  const edgeSource18 = await readSrc('src/features/graph/GraphCanvas/edges/FloatingEdge.tsx')
+  assert.ok(edgeSource18.includes('&& !canvasReadOnly')
+    && edgeSource18.includes('showToolbar ='),
+    '【只读】连线工具栏 / 锚点 / 弯曲控制柄必须收起')
+
+  const bannerSource18 = await readSrc('src/features/graph/GraphCanvas/components/CanvasReadOnlyBanner.tsx')
+  assert.ok(bannerSource18.includes('data-tm-canvas-readonly-banner=')
+    && bannerSource18.includes('data-tm-canvas-readonly-restore=')
+    && bannerSource18.includes('reactFlow.zoomTo(ZOOM_REFERENCE, { duration: ZOOM_TRANSITION_MS })')
+    && !bannerSource18.includes('fitView('),
+    '【只读】提示条必须给一键恢复 100% 的入口，且只改比例不改平移')
+  const controlSource18 = await readSrc('src/features/graph/GraphCanvas/components/LodControl.tsx')
+  assert.ok(controlSource18.includes('data-tm-canvas-readonly={readOnlyState.readOnly')
+    && controlSource18.includes('data-tm-lod-readonly='),
+    '【只读】左侧状态面板必须显示只读状态')
+  const cssSource18 = await readSrc('src/styles/base.css')
+  assert.ok(cssSource18.includes('.tm-canvas-readonly .react-flow__handle'),
+    '【只读】CSS 必须收掉残留的连线手柄命中与 grab 光标')
+  const storeSource18 = await readSrc('src/stores/canvasReadOnlyStore.ts')
+  assert.ok(storeSource18.indexOf('activeSnapshot = next') < storeSource18.indexOf('for (const listener of listeners) listener()'),
+    '【只读 store】必须先写快照再通知，否则 useSyncExternalStore 读到旧值')
+  assert.ok(storeSource18.includes('useSyncExternalStore(subscribeCanvasReadOnly, isActiveCanvasReadOnly, isActiveCanvasReadOnly)'),
+    '【只读 store】叶子组件必须只订阅布尔，缩放期不得让所有卡片重渲染')
+
+  // 6) 只读是纯视图态：绝不污染节点 / 边字段白名单与落盘格式。
+  const readOnlyWhitelistFiles = [
+    'src/types/graph.ts', 'src/domain/graph/model.ts', 'src/domain/graph/graphMapper.ts',
+    'src/domain/graph/normalizeGraphMeta.ts', 'src/core/storage/file.ts',
+    'src/core/fs-backend.ts', 'src/hooks/useGraph/graphBuilder.ts',
+  ]
+  for (const file of readOnlyWhitelistFiles) {
+    const source = await readSrc(file)
+    assert.ok(!source.includes('canvasReadOnly') && !source.includes('readOnlyState'),
+      `【只读】${file} 不得出现画布只读字段（只读不落盘）`)
+  }
+
+  // 7) GUI 端到端守卫：必须真机验证「缩小禁写」与「恢复 100% 解锁」两个方向。
+  const guiSource18 = await readSrc('scripts/verify-linked-documents-gui.mjs')
+  assert.ok(guiSource18.includes('data-tm-canvas-readonly-banner')
+    && guiSource18.includes('data-tm-canvas-readonly-restore')
+    && guiSource18.includes('只读期双击重命名不进入编辑、拖动节点坐标不变')
+    && guiSource18.includes('只读期仍可选中节点查看')
+    && guiSource18.includes('恢复 100% 后只读解除'),
+    '【只读】GUI 必须实测缩小禁写（重命名 / 拖动）与恢复 100% 解锁')
+  const stylePanelSource18 = await readSrc('src/features/right-panel/components/StyleTab/StyleSection.tsx')
+  assert.ok(stylePanelSource18.includes('data-tm-style-panel-readonly=')
+    && stylePanelSource18.includes('useActiveCanvasReadOnly()'),
+    '【只读】右栏样式面板同写画布数据，必须显示只读提示')
+}
+
+// ===========================================================================
+// 19) 【2026-11-11 两段镜头 + 密度自适应】5% 下限 / 20% 渐隐终点 / 紧凑只收紧 /
+//     节点多树深时每格缩放灵敏度按 1/√N 放慢。真跑 zoomScale 打包产物，不查字面量。
+// ===========================================================================
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundle = await build({
+    entryPoints: [fileURLToPath(new URL('../src/domain/graph/zoomScale.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const z = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const {
+    ZOOM_REFERENCE, MIN_RAW_ZOOM, MIN_DISPLAY_PERCENT, COMPACT_START_PERCENT,
+    COMPACT_START_RATIO, COMPACT_STEP_DECAY, COMPACT_STEP_MIN_PERCENT,
+    ZOOM_STEP_PERCENT, LOD_DENSITY_REFERENCE_NODES, MIN_ZOOM_STEP_SENSITIVITY,
+    toDisplayPercent, fromDisplayPercent, isCompactZoom,
+    zoomStepSensitivityForGraph, wheelSensitivityForZoom, stepGraphZoom,
+    glyphCompensationForZoom, quantizeLodZoom, GLYPH_FAR_SCALE,
+  } = z
+
+  // 1) 两段镜头的边界：100% 上限 / 20% 渐隐终点 / 5% 下限。
+  assert.equal(MIN_DISPLAY_PERCENT, 5, '【两段镜头】最小比例必须是 5%')
+  assert.equal(COMPACT_START_PERCENT, 20, '【两段镜头】渐隐终点 / 紧凑起点是 20%')
+  assert.equal(COMPACT_START_RATIO, 0.2)
+  assert.equal(toDisplayPercent(MIN_RAW_ZOOM), 5)
+  assert.equal(toDisplayPercent(COMPACT_START_RATIO * ZOOM_REFERENCE), 20)
+  assert.equal(isCompactZoom(ZOOM_REFERENCE), false, '100% 属于渐隐行程')
+  assert.equal(isCompactZoom(0.5 * ZOOM_REFERENCE), false, '50% 属于渐隐行程')
+  assert.equal(isCompactZoom(COMPACT_START_RATIO * ZOOM_REFERENCE), false,
+    '20% 本身是渐隐终点，不算紧凑区')
+  assert.equal(isCompactZoom(0.19 * ZOOM_REFERENCE), true, '20% 以下才进入紧凑行程')
+  assert.equal(isCompactZoom(MIN_RAW_ZOOM), true, '5% 是紧凑行程终点')
+
+  // 2) 紧凑区：文字保持（屏幕倍率恒 1.3）+ LOD 量化冻结（可见集合冻结见第 15 组）。
+  const c20 = glyphCompensationForZoom(COMPACT_START_RATIO * ZOOM_REFERENCE)
+  assert.ok(Math.abs(c20 - GLYPH_FAR_SCALE / 0.2) < 1e-9,
+    '20% 端点必须与渐隐区严格连续（1.3/0.2 = 6.5）')
+  for (const ratio of [0.19, 0.15, 0.1, 0.05]) {
+    const comp = glyphCompensationForZoom(ratio * ZOOM_REFERENCE)
+    assert.ok(Math.abs(comp * ratio - GLYPH_FAR_SCALE) < 1e-9,
+      `【文字保持】${Math.round(ratio * 100)}% 屏幕字号必须仍是 20% 的大小`)
+    assert.ok(comp > c20,
+      `【文字保持】${Math.round(ratio * 100)}% 补偿必须继续增大以抵消镜头缩小`)
+    assert.equal(quantizeLodZoom(ratio * ZOOM_REFERENCE), 0.2 * ZOOM_REFERENCE,
+      `【紧凑区】${Math.round(ratio * 100)}% LOD 计划必须冻结在 20%，零重算`)
+  }
+  assert.ok(Math.abs(glyphCompensationForZoom(MIN_RAW_ZOOM) - GLYPH_FAR_SCALE / 0.05) < 1e-9,
+    '【文字保持】5% 补偿必须是 1.3/0.05 = 26，屏幕字号不缩水')
+
+  // 3) 密度自适应：小图逐值不变、大图按 1/√N 放慢、树深再温和放慢、有下限。
+  assert.equal(zoomStepSensitivityForGraph(0), 1, '空图不得改变缩放手感')
+  assert.equal(zoomStepSensitivityForGraph(8, 3), 1, '所有既有小图夹具必须逐值不变')
+  assert.equal(zoomStepSensitivityForGraph(LOD_DENSITY_REFERENCE_NODES, 20), 1,
+    '不超过参考规模的图灵敏度恒为 1')
+  const s240 = zoomStepSensitivityForGraph(240, 2)
+  const s1000 = zoomStepSensitivityForGraph(1000, 2)
+  const s10000 = zoomStepSensitivityForGraph(10000, 2)
+  assert.ok(s240 < 1 && s1000 < s240 && s10000 < s1000,
+    '【密度自适应】图越大每格缩放幅度必须越小')
+  assert.ok(Math.abs(s240 - Math.sqrt(60 / 240)) < 1e-9,
+    '【密度自适应】灵敏度必须严格等于 1/√(N/60)（深度为 2 时）')
+  assert.ok(zoomStepSensitivityForGraph(1000, 20) < s1000,
+    '【密度自适应】同样节点数下树越深还要再放慢一点')
+  assert.equal(zoomStepSensitivityForGraph(1e9, 100), MIN_ZOOM_STEP_SENSITIVITY,
+    '【密度自适应】万级大图也必须保留可操作的下限，不能慢到滚不动')
+  assert.equal(zoomStepSensitivityForGraph(Number.NaN, Number.NaN), 1,
+    '【密度自适应】脏数据必须回落到 1')
+  // 权衡真跑：线性分位下每格隐藏数 ∝ N；放慢后 ∝ √N（两头都不爆炸）。
+  const hiddenPerNotch = (n: number) => n * ZOOM_STEP_PERCENT * zoomStepSensitivityForGraph(n, 1) / (100 - COMPACT_START_PERCENT)
+  const linearPerNotch = (n: number) => n * ZOOM_STEP_PERCENT / (100 - COMPACT_START_PERCENT)
+  assert.ok(Math.abs(hiddenPerNotch(60) - linearPerNotch(60)) < 1e-9,
+    '【密度自适应】小图与原实现逐值一致')
+  assert.ok(hiddenPerNotch(1000) < linearPerNotch(1000) / 3,
+    '【密度自适应】1000 节点时每格隐藏数必须压到线性的 1/3 以下，不再「轻轻一动消失一片」')
+  assert.ok(Math.abs(hiddenPerNotch(1000) / hiddenPerNotch(60) - Math.sqrt(1000 / 60)) < 0.01,
+    '【密度自适应】每格隐藏数按 √N 增长（而非 N），走完全程的格数同样按 √N 增长')
+  assert.equal(wheelSensitivityForZoom(ZOOM_REFERENCE, 8, 3), 1, '小图滚轮不降速')
+  assert.equal(wheelSensitivityForZoom(ZOOM_REFERENCE, 1000, 2), s1000, '大图滚轮按密度降速')
+  assert.equal(wheelSensitivityForZoom(MIN_RAW_ZOOM, 1000, 2), 1,
+    '紧凑区不隐藏节点，d3 等比缩放已边际递减，不再叠加限速')
+
+  // 4) 按钮步进：渐隐区每格 -10% 并稳定停靠 20%；紧凑区等比衰减（越接近下限幅度越小）、
+  //    保底步长确保真能到 5%；放大是逆运算，能一路回到 20% 以上。
+  let raw = ZOOM_REFERENCE
+  const fadeSteps: number[] = []
+  for (let i = 0; i < 8; i += 1) {
+    const next = stepGraphZoom(raw, -ZOOM_STEP_PERCENT, 1)
+    fadeSteps.push(toDisplayPercent(next))
+    raw = next
+  }
+  assert.deepEqual(fadeSteps, [90, 80, 70, 60, 50, 40, 30, 20],
+    '【两段镜头】100%→20% 每格 -10%，最后稳定停靠在渐隐终点')
+  const compactSteps: number[] = []
+  for (let i = 0; i < 16; i += 1) {
+    const next = stepGraphZoom(raw, -ZOOM_STEP_PERCENT, 1)
+    compactSteps.push(toDisplayPercent(next))
+    raw = next
+  }
+  assert.equal(toDisplayPercent(raw), 5, '【紧凑区】保底步长必须能真正走到 5% 端点')
+  const deltas = compactSteps.slice(0, 8).map((p: number, i: number) =>
+    (i === 0 ? 20 : compactSteps[i - 1]) - p)
+  assert.ok(deltas[0] > deltas[deltas.length - 1],
+    '【紧凑区】越接近下限绝对步长越小（越稀疏变快、越紧凑变慢）')
+  assert.ok(deltas.every((d: number) => d >= 0), '【紧凑区】步长不得反向放大')
+  assert.ok(COMPACT_STEP_DECAY < 1 && COMPACT_STEP_MIN_PERCENT > 0,
+    '【紧凑区】必须同时有等比衰减与保底步长')
+  let back = raw
+  for (let i = 0; i < 16; i += 1) back = stepGraphZoom(back, ZOOM_STEP_PERCENT, 1)
+  assert.equal(toDisplayPercent(back), 100,
+    '【紧凑区】放大可逆，必须能越过 20% 渐隐终点一路回到 100%（不得卡在 20%）')
+  assert.equal(stepGraphZoom(ZOOM_REFERENCE, ZOOM_STEP_PERCENT, 1), ZOOM_REFERENCE,
+    '100% 处放大仍必须停住')
+  assert.equal(fromDisplayPercent(0), MIN_RAW_ZOOM, '0% 也必须钳到 5% 下限')
+
+  // 5) 源码接线守卫：滚轮 / 按钮 / 面板诊断 / GUI 都必须消费这套规则。
+  const readSrc19 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const canvasSource19 = await readSrc19('src/features/graph/GraphCanvas/GraphCanvas.tsx')
+  assert.ok(canvasSource19.includes('wheelSensitivityForZoom(')
+    && canvasSource19.includes('clampWheelDelta(native.deltaY) * wheelSensitivity')
+    && canvasSource19.includes('data-tm-canvas-compact='),
+    '【密度自适应】滚轮必须在唯一规则源上按图规模降速，并暴露紧凑诊断')
+  const controlSource19 = await readSrc19('src/features/graph/GraphCanvas/components/LodControl.tsx')
+  assert.ok(controlSource19.includes('stepGraphZoom(reactFlow.getZoom()')
+    && controlSource19.includes('zoomStepSensitivityForGraph(')
+    && controlSource19.includes('data-tm-lod-compact=')
+    && controlSource19.includes('data-tm-lod-wheel-sensitivity=')
+    && controlSource19.includes('data-tm-lod-compact-hint')
+    && controlSource19.includes('data-tm-lod-compact-glyph-held="true"'),
+    '【两段镜头】按钮步进、密度读数与紧凑提示必须接在左侧状态面板')
+  const lodSource19 = await readSrc19('src/domain/graph/lod.ts')
+  assert.ok(lodSource19.includes('LOD_FLOOR_RATIO = COMPACT_START_RATIO')
+    && lodSource19.includes('Math.max(LOD_FLOOR_RATIO, ratio)')
+    && lodSource19.includes('ratio >= LOD_FLOOR_RATIO && ratio < LOD_FULL_RATIO'),
+    '【紧凑区】渐隐终点必须同源，可见集合冻结且跳过碰撞抽稀')
+  const guiSource19 = await readSrc19('scripts/verify-linked-documents-gui.mjs')
+  assert.ok(guiSource19.includes("atReferenceControl.min === '5%'")
+    && guiSource19.includes("=== '20%'")
+    && guiSource19.includes('5% 紧凑镜头：可见集合与 20% 端点完全一致')
+    && guiSource19.includes('5% 紧凑镜头：文字保持可读字号')
+    && guiSource19.includes('data-tm-lod-compact-hint'),
+    '【两段镜头】GUI 必须实测 20% 渐隐终点、5% 下限、紧凑区节点冻结与文字保持')
+}
+
+// ===========================================================================
+// 20) 【2026-11-11 多选水平镜像 + 紧凑区文字保持】
+//     esbuild 真跑 domain/graph/mirrorSelection.ts 的数据往返（坐标 / 锚点 / 曲线 /
+//     字段透传 / 幂等），另加源码守卫确认写闸门、undo 合并、菜单与只读接线。
+// ===========================================================================
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundle = await build({
+    entryPoints: [fileURLToPath(new URL('../src/domain/graph/mirrorSelection.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const m = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const {
+    applyHorizontalMirror, computeHorizontalMirror, mirrorAnchorHorizontally,
+    mirrorNodeWidth, MIRROR_MIN_SELECTED_NODES, DEFAULT_MIRROR_NODE_WIDTH,
+  } = m
+
+  assert.equal(MIRROR_MIN_SELECTED_NODES, 2, '【多选镜像】少于 2 个节点没有「左右布局」可翻')
+  assert.equal(mirrorNodeWidth({ id: 'x', position: { x: 0, y: 0 } }), DEFAULT_MIRROR_NODE_WIDTH,
+    '【多选镜像】缺宽度必须回落到 120（与落盘侧一致）')
+  assert.equal(mirrorNodeWidth({ id: 'x', position: { x: 0, y: 0 }, width: Number.NaN }), DEFAULT_MIRROR_NODE_WIDTH,
+    '【多选镜像】脏宽度不得污染中轴')
+  assert.equal(mirrorNodeWidth({ id: 'x', position: { x: 0, y: 0 }, measured: { width: 180 } }), 180,
+    '【多选镜像】未显式设宽时优先用测量宽度')
+  assert.deepEqual(mirrorAnchorHorizontally({ u: 0.2, v: 0.75 }), { u: 0.8, v: 0.75 },
+    '【多选镜像】锚点只翻 u，v 保持')
+  assert.equal(mirrorAnchorHorizontally(null), undefined, '非法锚点不写补丁')
+
+  // 三个选中节点宽度不同（100/200/120），包围盒 left=0 / right=920 → 中轴 460。
+  // mid(450) 与 out(1500) 不选中，用来验证「跨界连线」的方向变化判定。
+  const nodes: any[] = [
+    { id: 'a', position: { x: 0, y: 100 }, width: 100, selected: true, data: { label: 'A' } },
+    { id: 'b', position: { x: 400, y: 100 }, width: 200, selected: true, data: { label: 'B' } },
+    { id: 'c', position: { x: 800, y: 300 }, width: 120, selected: true, data: { label: 'C' } },
+    { id: 'mid', position: { x: 450, y: 500 }, width: 100, data: { label: 'MID' } },
+    { id: 'out', position: { x: 1500, y: 100 }, width: 100, data: { label: 'OUT' } },
+  ]
+  const edges: any[] = [
+    { id: 'e1', source: 'a', target: 'b', data: {
+      sourceAnchor: { u: 1, v: 0.3 }, targetAnchor: { u: 0, v: 0.7 },
+      curveControl: { u: 0.5, v: 0.25 }, relation: 'subordinate', lineWidth: 2 } },
+    { id: 'e2', source: 'b', target: 'c', data: {
+      sourceAnchor: { u: 0.8, v: 0.4 }, targetAnchor: null,
+      curveControl: { u: 0.4, v: -0.3 } } },
+    { id: 'e3', source: 'c', target: 'out', data: { sourceAnchor: { u: 1, v: 0.5 } } },
+    { id: 'e4', source: 'out', target: 'out', data: { curveControl: { u: 0.5, v: 0.6 } } },
+    // 跨界但水平方向反转（c 从 860 翻到 60，越过 mid 的 500）→ v 必须取反。
+    { id: 'e5', source: 'c', target: 'mid', data: {
+      sourceAnchor: { u: 1, v: 0.2 }, curveControl: { u: 0.5, v: 0.4 } } },
+    // 跨界但水平方向不变（a 从 50 翻到 870，仍在 out 的 1550 左侧）→ v 保持。
+    { id: 'e6', source: 'a', target: 'out', data: {
+      sourceAnchor: { u: 1, v: 0.1 }, curveControl: { u: 0.5, v: 0.4 } } },
+  ]
+  const selectedIds = ['a', 'b', 'c']
+  const patch = computeHorizontalMirror(nodes, edges, selectedIds)
+  assert.ok(patch, '【多选镜像】3 个选中节点必须产出补丁')
+  assert.equal(patch.axisX, 460, '【多选镜像】中轴必须由包围盒左右端点决定')
+  assert.deepEqual(patch.flippedEdgeIds.sort(), ['e1', 'e2', 'e3', 'e5', 'e6'],
+    '【多选镜像】只有至少一端在选区内的边参与翻转')
+
+  const result = applyHorizontalMirror(nodes, edges, selectedIds)
+  assert.ok(result)
+  const pos = (list: any[], id: string) => list.find((n: any) => n.id === id).position
+  assert.deepEqual(pos(result.nodes, 'a'), { x: 820, y: 100 }, '【多选镜像】a 右边界换到 920')
+  assert.deepEqual(pos(result.nodes, 'b'), { x: 320, y: 100 }, '【多选镜像】b 右边界换到 520')
+  assert.deepEqual(pos(result.nodes, 'c'), { x: 0, y: 300 }, '【多选镜像】c 左边界换到 0')
+  assert.deepEqual(pos(result.nodes, 'mid'), { x: 450, y: 500 })
+  assert.deepEqual(pos(result.nodes, 'out'), { x: 1500, y: 100 })
+  const mirrorBounds = (list: any[]) => {
+    let lo = Infinity; let hi = -Infinity
+    for (const id of selectedIds) {
+      const n = list.find((item: any) => item.id === id)
+      lo = Math.min(lo, n.position.x)
+      hi = Math.max(hi, n.position.x + mirrorNodeWidth(n))
+    }
+    return { lo, hi }
+  }
+  assert.deepEqual(mirrorBounds(result.nodes), mirrorBounds(nodes),
+    '【多选镜像】包围盒左右端点不变 → 原地翻转，整体位置不平移')
+  for (const id of selectedIds) {
+    assert.equal(pos(result.nodes, id).y, pos(nodes, id).y, '【多选镜像】只翻 x，纵坐标必须不变')
+    assert.equal(result.nodes.find((n: any) => n.id === id).width,
+      nodes.find((n: any) => n.id === id).width, '【多选镜像】节点尺寸不得改变')
+    assert.ok(result.nodes.find((n: any) => n.id === id).data.label, '【多选镜像】节点 data 原样透传')
+  }
+  assert.ok(result.nodes[3] === nodes[3] && result.nodes[4] === nodes[4],
+    '【多选镜像】未选中节点必须保持原引用（不触发重渲染）')
+  assert.equal(result.edges.length, edges.length, '【多选镜像】不得增删连线')
+
+  const byId = (id: string) => result.edges.find((e: any) => e.id === id)
+  assert.equal(byId('e1').source, 'a')
+  assert.equal(byId('e1').target, 'b')
+  assert.equal(byId('e1').data.relation, 'subordinate', '【多选镜像】关系 / 样式必须透传')
+  assert.equal(byId('e1').data.lineWidth, 2)
+  assert.deepEqual(byId('e1').data.sourceAnchor, { u: 0, v: 0.3 })
+  assert.deepEqual(byId('e1').data.targetAnchor, { u: 1, v: 0.7 })
+  assert.deepEqual(byId('e1').data.curveControl, { u: 0.5, v: -0.25 },
+    '【多选镜像】两端都选中时曲线弯曲方向必须跟着翻')
+  assert.ok(Math.abs(byId('e2').data.sourceAnchor.u - 0.2) < 1e-9
+    && byId('e2').data.sourceAnchor.v === 0.4,
+    '【多选镜像】锚点 u 取反（允许 1-u 的浮点尾差），v 不变')
+  assert.deepEqual(byId('e2').data.curveControl, { u: 0.4, v: 0.3 })
+  assert.deepEqual(byId('e3').data.sourceAnchor, { u: 0, v: 0.5 },
+    '【多选镜像】跨界边只翻落在选区内的那一端')
+  assert.ok(byId('e4') === edges[3], '【多选镜像】两端都在选区外的边必须保持原引用')
+  assert.deepEqual(byId('e5').data.curveControl, { u: 0.5, v: -0.4 },
+    '【多选镜像】跨界边方向反转时曲线弯曲方向也要翻')
+  assert.deepEqual(byId('e5').data.sourceAnchor, { u: 0, v: 0.2 })
+  assert.deepEqual(byId('e6').data.curveControl, { u: 0.5, v: 0.4 },
+    '【多选镜像】跨界边方向未反转时不要动用户设定的弯曲量')
+  assert.deepEqual(byId('e6').data.sourceAnchor, { u: 0, v: 0.1 })
+
+  // 幂等：再翻一次必须逐值回到原布局（含锚点与曲线）。
+  const twice = applyHorizontalMirror(result.nodes, result.edges, selectedIds)
+  assert.ok(twice)
+  for (const id of nodes.map((n: any) => n.id)) {
+    assert.ok(Math.abs(pos(twice.nodes, id).x - pos(nodes, id).x) < 1e-9
+      && Math.abs(pos(twice.nodes, id).y - pos(nodes, id).y) < 1e-9,
+      `【多选镜像】两次翻转必须回到原坐标（${id}）`)
+  }
+  const twiceE1 = twice.edges.find((e: any) => e.id === 'e1')
+  assert.deepEqual(twiceE1.data.sourceAnchor, { u: 1, v: 0.3 })
+  assert.deepEqual(twiceE1.data.targetAnchor, { u: 0, v: 0.7 })
+  assert.deepEqual(twiceE1.data.curveControl, { u: 0.5, v: 0.25 },
+    '【多选镜像】锚点与曲线也必须可逆')
+  // 不传 selectedIds 时从 nodes[].selected 派生，结果逐值一致。
+  const auto = applyHorizontalMirror(nodes, edges)
+  assert.ok(auto)
+  assert.deepEqual(auto.nodes.map((n: any) => n.position), result.nodes.map((n: any) => n.position),
+    '【多选镜像】store 选中态与显式 id 列表同源')
+  assert.equal(applyHorizontalMirror(nodes, edges, ['a']), null, '只选 1 个节点不翻转')
+  assert.equal(applyHorizontalMirror(nodes, edges, []), null, '空选区不翻转')
+  assert.equal(applyHorizontalMirror(nodes, edges, ['nope', 'nope2']), null, '脏 id 不翻转')
+
+  // 源码接线守卫：写闸门 / 单步 undo / 上方菜单 / 只读 / 文字保持 / GUI 实测。
+  const readSrc20 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const graphSource20 = await readSrc20('src/hooks/useGraph.ts')
+  assert.ok(graphSource20.includes('flipSelectionHorizontally: edit('),
+    '【多选镜像】必须过 useGraph 的唯一写闸门（缩小/有隐藏节点时禁写）')
+  const opsSource20 = await readSrc20('src/hooks/useGraph/selectionMirrorOperations.ts')
+  assert.ok(opsSource20.includes('commitGraphHistorySnapshot(')
+    && opsSource20.includes('setNodesPreservingSelection(') && opsSource20.includes('setEdges(')
+    && opsSource20.includes('temporalState.pause()') && opsSource20.includes('saveLater('),
+    '【多选镜像】节点 + 连线必须合并成一条 undo 历史并保存')
+  const contextSource20 = await readSrc20('src/contexts/GraphContext.tsx')
+  assert.ok(contextSource20.includes('flipSelectionHorizontally'),
+    '【多选镜像】方法必须经 GraphContext 暴露给画布')
+  const canvasSource20 = await readSrc20('src/features/graph/GraphCanvas/GraphCanvas.tsx')
+  assert.ok(canvasSource20.includes('MIRROR_MIN_SELECTED_NODES')
+    && canvasSource20.includes('!canvasReadOnly')
+    && canvasSource20.includes('showSelectionMirror')
+    && canvasSource20.includes('!showSelectionMirror'),
+    '【多选镜像】菜单只在多选且可写时出现，且与 Shift 提示条互斥')
+  const menuSource20 = await readSrc20('src/features/graph/GraphCanvas/components/SelectionMirrorMenu.tsx')
+  assert.ok(menuSource20.includes('Panel position="top-center"')
+    && menuSource20.includes('pointer-events-auto')
+    && menuSource20.includes('data-tm-selection-mirror-flip'),
+    '【多选镜像】上方菜单必须真实可点（Panel 默认 pointer-events:none）')
+  const mirrorSource20 = await readSrc20('src/domain/graph/mirrorSelection.ts')
+  assert.ok(mirrorSource20.includes('return { ...edge, data: { ...(edge.data ?? {}), ...dataPatch } }'),
+    '【多选镜像】边字段必须展开透传，不能重建白名单')
+  const zoomSource20 = await readSrc20('src/domain/graph/zoomScale.ts')
+  assert.ok(zoomSource20.includes('GLYPH_FAR_SCALE / Math.max(MIN_DISPLAY_PERCENT / 100, ratio)')
+    && zoomSource20.includes('文字仍保持'),
+    '【文字保持】紧凑区必须按 1/ratio 撑大补偿，而不是冻结')
+  const guiSource20 = await readSrc20('scripts/verify-linked-documents-gui.mjs')
+  assert.ok(guiSource20.includes('Shift 多选两个节点后上方出现镜像菜单')
+    && guiSource20.includes('水平镜像翻转：节点左右互换')
+    && guiSource20.includes('5% 紧凑镜头：文字保持可读字号'),
+    '【多选镜像 / 文字保持】GUI 必须端到端实测')
 }
 
 console.log('Critical regression checks verified')

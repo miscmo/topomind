@@ -1,75 +1,49 @@
-# TopoMind 长期约定
+# TopoMind 长期约定（逐轮细节见 .workbuddy/memory/2026-11-*.md）
 
-## 验证手段（每次迭代后必跑）
-- 类型 `node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`；回归 `npm run verify:critical`（末尾 "Critical regression checks verified" 即过；日志里 "save failed" 是 close-guard 预期分支）、`verify:graph-store`、`verify:plugins:static`；构建 `npx vite build`（renderer/main/preload 三阶段；避免覆盖 dist 用 `--outDir /tmp/<新目录> --emptyOutDir`）。
-- **铁律**：删字段/改能力必须同步 `scripts/verify-critical-regressions.mts`（断言具体字段），并做反向验证（临时恢复旧实现 → 回归须 exit 1 → 恢复）。只查源码字面量会被注释/类型声明蒙混，必须 esbuild 打包真跑数据往返与写库入口。
+## 验证
+- **用户 2026-11-11 约定：只测核心，不反复全套测试**。核心＝`npm run typecheck`、两验证脚本 `node --check`、`verify:critical`（末行 `Critical regression checks verified`；`save failed` 是 close-guard 预期）、`npx vite build --outDir /tmp/<新> --emptyOutDir` → `cp -r .../. dist/`、一次 `verify:linked:gui`（读 dist，改源码必重建）。按需才加 `verify:graph-store`/`verify:plugins`/`verify:lint:baseline`。
+- 改能力必同步 `scripts/verify-critical-regressions.mts` 断言具体字段 + **反向验证**（旧实现→exit 1→原子恢复）；须 esbuild 打包真跑数据往返/写库入口，勿只查字面量。
+- EPERM 打包→Defender 排除目录；个人目录删除→回收站 API+备份+sha256+每批 10 个。
 
-## 架构 / 运行时
-- **GraphContextProvider**：`GraphPage.tsx` 在返回 JSX 前调用 `useGraphPageActions({graph})`，链内 hook 在 Provider 外 → 不可 `useGraphContext()`（抛错 → 标签加载失败 + 右侧笔记打不开），需要 graph 由上层传参。
-- **Vite OOM**：项目根 `build-*/outputs/release/stats.html`（完整 dist 含 index.html）被 esbuild 当扫描入口 → OOM。已由 `vite.config.js` 的 `optimizeDeps.entries:['index.html']` 根治；陈旧产物清出工作区。主进程纯 Node 启动多因 `ELECTRON_RUN_AS_NODE=1`，onstart 已剥离。
-- **文档草稿**：完整正文绝不进 localStorage（含 base64 → QuotaExceededError）。权威副本在 topo，close-guard flush；`draftStore.partialize` 只存 `cardDrafts` 小片段，detail 草稿仅内存。**勿**引入历史草稿 eviction（会误删唯一未保存副本）。
-- **打包 EPERM rename**：Windows Defender 锁 electron 二进制；管理员 PowerShell `Add-MpPreference -ExclusionPath 'D:\Code\topomind_latest\topomind'` 后 `npm run build:win`。
-- **个人目录删除**：走回收站 API（系统已加载 `Microsoft.VisualBasic.FileIO.FileSystem`；勿 `Add-Type`，运行时编译会被安全策略拦；API 会误抛 `FileNotFoundException` 但操作已生效 → 以 `Test-Path` 为唯一判据）；先整体备份 + 逐文件 sha256 校验，每批 10 个逐批验证。
+## 存储 / 字段
+- 唯一格式边界 `electron/services/graph-meta-service.js` 的 `read/writeGraphMeta`；禁主进程直读 `_graph.json.children`。v2＝索引 `{version:2,zoom,pan}` + `nodes-0..15.json`(对象)/`edges-0..15.json`(数组)，FNV-1a%16、空桶不落盘、索引最后写；未知 version 抛错，v1 不改写。迁移 `scripts/migrate-graph-shards.mts`，比较 `graphMetaComparisonKey`。
+- **字段白名单 7 处**：`types/graph.ts`、`domain/graph/model.ts`、`graphMapper` 双向、`normalizeGraphMeta.ts`、`core/storage/file.ts`(含 `convertGraphToFSB`)、`core/fs-backend.ts`、`graphBuilder`；只加返回类型不算数。配置顶层字段另须 `normalizeConfig` 重建 + `service.writeConfig` 透传 + hydrate。
+- 草稿正文绝不进 localStorage（partialize 只存 cardDrafts）。`GraphPage.tsx` 在 JSX 前调 `useGraphPageActions({graph})`；链内 hook 不可在 Provider 外用 `useGraphContext()`。Vite OOM 由 `optimizeDeps.entries:['index.html']` 根治。
 
-## 图谱存储 / `_graph.json`
-- **唯一格式边界**：`electron/services/graph-meta-service.js`（纯 ESM、deps 注入，主进程与迁移脚本共用）。禁止主进程直接 `_fs_readJsonFile(_graph.json).children`：v2 索引无 children → 静默空图。已知必须走逻辑读：`card-service.readCardChildren`、`_fs_moveTopoNodesToRoom`（读/写/回滚 4 处）、`readRoomNodeSummaries`、`updateCardName`。
-- **v2**：索引 `{version:2, zoom, pan,...}`，节点/边按 id FNV-1a 取模落 `_graph/nodes-<0..15>.json` / `edges-<0..15>.json`（K=16 固定）。写侧按桶键排序 JSON 比较只覆盖变化分片；空桶不落盘但 `writeAsV2` 仍 ensureDir `_graph/`（判断有无数据要看**分片文件**）；**索引最后写**（崩溃时磁盘仍是完整 v1）。未知 version 读写抛错。
-- **兼容**：写侧跟随现有格式（外部 v1 旧档不自动改写，新/空房间默认 v2）。真实库已全量统一 v2（191 房间），v1 分支为外部旧档/回退保留。迁移 `scripts/migrate-graph-shards.mts`（默认 dry-run；`--apply` 逐房间备份 + sha256 TOCTOU 复核 + 真跑往返校验 + 失败恢复；`--verify <备份>` 复核；支持 `{}` 空档升级为 `{version:2}` 无分片索引）。
-- **P0 轻量节点**：新建只写父 `children`，不 mkdir/不写空图；物化由首次写文档/下钻/导入附件的 `ensureDir`。摘要用 `existsSync` 短路，不引入 `materialized` 标记。
-- **新增节点字段同步 7 处白名单**：`src/types/graph.ts`、`domain/graph/model.ts`(KBNode+RoomGraphNode)、`graphMapper.ts` 双向、`normalizeGraphMeta.ts`、`core/storage/file.ts`(FSBGraphChild + convertFSBToGraph + **convertGraphToFSB map 本体**)、`core/fs-backend.ts`、`graphBuilder.ts`(buildMetaFromNodesEdges + buildNodes)。`kind` 已预留；`buildNodes` type 仍统一 `knowledgeCard`，接形状节点只改映射 + 注册 nodeTypes。
-- **回归真跑到读库入口**：内存 fs 真跑分片读写、esbuild 真跑 kind 全链路与 `readCardChildren` 对 v2。注释里保留 `readGraphMeta(...)` 字面量曾蒙混静态断言 → 必须真跑。
-- **迁移往返校验边顺序无关**：v2 读回 edges 按桶序 0..15 拼接，严格数组顺序比较会让所有多边房间误报。统一 `graphMetaComparisonKey(meta)`（递归排序键 + edges 按 id 排序，丢边/改字段仍严格检出），主进程与 `--verify` 共用；回归样本必须含跨多分片的多条边。
-- **迁移失败隔离残留分片**：只恢复索引会让 `_graph/` 残留永久卡住「拒绝覆盖未知数据」；`quarantineShards()` rename 到 `<backupDir>/_shards_quarantine/`（保留证据，不删除），`--apply` 前与 catch 都要调；TOCTOU 提前中止时不得回滚/隔离（用 `backupCreated` 区分）。
+## 文档 / 双链
+- docId 全库主键 `doc_`+32hex；关联 `{docId,cardRef,title}`≤8 只记 `child.linkedDocuments`；物理 `card-<id>/_docs/<docId>.tdoc.json`+`tree.json`，写库必经 `createLinkedDocumentWriter`。
+- **ownerCardPath 铁律**：右栏/草稿/附件/缓存键一律 `documentCardPath`；面包屑唯一 `formatDocumentSource`。docLink inline 只存 `{docId,title}`；`[[` 用 Tiptap `InputRule(/\[\[$/)`+`queueMicrotask` 开 portal。开 chip 先 `flushDocumentSave()`→查锁→`enterRoomInTab`。
+- `fs:listDocumentRelations` 返 `{incoming,outgoing,parsed,indexed}`；索引 `rootDir/.topomind/doc-relations.json` 按 statSync 签名增量重解析，不挂钩写库入口、丢失自愈。`file-service.js` 依赖 electron.shell 不可纯 Node import；idRemap 必须消费；`mathPaste.ts` ALLOWED_ATTR 须含 `data-doc-id`/`data-doc-title`/`data-title`。GUI 候选异步须 waitFor 具体 item、右键须 `dispatchEvent(contextmenu)`。
+- **节点内文档路径消歧**：唯一格式源 `formatDocumentInNodePath`（主进程 `document-id-service.js`），沿 `tree.json` 的 `parentId` 返回祖先标题链（不含自身、`' / '`、顶层空串），带缺失/自环/互环/64 层保护；`scanDocumentEntries` 给 `FSBDocumentCandidate.documentPathLabel`，`LinkDocumentDialog`/`DocumentLinkPicker` 在面包屑下以 `↳ 路径` 单独成行且参与检索。勿在渲染层重写上溯，勿顶替 `formatDocumentSource`。
 
-## 编辑器 BlockNote / ProseMirror
-- **别在 `appendTransaction` 同步改文档**：`setNodeMarkup` 重建 nodeView 打断输入；只记脏块 id 进 pending + `return null`，用 `new Plugin({view})` 存 EditorView，停止输入~1s/blur/destroy 按块 id 批量 flush（`addToHistory:false` + pluginKey meta 防递归）。
-- **浮层一律 portal 到 `document.body`**：`usePortalElement(null)`；给浮层写 `.smart-document-content`/`.bn-block-outer` 前缀永不成立，也拿不到 `--topomind-smart-*` 变量；改前用 `el.matches()` 验一次。
-- **侧栏（＋/⠿）垂直对齐用运行时实测**：`Range.selectNodeContents(.bn-inline-content)` 取第一行矩形，以 `SideMenuExtension.referencePos.y` 算 delta 写 inline `margin-top`；容器 `height:auto !important` 覆盖 BlockNote 按 `[data-level]` 写死的高度。别用菜单自身 `getBoundingClientRect()`（首帧为 0）。
-- **标题留白是场景变量**：`--tm-heading-gap-top/-bottom`（em 相对自身字号）由 `.bn-block-outer` 的 `--tm-heading-gap-{top,bottom}-override` 覆盖：H1~H6 递减约 40→18px｜首块 0｜连续标题固定 `0.4/0.25 × 正文字号 × 间距比`。文档顶部边距是 `.bn-editor` 的 24px（写 `SmartDocumentEditor.css`，勿用 Tailwind 任意变体）。侧栏浮层继承不到 → `SmartDocumentSideMenu.getHeadingGapCategory()` 打 `data-tm-gap-*`。
-- **标题阶梯** H1 1.75/H2 1.45/H3 1.25/H4 1.12/H5 1.0/H6 0.9 em。按级别写样式必须 `:has(> h1…h6)`，勿用 `[data-level="N"]`（首个 heading 无该属性）；`:has()` 不能嵌套。
-- **xl-multi-column**：`useCreateBlockNote` 须传 `dictionary:{...zh, multi_column: multiColumnLocales.zh}`，版本精确配对 0.51.4↔0.51.4；License `GPL-3.0 OR Proprietary`，闭源商用需订阅。
-- **内容区顶部统一取 `.bn-editor` padding-top 24px**：滚动容器 `.tm-smart-editor-scroll` paddingTop=0。目录跳转/scroll-spy 按滚动容器算会把 H1 顶到上沿且 scrollTop 被 `topomind_scroll_<docKey>` 持久化 → 每次打开复现；统一 `smartDocumentUtils.getEditorTopInset()`，切文档先 `scrollTop=0`，恢复用 `MIN_RESTORE_SCROLL_TOP=48` 过滤脏值。看到「顶部被裁」先量 scrollTop。
-- **目录隐藏只认 `mouseleave`**：`handleTocItemClick` 末尾 `editor.focus()` 会让目录项失焦冒泡 `onBlur` → 绑 onBlur 会「点击即隐藏」。
-- **贴右缘浮层别压原生滚动条**：宽度用运行时 `offsetWidth - clientWidth` 实测（Windows 经典 15px），浮层 `right = 滚动条宽 + 6px`；别写死 `right:0`。
-- 行内公式/粘贴/链接拦截见 `useSmartDocumentEditorModel.ts`、`editorLinkInterceptor.ts`（只认 http/https/mailto/ftp，无内部文档协议）。
+## 编辑器 / 节点
+- 勿在 `appendTransaction` 同步改文档：只记脏块 id+return null，`Plugin({view})` 存 EditorView，停输入~1s/blur/destroy 批量 flush。浮层一律 portal 到 body。公式唯一入口 `mathRender.ts`（先 `normalizeMathSource` 再 katex）。图片对齐 `ImageAlignToolbar.tsx` 自监听+fixed 浮层。顶部工具栏折叠 36↔0、收起只留贴边按钮(right:24/z-50)。
+- `titleDecorations.ts` 是装饰唯一事实来源，`KnowledgeCard.tsx` 与 `autoSize.ts` 消费同一份 `decorations`；`signature=JSON.stringify(renderInputs)`。`cardSizeLimits.ts` MAX_TITLE_LINES=4/MAX_TITLE_WIDTH_CHARS=20，DOM line-clamp 与测量同源。
 
-## 图谱连线
-- **锚点归属「边」、只贴节点边框**：`edge.data.sourceAnchor/targetAnchor` = `EdgeAnchor{u,v}`（归一化，至少一个分量 0/1；空/非法=自动交点；旧存档框内点由 `projectAnchorToBorder` 投影到最近边框）。锚点只决定出线位置/方向、**不是线头**（用户明确纠正）：两边框交点一律经 `offsetBorderPoints` 沿连线外推 6px 得 `sx/sy/tx/ty`，线与边框留间隙。手柄贴 `getEdgeParams` 的 `sourceBorder/targetBorder`。改边字段同步：`normalizeGraphMeta` / `file.ts` 的 `convertFSBToGraph` **与 `convertGraphToFSB` 的 `edges.map` 本体** / `graphMapper` 双向 / `graphBuilder` 保存+加载 / minimap。**只在返回类型加字段不算数**（曾画面生效但从未落盘）。
-- **回归须真跑**：`source.includes('字段名')` 会被同文件类型声明/读入函数蒙混；用 `esbuild build({write:false})` + data URL import 加载 `file.ts` 真跑 `convertGraphToFSB → JSON → convertFSBToGraph`。还要测到**写库入口**：曾只测序列化往返，`updateEdgeStyle` 的 8 字段白名单吞掉新字段 → 回归全绿但功能无效；现额外打包 `edgeOperations.ts` 注入假 `storeApi`/`saveLater` 真跑（bundle 需 `banner:{js:'globalThis.window = globalThis.window || {};'}`）。
-- **「字段白名单/子集类型」是高频 bug 模式**：锚点 6 处白名单、`updateEdgeStyle` 8 字段变化检测 + `shouldPersist`、手写的 `defaultEdgeStyle` 子集类型。根治方向：构造 `nextData` 后遍历字段并集浅比较 + 通用透传；子集类型一律 `Partial<X>` 引用同一份定义。
-- **默认样式历史兼容会吞新枚举值**：`normalizeDefaultEdgeStyle` 曾写死 `edgeDefaultsVersion===2 && lineMode==='smoothstep' ? ... : defaults.lineMode`，新增 `'curve'` 后刷新被重置成直线；`currentEdgeStyle` 派生、`addEdge`、格式刷快照都要显式带新字段。
-- **`EdgeLabelRenderer` 浮层一律 `zIndex:10`**（否则被 `.react-flow__node` 盖住，DOM `.click()` 能触发但真鼠标点不到 → 易误判事件 bug）；锚点手柄 11 > 工具栏 10。其坐标系就是 flow 单位（viewport scale 只视觉缩放），`offsetWidth` 可直接与 flow 坐标比较、勿除 zoom。工具栏走 `EdgeToolbarAnchor` 自动避让两端手柄（`edgeToolbarPlacement.ts` 纯函数）；其内部下拉必须 `position:absolute`（ResizeObserver 量 children 容器，参与文档流会撑大导致位置跳动），自带 `pointerEvents:'all'`。
-- **拖动类交互只在组件内 preview**：pointerup 才一次写 store + 落盘；每帧 `setEdges` 会产生大量撤销历史与保存。样式滑杆同理（草稿 + pointerup/keyup/blur 一次提交），勿用 range 的 `onChange` 直写。
-- **曲线 `u` 区间 `[0.25,0.75]` 是数学边界**：二次贝塞尔 `C=2P-(S+T)/2`，投影 `L·(2u-0.5)`；`u<0.25` 端点切线反向回勾钻回节点。`domain/graph/edgeCurve.ts` 的 `CURVE_POSITION_MIN/MAX` 是唯一来源。要更大范围得改三次贝塞尔。
-- **Electron 里不要 `window.confirm`**：破坏性操作走 `useConfirmStore.getState().open()`（`ConfirmModal` 全局挂载 z-[99999]）。右键菜单 `useEdgeActions.handleEdgeDelete` 仍是一键生效。
-- **连线预设色板只有一份** `domain/style/styleDefaults.ts` 的 `EDGE_COLOR_PRESETS`，面板与浮窗都引用，TS 侧禁另写 hex。浮窗样式统一 `onStyleChange(patch)` → `updateEdgeStyle`，切曲线复用 `seedCurveControlOnModeSwitch`。
+## 连线 / 树
+- 锚点归「边」：`sourceAnchor/targetAnchor`=`EdgeAnchor{u,v}`，边框交点经 `offsetBorderPoints` 外推 6px。字段白名单/子集类型是高频 bug：构造 nextData 后遍历字段并集浅比较+通用透传，子集一律 `Partial<X>`。`EdgeLabelRenderer` zIndex:10、手柄 11>工具栏 10；滑杆只组件内 preview、pointerup 一次落盘。Electron 勿 `window.confirm`（用 `useConfirmStore.getState().open()`）。
+- 关系仅 `related`/`subordinate`，方向 source=父→target=子；规则源 `edgeRelations.ts`（`readEdgeRelationId()` 唯一读盘入口），定义在 `_config.json` 显式保留。迁移 `scripts/migrate-edge-relations.mts`（真实 KB 已迁移）。
+- **从属连线样式（2026-11-09 晚回滚，勿再加回）**：用户明确不要双线轨道/层级徽标；从属边只走 `BaseEdge style={style}`，由 `BUILTIN_EDGE_RELATIONS`+右栏样式面板+格式刷决定；关系名标签由 `showEdgeRelationLabels` 控制。**保留**关联边强契约：`describeEdgeSemantic.mandatoryLabel` 让「关联」恒显示，`data-tm-edge-relation-mandatory` 只在关联标签上为 true。
+- 树强校验唯一 `graphHierarchy.ts`：深度单调 O(1)、唯一父/无环/深度≤100，违规边降级 related 不删边，depth 派生不落盘。新建连线必须选关系，onConnect 未选不落盘、addEdge 过强校验。`parseStrictEdgeRelation`（只认显式两值）用于创建期、`assertEdgeRelationForCreate` 还要求关联边非空显示名；`readEdgeRelationId` 只用于读盘兼容，勿混。
 
-## 设计系统 / UI
-- **单色制 Monochrome Brand（用户决策）**：浅色 `--color-primary` == `--color-accent`(`#0969da`)，深色为同蓝明度变体，勿"修复"同色。颜色只在 `tokens.css` 定义一份，TS 侧不复制 hex。
-- **shared/ui**：空占位一律 `EmptyState.tsx`；互斥单选 `SegmentedControl.tsx`；模态走 `modal.ts` + 统一 `z-[10000]`（非模态 popover 例外）。全局 `:focus-visible` 在 `base.css`，勿逐个补焦点环。图标一律 lucide-react。
-- **卡片三层视觉通道所有权**：装饰层（背景/边框/字体/emoji）/结构层（右槽位，系统专有：`hasDetail` 文档图标 + `childCount` 徽章）/语义层（左竖条=进度、标题前=标记，系统专有；标题前链环=关联文档标记，已实现）。语义层永不被装饰覆盖、不进格式刷；emoji 禁承载状态。边框色优先级：显式 `data.nodeStyle.borderColor` > `domainColor` > 默认（读未 merge 原值）；节点 inline style 勿写 border-color。
-- **「A 展开成 B」morph 动画**：同一容器过渡 width/height/radius/底色/边框，勿两套元素滑入滑出。右缘固定向左长大时内容层须 `transform: translateX(d)` 与 `clip-path: inset(0 d bottom 0 round …)` 同节奏补偿（d = 面板宽−把手宽），否则先露右侧留白成「空板」；勿前载 easing、勿叠加延迟 opacity；阴影用两层 opacity 交叉淡入。中间帧验证 `document.getAnimations().forEach(a => {a.pause(); a.currentTime = t})`。
+## 缩放 / LOD（详见 2026-11-09~11.md）
+- `zoomScale.ts` 唯一比例尺源：100%＝raw 0.65、**5%~100%**（上限 100%=`MAX_RAW_ZOOM≡ZOOM_REFERENCE`，下限 5%，20% 分两段）；`rebaseViewportZoom` 复位历史 raw 1/0.5；滚轮 `clampWheelDelta`(80)+`wheelDeltaStep`(τ62ms) 由 rAF 逐帧派发；**禁用 CSS transition:transform**。端点判定唯一源 `isAtMaxZoom/isAtMinZoom` 按显示百分比。左下角 `ZoomResetButton` 常驻 `CanvasMiniMap` bottom-left，只 `zoomTo(ZOOM_REFERENCE)` 不改 pan、必须 `pointer-events-auto`；与左上角 `data-tm-zoom-reset` 同源。
+- **P0 语义缩放铁律**：视觉变量按**连续 zoom** 用 `containerRef.style.setProperty` 写画布最外层（零 React 重渲染），绝不用 2% 台阶的 `lodZoom`。`KnowledgeCard` 两层壳：`data-tm-card-anchor` 外层尺寸/Handle/测量/落盘全不动，`data-tm-glyph-layer` 内层唯一 `scale(var(--tm-glyph-comp,1))`；**禁止** `scale(1/zoom)` 改节点尺寸。装饰常驻由 `.tm-card-detail` 连续淡出。
+- **P1.5 字形**：唯一源 `glyphScaleForRatio`（近景放大分支已删；`safe>=1→1`；<100% `1+(1.3-1)*(1-smoothstep(0.2,1,r))`，`GLYPH_FAR_SCALE=1.3`）；越界 ratio 先 clamp [0.2,1]；`glyphCompensationForZoom` 供 LOD 压力复用。**文字仍保持（2026-11-11 晚，取代「紧凑区冻结 6.5」）**：紧凑区 `comp = GLYPH_FAR_SCALE/ratio`（20% 连续 6.5、5% 约 26），屏幕倍率恒 1.3 → 标题字号不缩到 2.4px；代价是节点间距继续收紧、骨架可能靠得更近，可见集合冻结且跳过碰撞抽稀故不触发隐藏；用户明确选「可读性优先于零重叠」。5% 端点有按钮保底步长残差（实测 5.22%），断言只锁 `comp×镜头比例` 恒定，勿断言 comp 恰为 26。
+- **LOD `lod.ts`**：`revealRatioForRank(rank,count)` 按退场序列（游离→深叶→浅主干→树根，父不先于子）的分位铺满 100%→20%；判据 `ratio>=reveal`，**阈值越高越早消失**；滞回 1.5%、树根恒留、pin/reveal/选中强制、无树或覆盖<25% 关闭。渐隐渐显用 `tm-lod-exit`/`tm-lod-enter` 关键帧+`both`(240ms)，勿退回 transition。`hidden` 只渲染不落盘。**禁止离散档位表 / 按深度级数分配**。
+- **自定义永久显示层数**：`LOD_DEFAULT_PRESERVED_DEPTH=2`、`LOD_MAX_PRESERVED_DEPTH=MAX_HIERARCHY_DEPTH(100)`、`normalizePreservedDepth()`；`LodVisibilityInput.preservedDepth` → `skeletonIds`＝**所有** `!free && !root && depth<=N` 树节点（**只依赖层级、禁读坐标**），树根恒留、游离不保；仍占 `exitOrder` rank、不分配 `revealOf` → 其它阈值逐值不变；与根同进碰撞 `protectedIds`/`priority` 最前，**层数优先于零重叠**，保护节点间重叠只计 `collisionProtectedOverlapPairs`。`LodVisibility.preservedDepth` 回吐生效值。偏好 `lodPreferences.ts` 增 `preservedDepth`+`setLodPreservedDepth`（commit 先写快照再通知）；`useSemanticLod` 传入 `common` 并写进 signature → 改配置立即重算；`LodControl` 下拉 1~8 层 + 「全部层级」，`data-tm-lod-preserved-depth-select`。GUI 夹具 `lod-c1`(60,660)、`lod-c2`(700,700) 拉开零重叠，`lod-g1`(130,405) 贴根承担碰撞抽稀。
+- **P1 几何压力 `lodPressure.ts`**：`collectNodeSpacings` 空间哈希（cell=`sqrt(area/n)*1.5`、3×3 邻格、孤立哨兵、24 probes），`overlapPressureForRatio` 需求 `base*glyphScale(r)/r`，`lodProgressForRatio=0.72*linear+0.28*geometric`，2% 台阶查表求逆。**三铁律**：只依赖静态布局+ratio（绝不依赖可见集合，否则自激）/ w=0.28 有界 / 两端固定。lod.ts 只把 reveal 经 `pressure.ratioFor` 求逆，**退场顺序仍由语义树唯一决定**。`useSemanticLod` signature 刻意不含 position。
+- **P1.75 折叠徽标**：`computeCollapsedCounts` 把隐藏节点归到最近可见祖先（不重复、游离单列、防环），`总+游离=隐藏数`；**绝不写 nodes[].data**，走 `lodCollapseStore.ts` 外部 store（roomPath 隔离+按 nodeId 精确通知），`KnowledgeCard` 用 `useSyncExternalStore`。**外部 store 先写快照再通知**。
+- 图型 `graphProfiles.ts`：auto/tree/flow/network，用户 off/force 压过图型。总览 `roomOverview.ts` 三铁律：`useGraphSession`（裸 selector 新对象让 React 19 挂）、独立 `ReactFlowProvider`、卡片带隐藏 Handle。返回上个视野 `viewportReturn.ts`+store（TTL 12s/settle 340ms/最小 24px，按 tab 隔离不落盘），只在程序化跳转埋点；viewport.x/y 是屏幕像素。Puppeteer 组合键须 `down('Control')+press('f')+up('Control')`。
+- **P1.9 碰撞硬约束 `lodCollision.ts`**：根因＝P0 钉住视觉壳屏幕尺寸但坐标仍随 viewport 收缩。**不改坐标**，改成「紧凑到重叠就渐隐」：碰撞盒＝锚点壳×`glyphCompensationForZoom`×1.06，100%→85% smoothstep 启用且 **100% 恒等点绝不裁剪**；按保留优先级贪心，**障碍必须是「所有更高优先级节点」而非「已保留节点」**（否则低优先级闪回、破坏单调）。树根/pin/选中/reveal 恒定保留、父被裁连带裁子树。`LodNodeLike` 只加只读 `width/height/measured?`，不进白名单。P1 回归 `positionedNodes` 稀疏布局隔离压力节奏。
+- **P2 多级布局插值 / 坐标随 zoom 变：不做**（撞手摆位置落盘 / viewport 返回视野 / hidden 不落盘三条铁律）。P1.9 是安全替代：用抽稀代替重排。
+- **画布只读（2026-11-11）**：唯一判定 `computeCanvasReadOnly(zoom, hiddenNodeCount)`（`src/domain/graph/canvasReadOnly.ts`）＝`!isAtMaxZoom(zoom) || hidden>0`（缩小即锁；100% 有隐藏也不解锁）。状态在 `src/stores/canvasReadOnlyStore.ts` 外部 store 按 tabId 隔离，GraphCanvas 用 `useLayoutEffect` 发布；**先写快照再通知**，叶子组件只 `useActiveCanvasReadOnly()` 订阅布尔。**唯一写闸门在 `src/hooks/useGraph.ts` 的 `guardCanvasEdit`**（不能只包 GraphContext：`useGraphPageActions` 在 Provider 外持有同一 graph）：包住全部 CRUD/连接/样式/锚点方法，`onNodesChange` 只过滤 position/remove/add/replace + 手动 resize 的 dimensions，**放行 select 与测量/auto-size 的 dimensions**。绕闸门四条捷径单独拦：`graphEventHandlers.onConnect` 的 `onConfirm`、格式刷 `onEdgeClick`、`useEdgeActions.deleteElements`、撤销/重做与 Enter/Tab 快捷键。UI 层 `nodesDraggable/nodesConnectable/nodesFocusable={!readOnly}`、右键菜单不弹、卡片标题/resize/加号/工具栏/emoji、连线工具栏与锚点全收；`elementsSelectable` 保留。提示条 `CanvasReadOnlyBanner`+LodControl 徽标+右栏样式面板提示，`data-tm-canvas-readonly*`。只读是纯视图态，绝不落盘。
+- **两段镜头 + 密度自适应（2026-11-11 晚）**：`MIN_DISPLAY_PERCENT=5`、`COMPACT_START_PERCENT=20`(=`COMPACT_START_RATIO`)，**`lod.LOD_FLOOR_RATIO` 必须从 `COMPACT_START_RATIO` 派生**（`lodPressure.DEFAULT_LOD_PRESSURE_BOUNDS.floorRatio` 同源），禁三处各写 0.2。100%~20% 渐隐、20%~5% 紧凑：紧凑区 `computeLodVisibility` 用 `lodRatio=max(LOD_FLOOR_RATIO, ratio)` → 可见集合严格冻结、`displayPercent` 回吐真实读数、**跳过碰撞抽稀**；`quantizeLodZoom` 也钳 0.2 → 零重算；`glyphScaleForRatio` clamp 下界 0.2。**一行坐标都不改**（P2 不做）。滚轮紧凑区靠 d3 等比缩放边际递减；按钮 `stepGraphZoom`（渐隐区 ±10%×灵敏度且 20% 停靠，紧凑区 `5+(p-5)*0.72-0.5` 保底步长、放大越过 20% 必须回线性否则卡死）。**密度自适应**：固定 80 个百分点藏 N 个节点，按分位每格隐藏 ∝N、按绝对数每格格数 ∝N，折中让步进量 ∝1/√N → `zoomStepSensitivityForGraph(n,d)=min(1,√(60/n)/(1+0.06·max(0,d-2)))`，n≤60 恒 1、下限 0.12；`wheelSensitivityForZoom` 紧凑区恒 1；只改操作量、**不改 zoom→显示比换算与 LOD 阈值公式**。诊断 `data-tm-lod-compact*`/`data-tm-canvas-compact*`。GUI 阶段 N：8 格到 20% 做全部 LOD/只读/字形断言 → 12 格到 5% 做紧凑断言 → 重置；`wheelOnPane` helper 在 CDP `Input.dispatchMouseEvent` 超时时用合成 WheelEvent 兜底。
 
-## Tailwind / CSS
-- **CSS 变量不能配透明度修饰符**：`bg-[var(--x)]/30` v3.4 无效 → `bg-[color-mix(in_srgb,var(--x)_45%,transparent)]`。
-- **改 BlockNote 内部元素别用 Tailwind 任意变体** `[&_.bn-X]:!pt-6`（本项目 3.4.19 整组不生成 CSS）→ 写进 `SmartDocumentEditor.css` 按 `.smart-document-content .bn-X` + `!important`。
-- `tailwind.config.js` 已把 borderRadius/boxShadow 映射到 token；SVG 取主题色须 `style={{fill:'var(--x)'}}` 而非 `fill="var(--x)"`；纸张深色变量双写 `html[data-theme='dark'], .dark`。
+## 多选 / 布局变换
+- **水平镜像（2026-11-11 晚）**：唯一规则源 `domain/graph/mirrorSelection.ts` 纯函数 `computeHorizontalMirror`/`applyHorizontalMirror`（esbuild 可真跑）。中轴＝选中节点包围盒 `(minLeft+maxRight)/2`；节点 `x' = 2*axis-(x+width)`、y/尺寸/data 全不动；**锚点只翻落在选中端的 `u→1-u`（v 不变）**；`curveControl` 两端全选中时 `v→-v`（法向 `(dy,-dx)` 决定，含垂直线），只有一端选中时按两端中心连线 `dx` 是否变号决定，避免跨界连线莫名变形；source/target 语义方向不变。未选中对象保持原引用、边 data 用展开语法透传（不进 7 处字段白名单）；连续两次严格幂等；选中 <2 返回 null。宽度取 `width ?? measured.width ?? initialWidth ?? 120`。
+- 接线：`hooks/useGraph/selectionMirrorOperations.ts` 把结果一次写回（`setNodesPreservingSelection`+`setEdges`，temporal `pause→set→resume→commitGraphHistorySnapshot` 合并成**一条 undo 历史**，再 `saveLater`）；`useGraph` 过 `guardCanvasEdit`、`GraphContext` 暴露；`components/SelectionMirrorMenu.tsx` 是 React Flow `<Panel position="top-center">`，仅 `selectedNodeCount>=2 && !canvasReadOnly` 时由 GraphCanvas 挂载，与 Shift 提示条互斥，内层必须 `pointer-events-auto`。**按钮不要做忙碌禁用**（异步保存会让连点第二下被吞，纯函数每次读最新 store 天然支持来回翻）。诊断 `data-tm-selection-mirror-menu/-count/-flip`。
 
-## 节点关联已有文档 / docId
-- **docId 是全库稳定主键**（`doc_` + UUID32hex），规则唯一来源 `electron/services/document-id-service.js`（主进程）与 `src/domain/graph/linkedDocuments.ts`（渲染层）。正文 JSON 顶层补自描述 `id`，以文件名为准自愈；旧档零迁移。
-- 破坏稳定性的 4 处已修：跨节点移动只在目标节点已有同 id 时重映射（`planDocumentIdRemap`）、`importKB` 副本按外部已有 id 重映射、回收站恢复优先复用原 id、正文写入/导出/读取补 `id`。改标题 / reparent / 改正文不动 id。
-- **不建常驻全局索引**：`resolveDocumentById(rootDir, docId, cardRef?)` 先按 `cardRef` O(1) 直取，失效全库扫 `_docs/tree.json` 自愈并回写；三态 `ok/trashed/missing`。关联记录 `{docId, cardRef, title}`，上限 8，空数组返回 `undefined`（不写空键）。
-- `linkedDocuments` 落盘同样走 7 处白名单（见上），尤其 `convertGraphToFSB` 的 **map 本体**。写库必须经 `graphMetaService` 逻辑读写的 `createLinkedDocumentWriter`（read-modify-write），渲染层不得「读全图→写回」。
-- **ownerCardPath 铁律**：右栏读写 / 草稿 / 附件 / 内容缓存键 / 滚动 key 一律用「文档实际所属节点」`documentCardPath`，不能用当前选中节点 `nodePath`；linked 视图 `syncHasDetail:false` + `allowedDocumentIds`。链环标记在语义层、不进格式刷；对话框全局唯一挂 `App.tsx`；`navRequest` 带 `tabId`。
-- **GUI 用例** `npm run verify:linked:gui`（`scripts/verify-linked-documents-gui.mjs`，22 项断言）：隔离临时库 + CDP attach/自启 Electron；右键菜单须 `dispatchEvent(contextmenu)`（puppeteer 右键不触发 React `onNodeContextMenu`）；用 localStorage 预置 `topomind_last_workspace` + reload 绕过原生目录对话框。`file-service.js` 依赖 `electron.shell`，纯 Node 不能整模块 import，写库入口真跑必须进真实 Electron。
-- 反向验证安全写法（先读 bytes 到内存、`finally` 恢复、sha256 比对）与 `sortKeys` 导致 `JSON.stringify` 误报的陷阱，见 `2026-11-06.md`。
-- **来源面包屑唯一规则**是主进程 `formatDocumentSource(cardPath, nodeName)`：resolve 返回 `nodeName`/`sourceLabel`（运行时派生，不落盘），选择器候选与右栏共用；渲染层不得再自己 `slice(0,-1)`。
-
-## 插件边界 / lint 门禁 / 构建产物
-- **共享 store 的位置有规则**：`verify:plugins:boundaries` 禁止 builtin 插件与 `shared/` 引用 `@/stores/*`。共享 UI 状态放 `src/shared/ui/<Comp>/xxxStore.ts`（沿用 ConfirmModal / PromptModal）；主应用↔内置插件共享的状态放 `src/plugins/public/xxxStore.ts`（规则显式放行 `@/plugins/public/*`）。`npm run verify:plugins` 三步 static/boundaries/runtime 全绿才算过。`features/monitor/` 重复模块已删除，别再按旧记忆找。
-- `verify-plugin-runtime-guards.mts` 跑在原生 Node，顶层 import 含 `@` 别名的模块必崩；用脚本内 `loadModuleWithVite()` 加载。
-- **lint 基线门禁**：`npm run verify:lint-baseline`（`scripts/verify-lint-baseline.mjs` + `lint-baseline.json`，按文件 error 数比对，新增脏文件/恶化即 exit 1），修完历史债用 `npm run lint:baseline:update`。**历史债治理已全部完成：247 → 167(P1 机械类+真 bug) → 57(P2 清 110 个 no-explicit-any) → 0(P3)**。`eslint.config.js` 忽略 `scripts/` 与 `.graph-store-test-*`。
-- **P2 清 any 手法**：删多余的 `:any` 标注改用推断/现成类型；第三方边界（BlockNote schema / X6 cells / MindMap options / emoji-mart props）用 `typeof` 收窄或新增最小结构契约类型文件（`src/types/react-css.d.ts`、`src/features/.../smartDocumentEditorTypes.ts`）。每批改完必过 `tsc --noEmit`。
-- **P3 降级决策**：`react-hooks/refs` 与 `react-hooks/set-state-in-effect` 降级为 `warn`（保留 IDE/CI 可见，但退出 error 计数）。二者是 React 19 插件主观意见，主要命中「渲染期写 ref 存最新值」与「effect 内派生 setState」两类既有模式，逐文件重构 57 处易引发交互回归。门禁只统计 error，故降级后 0 error + 85 warning。
-- lint 建议不能盲改：`saveCoordinator.ts` 的 `let savePromise!` 改 const 会因 IIFE finally 同步路径触发 TDZ；`log-backend.ts` 清完 any 后失效的 `eslint-disable` 注释要一并删。
-- **构建/GUI**：默认 `npx vite build` 清空 `dist/assets` 会撞 `SAFE_DELETE_BULK_CONFIRM_REQUIRED`；必须构建到 `$TEMP/...` 再 `cp -r .../. dist/`（只覆盖不删除）。GUI 用例读 `dist`，改源码后不同步就会测到旧代码；`index-*.js` 只是 bootstrap，UI 在懒加载 chunk。
+## 设计 / CSS / 门禁
+- 单色制：浅色 `--color-primary`==`--color-accent`(`#0969da`) 勿"修复"，颜色只在 `tokens.css`。卡片三层通道：装饰/结构/语义；边框色 显式>domainColor>默认。CSS 变量不配透明度修饰符（用 color-mix）；改 BlockNote 内部写进 `SmartDocumentEditor.css` 按 `.smart-document-content .bn-X`+`!important`；SVG `style={{fill:'var(--x)'}}`。
+- 插件门禁禁 builtin/`shared/` 引用 `@/stores/*`；共享状态放 `src/shared/ui/<Comp>/xxxStore.ts` 或 `src/plugins/public/xxxStore.ts`；runtime guards 用 `loadModuleWithVite()`。

@@ -8,8 +8,18 @@ import { generateId } from './graphBuilder'
 import type { GraphOperations } from './graphOperations'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { useGraphUiStore } from '../../stores/graphUiStore'
+import { isCanvasReadOnly } from '../../stores/canvasReadOnlyStore'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
+import { useEdgeRelationPickerStore } from '../../stores/edgeRelationPickerStore'
+import { SUBORDINATE_EDGE_RELATION_ID } from '../../domain/graph/edgeRelations'
+import {
+  buildHierarchy,
+  describeDowngradeReason,
+  toHierarchyEdge,
+  validateSubordinateEdge,
+  type HierarchyEdgeLike,
+} from '../../domain/graph/graphHierarchy'
 
 export interface GraphEventHandlerDeps {
   tabId: string
@@ -141,18 +151,49 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       const source = connection.source ?? graphUi.connectingSourceId
       const target = connection.target ?? graphUi.connectingTargetId
       if (!source || !target || source === target) return
-      
+
       ops.deselectNode()
       ops.setSelectedEdgeInGraph(null)
 
-      const edgeId = generateId('e-')
-      ops.addEdge({ ...connection, source, target }, edgeId, defaultEdgeStyle).then((created) => {
-        if (!created) return
-        ops.setSelectedEdgeInGraph(edgeId)
-        setSelectedEdgeId(edgeId)
+      // 【用户决策】每次新建连线必须强制选择关系类型。先算出「从属」是否可用，
+      // 不可用就在浮层里禁用并说明原因；用户不选 / 取消则一条边都不落盘。
+      const projected: HierarchyEdgeLike[] = storeApi.getState().edges.map((edge) => toHierarchyEdge({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        relation: edge.data?.relation,
+        weight: edge.data?.weight,
+      }))
+      const nodeIds = projected.flatMap((edge) => [edge.source, edge.target])
+      const hierarchy = buildHierarchy(nodeIds, projected).hierarchy
+      const subordinateCheck = validateSubordinateEdge(hierarchy, toHierarchyEdge({
+        id: '__pending__',
+        source,
+        target,
+        relation: SUBORDINATE_EDGE_RELATION_ID,
+        weight: 'minor',
+      }))
+
+      useEdgeRelationPickerStore.getState().open({
+        source,
+        target,
+        subordinateBlockedReason: subordinateCheck.ok
+          ? null
+          : describeDowngradeReason(subordinateCheck.reason ?? 'cycle'),
+        onConfirm: (relation) => {
+          // 浮层可能在可编辑时打开、用户随后缩小镜头才点确认；落盘前再挡一次，
+          // 否则「只读期间新增连线」会从这条异步路径漏过去。
+          if (isCanvasReadOnly(tabId)) return
+          const edgeId = generateId('e-')
+          ops.addEdge({ ...connection, source, target }, edgeId, defaultEdgeStyle, relation).then((created) => {
+            if (!created) return
+            ops.setSelectedEdgeInGraph(edgeId)
+            setSelectedEdgeId(edgeId)
+          })
+        },
       })
     },
-    [ops, defaultEdgeStyle, setSelectedEdgeId]
+    [ops, defaultEdgeStyle, setSelectedEdgeId, storeApi, tabId]
   )
 
   const onNodeClick = useCallback(
@@ -173,6 +214,9 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       // 连线格式刷激活时：点击连线即应用样式（可连续应用多条），不改变选中态，按 Esc 退出
       const edgeFormatPainterStyle = useGraphUiStore.getState().edgeFormatPainterStyle
       if (edgeFormatPainterStyle) {
+        // 格式刷是「点击即写入」，走的是 ops 而不是 Context 的 updateEdgeStyle，
+        // 只读时必须在这里单独挡住（Context 闸门覆盖不到这条捷径）。
+        if (isCanvasReadOnly(tabId)) return
         ops.updateEdgeStyle(edge.id, edgeFormatPainterStyle)
         return
       }
@@ -180,7 +224,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       ops.setSelectedEdgeInGraph(edge.id)
       setSelectedEdgeId(edge.id)
     },
-    [setSelectedEdgeId, ops]
+    [setSelectedEdgeId, ops, tabId]
   )
 
   // 程序化选中某条连线（与 onEdgeClick 等价），供右键菜单"连线样式"等入口复用：

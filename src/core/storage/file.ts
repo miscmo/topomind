@@ -7,6 +7,7 @@ import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-uti
 import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 import { normalizeCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
 import { normalizeLinkedDocuments, type LinkedDocumentRef, type DocumentResolution } from '../../domain/graph/linkedDocuments'
+import { readEdgeRelationId } from '../../domain/graph/edgeRelations'
 
 interface FSBGraphChild {
   name: string
@@ -132,7 +133,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
     id: e.id,
     source: { ref: normalizeRef(e.source), name: '', updatedAt: undefined },
     target: { ref: normalizeRef(e.target), name: '', updatedAt: undefined },
-    relation: e.relation ?? '相关',
+    relation: readEdgeRelationId(e.relation),
     weight: e.weight ?? 'minor',
     lineMode: e.lineMode,
     lineStyle: e.lineStyle,

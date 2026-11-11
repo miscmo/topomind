@@ -1,6 +1,7 @@
 import type { GraphMeta } from '../../domain/graph/model'
 import type { CardInfo } from '../../domain/graph/model'
 import type { EdgeRelationDefinition } from '../../domain/graph/edgeRelations'
+import type { GraphProfileId } from '../../domain/graph/graphProfiles'
 import type { KBListItem } from '../../types'
 import type { DefaultEdgeStyle, DefaultEditorStyle } from '../../domain/style/styleTypes'
 import type { FSBTrashItem, FSBTrashTopoDocumentItem, FSBDocumentCandidate } from '../fs-backend'
@@ -31,6 +32,8 @@ export interface VaultConfig {
   edgeRelations?: EdgeRelationDefinition[]
   /** 是否在连线上显示关系名小标签 */
   showEdgeRelationLabels?: boolean
+  /** 房间级图型分类（roomPath → 图型 id），缺省/旧档一律为 auto */
+  roomProfiles?: Record<string, GraphProfileId>
   kbCovers?: Record<string, string>
   kbCoverOffsets?: Record<string, number>
   kbOrder?: string[]

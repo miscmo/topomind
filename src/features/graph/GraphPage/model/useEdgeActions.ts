@@ -4,6 +4,7 @@ import { logAction } from '../../../../core/log-backend'
 import type { KnowledgeEdge } from '../../../../types'
 import type { GraphContextValue } from '../../../../contexts/GraphContext'
 import { useGraphStoreApi } from '../../../../stores/graphStore'
+import { isActiveCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
 
 export interface UseEdgeActionsOptions {
@@ -21,6 +22,9 @@ export function useEdgeActions(options: UseEdgeActionsOptions) {
   }, [storeApi])
 
   const handleEdgeDelete = useCallback((edgeId: string) => {
+    // deleteElements 是 React Flow 自带的删除 API，绕过了 useGraph 的编辑闸门，
+    // 必须在这里单独挡住（右键菜单只读时不打开，这里是第二道保险）。
+    if (isActiveCanvasReadOnly()) return
     const edge = findEdgeById(edgeId)
     logAction('连线:删除', 'useNodeActions', { edgeId, edgeSource: edge?.source, edgeTarget: edge?.target, trigger: 'context-menu' })
     deleteElements({ edges: [{ id: edgeId }] })

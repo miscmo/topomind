@@ -4,6 +4,7 @@ import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../st
 import { normalizeEdgeAnchor } from './edgeAnchors.ts'
 import { normalizeCurveControl } from './edgeCurve.ts'
 import { normalizeLinkedDocuments } from './linkedDocuments.ts'
+import { readEdgeRelationId } from './edgeRelations.ts'
 
 const DEFAULT_VIEWPORT = { zoom: 1, pan: { x: 0, y: 0 } }
 const DEFAULT_NODE_SIZE = { width: 120, height: 52 }
@@ -29,14 +30,14 @@ function normalizePoint(value: unknown, fallback: { x: number; y: number }) {
   }
 }
 
+/**
+ * 【用户决策 2026-11-08】磁盘已完成物理迁移，落盘值恒为两值之一。
+ * 本函数是读写共用的落盘边界，统一走 readEdgeRelationId：
+ *   - 旧档 / 导入 / 恢复备份里的中文值、四种旧内置 id、rel_* 都在这里自愈；
+ *   - 任何未知值一律回退「关联」，保证写回磁盘的绝不会是脏字符串。
+ */
 function normalizeRelation(value: unknown): EdgeRelation {
-  if (typeof value !== 'string') return '相关'
-  const trimmed = value.trim()
-  // 只做形状校验，绝不把未知值打回「相关」——否则自定义关系一落盘再读回来就丢了。
-  // 也绝不在这里把旧中文值（相关/依赖/演进）改写成新 id：本函数是读写共用的
-  // 落盘边界，改写会让保存房间时顺手批量改档，违背「读时映射、磁盘不动」。
-  if (!trimmed || trimmed.length > 64) return '相关'
-  return trimmed
+  return readEdgeRelationId(value)
 }
 
 function normalizeWeight(value: unknown): EdgeWeight {

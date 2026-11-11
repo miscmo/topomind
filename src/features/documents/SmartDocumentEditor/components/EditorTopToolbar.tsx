@@ -150,10 +150,10 @@ export function EditorTopToolbar({
         aria-label={collapsed ? '展开顶部工具栏' : '收起顶部工具栏'}
         title={collapsed ? '展开顶部工具栏' : '收起顶部工具栏'}
         onClick={handleToggleCollapsed}
-        className="tm-editor-top-toolbar__toggle flex h-5 w-6 shrink-0 items-center justify-center rounded-md border-none bg-transparent text-[var(--color-text-muted)] cursor-pointer transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]"
-        style={collapsed ? { position: 'absolute', top: 0, right: 8 } : undefined}
+        className="tm-editor-top-toolbar__toggle flex h-[24px] w-[28px] shrink-0 items-center justify-center rounded-md border border-[var(--color-border-light)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] cursor-pointer shadow-sm transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)] z-50"
+        style={collapsed ? { position: 'absolute', top: -12, right: 24 } : undefined}
       >
-        {collapsed ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
+        {collapsed ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
       </button>
       {styleOpen && styleRect && (
         <EditorStylePopover

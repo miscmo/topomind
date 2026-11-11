@@ -117,11 +117,14 @@ export interface GraphMeta {
 // ============== 边类型 ==============
 
 /**
- * 连线关系的稳定 id（见 domain/graph/edgeRelations.ts）。
- * 早先是硬编码三值联合，自定义关系会被归一化打回「相关」；现在放开为字符串，
- * 合法值由关系定义列表决定。旧存档的中文值原样保留，读取时才映射。
+ * 连线关系的稳定 id（唯一规则源 domain/graph/edgeRelations.ts）。
+ * 【用户决策 2026-11-08】语义收敛为两类并做物理磁盘迁移，落盘恒为这两值：
+ *   related     关联（弱，不参与树）
+ *   subordinate 从属（强，source=父 → target=子）
+ * 旧的中文值 / 四种内置 id / 自定义 rel_* 只在读取侧经
+ * LEGACY_EDGE_RELATION_MAP 映射，绝不再落到磁盘上。
  */
-export type EdgeRelation = string
+export type EdgeRelation = 'related' | 'subordinate'
 
 /** 边权重（决定主线/次线） */
 export type EdgeWeight = 'main' | 'minor'

@@ -108,7 +108,10 @@ export interface FSBDocumentCandidate {
   type: string
   cardPath: string
   nodeName: string
+  /** 所属知识库 / 房间 / 节点路径（主进程 formatDocumentSource 唯一格式规则）。 */
   breadcrumb: string
+  /** 节点内文档树路径（祖先文档标题链，根 → 直接父级；顶层文档为空串）。 */
+  documentPathLabel: string
 }
 
 /** 引用关系条目：形状与 domain 层一致，避免在渲染层再造一份 DTO。 */

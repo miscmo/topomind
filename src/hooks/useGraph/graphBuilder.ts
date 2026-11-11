@@ -15,6 +15,7 @@ import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 import { normalizeCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
 import { normalizeLinkedDocuments } from '../../domain/graph/linkedDocuments'
+import { readEdgeRelationId } from '../../domain/graph/edgeRelations'
 import { buildEdgeView } from './edgeView'
 
 export function generateId(prefix: string): string {
@@ -89,7 +90,7 @@ export function buildMetaFromNodesEdges(
     id: e.id,
     sourceRef: e.source,
     targetRef: e.target,
-    relation: e.data?.relation ?? '相关',
+    relation: readEdgeRelationId(e.data?.relation),
     weight: e.data?.weight ?? 'minor',
     lineMode: e.data?.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode,
     lineStyle: e.data?.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle,
