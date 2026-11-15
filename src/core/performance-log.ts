@@ -138,7 +138,8 @@ async function writePerformanceSample(
   }
   const nodeCount = typeof options.params?.nodeCount === 'number' ? options.params.nodeCount : 0
   const baseThreshold = canvasOperationThreshold(operation) ?? spec?.thresholdMs ?? Number.POSITIVE_INFINITY
-  // 全量构建 / LOD 重算等 O(N) 动作按节点数放宽阈值；交互类保持固定阈值。
+  // 批量 O(N) 动作按节点数放宽阈值；交互类与实测不随规模增长的
+  // meta_build / meta_flush / lod_recompute 保持固定阈值（见契约里的真实标定结论）。
   const thresholdMs = thresholdForScale(baseThreshold, nodeCount, operation)
   if (!shouldReport(metric, options, durationMs, thresholdMs, now)) return false
   lastReportAt.set(metric, now)

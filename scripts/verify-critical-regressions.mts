@@ -8637,15 +8637,20 @@ const edge = (
     (key) => typeof contract40.CANVAS_OPERATION_LABELS[key] === 'string',
   ), '【P0】每个动作都必须有中文标签')
 
-  // 动态阈值：小图恒等、O(N) 动作随规模单调放宽、交互类与无 operation 恒等、有上限。
-  assert.equal(contract40.thresholdForScale(100, 0, 'meta_build'), 100)
-  assert.equal(contract40.thresholdForScale(100, 200, 'meta_build'), 100)
-  const mid40 = contract40.thresholdForScale(100, 1000, 'meta_build')
-  const large40 = contract40.thresholdForScale(100, 20000, 'meta_build')
-  assert.ok(mid40 > 100, '【P0】万级节点的全量构建必须按规模放宽阈值，否则全部标红')
+  // 动态阈值：小图恒等、批量 O(N) 动作随规模单调放宽、交互类与无 operation 恒等、有上限。
+  // 【2026-11-15】真实标定后，meta_build / meta_flush / lod_recompute 已移出放宽清单。
+  assert.equal(contract40.thresholdForScale(100, 0, 'delete_batch'), 100)
+  assert.equal(contract40.thresholdForScale(100, 200, 'delete_batch'), 100)
+  const mid40 = contract40.thresholdForScale(100, 1000, 'delete_batch')
+  const large40 = contract40.thresholdForScale(100, 20000, 'delete_batch')
+  assert.ok(mid40 > 100, '【P0】万级节点的批量动作必须按规模放宽阈值，否则全部标红')
   assert.ok(large40 > mid40, '【P0】规模阈值必须单调不减')
-  assert.ok(contract40.thresholdForScale(100, 1e9, 'meta_build') <= 800,
+  assert.ok(contract40.thresholdForScale(100, 1e9, 'delete_batch') <= 800,
     '【P0】规模放宽必须有上限，异常峰值仍要能判慢')
+  for (const op of ['meta_build', 'meta_flush', 'lod_recompute']) {
+    assert.equal(contract40.thresholdForScale(100, 20000, op), 100,
+      `【P0】${op} 实测不随规模增长，必须回到静态阈值，不得再放宽漏报慢操作`)
+  }
   assert.equal(contract40.thresholdForScale(100, 5000, 'create'), 100,
     '【P0】交互类动作不得按规模放宽阈值')
   assert.equal(contract40.thresholdForScale(100, 5000, ''), 100,
@@ -9026,6 +9031,90 @@ const edge = (
   assert.equal(planned43.reason, 'off', '【P0】回调返回的最终 mode 必须在同一趟计算里生效')
   const legacy43 = lod43.computeLodVisibility({ nodes: nodes43, edges: edges43, zoom: 0.2, mode: 'off' })
   assert.equal(legacy43.reason, 'off', '【P0】不带 resolvePolicy 的旧调用必须保持兼容')
+}
+
+// --- 第 44 组：真实标定后的 P2/P3 修复（手势卡顿口径 / 收紧动态阈值 / 保存降采样） ---
+{
+  const read44 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const files44 = {
+    timing: '../src/shared/observability/gestureTiming.ts',
+    nodeChanges: '../src/hooks/useGraph/nodeChangeOperations.ts',
+    canvasModel: '../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts',
+    contract: '../src/shared/observability/performanceContract.ts',
+    perfLog: '../src/core/performance-log.ts',
+  } as const
+  const entries44 = Object.entries(files44) as Array<[keyof typeof files44, string]>
+  const sources44 = Object.fromEntries(
+    await Promise.all(entries44.map(async ([key, relative]) => [key, await read44(relative)] as const)),
+  ) as Record<keyof typeof files44, string>
+  const has44 = (key: keyof typeof files44, needle: string) => sources44[key].includes(needle)
+
+  // 1) 静态接线：手势口径只能有一个来源，两处埋点都不得再拿总时长当 durationMs。
+  for (const needle of ['export function resolveGestureSampleTiming', 'dropSingleFrame', 'durationMs = maxFrameMs']) {
+    assert.ok(has44('timing', needle), `【P0】手势口径纯函数缺少 ${needle}`)
+  }
+  for (const [key, needles] of [
+    ['nodeChanges', ['resolveGestureSampleTiming(', 'timing.durationMs', 'timing.elapsedMs', "dropSingleFrame: kind === 'resize'"]],
+    ['canvasModel', ['resolveGestureSampleTiming(', 'timing.durationMs', 'timing.elapsedMs', 'dropSingleFrame: false']],
+  ] as Array<[keyof typeof files44, string[]]>) {
+    for (const needle of needles) {
+      assert.ok(has44(key, needle), `【P0】${key} 未接入手势口径 ${needle}`)
+    }
+    assert.ok(!has44(key, 'canvasGesture, performance.now() -'),
+      `【P0】${key} 不得再把手势总时长直接上报为耗时`)
+  }
+  assert.ok(has44('contract', "'delete_batch', 'search', 'tree_expand', 'batch_style', 'subtree_select'"),
+    '【P0】动态放宽清单必须只保留实测线性增长的批量动作')
+  assert.ok(!has44('contract', "'meta_build', 'meta_flush', 'delete_batch', 'lod_recompute'"),
+    '【P0】meta_build / meta_flush / lod_recompute 必须移出动态放宽清单')
+  assert.ok(has44('contract', 'category: \'document\', thresholdMs: 300, sampleRate: 0.2'),
+    '【P0】detail_save 必须降采样，避免高频短保存挤占监控页样本窗口')
+  assert.ok(has44('perfLog', '实测不随规模增长'),
+    '【P0】上报层注释必须同步真实标定结论，避免后人把三项加回去')
+
+  // 2) esbuild 真跑：手势耗时换算与契约阈值都是零依赖纯函数。
+  const { build: build44 } = await import('esbuild')
+  const { fileURLToPath: toPath44 } = await import('node:url')
+  const loadBundled44 = async (relative: string) => {
+    const result = await build44({
+      entryPoints: [toPath44(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+  const timing44 = await loadBundled44(files44.timing)
+  assert.equal(timing44.resolveGestureSampleTiming({
+    frameCount: 1, maxFrameMs: 0, elapsedMs: 1, dropSingleFrame: true,
+  }), null, '【P0】只有一次 change 的即时 resize 不得上报噪声样本')
+  const slowFrame44 = timing44.resolveGestureSampleTiming({
+    frameCount: 40, maxFrameMs: 374, elapsedMs: 1563, dropSingleFrame: false,
+  })
+  assert.equal(slowFrame44.durationMs, 374,
+    '【P0】手势 durationMs 必须取最慢一帧，不能是含静止停留的总时长')
+  assert.equal(slowFrame44.elapsedMs, 1563,
+    '【P0】整个手势时长必须另存 elapsedMs 供追溯')
+  assert.equal(slowFrame44.maxFrameMs, 374, '【P0】maxFrameMs 必须原样保留')
+  assert.deepEqual(timing44.resolveGestureSampleTiming({
+    frameCount: 3, maxFrameMs: Number.NaN, elapsedMs: -5, dropSingleFrame: false,
+  }), { durationMs: 0, elapsedMs: 0, maxFrameMs: 0 },
+  '【P0】非法耗时必须兜底为 0，不得产出负样本')
+  assert.ok(timing44.resolveGestureSampleTiming({
+    frameCount: 1, maxFrameMs: 12, elapsedMs: 12, dropSingleFrame: false,
+  }) !== null, '【P0】缩放 / 平移的单帧交互仍要保留样本')
+
+  const contract44 = await loadBundled44(files44.contract)
+  assert.equal(contract44.SCALE_ADJUSTED_OPERATIONS.length, 5,
+    '【P0】动态放宽清单必须收敛到 5 项')
+  for (const [operation, base] of [['meta_build', 100], ['meta_flush', 500], ['lod_recompute', 120]] as const) {
+    assert.equal(contract44.thresholdForScale(base, 1469, operation), base,
+      `【P0】${operation} 实测不随规模增长，不得再放宽阈值`)
+  }
+  assert.ok(contract44.thresholdForScale(100, 1469, 'delete_batch') > 100,
+    '【P0】真正的批量 O(N) 动作仍须按规模放宽')
+  assert.equal(contract44.resolvePerformanceMetricSpec('detail_save').sampleRate, 0.2,
+    '【P0】detail_save 采样率必须是 0.2')
+  assert.equal(contract44.resolvePerformanceMetricSpec('detail_save').thresholdMs, 300,
+    '【P0】降采样不得改动慢判定阈值')
 }
 
 console.log('Critical regression checks verified')

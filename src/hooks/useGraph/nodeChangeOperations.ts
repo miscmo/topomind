@@ -14,6 +14,7 @@ import {
   startPerformanceSpan,
 } from '../../core/performance-log'
 import { readCanvasScale } from './canvasPerformanceContext'
+import { resolveGestureSampleTiming } from '@/shared/observability/gestureTiming'
 
 export interface NodeChangeOperationsDeps {
   tabId: string
@@ -122,13 +123,22 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     if (!session) return
     delete gestureSessions[kind]
     const operation = kind === 'drag' ? CANVAS_OPERATIONS.drag : CANVAS_OPERATIONS.resize
-    recordPerformance(PERFORMANCE_METRICS.canvasGesture, performance.now() - session.startedAt, {
+    // durationMs 只取最慢一帧；总时长（含按住不动）另存 elapsedMs，见 gestureTiming.ts。
+    const timing = resolveGestureSampleTiming({
+      frameCount: session.frameCount,
+      maxFrameMs: session.maxFrameMs,
+      elapsedMs: performance.now() - session.startedAt,
+      dropSingleFrame: kind === 'resize',
+    })
+    if (!timing) return
+    recordPerformance(PERFORMANCE_METRICS.canvasGesture, timing.durationMs, {
       module: 'graphOperations',
       traceId: session.traceId,
       contextKey: session.roomPath,
       params: {
         frameCount: session.frameCount,
-        maxFrameMs: Math.round(session.maxFrameMs),
+        maxFrameMs: timing.maxFrameMs,
+        elapsedMs: timing.elapsedMs,
         ...readCanvasScale(storeApi, {
           operation,
           roomPath: session.roomPath,

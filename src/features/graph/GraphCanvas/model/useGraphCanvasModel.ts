@@ -10,6 +10,7 @@ import {
   recordPerformance,
 } from '../../../../core/performance-log'
 import { readCanvasScale, startCanvasSpan } from '../../../../hooks/useGraph/canvasPerformanceContext'
+import { resolveGestureSampleTiming } from '../../../../shared/observability/gestureTiming'
 import { useTabStore } from '../../../../stores/tabs/tabStore'
 import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useEdgeRelationEditorStore, useEdgeRelationPickerStore } from '../../../../stores/edgeRelationPickerStore'
@@ -274,13 +275,22 @@ export function useGraphCanvasModel({
     if (!gesture) return
     viewportGestureRef.current = null
     const operation = gesture.operation === 'zoom' ? CANVAS_OPERATIONS.zoom : CANVAS_OPERATIONS.pan
-    recordPerformance(PERFORMANCE_METRICS.canvasGesture, performance.now() - gesture.startedAt, {
+    // durationMs 只取最慢一帧；总时长（含按住不动）另存 elapsedMs，见 gestureTiming.ts。
+    const timing = resolveGestureSampleTiming({
+      frameCount: gesture.frameCount,
+      maxFrameMs: gesture.maxFrameMs,
+      elapsedMs: performance.now() - gesture.startedAt,
+      dropSingleFrame: false,
+    })
+    if (!timing) return
+    recordPerformance(PERFORMANCE_METRICS.canvasGesture, timing.durationMs, {
       module: 'GraphCanvas',
       traceId: gesture.traceId,
       contextKey: roomPath,
       params: {
         frameCount: gesture.frameCount,
-        maxFrameMs: Math.round(gesture.maxFrameMs),
+        maxFrameMs: timing.maxFrameMs,
+        elapsedMs: timing.elapsedMs,
         zoomFrom: Number(gesture.zoomFrom.toFixed(3)),
         zoomTo: Number(gesture.zoomTo.toFixed(3)),
         hiddenBefore: gesture.hiddenBefore,

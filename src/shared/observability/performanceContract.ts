@@ -112,8 +112,8 @@ export const PERFORMANCE_METRIC_SPECS: readonly PerformanceMetricSpec[] = [
   },
   {
     id: PERFORMANCE_METRICS.detailSave, label: '详情文档保存', shortLabel: '保存',
-    category: 'document', thresholdMs: 300, sampleRate: 1, minIntervalMs: 0,
-    description: '序列化草稿并写回智能文档文件的耗时',
+    category: 'document', thresholdMs: 300, sampleRate: 0.2, minIntervalMs: 0,
+    description: '序列化草稿并写回智能文档文件的耗时；高频短保存按 20% 采样，慢/失败样本强制上报',
   },
   {
     id: PERFORMANCE_METRICS.documentExport, label: '导出文档', shortLabel: '导出',
@@ -266,12 +266,17 @@ export function canvasOperationThreshold(operation: string): number | null {
  * 静态阈值 100% 标红，慢操作反而失去区分度。交互类（点击/拖拽/缩放）不放宽，
  * 那些变慢就是真的退化。上限 8 倍，保证异常峰值仍能被判为慢。
  *
+ * 【2026-11-15 真实标定】meta_build / meta_flush / lod_recompute 已从清单移除：
+ * 1469 节点的 69267 条真实样本里，它们 P95 只有 2 / 31 / 338ms，却被放宽到
+ * ×2.84（100→284ms、120→340ms、500→1418ms），判定「阈值过松」漏报慢操作。
+ * 这三项实测不随规模增长，回到静态阈值即可；移除后写盘分组由过松转为合理。
+ * 若日后拿到 5k+ 节点样本证明其确实线性增长，再逐个加回。
+ *
  * 只在埋点上报时把结果写进 params.thresholdMs；isSlowSample 的语义不变，
  * 统计层无需知道「阈值是怎么来的」，存量样本与回归夹具也不受影响。
  */
 export const SCALE_ADJUSTED_OPERATIONS: readonly CanvasOperationId[] = [
-  'meta_build', 'meta_flush', 'delete_batch', 'lod_recompute',
-  'search', 'tree_expand', 'batch_style', 'subtree_select',
+  'delete_batch', 'search', 'tree_expand', 'batch_style', 'subtree_select',
 ]
 
 export function thresholdForScale(base: number, nodeCount: number, operation?: string): number {
