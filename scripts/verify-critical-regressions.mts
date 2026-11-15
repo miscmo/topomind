@@ -2270,16 +2270,19 @@ const edge = (
     'cardId 撞车必须显式报错'
   )
 
-  // 摘要短路：消除打开房间时每个节点 2 次同步读（readGraphMeta + listTopoDocuments）。
+  // 摘要短路（2026-11-15 升级）：旧实现逐节点 existsSync + 完整 readGraphMeta
+  // + 文档清单对账，在 1469 节点房间同步阻塞主进程数百毫秒。现在委托
+  // room-summary-service：一次父目录 readdir 判物化、只数 nodes 分片、
+  // hasDetail 只看 _docs 文件名。语义与 IO 次数由第 48 组内存文件系统真跑验证。
   const fileServiceSource = await readFile(new URL('../electron/file-service.js', import.meta.url), 'utf-8')
   const summaryStart = fileServiceSource.indexOf('readRoomNodeSummaries: function')
   assert.ok(summaryStart > 0, '必须存在 readRoomNodeSummaries')
   const summaryBlock = fileServiceSource.slice(summaryStart, summaryStart + 1400)
   assert.ok(
-    summaryBlock.includes('existsSync(_fs_resolveKbsPath(rootDir, roomPath))'),
-    '未物化节点必须用 existsSync 短路'
+    summaryBlock.includes('roomSummaryService.readRoomNodeSummaries(rootDir, roomPaths)'),
+    '摘要读取必须委托轻量只读层，不得回到逐节点同步 IO'
   )
-  assert.ok(summaryBlock.includes('childCount: 0, hasDetail: false'), '短路必须返回空摘要')
+  assert.ok(fileServiceSource.includes('createRoomSummaryService({'), '轻量层必须用 IO 注入接线')
   // 跨房间移动：目标房间可能是尚未物化的轻量节点，不能再硬抛「目标房间不存在」。
   assert.equal(
     fileServiceSource.includes("throw new Error('目标房间不存在: ')"), false,
@@ -9569,6 +9572,160 @@ const edge = (
     `【P0】4000 节点星形的 Map.set 必须线性（实际 ${calls4000}）`)
   assert.ok(calls4000 < calls1000 * 8,
     `【P0】写入次数必须随节点数线性增长（1000→4000 实际 ${calls1000}→${calls4000}，O(N²) 会是 ~16 倍）`)
+}
+
+// --- 第 48 组：房间加载轻量摘要 + 去重全量工作（2026-11-15） ---
+// 真实日志：1469 节点房间 room_load P50 602.5 / P95 1464.7ms，readMs 占 100%。
+// 旧 readRoomNodeSummaries 对 N 个节点逐个 existsSync + 物化目录各跑完整
+// readGraphMeta(33 文件) + 文档清单对账(1813 次 statSync)，全在主进程同步执行。
+{
+  const files48 = {
+    fileService: '../electron/file-service.js',
+    summaryService: '../electron/services/room-summary-service.js',
+    graphStore: '../src/stores/graphStore.tsx',
+    roomLoader: '../src/hooks/useGraph/roomLoader.ts',
+    graphBuilder: '../src/hooks/useGraph/graphBuilder.ts',
+  }
+  const entries48 = Object.entries(files48) as Array<[keyof typeof files48, string]>
+  const src48 = Object.fromEntries(await Promise.all(
+    entries48.map(async ([key, relative]) => [key, await readFile(new URL(relative, import.meta.url), 'utf8')] as const),
+  )) as Record<keyof typeof files48, string>
+
+  // 1) 静态：摘要入口必须委托轻量层，函数体不得再出现三类重 IO。
+  const fnStart48 = src48.fileService.indexOf('readRoomNodeSummaries: function(')
+  const fnEnd48 = src48.fileService.indexOf('writeGraphMeta: function(', fnStart48)
+  const summaryFn48 = src48.fileService.slice(fnStart48, fnEnd48)
+  assert.ok(fnStart48 > 0 && fnEnd48 > fnStart48, '【P0】必须存在 readRoomNodeSummaries 入口')
+  assert.ok(summaryFn48.includes('roomSummaryService.readRoomNodeSummaries(rootDir, roomPaths)'),
+    '【P0】节点摘要必须委托 room-summary-service 轻量层')
+  for (const forbidden of ['existsSync(', 'readGraphMeta(', 'listTopoDocuments(']) {
+    assert.ok(!summaryFn48.includes(forbidden),
+      `【P0】摘要入口不得再逐节点做 ${forbidden}（会同步阻塞主进程）`)
+  }
+  assert.ok(src48.fileService.includes("createRoomSummaryService({")
+    && src48.fileService.includes('shardCount: GRAPH_SHARD_COUNT,'),
+  '【P0】轻量层必须用 IO 注入接线、分片数取唯一真源')
+  for (const needle of ['readdirNames', 'namesCache', 'nodes-${i}.json', 'documentExtensions']) {
+    assert.ok(src48.summaryService.includes(needle), `【P0】轻量层缺少 ${needle}`)
+  }
+  assert.ok(!src48.summaryService.includes('writeJsonFile')
+    && !src48.summaryService.includes('statSync')
+    && !src48.summaryService.includes('edges-'),
+  '【P0】只读摘要层禁止回写、禁止逐文件 stat、禁止读 edges 分片')
+
+  // 2) 静态：加载链路的三次重复全量工作必须消失。
+  const replaceBody48 = src48.graphStore.slice(
+    src48.graphStore.indexOf('replaceGraph: (nodes, edges, viewport)'),
+    src48.graphStore.indexOf('setNodes: (nodes)'),
+  )
+  assert.ok(replaceBody48.includes('...buildDerivedGraphState(nodes, edges, state)'),
+    '【P1】replaceGraph 必须保留派生状态构建')
+  assert.ok(!replaceBody48.includes('nodesMap: buildNodesMap(nodes)'),
+    '【P1】replaceGraph 不得重复构建 nodesMap（会丢弃前一次 O(N) 结果）')
+  assert.equal((src48.roomLoader.match(/graphMetaToRoomGraph\(/g) ?? []).length, 1,
+    '【P1】roomLoader 只允许转换一次 GraphMeta→RoomGraph')
+  assert.ok(src48.roomLoader.includes('buildNodes(dirPath, meta, summaries, kbPath, roomGraph)')
+    && src48.roomLoader.includes('buildEdges(meta, dirPath, roomGraph)'),
+  '【P1】buildNodes / buildEdges 必须复用同一次转换结果')
+  assert.ok(src48.graphBuilder.includes('roomGraphOverride?: RoomGraph')
+    && src48.graphBuilder.includes('roomGraphOverride ?? graphMetaToRoomGraph'),
+  '【P1】两个构建函数必须支持复用且保留不传时的旧行为')
+
+  // 3) esbuild 真跑：内存文件系统验证语义等价 + IO 次数随父目录而非节点数增长。
+  const { build: build48 } = await import('esbuild')
+  const { fileURLToPath: toPath48 } = await import('node:url')
+  const bundle48 = await build48({
+    entryPoints: [toPath48(new URL(files48.summaryService, import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const { createRoomSummaryService } = await import(
+    `data:text/javascript;base64,${Buffer.from(bundle48.outputFiles[0].text).toString('base64')}`
+  ) as {
+    createRoomSummaryService: (deps: Record<string, unknown>) => {
+      readRoomNodeSummaries: (root: string, paths: string[]) => Record<string, {
+        childCount: number
+        hasDetail: boolean
+        position?: { x: number; y: number }
+      }>
+    }
+  }
+
+  const fileMap48 = new Map<string, unknown>()
+  const dirMap48 = new Map<string, string[]>()
+  const io48 = { readdir: 0, readJson: 0 }
+  const readFiles48: string[] = []
+  const root48 = '/kb/room'
+  dirMap48.set(root48, ['c1', 'c2', 'c3', 'c4', 'c5'])
+  // c1：v2，两个 nodes 分片共 3 个孩子，pan 有效，_docs 有一个真文档；
+  //     故意放一个 edges 分片，验证它不会被计入 childCount、也不会被读。
+  fileMap48.set(`${root48}/c1/_graph.json`, { version: 2, pan: { x: 10, y: 20 } })
+  fileMap48.set(`${root48}/c1/_graph/nodes-0.json`, { a: {}, b: {} })
+  fileMap48.set(`${root48}/c1/_graph/nodes-3.json`, { c: {} })
+  fileMap48.set(`${root48}/c1/_graph/edges-0.json`, [{ id: 'e1' }])
+  dirMap48.set(`${root48}/c1/_docs`, ['tree.json', 'doc_a.tdoc.json'])
+  // c2：v2 空房间，_docs 只有清单文件 → hasDetail 必须为 false。
+  fileMap48.set(`${root48}/c2/_graph.json`, { version: 2 })
+  dirMap48.set(`${root48}/c2/_docs`, ['tree.json', 'manifest.json'])
+  // c3：v1 单文件，children 3 个，pan 非法 → position undefined。
+  fileMap48.set(`${root48}/c3/_graph.json`, { children: { x: {}, y: {}, z: {} }, edges: [], pan: { x: 'bad', y: 2 } })
+  dirMap48.set(`${root48}/c3/_docs`, [])
+  // c4：未知版本 → 与旧 readGraphMeta 抛错一样降级为空摘要。
+  fileMap48.set(`${root48}/c4/_graph.json`, { version: 3, children: { q: {} } })
+  dirMap48.set(`${root48}/c4/_docs`, ['doc_x.tdoc.json'])
+  // c5：目录物化但没有 _graph.json，只有文档 → childCount 0 / hasDetail true。
+  dirMap48.set(`${root48}/c5/_docs`, ['doc_b.tmind.json'])
+
+  const service48 = createRoomSummaryService({
+    readdirNames: (absDir: string) => {
+      io48.readdir += 1
+      const names = dirMap48.get(absDir)
+      if (!names) throw new Error(`ENOENT: ${absDir}`)
+      return names.slice()
+    },
+    readJson: (absFile: string) => {
+      io48.readJson += 1
+      readFiles48.push(absFile)
+      return fileMap48.has(absFile) ? fileMap48.get(absFile) : {}
+    },
+    joinPath: (...parts: string[]) => parts.join('/'),
+    dirname: (p: string) => p.slice(0, p.lastIndexOf('/')),
+    basename: (p: string) => p.slice(p.lastIndexOf('/') + 1),
+    resolveKbsPath: (_root: string, rel: string) => `/kb/${rel}`,
+    documentExtensions: ['.tdoc.json', '.tmind.json', '.tflow.json'],
+    shardCount: 16,
+  })
+
+  // 1000 个未物化节点：旧实现每个都要一次 existsSync，新实现一次都不该有。
+  const ghostPaths48 = Array.from({ length: 1000 }, (_, i) => `room/ghost-${i}`)
+  const paths48 = ['room/c1', 'room/c2', 'room/c3', 'room/c4', 'room/c5', ...ghostPaths48, 'room/c1']
+  const result48 = service48.readRoomNodeSummaries('/work', paths48)
+
+  assert.equal(result48['room/c1'].childCount, 3, '【P0】v2 childCount 必须等于各 nodes 分片 key 之和')
+  assert.equal(result48['room/c1'].hasDetail, true, '【P0】_docs 有 .tdoc.json 时必须 hasDetail')
+  assert.deepEqual(result48['room/c1'].position, { x: 10, y: 20 }, '【P0】position 必须来自索引 pan')
+  assert.equal(result48['room/c2'].childCount, 0)
+  assert.equal(result48['room/c2'].hasDetail, false, '【P0】tree.json / manifest.json 不得被当成文档')
+  assert.equal(result48['room/c3'].childCount, 3, '【P0】v1 旧库必须回退读索引 children')
+  assert.equal(result48['room/c3'].position, undefined, '【P0】非法 pan 不得产生 position')
+  assert.equal(result48['room/c3'].hasDetail, false)
+  assert.equal(result48['room/c4'].childCount, 0, '【P0】未知版本必须降级为空摘要')
+  assert.equal(result48['room/c4'].hasDetail, false, '【P0】未知版本不得继续探测 _docs')
+  assert.equal(result48['room/c5'].childCount, 0)
+  assert.equal(result48['room/c5'].hasDetail, true, '【P0】物化但无索引的目录仍要识别文档')
+  assert.equal(Object.keys(result48).length, 1005, '【P0】重复路径必须去重且每个路径都有摘要')
+  for (const ghost of ghostPaths48) {
+    assert.equal(result48[ghost].childCount, 0)
+    assert.equal(result48[ghost].hasDetail, false)
+  }
+  // 1 次父目录 readdir + 4 次 _docs readdir（c4 提前降级不读）；与节点数无关。
+  assert.ok(io48.readdir <= 8,
+    `【P0】readdir 必须按父目录/物化目录计，不能随 N 增长（实际 ${io48.readdir}，N=1005）`)
+  assert.ok(io48.readJson < 60,
+    `【P0】禁止每个物化目录读 33 个分片（实际 ${io48.readJson} 次）`)
+  assert.ok(readFiles48.some((p) => p.includes('/_graph/nodes-')),
+    '夹具自检：确实读过 nodes 分片')
+  assert.ok(!readFiles48.some((p) => p.includes('/_graph/edges-')),
+    '【P0】摘要读取不得触碰 edges 分片（childCount 只依赖 nodes 分片）')
 }
 
 console.log('Critical regression checks verified')

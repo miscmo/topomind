@@ -267,8 +267,9 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
     nodes,
     edges,
     viewport: viewport ?? state.viewport,
+    // buildDerivedGraphState 已一次建好 nodesMap / edgesMap / 选中派生；
+    // 不要在此重复构建 nodesMap，否则会丢弃前一次 O(N) 结果。
     ...buildDerivedGraphState(nodes, edges, state),
-    nodesMap: buildNodesMap(nodes),
     derivedNodesRef: nodes,
     derivedEdgesRef: edges,
     historyRevision: state.historyRevision + 1,

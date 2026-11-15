@@ -1,6 +1,7 @@
 import type { GraphMeta } from '../../core/storage'
 import type { KnowledgeEdge, KnowledgeNode } from '../../types'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
+import { graphMetaToRoomGraph } from '../../domain/graph/graphMapper'
 import { buildEdges, buildNodes } from './graphBuilder'
 
 export interface RoomLoaderStorage {
@@ -39,10 +40,13 @@ export async function loadRoomGraph(
     })
   )
 
+  // 一次转换同时喂给 buildNodes / buildEdges：旧实现各调一次，等于把
+  // 1469 节点 + 1427 边的全量 GraphMeta→RoomGraph 转换白跑一遍。
+  const roomGraph = graphMetaToRoomGraph(dirPath, meta)
   return {
     meta,
     savedPositions,
-    nodes: buildNodes(dirPath, meta, summaries, kbPath),
-    edges: buildEdges(meta, dirPath),
+    nodes: buildNodes(dirPath, meta, summaries, kbPath, roomGraph),
+    edges: buildEdges(meta, dirPath, roomGraph),
   }
 }

@@ -171,9 +171,12 @@ export function buildNodes(
   dirPath: string,
   meta: GraphMeta,
   summaries: Record<string, BuildNodeSummary>,
-  kbPath: string
+  kbPath: string,
+  // 加载房间时由 roomLoader 复用同一次转换结果，避免 buildNodes / buildEdges
+  // 各自全量跑一遍 graphMetaToRoomGraph（每次都同时转 nodes 与 edges）。
+  roomGraphOverride?: RoomGraph
 ): KnowledgeNode[] {
-  const roomGraph = graphMetaToRoomGraph(dirPath, meta)
+  const roomGraph = roomGraphOverride ?? graphMetaToRoomGraph(dirPath, meta)
   const normalizedChildren = Object.values(roomGraph.nodes).map((roomNode) => {
     const nodeId = roomNode.id || roomNode.cardRef
     const childPath = resolveRoomChildRef(dirPath, roomNode.cardRef || nodeId)
@@ -288,8 +291,8 @@ export function applyTreeOrderPatch(
   return changed ? next : null
 }
 
-export function buildEdges(meta: GraphMeta, dirPath = ''): KnowledgeEdge[] {
-  const roomGraph = graphMetaToRoomGraph(dirPath, meta)
+export function buildEdges(meta: GraphMeta, dirPath = '', roomGraphOverride?: RoomGraph): KnowledgeEdge[] {
+  const roomGraph = roomGraphOverride ?? graphMetaToRoomGraph(dirPath, meta)
   return roomGraph.edges.map((e) => {
     const lineMode = e.lineMode ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineMode
     const lineStyle = e.lineStyle ?? STYLE_CONFIG_DEFAULTS.defaultEdgeStyle.lineStyle

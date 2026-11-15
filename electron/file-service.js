@@ -20,7 +20,8 @@ import {
 } from './services/workspace-service.js';
 import { createKbService } from './services/kb-service.js';
 import { createCardService } from './services/card-service.js';
-import { createGraphMetaService } from './services/graph-meta-service.js';
+import { createGraphMetaService, GRAPH_SHARD_COUNT } from './services/graph-meta-service.js';
+import { createRoomSummaryService } from './services/room-summary-service.js';
 import { createAttachmentService } from './services/attachment-service.js';
 import { createDocumentService } from './services/document-service.js';
 import { createTrashService } from './services/trash-service.js';
@@ -1604,6 +1605,20 @@ const linkedDocumentWriter = createLinkedDocumentWriter({
   writeGraphMeta: graphMetaService.writeGraphMeta,
 });
 
+// 【加载性能】节点摘要走轻量只读层：一次父目录 readdir 替代 N 次 existsSync，
+// v2 只数 nodes-* 分片的 key、不读 edges-*、不合并完整 meta，hasDetail 只看
+// _docs 是否有文档文件，绝不扫描对账或回写 tree.json。IO 全注入，便于门禁真跑。
+const roomSummaryService = createRoomSummaryService({
+  readdirNames: (absDir) => nodeFs.readdirSync(absDir),
+  readJson: _fs_readJsonFile,
+  joinPath: nodePath.join,
+  dirname: nodePath.dirname,
+  basename: nodePath.basename,
+  resolveKbsPath: _fs_resolveKbsPath,
+  documentExtensions: Object.values(TOPO_DOCUMENT_EXTENSIONS),
+  shardCount: GRAPH_SHARD_COUNT,
+});
+
 // A 阶段：docId 全库解析 / 关联记录规范化。关系索引是派生缓存，靠文件签名自愈，
 // 因此这里只需注入 statSync，任何写库入口都不必挂钩维护索引。
 const documentIndexService = createDocumentIndexService({
@@ -1907,36 +1922,9 @@ const fileService = {
       rootDir = _fs_requireValidWorkDir(rootDir);
       if (!Array.isArray(roomPaths)) throw new Error('房间路径列表必须是数组');
       if (roomPaths.length > 20000) throw new Error('单次读取的房间数量过多');
-
-      var summaries = {};
-      Array.from(new Set(roomPaths.map(function(roomPath) { return String(roomPath || ''); })))
-        .forEach(function(roomPath) {
-          try {
-            // P0 轻量节点：目录尚未物化 ⇒ 必然没有子房间、没有文档，直接给空摘要。
-            // 否则打开一个 N 节点的房间会变成 1 次主图 + 2N 次同步小文件读（readJsonFile + listTopoDocuments）。
-            // 旧库中「目录存在但无 _graph.json」仍走原路径，行为不变。
-            if (!nodeFs.existsSync(_fs_resolveKbsPath(rootDir, roomPath))) {
-              summaries[roomPath] = { childCount: 0, hasDetail: false };
-              return;
-            }
-            var meta = graphMetaService.readGraphMeta(rootDir, roomPath);
-            var children = meta && meta.children && typeof meta.children === 'object' && !Array.isArray(meta.children)
-              ? meta.children
-              : {};
-            var pan = meta && meta.pan;
-            var documents = documentService.listTopoDocuments(rootDir, roomPath);
-            summaries[roomPath] = {
-              position: pan && Number.isFinite(pan.x) && Number.isFinite(pan.y)
-                ? { x: pan.x, y: pan.y }
-                : undefined,
-              childCount: Object.keys(children).length,
-              hasDetail: documents.length > 0,
-            };
-          } catch {
-            summaries[roomPath] = { childCount: 0, hasDetail: false };
-          }
-        });
-      return summaries;
+      // 轻量只读层负责逐节点摘要；旧实现在这里对 N 个节点逐个 existsSync +
+      // 完整 readGraphMeta + 文档清单对账，1469 节点房间会同步阻塞主进程数百毫秒。
+      return roomSummaryService.readRoomNodeSummaries(rootDir, roomPaths);
     },
 
     /**
