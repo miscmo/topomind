@@ -9415,4 +9415,160 @@ const edge = (
     '【P0】真实业务改动仍必须正常进历史，短路只针对 selection 事务')
 }
 
+// --- 第 47 组：hierarchy attach 宽树 O(N²) 收敛（2026-11-15） ---
+// 只把深度重算起点从「父节点整棵已建子树」换成「新挂的 child 子树」，
+// depth / roots / free / downgrades 语义必须逐字段等价，且写入次数线性。
+{
+  const hierarchyFile47 = '../src/domain/graph/graphHierarchy.ts'
+  const hierarchySrc47 = await readFile(new URL(hierarchyFile47, import.meta.url), 'utf8')
+  const attachBody47 = hierarchySrc47.slice(
+    hierarchySrc47.indexOf('function attach('),
+    hierarchySrc47.indexOf('/** 稳定顺序'),
+  )
+  assert.ok(attachBody47.includes('[edge.target, (h.depth.get(edge.source) ?? 1) + 1]'),
+    '【P0】attach 必须从新挂的 child 起算深度，不得从父节点重遍历整棵已建子树')
+  assert.ok(!attachBody47.includes('const stack = [edge.source]'),
+    '【P0】禁止回退到从 parent 起遍历的 O(N²) 写法')
+  assert.ok(attachBody47.includes('const seen = new Set<string>()'),
+    '【P0】脏数据环防御必须保留')
+
+  const { build: build47 } = await import('esbuild')
+  const { fileURLToPath: toPath47 } = await import('node:url')
+  const bundle47 = await build47({
+    entryPoints: [toPath47(new URL(hierarchyFile47, import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const hierarchyMod47 = await import(
+    `data:text/javascript;base64,${Buffer.from(bundle47.outputFiles[0].text).toString('base64')}`
+  ) as {
+    buildHierarchy: (nodeIds: readonly string[], edges: readonly unknown[]) => {
+      hierarchy: {
+        nodes: string[]
+        roots: string[]
+        free: string[]
+        depth: Map<string, number>
+        parentEdge: Map<string, { id: string; source: string; target: string }>
+        children: Map<string, string[]>
+        subordinateEdges: Array<{ id: string; source: string; target: string }>
+      }
+      downgrades: Array<{ edgeId: string; reason: string }>
+    }
+    MAX_HIERARCHY_DEPTH: number
+  }
+  const E47 = (
+    id: string, source: string, target: string,
+    relation = 'subordinate', weight = 'minor',
+  ) => ({ id, source, target, relation, weight })
+
+  // 1) 独立 BFS oracle：只从 roots 逐层推深度，不复用被测实现的任何推导逻辑。
+  //    覆盖乱序挂边（child 先带子树再挂父）、多根、游离、多父/环/深度降级。
+  const verifyHierarchy47 = (nodeIds: string[], edges: ReturnType<typeof E47>[], label: string) => {
+    const { hierarchy, downgrades } = hierarchyMod47.buildHierarchy(nodeIds, edges)
+    const expected = new Map<string, number>()
+    const queue: Array<[string, number]> = hierarchy.roots.map((id) => [id, 1])
+    const seen = new Set<string>()
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const [id, depth] = queue[cursor]
+      if (seen.has(id)) continue
+      seen.add(id)
+      expected.set(id, depth)
+      for (const child of hierarchy.children.get(id) ?? []) queue.push([child, depth + 1])
+    }
+    for (const id of hierarchy.nodes) {
+      assert.equal(hierarchy.depth.get(id), expected.get(id) ?? 1,
+        `【P0】${label}: ${id} 的深度必须与 BFS oracle 一致`)
+    }
+    for (const id of hierarchy.free) {
+      assert.equal(hierarchy.depth.get(id), 1, `【P0】${label}: 游离节点深度必须为 1`)
+      assert.ok(!hierarchy.parentEdge.has(id), `【P0】${label}: 游离节点不得有父边`)
+    }
+    assert.equal(hierarchy.subordinateEdges.length, hierarchy.parentEdge.size,
+      `【P0】${label}: 生效从属边数必须等于 parentEdge 条目数`)
+    for (const [child, edge] of hierarchy.parentEdge) {
+      assert.equal(edge.target, child, `【P0】${label}: parentEdge 键必须是 child`)
+      assert.ok((hierarchy.children.get(edge.source) ?? []).includes(child),
+        `【P0】${label}: children 必须登记 ${child}`)
+    }
+    assert.ok(Math.max(...hierarchy.depth.values()) <= hierarchyMod47.MAX_HIERARCHY_DEPTH,
+      `【P0】${label}: 深度不得超过上限`)
+    return { hierarchy, downgrades, expected }
+  }
+
+  // 乱序：B→C / C→D 先挂（B 已带两层子树），A→B 最后挂，整棵子树必须整体下移。
+  const outOfOrder47 = verifyHierarchy47(
+    ['A', 'B', 'C', 'D', 'E', 'X'],
+    [
+      E47('z3', 'C', 'D'), E47('z1', 'B', 'C'), E47('z4', 'A', 'E', 'subordinate', 'main'),
+      E47('z2', 'A', 'B', 'subordinate', 'main'), E47('z5', 'D', 'A', 'related'),
+    ],
+    '乱序挂边',
+  )
+  assert.equal(outOfOrder47.hierarchy.depth.get('A'), 1)
+  assert.equal(outOfOrder47.hierarchy.depth.get('B'), 2)
+  assert.equal(outOfOrder47.hierarchy.depth.get('C'), 3, '【P0】child 自带子树时也必须整体平移')
+  assert.equal(outOfOrder47.hierarchy.depth.get('D'), 4)
+  assert.equal(outOfOrder47.hierarchy.depth.get('E'), 2, '【P0】parent 的其它子树深度不得被改动')
+  assert.deepEqual(outOfOrder47.hierarchy.free, ['X'])
+  assert.equal(outOfOrder47.downgrades.length, 0)
+
+  // 多根 + 游离 + 多父/环降级。
+  const degraded47 = verifyHierarchy47(
+    ['R1', 'R2', 'a', 'b', 'c', 'd', 'F1', 'F2'],
+    [
+      E47('d1', 'R1', 'a', 'subordinate', 'main'),
+      E47('d2', 'R2', 'b', 'subordinate', 'main'),
+      E47('d3', 'a', 'c', 'subordinate', 'main'),
+      E47('d4', 'b', 'c'),                 // 多父：c 已有父
+      E47('d5', 'c', 'R1'),               // 环：R1 是 c 的祖先
+      E47('d6', 'R1', 'R1'),              // 自环
+      E47('d7', 'a', 'd', 'related'),     // 非从属边不进树
+    ],
+    '降级图',
+  )
+  assert.deepEqual(degraded47.hierarchy.roots.slice().sort(), ['R1', 'R2'])
+  assert.deepEqual(degraded47.hierarchy.free.slice().sort(), ['F1', 'F2', 'd'])
+  assert.ok(degraded47.downgrades.some((item) => item.reason === 'multiple-parents'))
+  assert.ok(degraded47.downgrades.some((item) => item.reason === 'cycle'))
+  assert.ok(degraded47.downgrades.some((item) => item.reason === 'self-loop'))
+
+  // 2) 复杂度：替换 globalThis.Map 统计 set 调用次数（旧实现每条边都重写
+  //    已挂载的全部孩子，星形 5000 节点约 1250 万次；新实现每边 2 次）。
+  const starEdges47 = (n: number) => Array.from({ length: n - 1 }, (_, i) => (
+    E47(`s${String(i).padStart(5, '0')}`, 'n0', `n${i + 1}`)
+  ))
+  const measureSetCalls47 = (n: number): number => {
+    const nodeIds = Array.from({ length: n }, (_, i) => `n${i}`)
+    const edges = starEdges47(n)
+    const NativeMap = globalThis.Map
+    let calls = 0
+    class CountingMap extends NativeMap {
+      set(key: unknown, value: unknown) {
+        calls += 1
+        super.set(key, value)
+        return this
+      }
+    }
+    try {
+      globalThis.Map = CountingMap as typeof Map
+      const result = hierarchyMod47.buildHierarchy(nodeIds, edges)
+      assert.equal(result.hierarchy.depth.get('n0'), 1)
+      assert.equal(result.hierarchy.depth.get(`n${n - 1}`), 2,
+        '【P0】星形树的每个孩子深度必须是 2')
+      assert.equal(result.hierarchy.subordinateEdges.length, n - 1)
+      assert.equal(result.downgrades.length, 0)
+    } finally {
+      globalThis.Map = NativeMap
+    }
+    return calls
+  }
+  const calls1000 = measureSetCalls47(1000)
+  const calls4000 = measureSetCalls47(4000)
+  assert.ok(calls1000 < 1000 * 10,
+    `【P0】1000 节点星形的 Map.set 必须线性（实际 ${calls1000}）`)
+  assert.ok(calls4000 < 4000 * 10,
+    `【P0】4000 节点星形的 Map.set 必须线性（实际 ${calls4000}）`)
+  assert.ok(calls4000 < calls1000 * 8,
+    `【P0】写入次数必须随节点数线性增长（1000→4000 实际 ${calls1000}→${calls4000}，O(N²) 会是 ~16 倍）`)
+}
+
 console.log('Critical regression checks verified')

@@ -194,7 +194,15 @@ export function validateSubordinateEdge(
   return { ok: true }
 }
 
-/** 把一条已校验的从属边挂进索引，并只重算受影响子树的深度。 */
+/**
+ * 把一条已校验的从属边挂进索引，并只重算**新挂子树**的深度。
+ *
+ * 【为什么从 target 起而不是 source】validateSubordinateEdge 已保证 child
+ * 此前没有父边，挂上之后受影响的只有 child 及其后代；parent 自身与它的其它
+ * 子树深度一点不变。旧实现每次都从 parent 重遍历整棵已建子树，一个根挂 N
+ * 个孩子的宽树会退化成 O(N²)（5000 节点星形 buildHierarchy ~1.4s，LOD 随之
+ * ~2.8s）。改成 child 子树后每条边只写它自己的后代，整体 O(N+E)。
+ */
 function attach(h: GraphHierarchy, edge: HierarchyEdgeLike): void {
   h.parentEdge.set(edge.target, edge)
   const kids = h.children.get(edge.source)
@@ -203,16 +211,15 @@ function attach(h: GraphHierarchy, edge: HierarchyEdgeLike): void {
   h.subordinateEdges.push(edge)
 
   const seen = new Set<string>()
-  const stack = [edge.source]
+  const stack: Array<[string, number]> = [
+    [edge.target, (h.depth.get(edge.source) ?? 1) + 1],
+  ]
   while (stack.length > 0) {
-    const node = stack.pop()!
+    const [node, d] = stack.pop()!
     if (seen.has(node)) continue
     seen.add(node)
-    const d = h.depth.get(node) ?? 1
-    for (const child of h.children.get(node) ?? []) {
-      h.depth.set(child, d + 1)
-      stack.push(child)
-    }
+    h.depth.set(node, d)
+    for (const child of h.children.get(node) ?? []) stack.push([child, d + 1])
   }
 }
 
