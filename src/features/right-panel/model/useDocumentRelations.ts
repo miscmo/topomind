@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useStorage } from '../../../core/storage'
+import { PERFORMANCE_METRICS, measurePerformance } from '../../../core/performance-log'
 import type { DocumentRelations } from '../../../domain/graph/linkedDocuments'
 
 interface RelationResult {
@@ -38,7 +39,11 @@ export function useDocumentRelations(docId: string | null, enabled: boolean) {
     if (!requestKey || !docId) return
     let cancelled = false
     const key = requestKey
-    void storage.listDocumentRelations(docId)
+    void measurePerformance(
+      PERFORMANCE_METRICS.documentRelations,
+      () => storage.listDocumentRelations(docId),
+      { module: 'DocumentRelations', params: { docId } },
+    )
       .then((next) => { if (!cancelled) setResult({ key, relations: next }) })
       .catch((error) => {
         if (cancelled) return

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FSBDocumentCandidate } from '../../../core/fs-backend'
+import { PERFORMANCE_METRICS, measurePerformance } from '../../../core/performance-log'
 import type { UnifiedTreeDataSource } from './types'
 
 const SEARCH_DEBOUNCE_MS = 200
@@ -26,7 +27,11 @@ export function useUnifiedTreeSearch(dataSource: UnifiedTreeDataSource, limit = 
     setLoading(true)
     setError(null)
     const timer = setTimeout(() => {
-      void dataSource.search(q, limit)
+      void measurePerformance(
+        PERFORMANCE_METRICS.documentSearch,
+        () => dataSource.search(q, limit),
+        { module: 'UnifiedTree', params: { queryLength: q.length, limit } },
+      )
         .then((list) => {
           if (cancelled) return
           setResults(Array.isArray(list) ? list : [])

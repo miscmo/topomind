@@ -1,6 +1,7 @@
 import { memo } from 'react'
-import { AlertCircle, ExternalLink, FileText, Link2, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { ExternalLink, FileText, Link2, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import type { ResolvedLinkedDocument } from '../../../../domain/graph/linkedDocuments'
+import { PANEL_LIST, PanelListAction } from '../../../../shared/ui/panelList'
 import { EmptyState } from '../../../../shared/ui/EmptyState'
 
 interface LinkedDocumentListProps {
@@ -27,20 +28,22 @@ export const LinkedDocumentList = memo(function LinkedDocumentList({
 }: LinkedDocumentListProps) {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border-subtle)] shrink-0">
-        <span className="text-[12px] font-medium text-[var(--color-text-secondary)]">关联文档 · {links.length}</span>
+      <div className={PANEL_LIST.header}>
+        <Link2 className={PANEL_LIST.headerIcon} />
+        <span className={PANEL_LIST.title}>关联文档</span>
+        <span className={PANEL_LIST.count}>{links.length} / 8</span>
         <button
           type="button"
           onClick={onAdd}
-          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)] border-none bg-transparent cursor-pointer"
+          className={PANEL_LIST.addButton}
           title="关联已有文档"
         >
-          <Plus className="w-3.5 h-3.5" /> 添加
+          <Plus className="h-3.5 w-3.5" /> 添加
         </button>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-1.5 py-2">
+      <div className={PANEL_LIST.body}>
         {loading && links.length === 0 ? (
-          <div className="py-8 text-center text-[12px] text-[var(--color-text-muted)]">解析关联中…</div>
+          <div className={PANEL_LIST.empty}>解析关联中…</div>
         ) : links.length === 0 ? (
           <EmptyState size="sm" icon={<Link2 className="h-4 w-4" />} title="还没有关联文档" description="点击「添加」选择已有文档" />
         ) : (
@@ -51,51 +54,50 @@ export const LinkedDocumentList = memo(function LinkedDocumentList({
               return (
                 <div
                   key={link.docId}
-                  className={`group flex items-start gap-2 px-2 py-1.5 rounded-md transition-colors ${
-                    isActive ? 'bg-[var(--color-accent-soft)]' : 'hover:bg-[var(--color-bg-muted)]'
-                  }`}
+                  className={`${PANEL_LIST.row} !items-start !gap-2 ${isActive ? PANEL_LIST.rowActive : ''}`}
                 >
                   <button
                     type="button"
                     disabled={disabled}
                     onClick={() => onSelect(link.docId)}
-                    className="flex items-start gap-2 flex-1 min-w-0 text-left border-none bg-transparent p-0 cursor-pointer disabled:cursor-not-allowed"
+                    className="flex min-w-0 flex-1 items-start gap-1.5 text-left border-none bg-transparent p-0 cursor-pointer disabled:cursor-not-allowed"
                     title={disabled ? '文档已失效或在回收站' : link.title}
                   >
-                    <FileText className={`w-3.5 h-3.5 mt-[2px] shrink-0 ${isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}`} />
+                    <FileText className={`mt-[2px] ${isActive ? PANEL_LIST.iconActive : PANEL_LIST.icon}`} />
                     <span className="min-w-0 flex-1">
-                      <span className={`block truncate text-[12px] ${isActive ? 'text-[var(--color-accent)] font-medium' : 'text-[var(--color-text-primary)]'} ${disabled ? 'opacity-60' : ''}`}>
+                      <span className={`block truncate text-[12px] ${isActive ? PANEL_LIST.rowTitleActive : 'text-[var(--color-text-primary)]'} ${disabled ? 'opacity-60' : ''}`}>
                         {link.title || '未命名文档'}
                       </span>
-                      <span className="block truncate text-[10px] text-[var(--color-text-muted)]">
-                        来源：{link.sourceLabel || '未知位置'}
+                      {/* 来源面包屑独占一行且以「来源：」开头；状态徽章另起 span，不污染文本匹配。 */}
+                      <span className="flex items-center gap-1">
+                        <span className={`${PANEL_LIST.rowMeta} min-w-0 flex-1`}>来源：{link.sourceLabel || '未知位置'}</span>
+                        {link.status === 'trashed' && (
+                          <span className={`${PANEL_LIST.badge} ${PANEL_LIST.badgeWarning}`}>回收站</span>
+                        )}
+                        {link.status === 'missing' && (
+                          <span className={`${PANEL_LIST.badge} ${PANEL_LIST.badgeDanger}`}>已删除</span>
+                        )}
                       </span>
-                      {link.status === 'trashed' && (
-                        <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] text-[var(--color-warning)]">
-                          <AlertCircle className="w-3 h-3" /> 已在回收站
-                        </span>
-                      )}
-                      {link.status === 'missing' && (
-                        <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] text-[var(--color-danger)]">
-                          <AlertCircle className="w-3 h-3" /> 文档已删除
-                        </span>
-                      )}
                     </span>
                   </button>
-                  <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     {link.status === 'trashed' && (
-                      <button type="button" className="p-1 rounded hover:bg-[var(--color-hover-bg)] text-[var(--color-text-muted)] border-none bg-transparent cursor-pointer" title="从回收站恢复" onClick={() => onRestore(link)}>
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
+                      <PanelListAction title="从回收站恢复" onClick={() => onRestore(link)}>
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </PanelListAction>
                     )}
                     {link.status === 'ok' && (
-                      <button type="button" className="p-1 rounded hover:bg-[var(--color-hover-bg)] text-[var(--color-text-muted)] border-none bg-transparent cursor-pointer" title="在所属节点打开" onClick={() => onOpenOwner(link)}>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
+                      <PanelListAction title="在所属节点打开" onClick={() => onOpenOwner(link)}>
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </PanelListAction>
                     )}
-                    <button type="button" className="p-1 rounded hover:bg-[var(--color-danger-soft)] text-[var(--color-text-muted)] hover:text-[var(--color-danger)] border-none bg-transparent cursor-pointer" title="移除关联" onClick={() => onRemove(link.docId)}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <PanelListAction
+                      title="移除关联"
+                      className="hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]"
+                      onClick={() => onRemove(link.docId)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </PanelListAction>
                   </div>
                 </div>
               )
@@ -103,6 +105,7 @@ export const LinkedDocumentList = memo(function LinkedDocumentList({
           </div>
         )}
       </div>
+      <div className={PANEL_LIST.footer}>最多关联 8 篇 · 内容始终保存在所属节点</div>
     </div>
   )
 })

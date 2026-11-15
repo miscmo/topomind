@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStorage } from '../../../core/storage'
 import { logAction } from '../../../core/log-backend'
+import { PERFORMANCE_METRICS, startPerformanceSpan } from '../../../core/performance-log'
 import { logger } from '../../../core/logger'
 import { tabStore } from '../../../stores/tabs/tabStore'
 
@@ -53,6 +54,11 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
   const loadKBList = useCallback(async () => {
     const requestSeq = ++requestSeqRef.current
     const isCurrentRequest = () => requestSeqRef.current === requestSeq
+    const perfSpan = startPerformanceSpan(PERFORMANCE_METRICS.kbListLoad, {
+      module: 'HomePage',
+      params: { workDir: currentWorkDir },
+    })
+    let perfError: unknown = null
     setLoading(true)
     try {
       const list = await storage.listKBs()
@@ -120,6 +126,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
       setKbs(completed)
       logAction('HomePage:子节点数量加载完成', 'HomePage', { totalNodes: counts.reduce((a, b) => a + b, 0) })
     } catch (err) {
+      perfError = err
       const msg = err instanceof Error ? err.message : String(err)
       logger.catch('HomePage', 'loadKBList', err)
       logAction('HomePage:加载知识库列表异常', 'HomePage', { error: msg })
@@ -128,6 +135,8 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
         setMessageError(true)
       }
     } finally {
+      if (perfError) perfSpan.fail(perfError)
+      else perfSpan.end({ kbCount: latestKbsRef.current.length })
       if (isCurrentRequest()) setLoading(false)
     }
   }, [currentWorkDir, setMessage, setMessageError, storage])

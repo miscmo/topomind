@@ -115,6 +115,13 @@ function setupWorkDir() {
   // 免得影响阶段 K 的 LOD 覆盖率与深度断言）。
   writeDocs('lod-root', [{ id: 'doc_lod_root', title: 'LOD 树根文档' }])
   writeDocs('lod-g1', [{ id: 'doc_lod_leaf', title: 'LOD 三级文档' }])
+  // 阶段 AB：让 node-a 同时是一个可进入的子房间。只加一份自己的 _graph.json，
+  // 不改顶层节点数 / edges，阶段 K 的 LOD 覆盖率与深度断言不受影响。
+  fs.writeFileSync(path.join(KB_DIR, 'node-a', '_graph.json'), JSON.stringify({
+    children: { aa: { name: 'AA' }, ab: { name: 'AB' }, af: { name: 'AF' } },
+    edges: [{ id: 'ab-e1', source: 'aa', target: 'ab', relation: 'subordinate', weight: 'main' }],
+    zoom: 1, pan: { x: 0, y: 0 },
+  }, null, 2), 'utf8')
 }
 
 async function cdpReachable() {
@@ -131,7 +138,13 @@ async function connectOrLaunch() {
   if (!fs.existsSync(exe)) throw new Error('找不到 electron 可执行文件: ' + exe)
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE // 否则主进程会被当成纯 Node 启动
-  const spawned = spawn(exe, ['.', `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`], {
+  // 关掉 Chromium 的后台节流：GUI 自动化里窗口被遮挡 / 失焦时 rAF 会被冻结，
+  // 而 zoomTo 的 240ms 动画全靠 rAF 推进（滚轮走 d3-zoom 同步 transform 不受影响）。
+  // 不关就会出现「缩放按钮连点全部无效、滚轮却生效」的假失败。
+  const spawned = spawn(exe, ['.', `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`,
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows'], {
     cwd: process.cwd(), env, stdio: 'ignore', detached: false,
   })
   for (let i = 0; i < 60; i += 1) {
@@ -147,6 +160,57 @@ async function waitFor(page, fn, timeout = 10000) {
   while (Date.now() < end) {
     if (await page.evaluate(fn)) return true
     await sleep(250)
+  }
+  return false
+}
+
+/**
+ * 右栏现在是覆盖画布右侧的浮层：被它遮住的节点无法用真实鼠标点中。
+ * 需要「真实点击节点」的画布阶段先折叠右栏（画布宽度仍不变），阶段 V 前再展开。
+ * 页面 reload 会重置 Zustand 内存态，重载后要重新调一次。
+ */
+async function setRightPanelCollapsed(page, want) {
+  await page.evaluate((wantCollapsed) => {
+    const right = document.querySelector('.right-panel-container')
+    if (!right) return
+    const isCollapsed = getComputedStyle(right).display === 'none'
+    if (isCollapsed === wantCollapsed) return
+    const label = wantCollapsed ? '折叠右侧面板' : '展开右侧面板'
+    document.querySelector(`button[aria-label="${label}"]`)?.click()
+  }, want)
+  return want
+    ? waitFor(page, () => {
+      const right = document.querySelector('.right-panel-container')
+      return !!right && getComputedStyle(right).display === 'none'
+    }, 6000)
+    : waitFor(page, () => {
+      const right = document.querySelector('.right-panel-container')
+      return !!right && getComputedStyle(right).display !== 'none'
+    }, 6000)
+}
+
+/**
+ * 左侧节点树是 absolute 浮层，默认展开会遮住画布左侧节点的真实点击。
+ * 除阶段 AB（专门验证面板）外一律折叠；偏好写 localStorage，reload 后仍生效，
+ * 但脚本仍在每次重载后显式校正一次，避免复用到旧 profile 的展开态。
+ */
+async function setNodeTreeCollapsed(page, want) {
+  await page.evaluate((wantCollapsed) => {
+    const panel = document.querySelector('[data-tm-node-tree-panel]')
+    if (!panel) return
+    const isCollapsed = panel.getAttribute('data-tm-node-tree-collapsed') === 'true'
+    if (isCollapsed === wantCollapsed) return
+    document.querySelector('[data-tm-node-tree-toggle]')?.click()
+  }, want)
+  // waitFor 的回调在浏览器上下文执行，不能闭包引用 Node 侧的 want；显式传参轮询。
+  const end = Date.now() + 6000
+  while (Date.now() < end) {
+    const ok = await page.evaluate((wantCollapsed) => {
+      const panel = document.querySelector('[data-tm-node-tree-panel]')
+      return !!panel && (panel.getAttribute('data-tm-node-tree-collapsed') === 'true') === wantCollapsed
+    }, want)
+    if (ok) return true
+    await sleep(200)
   }
   return false
 }
@@ -208,27 +272,453 @@ async function enterWorkspace(page) {
   await page.evaluate((dir) => {
     localStorage.setItem('topomind_last_workspace', dir)
     localStorage.setItem('topomind_recent_workspaces', JSON.stringify([{ path: dir, lastOpened: Date.now() }]))
+    // Electron profile 固定复用，清掉上一轮留下的节点树展开态，保证「默认全部折叠」可测。
+    localStorage.removeItem('topomind_node_tree_expanded_v2')
   }, WORKDIR)
+  // 【阶段 W】reload 会重走一遍启动：setup 视图下 currentWorkDir 仍为 null，
+  // 自动恢复是异步 IPC。常驻的全局弹窗若此时就加载统一树 root 层，logger 会打
+  // 「未选择工作目录」。在新文档创建前挂钩 console.error，精确捕获这类误调用。
+  await page.evaluateOnNewDocument(() => {
+    const buffer = []
+    Object.defineProperty(window, '__tmStartupConsoleErrors', { value: buffer })
+    const original = console.error.bind(console)
+    console.error = (...args) => {
+      try {
+        buffer.push(args.map((a) => (a instanceof Error ? a.message : String(a))).join(' '))
+      } catch { /* 收集器绝不能影响业务 */ }
+      original(...args)
+    }
+  })
   await page.reload({ waitUntil: 'networkidle2' })
   await sleep(2200)
+  const startupErrors = await page.evaluate(() => window.__tmStartupConsoleErrors || [])
+  check('【阶段 W】启动期不发起统一树查询（未选择工作目录时无误调用）',
+    !startupErrors.some((m) => m.includes('Store.listUnifiedTreeLevel') || m.includes('未选择工作目录')),
+    JSON.stringify(startupErrors.filter((m) => m.includes('统一树') || m.includes('工作目录')).slice(0, 2)))
   await page.evaluate((name) => {
     const els = [...document.querySelectorAll('*')].filter((e) =>
       e.children.length === 0 && (e.textContent || '').includes(name))
     if (els.length) els[0].parentElement?.click()
   }, KB_NAME)
-  return waitFor(page, () => !!document.querySelector('.react-flow__node[data-id="node-a"]'), 10000)
+  const workspaceReady = await waitFor(page, () =>
+    !!document.querySelector('.react-flow__node[data-id="node-a"]'), 10000)
+  await setNodeTreeCollapsed(page, true)
+  return workspaceReady
 }
 
 async function main() {
   setupWorkDir()
   const { spawned } = await connectOrLaunch()
-  const browser = await puppeteer.connect({ browserURL: CDP_URL, defaultViewport: null })
+  // BlockNote 编辑器 focus / scrollIntoView 偶发 CDP 长调用，默认 180s 会把整轮 GUI 打断。
+  const browser = await puppeteer.connect({ browserURL: CDP_URL, defaultViewport: null, protocolTimeout: 300000 })
   try {
     const page = (await browser.pages()).find((p) => p.url().includes('index.html'))
     if (!page) throw new Error('找不到 renderer 页面')
 
     check('隔离测试库构造完成', fs.existsSync(DOC_A) && fs.existsSync(DOC_B))
     check('进入工作空间并渲染两个节点', await enterWorkspace(page))
+
+    // ===== 阶段 AB：左侧节点树（浮层 / 结构 / 搜索 / 拖动排序 / 子房间按需加载） =====
+    await setNodeTreeCollapsed(page, false)
+    const panelAB = await page.evaluate(() => {
+      const el = document.querySelector('[data-tm-node-tree-panel]')
+      if (!el) return null
+      return {
+        collapsed: el.getAttribute('data-tm-node-tree-collapsed'),
+        total: Number(el.getAttribute('data-tm-node-tree-total') || '0'),
+        loadedRooms: Number(el.getAttribute('data-tm-node-tree-loaded-rooms') || '0'),
+        position: getComputedStyle(el).position,
+        background: getComputedStyle(el).backgroundColor,
+        expandedCount: Number(el.getAttribute('data-tm-node-tree-expanded-count') || '0'),
+        width: Number(el.getAttribute('data-tm-node-tree-width') || '0'),
+      }
+    })
+    const opaqueAB = (color) => !!color && color !== 'transparent'
+      && !/rgba\([^)]*,\s*0\s*\)$/.test(color)
+    check('【阶段 AB】absolute 浮层 / 背景不透明 / 默认不加载子房间',
+      panelAB?.collapsed === 'false' && panelAB?.position === 'absolute'
+      && panelAB?.total === 8 && panelAB?.loadedRooms === 0
+      && opaqueAB(panelAB?.background) && panelAB?.width === 280,
+      JSON.stringify(panelAB))
+
+    const readRowsAB = () => page.evaluate(() =>
+      [...document.querySelectorAll('[data-tm-node-tree-row]')].map((el) => ({
+        id: el.getAttribute('data-tm-node-tree-id') || '',
+        origin: el.getAttribute('data-tm-node-tree-origin') || '',
+        sortable: el.getAttribute('data-tm-node-tree-sortable'),
+        hasRoom: el.getAttribute('data-tm-node-tree-has-room'),
+        roomLoaded: el.getAttribute('data-tm-node-tree-room-loaded'),
+        hasChildren: el.getAttribute('data-tm-node-tree-has-children'),
+        expanded: el.getAttribute('data-tm-node-tree-expanded'),
+        lazy: el.getAttribute('data-tm-node-tree-lazy'),
+        depth: Number(el.getAttribute('data-tm-node-tree-depth') || '0'),
+      })))
+    let rowsAB = await readRowsAB()
+    const rowOfAB = (id) => rowsAB.find((row) => row.id === id)
+    check('【阶段 AB】默认全部折叠：只显示房间根第一层，子节点未入 DOM',
+      rowsAB[0]?.origin === 'room-root' && rowsAB[0]?.expanded === 'true'
+      && rowsAB.every((row) => row.depth <= 1)
+      && rowOfAB('lod-root')?.hasChildren === 'true'
+      && rowOfAB('lod-root')?.expanded === 'false'
+      && rowOfAB('lod-root')?.lazy === 'true'
+      && !rowOfAB('lod-c1') && !rowOfAB('lod-g1')
+      && panelAB?.expandedCount === 1,
+      JSON.stringify({ rows: rowsAB, expandedCount: panelAB?.expandedCount }))
+
+    // 逐层懒加载：只展开 lod-root，长出 c1/c2，三级 g1 仍不构造。
+    await page.evaluate(() => {
+      const row = [...document.querySelectorAll('[data-tm-node-tree-row]')]
+        .find((el) => el.getAttribute('data-tm-node-tree-id') === 'lod-root')
+      row?.querySelector('[data-tm-node-tree-chevron]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    rowsAB = await readRowsAB()
+    check('【阶段 AB】单层展开只长出直接子节点，更深一层仍懒加载',
+      !!rowOfAB('lod-c1') && !!rowOfAB('lod-c2') && !rowOfAB('lod-g1')
+      && rowOfAB('lod-root')?.expanded === 'true'
+      && rowOfAB('lod-c1')?.expanded === 'false',
+      JSON.stringify(rowsAB.slice(0, 8)))
+
+    // 结构与拖动断言需要完整视图：用面板自带的「展开全部」。
+    await page.evaluate(() => {
+      document.querySelector('[data-tm-node-tree-expand-all]')?.click()
+    })
+    await waitFor(page, () =>
+      !!document.querySelector('[data-tm-node-tree-row][data-tm-node-tree-id="lod-g1"]'), 6000)
+    rowsAB = await readRowsAB()
+    check('【阶段 AB】顶层是房间虚拟根，从属树按深度逐层展开',
+      rowsAB[0]?.origin === 'room-root'
+      && rowOfAB('lod-root')?.origin === 'subordinate'
+      && rowOfAB('lod-c1')?.depth === 2 && rowOfAB('lod-c2')?.depth === 2
+      && rowOfAB('lod-g1')?.depth === 3,
+      JSON.stringify(rowsAB.slice(0, 8)))
+    const freeIdsAB = rowsAB.filter((row) => row.origin === 'free').map((row) => row.id)
+    const tailIdsAB = rowsAB.slice(-4).map((row) => row.id)
+    check('【阶段 AB】游离节点恒在末尾、带标记且不可自定义排序',
+      freeIdsAB.length === 4
+      && freeIdsAB.every((id) => rowOfAB(id)?.sortable === 'false')
+      && freeIdsAB.every((id) => tailIdsAB.includes(id)),
+      JSON.stringify({ freeIdsAB, tailIdsAB }))
+    check('【阶段 AB】可进入房间的节点默认折叠（还没读子房间 meta）',
+      rowOfAB('node-a')?.hasRoom === 'true' && rowOfAB('node-a')?.roomLoaded === 'false',
+      JSON.stringify(rowOfAB('node-a')))
+
+    const canvasRectAB = () => page.evaluate(() => {
+      const r = document.querySelector('#graph-panel')?.getBoundingClientRect()
+      const s = document.querySelector('.react-flow__panel.top.left')?.getBoundingClientRect()
+      return {
+        rect: r ? { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) } : null,
+        status: s ? { left: Math.round(s.left), width: Math.round(s.width) } : null,
+      }
+    })
+    // 左栏展开时状态抽屉通过 CSS 变量让位；折叠后回到原位。
+    await waitFor(page, () => {
+      const s = document.querySelector('.react-flow__panel.top.left')?.getBoundingClientRect()
+      return !!s && s.left >= 280
+    }, 6000)
+    const layoutOpenAB = await canvasRectAB()
+    await setNodeTreeCollapsed(page, true)
+    await waitFor(page, () => {
+      const s = document.querySelector('.react-flow__panel.top.left')?.getBoundingClientRect()
+      return !!s && s.left < 20
+    }, 6000)
+    const layoutFoldedAB = await canvasRectAB()
+    await setNodeTreeCollapsed(page, false)
+    await waitFor(page, () => {
+      const s = document.querySelector('.react-flow__panel.top.left')?.getBoundingClientRect()
+      return !!s && s.left >= 280
+    }, 6000)
+    const layoutReopenAB = await canvasRectAB()
+    const rectOpenAB = layoutOpenAB.rect
+    const rectFoldedAB = layoutFoldedAB.rect
+    const rectReopenAB = layoutReopenAB.rect
+    check('【阶段 AB】展开/折叠对画布尺寸完全无感知',
+      !!rectOpenAB && JSON.stringify(rectOpenAB) === JSON.stringify(rectFoldedAB)
+      && JSON.stringify(rectOpenAB) === JSON.stringify(rectReopenAB),
+      JSON.stringify({ rectOpenAB, rectFoldedAB, rectReopenAB }))
+    check('【阶段 AB】面板展开时状态抽屉挤到右侧，折叠后回原位且宽度不变',
+      !!layoutOpenAB.status && layoutOpenAB.status.left >= 280
+      && !!layoutFoldedAB.status && layoutFoldedAB.status.left < 20
+      && layoutReopenAB.status?.left === layoutOpenAB.status.left
+      && layoutOpenAB.status.width === layoutFoldedAB.status?.width,
+      JSON.stringify({ open: layoutOpenAB.status, folded: layoutFoldedAB.status, reopen: layoutReopenAB.status }))
+    rowsAB = await readRowsAB()
+
+    const typeSearchAB = (value) => page.evaluate((v) => {
+      const input = document.querySelector('[data-tm-node-tree-search]')
+      if (!input) return
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, v)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }, value)
+    await typeSearchAB('LOD 三级')
+    check('【阶段 AB】搜索命中时切成平铺结果', await waitFor(page, () =>
+      [...document.querySelectorAll('[data-tm-node-tree-hit]')]
+        .some((el) => (el.getAttribute('data-tm-node-tree-key') || '').includes(':lod-g1')), 6000))
+    await typeSearchAB('')
+    check('【阶段 AB】清空搜索后恢复整棵树', await waitFor(page, () =>
+      !document.querySelector('[data-tm-node-tree-hit]')
+      && !!document.querySelector('[data-tm-node-tree-row]'), 6000))
+
+    const roomChevronAB = await page.evaluate(() => {
+      const row = [...document.querySelectorAll('[data-tm-node-tree-row]')]
+        .find((el) => el.getAttribute('data-tm-node-tree-id') === 'node-a')
+      const btn = row?.querySelector('[data-tm-node-tree-chevron]')
+      if (!btn) return false
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      return true
+    })
+    check('【阶段 AB】点击房间箭头才按需加载子房间', roomChevronAB
+      && await waitFor(page, () => Number(document.querySelector('[data-tm-node-tree-panel]')
+        ?.getAttribute('data-tm-node-tree-loaded-rooms') || '0') >= 1, 8000))
+    // 子房间刚加载，其节点默认折叠（懒加载）；再点「展开全部」才能验房间子层级。
+    await page.evaluate(() => {
+      document.querySelector('[data-tm-node-tree-expand-all]')?.click()
+    })
+    await waitFor(page, () =>
+      !!document.querySelector('[data-tm-node-tree-row][data-tm-node-tree-id="ab"]'), 6000)
+    rowsAB = await readRowsAB()
+    const nodeAIndexAB = rowsAB.findIndex((row) => row.id === 'node-a')
+    check('【阶段 AB】房间子节点默认第一、AA 的子节点挂 AA 下、房间游离在末尾',
+      rowsAB[nodeAIndexAB + 1]?.id === 'aa'
+      && rowsAB[nodeAIndexAB + 1]?.origin === 'room-child'
+      && rowsAB[nodeAIndexAB + 2]?.id === 'ab'
+      && rowsAB[nodeAIndexAB + 2]?.sortable === 'false'
+      && rowsAB[nodeAIndexAB + 3]?.id === 'af'
+      && rowsAB[nodeAIndexAB + 3]?.origin === 'free',
+      JSON.stringify(rowsAB.slice(nodeAIndexAB, nodeAIndexAB + 5)))
+
+    const coordsBeforeAB = readGraph().children || {}
+    await page.evaluate(() => {
+      const dt = new DataTransfer()
+      const rows = [...document.querySelectorAll('[data-tm-node-tree-row]')]
+      const src = rows.find((el) => el.getAttribute('data-tm-node-tree-id') === 'lod-c1')
+      const dst = rows.find((el) => el.getAttribute('data-tm-node-tree-id') === 'lod-c2')
+      if (!src || !dst) return
+      src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }))
+      dst.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
+      dst.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
+      src.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }))
+    })
+    let orderWrittenAB = false
+    for (let i = 0; i < 30 && !orderWrittenAB; i += 1) {
+      const children = readGraph().children || {}
+      orderWrittenAB = children['lod-c2']?.treeOrder === 0 && children['lod-c1']?.treeOrder === 1
+      if (!orderWrittenAB) await sleep(150)
+    }
+    check('【阶段 AB】同父拖动排序写入 treeOrder 并后台落盘', orderWrittenAB,
+      JSON.stringify({ c1: readGraph().children?.['lod-c1'], c2: readGraph().children?.['lod-c2'] }))
+    const coordsAfterAB = readGraph().children || {}
+    check('【阶段 AB】排序只写 treeOrder，绝不改画布坐标',
+      coordsBeforeAB['lod-c1']?.x === coordsAfterAB['lod-c1']?.x
+      && coordsBeforeAB['lod-c1']?.y === coordsAfterAB['lod-c1']?.y
+      && coordsBeforeAB['lod-c2']?.x === coordsAfterAB['lod-c2']?.x
+      && coordsBeforeAB['lod-c2']?.y === coordsAfterAB['lod-c2']?.y,
+      JSON.stringify({ before: [coordsBeforeAB['lod-c1'], coordsBeforeAB['lod-c2']],
+        after: [coordsAfterAB['lod-c1'], coordsAfterAB['lod-c2']] }))
+    // 展开态记忆：折叠 lod-root → 收起/重开面板 → 仍折叠，且已按房间写进 localStorage。
+    await page.evaluate(() => {
+      const row = [...document.querySelectorAll('[data-tm-node-tree-row]')]
+        .find((el) => el.getAttribute('data-tm-node-tree-id') === 'lod-root')
+      row?.querySelector('[data-tm-node-tree-chevron]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    await setNodeTreeCollapsed(page, true)
+    await setNodeTreeCollapsed(page, false)
+    const persistedAB = await page.evaluate(() => {
+      let keys = []
+      try { keys = Object.values(JSON.parse(localStorage.getItem('topomind_node_tree_expanded_v2') || '{}')).flat() } catch { /* 忽略脏值 */ }
+      return {
+        expanded: [...document.querySelectorAll('[data-tm-node-tree-row]')]
+          .find((el) => el.getAttribute('data-tm-node-tree-id') === 'lod-root')
+          ?.getAttribute('data-tm-node-tree-expanded'),
+        rootKey: document.querySelector('[data-tm-node-tree-panel]')
+          ?.getAttribute('data-tm-node-tree-root-key') || '',
+        keys: keys.map(String),
+      }
+    })
+    check('【阶段 AB】展开状态按房间记忆（重开面板仍保留并写入 localStorage）',
+      persistedAB.expanded === 'false'
+      && persistedAB.keys.includes(persistedAB.rootKey)
+      && !persistedAB.keys.some((key) => key.endsWith(':lod-root')),
+      JSON.stringify(persistedAB))
+
+    // 后续阶段要真实点击画布左侧节点，左栏保持折叠（画布无感知，尺寸已验证不变）。
+    await setNodeTreeCollapsed(page, true)
+
+    // ===== 阶段 Z：双击关联连线编辑自定义关系名（轻量浮层贴在双击处） =====
+    // 直接在 lod-e4 的 SVG 组上派发 dblclick，避开视口/LOD 命中误差；验浮层锚点、
+    // 线上标签与后台落盘后「恢复默认名」把夹具还原，不影响后面「关联边恒显示
+    // 全局关系名」的既有断言。
+    const edgeReadyZ = await waitFor(page, () =>
+      !!document.querySelector('.react-flow__edge[data-id="lod-e4"]'), 8000)
+    check('【阶段 Z】关联连线 lod-e4 已渲染', edgeReadyZ)
+    if (edgeReadyZ) {
+      const typeLabelZ = async (value) => {
+        await page.evaluate((v) => {
+          const input = document.querySelector('[data-tm-edge-relation-label-input]')
+          if (!input) return
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+          setter?.call(input, v)
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+        }, value)
+        await sleep(60)
+        await page.evaluate(() => document.querySelector('[data-tm-edge-relation-label-input]')?.focus())
+        await page.keyboard.press('Enter')
+      }
+      const popupZ = await page.evaluate(() => {
+        const edge = document.querySelector('.react-flow__edge[data-id="lod-e4"]')
+        if (!edge) return null
+        const x = 412
+        const y = 468
+        edge.dispatchEvent(new MouseEvent('dblclick', {
+          bubbles: true, cancelable: true, clientX: x, clientY: y,
+        }))
+        return { x, y }
+      })
+      check('【阶段 Z】双击连线在双击处打开轻量关系编辑器', popupZ !== null
+        && await waitFor(page, () => !!document.querySelector('[data-tm-edge-relation-editor]'), 5000))
+      check('【阶段 Z】编辑器锚点 = 双击坐标、无全屏遮罩、尺寸轻量', await page.evaluate((p) => {
+        const el = document.querySelector('[data-tm-edge-relation-editor]')
+        if (!el || !p) return false
+        const r = el.getBoundingClientRect()
+        return el.getAttribute('data-tm-edge-relation-inline') === 'true'
+          && Number(el.getAttribute('data-tm-edge-relation-anchor-x')) === p.x
+          && Number(el.getAttribute('data-tm-edge-relation-anchor-y')) === p.y
+          && r.left >= 0 && r.top >= 0
+          && r.left <= window.innerWidth && r.top <= window.innerHeight
+          && r.width < 300 && r.height < 300
+          && !document.querySelector('[data-tm-edge-relation-picker]')
+      }, popupZ))
+
+      await typeLabelZ('前置知识')
+      check('【阶段 Z】Enter 保存后浮层关闭', await waitFor(page, () =>
+        !document.querySelector('[data-tm-edge-relation-editor]'), 5000))
+      check('【阶段 Z】关联边线上标签显示自定义关系名', await page.evaluate(() =>
+        [...document.querySelectorAll('[data-tm-edge-relation-label="related"]')]
+          .some((el) => (el.textContent || '').trim() === '前置知识'
+            && el.getAttribute('data-tm-edge-relation-mandatory') === 'true')))
+
+      let savedZ = false
+      for (let i = 0; i < 30 && !savedZ; i += 1) {
+        const g = readGraph()
+        savedZ = (g.edges || []).some((e) => e.id === 'lod-e4' && e.relationLabel === '前置知识')
+        if (!savedZ) await sleep(150)
+      }
+      check('【阶段 Z】后台保存把自定义关系名写进 _graph.json', savedZ,
+        JSON.stringify((readGraph().edges || []).map((e) => ({ id: e.id, relationLabel: e.relationLabel }))))
+
+      // 还原夹具：恢复默认名 → 字段从磁盘删除，后续全局改名断言不受影响。
+      await page.evaluate(() => {
+        const edge = document.querySelector('.react-flow__edge[data-id="lod-e4"]')
+        edge?.dispatchEvent(new MouseEvent('dblclick', {
+          bubbles: true, cancelable: true, clientX: 412, clientY: 468,
+        }))
+      })
+      const resetReadyZ = await waitFor(page, () => !!document.querySelector('[data-tm-edge-relation-label-reset]'), 5000)
+      check('【阶段 Z】有自定义名时提供「恢复默认名」', resetReadyZ)
+      if (resetReadyZ) {
+        await page.evaluate(() => {
+          const btn = document.querySelector('[data-tm-edge-relation-label-reset]')
+          btn?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+        })
+        let clearedZ = false
+        for (let i = 0; i < 30 && !clearedZ; i += 1) {
+          const g = readGraph()
+          clearedZ = !(g.edges || []).some((e) => e.id === 'lod-e4' && e.relationLabel)
+          if (!clearedZ) await sleep(150)
+        }
+        check('【阶段 Z】恢复默认名后自定义字段从磁盘删除', clearedZ
+          && await page.evaluate(() => !document.querySelector('[data-tm-edge-relation-editor]')))
+      }
+    }
+
+    // ===== 阶段 AA：连线工具栏下拉菜单层级（两端锚点不得穿透菜单面板） =====
+    // 静态工具栏 z=10 让锚点优先抓指针；关系菜单 / 样式面板展开时必须把整个工具栏
+    // 提到 20（> 锚点 11、弯曲手柄 12），否则 absolute 面板覆盖到手柄时会被「穿透」。
+    const toolbarZAA = () => page.evaluate(() => {
+      const el = document.querySelector('[data-edge-toolbar-anchor]')
+      return el ? Number(getComputedStyle(el).zIndex) : null
+    })
+    const selectedAA = await page.evaluate(() => {
+      const edge = document.querySelector('.react-flow__edge[data-id="lod-e4"]')
+      if (!edge) return false
+      edge.dispatchEvent(new MouseEvent('click', {
+        bubbles: true, cancelable: true, button: 0, clientX: 412, clientY: 468,
+      }))
+      return true
+    })
+    check('【阶段 AA】可程序化选中关联连线', selectedAA
+      && await waitFor(page, () => !!document.querySelector('[data-edge-toolbar-anchor]'), 5000))
+    check('【阶段 AA】静态工具栏层级 10（锚点仍优先抓指针）', (await toolbarZAA()) === 10,
+      String(await toolbarZAA()))
+    const menuOpenAA = await page.evaluate(() => {
+      const trigger = document.querySelector('[data-tm-edge-relation-trigger]')
+      if (!trigger) return false
+      trigger.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }))
+      return true
+    })
+    check('【阶段 AA】展开连线关系下拉菜单', menuOpenAA
+      && await waitFor(page, () => !!document.querySelector('[data-tm-edge-relation-menu]'), 5000))
+    check('【阶段 AA】菜单展开后工具栏提到 20，高于锚点 11 / 弯曲 12',
+      await waitFor(page, () => {
+        const el = document.querySelector('[data-edge-toolbar-anchor]')
+        return !!el && Number(getComputedStyle(el).zIndex) === 20
+      }, 5000), String(await toolbarZAA()))
+    const aaHit = await page.evaluate(() => {
+      const menu = document.querySelector('[data-tm-edge-relation-menu]')
+      if (!menu) return { ok: false, diag: 'no menu' }
+      const r = menu.getBoundingClientRect()
+      // 左上状态面板 / 右栏等浮层在 renderer 层叠上下文之上，会参与 hit-test；
+      // 临时让它们不吃指针，才能单独比较「菜单 vs 锚点手柄」的层叠顺序。
+      const blockers = [...document.querySelectorAll('.react-flow__panel, .right-panel-container')]
+      const saved = blockers.map((el) => el.style.pointerEvents)
+      blockers.forEach((el) => { el.style.pointerEvents = 'none' })
+      let diag = []
+      try {
+        // 只检查「手柄中心确实落在菜单矩形内」的真正覆盖：矩形擦边相交时中心
+        // 仍在菜单外，命中到手柄是正常的，不该算穿透。
+        diag = [...document.querySelectorAll('[data-anchor-side]')].map((h) => {
+          const a = h.getBoundingClientRect()
+          const cx = (a.left + a.right) / 2
+          const cy = (a.top + a.bottom) / 2
+          const covered = cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom
+          const stack = covered ? [...document.elementsFromPoint(cx, cy)] : []
+          return {
+            side: h.getAttribute('data-anchor-side'),
+            covered,
+            menuIndex: stack.indexOf(menu),
+            handleIndex: stack.indexOf(h),
+            top: stack[0] ? stack[0].tagName + '.' + String(stack[0].className ?? '').slice(0, 40) : '',
+          }
+        })
+      } finally {
+        blockers.forEach((el, i) => { el.style.pointerEvents = saved[i] })
+      }
+      // 不截断 stack：顶层浮层的祖先链很长，菜单 / 手柄可能排在很后面。
+      return {
+        ok: diag.filter((d) => d.covered).every((d) =>
+          d.menuIndex >= 0 && (d.handleIndex < 0 || d.menuIndex < d.handleIndex)),
+        diag,
+      }
+    })
+    check('【阶段 AA】菜单覆盖锚点时命中优先于锚点手柄（不穿透）', aaHit.ok,
+      JSON.stringify(aaHit.diag))
+    await page.evaluate(() => {
+      document.querySelector('[data-tm-edge-relation-trigger]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }))
+    })
+    check('【阶段 AA】收起菜单后层级回落到 10', await waitFor(page, () => {
+      const el = document.querySelector('[data-edge-toolbar-anchor]')
+      return !!el && Number(getComputedStyle(el).zIndex) === 10
+        && !document.querySelector('[data-tm-edge-relation-menu]')
+    }, 5000), String(await toolbarZAA()))
+    // 清掉连线选中，避免影响后续阶段 A 的右键菜单 / 右栏状态
+    await page.evaluate(() => {
+      document.querySelector('.react-flow__pane')?.dispatchEvent(new MouseEvent('click', {
+        bubbles: true, cancelable: true, button: 0, clientX: 700, clientY: 300,
+      }))
+    })
 
     // ---- 阶段 A / T：统一树按需加载 + 文档树路径 + 上限 8 ----
     check('右键菜单含「关联已有文档…」', await openLinkDialog(page) &&
@@ -486,6 +976,91 @@ async function main() {
       list.sourceLines.some((t) => t.includes('测试库 / 节点 B')) &&
       !list.sourceLines.some((t) => t.includes('node-b')),
       JSON.stringify(list.sourceLines))
+
+    // ===== 阶段 AC：右侧列表统一视觉语言（标题条 / 紧凑双行 / 语义图标 / 纯色不透明） =====
+    const ac = await page.evaluate(() => {
+      const rail = [...document.querySelectorAll('button[aria-label]')]
+        .filter((b) => ['文档', '附件', '引用关系'].includes(b.getAttribute('aria-label') || ''))
+        .map((b) => ({
+          label: b.getAttribute('aria-label'),
+          text: (b.textContent || '').trim(),
+          svg: b.querySelectorAll('svg').length,
+        }))
+      const header = [...document.querySelectorAll('div')].find((el) =>
+        typeof el.className === 'string' && el.className.includes('h-10')
+        && (el.textContent || '').includes('关联文档') && el.querySelector('button')) || null
+      const rows = [...document.querySelectorAll('button[title="移除关联"]')]
+        .map((b) => b.closest('div.group')).filter(Boolean)
+      const rowInfo = rows.map((row) => {
+        const spans = [...row.querySelectorAll('span')]
+        // 第二行容器自身也以「来源：」开头，必须按小字号锁定真正的元信息 span。
+        const meta = spans.find((s) => (s.textContent || '').trim().startsWith('来源：')
+          && s.className.includes('text-[10px]'))
+        const title = spans.find((s) => typeof s.className === 'string'
+          && s.className.includes('text-[12px]') && (s.textContent || '').trim())
+        const cs = getComputedStyle(row)
+        const metaTop = meta ? meta.getBoundingClientRect().top : -1
+        const titleTop = title ? title.getBoundingClientRect().top : -1
+        return {
+          height: Math.round(row.getBoundingClientRect().height),
+          radius: parseFloat(cs.borderTopLeftRadius) || 0,
+          svg: row.querySelectorAll('svg').length,
+          metaFound: !!meta, titleFound: !!title,
+          // 真正的「第二行」：小字号元信息必须渲染在标题的下方，而不是与标题同行或同一元素。
+          metaSeparate: !!meta && !!title && meta !== title
+            && meta.className.includes('text-[10px]') && metaTop > titleTop + 2,
+          emoji: /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(row.textContent || ''),
+        }
+      })
+      const bg = [...document.querySelectorAll('aside, #detail-panel')].map((el) => {
+        const cs = getComputedStyle(el)
+        return { image: cs.backgroundImage, color: cs.backgroundColor }
+      })
+      // 只否决列表行祖先链上的旧 surface→bg 竖向渐变；编辑器主体自带渐变不属本契约。
+      const legacyGradients = (() => {
+        const hits = []
+        let el = rows[0] || null
+        while (el) {
+          const cls = typeof el.className === 'string' ? el.className : ''
+          if (cls.includes('bg-gradient-to-b') && cls.includes('from-[var(--color-surface)]')
+            && cls.includes('to-[var(--color-bg)]')) hits.push(el.tagName)
+          el = el.parentElement
+        }
+        return hits
+      })()
+      const footer = [...document.querySelectorAll('div')].find((el) =>
+        el.children.length === 0 && (el.textContent || '').includes('最多关联 8 篇'))
+      return {
+        rail,
+        header: header ? {
+          height: Math.round(header.getBoundingClientRect().height),
+          border: getComputedStyle(header).borderBottomWidth,
+          count: /\d+\s*\/\s*8/.test(header.textContent || ''),
+          add: [...header.querySelectorAll('button')].some((b) => (b.textContent || '').includes('添加')),
+        } : null,
+        rowInfo, bg, legacyGradients, footer: !!footer,
+      }
+    })
+    check('【阶段 AC】rail 三个页签改为语义图标且保留原 aria-label',
+      ['文档', '附件', '引用关系'].every((label) => ac.rail.some((r) => r.label === label))
+      && ac.rail.every((r) => r.svg > 0 && r.text === ''),
+      JSON.stringify(ac.rail))
+    check('【阶段 AC】列表有细边框标题条（40px / 计数 / 添加按钮）',
+      !!ac.header && ac.header.height >= 36 && ac.header.height <= 44
+      && ac.header.border !== '0px' && ac.header.count && ac.header.add,
+      JSON.stringify(ac.header))
+    check('【阶段 AC】关联行紧凑圆角、来源独占第二行、无 emoji',
+      ac.rowInfo.length > 0 && ac.rowInfo.every((r) =>
+        r.height >= 26 && r.height <= 52 && r.radius >= 4 && r.svg > 0
+        && r.metaSeparate && !r.emoji),
+      JSON.stringify(ac.rowInfo))
+    check('【阶段 AC】侧栏 / 详情区为纯色不透明背景且无旧渐变',
+      ac.bg.length > 0 && ac.bg.every((b) => b.image === 'none')
+      && ac.bg.some((b) => b.color !== 'rgba(0, 0, 0, 0)')
+      && ac.legacyGradients.length === 0,
+      JSON.stringify({ bg: ac.bg, legacyGradients: ac.legacyGradients }))
+    check('【阶段 AC】底部轻量说明与左侧节点树同款',
+      ac.footer, JSON.stringify({ footer: ac.footer }))
 
     await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.getAttribute('title') === '在所属节点打开')?.click())
     await sleep(1300)
@@ -1142,53 +1717,14 @@ async function main() {
       document.querySelector('[data-tm-lod-control]')?.getAttribute('data-tm-lod-reason') === 'forced'))
     await page.evaluate(() => document.querySelector('[data-tm-lod-mode="auto"]')?.click())
 
-    // 缩小视图现在是只读态；pin 夹具先回到 100% 再做真实点击选中，
-    // 避免远景下补偿放大的视觉壳 / 只读提示条影响 page.click 的命中判定。
+    // 缩小视图现在是只读态：后续图型 / 滑条阶段必须在 100% 下开始，
+    // 否则 profile 会停在 52% 只读档并连锁污染缩放滑动条的显隐判定。
     await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
     await waitFor(page, () =>
       document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
-
-    // pin：选中树根 → 置顶 → 持久化 → 清除。
-    let rootSelected = false
-    try {
-      await page.click('.react-flow__node[data-id="lod-root"]', { timeout: 4000 })
-      rootSelected = await waitFor(page, () =>
-        !!document.querySelector('.react-flow__node.selected[data-id="lod-root"]'), 4000)
-    } catch { rootSelected = false }
-    check('树根节点仍可真实点击选中', rootSelected)
-    check('选中节点后置顶按钮可用', await page.evaluate(() =>
-      !document.querySelector('[data-tm-lod-pin-toggle]')?.disabled))
-    const selectedDepthOk = await waitFor(page, () => {
-      const el = document.querySelector('[data-tm-lod-depth-panel]')
-      return el?.getAttribute('data-tm-lod-selected-depth') === '1'
-        && el?.getAttribute('data-tm-lod-selected-kind') === 'root'
-        && (el?.textContent || '').includes('树根')
-    }, 4000)
-    const selectedDepthState = await page.evaluate(() => {
-      const el = document.querySelector('[data-tm-lod-depth-panel]')
-      return {
-        depth: el?.getAttribute('data-tm-lod-selected-depth') ?? '',
-        kind: el?.getAttribute('data-tm-lod-selected-kind') ?? '',
-        text: (el?.textContent || '').slice(-70),
-      }
-    })
-    check('选中节点后左上角显示它的深度与节点类型', selectedDepthOk, JSON.stringify(selectedDepthState))
-    await page.evaluate(() => document.querySelector('[data-tm-lod-pin-toggle]')?.click())
-    await sleep(250)
-    const pinState = await page.evaluate(() => ({
-      stored: localStorage.getItem('topomind_semantic_lod_preferences_v1') || '',
-      label: document.querySelector('[data-tm-lod-pin-toggle]')?.textContent?.trim() || '',
-      count: document.querySelector('[data-tm-lod-pinned-count]')?.textContent?.trim() || '',
-      hasClear: !!document.querySelector('[data-tm-lod-pin-clear]'),
-    }))
-    check('置顶选中节点写进本机偏好且控件回显',
-      pinState.stored.includes('lod-root') && pinState.label.includes('取消置顶')
-        && pinState.count === '1' && pinState.hasClear,
-      JSON.stringify(pinState))
-    await page.evaluate(() => document.querySelector('[data-tm-lod-pin-clear]')?.click())
-    await sleep(250)
-    check('清除置顶后偏好不再含该节点', await page.evaluate(() =>
-      !(localStorage.getItem('topomind_semantic_lod_preferences_v1') || '').includes('lod-root')))
+    // 右栏浮层会盖住画布右侧，后续「真实点击节点」的用例先在折叠态跑；
+    // 画布宽度恒定不变，折叠只影响遮挡，不影响任何布局断言。
+    await setRightPanelCollapsed(page, true)
 
     // ===== 阶段 L：房间级图型分类（P3-A） =====
     // 图型存全局 _config.json 的 roomProfiles；验证写盘 / 刷新恢复 / LOD 定制 /
@@ -1221,10 +1757,15 @@ async function main() {
     await page.select('[data-tm-graph-profile-select]', 'flow')
     await sleep(350)
     const flowState = await profileState()
+    // 「显示全部节点」以 LOD 可见集合为准：视口外的节点本来就不该被
+    // onlyRenderVisibleElements 渲染，用 DOM 节点数判定会把视口裁剪误判成 LOD 回归。
+    const flowVisibleCount = await page.evaluate(() =>
+      Number(document.querySelector('[data-tm-lod-control]')?.getAttribute('data-tm-lod-visible-count') ?? '0'))
     check('流程图图型自动关闭语义缩放并显示全部节点',
       flowState.value === 'flow' && flowState.reason === 'off' && flowState.active === 'false'
-      && flowState.policySource === 'profile' && flowState.nodeA,
-      JSON.stringify(flowState).slice(0, 220))
+      && flowState.policySource === 'profile' && flowVisibleCount === 8,
+      JSON.stringify({ value: flowState.value, reason: flowState.reason, active: flowState.active,
+        policySource: flowState.policySource, visibleCount: flowVisibleCount }))
 
     await page.evaluate(() => document.querySelector('[data-tm-lod-mode="force"]')?.click())
     await sleep(250)
@@ -1269,6 +1810,9 @@ async function main() {
     check('重载后画布与镜头控件恢复', await waitFor(page, () =>
       !!document.querySelector('[data-tm-lod-control]')
       && !!document.querySelector('[data-tm-graph-profile-select]'), 15000))
+    // reload 重置了右栏折叠态（Zustand 内存态），重新折叠以继续真实点击画布。
+    await setRightPanelCollapsed(page, true)
+    await setNodeTreeCollapsed(page, true)
     await sleep(400)
     const reloadedProfile = await profileState()
     check('重启后图型从 _config.json 恢复（hydrate）',
@@ -2008,6 +2552,56 @@ async function main() {
     check('取消多选后菜单收起', await waitFor(page, () =>
       !document.querySelector('[data-tm-selection-mirror-menu]'), 4000))
 
+    // ===== pin 夹具（画布全宽后移到视口复位的位置） =====
+    // 连续缩放的 pan 漂移会把节点推出 onlyRenderVisibleElements 视口；总览 / 多选
+    // 之后视口已复位、8 个夹具节点都在 DOM，这里才能做「真实点击选中」断言。
+    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    await waitFor(page, () =>
+      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
+    await waitFor(page, () => !!document.querySelector('.react-flow__node[data-id="lod-root"]'), 6000)
+    let rootSelected = false
+    try {
+      await page.click('.react-flow__node[data-id="lod-root"]', { timeout: 4000 })
+      rootSelected = await waitFor(page, () =>
+        !!document.querySelector('.react-flow__node.selected[data-id="lod-root"]'), 4000)
+    } catch { rootSelected = false }
+    check('树根节点仍可真实点击选中', rootSelected)
+    check('选中节点后置顶按钮可用', await page.evaluate(() =>
+      !document.querySelector('[data-tm-lod-pin-toggle]')?.disabled))
+    const selectedDepthOk = await waitFor(page, () => {
+      const el = document.querySelector('[data-tm-lod-depth-panel]')
+      return el?.getAttribute('data-tm-lod-selected-depth') === '1'
+        && el?.getAttribute('data-tm-lod-selected-kind') === 'root'
+        && (el?.textContent || '').includes('树根')
+    }, 4000)
+    const selectedDepthState = await page.evaluate(() => {
+      const el = document.querySelector('[data-tm-lod-depth-panel]')
+      return {
+        depth: el?.getAttribute('data-tm-lod-selected-depth') ?? '',
+        kind: el?.getAttribute('data-tm-lod-selected-kind') ?? '',
+        text: (el?.textContent || '').slice(-70),
+      }
+    })
+    check('选中节点后左上角显示它的深度与节点类型', selectedDepthOk, JSON.stringify(selectedDepthState))
+    await page.evaluate(() => document.querySelector('[data-tm-lod-pin-toggle]')?.click())
+    await sleep(250)
+    const pinState = await page.evaluate(() => ({
+      stored: localStorage.getItem('topomind_semantic_lod_preferences_v1') || '',
+      label: document.querySelector('[data-tm-lod-pin-toggle]')?.textContent?.trim() || '',
+      count: document.querySelector('[data-tm-lod-pinned-count]')?.textContent?.trim() || '',
+      hasClear: !!document.querySelector('[data-tm-lod-pin-clear]'),
+    }))
+    check('置顶选中节点写进本机偏好且控件回显',
+      pinState.stored.includes('lod-root') && pinState.label.includes('取消置顶')
+        && pinState.count === '1' && pinState.hasClear,
+      JSON.stringify(pinState))
+    await page.evaluate(() => document.querySelector('[data-tm-lod-pin-clear]')?.click())
+    await sleep(250)
+    check('清除置顶后偏好不再含该节点', await page.evaluate(() =>
+      !(localStorage.getItem('topomind_semantic_lod_preferences_v1') || '').includes('lod-root')))
+    // 恢复无选中态，避免影响后面的状态抽屉 / 选中子树 / 阶段 V。
+    await page.mouse.click(500, 800)
+
     // ===== 阶段 Q：画布状态抽屉（房间路径 / 最近打开 / 镜头状态融合） =====
     // 不假设 localStorage 里的持久化初值：所有断言都读「点击前后」的相对变化。
     const statusRead = () => page.evaluate(() => {
@@ -2107,15 +2701,20 @@ async function main() {
       JSON.stringify(await selectionIds()))
 
     await page.evaluate(() => document.querySelector('[data-tm-selection-subtree]')?.click())
-    const subtreeDone = await waitFor(page, () =>
-      (document.querySelector('[data-tm-selection-menu]')?.getAttribute('data-tm-selection-ids') || '')
-        .split('|').filter(Boolean).sort().join('|') === 'lod-c1|lod-c2|lod-g1|lod-root', 6000)
+    // ids 与 count 必须在同一帧一起满足：菜单会随 React 重渲染瞬时卸载，分两次 CDP 读取会偶发读到空值。
+    const subtreeDone = await waitFor(page, () => {
+      const menu = document.querySelector('[data-tm-selection-menu]')
+      const ids = (menu?.getAttribute('data-tm-selection-ids') || '')
+        .split('|').filter(Boolean).sort().join('|')
+      return ids === 'lod-c1|lod-c2|lod-g1|lod-root'
+        && menu?.getAttribute('data-tm-selection-count') === '4'
+    }, 6000)
     const domSelected = await page.evaluate(() =>
       [...document.querySelectorAll('.react-flow__node.selected')].map((n) => n.getAttribute('data-id')))
     const subtreeCount = await page.evaluate(() =>
       document.querySelector('[data-tm-selection-menu]')?.getAttribute('data-tm-selection-count'))
     check('选中子树：整棵从属树被选中，related / 游离 / 其它节点不入',
-      subtreeDone && subtreeCount === '4' && domSelected.includes('lod-root')
+      subtreeDone && domSelected.includes('lod-root')
       && domSelected.every((id) => ['lod-root', 'lod-c1', 'lod-c2', 'lod-g1'].includes(id)),
       JSON.stringify({ domSelected, subtreeCount, ids: await selectionIds() }))
 
@@ -2194,6 +2793,253 @@ async function main() {
       && !document.querySelector('[data-tm-canvas-zoom-slider]')
       && document.querySelector('[data-shortcut-scope="canvas"]')?.getAttribute('data-tm-canvas-readonly') === 'false', 8000)
     check('缩放滑动条：回到 100% 时与提示条一起隐藏并解除只读', restoredBySlider, await zoomReadout())
+
+    // 阶段 V 的基线必须是右栏展开态：先恢复，再由阶段 V 自己折叠/展开往返。
+    await setRightPanelCollapsed(page, false)
+
+    // ===== 阶段 V：右栏是画布浮层，折叠/展开不得改变任何画布布局 =====
+    const layoutSnapshot = () => page.evaluate(() => {
+      const rectOf = (el) => {
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]
+      }
+      const app = document.querySelector('#app-layout')
+      const graph = document.querySelector('#graph-panel')
+      const canvas = document.querySelector('[data-shortcut-scope="canvas"]')
+      const right = document.querySelector('.right-panel-container')
+      const panels = [...document.querySelectorAll('.react-flow__panel')]
+        .map((el) => ({ key: String(el.className), rect: rectOf(el) }))
+        .sort((a, b) => a.key.localeCompare(b.key))
+      const svg = document.querySelector('svg[aria-label="画布缩略图"]')
+      const vp = svg ? [...svg.querySelectorAll('rect')]
+        .find((r) => r.getAttribute('fill') === 'var(--color-accent-soft)') : null
+      return {
+        app: rectOf(app),
+        graph: rectOf(graph),
+        canvas: [canvas?.clientWidth ?? 0, canvas?.clientHeight ?? 0],
+        panels,
+        viewport: vp ? [vp.getAttribute('x'), vp.getAttribute('y'), vp.getAttribute('width'), vp.getAttribute('height')] : null,
+        right: rectOf(right),
+        rightVisible: !!right && getComputedStyle(right).display !== 'none',
+        rightPosition: right ? getComputedStyle(right).position : '',
+        graphPosition: graph ? getComputedStyle(graph).position : '',
+        overlay: right?.getAttribute('data-tm-right-panel-overlay') || '',
+      }
+    })
+    // 画布几何 = 画布容器 / React Flow 容器 / 全部 Panel / 缩略图视口框，逐像素比对。
+    const canvasGeometry = (s) => JSON.stringify({
+      app: s.app, graph: s.graph, canvas: s.canvas, panels: s.panels, viewport: s.viewport,
+    })
+    const toggleRightPanel = async () => {
+      const clicked = await page.evaluate(() => {
+        const button = document.querySelector('button[aria-label="折叠右侧面板"]')
+          || document.querySelector('button[aria-label="展开右侧面板"]')
+        if (!button) return false
+        button.click()
+        return true
+      })
+      if (clicked) return true
+      // 标题栏按钮在某些宿主模式下不渲染时，回落到全局 Ctrl+Tab 快捷键。
+      await page.keyboard.down('Control')
+      await page.keyboard.press('Tab')
+      await page.keyboard.up('Control')
+      return true
+    }
+
+    const baseLayout = await layoutSnapshot()
+    check('【阶段 V】画布绝对铺满、右栏为贴右浮层（不参与 flex 挤压）',
+      baseLayout.graphPosition === 'absolute' && baseLayout.rightPosition === 'absolute'
+      && !!baseLayout.graph && !!baseLayout.app && baseLayout.graph[2] === baseLayout.app[2]
+      && baseLayout.rightVisible && baseLayout.overlay === 'true',
+      JSON.stringify({ graph: baseLayout.graph, app: baseLayout.app, right: baseLayout.right, overlay: baseLayout.overlay }))
+
+    await toggleRightPanel()
+    const collapsedOk = await waitFor(page, () => {
+      const right = document.querySelector('.right-panel-container')
+      return !!right && getComputedStyle(right).display === 'none'
+    }, 8000)
+    const collapsedLayout = await layoutSnapshot()
+    check('【阶段 V】折叠右栏后画布尺寸、全部 Panel 定位与缩略图视口均不变',
+      collapsedOk && canvasGeometry(baseLayout) === canvasGeometry(collapsedLayout),
+      JSON.stringify({
+        base: { graph: baseLayout.graph, panels: baseLayout.panels.length, viewport: baseLayout.viewport },
+        after: { graph: collapsedLayout.graph, panels: collapsedLayout.panels.length, viewport: collapsedLayout.viewport },
+      }))
+
+    await toggleRightPanel()
+    const expandedOk = await waitFor(page, () => {
+      const right = document.querySelector('.right-panel-container')
+      return !!right && getComputedStyle(right).display !== 'none'
+    }, 8000)
+    const expandedLayout = await layoutSnapshot()
+    check('【阶段 V】再次展开后画布仍与基线逐像素一致',
+      expandedOk && canvasGeometry(baseLayout) === canvasGeometry(expandedLayout),
+      JSON.stringify({
+        base: { graph: baseLayout.graph, panels: baseLayout.panels.length, viewport: baseLayout.viewport },
+        after: { graph: expandedLayout.graph, panels: expandedLayout.panels.length, viewport: expandedLayout.viewport },
+      }))
+
+    const viewportStable = baseLayout.viewport
+      ? JSON.stringify(baseLayout.viewport) === JSON.stringify(collapsedLayout.viewport)
+        && JSON.stringify(baseLayout.viewport) === JSON.stringify(expandedLayout.viewport)
+      : baseLayout.canvas[0] > 0 && baseLayout.canvas[0] === collapsedLayout.canvas[0]
+        && baseLayout.canvas[0] === expandedLayout.canvas[0]
+    check('【阶段 V】缩略图视口框读数稳定（未显示时以画布尺寸代理）', viewportStable,
+      JSON.stringify({ visible: !!baseLayout.viewport, viewport: baseLayout.viewport, canvas: baseLayout.canvas }))
+
+    check('【阶段 V】折叠/展开确实只切换右栏显隐，右栏本身尺寸不变',
+      baseLayout.rightVisible && !collapsedLayout.rightVisible && expandedLayout.rightVisible
+      && JSON.stringify(baseLayout.right) === JSON.stringify(expandedLayout.right),
+      JSON.stringify({ base: baseLayout.right, collapsed: collapsedLayout.right, expanded: expandedLayout.right }))
+
+    // ===== 阶段 X：新建节点即时呈现（同步插入内存 + 后台合并落盘） =====
+    // 旧实现为 1 个新节点会重载整房间，节点多时点击后要等半秒。这里从「点下菜单项」
+    // 到「新节点 DOM 出现」在页面内用 MutationObserver 计时，避免 CDP 往返误差。
+    const paneSpot = await page.evaluate(() => {
+      const candidates = [[500, 500], [430, 430], [600, 560], [360, 640], [700, 300]]
+      for (const [x, y] of candidates) {
+        const el = document.elementFromPoint(x, y)
+        const pane = el?.closest?.('.react-flow__pane')
+          || (el?.classList?.contains('react-flow__pane') ? el : null)
+        if (!pane) continue
+        pane.dispatchEvent(new MouseEvent('contextmenu', {
+          bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: x, clientY: y,
+        }))
+        return { x, y }
+      }
+      return null
+    })
+    check('【阶段 X】画布空白处可打开新建节点菜单', !!paneSpot
+      && await waitFor(page, () => [...document.querySelectorAll('button')]
+        .some((b) => (b.textContent || '').trim().startsWith('新建节点')), 5000),
+      JSON.stringify(paneSpot))
+
+    const createTiming = await page.evaluate(() => new Promise((resolve) => {
+      const btn = [...document.querySelectorAll('button')]
+        .find((b) => (b.textContent || '').trim().startsWith('新建节点'))
+      if (!btn) return resolve({ ms: -1, id: null, reason: 'menu-missing' })
+      const start = performance.now()
+      let settled = false
+      let timer = null
+      let obs = null
+      const finish = (id) => {
+        if (settled) return
+        settled = true
+        if (obs) obs.disconnect()
+        if (timer) clearTimeout(timer)
+        resolve({ ms: Math.round(performance.now() - start), id })
+      }
+      obs = new MutationObserver(() => {
+        const el = document.querySelector('.react-flow__node[data-id^="card-"]')
+        if (el) finish(el.getAttribute('data-id'))
+      })
+      obs.observe(document.querySelector('.react-flow') || document.body, { childList: true, subtree: true })
+      timer = setTimeout(() => finish(null), 3000)
+      btn.click()
+    }))
+    check('【阶段 X】点击新建节点后同帧出现（不等待整房间重载）',
+      !!createTiming.id && createTiming.ms >= 0 && createTiming.ms < 250,
+      JSON.stringify(createTiming))
+
+    // 保存协调器 delayMs=300；后台写盘不阻塞上面的 UI 计时。
+    let createdOnDisk = false
+    for (let i = 0; i < 30 && !createdOnDisk; i += 1) {
+      createdOnDisk = !!(readGraph().children || {})[createTiming.id]
+      if (!createdOnDisk) await sleep(150)
+    }
+    const childrenAfterCreate = readGraph().children || {}
+    check('【阶段 X】后台合并保存把新节点写进父 _graph.json', createdOnDisk,
+      JSON.stringify({ id: createTiming.id, keys: Object.keys(childrenAfterCreate).slice(-3) }))
+    check('【阶段 X】后台保存未覆盖既有节点',
+      childrenAfterCreate['node-a']?.name === '节点 A' && childrenAfterCreate['node-b']?.name === '节点 B')
+
+    // ===== 阶段 Y：删除节点即时消失（局部 IO + 同步内存删除 + 后台合并落盘） =====
+    // 旧实现删 1 个节点会 saveNow 全量写盘 + loadRoom 重扫整房间，约半秒后才更新 UI。
+    // 这里从「点下确认框的确定」到「节点 DOM 消失」在页面内用 MutationObserver 计时。
+    // 目标选 lod-root：它有物理目录 / 文档，且带 2 条 subordinate 边，可一并验关联边裁剪。
+    // 菜单项文案带快捷键后缀（「删除节点Backspace」），必须 startsWith；
+    // 用真实鼠标右键而非合成事件，确保 React Flow 走 onNodeContextMenu（node 菜单）。
+    const deleteNodeRect = await page.evaluate(() => {
+      const el = document.querySelector('.react-flow__node[data-id="lod-root"]')
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.x + Math.min(30, r.width / 2)), y: Math.round(r.y + Math.min(20, r.height / 2)) }
+    })
+    check('【阶段 Y】可在画布上定位待删除节点', !!deleteNodeRect, JSON.stringify(deleteNodeRect))
+    if (deleteNodeRect) await page.mouse.click(deleteNodeRect.x, deleteNodeRect.y, { button: 'right' })
+    const deleteMenuReady = await waitFor(page, () => [...document.querySelectorAll('button')]
+      .some((b) => (b.textContent || '').trim().startsWith('删除节点')), 5000)
+    check('【阶段 Y】节点右键菜单含「删除节点」', deleteMenuReady,
+      JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('button')]
+        .map((b) => (b.textContent || '').trim()).filter(Boolean).slice(-12))))
+
+    const deleteTiming = await page.evaluate((id) => new Promise((resolve) => {
+      const selector = `.react-flow__node[data-id="${id}"]`
+      let settled = false
+      let obs = null
+      let timer = null
+      const finish = (result) => {
+        if (settled) return
+        settled = true
+        if (obs) obs.disconnect()
+        if (timer) clearTimeout(timer)
+        resolve(result)
+      }
+      const menuBtn = [...document.querySelectorAll('button')]
+        .find((b) => (b.textContent || '').trim().startsWith('删除节点'))
+      if (!menuBtn) return finish({ ms: -1, reason: 'menu-missing' })
+      menuBtn.click()
+      setTimeout(() => {
+        const dlg = document.querySelector('[role="dialog"]')
+        const okBtn = dlg && [...dlg.querySelectorAll('button')]
+          .find((b) => (b.textContent || '').trim() === '确定')
+        if (!okBtn) return finish({ ms: -1, reason: 'confirm-missing' })
+        const start = performance.now()
+        const done = () => finish({ ms: Math.round(performance.now() - start), reason: 'removed' })
+        obs = new MutationObserver(() => {
+          if (!document.querySelector(selector)) done()
+        })
+        obs.observe(document.querySelector('.react-flow') || document.body,
+          { childList: true, subtree: true })
+        timer = setTimeout(() => finish({ ms: -1, reason: 'timeout' }), 3000)
+        okBtn.click()
+        if (!document.querySelector(selector)) done()
+      }, 300)
+    }), 'lod-root')
+    check('【阶段 Y】确认删除后节点同帧消失（不等待整房间重载）',
+      deleteTiming.reason === 'removed' && deleteTiming.ms >= 0 && deleteTiming.ms < 250,
+      JSON.stringify(deleteTiming))
+    check('【阶段 Y】删除后节点不再出现在 DOM', await page.evaluate(() =>
+      !document.querySelector('.react-flow__node[data-id="lod-root"]')))
+
+    let deletedOnDisk = false
+    for (let i = 0; i < 30 && !deletedOnDisk; i += 1) {
+      deletedOnDisk = !(readGraph().children || {})['lod-root']
+      if (!deletedOnDisk) await sleep(150)
+    }
+    const graphAfterDelete = readGraph()
+    const edgesAfterDelete = graphAfterDelete.edges || []
+    check('【阶段 Y】后台合并保存把节点从 _graph.json 移除', deletedOnDisk,
+      JSON.stringify(Object.keys(graphAfterDelete.children || {})))
+    check('【阶段 Y】关联边被裁、无关边保留',
+      !edgesAfterDelete.some((e) => e.source === 'lod-root' || e.target === 'lod-root')
+      && edgesAfterDelete.some((e) => e.id === 'lod-e3')
+      && edgesAfterDelete.some((e) => e.id === 'lod-e4'),
+      JSON.stringify(edgesAfterDelete.map((e) => e.id)))
+    check('【阶段 Y】未删的既有节点仍在',
+      (graphAfterDelete.children || {})['node-a']?.name === '节点 A'
+      && (graphAfterDelete.children || {})['node-b']?.name === '节点 B')
+
+    const trashDirY = path.join(WORKDIR, '.trash', 'kbs')
+    const trashItemsY = fs.existsSync(trashDirY) ? fs.readdirSync(trashDirY) : []
+    const trashMetaY = trashItemsY.filter((n) => n.endsWith('.trash.json')).map((n) => {
+      try { return JSON.parse(fs.readFileSync(path.join(trashDirY, n), 'utf8')) } catch { return {} }
+    })
+    check('【阶段 Y】被删目录移入回收站且带原节点名',
+      trashItemsY.some((n) => n.includes('lod-root') && !n.endsWith('.trash.json'))
+      && trashMetaY.some((m) => m.label === 'LOD 树根'),
+      JSON.stringify({ items: trashItemsY.slice(0, 4), labels: trashMetaY.map((m) => m.label) }))
   } finally {
     browser.disconnect()
     if (spawned) spawned.kill()

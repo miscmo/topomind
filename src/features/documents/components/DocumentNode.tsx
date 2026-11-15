@@ -1,7 +1,8 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, FileText, FolderTree } from 'lucide-react'
 import React from 'react'
 import type { TopoDocumentManifestItem } from '../../../core/storage'
-import { topoDocumentPath, topoDocumentTypeIcon } from '../types/documentTypes'
+import { PANEL_LIST } from '../../../shared/ui/panelList'
+import { topoDocumentPath } from '../types/documentTypes'
 import { DocumentInlineEdit } from './DocumentInlineEdit'
 import type { DocumentInlineEditState } from '../model/useDocumentSidebarModel'
 
@@ -112,7 +113,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           onDragOver={sticky ? undefined : (e) => onDragOver(e, node.id)}
           onDragLeave={sticky ? undefined : onDragLeave}
           onDrop={sticky ? undefined : (e) => onDrop(e, node.id)}
-          className={`group w-full flex items-center mb-[2px] py-[7px] pr-2.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[var(--color-hover-bg)] ${isActive ? '!bg-[var(--color-selected-bg)]' : ''} ${dragClass} ${draggedId === node.id ? 'opacity-50' : ''}`}
+          className={`group relative w-full flex min-h-[26px] items-center gap-1 mb-[2px] py-1 pr-1.5 border-none rounded-md bg-transparent text-left cursor-pointer transition-colors duration-75 hover:bg-[var(--color-hover-bg)] ${isActive ? `!bg-[var(--color-accent-soft)] ${PANEL_LIST.rowActive}` : ''} ${dragClass} ${draggedId === node.id ? 'opacity-50' : ''}`}
           style={{ paddingLeft: `${level * 16 + 4}px` }}
           onClick={() => onSelectDocument(topoDocumentPath(node.id))}
           onKeyDown={(e) => {
@@ -136,7 +137,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
             tabIndex={hasChildren ? 0 : -1}
             draggable={hasChildren ? false : undefined}
             aria-label={hasChildren ? `${isExpanded ? '折叠' : '展开'}「${node.title}」` : undefined}
-            className={`w-5 h-5 flex items-center justify-center shrink-0 ${hasChildren ? 'cursor-pointer hover:bg-black/5 rounded ' : ''}`}
+            className={`w-4 h-4 flex items-center justify-center shrink-0 ${hasChildren ? 'cursor-pointer hover:bg-[var(--color-hover-bg)] rounded ' : ''}`}
             onPointerDown={(e) => {
               e.stopPropagation()
             }}
@@ -164,17 +165,17 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
             }}
           >
             {hasChildren ? (
-              <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+              <ChevronRight className={`h-3 w-3 text-[var(--color-text-muted)] transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
             ) : <span className="w-1" />}
           </span>
-          <span className="w-5 h-5 flex items-center justify-center shrink-0 mr-1">
+          <span className="w-4 h-4 flex items-center justify-center shrink-0">
             <span
               role="button"
               tabIndex={isBusy ? -1 : 0}
               draggable={false}
               aria-label={`更换「${node.title}」的图标`}
               aria-disabled={isBusy || undefined}
-              className={`w-5 h-5 flex items-center justify-center rounded-md text-sm  ${isBusy ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-black/5'}`}
+              className={`w-4 h-4 flex items-center justify-center rounded text-[12px] leading-none ${isBusy ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-[var(--color-hover-bg)]'}`}
               onPointerDown={(e) => {
                 e.stopPropagation()
               }}
@@ -203,12 +204,17 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
                 }
               }}
             >
-              {node.icon || topoDocumentTypeIcon(node.type)}
+              {/* 自定义 emoji 保留；缺省改用语义图标：分支 / 单篇文档，颜色随选中态。 */}
+              {node.icon ? <span className="leading-none">{node.icon}</span> : (
+                hasChildren
+                  ? <FolderTree className={isActive ? PANEL_LIST.iconActive : PANEL_LIST.icon} />
+                  : <FileText className={isActive ? PANEL_LIST.iconActive : PANEL_LIST.icon} />
+              )}
             </span>
           </span>
           <span
             data-document-title
-            className="block text-[12px] font-semibold leading-[1.4] whitespace-nowrap overflow-hidden text-ellipsis text-[var(--color-text-primary)]"
+            className={`block min-w-0 flex-1 truncate text-[12px] leading-[1.4] text-[var(--color-text-primary)] ${isActive ? `${PANEL_LIST.rowTitleActive} font-medium` : ''}`}
             style={node.color ? { color: node.color } : undefined}
           >
             {node.title}
@@ -248,7 +254,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
       {renderChildren && isExpanded && hiddenChildCount > 0 && (
         <button
           type="button"
-          className="mb-[2px] py-1 pr-2.5 text-left text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:underline transition-colors"
+          className="mb-[2px] rounded-md py-1 pr-2.5 text-left text-[11px] text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] transition-colors"
           style={{ paddingLeft: `${(level + 1) * 16 + 4}px` }}
           onClick={() => onShowMoreChildren?.(node.id)}
         >

@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { ArrowDownRight, ArrowUpRight, FileText, Link2, RefreshCw } from 'lucide-react'
 import type { DocumentBacklink } from '../../../../domain/graph/linkedDocuments'
+import { PANEL_LIST, PanelListAction } from '../../../../shared/ui/panelList'
 import { EmptyState } from '../../../../shared/ui/EmptyState'
 
 interface DocumentRelationPanelProps {
@@ -32,22 +33,24 @@ const RelationRow = memo(function RelationRow({ item, kind, onOpen }: RelationRo
       data-tm-outgoing-item={isOutgoing ? item.docId : undefined}
       disabled={missing}
       onClick={() => onOpen(item.docId)}
-      className="flex items-start gap-2 w-full px-2 py-1.5 rounded-md text-left hover:bg-[var(--color-hover-bg)] disabled:opacity-60 disabled:cursor-not-allowed border-none bg-transparent cursor-pointer"
+      className={`${PANEL_LIST.row} w-full !items-start !gap-2 text-left border-none bg-transparent cursor-pointer disabled:cursor-not-allowed ${missing ? PANEL_LIST.rowDisabled : ''}`}
       title={missing ? '引用的文档已不存在' : `打开「${item.title || item.docId}」`}
     >
-      <FileText className="mt-[2px] h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
+      <FileText className={`mt-[2px] ${PANEL_LIST.icon}`} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[12px] text-[var(--color-text-primary)]">
+        <span className={`${PANEL_LIST.rowTitle} block`}>
           {item.title || '未命名文档'}
         </span>
-        <span className="block truncate text-[10px] text-[var(--color-text-muted)]">
-          {missing ? '文档已不存在' : `来源：${item.breadcrumb}`}
-        </span>
-        <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] text-[var(--color-accent)]">
-          {isOutgoing
-            ? <ArrowDownRight className="h-3 w-3" />
-            : <ArrowUpRight className="h-3 w-3" />}
-          {item.references} 处引用
+        <span className="flex items-center gap-1">
+          <span className={`${PANEL_LIST.rowMeta} min-w-0 flex-1`}>
+            {missing ? '文档已不存在' : `来源：${item.breadcrumb}`}
+          </span>
+          <span className={`${PANEL_LIST.badge} ${PANEL_LIST.badgeAccent} inline-flex items-center gap-0.5`}>
+            {isOutgoing
+              ? <ArrowDownRight className="h-3 w-3" />
+              : <ArrowUpRight className="h-3 w-3" />}
+            {item.references} 处
+          </span>
         </span>
       </span>
     </button>
@@ -74,15 +77,15 @@ const RelationSection = memo(function RelationSection({
       data-tm-relations-incoming={kind === 'incoming' ? '' : undefined}
       data-tm-relations-outgoing={kind === 'outgoing' ? '' : undefined}
     >
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 shrink-0 bg-[var(--color-bg-muted)]">
-        <span className="text-[12px] font-medium text-[var(--color-text-secondary)]" title={hint}>
+      <div className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border-light)] px-3">
+        <span className="text-[11px] font-medium text-[var(--color-text-secondary)]" title={hint}>
           {title}
         </span>
-        <span className="text-[10px] text-[var(--color-text-muted)] shrink-0">
+        <span className="shrink-0 text-[10px] tabular-nums text-[var(--color-text-muted)]">
           {items.length} 篇 · {totalReferences} 处
         </span>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-1.5 py-2">
+      <div className={PANEL_LIST.body}>
         {items.length === 0 ? (
           <EmptyState
             size="sm"
@@ -117,28 +120,19 @@ export const DocumentRelationPanel = memo(function DocumentRelationPanel({
 }: DocumentRelationPanelProps) {
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-tm-backlinks-panel="">
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--color-border-subtle)] shrink-0">
-        <span className="text-[12px] font-medium text-[var(--color-text-secondary)]">引用关系</span>
-        <div className="flex items-center gap-1.5 min-w-0">
-          {loading && <span className="text-[10px] text-[var(--color-text-muted)]">校验中…</span>}
-          {!loading && (
-            <span
-              className="text-[10px] text-[var(--color-text-muted)] truncate"
-              title="关系索引覆盖的文档数 / 本次真正读正文解析的篇数（0 表示完全命中索引）"
-            >
-              索引 {indexed} 篇 · 解析 {parsed}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="p-1 rounded text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] border-none bg-transparent cursor-pointer shrink-0"
-            title="重新校验全库引用关系（只重新解析改动过的正文）"
-            aria-label="重新校验引用关系"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
-        </div>
+      <div className={PANEL_LIST.header}>
+        <Link2 className={PANEL_LIST.headerIcon} />
+        <span className={PANEL_LIST.title}>引用关系</span>
+        <span className={`${PANEL_LIST.hint} text-right`} title="关系索引覆盖的文档数 / 本次真正读正文解析的篇数（0 表示完全命中索引）">
+          {loading ? '校验中…' : `索引 ${indexed} 篇 · 解析 ${parsed}`}
+        </span>
+        <PanelListAction
+          onClick={onRefresh}
+          title="重新校验全库引用关系（只重新解析改动过的正文）"
+          aria-label="重新校验引用关系"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+        </PanelListAction>
       </div>
 
       <RelationSection
@@ -151,7 +145,7 @@ export const DocumentRelationPanel = memo(function DocumentRelationPanel({
         onOpen={onOpen}
       />
 
-      <div className="h-px shrink-0 bg-[var(--color-border-subtle)]" />
+      <div className="h-px shrink-0 bg-[var(--color-border-light)]" />
 
       <RelationSection
         kind="outgoing"

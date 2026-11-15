@@ -1,12 +1,14 @@
 import { memo, useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { CornerDownLeft, ExternalLink, FileText, FolderOpen, Image as ImageIcon, Paperclip, Trash2, Upload } from 'lucide-react'
 import { useStorage } from '../../../../core/storage'
 import { useConfirmStore } from '../../../../shared/ui/ConfirmModal/confirmStore'
 import { logger } from '../../../../core/logger'
 import type { AttachmentItem } from '../../../../core/storage'
 import { logAction } from '../../../../core/log-backend'
+import { PERFORMANCE_METRICS, startPerformanceSpan } from '../../../../core/performance-log'
 import { EmptyState } from '../../../../shared/ui/EmptyState'
-import { Paperclip } from 'lucide-react'
+import { PANEL_LIST, PanelListAction } from '../../../../shared/ui/panelList'
 
 export function generateUniqueFileName(originalName: string): string {
   const uuid = crypto.randomUUID().split('-')[0]
@@ -71,52 +73,40 @@ const AttachmentItemRow = memo(function AttachmentItemRow({
     }
   }, [])
 
+  const TypeIcon = item.isImage ? ImageIcon : FileText
+
   return (
     <>
-      <div 
+      <div
         ref={elRef}
-        className="flex items-center gap-2 p-2 rounded-md select-none transition-colors duration-75 hover:bg-[var(--color-hover-bg)] group relative"
+        className={`${PANEL_LIST.row} !items-start !gap-2`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <div className="text-[18px] flex items-center justify-center w-6 shrink-0 text-[var(--color-text-muted)]">
-          {item.isImage ? '🖼️' : '📄'}
-        </div>
-        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-          <div className="text-[13px] text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis" title={item.name}>{item.name}</div>
-          <div className="text-[11px] text-[var(--color-text-muted)]">
-            {(item.size / 1024).toFixed(1)} KB
+        <TypeIcon className={`mt-[2px] ${item.isImage ? PANEL_LIST.iconActive : PANEL_LIST.icon}`} />
+        <div className="min-w-0 flex-1">
+          <div className={`${PANEL_LIST.rowTitle} truncate`} title={item.name}>{item.name}</div>
+          <div className={PANEL_LIST.rowMeta}>
+            {(item.size / 1024).toFixed(1)} KB · {item.isImage ? '图片' : '文件'}
           </div>
         </div>
-        <div className="opacity-0 flex items-center gap-1 group-hover:opacity-100 transition-all duration-75">
-          <button
-            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]"
-            onClick={(e) => onInsert(item, e)}
-            title="插入到文档"
-          >
-            ↵
-          </button>
-          <button
-            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]"
-            onClick={(e) => onOpen(item, e)}
-            title="使用系统默认程序打开"
-          >
-            ↗
-          </button>
-          <button
-            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text-primary)]"
-            onClick={(e) => onShowInFolder(item, e)}
-            title="在文件夹中显示"
-          >
-            📁
-          </button>
-          <button
-            className="w-6 h-6 flex items-center justify-center border-none bg-transparent text-[var(--color-text-muted)] rounded cursor-pointer transition-all duration-75 text-[14px] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-danger)]"
-            onClick={(e) => onDelete(item, e)}
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          <PanelListAction title="插入到文档" onClick={(e) => onInsert(item, e)}>
+            <CornerDownLeft className="h-3.5 w-3.5" />
+          </PanelListAction>
+          <PanelListAction title="使用系统默认程序打开" onClick={(e) => onOpen(item, e)}>
+            <ExternalLink className="h-3.5 w-3.5" />
+          </PanelListAction>
+          <PanelListAction title="在文件夹中显示" onClick={(e) => onShowInFolder(item, e)}>
+            <FolderOpen className="h-3.5 w-3.5" />
+          </PanelListAction>
+          <PanelListAction
             title="删除附件"
+            className="hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]"
+            onClick={(e) => onDelete(item, e)}
           >
-            ✕
-          </button>
+            <Trash2 className="h-3.5 w-3.5" />
+          </PanelListAction>
         </div>
       </div>
       {item.isImage && isHovering && previewUrl && rect && createPortal(
@@ -127,8 +117,8 @@ const AttachmentItemRow = memo(function AttachmentItemRow({
           left: rect.right + 340 > window.innerWidth ? rect.left - 330 : rect.right + 10,
           width: '320px',
           backgroundColor: 'var(--color-surface-elevated)',
-          border: '1px solid var(--color-border)',
-          borderRadius: '6px',
+          border: '1px solid var(--color-border-light)',
+          borderRadius: '8px',
           boxShadow: 'var(--shadow-lg)',
           padding: '6px',
           pointerEvents: 'none'
@@ -179,7 +169,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
       message: `确定要删除附件「${item.name}」吗？该附件会移入全局回收站。如果该附件已在文档中引用，引用将失效。`
     })
     if (!confirmed) return
-    
+
     try {
       setError('')
       await storage.deleteAttachment(attachmentCardPath, item.name)
@@ -192,15 +182,20 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
   }, [attachmentCardPath, confirm, loadAttachments, storage])
 
   const handleUpload = useCallback(async () => {
+    let perfSpan: ReturnType<typeof startPerformanceSpan> | null = null
     try {
       setError('')
       const filePaths = await window.electronAPI?.invoke('app:openFileDialog', {
         properties: ['openFile', 'multiSelections'],
         title: '选择要上传的附件'
       }) as string[] | undefined
-      
+
       if (filePaths && filePaths.length > 0) {
         setLoading(true)
+        perfSpan = startPerformanceSpan(PERFORMANCE_METRICS.attachmentUpload, {
+          module: 'AttachmentsTab',
+          params: { attachmentCardPath, requestedCount: filePaths.length },
+        })
         let importedCount = 0
         for (const filePath of filePaths) {
           const originalName = filePath.split(/[/\\]/).pop() || 'attachment'
@@ -210,8 +205,12 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
         }
         await loadAttachments()
         logAction('附件管理:上传', 'AttachmentsTab', { attachmentCardPath, count: importedCount })
+        perfSpan.end({ count: importedCount })
+        perfSpan = null
       }
     } catch (e) {
+      perfSpan?.fail(e)
+      perfSpan = null
       setError(e instanceof Error ? e.message : String(e))
       logger.catch('AttachmentsTab', 'handleUpload', e)
     } finally {
@@ -274,28 +273,39 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
   const isInitialLoading = loading && attachments.length === 0
 
   if (isInitialLoading) {
-    return <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">加载中...</div>
+    return <div className={PANEL_LIST.empty}>加载中...</div>
   }
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-[var(--color-border-subtle)]">
-        <button className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 border border-dashed border-[var(--color-border-strong)] bg-[var(--color-bg)] text-[var(--color-text-muted)] rounded-md text-[13px] cursor-pointer transition-all duration-75 disabled:opacity-60 disabled:cursor-not-allowed hover:not(:disabled):bg-[var(--color-hover-bg)] hover:not(:disabled):border-[var(--color-border-strong)] hover:not(:disabled):text-[var(--color-text-primary)]" onClick={handleUpload} disabled={loading}>
-          <span className="text-[16px] font-bold">+</span> 上传附件
+      <div className={PANEL_LIST.header}>
+        <Paperclip className={PANEL_LIST.headerIcon} />
+        <span className={PANEL_LIST.title}>附件</span>
+        <span className={PANEL_LIST.count}>{attachments.length} 个</span>
+        <button
+          type="button"
+          className={PANEL_LIST.addButton}
+          onClick={handleUpload}
+          disabled={loading}
+          title="上传附件"
+        >
+          <Upload className="h-3.5 w-3.5" /> 上传附件
         </button>
-        {error && <div className="mt-2 rounded-md bg-[var(--color-danger-soft)] px-2 py-1.5 text-[11px] leading-snug text-[var(--color-danger)]">{error}</div>}
       </div>
-      
+      {error && (
+        <div className="mx-2 mt-1.5 rounded-md bg-[var(--color-danger-soft)] px-2 py-1.5 text-[11px] leading-snug text-[var(--color-danger)]">{error}</div>
+      )}
+
       {attachments.length === 0 ? (
         <EmptyState
           className="flex-1 justify-center"
           size="sm"
           icon={<Paperclip className="h-4 w-4" />}
           title="暂无附件"
-          description="点击上方按钮或拖拽文件到编辑器"
+          description="点击上方上传，或拖拽文件到编辑器"
         />
       ) : (
-        <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
+        <div className={`${PANEL_LIST.body} flex flex-col gap-0.5`}>
           {attachments.map(item => (
             <AttachmentItemRow
               key={item.name}
@@ -309,6 +319,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
           ))}
         </div>
       )}
+      <div className={PANEL_LIST.footer}>拖拽文件到编辑器也可自动上传</div>
     </div>
   )
 })

@@ -79,9 +79,14 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
     collapse()
   }, [collapse])
 
+  // 【右栏浮层 2026-11-12】常态贴右、最大化铺满，两种形态都是 absolute，绝不参与
+  // app-layout 的 flex 计算：折叠/展开只切换显隐，画布宽度、React Flow Panel 定位和
+  // 缩略图视口框都不受影响。z-30 高于画布 isolate 层（0），低于 fixed 右键菜单 z-50
+  // 与全局弹窗 z-10000，避免浮层把菜单盖住。
   return (
     <div
-      className={`${collapsed ? 'hidden' : 'flex'} h-full shrink-0 right-panel-container ${maximized ? 'absolute inset-0 z-[100] bg-[var(--color-canvas-bg)] w-full' : 'relative'}`}
+      className={`${collapsed ? 'hidden' : 'flex'} h-full shrink-0 right-panel-container ${maximized ? 'absolute inset-0 z-30 bg-[var(--color-canvas-bg)] w-full' : 'absolute inset-y-0 right-0 z-30'}`}
+      data-tm-right-panel-overlay="true"
       aria-hidden={collapsed}
     >
       {!maximized && willAutoCollapse && isResizing && (

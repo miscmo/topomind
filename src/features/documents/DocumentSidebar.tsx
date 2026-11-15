@@ -1,5 +1,8 @@
 import { memo } from 'react'
+import { FileText } from 'lucide-react'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
+import { PANEL_LIST } from '../../shared/ui/panelList'
+import { EmptyState } from '../../shared/ui/EmptyState'
 import { useDocumentSidebarModel } from './model/useDocumentSidebarModel'
 import { DocumentNode } from './components/DocumentNode'
 import { DocumentInlineEdit } from './components/DocumentInlineEdit'
@@ -97,6 +100,11 @@ export const DocumentSidebar = memo(function DocumentSidebar({
       onDragOver={(e) => handleDragOver(e, null)}
       onDrop={(e) => handleDrop(e, null)}
     >
+      <div className={PANEL_LIST.header}>
+        <FileText className={PANEL_LIST.headerIcon} />
+        <span className={PANEL_LIST.title}>文档</span>
+        <span className={PANEL_LIST.count}>{topoDocuments.length} 篇</span>
+      </div>
       <div
         ref={scrollContainerRef}
         onScroll={handleSidebarScroll}
@@ -143,11 +151,12 @@ export const DocumentSidebar = memo(function DocumentSidebar({
         )}
         <div role="tree" aria-label="文档列表" className="flex flex-col gap-0.5 relative">
           {rootItems.length === 0 && !inlineEdit ? (
-            <div className="py-8 px-4 text-center text-[var(--color-text-muted)] text-[13px] leading-[1.6]">
-              <div className="mb-2 text-[24px]">📄</div>
-              还没有文档<br />
-              右键或拖拽文件到这里
-            </div>
+            <EmptyState
+              size="sm"
+              icon={<FileText className="h-4 w-4" />}
+              title="还没有文档"
+              description="右键空白处新建，或拖入文件"
+            />
           ) : (
             <>
               {rootItems.map(node => (
@@ -195,6 +204,8 @@ export const DocumentSidebar = memo(function DocumentSidebar({
           )}
         </div>
       </div>
+
+      <div className={PANEL_LIST.footer}>右键新建 · 拖动调整层级 · 双击重命名</div>
 
       {/* 文档列表滚动进度条：滚动时出现、停手后淡出；贴右侧（最靠近分隔线） */}
       {scrollMetrics && (

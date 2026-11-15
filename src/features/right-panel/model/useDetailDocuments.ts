@@ -5,6 +5,7 @@ import { useDraftStore } from './draftStore'
 import { useCardContentStore } from './cardContentStore'
 import { useGraphStoreApi } from '../../../stores/graphStore'
 import { logAction } from '../../../core/log-backend'
+import { PERFORMANCE_METRICS, measurePerformance } from '../../../core/performance-log'
 import { logger } from '../../../core/logger'
 import { joinRefs } from '../../../domain/graph/path-utils'
 import { topoDocumentIdFromPath, topoDocumentPath } from '../../../features/documents/types/documentTypes'
@@ -338,7 +339,11 @@ export function useDetailDocuments({
       if (documentPath === activeDocumentPath) {
         await flushDocumentSave()
       }
-      const payload = await storage.exportTopoDocument(nodePath, documentId)
+      const payload = await measurePerformance(
+        PERFORMANCE_METRICS.documentExport,
+        () => storage.exportTopoDocument(nodePath, documentId),
+        { module: 'DetailPanel', params: { nodePath, documentId } },
+      )
       const blob = new Blob([payload.content], { type: payload.mimeType })
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')

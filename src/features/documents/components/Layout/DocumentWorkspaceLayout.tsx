@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
-import { ListTree, Pin, PinOff } from 'lucide-react'
+import { FileText, Link2, ListTree, Paperclip, Pin, PinOff } from 'lucide-react'
 import type { DetailSidebarTab, DocumentSaveStatus, DocumentWorkspaceLayoutProps, TocItem } from '../../types/workspaceTypes'
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../../../hooks/useResizePanel'
@@ -40,6 +40,9 @@ const TOC_PANEL_MIN_HEIGHT = TOC_RAIL_HEIGHT + TOC_HEADER_HEIGHT
 const TOC_MORPH_MS = 300
 // 标准缓动而非前载的 easeOutQuint：前 1/4 时间只张开约 1/3，才看得出「竖条在长成面板」。
 const TOC_MORPH_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
+// 左侧分区导航：图标按钮，与面板内列表共用同一套细边框 / 圆角 / hover 语言。
+const RAIL_BUTTON = 'flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[var(--color-text-muted)] bg-transparent cursor-pointer transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] disabled:opacity-40 disabled:cursor-not-allowed'
+const RAIL_BUTTON_ACTIVE = '!bg-[var(--color-accent-soft)] !text-[var(--color-accent)]'
 
 export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   isDirty,
@@ -400,9 +403,6 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   const toggleLock = useDetailLockStore((s) => s.toggleLock)
   const isLocked = lockedNodeId !== null
   const lockedNodeLabel = useGraphStore((s) => (lockedNodeId ? s.nodesMap.get(lockedNodeId)?.data.label ?? '' : ''))
-  const selectedNodeLabel = useGraphStore((s) => (selectedNodeIdRaw ? s.nodesMap.get(selectedNodeIdRaw)?.data.label ?? '' : ''))
-  // 详情区当前展示的节点标题：锁定时取锁定节点，否则取当前选中节点
-  const detailNodeTitle = isLocked ? lockedNodeLabel : selectedNodeLabel
 
   const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
     initialWidth: detailSidebarWidth,
@@ -480,14 +480,14 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   return (
     <div 
       ref={containerRef}
-      className={`flex flex-col h-full border border-[var(--color-border)] rounded-lg overflow-hidden bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shadow-[var(--shadow-sm)] ${documentType}`} 
+      className={`flex flex-col h-full border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-surface)] shadow-[var(--shadow-sm)] ${documentType}`} 
     >
       <div className="flex flex-1 overflow-hidden relative">
         {documentType === 'detail' && !effectiveFloating && (
-          <div className="w-9 shrink-0 border-r border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] flex flex-col items-center gap-1 py-2 z-10">
+          <div className="w-9 shrink-0 border-r border-[var(--color-border-light)] bg-[var(--color-surface)] flex flex-col items-center gap-1 py-2 z-10">
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[14px] font-semibold cursor-pointer transition-colors bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] flex items-center justify-center`}
+              className={RAIL_BUTTON}
               onClick={toggleMaximized}
               title={isMaximized ? "还原面板" : "最大化面板"}
               aria-label={isMaximized ? "还原面板" : "最大化面板"}
@@ -500,11 +500,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             </button>
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent cursor-pointer transition-colors flex items-center justify-center ${
-                isLocked
-                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-inset-highlight)]'
-                  : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'
-              }`}
+              className={`${RAIL_BUTTON} ${isLocked ? RAIL_BUTTON_ACTIVE : ''}`}
               onClick={() => toggleLock(kbPath, selectedNodeIdRaw)}
               disabled={!isLocked && !selectedNodeIdRaw}
               title={isLocked ? `已锁定节点${lockedNodeLabel ? `：${lockedNodeLabel}` : ''}（点击解锁）` : '锁定当前节点（固定显示该节点内容，不受选中变化影响）'}
@@ -519,38 +515,38 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             <div className="w-5 h-px bg-[var(--color-border-light)] my-0.5" />
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'documents' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-inset-highlight)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
+              className={`${RAIL_BUTTON} ${!detailSidebarCollapsed && detailSidebarTab === 'documents' ? RAIL_BUTTON_ACTIVE : ''}`}
               onClick={() => handleRailTabClick('documents')}
               title="文档"
               aria-label="文档"
             >
-              文
+              <FileText className="h-4 w-4" />
             </button>
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${!detailSidebarCollapsed && detailSidebarTab === 'attachments' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-inset-highlight)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
+              className={`${RAIL_BUTTON} ${!detailSidebarCollapsed && detailSidebarTab === 'attachments' ? RAIL_BUTTON_ACTIVE : ''}`}
               onClick={() => handleRailTabClick('attachments')}
               disabled={!attachmentCardPath}
               title={!attachmentCardPath ? '当前环境暂不支持附件' : '附件'}
               aria-label="附件"
             >
-              附
+              <Paperclip className="h-4 w-4" />
             </button>
             <button
               type="button"
-              className={`w-7 h-7 rounded-lg border border-transparent text-[12px] font-semibold cursor-pointer transition-colors ${!detailSidebarCollapsed && detailSidebarTab === 'backlinks' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-inset-highlight)]' : 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'}`}
+              className={`${RAIL_BUTTON} ${!detailSidebarCollapsed && detailSidebarTab === 'backlinks' ? RAIL_BUTTON_ACTIVE : ''}`}
               onClick={() => handleRailTabClick('backlinks')}
               title="引用关系：谁引用了本页 / 本页引用了谁"
               aria-label="引用关系"
               data-tm-backlinks-rail=""
             >
-              引
+              <Link2 className="h-4 w-4" />
             </button>
           </div>
         )}
         {documentType === 'detail' && (
           <aside
-            className={`w-[180px] shrink-0 flex flex-col bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] ${
+            className={`w-[180px] shrink-0 flex flex-col bg-[var(--color-surface)] ${
               effectiveFloating 
                 ? 'absolute left-[12px] top-[42px] bottom-[16px] z-30 shadow-[var(--shadow-popover)] border border-[var(--color-border-strong)] rounded-lg overflow-hidden'
                 : detailSidebarCollapsed 
@@ -561,17 +557,8 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             onMouseEnter={() => onSidebarHoverChange?.(true)}
             onMouseLeave={() => onSidebarHoverChange?.(false)}
           >
-            <div className="flex items-center justify-center gap-2 min-h-[58px] p-2.5 px-3 pb-2 border-b border-[var(--color-border-subtle)] bg-gradient-to-b from-[color-mix(in_srgb,var(--color-surface)_98%,transparent)] to-[var(--color-bg)] box-border">
-              {showSidebarContent ? (
-                <div className="w-full min-w-0 flex items-center justify-center h-[30px] text-center">
-                  <span className="text-[14px] font-bold text-[var(--color-text-primary)] truncate">
-                    {detailSidebarTab === 'documents' ? (detailNodeTitle || '文档') : detailSidebarTab === 'attachments' ? '附件' : '引用关系'}
-                  </span>
-                </div>
-              ) : (
-                <div className="w-full h-full" aria-hidden="true" />
-              )}
-            </div>
+            {/* 分区标题条由各列表组件自己提供（与左侧节点树面板同款 h-10 细边框），
+                这里不再叠一层大标题，避免同一侧栏出现两条标题栏。 */}
             {showSidebarContent && (
               <>
                 <div className={`flex-1 min-h-0 flex flex-col ${detailSidebarTab === 'documents' ? '' : 'hidden'}`}>

@@ -432,14 +432,14 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
   // ===== Empty state =====
   if (!selectedNodeId || !hasSelectedNode) {
     return (
-      <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shrink-0 overflow-hidden transition-opacity">
+      <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-[var(--color-surface)] shrink-0 overflow-hidden transition-opacity">
         <div className="p-4 text-xs text-[var(--color-text-muted)] text-center mt-[40%]">选择一个节点查看详情</div>
       </div>
     )
   }
 
   return (
-    <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] shrink-0 overflow-hidden transition-opacity">
+    <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-[var(--color-surface)] shrink-0 overflow-hidden transition-opacity">
       <div className="flex-1 flex min-h-0 overflow-hidden p-0 leading-relaxed text-[13px] [&>*]:flex-1 [&>*]:min-h-0 [&>*]:min-w-0">
         {isActive ? <DocumentWorkspace
           value={draftContent}

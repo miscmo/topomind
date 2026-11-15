@@ -1,4 +1,5 @@
 import React from 'react'
+import { PANEL_LIST } from '../../../shared/ui/panelList'
 import type { DocumentInlineEditState } from '../model/useDocumentSidebarModel'
 
 interface DocumentInlineEditProps {
@@ -21,13 +22,13 @@ export const DocumentInlineEdit: React.FC<DocumentInlineEditProps> = ({
   onKeyDown,
 }) => {
   return (
-    <div 
-      className="w-full flex items-center justify-between mb-[2px] border-none rounded-lg text-left cursor-default transition-colors duration-75 hover:bg-[var(--color-hover-bg)] py-1 px-2 bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] border border-[var(--color-border-light)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
-      style={{ paddingLeft: `${level * 16 + 10}px` }}
+    <div
+      className={`${PANEL_LIST.row} mb-[2px] border border-[var(--color-border-light)] bg-[var(--color-surface)]`}
+      style={{ paddingLeft: `${level * 16 + 4}px` }}
     >
       <input
         ref={inlineInputRef}
-        className="flex-1 w-full min-h-[calc(1.35em+10px)] py-1 px-2.5 border border-transparent !border-[var(--color-border-light)] rounded-lg !bg-[color-mix(in_srgb,var(--color-surface)_22%,transparent)] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-all duration-75 focus:!bg-[color-mix(in_srgb,var(--color-surface)_44%,transparent)] focus:!border-[var(--color-border)] focus:!shadow-[var(--shadow-focus-ring)] disabled:!bg-[var(--color-bg-muted)] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:font-medium placeholder:!text-[var(--color-text-muted)]"
+        className="min-w-0 w-full flex-1 rounded border border-transparent bg-transparent px-1.5 py-1 text-[12px] !text-[var(--color-text-primary)] font-inherit leading-[1.35] outline-none box-border transition-colors duration-75 focus:border-[var(--color-accent)] focus:shadow-[var(--shadow-focus-ring)] disabled:bg-[var(--color-bg-muted)] disabled:!text-[var(--color-text-muted)] disabled:cursor-not-allowed placeholder:!text-[var(--color-text-muted)]"
         value={inlineEdit.value}
         placeholder="输入文档名称"
         onChange={(e) => onChange(e.target.value)}

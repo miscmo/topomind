@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStorage } from '../../../core/storage'
 import { usePlatform } from '../../../hooks/usePlatform'
 import { logAction } from '../../../core/log-backend'
+import { PERFORMANCE_METRICS, measurePerformance } from '../../../core/performance-log'
 
 interface UseHomeImportKBOptions {
   refreshKBList: () => Promise<void>
@@ -58,7 +59,10 @@ export function useHomeImportKB({ refreshKBList }: UseHomeImportKBOptions) {
     setImportError('')
     setImportLoading(true)
     try {
-      await storage.importKB(importDir)
+      await measurePerformance(PERFORMANCE_METRICS.kbImport, () => storage.importKB(importDir), {
+        module: 'HomePage',
+        params: { sourcePath: importDir },
+      })
       logAction('知识库:导入', 'HomePage', { sourcePath: importDir })
       setShowImportSheet(false)
       setImportDir('')
