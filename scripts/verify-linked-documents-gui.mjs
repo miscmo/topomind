@@ -423,6 +423,62 @@ async function main() {
       return !!s && s.left < 20
     }, 6000)
     const layoutFoldedAB = await canvasRectAB()
+    // 自动避让在 rAF 里按状态抽屉实测底边定位，等两帧让位置稳定再开始拖动。
+    await page.evaluate(() => new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    }))
+
+    // 折叠态触发按钮可上下拖动：真实鼠标按下/移动/松开，验证位置变化、偏好落盘、
+    // 且拖动后的合成 click 不会把面板误展开；随后拖回原位，避免遮挡后续阶段。
+    const handleBeforeDragAB = await page.evaluate(() => {
+      const el = document.querySelector('[data-tm-node-tree-collapsed="true"]')
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return {
+        x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2),
+        top: Math.round(r.top),
+      }
+    })
+    let handleDragAB = null
+    if (handleBeforeDragAB) {
+      const dragByAB = 100
+      await page.evaluate((top) => { window.__tmNodeTreeDragBefore = top }, handleBeforeDragAB.top)
+      await page.mouse.move(handleBeforeDragAB.x, handleBeforeDragAB.y)
+      await page.mouse.down()
+      await page.mouse.move(handleBeforeDragAB.x, handleBeforeDragAB.y + dragByAB, { steps: 8 })
+      await page.mouse.up()
+      // 等按钮真的移动到位（不是只看 localStorage 是否被写入）。
+      await waitFor(page, () => {
+        const el = document.querySelector('[data-tm-node-tree-collapsed="true"]')
+        return !!el && Math.round(el.getBoundingClientRect().top) >= window.__tmNodeTreeDragBefore + 80
+      }, 4000)
+      const afterDownAB = await page.evaluate(() => {
+        const el = document.querySelector('[data-tm-node-tree-collapsed="true"]')
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return {
+          x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2),
+          top: Math.round(r.top),
+          collapsed: el.getAttribute('data-tm-node-tree-collapsed'),
+          saved: window.localStorage.getItem('topomind_node_tree_handle_y_v1'),
+        }
+      })
+      handleDragAB = { before: handleBeforeDragAB, after: afterDownAB }
+      if (afterDownAB) {
+        await page.mouse.move(afterDownAB.x, afterDownAB.y)
+        await page.mouse.down()
+        await page.mouse.move(afterDownAB.x, afterDownAB.y - dragByAB, { steps: 8 })
+        await page.mouse.up()
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+      }
+    }
+    check('【阶段 AB】节点结构触发按钮可上下拖动、记住位置且不误触发展开',
+      !!handleDragAB?.after
+      && handleDragAB.after.top - handleDragAB.before.top >= 80
+      && handleDragAB.after.collapsed === 'true'
+      && Number(handleDragAB.after.saved) >= 12,
+      JSON.stringify(handleDragAB))
+
     await setNodeTreeCollapsed(page, false)
     await waitFor(page, () => {
       const s = document.querySelector('.react-flow__panel.top.left')?.getBoundingClientRect()

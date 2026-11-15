@@ -9117,4 +9117,64 @@ const edge = (
     '【P0】降采样不得改动慢判定阈值')
 }
 
+// --- 第 45 组：节点结构折叠触发按钮可上下拖动（2026-11-15） ---
+{
+  const read45 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const files45 = {
+    panel: '../src/features/graph/GraphPage/components/NodeTreePanel.tsx',
+    store: '../src/stores/nodeTreePanelStore.ts',
+    css: '../src/styles/base.css',
+  } as const
+  const entries45 = Object.entries(files45) as Array<[keyof typeof files45, string]>
+  const sources45 = Object.fromEntries(
+    await Promise.all(entries45.map(async ([key, relative]) => [key, await read45(relative)] as const)),
+  ) as Record<keyof typeof files45, string>
+  const has45 = (key: keyof typeof files45, needle: string) => sources45[key].includes(needle)
+
+  // 1) 静态接线：固定 top-3 已被可拖动定位取代，选择器 / 展开语义不变。
+  assert.ok(!has45('panel', 'absolute left-0 top-3 z-30'),
+    '【P0】折叠按钮不得再固定在与状态抽屉重叠的 top-3')
+  for (const needle of [
+    'onPointerDown={handlePointerDown}', 'onPointerMove={handlePointerMove}',
+    'setPointerCapture(event.pointerId)', 'HANDLE_DRAG_THRESHOLD',
+    'suppressClickRef', 'data-tm-canvas-status-drawer',
+    'if (dragRef.current) return', 'cursor-ns-resize',
+    'touchAction: \'none\'', 'clamp(',
+  ]) {
+    assert.ok(has45('panel', needle), `【P0】折叠按钮缺少可拖动接线 ${needle}`)
+  }
+  for (const needle of ['data-tm-node-tree-panel=""', 'data-tm-node-tree-collapsed="true"', 'data-tm-node-tree-toggle=""']) {
+    assert.ok(has45('panel', needle), `【P0】拖动改造不得破坏 GUI 选择器 ${needle}`)
+  }
+  assert.ok(has45('panel', "'--tm-node-tree-offset'") && has45('panel', 'NODE_TREE_PANEL_WIDTH'),
+    '【P0】展开态的横向让位机制必须保持原样')
+  assert.ok(has45('css', 'margin-left: calc(12px + var(--tm-node-tree-offset, 0px)) !important'),
+    '【P0】折叠态不允许靠改状态抽屉横坐标来避让（GUI 要求 left < 20）')
+  for (const needle of ['HANDLE_Y_KEY', 'readHandleY', 'writeHandleY', 'handleY: number | null', 'setHandleY']) {
+    assert.ok(has45('store', needle), `【P0】位置偏好缺少持久化 ${needle}`)
+  }
+
+  // 2) esbuild 真跑 store：钳制与持久化状态真的生效，不是只有字符串。
+  const { build: build45 } = await import('esbuild')
+  const { fileURLToPath: toPath45 } = await import('node:url')
+  const result45 = await build45({
+    entryPoints: [toPath45(new URL(files45.store, import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const store45 = await import(`data:text/javascript;base64,${Buffer.from(result45.outputFiles[0].text).toString('base64')}`)
+  assert.equal(store45.MIN_HANDLE_Y, 12)
+  assert.equal(store45.clampNodeTreeHandleY(-5), 12, '【P0】位置不得越过顶部边界')
+  assert.equal(store45.clampNodeTreeHandleY(120.6), 121, '【P0】位置必须取整')
+  assert.equal(store45.clampNodeTreeHandleY(99999), 5000, '【P0】超大位置必须钳制')
+  assert.equal(store45.clampNodeTreeHandleY(Number.NaN), 12, '【P0】非法位置必须回落到默认')
+  assert.equal(store45.useNodeTreePanelStore.getState().handleY, null,
+    '【P0】未自定义时必须走自动避让，而不是写死一个坐标')
+  store45.useNodeTreePanelStore.getState().setHandleY(240)
+  assert.equal(store45.useNodeTreePanelStore.getState().handleY, 240,
+    '【P0】拖动结束必须把位置写进 store')
+  store45.useNodeTreePanelStore.getState().setHandleY(-100)
+  assert.equal(store45.useNodeTreePanelStore.getState().handleY, 12,
+    '【P0】写入非法位置也必须钳制')
+}
+
 console.log('Critical regression checks verified')
