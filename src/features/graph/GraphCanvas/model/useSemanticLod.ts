@@ -22,9 +22,11 @@ import {
   applyLodNodeHidden,
   buildLodHierarchyKey,
   computeLodVisibility,
+  isLodFullZoom,
   type LodFadeState,
   type LodVisibility,
 } from '../../../../domain/graph/lod'
+import { buildLodPlanSignature } from '../../../../domain/graph/lodPlanSignature'
 import {
   inferGraphProfile,
   normalizeGraphProfileId,
@@ -125,20 +127,29 @@ export function useSemanticLod(options: UseSemanticLodOptions) {
   // nodes[].position，但拖动本身不该触发重算（否则每帧重建压力表 + 整树，
   // 且节点会随手指位置忽隐忽现）。坐标只在跨 2% 台阶 / 关系变化时重新采样。
   const signature = useMemo(() => {
-    const selectedKey = nodes.filter((node) => node.selected).map((node) => node.id).join('|')
-    return [
-      buildLodHierarchyKey(nodes, edges),
-      edges.length,
+    // 【2026-11-15 多选卡顿修复】100% 是唯一可编辑档位，此时全部节点可见，
+    // 选中集合既不影响裁剪也不影响强制显示。旧签名把所有选中 id 拼串 + selectedNodeId
+    // 算进去，Shift 拖框每帧选中集合一变就重算整张 LOD 计划（hierarchy / 排序 /
+    // 压力曲线 / 碰撞）。满缩放连拼串都省掉；只有真正缩小时才纳入整份选中集合。
+    // selectedNodeId（单个 id）仍进签名：左上角诊断面板的深度 / 类型 / 隐藏阈值
+    // 来自同一次计算，选中节点变了必须重算一次，否则面板会停在旧节点上。
+    const fullZoom = isLodFullZoom(zoom)
+    const selectedKey = fullZoom
+      ? ''
+      : nodes.filter((node) => node.selected).map((node) => node.id).join('|')
+    return buildLodPlanSignature({
+      hierarchyKey: buildLodHierarchyKey(nodes, edges),
+      edgeCount: edges.length,
       zoom,
-      prefs.mode,
-      // 面板改层数必须让计划立即失效：否则要等下一次缩放才生效。
-      prefs.preservedDepth,
+      mode: prefs.mode,
+      preservedDepth: prefs.preservedDepth,
       configuredProfileId,
       pinnedKey,
-      [...revealed].join('|'),
+      revealedKey: [...revealed].join('|'),
+      fullZoom,
       selectedKey,
-      selectedNodeId ?? '',
-    ].join('~')
+      selectedNodeId,
+    })
   }, [nodes, edges, zoom, prefs.mode, prefs.preservedDepth, configuredProfileId, pinnedKey, revealed, selectedNodeId])
 
   const cacheRef = useRef<{ signature: string; plan: LodPlan } | null>(null)

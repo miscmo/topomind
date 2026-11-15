@@ -391,6 +391,15 @@ export function computeCollapsedCounts(
   return counts
 }
 
+/**
+ * 与 computeLodVisibility 同源的「满缩放」判定，供 hook 的缓存签名复用。
+ * 100% 是画布唯一可编辑档位，此时所有节点必然可见，选中集合不影响任何裁剪结果。
+ */
+export function isLodFullZoom(zoom: number | undefined): boolean {
+  const rawZoom = Number.isFinite(zoom) ? (zoom as number) : ZOOM_REFERENCE
+  return Math.max(LOD_FLOOR_RATIO, toDisplayRatio(clampRawZoom(rawZoom))) >= LOD_FULL_RATIO
+}
+
 export function computeLodVisibility(input: LodVisibilityInput): LodVisibility {
   const { nodes, edges } = input
   const rawZoom = Number.isFinite(input.zoom) ? (input.zoom as number) : ZOOM_REFERENCE
@@ -572,16 +581,29 @@ export function computeLodVisibility(input: LodVisibilityInput): LodVisibility {
     for (const id of collision.hiddenIds) visibleNodeIds.delete(id)
   }
 
-  const hiddenNodeIds = new Set(nodeIds.filter((id) => !visibleNodeIds.has(id)))
-  const collapsedCounts = computeCollapsedCounts(hierarchy, visibleNodeIds, hiddenNodeIds)
+  const fullZoom = lodRatio >= LOD_FULL_RATIO
+  let hiddenNodeIds: Set<string>
+  let collapsedCounts: Map<string, number>
   let collapsedTotal = 0
-  for (const value of collapsedCounts.values()) collapsedTotal += value
-  const collapsedFreeCount = hiddenNodeIds.size - collapsedTotal
+  let collapsedFreeCount = 0
   const hiddenEdgeIds = new Set<string>()
-  if (active) {
-    for (const edge of edges) {
-      if (!visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target)) {
-        hiddenEdgeIds.add(edge.id)
+  if (fullZoom) {
+    // 【2026-11-15 多选卡顿修复】满缩放全部可见：hidden 派生一律为空，
+    // 跳过 O(N+E) 的过滤、折叠归属与边遍历。注意这里**不能**跳过 hierarchy、
+    // 退场序列与压力曲线：100% 时的层级诊断与 selectedNode.revealRatio 必须
+    // 仍与裁剪同源（门禁第 4856 组硬约束），否则面板读数和实际隐藏时机脱节。
+    hiddenNodeIds = new Set<string>()
+    collapsedCounts = new Map<string, number>()
+  } else {
+    hiddenNodeIds = new Set(nodeIds.filter((id) => !visibleNodeIds.has(id)))
+    collapsedCounts = computeCollapsedCounts(hierarchy, visibleNodeIds, hiddenNodeIds)
+    for (const value of collapsedCounts.values()) collapsedTotal += value
+    collapsedFreeCount = hiddenNodeIds.size - collapsedTotal
+    if (active) {
+      for (const edge of edges) {
+        if (!visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target)) {
+          hiddenEdgeIds.add(edge.id)
+        }
       }
     }
   }
@@ -589,11 +611,17 @@ export function computeLodVisibility(input: LodVisibilityInput): LodVisibility {
   let maxDepth = 1
   let visibleFreeCount = 0
   const depthVisible = new Map<number, number>()
-  for (const id of visibleNodeIds) {
-    if (freeIds.has(id)) { visibleFreeCount += 1; continue }
-    const depth = hierarchy.depth.get(id) ?? 1
-    maxDepth = Math.max(maxDepth, depth)
-    depthVisible.set(depth, (depthVisible.get(depth) ?? 0) + 1)
+  if (fullZoom) {
+    maxDepth = treeMaxDepth
+    visibleFreeCount = hierarchy.free.length
+    for (const [depth, total] of depthTotals) depthVisible.set(depth, total)
+  } else {
+    for (const id of visibleNodeIds) {
+      if (freeIds.has(id)) { visibleFreeCount += 1; continue }
+      const depth = hierarchy.depth.get(id) ?? 1
+      maxDepth = Math.max(maxDepth, depth)
+      depthVisible.set(depth, (depthVisible.get(depth) ?? 0) + 1)
+    }
   }
   const depthLevels: LodDepthLevel[] = [...depthTotals.keys()]
     .sort((a, b) => a - b)

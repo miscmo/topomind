@@ -206,6 +206,10 @@ export const CANVAS_OPERATIONS = {
   mirror: 'mirror',
   subtreeSelect: 'subtree_select',
   treeOrder: 'tree_order',
+  /** React Flow 的 select change：单击/Shift 点选，一次派发一条样本 */
+  select: 'select',
+  /** Shift 拖框：每帧选中集合变化都会派发一次，是多选卡顿的关键基线 */
+  boxSelect: 'box_select',
 } as const
 
 export type CanvasOperationId = typeof CANVAS_OPERATIONS[keyof typeof CANVAS_OPERATIONS]
@@ -232,6 +236,8 @@ export const CANVAS_OPERATION_THRESHOLDS: Record<CanvasOperationId, number> = {
   mirror: 250,
   subtree_select: 150,
   tree_order: 150,
+  select: 30,
+  box_select: 50,
 }
 
 export const CANVAS_OPERATION_LABELS: Record<CanvasOperationId, string> = {
@@ -255,6 +261,8 @@ export const CANVAS_OPERATION_LABELS: Record<CanvasOperationId, string> = {
   mirror: '水平镜像',
   subtree_select: '选中子树',
   tree_order: '树排序',
+  select: '选中节点',
+  box_select: '框选节点',
 }
 
 export function canvasOperationThreshold(operation: string): number | null {

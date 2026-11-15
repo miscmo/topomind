@@ -1,11 +1,13 @@
 import {
   captureGraphHistorySnapshot,
   commitGraphHistorySnapshot,
+  graphNodeIndexCache,
   type GraphHistorySnapshot,
   type GraphState,
   type GraphStoreApi,
 } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
+import { computeIncrementalNodes } from '../../domain/graph/incrementalNodes'
 import { CANVAS_OPERATIONS } from '@/shared/observability/performanceContract'
 import {
   PERFORMANCE_METRICS,
@@ -13,7 +15,7 @@ import {
   recordPerformance,
   startPerformanceSpan,
 } from '../../core/performance-log'
-import { readCanvasScale } from './canvasPerformanceContext'
+import { readCanvasScale, startCanvasSpan } from './canvasPerformanceContext'
 import { resolveGestureSampleTiming } from '@/shared/observability/gestureTiming'
 
 export interface NodeChangeOperationsDeps {
@@ -24,48 +26,9 @@ export interface NodeChangeOperationsDeps {
   storeApi: StoreApi<GraphState>
 }
 
-type GNode = GraphState['nodes'][number]
-
-// Build the next nodes array incrementally: only entries present in `changesById`
-// get a fresh object (via `apply`); every other node keeps its original reference,
-// so React Flow's memoized node components skip re-rendering. Early-returns null when
-// nothing actually changed, letting callers skip the store update entirely.
-//
-// The id->index map is built from `nodes` on every call (O(n) Map build, no per-node
-// object allocation). This deliberately avoids relying on any cached/store-level index,
-// which can be stale or empty (e.g. right after load / undo) and would make every change
-// silently skipped — leaving dragged nodes stuck in place. The per-frame cost stays
-// dominated by O(changed) for the actual node updates, which is what matters as the
-// graph grows into the thousands.
-function computeIncrementalNodes<T>(
-  nodes: GNode[],
-  changesById: Map<string, T>,
-  apply: (node: GNode, change: T) => { changed: boolean; node: GNode },
-): { nextNodes: GNode[]; changedIds: string[] } | null {
-  const nodeIndexById = new Map<string, number>()
-  for (let i = 0; i < nodes.length; i++) {
-    nodeIndexById.set(nodes[i].id, i)
-  }
-
-  const changedIds: string[] = []
-  const nextById = new Map<string, GNode>()
-  for (const [id, change] of changesById) {
-    const idx = nodeIndexById.get(id)
-    if (idx === undefined) continue
-    const result = apply(nodes[idx], change)
-    if (result.changed) {
-      nextById.set(id, result.node)
-      changedIds.push(id)
-    }
-  }
-  if (changedIds.length === 0) return null
-  const nextNodes = nodes.slice()
-  for (const id of changedIds) {
-    const idx = nodeIndexById.get(id)!
-    nextNodes[idx] = nextById.get(id)!
-  }
-  return { nextNodes, changedIds }
-}
+// 节点增量更新的唯一实现在 domain/graph/incrementalNodes.ts：只给真正变化的节点
+// 换引用，其余保持原引用；id→index 索引按数组引用缓存，连续帧不再每帧重建全图
+// Map。换房间 / undo 产生的外部新数组没有缓存记录，自动重建，不会静默跳过变更。
 
 export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
   const {
@@ -177,7 +140,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
       if (!cp) return { changed: false, node }
       if (node.position.x === cp.x && node.position.y === cp.y) return { changed: false, node }
       return { changed: true, node: { ...node, position: cp } }
-    })
+    }, graphNodeIndexCache)
 
     const isDragging = changes.some((change) => change.dragging === true)
     const isDragEnd = changes.some((change) => change.dragging === false)
@@ -297,7 +260,7 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
           },
         },
       }
-    })
+    }, graphNodeIndexCache)
 
     const isResizing = changes.some((change) => change.resizing === true)
     const isResizeEnd = changes.some((change) => change.resizing === false)
@@ -318,14 +281,43 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
 
   const applyNodeSelectionChanges = (changes: Array<{ id: string; selected: boolean }>) => {
     const store = storeApi.getState()
-    const changesById = new Map(changes.map((change) => [change.id, change]))
-    const result = computeIncrementalNodes(store.nodes, changesById, (node, change) => {
-      if (node.selected === change.selected) return { changed: false, node }
-      return { changed: true, node: { ...node, selected: change.selected } }
+    const graphSession = getActiveGraphSession()
+    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
+    // React Flow 的 Shift 拖框每帧都会派发一次 select change（见 commitUserSelectionRect）。
+    // 一帧一条样本，配合 operation=box_select 才能量出「多选过程中」的真实帧耗时；
+    // 之前多选链路零埋点，看板上完全看不到这次卡顿。
+    const operation = changes.length > 1
+      ? CANVAS_OPERATIONS.boxSelect
+      : CANVAS_OPERATIONS.select
+    const span = startCanvasSpan(storeApi, {
+      operation,
+      roomPath: currentRoomPath,
+      module: 'graphOperations',
+      params: {
+        changedCount: changes.length,
+        selectedBefore: typeof store.selectedNodeCount === 'number' ? store.selectedNodeCount : 0,
+        selectionMode: changes.length > 1 ? 'box' : 'single',
+      },
     })
+    try {
+      const changesById = new Map(changes.map((change) => [change.id, change]))
+      const result = computeIncrementalNodes(store.nodes, changesById, (node, change) => {
+        if (node.selected === change.selected) return { changed: false, node }
+        return { changed: true, node: { ...node, selected: change.selected } }
+      }, graphNodeIndexCache)
 
-    if (result) {
-      store.setNodes(result.nextNodes)
+      if (result) {
+        // 选中态专用通道：只刷新被改的 K 个 nodesMap 条目，并跳过 zundo 的
+        // O(N) 快照比较（selected 是运行时字段，本来就不该进历史）。
+        store.applySelectionChanges(result.nextNodes, result.changedNodes)
+      }
+      span.end({
+        appliedCount: result?.changedIds.length ?? 0,
+        skipped: !result,
+      })
+    } catch (error) {
+      span.fail(error)
+      throw error
     }
   }
 

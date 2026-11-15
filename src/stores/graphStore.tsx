@@ -3,6 +3,21 @@ import { temporal, type TemporalState } from 'zundo'
 import { createContext, useContext, useRef, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { KnowledgeEdge, KnowledgeNode } from '../types'
+import { createNodeIndexCache } from '../domain/graph/incrementalNodes'
+
+/**
+ * 全图共享的 id→index 缓存（按 nodes 数组引用，不跨状态持久化）。
+ * computeIncrementalNodes 产出的 nextNodes 会登记索引，紧接着的
+ * setNodesPreservingSelection 因此不必再扫一遍全图重建 Map。
+ */
+export const graphNodeIndexCache = createNodeIndexCache<KnowledgeNode>()
+
+/**
+ * 只改 nodes[].selected 的事务产出的数组。zundo 每次 set 都会跑 equality，
+ * 这里让这类事务 O(1) 短路：运行时字段本就不进历史，没必要做 O(N) 快照比较。
+ * WeakSet 只认「本次 selection 生成的数组」，任何其它 setter 都走正常比较。
+ */
+const selectionOnlyNodeArrays = new WeakSet<KnowledgeNode[]>()
 
 export interface GraphState {
   nodes: KnowledgeNode[]
@@ -25,6 +40,12 @@ export interface GraphState {
 
   replaceGraph: (nodes: KnowledgeNode[], edges: KnowledgeEdge[], viewport?: { x: number; y: number; zoom: number }) => void
   setNodes: (nodes: KnowledgeNode[]) => void
+  /**
+   * 选中态专用通道：nodes 数组已由 computeIncrementalNodes 增量构造好，
+   * 这里只更新被改的 K 个 nodesMap 条目并重算选中派生，跳过 reconcileMap
+   * 的两次全图遍历与 zundo 的全量快照比较。
+   */
+  applySelectionChanges: (nextNodes: KnowledgeNode[], changedNodes: KnowledgeNode[]) => void
   setNodesPreservingSelection: (nodes: KnowledgeNode[], changedIds?: string[]) => void
   setEdges: (edges: KnowledgeEdge[]) => void
   setLoading: (loading: boolean) => void
@@ -172,6 +193,10 @@ export type GraphStoreApi = StoreApi<GraphState> & {
 function areGraphHistorySnapshotsEqual(a: GraphHistorySnapshot, b: GraphHistorySnapshot) {
   if (a.historyRevision !== b.historyRevision) return false
   if (a.nodes === b.nodes && a.edges === b.edges) return true
+  // 多选事务：nodes 引用变了但只改了 selected（运行时字段不进历史）。
+  // 省掉万级节点下每帧一次 O(N) 引用比对 + K 次业务字段深比较。
+  if (selectionOnlyNodeArrays.has(b.nodes) && a.edges === b.edges
+    && a.nodes.length === b.nodes.length) return true
   if (a.nodes.length !== b.nodes.length || a.edges.length !== b.edges.length) return false
   // 每次 store 更新 zundo 都会跑一遍这个比较（见 zundo 的 equality 调用点），
   // 万级节点下"逐个引用比对 + 只对引用不同的做深比较"能把这里的开销压掉一个数量级。
@@ -256,6 +281,21 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
     derivedNodesRef: nodes,
   })),
 
+  applySelectionChanges: (nextNodes, changedNodes) => set((state) => {
+    if (nextNodes === state.nodes || changedNodes.length === 0) return state
+    selectionOnlyNodeArrays.add(nextNodes)
+    // nodesMap 是 store 内部派生（不参与 React 引用订阅）：只替换真正变化的 K 项，
+    // 省掉 reconcileMap 的「遍历 entries + 遍历旧 Map keys」两次全图扫描。
+    const nodesMap = new Map(state.nodesMap)
+    for (const node of changedNodes) nodesMap.set(node.id, node)
+    return {
+      nodes: nextNodes,
+      nodesMap,
+      ...getSelectionState(nextNodes, state),
+      derivedNodesRef: nextNodes,
+    }
+  }),
+
   // Position/dimension updates already carry selection state from the current nodes.
   // Avoid rescanning every node just to derive the same selection arrays on the drag hot path.
   // When `changedIds` is supplied (the per-frame drag/resize path), only those entries are
@@ -264,12 +304,9 @@ export const createGraphStore = (): GraphStoreApi => createStore<GraphState>()(t
   setNodesPreservingSelection: (nodes, changedIds) => set((state) => {
     let nodesMap = state.nodesMap
     if (changedIds && changedIds.length > 0) {
-      // Build the id->index map from the incoming `nodes` rather than trusting any
-      // store-level index: the incoming array is authoritative and always in
-      // sync, so this never silently skips a moved node. O(n) Map build with no
-      // per-node allocation; the loop below only touches `changedIds`.
-      const nodeIndexById = new Map<string, number>()
-      for (let i = 0; i < nodes.length; i++) nodeIndexById.set(nodes[i].id, i)
+      // 复用 computeIncrementalNodes 登记在同一份数组上的索引（slice 保序），
+      // 拖拽 / resize 连续帧不再每帧扫一遍全图重建 Map；外部新数组自动重建。
+      const nodeIndexById = graphNodeIndexCache.indexFor(nodes)
       nodesMap = new Map(state.nodesMap)
       for (const id of changedIds) {
         const idx = nodeIndexById.get(id)

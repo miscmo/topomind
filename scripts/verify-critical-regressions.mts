@@ -9177,4 +9177,242 @@ const edge = (
     '【P0】写入非法位置也必须钳制')
 }
 
+// --- 第 46 组：多选链路埋点 + 选中态热路径优化（2026-11-15） ---
+{
+  const files46 = {
+    contract: '../src/shared/observability/performanceContract.ts',
+    statistics: '../src/shared/observability/performanceStatistics.ts',
+    nodeChange: '../src/hooks/useGraph/nodeChangeOperations.ts',
+  }
+  const entries46 = Object.entries(files46) as Array<[keyof typeof files46, string]>
+  const sources46 = Object.fromEntries(await Promise.all(
+    entries46.map(async ([key, relative]) => [key, await readFile(new URL(relative, import.meta.url), 'utf8')] as const),
+  )) as Record<keyof typeof files46, string>
+  const has46 = (key: keyof typeof files46, needle: string) => sources46[key].includes(needle)
+
+  // 1) 多选基线埋点：只在 params.operation 增加两个维度，不新增指标 id。
+  for (const needle of [
+    "select: 'select'", "boxSelect: 'box_select'",
+    'select: 30,', 'box_select: 50,',
+    "select: '选中节点'", "box_select: '框选节点'",
+  ]) {
+    assert.ok(has46('contract', needle), `【P0】多选埋点契约缺少 ${needle}`)
+  }
+  assert.ok(has46('nodeChange', 'CANVAS_OPERATIONS.boxSelect')
+    && has46('nodeChange', 'CANVAS_OPERATIONS.select')
+    && has46('nodeChange', 'startCanvasSpan(storeApi, {'),
+  '【P0】applyNodeSelectionChanges 必须按帧上报 select / box_select 样本')
+  for (const needle of [
+    'changedCount: changes.length', 'selectedBefore:', "selectionMode:",
+    'appliedCount:', 'skipped: !result', 'span.fail(error)',
+  ]) {
+    assert.ok(has46('nodeChange', needle), `【P0】多选样本缺少可追溯字段 ${needle}`)
+  }
+  const selectionBody46 = sources46.nodeChange.slice(
+    sources46.nodeChange.indexOf('const applyNodeSelectionChanges'),
+  )
+  assert.ok(!selectionBody46.includes('performance.now()'),
+    '【P0】多选埋点必须走统一 span，禁止自算 performance.now()')
+  assert.ok(!selectionBody46.includes('success: true'),
+    '【P0】多选埋点禁止手工拼 success，交给 span 判定')
+
+  // 2) esbuild 真跑：新动作进阈值表/标签表/下拉，指标数不变，交互类不放宽。
+  const { build: build46 } = await import('esbuild')
+  const { fileURLToPath: toPath46 } = await import('node:url')
+  const loadBundled46 = async (relative: string) => {
+    const result = await build46({
+      entryPoints: [toPath46(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+  const contract46 = await loadBundled46(files46.contract) as {
+    PERFORMANCE_METRIC_IDS: string[]
+    CANVAS_OPERATIONS: Record<string, string>
+    CANVAS_OPERATION_THRESHOLDS: Record<string, number>
+    CANVAS_OPERATION_LABELS: Record<string, string>
+    canvasOperationThreshold: (operation: string) => number | null
+    thresholdForScale: (base: number, nodeCount: number, operation?: string) => number
+  }
+  assert.equal(contract46.CANVAS_OPERATIONS.select, 'select')
+  assert.equal(contract46.CANVAS_OPERATIONS.boxSelect, 'box_select')
+  assert.equal(contract46.canvasOperationThreshold('select'), 30)
+  assert.equal(contract46.canvasOperationThreshold('box_select'), 50)
+  assert.equal(contract46.CANVAS_OPERATION_LABELS.box_select, '框选节点')
+  assert.equal(contract46.PERFORMANCE_METRIC_IDS.length, 21,
+    '【P0】多选只增 operation 维度，不得新增指标 id')
+  assert.equal(contract46.thresholdForScale(30, 20000, 'select'), 30,
+    '【P0】交互类选中动作不得按规模放宽阈值')
+  assert.equal(contract46.thresholdForScale(50, 20000, 'box_select'), 50,
+    '【P0】框选帧耗时不得因大图被放宽而漏报')
+  assert.ok(Object.keys(contract46.CANVAS_OPERATION_THRESHOLDS).every(
+    (key) => typeof contract46.CANVAS_OPERATION_LABELS[key] === 'string',
+  ), '【P0】每个画布动作都必须有中文标签')
+  const stats46 = await loadBundled46(files46.statistics) as {
+    CANVAS_OPERATION_OPTIONS: Array<{ value: string }>
+  }
+  assert.ok(stats46.CANVAS_OPERATION_OPTIONS.some((option) => option.value === 'select')
+    && stats46.CANVAS_OPERATION_OPTIONS.some((option) => option.value === 'box_select'),
+  '【P0】监控页「画布动作」下拉必须能筛出多选样本')
+
+  // 3) P0 三项接线：满缩放签名剔除选中、selection 专用通道、增量索引缓存。
+  const files46b = {
+    incremental: '../src/domain/graph/incrementalNodes.ts',
+    signature: '../src/domain/graph/lodPlanSignature.ts',
+    lod: '../src/domain/graph/lod.ts',
+    semanticLod: '../src/features/graph/GraphCanvas/model/useSemanticLod.ts',
+    graphStore: '../src/stores/graphStore.tsx',
+    nodeChange: '../src/hooks/useGraph/nodeChangeOperations.ts',
+  }
+  const entries46b = Object.entries(files46b) as Array<[keyof typeof files46b, string]>
+  const sources46b = Object.fromEntries(await Promise.all(
+    entries46b.map(async ([key, relative]) => [key, await readFile(new URL(relative, import.meta.url), 'utf8')] as const),
+  )) as Record<keyof typeof files46b, string>
+  const has46b = (key: keyof typeof files46b, needle: string) => sources46b[key].includes(needle)
+  for (const [key, needle] of [
+    ['graphStore', 'applySelectionChanges: (nextNodes, changedNodes)'],
+    ['graphStore', 'selectionOnlyNodeArrays.has(b.nodes)'],
+    ['graphStore', 'graphNodeIndexCache.indexFor(nodes)'],
+    ['nodeChange', 'store.applySelectionChanges(result.nextNodes, result.changedNodes)'],
+    ['incremental', 'cache.remember(nextNodes, nodeIndexById)'],
+    ['lod', 'export function isLodFullZoom'],
+    ['lod', 'const fullZoom = lodRatio >= LOD_FULL_RATIO'],
+    ['semanticLod', 'buildLodPlanSignature('],
+    ['semanticLod', 'const fullZoom = isLodFullZoom(zoom)'],
+    ['signature', "parts.push(input.selectedNodeId ?? '')"],
+  ] as Array<[keyof typeof files46b, string]>) {
+    assert.ok(has46b(key, needle), `【P0】${key} 缺少多选热路径优化 ${needle}`)
+  }
+  assert.ok(!has46b('nodeChange', 'store.setNodes(result.nextNodes)'),
+    '【P0】selection 路径不得再走全量 setNodes（reconcileMap + O(N) 历史比较）')
+  assert.ok(has46b('semanticLod', 'const selectedKey = fullZoom'),
+    '【P0】满缩放连「所有选中 id 拼串」都不该做')
+
+  // 4) esbuild 真跑四个纯模块 / store，不是查源码字面量。
+  const incr46 = await loadBundled46(files46b.incremental) as {
+    createNodeIndexCache: () => {
+      indexFor: (nodes: unknown[]) => Map<string, number>
+      remember: (nodes: unknown[], index: Map<string, number>) => void
+    }
+    computeIncrementalNodes: (
+      nodes: unknown[], changes: Map<string, number>,
+      apply: (node: any, delta: number) => { changed: boolean; node: any },
+      cache: unknown,
+    ) => { nextNodes: any[]; changedIds: string[]; changedNodes: any[] } | null
+  }
+  const cache46 = incr46.createNodeIndexCache()
+  const nodes46 = [{ id: 'a', v: 0 }, { id: 'b', v: 0 }, { id: 'c', v: 0 }]
+  const apply46 = (node: { id: string; v: number }, delta: number) => ({
+    changed: true, node: { ...node, v: node.v + delta },
+  })
+  const step46a = incr46.computeIncrementalNodes(nodes46, new Map([['a', 1]]), apply46, cache46)
+  assert.ok(step46a, '【P0】有变更时必须产出增量结果')
+  assert.equal(step46a!.changedNodes.length, 1)
+  assert.equal(step46a!.nextNodes[1], nodes46[1], '【P0】未变更节点必须保持引用')
+  const indexOfBase46 = cache46.indexFor(nodes46)
+  assert.equal(cache46.indexFor(step46a!.nextNodes), indexOfBase46,
+    '【P0】slice 产出的新数组必须登记同一份 id→index，下一帧零重建')
+  const step46b = incr46.computeIncrementalNodes(
+    step46a!.nextNodes, new Map([['b', 2]]), apply46, cache46,
+  )
+  assert.equal(cache46.indexFor(step46b!.nextNodes), indexOfBase46,
+    '【P0】连续帧不得重建全图索引')
+  const external46 = nodes46.map((node) => ({ ...node }))
+  assert.notEqual(cache46.indexFor(external46), indexOfBase46,
+    '【P0】换房间 / undo 的外部新数组必须重建索引，不能静默跳过变更')
+  assert.equal(incr46.computeIncrementalNodes(nodes46, new Map([['missing', 1]]), apply46, cache46), null,
+    '【P0】无有效变更必须返回 null，跳过整个 store 写入')
+
+  const sig46 = await loadBundled46(files46b.signature) as {
+    buildLodPlanSignature: (input: Record<string, unknown>) => string
+  }
+  const lod46 = await loadBundled46(files46b.lod) as {
+    isLodFullZoom: (zoom?: number) => boolean
+    computeLodVisibility: (input: Record<string, unknown>) => Record<string, any>
+  }
+  const ZOOM_REF46 = 0.65
+  assert.equal(lod46.isLodFullZoom(ZOOM_REF46), true)
+  assert.equal(lod46.isLodFullZoom(ZOOM_REF46 * 0.8), false)
+  assert.equal(lod46.isLodFullZoom(undefined), true, '【P0】缺省 zoom 按 100% 处理')
+  const sigBase46 = {
+    hierarchyKey: 'a|b|c#e1>root>c1', edgeCount: 3, zoom: ZOOM_REF46, mode: 'auto',
+    preservedDepth: 2, configuredProfileId: 'auto', pinnedKey: '', revealedKey: '',
+  }
+  assert.equal(
+    sig46.buildLodPlanSignature({ ...sigBase46, fullZoom: true, selectedKey: 'a|b', selectedNodeId: 'a' }),
+    sig46.buildLodPlanSignature({ ...sigBase46, fullZoom: true, selectedKey: '', selectedNodeId: 'a' }),
+    '【P0】满缩放时选中集合变化不得让 LOD 计划缓存失效',
+  )
+  assert.notEqual(
+    sig46.buildLodPlanSignature({ ...sigBase46, fullZoom: true, selectedKey: '', selectedNodeId: 'a' }),
+    sig46.buildLodPlanSignature({ ...sigBase46, fullZoom: true, selectedKey: '', selectedNodeId: 'b' }),
+    '【P0】选中节点变化必须让计划失效，否则左上角深度/类型诊断停在旧节点',
+  )
+  assert.notEqual(
+    sig46.buildLodPlanSignature({ ...sigBase46, fullZoom: false, selectedKey: 'a|b', selectedNodeId: 'a' }),
+    sig46.buildLodPlanSignature({ ...sigBase46, fullZoom: false, selectedKey: 'a', selectedNodeId: 'a' }),
+    '【P0】缩小时整份选中集合变化仍必须让计划失效（选中节点强制显示）',
+  )
+  assert.notEqual(
+    sig46.buildLodPlanSignature({ ...sigBase46, fullZoom: true, zoom: ZOOM_REF46 * 0.8, selectedKey: '', selectedNodeId: null }),
+    sig46.buildLodPlanSignature({ ...sigBase46, fullZoom: true, selectedKey: '', selectedNodeId: null }),
+    '【P0】缩放变化仍必须让计划失效',
+  )
+
+  const lodNodes46 = [
+    { id: 'root', position: { x: 0, y: 0 }, data: { label: '根' } },
+    { id: 'c1', position: { x: 0, y: 120 }, data: {} },
+    { id: 'g1', position: { x: 0, y: 240 }, data: {} },
+  ]
+  const lodEdges46 = [
+    { id: 'e1', source: 'root', target: 'c1', relation: 'subordinate' },
+    { id: 'e2', source: 'c1', target: 'g1', relation: 'subordinate' },
+  ]
+  const lodFull46 = lod46.computeLodVisibility({ nodes: lodNodes46, edges: lodEdges46, zoom: ZOOM_REF46 })
+  assert.equal(lodFull46.hiddenNodeIds.size, 0, '【P0】满缩放短路不得藏任何节点')
+  assert.equal(lodFull46.hiddenEdgeIds.size, 0, '【P0】满缩放短路不得藏任何边')
+  assert.equal(lodFull46.collapsedTotal, 0)
+  assert.equal(lodFull46.collapsedFreeCount, 0)
+  assert.equal(lodFull46.maxDepth, 3, '【P0】满缩放短路必须保留层级诊断')
+  assert.ok(lodFull46.depthLevels.every((level: { total: number; visible: number }) => level.visible === level.total),
+    '【P0】满缩放每级可见数必须等于总数')
+  assert.equal(lodFull46.pressureActive, true,
+    '【P0】满缩放短路不得跳过压力曲线：100% 的诊断阈值仍要与裁剪同源')
+  const lodMid46 = lod46.computeLodVisibility({ nodes: lodNodes46, edges: lodEdges46, zoom: ZOOM_REF46 * 0.5 })
+  assert.ok(lodMid46.hiddenNodeIds.size > 0, '【P0】缩小仍必须正常裁剪')
+  assert.ok(lodMid46.depthLevels.some((level: { total: number; visible: number }) => level.visible < level.total),
+    '【P0】缩小时层级诊断仍要反映真实裁剪')
+
+  const storeMod46 = await loadBundled46(files46b.graphStore) as {
+    createGraphStore: () => {
+      getState: () => Record<string, any>
+      temporal: { getState: () => { pastStates: unknown[] } }
+    }
+  }
+  const store46 = storeMod46.createGraphStore()
+  const baseNodes46 = [
+    { id: 'a', selected: false, position: { x: 0, y: 0 } },
+    { id: 'b', selected: false, position: { x: 1, y: 1 } },
+  ]
+  store46.getState().replaceGraph(baseNodes46, [], undefined)
+  const pastBefore46 = store46.temporal.getState().pastStates.length
+  const nextNodes46 = baseNodes46.map((node) => node.id === 'a' ? { ...node, selected: true } : node)
+  store46.getState().applySelectionChanges(nextNodes46, [nextNodes46[0]])
+  const stateAfterSelection46 = store46.getState()
+  assert.equal(stateAfterSelection46.selectedNodeCount, 1)
+  assert.equal(stateAfterSelection46.selectedNodeId, 'a')
+  assert.equal(stateAfterSelection46.nodesMap.get('a'), nextNodes46[0],
+    '【P0】nodesMap 必须只增量刷新被改的节点')
+  assert.equal(stateAfterSelection46.nodes[1], baseNodes46[1],
+    '【P0】未选中的节点必须保持引用')
+  assert.equal(store46.temporal.getState().pastStates.length, pastBefore46,
+    '【P0】selected 是运行时字段，不得进撤销历史、不得触发 O(N) 快照比较')
+  const editedNodes46 = stateAfterSelection46.nodes.map(
+    (node: { id: string }) => node.id === 'b' ? { ...node, position: { x: 9, y: 9 } } : node,
+  )
+  store46.getState().setNodes(editedNodes46)
+  assert.ok(store46.temporal.getState().pastStates.length > pastBefore46,
+    '【P0】真实业务改动仍必须正常进历史，短路只针对 selection 事务')
+}
+
 console.log('Critical regression checks verified')
