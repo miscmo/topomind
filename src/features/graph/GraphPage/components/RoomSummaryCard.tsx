@@ -13,7 +13,7 @@ export const RoomSummaryCard = memo(function RoomSummaryCard({ data }: NodeProps
   const { item } = data
   return (
     <div
-      className="nodrag nowheel relative flex h-[92px] w-[208px] flex-col justify-between rounded-xl border border-[var(--color-border-light)] bg-[var(--color-background-primary)] px-3 py-2 shadow-sm"
+      className="nodrag nowheel relative flex h-[92px] w-[208px] flex-col justify-between rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface)] px-3 py-2 shadow-sm"
       data-tm-room-summary-card={item.path}
       data-tm-room-summary-depth={item.depth}
       data-tm-room-summary-node-count={item.nodeCount}

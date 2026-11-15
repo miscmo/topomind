@@ -7,7 +7,8 @@ import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-uti
 import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 import { normalizeCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
 import { normalizeLinkedDocuments, type LinkedDocumentRef, type DocumentResolution } from '../../domain/graph/linkedDocuments'
-import { readEdgeRelationId } from '../../domain/graph/edgeRelations'
+import { normalizeEdgeRelationLabel, readEdgeRelationId } from '../../domain/graph/edgeRelations'
+import { normalizeTreeOrder } from '../../domain/graph/treeOrder.ts'
 
 interface FSBGraphChild {
   name: string
@@ -26,6 +27,8 @@ interface FSBGraphChild {
   emojis?: string[]
   /** 关联到别处已有文档；docId 为全库主键 */
   linkedDocuments?: LinkedDocumentRef[]
+  /** 左侧节点树同级顺序；只影响列表排列 */
+  treeOrder?: number
 }
 
 interface FSBGraphEdge {
@@ -33,6 +36,8 @@ interface FSBGraphEdge {
   source: string
   target: string
   relation?: EdgeRelation
+  /** 本条连线的自定义关系名；读入时归一化，空值不落盘 */
+  relationLabel?: string
   weight?: EdgeWeight
   lineMode?: 'smoothstep' | 'straight' | 'curve'
   lineStyle?: 'solid' | 'dashed'
@@ -120,11 +125,13 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
       expandedHeight: Number.isFinite(child.expandedHeight) ? child.expandedHeight as number : undefined,
       emojis: Array.isArray(child.emojis) ? child.emojis.filter((emoji): emoji is string => typeof emoji === 'string') : undefined,
       linkedDocuments: normalizeLinkedDocuments(child.linkedDocuments),
+      treeOrder: normalizeTreeOrder(child.treeOrder),
     }
   }
 
   const edges: Array<{
     id: string; source: CardInfo; target: CardInfo; relation: EdgeRelation; weight: EdgeWeight
+  relationLabel?: string
   lineMode?: 'smoothstep' | 'straight' | 'curve'; lineStyle?: 'solid' | 'dashed'
   color?: string; lineWidth?: number; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
   curveControl?: CurveControl | null; sourceAnchor?: EdgeAnchor | null; targetAnchor?: EdgeAnchor | null
@@ -134,6 +141,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
     source: { ref: normalizeRef(e.source), name: '', updatedAt: undefined },
     target: { ref: normalizeRef(e.target), name: '', updatedAt: undefined },
     relation: readEdgeRelationId(e.relation),
+    relationLabel: normalizeEdgeRelationLabel(e.relationLabel),
     weight: e.weight ?? 'minor',
     lineMode: e.lineMode,
     lineStyle: e.lineStyle,
@@ -166,7 +174,8 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
   children?: Record<string, FSBGraphChild>
   edges?: Array<{
     id: string; source: string; target: string; relation: EdgeRelation; weight: EdgeWeight
-    lineMode?: 'smoothstep' | 'straight' | 'curve'; lineStyle?: 'solid' | 'dashed'
+  relationLabel?: string
+  lineMode?: 'smoothstep' | 'straight' | 'curve'; lineStyle?: 'solid' | 'dashed'
     color?: string; lineWidth?: number; arrow?: boolean; arrowSize?: number; arrowShape?: EdgeArrowShape; arrowPosition?: EdgeArrowPosition
     curveControl?: CurveControl | null; sourceAnchor?: EdgeAnchor | null; targetAnchor?: EdgeAnchor | null
     highlighted?: boolean; faded?: boolean
@@ -195,6 +204,7 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
       emojis: node.emojis,
       // 必须写在 map 本体里：历史上只在返回类型加字段，画面生效但从未落盘。
       linkedDocuments: normalizeLinkedDocuments(node.linkedDocuments),
+      treeOrder: normalizeTreeOrder(node.treeOrder),
     }
   }
 
@@ -205,6 +215,7 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
       source: normalizeRef(e.source.ref),
       target: normalizeRef(e.target.ref),
       relation: e.relation,
+      relationLabel: normalizeEdgeRelationLabel(e.relationLabel),
       weight: e.weight,
       lineMode: e.lineMode,
       lineStyle: e.lineStyle,

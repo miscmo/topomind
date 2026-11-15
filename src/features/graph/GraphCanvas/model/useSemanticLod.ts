@@ -42,6 +42,9 @@ import {
   useLodPreferences,
 } from './lodPreferences'
 import { clearCollapsedCounts, publishCollapsedCounts } from './lodCollapseStore'
+import { useGraphStoreApi } from '../../../../stores/graphStore'
+import { CANVAS_OPERATIONS, PERFORMANCE_METRICS } from '../../../../shared/observability/performanceContract'
+import { startCanvasSpan } from '../../../../hooks/useGraph/canvasPerformanceContext'
 
 const EMPTY_IDS: readonly string[] = []
 const EMPTY_SET: ReadonlySet<string> = new Set<string>()
@@ -105,6 +108,7 @@ function removeFadeBatch(current: ReadonlySet<string>, batch: readonly string[])
 
 export function useSemanticLod(options: UseSemanticLodOptions) {
   const { nodes, edges, zoom, stage, roomPath, configuredProfileId = 'auto', selectedNodeId = null } = options
+  const graphStoreApi = useGraphStoreApi()
   const prefs = useLodPreferences()
   const pinnedIds: readonly string[] = prefs.pinnedByRoom[roomPath] ?? EMPTY_IDS
   const pinnedKey = pinnedIds.join('|')
@@ -141,6 +145,14 @@ export function useSemanticLod(options: UseSemanticLodOptions) {
   const previousVisibleRef = useRef<ReadonlySet<string>>(EMPTY_SET)
   const plan = useMemo(() => {
     if (cacheRef.current?.signature === signature) return cacheRef.current.plan
+    // 只测真正重算的那一次：signature 命中缓存就走上面的早退，不产生样本。
+    const perfSpan = startCanvasSpan(graphStoreApi, {
+      operation: CANVAS_OPERATIONS.lodRecompute,
+      metric: PERFORMANCE_METRICS.canvasLod,
+      roomPath,
+      module: 'semanticLod',
+      params: { zoom: Number(zoom.toFixed(3)), trigger: 'signature-change' },
+    })
     const pinned = new Set(pinnedIds)
     const common = {
       nodes, edges, zoom, pinned, revealed,
@@ -169,8 +181,15 @@ export function useSemanticLod(options: UseSemanticLodOptions) {
     previousVisibleRef.current = visibility.visibleNodeIds
     const next: LodPlan = { visibility, effectiveProfileId, policy }
     cacheRef.current = { signature, plan: next }
+    perfSpan.end({
+      hiddenCount: visibility.hiddenNodeIds.size,
+      visibleCount: visibility.visibleNodeIds.size,
+      displayPercent: visibility.displayPercent,
+      recomputedTwice: needsOverride,
+      effectiveProfileId,
+    })
     return next
-  }, [signature, nodes, edges, zoom, prefs.mode, prefs.preservedDepth, configuredProfileId, pinnedIds, pinnedKey, revealed, selectedNodeId])
+  }, [signature, nodes, edges, zoom, prefs.mode, prefs.preservedDepth, configuredProfileId, pinnedIds, pinnedKey, revealed, selectedNodeId, graphStoreApi, roomPath])
 
   const { visibility, effectiveProfileId, policy } = plan
 

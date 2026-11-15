@@ -2,7 +2,8 @@ import type { CardInfo, GraphMeta } from './model'
 import { basenameRef, normalizeRef } from './path-utils'
 import { normalizeEdgeAnchor } from './edgeAnchors'
 import { normalizeLinkedDocuments } from './linkedDocuments'
-import { readEdgeRelationId } from './edgeRelations'
+import { normalizeEdgeRelationLabel, readEdgeRelationId } from './edgeRelations'
+import { normalizeTreeOrder } from './treeOrder.ts'
 import {
   DEFAULT_NODE_SIZE,
   DEFAULT_VIEWPORT,
@@ -48,6 +49,7 @@ export function graphMetaToRoomGraph(roomRef: string, meta: GraphMeta): RoomGrap
       expandedHeight: node.expandedHeight,
       emojis: node.emojis,
       linkedDocuments: normalizeLinkedDocuments(node.linkedDocuments),
+      treeOrder: normalizeTreeOrder(node.treeOrder),
     }
   }
 
@@ -59,6 +61,7 @@ export function graphMetaToRoomGraph(roomRef: string, meta: GraphMeta): RoomGrap
       sourceRef: normalizeRef(edge.source.ref),
       targetRef: normalizeRef(edge.target.ref),
       relation: readEdgeRelationId(edge.relation),
+      relationLabel: normalizeEdgeRelationLabel(edge.relationLabel),
       weight: edge.weight,
       lineMode: edge.lineMode,
       lineStyle: edge.lineStyle,
@@ -105,6 +108,7 @@ export function roomGraphToGraphMeta(graph: RoomGraph): GraphMeta {
       expandedHeight: node.expandedHeight,
       emojis: node.emojis,
       linkedDocuments: normalizeLinkedDocuments(node.linkedDocuments),
+      treeOrder: normalizeTreeOrder(node.treeOrder),
     }
   }
 
@@ -115,6 +119,7 @@ export function roomGraphToGraphMeta(graph: RoomGraph): GraphMeta {
       source: { ref: edge.sourceRef, name: '', updatedAt: undefined } as CardInfo,
       target: { ref: edge.targetRef, name: '', updatedAt: undefined } as CardInfo,
       relation: readEdgeRelationId(edge.relation),
+      relationLabel: normalizeEdgeRelationLabel(edge.relationLabel),
       weight: edge.weight,
       lineMode: edge.lineMode,
       lineStyle: edge.lineStyle,

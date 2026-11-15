@@ -13,7 +13,11 @@ export function useGraphStorageApi(storage: Store): StorageApi {
     (dirPath: string) => storage.hasPendingGraphSave(dirPath),
     [storage]
   )
-  const deleteCard = useCallback(async (cardPath: string) => storage.deleteCard(cardPath), [storage])
+  // label 会写进 .trash.json，供回收站显示原节点名；过去被这一层吞掉。
+  const deleteCard = useCallback(
+    async (cardPath: string, label?: string) => storage.deleteCard(cardPath, label),
+    [storage],
+  )
   const renameCard = useCallback(
     async (cardPath: string, newName: string) => storage.renameCard(cardPath, newName),
     [storage]

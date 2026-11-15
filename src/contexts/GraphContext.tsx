@@ -48,11 +48,15 @@ export interface GraphContextValue {
   flipSelectionHorizontally: () => Promise<boolean>
   /** 以传入节点（省略则用当前选中）为根选中整棵从属子树；返回 false = 无有效根 */
   selectSubtree: (rootIds?: readonly string[]) => boolean
+  /** 左侧节点树拖动排序：只写同父兄弟的 treeOrder，返回 false = 无变化 / 只读 */
+  setNodeTreeOrder: (updates: ReadonlyArray<{ id: string; treeOrder: number }>) => Promise<boolean>
 
   // Edge operations
   /** weight 省略时沿用该边原权重；切换关系会套用关系自带的默认样式 */
   /** 返回 false 表示被从属关系强校验拒绝（唯一父 / 无环 / 深度 ≤100） */
   updateEdgeRelation: (edgeId: string, relation: EdgeRelation, weight?: EdgeWeight) => Promise<boolean>
+  /** 双击连线编辑本条边的自定义关系名；传 null / 空白 = 恢复全局关系名 */
+  updateEdgeRelationLabel: (edgeId: string, label: string | null) => Promise<boolean>
   updateEdgeStyle: (edgeId: string, style: EdgeStylePatch & { selected?: boolean }) => void
   updateEdgeAnchor: (edgeId: string, patch: EdgeAnchorPatch) => void
   deleteEdge: (edgeId: string) => Promise<boolean>
@@ -97,7 +101,9 @@ function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
     createEdge: graph.createEdge,
     flipSelectionHorizontally: graph.flipSelectionHorizontally,
     selectSubtree: graph.selectSubtree,
+    setNodeTreeOrder: graph.setNodeTreeOrder,
     updateEdgeRelation: graph.updateEdgeRelation,
+    updateEdgeRelationLabel: graph.updateEdgeRelationLabel,
     updateEdgeStyle: graph.updateEdgeStyle,
     updateEdgeAnchor: graph.updateEdgeAnchor,
     deleteEdge: graph.deleteEdge,

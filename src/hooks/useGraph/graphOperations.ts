@@ -5,15 +5,18 @@
  * All functions here deal with pure state transformations and storage I/O.
  */
 import type { GraphMeta } from '../../core/storage'
+import { PERFORMANCE_METRICS, startPerformanceSpan } from '../../core/performance-log'
+import { CANVAS_OPERATIONS } from '@/shared/observability/performanceContract'
+import { readCanvasScale } from './canvasPerformanceContext'
 import { buildMetaFromNodesEdges } from './graphBuilder'
+import { buildNodeTreeOperations } from './nodeTreeOperations'
 import { buildNodeCrudOperations } from './nodeCrudOperations'
 import { buildEdgeOperations } from './edgeOperations'
 import { buildNodeChangeOperations } from './nodeChangeOperations'
 import { buildSelectionOperations } from './selectionOperations'
 import { buildSelectionMirrorOperations } from './selectionMirrorOperations'
 import { buildSelectionSubtreeOperations } from './selectionSubtreeOperations'
-import type { GraphState } from '../../stores/graphStore'
-import type { StoreApi } from 'zustand'
+import type { GraphState, GraphStoreApi } from '../../stores/graphStore'
 
 import type { GraphSession } from '../../stores/tabs/tabStore'
 import { useGraphUiStore } from '../../stores/graphUiStore'
@@ -21,7 +24,7 @@ import { useGraphUiStore } from '../../stores/graphUiStore'
 export interface StorageApi {
   saveGraphDebounced: (dirPath: string, buildMeta: () => GraphMeta, onSaved: (() => void) | undefined) => Promise<void>
   hasPendingGraphSave: (dirPath: string) => boolean
-  deleteCard: (cardPath: string) => Promise<unknown>
+  deleteCard: (cardPath: string, label?: string) => Promise<unknown>
   renameCard: (cardPath: string, newName: string) => Promise<unknown>
   flushGraphSave: (dirPath: string, buildMeta: () => GraphMeta, onFlush: (() => void) | undefined) => Promise<void>
   readLayout: (dirPath: string) => Promise<GraphMeta>
@@ -35,7 +38,7 @@ export interface GraphOpsDeps {
   loadRoom: (path: string, isCreating?: boolean) => Promise<void>
   isCreatingRef: { current: boolean }
   currentLoadedRoomPathRef: { current: string }
-  storeApi: StoreApi<GraphState>
+  storeApi: GraphStoreApi
 }
 
 export interface GraphSaveSnapshot {
@@ -56,11 +59,31 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   // ===== Internal helpers =====
 
-  const buildGraphMetaSnapshot = (store: GraphState): GraphMeta => buildMetaFromNodesEdges(
-    Array.from(store.nodesMap.values()),
-    Array.from(store.edgesMap.values()),
-    { zoom: store.viewport.zoom, pan: { x: store.viewport.x, y: store.viewport.y } }
-  )
+  const buildGraphMetaSnapshot = (store: GraphState, dirPath: string): GraphMeta => {
+    // 这一步是全量 O(N+E) 序列化：SaveCoordinator 只合并写盘，不合并构建。
+    // 单独立一个指标，才能把「大图上变慢」与「界面操作变慢」分开归因。
+    const scale = readCanvasScale(storeApi, {
+      operation: CANVAS_OPERATIONS.metaBuild,
+      roomPath: dirPath,
+    })
+    const span = startPerformanceSpan(PERFORMANCE_METRICS.graphMetaBuild, {
+      module: 'graphOperations',
+      contextKey: dirPath,
+      params: { ...scale },
+    })
+    try {
+      const meta = buildMetaFromNodesEdges(
+        Array.from(store.nodesMap.values()),
+        Array.from(store.edgesMap.values()),
+        { zoom: store.viewport.zoom, pan: { x: store.viewport.x, y: store.viewport.y } },
+      )
+      span.end({ metaNodeCount: Object.keys(meta.nodes ?? {}).length })
+      return meta
+    } catch (error) {
+      span.fail(error)
+      throw error
+    }
+  }
 
   const captureSaveSnapshot = (dirPath: string): GraphSaveSnapshot | null => {
     if (!dirPath) return null
@@ -69,7 +92,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     }
     return {
       dirPath,
-      meta: buildGraphMetaSnapshot(storeApi.getState()),
+      meta: buildGraphMetaSnapshot(storeApi.getState(), dirPath),
     }
   }
 
@@ -101,6 +124,7 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     saveNow,
       saveLater,
     isCreatingRef,
+    currentLoadedRoomPathRef,
     storeApi,
   })
 
@@ -145,6 +169,14 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
 
   const selectionSubtreeOps = buildSelectionSubtreeOperations({ storeApi })
 
+  // ===== 左侧节点树拖动排序（写闸门在 useGraph 统一包住） =====
+
+  const nodeTreeOps = buildNodeTreeOperations({
+    getActiveGraphSession,
+    saveLater,
+    storeApi,
+  })
+
   return {
     // Node CRUD
     ...nodeCrudOps,
@@ -158,6 +190,8 @@ export function buildGraphOperations(deps: GraphOpsDeps) {
     ...selectionMirrorOps,
     // Select whole subtree(s) rooted at the selected nodes
     ...selectionSubtreeOps,
+    // 左侧节点树排序（只写 data.treeOrder）
+    ...nodeTreeOps,
     updateNodeEmojis: nodeCrudOps.updateNodeEmojis,
     // Internal
     captureSaveSnapshot,

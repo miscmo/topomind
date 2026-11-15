@@ -164,10 +164,14 @@ export function useGraph(tabId: string) {
     deselectNode: ops.deselectNode,
     // 选中子树只改运行时 selected 字段：与 selectNode 一样放行，只读远景下也能查看。
     selectSubtree: ops.selectSubtree,
+    // 左侧节点树拖动排序：与其余写操作一样过唯一闸门（缩小 / 有隐藏节点时禁写）。
+    setNodeTreeOrder: edit(ops.setNodeTreeOrder, noResult),
     createEdge: edit(createEdge, noId),
     // 【多选镜像 2026-11-11】与其余写操作一样过唯一闸门：缩小/有隐藏节点时禁写。
     flipSelectionHorizontally: edit(ops.flipSelectionHorizontally, noResult),
     updateEdgeRelation: edit(ops.updateEdgeRelation, noResult),
+    // 双击连线写自定义关系名同样落在唯一写闸门里：缩小 / 有隐藏节点时不可编辑。
+    updateEdgeRelationLabel: edit(ops.updateEdgeRelationLabel, noResult),
     updateEdgeStyle: edit(ops.updateEdgeStyle, noAsync),
     updateEdgeAnchor: edit(ops.updateEdgeAnchor, noAsync),
     deleteEdge: edit(ops.deleteEdge, noResult),
@@ -206,6 +210,7 @@ export function useGraph(tabId: string) {
     createEdge,
     ops.flipSelectionHorizontally,
     ops.updateEdgeRelation,
+    ops.updateEdgeRelationLabel,
     ops.updateEdgeStyle,
     ops.updateEdgeAnchor,
     ops.deleteEdge,

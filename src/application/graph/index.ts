@@ -1,6 +1,5 @@
 export {
   createChildCardNode,
-  deleteCardNodeAndPruneGraph,
   renameCardNode,
   type CardNodeServiceStorage,
   type CreateChildCardOptions,

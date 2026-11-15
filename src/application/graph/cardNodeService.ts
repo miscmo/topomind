@@ -1,5 +1,4 @@
 import type { GraphMeta } from '../../domain/graph/model'
-import type { KnowledgeEdge, KnowledgeNode } from '../../types'
 import { joinRefs } from '../../domain/graph/path-utils'
 
 export interface CardNodeServiceStorage {
@@ -77,22 +76,10 @@ export async function createChildCardNode(
   return { newRef: joinRefs(options.parentRef, cardKey), reloadRef: options.reloadRef }
 }
 
-export async function deleteCardNodeAndPruneGraph(
-  storage: CardNodeServiceStorage,
-  cardRef: string,
-  nodeId: string,
-  nodesById: Map<string, KnowledgeNode>,
-  edgesById: Map<string, KnowledgeEdge>
-): Promise<void> {
-  const node = nodesById.get(nodeId)
-  await storage.deleteCard(cardRef, node?.data?.label)
-  nodesById.delete(nodeId)
-  for (const [edgeId, edge] of edgesById.entries()) {
-    if (edge.source === nodeId || edge.target === nodeId) {
-      edgesById.delete(edgeId)
-    }
-  }
-}
+// 删除节点的「裁掉节点与关联边」已下沉到 useGraph 的 store 原语
+// （removeNodes / removeEdgesByNodeIds）。过去这里直接 delete 外部传入的
+// nodesMap / edgesMap，绕过 zustand set，反而逼迫调用方必须 loadRoom 整房间重载
+// 才能让 UI 同步，是删除延迟的根因；不要回灌这个副作用。
 
 export async function renameCardNode(storage: CardNodeServiceStorage, cardRef: string, newName: string): Promise<void> {
   await storage.renameCard(cardRef, newName)

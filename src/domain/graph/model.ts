@@ -37,6 +37,8 @@ export interface RoomGraphNode {
   emojis?: string[]
   /** 关联到别处已有文档；不参与布局，不进格式刷 */
   linkedDocuments?: LinkedDocumentRef[]
+  /** 左侧节点树同级顺序；缺省 = 按遍历顺序追加尾部 */
+  treeOrder?: number
 }
 
 export interface RoomGraphEdge {
@@ -44,6 +46,8 @@ export interface RoomGraphEdge {
   sourceRef: string
   targetRef: string
   relation: EdgeRelation
+  /** 本条连线的自定义关系名；随 GraphMeta 全链路往返 */
+  relationLabel?: string
   weight: EdgeWeight
   lineMode?: EdgeLineMode
   lineStyle?: EdgeLineStyle
@@ -87,6 +91,8 @@ export interface KBNode {
   emojis?: string[]
   /** 关联到别处已有文档；随 GraphMeta 全链路往返 */
   linkedDocuments?: LinkedDocumentRef[]
+  /** 左侧节点树同级顺序；随 GraphMeta 全链路往返 */
+  treeOrder?: number
 }
 
 export interface KBEdge {
@@ -94,6 +100,8 @@ export interface KBEdge {
   source: CardInfo
   target: CardInfo
   relation: EdgeRelation
+  /** 本条连线的自定义关系名；缺省 = 用全局关系定义名 */
+  relationLabel?: string
   weight: EdgeWeight
   lineMode?: EdgeLineMode
   lineStyle?: EdgeLineStyle

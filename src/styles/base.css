@@ -174,3 +174,12 @@ textarea:focus-visible,
 .tm-canvas-readonly .react-flow__handle {
   pointer-events: none !important;
 }
+
+/* 【左侧节点树让位 2026-11-13】左栏是 absolute 浮层，展开时会盖住画布左上角的
+   状态抽屉。用户要求状态抽屉「挤压到面板右侧」：这里只改 top-left Panel 的
+   margin-left，由面板写到 :root 的 --tm-node-tree-offset 驱动（纯 CSS）。
+   画布容器宽度、React Flow viewport、其它 Panel、缩略图视口框一律不变；
+   #app-layout 仍不得变成 flex 两栏。12px 对应 LodControl 的 !m-3。 */
+#app-layout .react-flow__panel.top.left {
+  margin-left: calc(12px + var(--tm-node-tree-offset, 0px)) !important;
+}

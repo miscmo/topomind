@@ -113,7 +113,7 @@ function RoomOverviewInner({ tabId }: RoomOverviewProps) {
       data-tm-room-overview-truncated={truncated}
       data-tm-room-overview-kb={kbPath}
     >
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--color-border-light)] bg-[var(--color-background-primary)] px-4">
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--color-border-light)] bg-[var(--color-surface)] px-4">
         <Map className="h-4 w-4 text-[var(--color-accent)]" />
         <span className="text-[13px] font-medium text-[var(--color-text-primary)]">知识库总览</span>
         <span className="text-[11px] text-[var(--color-text-secondary)]">
@@ -164,7 +164,7 @@ function RoomOverviewInner({ tabId }: RoomOverviewProps) {
           />
         </ReactFlowProvider>
         {error && (
-          <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-md border border-[var(--color-border-light)] bg-[var(--color-background-primary)] px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-md border border-[var(--color-border-light)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-danger)]">
             读取房间失败：{error}
           </div>
         )}

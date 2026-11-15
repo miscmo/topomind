@@ -3,6 +3,8 @@
  * 业务层通过 useStorage() 调用，底层存储由 StorageBackend 隔离。
  */
 import { logger } from '../logger'
+import { PERFORMANCE_METRICS, startPerformanceSpan } from '../performance-log'
+import { CANVAS_OPERATIONS } from '@/shared/observability/performanceContract'
 import type { KBListItem } from '../../types'
 import type { GraphMeta } from '../../domain/graph/model'
 import { SaveCoordinator } from '../../domain/persistence/saveCoordinator'
@@ -51,7 +53,28 @@ export function createStore(backend: StorageBackend) {
   const layoutSaveCoordinator = new SaveCoordinator<GraphMeta>({
     delayMs: 300,
     save: async (kbPath, meta) => {
-      await backend.writeLayout(kbPath, normalizeGraphMeta(meta))
+      // 这里才是真正的 IPC 写盘：debounce 的 300ms 等待发生在 SaveCoordinator 之前，
+      // 计进去会让所有样本恒为 ~300ms，失去诊断价值。
+      const nodeCount = Object.keys(meta?.nodes ?? {}).length
+      const edgeCount = Array.isArray(meta?.edges) ? meta.edges.length : 0
+      const span = startPerformanceSpan(PERFORMANCE_METRICS.graphMetaFlush, {
+        module: 'storage',
+        contextKey: kbPath,
+        params: {
+          operation: CANVAS_OPERATIONS.metaFlush,
+          dirPath: kbPath,
+          roomPath: kbPath,
+          nodeCount,
+          edgeCount,
+        },
+      })
+      try {
+        await backend.writeLayout(kbPath, normalizeGraphMeta(meta))
+        span.end()
+      } catch (error) {
+        span.fail(error)
+        throw error
+      }
     },
     onError: (error, kbPath) => {
       logger.catch('Store.saveCoordinator', `保存布局失败: ${kbPath}`, error)

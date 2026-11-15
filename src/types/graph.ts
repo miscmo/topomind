@@ -43,6 +43,8 @@ export interface GraphChild {
   emojis?: string[]
   /** 关联到别处已有文档（docId 为主键，cardRef 为定位缓存），最多 8 条 */
   linkedDocuments?: LinkedDocumentRef[]
+  /** 左侧节点树里的同级顺序；缺省 = 按遍历顺序追加尾部，不参与画布布局 */
+  treeOrder?: number
 }
 
 export type NodeSizingMode = 'auto' | 'manual'
@@ -77,6 +79,8 @@ export interface GraphEdge {
   source: string
   target: string
   relation: EdgeRelation
+  /** 本条连线的自定义关系名（双击连线编辑）；缺省 = 用全局关系定义名 */
+  relationLabel?: string
   weight: EdgeWeight
   lineMode?: EdgeLineMode
   lineStyle?: EdgeLineStyle
@@ -171,6 +175,8 @@ export interface KnowledgeNodeData {
   nodeStyle?: KnowledgeNodeStyle
   /** 外部请求进入标题编辑（创建节点后自动重命名用），由 nodeCrudOperations 写入 */
   titleEditRequested?: boolean
+  /** 左侧节点树里的同级顺序（持久化）；只影响列表，不参与画布布局 */
+  treeOrder?: number
   /** Index signature for React Flow Record<string, unknown> compatibility */
   [key: string]: unknown
 }
@@ -193,6 +199,8 @@ export type KnowledgeNode = Node<KnowledgeNodeData, 'knowledgeCard'>
 /** TopoMind 边 */
 export type KnowledgeEdge = Edge<{
   relation: EdgeRelation
+  /** 本条连线的自定义关系名（双击连线编辑）；缺省 = 用全局关系定义名 */
+  relationLabel?: string
   weight: EdgeWeight
   lineMode?: EdgeLineMode
   lineStyle?: EdgeLineStyle

@@ -17,6 +17,8 @@ import {
   type GraphStoreApi,
 } from '../../stores/graphStore'
 import { applyHorizontalMirror } from '../../domain/graph/mirrorSelection'
+import { CANVAS_OPERATIONS } from '@/shared/observability/performanceContract'
+import { startCanvasSpan } from './canvasPerformanceContext'
 
 export interface SelectionMirrorOperationsDeps {
   getActiveGraphSession: () => { kbPath: string; roomPath: string; roomName: string }
@@ -35,6 +37,14 @@ export function buildSelectionMirrorOperations({
     const result = applyHorizontalMirror(store.nodes, store.edges, store.selectedNodeIds)
     if (!result) return false
 
+    const session = getActiveGraphSession()
+    const dirPath = session.roomPath || session.kbPath || ''
+    const perfSpan = startCanvasSpan(storeApi, {
+      operation: CANVAS_OPERATIONS.mirror,
+      roomPath: dirPath,
+      affectedCount: result.flippedNodeIds.length,
+    })
+
     const graphStoreApi = storeApi as GraphStoreApi
     const baseline = captureGraphHistorySnapshot(store)
     const temporalState = graphStoreApi.temporal.getState()
@@ -47,9 +57,8 @@ export function buildSelectionMirrorOperations({
       temporalState.resume()
     }
     commitGraphHistorySnapshot(graphStoreApi, baseline)
+    perfSpan.end()
 
-    const session = getActiveGraphSession()
-    const dirPath = session.roomPath || session.kbPath || ''
     if (dirPath) await saveLater(dirPath)
     return true
   }

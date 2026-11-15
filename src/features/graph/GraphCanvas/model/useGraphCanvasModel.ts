@@ -1,10 +1,18 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, type Viewport, type NodeChange, type Node, type Edge } from '@xyflow/react'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
-import { isCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
+import { getActiveCanvasReadOnly, isCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { useGraphStore, useGraphStoreApi } from '../../../../stores/graphStore'
+import { CANVAS_OPERATIONS } from '../../../../shared/observability/performanceContract'
+import {
+  PERFORMANCE_METRICS,
+  newPerformanceTraceId,
+  recordPerformance,
+} from '../../../../core/performance-log'
+import { readCanvasScale, startCanvasSpan } from '../../../../hooks/useGraph/canvasPerformanceContext'
 import { useTabStore } from '../../../../stores/tabs/tabStore'
 import { useGraphContext } from '../../../../contexts/GraphContext'
+import { useEdgeRelationEditorStore, useEdgeRelationPickerStore } from '../../../../stores/edgeRelationPickerStore'
 import { useShortcut } from '../../../../hooks/useShortcut'
 import { logAction } from '../../../../core/log-backend'
 import { useSmartGuides } from '../useSmartGuides'
@@ -243,22 +251,88 @@ export function useGraphCanvasModel({
   const zoomingRef = useRef(false)
   const lastMoveZoomRef = useRef<number | null>(null)
   const zoomEndTimerRef = useRef<number | null>(null)
+  const gestureEndTimerRef = useRef<number | null>(null)
+  const viewportGestureRef = useRef<{
+    operation: 'zoom' | 'pan'
+    traceId: string
+    startedAt: number
+    lastFrameAt: number
+    frameCount: number
+    maxFrameMs: number
+    zoomFrom: number
+    zoomTo: number
+    hiddenBefore: number
+  } | null>(null)
+
+  // 缩放 / 平移按一次手势上报一条样本：每帧只更新 ref，帧内不写日志、不 setState。
+  const finishViewportGesture = useCallback(() => {
+    if (gestureEndTimerRef.current !== null) {
+      window.clearTimeout(gestureEndTimerRef.current)
+      gestureEndTimerRef.current = null
+    }
+    const gesture = viewportGestureRef.current
+    if (!gesture) return
+    viewportGestureRef.current = null
+    const operation = gesture.operation === 'zoom' ? CANVAS_OPERATIONS.zoom : CANVAS_OPERATIONS.pan
+    recordPerformance(PERFORMANCE_METRICS.canvasGesture, performance.now() - gesture.startedAt, {
+      module: 'GraphCanvas',
+      traceId: gesture.traceId,
+      contextKey: roomPath,
+      params: {
+        frameCount: gesture.frameCount,
+        maxFrameMs: Math.round(gesture.maxFrameMs),
+        zoomFrom: Number(gesture.zoomFrom.toFixed(3)),
+        zoomTo: Number(gesture.zoomTo.toFixed(3)),
+        hiddenBefore: gesture.hiddenBefore,
+        hiddenAfter: getActiveCanvasReadOnly().hiddenNodeCount,
+        ...readCanvasScale(graphStoreApi, { operation, roomPath }),
+      },
+    })
+  }, [graphStoreApi, roomPath])
 
   const endZooming = useCallback(() => {
     if (zoomEndTimerRef.current !== null) {
       window.clearTimeout(zoomEndTimerRef.current)
       zoomEndTimerRef.current = null
     }
+    finishViewportGesture()
     if (!zoomingRef.current) return
     zoomingRef.current = false
     useGraphUiStore.getState().setViewportZooming(false)
-  }, [])
+  }, [finishViewportGesture])
 
   const handleMove = useCallback((_: unknown, viewport: Viewport) => {
     updateZoomLevel(viewport.zoom)
     const previousZoom = lastMoveZoomRef.current
     lastMoveZoomRef.current = viewport.zoom
-    if (previousZoom !== null && Math.abs(viewport.zoom - previousZoom) > 0.0005) {
+    const zoomChanged = previousZoom !== null && Math.abs(viewport.zoom - previousZoom) > 0.0005
+
+    // 手势会话：逐帧只在 ref 里累加，绝不在这里写日志或 setState。
+    const now = performance.now()
+    let gesture = viewportGestureRef.current
+    if (!gesture) {
+      gesture = {
+        operation: zoomChanged ? 'zoom' : 'pan',
+        traceId: newPerformanceTraceId('viewport'),
+        startedAt: now,
+        lastFrameAt: now,
+        frameCount: 0,
+        maxFrameMs: 0,
+        zoomFrom: previousZoom ?? viewport.zoom,
+        zoomTo: viewport.zoom,
+        hiddenBefore: getActiveCanvasReadOnly().hiddenNodeCount,
+      }
+      viewportGestureRef.current = gesture
+    }
+    gesture.frameCount += 1
+    gesture.maxFrameMs = Math.max(gesture.maxFrameMs, now - gesture.lastFrameAt)
+    gesture.lastFrameAt = now
+    gesture.zoomTo = viewport.zoom
+    if (zoomChanged) gesture.operation = 'zoom'
+    if (gestureEndTimerRef.current !== null) window.clearTimeout(gestureEndTimerRef.current)
+    gestureEndTimerRef.current = window.setTimeout(finishViewportGesture, 180)
+
+    if (zoomChanged) {
       // 只在 false → true 时写 store，避免缩放期间每帧 setState
       if (!zoomingRef.current) {
         zoomingRef.current = true
@@ -269,7 +343,7 @@ export function useGraphCanvasModel({
       if (zoomEndTimerRef.current !== null) window.clearTimeout(zoomEndTimerRef.current)
       zoomEndTimerRef.current = window.setTimeout(endZooming, 180)
     }
-  }, [endZooming, updateZoomLevel])
+  }, [endZooming, finishViewportGesture, updateZoomLevel])
 
   useEffect(() => () => endZooming(), [endZooming])
 
@@ -281,7 +355,8 @@ export function useGraphCanvasModel({
       Math.abs(viewport.y - storedViewport.y) > 0.5 ||
       Math.abs(viewport.zoom - storedViewport.zoom) > 0.001
     if (viewportChanged) setStoredViewport(viewport)
-  }, [setStoredViewport, storedViewport, updateZoomLevel])
+    finishViewportGesture()
+  }, [finishViewportGesture, setStoredViewport, storedViewport, updateZoomLevel])
 
   useShortcut(['Control+f', 'Meta+f'], (event) => {
     if (activeTabId !== tabId) return
@@ -398,6 +473,25 @@ export function useGraphCanvasModel({
     graph.onEdgeClick(event, edge)
   }, [graph])
 
+  /**
+   * 双击连线 → 在双击处打开轻量关系编辑器（自定义关系名 / 切换关联·从属）。
+   * 只读时与右键菜单一样干脆不弹；格式刷是「点击即写」模式，双击不抢它的语义。
+   * 写入仍由 useGraph 的唯一写闸门兜底，这里只负责开浮层。
+   */
+  const handleEdgeDoubleClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    if (isCanvasReadOnly(tabId)) return
+    const ui = useGraphUiStore.getState()
+    if (ui.edgeFormatPainterStyle || ui.formatPainterStyle) return
+    event.stopPropagation()
+    onCloseContextMenu?.()
+    // 与「新建连线必选关系」浮层互斥，避免两个菜单叠在一起。
+    useEdgeRelationPickerStore.getState().close()
+    useEdgeRelationEditorStore.getState().open({
+      edgeId: edge.id,
+      anchor: { x: event.clientX, y: event.clientY },
+    })
+  }, [tabId, onCloseContextMenu])
+
   const handleEdgeContextMenu = useCallback((event: React.MouseEvent, edge: Edge) => {
     if (isCanvasReadOnly(tabId)) {
       event.preventDefault()
@@ -504,6 +598,12 @@ export function useGraphCanvasModel({
   }, [])
 
   const handleSearchSelectNode = useCallback((node: Node) => {
+    const perfSpan = startCanvasSpan(graphStoreApi, {
+      operation: CANVAS_OPERATIONS.locate,
+      metric: PERFORMANCE_METRICS.canvasQuery,
+      module: 'canvasModel',
+      params: { trigger: 'canvas-search', targetNodeId: node.id },
+    })
     graph.selectNode(node.id)
     setIsSearchOpen(false)
     // 程序化跳转前记下当前视野；手动平移 / 滚轮缩放不经过这里，不会污染返回历史。
@@ -516,7 +616,10 @@ export function useGraphCanvasModel({
     }
     const zoom = reactFlow.getZoom()
     reactFlow.setCenter(nodeRect.x + nodeRect.width / 2, nodeRect.y + nodeRect.height / 2, { zoom, duration: 300 })
-  }, [graph, reactFlow])
+    // setCenter 的 300ms 镜头动画由 finishViewportGesture 的手势样本覆盖；
+    // 这里只量同步定位部分，并把动画时长如实记进上下文，不伪造耗时。
+    perfSpan.end({ zoom: Number(zoom.toFixed(3)), animationMs: 300 })
+  }, [graph, reactFlow, graphStoreApi])
 
   return {
     state: {
@@ -548,6 +651,7 @@ export function useGraphCanvasModel({
       handleMoveEnd,
       handleNodeContextMenu,
       handleEdgeClick,
+      handleEdgeDoubleClick,
       handleEdgeContextMenu,
       handlePaneContextMenu,
       handleConnectionMouseMove,

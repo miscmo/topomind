@@ -25,6 +25,7 @@ import {
 } from '../../../../domain/graph/edgeCurve'
 import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
+import { useEdgeRelationEditorStore } from '../../../../stores/edgeRelationPickerStore'
 import { useActiveCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { useConfirmStore } from '../../../../shared/ui/ConfirmModal/confirmStore'
 import { getEdgeParams, getInternalNodeRect, getCurvedEdgePath } from './floatingUtils'
@@ -78,6 +79,8 @@ function FloatingEdge({
   const showRelationLabels = useGraphUiStore((s) => s.showEdgeRelationLabels)
   const isNodeFormatPainterActive = useGraphUiStore((s) => s.formatPainterStyle !== null)
   const isEdgeFormatPainterActive = useGraphUiStore((s) => s.edgeFormatPainterStyle !== null)
+  // 双击本条边编辑关系名时，中点让位给关系名标签：工具栏 / 手柄不与编辑浮层抢位置。
+  const isEditingThisEdge = useEdgeRelationEditorStore((s) => s.editing?.edgeId === id)
   const { updateEdgeStyle, updateEdgeAnchor, updateEdgeRelation, deleteEdge } = useGraphContext()
   const confirm = useConfirmStore((s) => s.open)
   // 只读时收起连线工具栏 / 锚点 / 弯曲控制柄，避免「拖了却不落盘」的假交互。
@@ -85,6 +88,8 @@ function FloatingEdge({
   // 拖动锚点 / 弯曲控制柄时只在这里做路径预览，松手才写 store：一次拖动 = 一条撤销记录、一次落盘
   const [anchorPreview, setAnchorPreview] = useState<EdgeAnchorPreview | null>(null)
   const [curvePreview, setCurvePreview] = useState<CurveControl | null>(null)
+  // 工具栏下拉菜单展开时提层级，避免两端锚点手柄穿透菜单面板
+  const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false)
 
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
@@ -161,6 +166,7 @@ function FloatingEdge({
     && connectingSourceId === null
     && !isNodeFormatPainterActive
     && !canvasReadOnly
+    && !isEditingThisEdge
   // 格式刷/连线中隐藏手柄，避免挡住「点击连线应用样式」
   const showAnchorHandles =
     isSelected
@@ -168,6 +174,7 @@ function FloatingEdge({
     && !isNodeFormatPainterActive
     && !isEdgeFormatPainterActive
     && !canvasReadOnly
+    && !isEditingThisEdge
   const hasCustomAnchors =
     normalizeEdgeAnchor(edgeData?.sourceAnchor) != null
     || normalizeEdgeAnchor(edgeData?.targetAnchor) != null
@@ -193,6 +200,7 @@ function FloatingEdge({
     && connectingSourceId === null
     && !isNodeFormatPainterActive
     && !isEdgeFormatPainterActive
+    && !isEditingThisEdge
 
   if (!sourceNode || !targetNode) {
     return null
@@ -259,10 +267,10 @@ function FloatingEdge({
   //   - 从属边：恢复原样式，线条只走 BaseEdge 的 style（关系配置 / 单条边 / 格式刷可改），
   //     不加任何额外视觉标记；关系名是否显示仍由「显示关系名」开关控制。
   // 选中 / 连线中 / 格式刷时，中点浮层让位给工具栏。
-  const semantic = describeEdgeSemantic(edgeData?.relation, edgeRelations)
+  const semantic = describeEdgeSemantic(edgeData?.relation, edgeRelations, edgeData?.relationLabel)
   const relationDefinition = findEdgeRelationDefinition(semantic.kind, edgeRelations)
   const midpointAvailable =
-    !isSelected
+    (!isSelected || isEditingThisEdge)
     && connectingSourceId === null
     && !isNodeFormatPainterActive
     && !isEdgeFormatPainterActive
@@ -311,6 +319,7 @@ function FloatingEdge({
             <div
               data-tm-edge-relation-label={relationDefinition.id}
               data-tm-edge-relation-mandatory={semantic.mandatoryLabel ? 'true' : undefined}
+              data-tm-edge-relation-custom={edgeData?.relationLabel ? 'true' : undefined}
               className="nodrag nopan absolute rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-[3px] text-[10px] leading-none text-[var(--color-text-secondary)] shadow-[var(--shadow-sm)]"
               style={{
                 transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
@@ -353,6 +362,7 @@ function FloatingEdge({
               labelY={labelY}
               anchors={showBendHandle && curveMid ? [sourceBorder, targetBorder, curveMid] : [sourceBorder, targetBorder]}
               faded={anchorPreview !== null || curvePreview !== null}
+              elevated={showToolbar && toolbarMenuOpen}
             >
               <QuickEdgeToolbar
                 edgeStyle={quickEdgeStyle}
@@ -367,6 +377,7 @@ function FloatingEdge({
                 onResetAnchors={handleAnchorReset}
                 onResetCurve={handleCurveReset}
                 onDelete={handleDelete}
+                onFloatingOpenChange={setToolbarMenuOpen}
               />
             </EdgeToolbarAnchor>
           )}

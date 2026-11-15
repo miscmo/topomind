@@ -4,7 +4,8 @@ import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, clampNumber } from '../st
 import { normalizeEdgeAnchor } from './edgeAnchors.ts'
 import { normalizeCurveControl } from './edgeCurve.ts'
 import { normalizeLinkedDocuments } from './linkedDocuments.ts'
-import { readEdgeRelationId } from './edgeRelations.ts'
+import { normalizeEdgeRelationLabel, readEdgeRelationId } from './edgeRelations.ts'
+import { normalizeTreeOrder } from './treeOrder.ts'
 
 const DEFAULT_VIEWPORT = { zoom: 1, pan: { x: 0, y: 0 } }
 const DEFAULT_NODE_SIZE = { width: 120, height: 52 }
@@ -128,6 +129,7 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       expandedHeight: typeof rawNode.expandedHeight === 'number' ? rawNode.expandedHeight : undefined,
       emojis: Array.isArray(rawNode.emojis) ? rawNode.emojis.filter((emoji): emoji is string => typeof emoji === 'string') : undefined,
       linkedDocuments: normalizeLinkedDocuments(rawNode.linkedDocuments),
+      treeOrder: normalizeTreeOrder(rawNode.treeOrder),
     }
   }
 
@@ -149,6 +151,7 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       source,
       target,
       relation: normalizeRelation(rawEdge.relation),
+      relationLabel: normalizeEdgeRelationLabel(rawEdge.relationLabel),
       weight: normalizeWeight(rawEdge.weight),
       lineMode: normalizeLineMode(rawEdge.lineMode),
       lineStyle: normalizeLineStyle(rawEdge.lineStyle),

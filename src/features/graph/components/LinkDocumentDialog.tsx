@@ -15,7 +15,7 @@ import { DocumentCandidateRow } from '../../documents/unifiedTree/DocumentCandid
 import { UnifiedTreeView } from '../../documents/unifiedTree/UnifiedTreeView'
 import { useUnifiedTree } from '../../documents/unifiedTree/useUnifiedTree'
 import { useUnifiedTreeSearch } from '../../documents/unifiedTree/useUnifiedTreeSearch'
-import { syncLinkedDocumentsToGraph, useLinkedDocumentStore } from '../linkedDocumentStore'
+import { syncLinkedDocumentsToGraph, useLinkedDocumentStore, type LinkedDocumentDialogState } from '../linkedDocumentStore'
 
 const ID_ATTRIBUTE = 'data-tm-link-document-id'
 const PATH_ATTRIBUTE = 'data-tm-link-document-path'
@@ -28,6 +28,19 @@ const PATH_LABEL_ATTRIBUTE = 'data-tm-link-document-path-label'
  */
 export const LinkDocumentDialog = memo(function LinkDocumentDialog() {
   const dialog = useLinkedDocumentStore((s) => s.dialog)
+  if (!dialog) return null
+  // key 让「弹窗开着又切到另一个节点」也重新挂载一次：树缓存与已见候选全部清空，
+  // 无需 refresh，也就不会出现打开瞬间两次 root 层查询。
+  return <LinkDocumentDialogBody key={`${dialog.nodeId}:${dialog.cardPath}`} dialog={dialog} />
+})
+
+/**
+ * 数据层只在弹窗打开时挂载。App 根常驻的是上面的外壳：启动阶段还在 setup 视图、
+ * currentWorkDir 为 null（SetupPage 的自动恢复是异步 IPC），若在外壳里直接调
+ * useUnifiedTree，它挂载即加载 root 层会让 requireRootDir() 抛「未选择工作目录」，
+ * 每次启动都往控制台刷一条 error。关闭弹窗时 Body 卸载，缓存与 error 一并清空。
+ */
+const LinkDocumentDialogBody = memo(function LinkDocumentDialogBody({ dialog }: { dialog: LinkedDocumentDialogState }) {
   const closeDialog = useLinkedDocumentStore((s) => s.closeDialog)
   const storage = useStorage()
   const dataSource = useMemo(() => createStorageTreeDataSource(storage), [storage])
@@ -41,14 +54,16 @@ export const LinkDocumentDialog = memo(function LinkDocumentDialog() {
   /** 见过的候选（树层 / 搜索结果）留作保存时的 cardRef / 标题来源。 */
   const knownCandidates = useRef(new Map<string, FSBDocumentCandidate>())
 
+  // Body 每次打开都是全新挂载：useUnifiedTree 已恰好加载一次 root 层，这里只做表单
+  // 初始化。刻意不再调用刷新方法，否则打开瞬间会并发两次 listUnifiedTreeLevel
+  // ('root')，违背「打开只查一层」的契约。dialog 在打开期间被替换时只重置表单，
+  // 树缓存仍是同一工作目录，不必重扫。
   useEffect(() => {
-    if (!dialog) return
     knownCandidates.current.clear()
     setSelected(new Set(dialog.links.map((link) => link.docId)))
     setShowSelected(false)
     setActiveIndex(0)
     search.setQuery('')
-    tree.refresh()
     inputRef.current?.focus()
   }, [dialog, storage]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -85,8 +100,6 @@ export const LinkDocumentDialog = memo(function LinkDocumentDialog() {
       title: knownCandidates.current.get(docId)?.title || linkById.get(docId)?.title || '未命名文档',
     }))
   }, [selected, dialog, tree.rows, search.results]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!dialog) return null
 
   const save = async () => {
     if (saving || selected.size > MAX_LINKED_DOCUMENTS) return

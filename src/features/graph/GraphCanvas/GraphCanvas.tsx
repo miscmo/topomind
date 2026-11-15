@@ -10,7 +10,7 @@ import { SmartGuidesRenderer } from './SmartGuidesRenderer'
 import { CardSnappedConnectionLine } from './components/CardSnappedConnectionLine'
 import { CanvasMiniMap } from './components/CanvasMiniMap'
 import { NodeSearchBox } from './components/NodeSearchBox'
-import { EdgeRelationPicker } from './components/EdgeRelationPicker'
+import { EdgeRelationPicker, EdgeRelationQuickEditor } from './components/EdgeRelationPicker'
 import LodControl from './components/LodControl'
 import CanvasReadOnlyBanner from './components/CanvasReadOnlyBanner'
 import ViewportReturnButton from './components/ViewportReturnButton'
@@ -82,6 +82,7 @@ export default memo(function GraphCanvas({
     handleMoveEnd,
     handleNodeContextMenu,
     handleEdgeClick,
+    handleEdgeDoubleClick,
     handleEdgeContextMenu,
     handlePaneContextMenu,
     setIsSearchOpen,
@@ -338,8 +339,9 @@ export default memo(function GraphCanvas({
         />
       )}
 
-      {/* 新建连线的必选关系浮层（portal 到 document.body，不受画布裁剪） */}
+      {/* 两个关系浮层都 portal 到 document.body：新建贴在连线终点、双击贴在双击处 */}
       <EdgeRelationPicker recommendedRelation={lod.recommendedRelation} />
+      <EdgeRelationQuickEditor />
 
       {/* 【只读】拖节点 / 拉连线在 React Flow 手势层就停掉，不让用户「拖了却不动」；
           选择仍保留（只读也要能点节点看右栏），写操作另由 useGraph 闸门硬拦。 */}
@@ -363,6 +365,7 @@ export default memo(function GraphCanvas({
         onNodeClick={graph.onNodeClick as (event: React.MouseEvent, node: Node) => void}
         onNodeContextMenu={handleNodeContextMenu}
         onEdgeClick={handleEdgeClick}
+        onEdgeDoubleClick={handleEdgeDoubleClick}
         onPaneClick={handlePaneClick}
         onPaneContextMenu={handlePaneContextMenu}
         onEdgeContextMenu={handleEdgeContextMenu}

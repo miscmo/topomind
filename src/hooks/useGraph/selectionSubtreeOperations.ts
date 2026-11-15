@@ -8,6 +8,8 @@
 import type { StoreApi } from 'zustand'
 import { logAction } from '../../core/log-backend'
 import { applySubtreeSelection } from '../../domain/graph/selectSubtree'
+import { CANVAS_OPERATIONS } from '@/shared/observability/performanceContract'
+import { startCanvasSpan } from './canvasPerformanceContext'
 import type { GraphState } from '../../stores/graphStore'
 
 export interface SelectionSubtreeOpsDeps {
@@ -21,12 +23,18 @@ export function buildSelectionSubtreeOperations({ storeApi }: SelectionSubtreeOp
     const roots: readonly string[] = rootIds && rootIds.length > 0 ? rootIds : store.selectedNodeIds
     const patch = applySubtreeSelection(store.nodes, store.edges, roots)
     if (!patch) return false
+    const perfSpan = startCanvasSpan(storeApi, {
+      operation: CANVAS_OPERATIONS.subtreeSelect,
+      affectedCount: patch.subtreeIds.length,
+      params: { rootCount: roots.length, trigger: 'selection-only' },
+    })
     if (patch.changed) store.setNodes(patch.nodes)
     logAction('节点:选中子树', 'graphOperations', {
       roots: [...roots],
       count: patch.subtreeIds.length,
       added: patch.addedIds.length,
     })
+    perfSpan.end({ added: patch.addedIds.length, changed: patch.changed })
     return true
   }
 

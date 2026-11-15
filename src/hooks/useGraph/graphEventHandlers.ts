@@ -11,7 +11,11 @@ import { useGraphUiStore } from '../../stores/graphUiStore'
 import { isCanvasReadOnly } from '../../stores/canvasReadOnlyStore'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
-import { useEdgeRelationPickerStore } from '../../stores/edgeRelationPickerStore'
+import {
+  useEdgeRelationEditorStore,
+  useEdgeRelationPickerStore,
+  type EdgePopupAnchor,
+} from '../../stores/edgeRelationPickerStore'
 import { SUBORDINATE_EDGE_RELATION_ID } from '../../domain/graph/edgeRelations'
 import {
   buildHierarchy,
@@ -20,6 +24,21 @@ import {
   validateSubordinateEdge,
   type HierarchyEdgeLike,
 } from '../../domain/graph/graphHierarchy'
+
+/**
+ * 取连线结束时的屏幕坐标。xyflow 在 document 的**冒泡**阶段收 mouseup/touchend，
+ * 所以 window 捕获阶段的监听一定先跑：onConnect 触发时 connectionPointRef
+ * 里已经是「松手那一点」，关系菜单才能贴在连线终点而不是屏幕中央。
+ */
+function pointerPointFromEvent(event: Event): EdgePopupAnchor | null {
+  const touch = (event as TouchEvent).changedTouches?.[0]
+  if (touch) return { x: touch.clientX, y: touch.clientY }
+  const mouse = event as MouseEvent
+  if (Number.isFinite(mouse.clientX) && Number.isFinite(mouse.clientY)) {
+    return { x: mouse.clientX, y: mouse.clientY }
+  }
+  return null
+}
 
 export interface GraphEventHandlerDeps {
   tabId: string
@@ -41,6 +60,22 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
   } = deps
   const navigationTargetRef = useRef('')
   const navigationResetTimerRef = useRef<number | null>(null)
+  const connectionPointRef = useRef<EdgePopupAnchor>({ x: 0, y: 0 })
+
+  useEffect(() => {
+    const record = (event: Event) => {
+      const point = pointerPointFromEvent(event)
+      if (point) connectionPointRef.current = point
+    }
+    window.addEventListener('mousemove', record, true)
+    window.addEventListener('mouseup', record, true)
+    window.addEventListener('touchend', record, true)
+    return () => {
+      window.removeEventListener('mousemove', record, true)
+      window.removeEventListener('mouseup', record, true)
+      window.removeEventListener('touchend', record, true)
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -174,12 +209,16 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
         weight: 'minor',
       }))
 
+      // 两个轻量浮层互斥：开始画新线时先收起可能还开着的双击编辑器。
+      useEdgeRelationEditorStore.getState().close()
       useEdgeRelationPickerStore.getState().open({
         source,
         target,
         subordinateBlockedReason: subordinateCheck.ok
           ? null
           : describeDowngradeReason(subordinateCheck.reason ?? 'cycle'),
+        // 贴在连线终点：松手坐标由 window 捕获阶段记下，onConnectEnd 再纠偏一次。
+        anchor: { ...connectionPointRef.current },
         onConfirm: (relation) => {
           // 浮层可能在可编辑时打开、用户随后缩小镜头才点确认；落盘前再挡一次，
           // 否则「只读期间新增连线」会从这条异步路径漏过去。
@@ -301,7 +340,14 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
     graphUi.setConnectingTargetId(null)
   }, [])
 
-  const onConnectEnd = useCallback((_: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+  const onConnectEnd = useCallback((event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+    // onConnectEnd 与 onConnect 在同一个 mouseup/touchend 里先后触发：这里把
+    // 精确落点回填给已经打开（或马上要由下面的 synthesize 打开）的关系菜单。
+    const point = pointerPointFromEvent(event)
+    if (point) {
+      connectionPointRef.current = point
+      useEdgeRelationPickerStore.getState().setAnchor(point)
+    }
     const graphUi = useGraphUiStore.getState()
     const source = graphUi.connectingSourceId
     const target = graphUi.connectingTargetId

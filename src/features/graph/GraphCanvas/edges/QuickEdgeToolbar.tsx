@@ -25,6 +25,8 @@ interface QuickEdgeToolbarProps {
   onResetAnchors: () => void
   onResetCurve: () => void
   onDelete: () => void
+  /** 关系菜单 / 样式面板的展开状态：父级据此把工具栏整体提到锚点手柄之上 */
+  onFloatingOpenChange?: (open: boolean) => void
 }
 
 function stopEvent(event: React.SyntheticEvent) {
@@ -54,6 +56,7 @@ function QuickEdgeToolbar({
   onResetAnchors,
   onResetCurve,
   onDelete,
+  onFloatingOpenChange,
 }: QuickEdgeToolbarProps) {
   const [stylePanelOpen, setStylePanelOpen] = useState(false)
   const [relationMenuOpen, setRelationMenuOpen] = useState(false)
@@ -70,6 +73,12 @@ function QuickEdgeToolbar({
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [stylePanelOpen, relationMenuOpen])
+
+  // 下拉面板是 absolute 脱离测量盒，EdgeToolbarAnchor 的避让量不到它；
+  // 展开时通知外层提层级，否则两端锚点手柄（z=11）会画在面板上面「穿透」。
+  useEffect(() => {
+    onFloatingOpenChange?.(stylePanelOpen || relationMenuOpen)
+  }, [stylePanelOpen, relationMenuOpen, onFloatingOpenChange])
 
   return (
     <div

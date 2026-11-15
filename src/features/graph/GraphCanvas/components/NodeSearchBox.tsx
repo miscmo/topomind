@@ -2,6 +2,9 @@ import { memo, useEffect, useRef, useState, useDeferredValue, useMemo } from 're
 import { Search, SearchX, X } from 'lucide-react'
 import type { Node } from '@xyflow/react'
 import { EmptyState } from '../../../../shared/ui/EmptyState'
+import { useGraphStoreApi } from '../../../../stores/graphStore'
+import { CANVAS_OPERATIONS, PERFORMANCE_METRICS } from '../../../../shared/observability/performanceContract'
+import { startCanvasSpan } from '../../../../hooks/useGraph/canvasPerformanceContext'
 
 const MAX_RESULTS = 50
 
@@ -23,18 +26,26 @@ export const NodeSearchBox = memo(function NodeSearchBox({
   // Defer the heavy filter so typing stays responsive even with thousands of nodes.
   // The input updates immediately (query), but the O(n) scan runs against a deferred
   // value that React can interrupt, keeping keystrokes smooth under large graphs.
+  const graphStoreApi = useGraphStoreApi()
   const deferredQuery = useDeferredValue(query)
 
   const filteredNodes = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
     if (!q) return [] as Node[]
+    const perfSpan = startCanvasSpan(graphStoreApi, {
+      operation: CANVAS_OPERATIONS.search,
+      metric: PERFORMANCE_METRICS.canvasQuery,
+      module: 'nodeSearchBox',
+      params: { queryLength: q.length, trigger: 'canvas-search' },
+    })
     const result: Node[] = []
     for (const node of nodes) {
       const label = String(node.data?.label ?? '').toLowerCase()
       if (label.includes(q)) result.push(node)
     }
+    perfSpan.end({ resultCount: result.length, capped: result.length > MAX_RESULTS })
     return result
-  }, [nodes, deferredQuery])
+  }, [nodes, deferredQuery, graphStoreApi])
 
   // Cap DOM nodes rendered; users rarely scroll past the first page of matches,
   // and rendering thousands of rows would defeat the deferred filter above.

@@ -91,6 +91,8 @@ export const LEGACY_EDGE_RELATION_MAP: Readonly<Record<string, EdgeRelation>> = 
 
 const MAX_NAME_LENGTH = 24
 const MAX_DESCRIPTION_LENGTH = 120
+/** 单条连线的自定义关系名上限（与内置显示名同宽），防止超长文本撑爆线上标签 */
+export const MAX_EDGE_RELATION_LABEL_LENGTH = 24
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -100,6 +102,15 @@ function cleanText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
   return trimmed ? trimmed.slice(0, maxLength) : undefined
+}
+
+/**
+ * 【用户决策 2026-11-12】单条「关联」连线可以双击写自己的关系名（如「前置知识」）。
+ * 这是**唯一**的自定义关系名归一化入口：空白 / 非字符串一律视为「没写」，
+ * 回落到全局关系定义名；undefined 不落盘，避免给每条边都塞一个空字符串。
+ */
+export function normalizeEdgeRelationLabel(value: unknown): string | undefined {
+  return cleanText(value, MAX_EDGE_RELATION_LABEL_LENGTH)
 }
 
 /**
@@ -207,6 +218,7 @@ export function parseStrictEdgeRelation(value: unknown): EdgeRelation | null {
 export function describeEdgeSemantic(
   value: unknown,
   definitions?: readonly EdgeRelationDefinition[],
+  customLabel?: unknown,
 ): EdgeSemanticDisplay {
   const relation = readEdgeRelationId(value)
   const configuredName = definitions
@@ -215,7 +227,9 @@ export function describeEdgeSemantic(
   const subordinate = relation === SUBORDINATE_EDGE_RELATION_ID
   return {
     kind: relation,
-    label: configuredName
+    // 优先级：本条边自定义名 > 全局关系定义名 > 兜底内置名。恒非空。
+    label: normalizeEdgeRelationLabel(customLabel)
+      ?? configuredName
       ?? (subordinate ? DEFAULT_SUBORDINATE_DISPLAY_NAME : DEFAULT_RELATED_DISPLAY_NAME),
     mandatoryLabel: !subordinate,
   }

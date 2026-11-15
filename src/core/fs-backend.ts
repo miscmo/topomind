@@ -59,12 +59,16 @@ export interface FSBGraphMeta {
     expandedHeight?: number
     /** 关联到别处已有文档，写盘时由 convertGraphToFSB 的 map 本体带入 */
     linkedDocuments?: LinkedDocumentRef[]
+    /** 左侧节点树同级顺序，写盘时由 convertGraphToFSB 的 map 本体带入 */
+    treeOrder?: number
   }> | undefined
   edges?: Array<{
     id: string
     source: string
     target: string
     relation: EdgeRelation
+    /** 本条连线的自定义关系名（双击连线编辑） */
+    relationLabel?: string
     weight: EdgeWeight
     highlighted?: boolean
     faded?: boolean

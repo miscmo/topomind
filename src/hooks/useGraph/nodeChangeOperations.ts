@@ -6,6 +6,14 @@ import {
   type GraphStoreApi,
 } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
+import { CANVAS_OPERATIONS } from '@/shared/observability/performanceContract'
+import {
+  PERFORMANCE_METRICS,
+  newPerformanceTraceId,
+  recordPerformance,
+  startPerformanceSpan,
+} from '../../core/performance-log'
+import { readCanvasScale } from './canvasPerformanceContext'
 
 export interface NodeChangeOperationsDeps {
   tabId: string
@@ -69,6 +77,67 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
   let dragHistoryBaseline: GraphHistorySnapshot | null = null
   let resizeHistoryBaseline: GraphHistorySnapshot | null = null
 
+  // 手势按「一次会话」上报一条样本：逐帧只累加计数，帧内不写日志、不 await。
+  // movedCount 同时区分单个移动与多选批量移动，无需拆成两个指标。
+  type GestureKind = 'drag' | 'resize'
+  interface GestureSession {
+    operation: GestureKind
+    traceId: string
+    roomPath: string
+    startedAt: number
+    lastFrameAt: number
+    frameCount: number
+    maxFrameMs: number
+    movedCount: number
+  }
+  const gestureSessions: Partial<Record<GestureKind, GestureSession>> = {}
+
+  const beginGesture = (kind: GestureKind, roomPath: string) => {
+    if (gestureSessions[kind]) return
+    const now = performance.now()
+    gestureSessions[kind] = {
+      operation: kind,
+      traceId: newPerformanceTraceId('gesture'),
+      roomPath,
+      startedAt: now,
+      lastFrameAt: now,
+      frameCount: 0,
+      maxFrameMs: 0,
+      movedCount: 1,
+    }
+  }
+
+  const trackGesture = (kind: GestureKind, affectedCount: number) => {
+    const session = gestureSessions[kind]
+    if (!session) return
+    const now = performance.now()
+    session.frameCount += 1
+    session.maxFrameMs = Math.max(session.maxFrameMs, now - session.lastFrameAt)
+    session.lastFrameAt = now
+    session.movedCount = Math.max(session.movedCount, affectedCount)
+  }
+
+  const endGesture = (kind: GestureKind) => {
+    const session = gestureSessions[kind]
+    if (!session) return
+    delete gestureSessions[kind]
+    const operation = kind === 'drag' ? CANVAS_OPERATIONS.drag : CANVAS_OPERATIONS.resize
+    recordPerformance(PERFORMANCE_METRICS.canvasGesture, performance.now() - session.startedAt, {
+      module: 'graphOperations',
+      traceId: session.traceId,
+      contextKey: session.roomPath,
+      params: {
+        frameCount: session.frameCount,
+        maxFrameMs: Math.round(session.maxFrameMs),
+        ...readCanvasScale(storeApi, {
+          operation,
+          roomPath: session.roomPath,
+          affectedCount: session.movedCount,
+        }),
+      },
+    })
+  }
+
   const beginInteractionHistory = (kind: 'drag' | 'resize') => {
     const baseline = kind === 'drag' ? dragHistoryBaseline : resizeHistoryBaseline
     if (baseline) return
@@ -90,6 +159,8 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
 
   const applyNodePositionChanges = async (changes: Array<{ id: string; position?: { x: number; y: number }; dragging?: boolean }>) => {
     const store = storeApi.getState()
+    const graphSession = getActiveGraphSession()
+    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
     const changesById = new Map(changes.map((change) => [change.id, change]))
     const result = computeIncrementalNodes(store.nodes, changesById, (node, change) => {
       const cp = change.position
@@ -101,11 +172,18 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
     const isDragging = changes.some((change) => change.dragging === true)
     const isDragEnd = changes.some((change) => change.dragging === false)
 
-    if (isDragging) beginInteractionHistory('drag')
-    if (isDragEnd) finishInteractionHistory('drag')
+    if (isDragging || isDragEnd) {
+      beginGesture('drag', currentRoomPath)
+      trackGesture('drag', result?.changedIds.length ?? changes.length)
+    }
 
-    const graphSession = getActiveGraphSession()
-    const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
+    if (isDragging) beginInteractionHistory('drag')
+    if (isDragEnd) {
+      finishInteractionHistory('drag')
+      // 在 await saveLater 之前收口：debounce 的 300ms 不属于用户手势时长。
+      endGesture('drag')
+    }
+
     const shouldSaveNow = changes.some((change) => change.dragging === false)
     if (currentRoomPath && shouldSaveNow) {
       await saveLater(currentRoomPath)
@@ -118,16 +196,40 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
 
   const applyNodeRemoveChanges = async (changeIds: string[]) => {
     const store = storeApi.getState()
-    store.removeNodes(changeIds)
-    store.removeEdgesByNodeIds(changeIds)
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-    if (currentRoomPath) await saveLater(currentRoomPath)
+    const span = startPerformanceSpan(PERFORMANCE_METRICS.canvasEdit, {
+      module: 'graphOperations',
+      traceId: newPerformanceTraceId('graph'),
+      contextKey: currentRoomPath,
+      params: {
+        // React Flow remove change 只改内存并触发全量落盘，不进回收站；如实记录便于追溯。
+        trashed: false,
+        ...readCanvasScale(storeApi, {
+          operation: CANVAS_OPERATIONS.deleteBatch,
+          roomPath: currentRoomPath,
+          affectedCount: changeIds.length,
+        }),
+      },
+    })
+    try {
+      store.removeNodes(changeIds)
+      store.removeEdgesByNodeIds(changeIds)
+      if (currentRoomPath) await saveLater(currentRoomPath)
+      span.end()
+    } catch (error) {
+      span.fail(error)
+      throw error
+    }
   }
 
   const applyNodeDimensionChanges = async (changes: Array<{ id: string; dimensions: { width: number; height: number } | null | undefined; resizing?: boolean; origin?: 'auto-size' | 'manual' }>) => {
     let shouldSave = false
     const store = storeApi.getState()
+    const resizeRoomPath = (() => {
+      const session = getActiveGraphSession()
+      return session.roomPath || session.kbPath || ''
+    })()
     const changesById = new Map(changes.map((change) => [change.id, change]))
     const result = computeIncrementalNodes(store.nodes, changesById, (node, change) => {
       const dims = change.dimensions
@@ -189,16 +291,19 @@ export function buildNodeChangeOperations(deps: NodeChangeOperationsDeps) {
 
     const isResizing = changes.some((change) => change.resizing === true)
     const isResizeEnd = changes.some((change) => change.resizing === false)
+    if (isResizing || isResizeEnd) {
+      beginGesture('resize', resizeRoomPath)
+      trackGesture('resize', result?.changedIds.length ?? changes.length)
+    }
     if (isResizing) beginInteractionHistory('resize')
 
     if (result) store.setNodesPreservingSelection(result.nextNodes, result.changedIds)
-    if (isResizeEnd) finishInteractionHistory('resize')
-
-    if (shouldSave) {
-      const graphSession = getActiveGraphSession()
-      const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
-      if (currentRoomPath) await saveLater(currentRoomPath)
+    if (isResizeEnd) {
+      finishInteractionHistory('resize')
+      endGesture('resize')
     }
+
+    if (shouldSave && resizeRoomPath) await saveLater(resizeRoomPath)
   }
 
   const applyNodeSelectionChanges = (changes: Array<{ id: string; selected: boolean }>) => {

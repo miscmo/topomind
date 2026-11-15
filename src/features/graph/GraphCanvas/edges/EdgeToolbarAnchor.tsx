@@ -9,6 +9,8 @@ interface EdgeToolbarAnchorProps {
   anchors: EdgeToolbarPoint[]
   /** 拖动锚点时让工具栏淡出让位，避免浮层挡住拖动视线 */
   faded: boolean
+  /** 下拉菜单展开时提升层级，盖住同层更高的锚点 / 弯曲手柄 */
+  elevated?: boolean
   children: ReactNode
 }
 
@@ -30,6 +32,7 @@ export default function EdgeToolbarAnchor({
   labelY,
   anchors,
   faded,
+  elevated = false,
   children,
 }: EdgeToolbarAnchorProps) {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -64,9 +67,11 @@ export default function EdgeToolbarAnchor({
       style={{
         position: 'absolute',
         transform: `translate(${labelX}px, ${labelY}px)`,
-        // 与锚点手柄（z-index 11）同在 EdgeLabelRenderer 内：工具栏略低一层，
-        // 极端重叠时手柄依然能抓到指针
-        zIndex: 10,
+        // 与锚点手柄（z-index 11）/ 弯曲手柄（12）同在 EdgeLabelRenderer 内。
+        // 静态保持 10：极端重叠时手柄依然能抓到指针；拖动时上层 faded 会透明且不吃指针。
+        // 下拉关系菜单 / 样式面板展开时提到 20：这两个面板 absolute 脱离测量盒，
+        // 避让算法量不到，若仍压在 10 的层叠上下文里，两端锚点会画在面板上面。
+        zIndex: elevated ? 20 : 10,
       }}
     >
       <div

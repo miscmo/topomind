@@ -1,6 +1,9 @@
 import type { Connection } from '@xyflow/react'
 import type { EdgeStylePatch, EdgeWeight, KnowledgeEdge } from '../../types'
 import { logAction } from '../../core/log-backend'
+import { CANVAS_OPERATIONS } from '@/shared/observability/performanceContract'
+import { PERFORMANCE_METRICS, newPerformanceTraceId, startPerformanceSpan } from '../../core/performance-log'
+import { readCanvasScale, startCanvasSpan } from './canvasPerformanceContext'
 import { buildEdgeView } from './edgeView'
 import type { GraphSession } from '../../stores/tabs/tabStore'
 import type { GraphState } from '../../stores/graphStore'
@@ -16,6 +19,7 @@ import {
   edgeRelationStylePatch,
   findEdgeRelationDefinition,
   normalizeEdgeRelationDefinitions,
+  normalizeEdgeRelationLabel,
   readEdgeRelationId,
   type EdgeRelationDefinition,
 } from '../../domain/graph/edgeRelations'
@@ -153,6 +157,16 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       return false
     }
     const relation = creation.relation
+    const edgeRoomPath = getActiveGraphSession()?.roomPath ?? ''
+    const perfSpan = startPerformanceSpan(PERFORMANCE_METRICS.edgeCreate, {
+      module: 'graphOperations',
+      traceId: newPerformanceTraceId('graph'),
+      contextKey: edgeRoomPath,
+      params: {
+        edgeId, relation, source: connection.source, target: connection.target,
+        ...readCanvasScale(storeApi, { operation: CANVAS_OPERATIONS.edgeCreate, roomPath: edgeRoomPath }),
+      },
+    })
     const store = storeApi.getState()
     if (relation === SUBORDINATE_EDGE_RELATION_ID) {
       // 从属是强关系：唯一父、无环、深度 ≤100。用深度单调不变量做增量校验，
@@ -230,14 +244,21 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('连线:创建', 'graphOperations', { edgeId, source: connection.source, target: connection.target })
+    perfSpan.end({ edgeId, relation })
     return true
   }
 
   const deleteEdge = async (edgeId: string) => {
     const store = storeApi.getState()
-    store.setEdges(store.edges.filter((e) => e.id !== edgeId))
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
+    const perfSpan = startCanvasSpan(storeApi, {
+      operation: CANVAS_OPERATIONS.edgeDelete,
+      roomPath: currentRoomPath,
+      params: { edgeId },
+    })
+    store.setEdges(store.edges.filter((e) => e.id !== edgeId))
+    perfSpan.end()
     if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('连线:删除', 'graphOperations', { edgeId })
     return true
@@ -298,6 +319,35 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     store.setEdges(nextEdges)
     if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('连线:更新关系', 'graphOperations', { edgeId, relation: nextRelation, weight })
+    return true
+  }
+
+  /**
+   * 【用户决策 2026-11-12】双击关联连线可以写「本条边自己的关系名」。
+   * 归一化（trim / 长度上限 / 空白视为清空）统一走 edgeRelations 的规则源；
+   * 清空时直接删字段而不是写空串，读盘侧自然回落到全局关系定义名。
+   * 未变化返回 false，不写内存也不触发落盘。
+   */
+  const updateEdgeRelationLabel = async (edgeId: string, label: string | null): Promise<boolean> => {
+    const graphSession = getActiveGraphSession()
+    const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
+    const store = storeApi.getState()
+    const nextLabel = label === null ? undefined : normalizeEdgeRelationLabel(label)
+    let changed = false
+    const nextEdges = store.edges.map((e) => {
+      if (e.id !== edgeId) return e
+      const previous = normalizeEdgeRelationLabel(e.data?.relationLabel)
+      if (previous === nextLabel) return e
+      changed = true
+      const nextData = { ...e.data }
+      if (nextLabel) nextData.relationLabel = nextLabel
+      else delete nextData.relationLabel
+      return { ...e, data: nextData } as KnowledgeEdge
+    })
+    if (!changed) return false
+    store.setEdges(nextEdges)
+    if (currentRoomPath) await saveLater(currentRoomPath)
+    logAction('连线:更新关系名', 'graphOperations', { edgeId, relationLabel: nextLabel ?? null })
     return true
   }
 
@@ -423,7 +473,13 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
       } as KnowledgeEdge
     })
     if (!changed) return
+    const perfSpan = startCanvasSpan(storeApi, {
+      operation: CANVAS_OPERATIONS.anchorAdjust,
+      roomPath: currentRoomPath,
+      params: { edgeId, sourceAnchorPatched: 'sourceAnchor' in patch, targetAnchorPatched: 'targetAnchor' in patch },
+    })
     store.setEdges(nextEdges)
+    perfSpan.end()
     if (currentRoomPath) await saveLater(currentRoomPath)
     logAction('连线:更新锚点', 'graphOperations', { edgeId, ...patch })
   }
@@ -444,6 +500,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     addEdge,
     deleteEdge,
     updateEdgeRelation,
+    updateEdgeRelationLabel,
     updateEdgeStyle,
     updateEdgeAnchor,
     setSelectedEdgeInGraph,
