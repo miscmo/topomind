@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react'
 
+import type { PerformanceCategoryId, PerformanceMetricId } from '@/shared/observability/performanceContract'
 import type { Disposable } from './disposables'
 import type { PluginManifest } from './manifest'
+
+export type { PerformanceCategoryId, PerformanceMetricId }
 
 export interface SecondaryViewRendererProps {
   viewId: string
@@ -152,18 +155,17 @@ export interface LogsApi {
   subscribe(listener: (entry: LogEntrySnapshot) => void): Disposable
 }
 
-export type PerformanceMetricId =
-  | 'room_load'
-  | 'node_select'
-  | 'detail_read'
-  | 'detail_save'
-
 export interface PerformanceMetricDefinition {
   id: PerformanceMetricId
   label: string
   shortLabel: string
   color: string
   thresholdMs: number
+  /** 注册表演进后新增；宿主 mock / 旧插件可不提供，页面须自行兜底。 */
+  category?: PerformanceCategoryId
+  categoryLabel?: string
+  description?: string
+  sampleRate?: number
 }
 
 export interface PerformanceSample {
@@ -178,6 +180,10 @@ export interface PerformanceSample {
   timestamp: string
   timestampMs: number
   module?: string
+  category?: PerformanceCategoryId
+  sessionId?: string
+  source?: string
+  traceId?: string
   params: Record<string, unknown>
 }
 

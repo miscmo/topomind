@@ -98,6 +98,7 @@ import {
   describeEdgeSemantic,
   edgeRelationStylePatch,
   normalizeEdgeRelationDefinitions,
+  normalizeEdgeRelationLabel,
   parseStrictEdgeRelation,
   readEdgeRelationId,
   resolveEdgeRelationId,
@@ -5946,8 +5947,9 @@ const edge = (
     '【只读】仍要允许选中节点查看信息')
 
   const modelSource18 = await readSrc('src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts')
-  assert.equal((modelSource18.match(/if \(isCanvasReadOnly\(tabId\)\) return/g) ?? []).length, 3,
-    '【只读】撤销 / 重做 / 快捷键新建节点三处都必须拦')
+  // 2026-11-12 新增第四处：双击连线编辑关系名，只读时也一律不弹浮层。
+  assert.equal((modelSource18.match(/if \(isCanvasReadOnly\(tabId\)\) return/g) ?? []).length, 4,
+    '【只读】撤销 / 重做 / 快捷键新建节点 / 双击编辑连线四处都必须拦')
   assert.equal((modelSource18.match(/if \(isCanvasReadOnly\(tabId\)\) \{/g) ?? []).length, 3,
     '【只读】节点 / 连线 / 画布三种右键菜单都必须不弹出')
 
@@ -7133,6 +7135,1796 @@ const edge = (
     '【统一树连线】来源字段必须落在 FSB DTO 上，不能只靠前端猜')
   assert.ok(guiSrc28.includes('阶段 U') && guiSrc28.includes('data-tm-unified-tree-origin'),
     '【统一树连线】GUI 必须实测只列有文档的节点与两类来源标签')
+}
+
+// ===== 第 29 组：右栏是画布浮层，展开/折叠不得挤压任何画布布局（2026-11-12） =====
+{
+  const readSrc29 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const pageSrc29 = await readSrc29('src/features/graph/GraphPage/GraphPage.tsx')
+  const panelSrc29 = await readSrc29('src/features/right-panel/RightPanelContainer.tsx')
+  const canvasSrc29 = await readSrc29('src/features/graph/GraphCanvas/GraphCanvas.tsx')
+  const miniMapSrc29 = await readSrc29('src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx')
+  const guiSrc29 = await readSrc29('scripts/verify-linked-documents-gui.mjs')
+
+  assert.ok(pageSrc29.includes('id="app-layout" className="relative w-full h-full"'),
+    '【右栏浮层】app-layout 不得再是 flex 两栏，否则右栏会参与布局挤压画布')
+  assert.ok(pageSrc29.includes('id="graph-panel" className="absolute inset-0 isolate overflow-clip'),
+    '【右栏浮层】画布必须绝对铺满并 isolate 自成一层，宽度才不受右栏影响')
+  assert.ok(!pageSrc29.includes('className="flex-1 h-full relative overflow-clip'),
+    '【右栏浮层】不得回灌 flex-1 画布（那会让展开右栏改变 React Flow 容器尺寸）')
+  assert.ok(panelSrc29.includes("${collapsed ? 'hidden' : 'flex'}"),
+    '【右栏浮层】折叠仍只隐藏同一组件树，保留文档保存 session / dirty close guard')
+  assert.ok(panelSrc29.includes('absolute inset-y-0 right-0 z-30')
+    && panelSrc29.includes('absolute inset-0 z-30'),
+    '【右栏浮层】常态贴右、最大化铺满，两者都必须 absolute 且不占布局宽度')
+  assert.ok(!panelSrc29.includes('z-[100]'),
+    '【右栏浮层】层级不得高于 fixed 右键菜单 z-50，避免菜单被面板盖住')
+  assert.ok(!canvasSrc29.includes('rightPanel') && !miniMapSrc29.includes('rightPanel'),
+    '【右栏浮层】画布 / 缩略图不得订阅右栏状态，布局只由画布容器自身尺寸决定')
+  assert.ok(canvasSrc29.includes('element.clientWidth') && canvasSrc29.includes('ResizeObserver'),
+    '【右栏浮层】canvasSize 仍由画布容器自身的 ResizeObserver 驱动')
+  assert.ok(miniMapSrc29.includes('width: canvasSize.width / Math.max(viewport.zoom, 0.0001)'),
+    '【右栏浮层】缩略图视口框只由 canvasSize + viewport 派生，画布宽度恒定则视口框恒定')
+  assert.ok(guiSrc29.includes('阶段 V') && guiSrc29.includes('data-tm-right-panel-overlay'),
+    '【右栏浮层】GUI 必须实测折叠/展开往返的画布布局不变量')
+}
+
+// ===== 第 30 组：全局弹窗未打开时不得发起统一树查询（2026-11-12） =====
+// 现象：App 根常驻的 LinkDocumentDialog 挂载即加载 root 层，而启动阶段还在 setup
+// 视图、currentWorkDir=null（SetupPage 自动恢复是异步 IPC），requireRootDir() 必抛
+// 「未选择工作目录」，每次启动都往控制台刷一条 Store.listUnifiedTreeLevel error。
+{
+  const readSrc30 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const dlgSrc30 = await readSrc30('src/features/graph/components/LinkDocumentDialog.tsx')
+  const appSrc30 = await readSrc30('src/App.tsx')
+  const hookSrc30 = await readSrc30('src/features/documents/unifiedTree/useUnifiedTree.ts')
+  const editorSrc30 = await readSrc30('src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx')
+  const guiSrc30 = await readSrc30('scripts/verify-linked-documents-gui.mjs')
+
+  const bodyStart30 = dlgSrc30.indexOf('const LinkDocumentDialogBody')
+  assert.ok(bodyStart30 > 0, '【启动期统一树】数据层必须下沉到独立的 Body 组件')
+  const shell30 = dlgSrc30.slice(0, bodyStart30)
+  const body30 = dlgSrc30.slice(bodyStart30)
+  assert.ok(shell30.includes('if (!dialog) return null'),
+    '【启动期统一树】App 根常驻的外壳必须在弹窗未打开时直接返回空')
+  assert.ok(!shell30.includes('useUnifiedTree(') && !shell30.includes('useStorage()')
+    && !shell30.includes('createStorageTreeDataSource('),
+    '【启动期统一树】外壳不得挂任何统一树数据 hook（工作目录就绪前会抛未选择工作目录）')
+  assert.ok(shell30.includes('<LinkDocumentDialogBody') && shell30.includes('key='),
+    '【启动期统一树】Body 必须按 dialog 条件挂载，切换节点时用 key 重建缓存')
+  assert.ok(body30.includes('useUnifiedTree(dataSource)') && body30.includes('createStorageTreeDataSource(storage)'),
+    '【启动期统一树】按层加载只发生在弹窗打开后的 Body 内')
+  assert.ok(!/^\s+tree\.refresh\(\)/m.test(body30),
+    '【启动期统一树】打开弹窗不得再重复 refresh，否则一次打开并发两次 root 层查询')
+  assert.ok(appSrc30.includes('<LinkDocumentDialog />'),
+    '【启动期统一树】弹窗仍全局常驻，守卫必须留在外壳而不是靠 App 层条件渲染')
+  assert.ok(hookSrc30.includes('useEffect(() => { void loadLevel(UNIFIED_TREE_ROOT_KEY) }, [loadLevel])'),
+    '【启动期统一树】hook 仍保持挂载即按层加载 root 的惰性语义')
+  assert.ok(editorSrc30.includes("{docLinkPicker && typeof document !== 'undefined'"),
+    '【启动期统一树】编辑器选择器也必须保持条件挂载')
+  assert.ok(guiSrc30.includes('阶段 W') && guiSrc30.includes('__tmStartupConsoleErrors'),
+    '【启动期统一树】GUI 必须实测 reload 启动期控制台没有工作目录误调用')
+}
+
+// ===== 第 31 组：新建节点即时呈现，不再为 1 个节点重载整房间（2026-11-12） =====
+// 旧链：saveNow 全量写盘 → createChildCardNode 读+写整份 layout → loadRoom 重扫
+// N 个节点的目录摘要并重建全部节点 → 再全量 map 一遍设标题编辑态。全 O(N)、串行、
+// 完成才更新 UI，节点 >400 时约半秒。新链：同步追加 1 个节点 + 后台合并落盘。
+{
+  const readSrc31 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const crudSrc31 = await readSrc31('src/hooks/useGraph/nodeCrudOperations.ts')
+  const opsSrc31 = await readSrc31('src/hooks/useGraph/graphOperations.ts')
+  const builderSrc31 = await readSrc31('src/hooks/useGraph/graphBuilder.ts')
+  const guiSrc31 = await readSrc31('scripts/verify-linked-documents-gui.mjs')
+
+  const fastStart31 = crudSrc31.indexOf('const createChildNodeOptimistic')
+  const dispatchStart31 = crudSrc31.indexOf('const createChildNode = async')
+  assert.ok(fastStart31 > 0 && dispatchStart31 > fastStart31,
+    '【新建节点丝滑】热路径必须与冷路径分开，不能回灌整房间重载')
+  const fastSrc31 = crudSrc31.slice(fastStart31, dispatchStart31)
+  assert.ok(!/\bawait\b/.test(fastSrc31) && !fastSrc31.includes('loadRoom(')
+    && !fastSrc31.includes('saveNow(') && !fastSrc31.includes('createChildCardNode('),
+    '【新建节点丝滑】热路径不得有任何等待 / 整房间重载 / 同步全量读写盘')
+  assert.ok(fastSrc31.includes('store.setNodes([...store.nodes, newNode])'),
+    '【新建节点丝滑】必须同步追加节点，未变更节点保持原引用')
+  assert.ok(fastSrc31.includes('void saveLater(roomPath)'),
+    '【新建节点丝滑】落盘只走后台 debounced 保存，按房间 key 与后续编辑合并')
+  assert.ok(!fastSrc31.includes('.map('),
+    '【新建节点丝滑】不得再全量 map 一遍节点设标题编辑态')
+  assert.ok(crudSrc31.slice(dispatchStart31).includes('currentLoadedRoomPathRef.current !== reloadPath')
+    && crudSrc31.includes('createChildNodeViaReload'),
+    '【新建节点丝滑】子房间创建 / 房间未加载完成必须保留旧链，保证磁盘一定写入')
+  assert.ok(opsSrc31.includes('currentLoadedRoomPathRef,'),
+    '【新建节点丝滑】graphOperations 必须把房间加载状态透传给 CRUD 层')
+  assert.ok(builderSrc31.includes('export function buildCreatedKnowledgeNode'),
+    '【新建节点丝滑】新节点必须由复用 buildNodes 字段契约的纯函数构造')
+  assert.ok(guiSrc31.includes('阶段 X'),
+    '【新建节点丝滑】GUI 必须实测点击到节点出现的耗时与后台落盘')
+
+  // 真跑纯函数：乐观节点必须能被保存通道原样写回，否则重启后字段会静默丢失。
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundled31 = await build({
+    entryPoints: [fileURLToPath(new URL('../src/hooks/useGraph/graphBuilder.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const graphBuilder31 = await import(
+    `data:text/javascript;base64,${Buffer.from(bundled31.outputFiles[0].text).toString('base64')}`
+  ) as Record<string, any>
+  const created31 = graphBuilder31.buildCreatedKnowledgeNode({
+    roomPath: '计算机/算法', kbPath: '计算机', cardId: 'card-x', name: '新节点',
+    position: { x: 10, y: 20 }, size: { width: 130, height: 60 },
+    editTitle: true, fallbackIndex: 3,
+  })
+  assert.equal(created31.id, 'card-x', '【新建节点丝滑】新节点 id 必须是 cardId')
+  assert.equal(created31.type, 'knowledgeCard', '【新建节点丝滑】节点类型必须与加载路径一致')
+  assert.deepEqual(created31.position, { x: 10, y: 20 }, '【新建节点丝滑】必须保留右键 / 快捷键给出的坐标')
+  assert.equal(created31.width, 130, '【新建节点丝滑】必须继承默认节点宽度')
+  assert.equal(created31.height, 60, '【新建节点丝滑】必须继承默认节点高度')
+  assert.equal(created31.selected, true, '【新建节点丝滑】新节点应直接选中')
+  assert.equal(created31.data.label, '新节点', '【新建节点丝滑】显示名必须写进 data.label')
+  assert.equal(created31.data.cardRef, 'card-x', '【新建节点丝滑】cardRef 必须指向自身')
+  assert.equal(created31.data.parent, '计算机/算法', '【新建节点丝滑】data.parent 必须是当前房间')
+  assert.equal(created31.data.titleEditRequested, true, '【新建节点丝滑】标题编辑态必须直接挂在新节点上')
+  const meta31 = graphBuilder31.buildMetaFromNodesEdges([created31], [])
+  assert.equal(meta31.nodes['card-x'].card.name, '新节点',
+    '【新建节点丝滑】乐观节点必须能被保存通道原样序列化')
+  assert.equal(meta31.nodes['card-x'].width, 130,
+    '【新建节点丝滑】序列化不能丢尺寸')
+  const auto31 = graphBuilder31.buildCreatedKnowledgeNode({
+    roomPath: '计算机', kbPath: '计算机', cardId: 'card-y', name: '自动排布', fallbackIndex: 2,
+  })
+  assert.deepEqual(auto31.position, { x: 420, y: 272 },
+    '【新建节点丝滑】未给坐标时必须复现 buildNodes 的默认排布')
+  assert.equal(auto31.data.titleEditRequested, undefined,
+    '【新建节点丝滑】未要求编辑标题时不得带运行时编辑标记')
+}
+
+// ===== 第 32 组：删除节点不再重载整房间 + 批量样式一次写回（2026-11-12） =====
+// 旧删除链：deleteCardNodeAndPruneGraph 直接改 store 内部 Map → saveNow 全量写盘
+// → loadRoom 重扫 N 个节点目录摘要并重建全图 → 全量 map 清选中。全 O(N) 串行。
+// 旧批量样式：forEach 逐个 updateNode，每次都全量 map + new Map + 全量 selection
+// 扫描，选中 K 个节点就是 O(K·N)。两者都必须换成一次 store 写回。
+{
+  const readSrc32 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const crudSrc32 = await readSrc32('src/hooks/useGraph/nodeCrudOperations.ts')
+  const builderSrc32 = await readSrc32('src/hooks/useGraph/graphBuilder.ts')
+  const cardSvcSrc32 = await readSrc32('src/application/graph/cardNodeService.ts')
+  const appIndexSrc32 = await readSrc32('src/application/graph/index.ts')
+  const opsSrc32 = await readSrc32('src/hooks/useGraph/graphOperations.ts')
+  const storageApiSrc32 = await readSrc32('src/hooks/useGraph/useGraphStorageApi.ts')
+  const guiSrc32 = await readSrc32('scripts/verify-linked-documents-gui.mjs')
+
+  const delStart32 = crudSrc32.indexOf('const deleteChildNode = async')
+  const delEnd32 = crudSrc32.indexOf('const renameNode = async')
+  assert.ok(delStart32 > 0 && delEnd32 > delStart32,
+    '【删除节点丝滑】必须存在独立的删除节点实现')
+  const delSrc32 = crudSrc32.slice(delStart32, delEnd32)
+  assert.ok(!delSrc32.includes('loadRoom(') && !delSrc32.includes('saveNow('),
+    '【删除节点丝滑】删 1 个节点不得整房间重载 / 同步全量写盘')
+  assert.ok(!delSrc32.includes('await deleteCardNodeAndPruneGraph('),
+    '【删除节点丝滑】不得回灌「直接改 store 内部 Map」的旧服务')
+  assert.ok(delSrc32.includes('await storage.deleteCard(cardPath, nodeLabel)'),
+    '【删除节点丝滑】唯一 IO 只能是被删节点自己的目录（局部 rename 进回收站）')
+  assert.ok(delSrc32.includes('current.removeNodes([nodeId])')
+    && delSrc32.includes('current.removeEdgesByNodeIds([nodeId])'),
+    '【删除节点丝滑】必须同步用 store 原语删节点与关联边，让 UI 同帧更新')
+  assert.ok(delSrc32.includes('temporal.pause()') && delSrc32.includes('temporal.resume()'),
+    '【删除节点丝滑】删除必须排除在 undo 历史之外（否则撤销会造出空壳节点）')
+  assert.ok(delSrc32.includes('void saveLater(currentRoomPath)'),
+    '【删除节点丝滑】落盘只走后台 debounced 保存，与后续编辑按房间 key 合并')
+  assert.ok(!delSrc32.includes('.map('),
+    '【删除节点丝滑】不得再全量 map 一遍节点清选中')
+  assert.ok(!cardSvcSrc32.includes('nodesById.delete') && !cardSvcSrc32.includes('edgesById.delete')
+    && !appIndexSrc32.includes('deleteCardNodeAndPruneGraph'),
+    '【删除节点丝滑】应用层不得保留绕过 zustand set 的 Map 直改副作用')
+  assert.ok(opsSrc32.includes('deleteCard: (cardPath: string, label?: string)')
+    && storageApiSrc32.includes('storage.deleteCard(cardPath, label)'),
+    '【删除节点丝滑】回收站标签必须透传到主进程 .trash.json')
+
+  const batchStart32 = crudSrc32.indexOf('const updateNodesStyle = async')
+  const batchEnd32 = crudSrc32.indexOf('const updateNodeSizingMode = async')
+  assert.ok(batchStart32 > 0 && batchEnd32 > batchStart32,
+    '【批量样式】必须存在批量样式与清除样式实现')
+  const batchSrc32 = crudSrc32.slice(batchStart32, batchEnd32)
+  assert.ok(!batchSrc32.includes('store.updateNode(') && !batchSrc32.includes('forEach('),
+    '【批量样式】不得逐节点 updateNode（每次都触发一次全量 store 更新）')
+  assert.ok(batchSrc32.includes('applyNodeStylePatch(') && batchSrc32.includes('clearNodeStyles(')
+    && (batchSrc32.match(/store\.setNodes\(nextNodes\)/g) ?? []).length === 2,
+    '【批量样式】两个操作各只做一次 setNodes 写回')
+  assert.ok(guiSrc32.includes('阶段 Y'),
+    '【删除节点丝滑】GUI 必须实测删除耗时与后台落盘')
+
+  // 真跑 store 原语：删除后数组/Map 必须一致、未变更节点保持引用、关联边被裁。
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundleStore32 = await build({
+    entryPoints: [fileURLToPath(new URL('../src/stores/graphStore.tsx', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const graphStore32 = await import(
+    `data:text/javascript;base64,${Buffer.from(bundleStore32.outputFiles[0].text).toString('base64')}`
+  ) as Record<string, any>
+  const store32 = graphStore32.createGraphStore()
+  const nodes32 = [
+    { id: 'a', selected: true, position: { x: 0, y: 0 }, data: { label: 'A' } },
+    { id: 'b', selected: false, position: { x: 1, y: 0 }, data: { label: 'B' } },
+    { id: 'c', selected: false, position: { x: 2, y: 0 }, data: { label: 'C' } },
+  ]
+  const edges32 = [
+    { id: 'e1', source: 'a', target: 'b' },
+    { id: 'e2', source: 'b', target: 'c' },
+  ]
+  store32.getState().setNodes(nodes32)
+  store32.getState().setEdges(edges32)
+  store32.getState().removeNodes(['a'])
+  store32.getState().removeEdgesByNodeIds(['a'])
+  const after32 = store32.getState()
+  assert.equal(after32.nodes.length, 2, '【删除节点丝滑】store 原语必须真的移除节点')
+  assert.equal(after32.nodes[0], nodes32[1], '【删除节点丝滑】未变更节点必须保持原引用')
+  assert.equal(after32.nodesMap.has('a'), false, '【删除节点丝滑】nodesMap 必须与数组一致')
+  assert.equal(after32.edges.length, 1, '【删除节点丝滑】关联边必须被裁掉')
+  assert.equal(after32.edges[0].id, 'e2', '【删除节点丝滑】无关边必须保留')
+  assert.equal(after32.selectedNodeCount, 0, '【删除节点丝滑】选中态必须随删除重算')
+  assert.equal(after32.selectedNodeId, null, '【删除节点丝滑】选中节点必须清空')
+
+  // 真跑批量样式纯函数：一次遍历、无变化返回 null、未变更节点保持引用。
+  const bundleBuilder32 = await build({
+    entryPoints: [fileURLToPath(new URL('../src/hooks/useGraph/graphBuilder.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const graphBuilder32 = await import(
+    `data:text/javascript;base64,${Buffer.from(bundleBuilder32.outputFiles[0].text).toString('base64')}`
+  ) as Record<string, any>
+  const patched32 = graphBuilder32.applyNodeStylePatch(nodes32, ['a', 'b'], { headerFontSize: 20 })
+  assert.ok(Array.isArray(patched32), '【批量样式】有变化时返回新数组')
+  assert.equal(patched32[0].data.nodeStyle.headerFontSize, 20, '【批量样式】样式必须合并进 data.nodeStyle')
+  assert.equal(patched32[2], nodes32[2], '【批量样式】未选中节点必须保持原引用')
+  assert.equal(nodes32[0].data.nodeStyle, undefined, '【批量样式】不得原地修改旧节点')
+  assert.equal(graphBuilder32.applyNodeStylePatch(patched32, ['a', 'b'], { headerFontSize: 20 }), null,
+    '【批量样式】重复应用同一 patch 必须返回 null，避免无意义的 setNodes')
+  assert.equal(graphBuilder32.applyNodeStylePatch(nodes32, ['c'], {}), null,
+    '【批量样式】空 patch 必须返回 null')
+  const cleared32 = graphBuilder32.clearNodeStyles(patched32, ['a'])
+  assert.equal(cleared32[0].data.nodeStyle, undefined, '【批量样式】清除后不得残留 nodeStyle')
+  assert.equal(cleared32[1], patched32[1], '【批量样式】清除时未选中节点保持原引用')
+  assert.equal(graphBuilder32.clearNodeStyles(nodes32, ['c']), null,
+    '【批量样式】本就无样式的节点必须返回 null')
+}
+
+// --- 第 33 组：连线终点轻量关系菜单 + 双击编辑自定义关系名（2026-11-12） ---
+// 铁律：字段必须贯穿 7 处白名单（真跑往返验证，不只查字面量）；浮层必须贴事件坐标
+// 且**没有居中模态遮罩**；双击写操作必须过唯一写闸门；旧「自定义关系 CRUD 已删除」契约不回灌。
+{
+  const read33 = async (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const [
+    relations33, types33, model33, mapper33, normalizeMeta33, file33, fsBackend33, builder33,
+    picker33, handlers33, canvasModel33, canvas33, useGraph33, context33, edgeOps33, floating33, panel33,
+  ] = await Promise.all([
+    read33('../src/domain/graph/edgeRelations.ts'),
+    read33('../src/types/graph.ts'),
+    read33('../src/domain/graph/model.ts'),
+    read33('../src/domain/graph/graphMapper.ts'),
+    read33('../src/domain/graph/normalizeGraphMeta.ts'),
+    read33('../src/core/storage/file.ts'),
+    read33('../src/core/fs-backend.ts'),
+    read33('../src/hooks/useGraph/graphBuilder.ts'),
+    read33('../src/features/graph/GraphCanvas/components/EdgeRelationPicker.tsx'),
+    read33('../src/hooks/useGraph/graphEventHandlers.ts'),
+    read33('../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts'),
+    read33('../src/features/graph/GraphCanvas/GraphCanvas.tsx'),
+    read33('../src/hooks/useGraph.ts'),
+    read33('../src/contexts/GraphContext.tsx'),
+    read33('../src/hooks/useGraph/edgeOperations.ts'),
+    read33('../src/features/graph/GraphCanvas/edges/FloatingEdge.tsx'),
+    read33('../src/features/right-panel/components/StyleTab/EdgeRelationPanel.tsx'),
+  ])
+
+  // 1) 唯一规则源：归一化 + describeEdgeSemantic 消费自定义名。
+  assert.ok(relations33.includes('export function normalizeEdgeRelationLabel(')
+    && relations33.includes('normalizeEdgeRelationLabel(customLabel)'),
+  '【连线关系】自定义关系名归一化与优先级必须在 edgeRelations.ts 唯一定义')
+
+  // 2) 7 处字段白名单：只加返回类型不算，必须在 map 本体 / 读入边界里真实透传。
+  assert.equal((types33.match(/relationLabel\?: string/g) ?? []).length, 2,
+    '【连线关系】types/graph.ts 的 GraphEdge 与 KnowledgeEdge.data 都要有字段')
+  assert.equal((model33.match(/relationLabel\?: string/g) ?? []).length, 2,
+    '【连线关系】domain/graph/model.ts 的 RoomGraphEdge 与 KBEdge 都要有字段')
+  assert.equal((mapper33.match(/relationLabel: normalizeEdgeRelationLabel\(edge\.relationLabel\)/g) ?? []).length, 2,
+    '【连线关系】graphMapper 双向都要透传字段')
+  assert.ok(normalizeMeta33.includes('relationLabel: normalizeEdgeRelationLabel(rawEdge.relationLabel)'),
+    '【连线关系】normalizeGraphMeta 读入边界必须归一化字段')
+  assert.equal((file33.match(/relationLabel: normalizeEdgeRelationLabel\(e\.relationLabel\)/g) ?? []).length, 2,
+    '【连线关系】file.ts 的 FSB 双向转换都要透传字段')
+  assert.ok(fsBackend33.includes('relationLabel?: string'),
+    '【连线关系】fs-backend 的原始边类型必须放行字段')
+  assert.ok(builder33.includes('relationLabel: normalizeEdgeRelationLabel(e.data?.relationLabel)')
+    && builder33.includes('relationLabel: e.relationLabel'),
+  '【连线关系】graphBuilder 写盘与回读都要带字段')
+
+  // 3) 浮层：贴在事件坐标、视口内钳位、轻量菜单形态（无全屏遮罩）。
+  assert.ok(picker33.includes("'data-tm-edge-relation-inline': 'true'")
+    && picker33.includes("'data-tm-edge-relation-anchor-x'")
+    && picker33.includes('window.innerWidth - rect.width')
+    && picker33.includes('window.innerHeight - rect.height')
+    && picker33.includes('data-tm-edge-relation-picker'),
+  '【连线关系】新建关系菜单必须按落点坐标定位并做视口钳位')
+  assert.equal(picker33.includes('inset-0 flex items-center justify-center'), false,
+    '【P0】不得回灌「全屏遮罩 + 屏幕居中」的模态形态')
+  assert.equal(picker33.includes('bg-[color-mix(in_srgb,var(--color-text-primary)_28%'), false,
+    '【P0】不得回灌遮罩背景')
+  assert.ok(picker33.includes('fixed z-[60]') && !picker33.includes('z-[99998]'),
+    '【连线关系】轻量菜单层级必须低于弹窗，不得回灌居中模态的 99998')
+  assert.ok(picker33.includes('orderEdgeRelationOptions')
+    && picker33.includes('data-tm-edge-relation-choice={option.id}')
+    && picker33.includes('data-tm-edge-relation-mandatory'),
+  '【连线关系】两个必选项 / 图型推荐 / 关联强契约不得丢')
+
+  // 4) 落点捕获必须在 xyflow 的 document 冒泡 mouseup 之前（window 捕获阶段）。
+  assert.ok(handlers33.includes("window.addEventListener('mouseup', record, true)")
+    && handlers33.includes("window.addEventListener('touchend', record, true)")
+    && handlers33.includes('anchor: { ...connectionPointRef.current }')
+    && handlers33.includes('setAnchor(point)'),
+  '【连线关系】松手坐标必须在捕获阶段记录并交给关系菜单')
+  assert.ok(handlers33.includes('pointerPointFromEvent(event)'),
+    '【连线关系】onConnectEnd 必须用事件坐标纠偏菜单位置')
+
+  // 5) 双击编辑：事件接线 → 轻量编辑器 → 写闸门 → 线上标签。
+  assert.ok(canvasModel33.includes('handleEdgeDoubleClick')
+    && canvasModel33.includes('useEdgeRelationEditorStore.getState().open(')
+    && canvasModel33.includes('if (isCanvasReadOnly(tabId)) return'),
+  '【连线关系】双击必须在画布模型里打开编辑器且只读时不弹')
+  assert.ok(canvas33.includes('onEdgeDoubleClick={handleEdgeDoubleClick}')
+    && canvas33.includes('<EdgeRelationQuickEditor />'),
+  '【连线关系】ReactFlow 必须接通双击并挂载轻量编辑器')
+  assert.ok(picker33.includes('data-tm-edge-relation-label-input')
+    && picker33.includes('data-tm-edge-relation-editor-choice={item.id}'),
+  '【连线关系】编辑器必须能写自定义名并切换关联/从属')
+  assert.ok(edgeOps33.includes('const updateEdgeRelationLabel = async')
+    && edgeOps33.includes('delete nextData.relationLabel'),
+  '【连线关系】写入必须归一化、清空时删字段')
+  assert.ok(useGraph33.includes('updateEdgeRelationLabel: edit(ops.updateEdgeRelationLabel, noResult)'),
+    '【P0】双击写关系名必须过 useGraph 唯一写闸门')
+  assert.ok(context33.includes('updateEdgeRelationLabel: graph.updateEdgeRelationLabel'),
+    '【连线关系】GraphContext 必须暴露写操作')
+  assert.ok(floating33.includes('describeEdgeSemantic(edgeData?.relation, edgeRelations, edgeData?.relationLabel)')
+    && floating33.includes('data-tm-edge-relation-custom')
+    && floating33.includes('!isEditingThisEdge')
+    && floating33.includes('{semantic.label}'),
+  '【P0】关联边标签必须显示自定义名且恒显示契约不变')
+  assert.equal(panel33.includes('data-tm-edge-relation-add'), false,
+    '【P0】自定义关系名是**单条边**属性，不得回灌全局自定义关系 CRUD')
+
+  // 6) 真跑纯函数：自定义名归一化、显示优先级、mandatoryLabel 恒显示。
+  const defs33 = normalizeEdgeRelationDefinitions(undefined)
+  assert.equal(normalizeEdgeRelationLabel('  前置知识  '), '前置知识')
+  assert.equal(normalizeEdgeRelationLabel(''), undefined)
+  assert.equal(normalizeEdgeRelationLabel('   '), undefined)
+  assert.equal(normalizeEdgeRelationLabel(42), undefined)
+  assert.equal(normalizeEdgeRelationLabel('x'.repeat(40))?.length, 24,
+    '【连线关系】超长自定义名必须在规则源截断')
+  assert.equal(describeEdgeSemantic('related', defs33, '前置知识').label, '前置知识')
+  assert.equal(describeEdgeSemantic('related', defs33, '前置知识').mandatoryLabel, true)
+  assert.equal(describeEdgeSemantic('related', defs33, '   ').label, DEFAULT_RELATED_DISPLAY_NAME)
+  assert.equal(describeEdgeSemantic('related', defs33).label, DEFAULT_RELATED_DISPLAY_NAME)
+  assert.equal(describeEdgeSemantic('subordinate', defs33, '前置知识').mandatoryLabel, false)
+  assert.equal(assertEdgeRelationForCreate('related', defs33).ok, true,
+    '【P0】新建连线强校验不得被自定义名改动破坏')
+
+  // 7) esbuild 真跑往返：store 边 → _graph.json → store 边，字段不能在中途被吃掉。
+  const { build: esbuild33 } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const loadBundled33 = async (relative: string) => {
+    const bundled = await esbuild33({
+      entryPoints: [fileURLToPath(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return await import(
+      `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
+    ) as Record<string, any>
+  }
+  const graphBuilder33 = await loadBundled33('../src/hooks/useGraph/graphBuilder.ts')
+  const nodes33 = [
+    { id: 'a33', position: { x: 0, y: 0 }, data: { label: 'A' } },
+    { id: 'b33', position: { x: 200, y: 0 }, data: { label: 'B' } },
+  ]
+  const roundTrip33 = graphBuilder33.buildEdges(
+    graphBuilder33.buildMetaFromNodesEdges(nodes33, [
+      { id: 'e33', source: 'a33', target: 'b33', data: { relation: 'related', relationLabel: '  前置知识  ' } },
+    ]),
+    '',
+  )
+  assert.equal(roundTrip33[0].data.relationLabel, '前置知识',
+    '【P0】自定义关系名必须经写盘/读盘往返不丢')
+  const blankMeta33 = graphBuilder33.buildMetaFromNodesEdges(nodes33, [
+    { id: 'e33b', source: 'a33', target: 'b33', data: { relation: 'related', relationLabel: '   ' } },
+  ])
+  assert.equal(blankMeta33.edges[0].relationLabel, undefined,
+    '【连线关系】空白自定义名不得落盘为脏字符串')
+  const normalizeGraphMeta33 = await loadBundled33('../src/domain/graph/normalizeGraphMeta.ts')
+  const parsed33 = normalizeGraphMeta33.normalizeGraphMeta({
+    edges: [{
+      id: 'e33c', source: { ref: 'a33' }, target: { ref: 'b33' },
+      relation: 'related', relationLabel: '  前置知识  ', weight: 'minor',
+    }],
+  })
+  assert.equal(parsed33.edges[0].relationLabel, '前置知识',
+    '【P0】旧档/外部导入读入边界必须归一化自定义关系名')
+}
+
+// --- 第 34 组：连线工具栏下拉菜单不得被两端锚点穿透（2026-11-13） ---
+// 铁律：静态层级 10 < 锚点 11 < 弯曲手柄 12 < 菜单展开 20；两个下拉面板仍是
+// 工具栏内部的 absolute 面板，靠**提升父级层叠上下文**解决，而不是面板自己写更大的 z-index。
+{
+  const read34 = async (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const [anchor34, bend34, toolbar34, quick34, popover34, floating34] = await Promise.all([
+    read34('../src/features/graph/GraphCanvas/edges/EdgeAnchorHandles.tsx'),
+    read34('../src/features/graph/GraphCanvas/edges/EdgeBendHandle.tsx'),
+    read34('../src/features/graph/GraphCanvas/edges/EdgeToolbarAnchor.tsx'),
+    read34('../src/features/graph/GraphCanvas/edges/QuickEdgeToolbar.tsx'),
+    read34('../src/features/graph/GraphCanvas/edges/QuickEdgeStylePopover.tsx'),
+    read34('../src/features/graph/GraphCanvas/edges/FloatingEdge.tsx'),
+  ])
+
+  const idleZ34 = Number(toolbar34.match(/zIndex: elevated \? \d+ : (\d+)/)?.[1] ?? NaN)
+  const openZ34 = Number(toolbar34.match(/zIndex: elevated \? (\d+) : \d+/)?.[1] ?? NaN)
+  const anchorZ34 = Number(anchor34.match(/zIndex: (\d+)/)?.[1] ?? NaN)
+  const bendZ34 = Number(bend34.match(/zIndex: (\d+)/)?.[1] ?? NaN)
+  assert.ok(idleZ34 < anchorZ34 && anchorZ34 < bendZ34 && bendZ34 < openZ34,
+    `【P0】层级链必须是 静态 ${idleZ34} < 锚点 ${anchorZ34} < 弯曲 ${bendZ34} < 展开 ${openZ34}`)
+  assert.ok(toolbar34.includes('elevated?: boolean')
+    && floating34.includes('elevated={showToolbar && toolbarMenuOpen}')
+    && floating34.includes('onFloatingOpenChange={setToolbarMenuOpen}'),
+  '【连线菜单】elevated 必须由 FloatingEdge 接线到工具栏外壳')
+  assert.ok(quick34.includes('onFloatingOpenChange?: (open: boolean) => void')
+    && quick34.includes('onFloatingOpenChange?.(stylePanelOpen || relationMenuOpen)'),
+  '【连线菜单】关系菜单 / 样式面板任一展开都要通知提层级')
+  assert.ok(quick34.includes('data-tm-edge-relation-menu') && quick34.includes('z-[11]')
+    && popover34.includes('z-[11]'),
+  '【连线菜单】两个下拉面板仍是工具栏内部 absolute 面板，不许改成绕过层级的 portal')
+  assert.ok(toolbar34.includes('opacity: faded ? 0 : 1')
+    && toolbar34.includes("pointerEvents: faded ? 'none' : 'all'"),
+  '【P0】拖动锚点时工具栏淡出让位的机制不得丢')
+  assert.equal(toolbar34.includes('zIndex: 10,'), false,
+    '【P0】不得回灌固定 zIndex: 10（下拉菜单会继续被锚点穿透）')
+}
+
+// --- 第 35 组：左侧节点树（房间根 / 房间子节点 / 游离 / 同级顺序 / 浮层） ---
+// 铁律：treeOrder 必须真的贯通 7 处字段白名单（只加类型不算），排序规则唯一在
+// domain/graph/nodeTree.ts；面板是 absolute 浮层，画布对展开折叠完全无感知。
+{
+  const read35 = async (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const [
+    types35, model35, mapper35, normalize35, storage35, backend35, builder35,
+    treeSource35, treeOrder35, panel35, hook35, page35, useGraph35, context35, ops35,
+    graphOps35, store35,
+  ] = await Promise.all([
+    read35('../src/types/graph.ts'),
+    read35('../src/domain/graph/model.ts'),
+    read35('../src/domain/graph/graphMapper.ts'),
+    read35('../src/domain/graph/normalizeGraphMeta.ts'),
+    read35('../src/core/storage/file.ts'),
+    read35('../src/core/fs-backend.ts'),
+    read35('../src/hooks/useGraph/graphBuilder.ts'),
+    read35('../src/domain/graph/nodeTree.ts'),
+    read35('../src/domain/graph/treeOrder.ts'),
+    read35('../src/features/graph/GraphPage/components/NodeTreePanel.tsx'),
+    read35('../src/features/graph/GraphPage/model/useNodeTree.ts'),
+    read35('../src/features/graph/GraphPage/GraphPage.tsx'),
+    read35('../src/hooks/useGraph.ts'),
+    read35('../src/contexts/GraphContext.tsx'),
+    read35('../src/hooks/useGraph/nodeTreeOperations.ts'),
+    read35('../src/hooks/useGraph/graphOperations.ts'),
+    read35('../src/stores/nodeTreePanelStore.ts'),
+  ])
+  const count35 = (text: string, needle: string) => text.split(needle).length - 1
+
+  // 1) 字段白名单：7 处都要有「写在 map 本体里」的赋值，不能只在类型里出现
+  assert.ok(count35(types35, 'treeOrder?: number') >= 2, '【P0】GraphChild + KnowledgeNodeData 都要有 treeOrder')
+  assert.ok(count35(model35, 'treeOrder?: number') >= 2, '【P0】KBNode + RoomGraphNode 都要有 treeOrder')
+  assert.ok(count35(mapper35, 'treeOrder: normalizeTreeOrder') >= 2, '【P0】graphMapper 双向都要写 treeOrder')
+  assert.ok(normalize35.includes('treeOrder: normalizeTreeOrder(rawNode.treeOrder)'), '【P0】normalizeGraphMeta 读盘要保留 treeOrder')
+  assert.ok(storage35.includes('treeOrder: normalizeTreeOrder(child.treeOrder)')
+    && storage35.includes('treeOrder: normalizeTreeOrder(node.treeOrder)'),
+  '【P0】convertFSBToGraph / convertGraphToFSB 两处 map 本体都要写 treeOrder')
+  assert.ok(backend35.includes('treeOrder?: number'), '【P0】fs-backend 顶层 children 类型要放行 treeOrder')
+  assert.ok(builder35.includes('treeOrder: normalizeTreeOrder(node.data.treeOrder)')
+    && builder35.includes('treeOrder: roomNode.treeOrder')
+    && builder35.includes('export function applyTreeOrderPatch'),
+  '【P0】graphBuilder 写盘 + 回读 + 批量排序纯函数都要带 treeOrder')
+  assert.ok(treeOrder35.includes('export function normalizeTreeOrder')
+    && treeSource35.includes("from './treeOrder.ts'"),
+  '【P0】归一化规则源唯一在 treeOrder.ts，格式层不得依赖 nodeTree.ts')
+
+  // 2) 浮层布局：不参与 flex 两栏、画布对面板状态无感知
+  assert.ok(panel35.includes('absolute inset-y-0 left-0 z-30')
+    && panel35.includes('data-tm-node-tree-collapsed="false"')
+    && panel35.includes('data-tm-node-tree-toggle=""'),
+  '【P0】左侧节点树必须是可折叠的 absolute 浮层')
+  assert.ok(page35.includes('<NodeTreePanel tabId={tabId} isActive={isActive} />')
+    && page35.includes('id="app-layout" className="relative w-full h-full"'),
+  '【P0】节点树挂在 #app-layout 内，且 #app-layout 不得变成 flex 两栏')
+  assert.ok(store35.includes('useNodeTreePanelStore') && !panel35.includes('rightPanel'),
+  '【P0】画布 / 缩略图不得订阅节点树面板状态，面板也不得读右栏状态')
+  assert.ok(hook35.includes('useGraphStore((state) => state.nodes)')
+    && hook35.includes('useGraphStore((state) => state.edges)'),
+  '【P0】树必须与根节点新增/修改（store nodes/edges）同步')
+  assert.ok(hook35.includes('storage.readLayout(targetRoomPath)')
+    && hook35.includes('readRoomNodeSummaries')
+    && hook35.includes('setRooms({})'),
+  '【P0】子房间按需读一次 meta + 摘要，换房间清缓存')
+  assert.ok(panel35.includes('data-tm-node-tree-chevron=""')
+    && panel35.includes('void loadChildRoom(node.childRoomPath)'),
+  '【P0】默认全部折叠，点箭头才加载子房间')
+  assert.ok(panel35.includes('reorderSiblings') && panel35.includes('flattenTreeForSearch')
+    && panel35.includes('data-tm-node-tree-search=""')
+    && panel35.includes('data-tm-node-tree-origin={node.origin}'),
+  '【P0】搜索 / 拖动排序 / 来源标记都要接线')
+
+  // 3) 写操作：唯一写闸门 + 一次 setNodes + 后台合并落盘
+  assert.ok(ops35.includes('applyTreeOrderPatch') && ops35.includes('void saveLater')
+    && ops35.includes('state.setNodes(nextNodes)'),
+  '【P0】排序写入只做一次 setNodes + saveLater，绝不重载整房间')
+  assert.ok(graphOps35.includes('buildNodeTreeOperations') && graphOps35.includes('...nodeTreeOps'),
+  '【P0】排序操作必须接进 graphOperations 返回')
+  assert.ok(useGraph35.includes('setNodeTreeOrder: edit(ops.setNodeTreeOrder, noResult)'),
+  '【P0】排序写入必须过 useGraph 的唯一写闸门')
+  assert.ok(context35.includes('setNodeTreeOrder: graph.setNodeTreeOrder'),
+  '【P0】排序写入必须由 GraphContext 暴露给面板')
+  assert.equal(treeSource35.includes("if (!q) return []"), true,
+  '【P0】空查询不得遍历整棵树（与统一文档树同款硬约束）')
+
+  // 4) esbuild 真跑纯函数：树结构 / 排序 / 拖动 / 搜索 + 写盘往返
+  const { build: build35 } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const bundle35 = async (relative: string) => {
+    const result = await build35({
+      entryPoints: [fileURLToPath(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+  const treeMod = await bundle35('../src/domain/graph/nodeTree.ts') as {
+    buildNodeTree: (input: unknown) => any
+    toNodeTreeRoom: (input: unknown) => unknown
+    reorderSiblings: (siblings: readonly any[], from: string, to: string) => Array<{ id: string; treeOrder: number }> | null
+    flattenTreeForSearch: (root: any, query: string) => Array<{ id: string; path: string[] }>
+    normalizeTreeOrder: (value: unknown) => number | undefined
+  }
+  const builderMod = await bundle35('../src/hooks/useGraph/graphBuilder.ts') as {
+    applyTreeOrderPatch: (nodes: any[], updates: Array<{ id: string; treeOrder: number }>) => any[] | null
+    buildMetaFromNodesEdges: (nodes: any[], edges: any[], viewport?: unknown) => unknown
+  }
+  const storageMod = await bundle35('../src/core/storage/file.ts') as {
+    convertGraphToFSB: (meta: unknown) => { children?: Record<string, Record<string, unknown>> }
+    convertFSBToGraph: (raw: unknown) => { nodes: Record<string, Record<string, unknown>> }
+  }
+
+  const root35 = treeMod.toNodeTreeRoom({
+    roomPath: 'kb', roomName: 'KB',
+    nodes: [
+      { id: 'A', label: 'A', childCount: 1 },
+      { id: 'B', label: 'B' }, { id: 'C', label: 'C' },
+      { id: 'R', label: 'R' }, { id: 'D', label: 'D' },
+      { id: 'F1', label: '游离 1' }, { id: 'F2', label: '游离 2' },
+    ],
+    edges: [
+      { id: 'e1', source: 'A', target: 'B', relation: 'subordinate' },
+      { id: 'e2', source: 'A', target: 'C', relation: 'subordinate' },
+      { id: 'e3', source: 'R', target: 'D', relation: 'subordinate' },
+      { id: 'e4', source: 'F1', target: 'F2', relation: 'related' },
+    ],
+  })
+  const childRoom35 = treeMod.toNodeTreeRoom({
+    roomPath: 'kb/A', roomName: 'A',
+    nodes: [{ id: 'AA', label: 'AA' }, { id: 'AB', label: 'AB' }, { id: 'AF', label: 'AF' }],
+    edges: [{ id: 'ce1', source: 'AA', target: 'AB', relation: 'subordinate' }],
+  })
+
+  // 未加载时：A 只有普通子节点，带可展开标记但不长房间子节点
+  const folded35 = treeMod.buildNodeTree({ root: root35, rooms: {}, resolveChildRoomPath: (r: string, id: string) => `${r}/${id}` })
+  const foldedA35 = folded35.children.find((node: any) => node.id === 'A')
+  assert.equal(folded35.origin, 'room-root', '【P0】顶层是当前房间虚拟根')
+  assert.deepEqual(folded35.children.map((node: any) => node.id), ['A', 'R', 'F1', 'F2'],
+    '【P0】从属树根按遍历顺序在前，游离节点恒末尾')
+  assert.equal(foldedA35.hasChildRoom, true, '【P0】childCount>0 的节点要标记为可进入房间')
+  assert.equal(foldedA35.roomLoaded, false, '【P0】子房间默认全部折叠')
+  assert.deepEqual(foldedA35.children.map((node: any) => node.id), ['B', 'C'],
+    '【P0】折叠时不长出房间子节点')
+
+  // 加载后：AA 直接挂在 A 下、与 B/C 同级、默认第一；AF 作为房间游离挂末尾
+  const loaded35 = treeMod.buildNodeTree({
+    root: root35, rooms: { 'kb/A': childRoom35 },
+    resolveChildRoomPath: (r: string, id: string) => `${r}/${id}`,
+  })
+  const a35 = loaded35.children.find((node: any) => node.id === 'A')
+  assert.equal(a35.roomLoaded, true, '【P0】加载后标记已加载')
+  assert.deepEqual(a35.children.map((node: any) => node.id), ['AA', 'B', 'C', 'AF'],
+    '【P0】房间子节点默认第一，普通子节点居中，游离恒末尾')
+  assert.equal(a35.children[0].origin, 'room-child', '【P0】房间子节点必须带来源标记')
+  assert.equal(a35.depth, 1, '【P0】从属树根深度 1')
+  assert.equal(a35.children.find((node: any) => node.id === 'B')?.depth, 2,
+    '【P0】从属子节点深度必须逐级递增，不能整棵树塌成 1')
+  assert.equal(a35.children[0].children[0]?.depth, 3,
+    '【P0】房间子节点下的从属子节点深度继续递增')
+  assert.equal(loaded35.children.find((node: any) => node.id === 'F1')?.depth, 1,
+    '【P0】游离节点属于房间第一层')
+  assert.equal(a35.children[3].origin, 'free', '【P0】房间游离节点必须带游离标记')
+  assert.deepEqual(a35.children[0].children.map((node: any) => node.id), ['AB'],
+    '【P0】AA 的子节点挂在 AA 下')
+  assert.ok(a35.children.filter((node: any) => node.origin === 'subordinate').every((node: any) => node.sortable),
+    '【P0】当前房间从属节点可拖动排序')
+  assert.ok(a35.children.filter((node: any) => node.origin !== 'subordinate').every((node: any) => !node.sortable),
+    '【P0】房间子节点 / 游离节点不可自定义排序')
+  assert.ok(loaded35.children.filter((node: any) => node.origin === 'free').every((node: any) => !node.sortable),
+    '【P0】当前房间游离节点不可自定义排序')
+
+  // 游离节点也可能同时是可进入房间（无边但有子房间目录），房间子节点不能漏挂
+  const freeRoomRoot35 = treeMod.toNodeTreeRoom({
+    roomPath: 'kb2', roomName: 'KB2',
+    nodes: [{ id: 'FR', label: '游离房间', childCount: 1 }, { id: 'X', label: 'X' }],
+    edges: [],
+  })
+  const freeChildRoom35 = treeMod.toNodeTreeRoom({
+    roomPath: 'kb2/FR', roomName: 'FR',
+    nodes: [{ id: 'RR', label: 'RR' }, { id: 'RS', label: 'RS' }],
+    edges: [{ id: 'fr-e1', source: 'RR', target: 'RS', relation: 'subordinate' }],
+  })
+  const freeLoaded35 = treeMod.buildNodeTree({
+    root: freeRoomRoot35, rooms: { 'kb2/FR': freeChildRoom35 },
+    resolveChildRoomPath: (r: string, id: string) => `${r}/${id}`,
+  })
+  const fr35 = freeLoaded35.children.find((node: any) => node.id === 'FR')
+  assert.equal(fr35?.origin, 'free', '【P0】无边节点仍是游离节点')
+  assert.equal(fr35?.children[0]?.origin, 'room-child',
+    '【P0】游离房间节点也必须挂出子房间的房间子节点')
+  assert.deepEqual(fr35?.children[0]?.children.map((node: any) => node.id), ['RS'],
+    '【P0】游离房间里的从属树子节点仍逐层挂载')
+
+  // 显式 treeOrder：升序在前，未写过的新节点按遍历顺序追加尾部
+  const orderedRoot35 = treeMod.toNodeTreeRoom({
+    roomPath: 'kb', roomName: 'KB',
+    nodes: [
+      { id: 'A', label: 'A' }, { id: 'B', label: 'B', treeOrder: 1 },
+      { id: 'C', label: 'C', treeOrder: 0 }, { id: 'N', label: '新增' },
+    ],
+    edges: ['B', 'C', 'N'].map((id: string, index: number) => ({
+      id: `o${index}`, source: 'A', target: id, relation: 'subordinate',
+    })),
+  })
+  const ordered35 = treeMod.buildNodeTree({ root: orderedRoot35, rooms: {} })
+  assert.deepEqual(ordered35.children[0].children.map((node: any) => node.id), ['C', 'B', 'N'],
+    '【P0】treeOrder 升序 + 新节点追加尾部（存量按遍历顺序初始化）')
+
+  const keyOf35 = (id: string) => `kb:${id}`
+  const updates35 = treeMod.reorderSiblings(ordered35.children[0].children, keyOf35('C'), keyOf35('N'))
+  assert.deepEqual(updates35, [
+    { id: 'B', treeOrder: 0 }, { id: 'N', treeOrder: 1 }, { id: 'C', treeOrder: 2 },
+  ], '【P0】拖动排序要给同父所有可排序兄弟重排 treeOrder')
+  assert.equal(treeMod.reorderSiblings(a35.children, a35.children[0].key, keyOf35('B')), null,
+    '【P0】房间子节点不可作为拖动源')
+  assert.equal(treeMod.reorderSiblings(a35.children, keyOf35('B'), a35.children[3].key), null,
+    '【P0】游离节点不可作为拖放目标')
+  assert.deepEqual(treeMod.flattenTreeForSearch(loaded35, ''), [], '【P0】空查询直接返回空')
+  assert.equal(treeMod.flattenTreeForSearch(loaded35, 'aa').some((hit) => hit.id === 'AA'), true,
+    '【P0】搜索要能命中已加载的子房间节点')
+  assert.equal(treeMod.normalizeTreeOrder(Number.NaN), undefined, '【P0】脏值视为未排序')
+
+  // 拖动写入只改 data.treeOrder，坐标 / 尺寸 / 未变更节点引用全部不变
+  const patchNodes35 = [
+    { id: 'B', position: { x: 11, y: 22 }, width: 120, data: { label: 'B' } },
+    { id: 'C', position: { x: 33, y: 44 }, data: { label: 'C' } },
+  ]
+  const patched35 = builderMod.applyTreeOrderPatch(patchNodes35, [{ id: 'B', treeOrder: 0 }])!
+  assert.ok(patched35, '【P0】排序补丁要有变化')
+  assert.notEqual(patched35[0], patchNodes35[0], '【P0】被排序节点要换成新引用')
+  assert.equal(patched35[1], patchNodes35[1], '【P0】未变更节点保持引用')
+  assert.deepEqual(patched35[0].position, { x: 11, y: 22 }, '【P0】顺序绝不改画布坐标')
+  assert.equal(patched35[0].data.treeOrder, 0)
+  assert.equal(builderMod.applyTreeOrderPatch(patched35, [{ id: 'B', treeOrder: 0 }]), null,
+    '【P0】无变化时连一次 setNodes 都不发')
+
+  // 写盘往返：treeOrder 真的进 _graph.json.children，老档缺字段不凭空生成
+  const meta35 = builderMod.buildMetaFromNodesEdges(
+    [{ id: 'B', position: { x: 0, y: 0 }, width: 120, height: 52, data: { label: 'B', treeOrder: 3 } },
+      { id: 'C', position: { x: 1, y: 1 }, width: 120, height: 52, data: { label: 'C' } }],
+    [], { zoom: 1, pan: { x: 0, y: 0 } },
+  )
+  const written35 = JSON.parse(JSON.stringify(storageMod.convertGraphToFSB(meta35)))
+  assert.equal(written35.children?.B?.treeOrder, 3, '【P0】treeOrder 必须真的写进磁盘 JSON')
+  assert.equal(written35.children?.C?.treeOrder, undefined, '【P0】老档无字段时不凭空生成')
+  assert.equal(storageMod.convertFSBToGraph(written35).nodes.B.treeOrder, 3,
+    '【P0】写盘往返后 treeOrder 不能丢')
+}
+
+// --- 第 36 组：节点树默认折叠 / 展开态记忆 / 子树懒加载 / 不透明背景 / 状态抽屉让位 / 语义图标 ---
+{
+  const read36 = async (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const [panel36, store36, tree36, hook36, css36, page36, overview36, card36] = await Promise.all([
+    read36('../src/features/graph/GraphPage/components/NodeTreePanel.tsx'),
+    read36('../src/stores/nodeTreePanelStore.ts'),
+    read36('../src/domain/graph/nodeTree.ts'),
+    read36('../src/features/graph/GraphPage/model/useNodeTree.ts'),
+    read36('../src/styles/base.css'),
+    read36('../src/features/graph/GraphPage/GraphPage.tsx'),
+    read36('../src/features/graph/GraphPage/components/RoomOverview.tsx'),
+    read36('../src/features/graph/GraphPage/components/RoomSummaryCard.tsx'),
+  ])
+  const has36 = (text: string, needle: string) => text.includes(needle)
+
+  // 1) 背景：--color-background-primary 在 tokens.css 里从未定义，用到就是透明。
+  assert.ok(!has36(panel36, '--color-background-primary')
+    && has36(panel36, 'bg-[var(--color-surface)]')
+    && !has36(overview36, '--color-background-primary')
+    && !has36(card36, '--color-background-primary'),
+  '【P0】面板背景必须用已定义的 --color-surface，禁回灌未定义的 background-primary')
+
+  // 2) 默认折叠 + 按房间记忆：状态在 store / localStorage，不在组件本地 state。
+  assert.ok(has36(store36, "const EXPANDED_KEY = 'topomind_node_tree_expanded_v2'")
+    && has36(store36, 'expandedByRoom: readExpandedByRoom()')
+    && has36(store36, 'writeExpandedByRoom(next)')
+    && has36(store36, 'defaultExpandedKeys(rootKey)')
+    && has36(store36, 'toggleExpandedKeys(keysFor(roomPath, rootKey), key)')
+    && has36(store36, 'ensureExpandedKeys(current, key)'),
+  '【P0】展开态按房间持久化，缺省只展开房间虚拟根')
+  assert.ok(has36(panel36, 'defaultExpandedKeys(rootKey)')
+    && has36(panel36, 'data-tm-node-tree-expanded-count')
+    && has36(panel36, 'data-tm-node-tree-expand-all')
+    && has36(panel36, 'data-tm-node-tree-collapse-all')
+    && has36(panel36, 'expandNode(roomPath, rootKey, node.key)')
+    && !has36(panel36, 'useState<Set<string>>'),
+  '【P0】默认折叠 / 展开全部 / 收起全部 / 房间加载只展开都接线，禁回灌本地展开 state')
+
+  // 3) 懒加载：折叠分支不构造子树，箭头只认 hasChildren；搜索仍走完整树。
+  assert.ok(has36(tree36, 'expandedKeys?: ReadonlySet<string>')
+    && has36(tree36, 'if (expandedKeys && !expandedKeys.has(makeNodeTreeKey(room.roomPath, id))) return []')
+    && has36(tree36, 'hasChildren: (hierarchy.children.get(id)?.length ?? 0) > 0 || !!childRoomPath')
+    && has36(tree36, 'children: rootOpen')
+    && has36(tree36, 'export function collectNodeTreeKeys')
+    && has36(tree36, 'export function makeNodeTreeKey')
+    && has36(tree36, 'export function makeRoomRootKey'),
+  '【P0】树规则源必须支持展开集合、hasChildren 与 tree key 唯一编码')
+  assert.ok(has36(hook36, 'const fullTree = useMemo(() => buildNodeTree({')
+    && has36(hook36, 'const visibleTree = useMemo(() => buildNodeTree({')
+    && has36(hook36, 'expandedKeys,')
+    && has36(hook36, 'collectNodeTreeKeys(fullTree)'),
+  '【P0】完整树供搜索/计数/展开全部，懒加载树供列表渲染')
+  assert.ok(has36(panel36, 'renderLevel([visibleTree], 0)')
+    && has36(panel36, 'const showChevron = node.hasChildren || roomPending')
+    && has36(panel36, 'data-tm-node-tree-lazy=')
+    && has36(panel36, 'if (isExpanded && node.children.length > 0)'),
+  '【P0】列表只渲染展开路径，折叠分支零 DOM')
+
+  // 4) 状态抽屉让位：纯 CSS 变量，只动 top-left Panel 的 margin-left。
+  assert.ok(has36(css36, '#app-layout .react-flow__panel.top.left')
+    && has36(css36, 'margin-left: calc(12px + var(--tm-node-tree-offset, 0px)) !important'),
+  '【P0】只让 top-left 画布状态抽屉横向让位')
+  assert.ok(has36(panel36, "'--tm-node-tree-offset'")
+    && has36(panel36, 'NODE_TREE_PANEL_WIDTH')
+    && has36(page36, 'id="app-layout" className="relative w-full h-full"'),
+  '【P0】让位由 CSS 变量驱动，#app-layout 不得改 flex 两栏')
+
+  // 5) 语义化图标：房间 / 可进入房间 / 分支 / 游离 / 普通卡片逐级区分。
+  for (const icon36 of ['ListTree', 'Layers3', 'FolderOpen', 'FolderTree', 'FileText', 'CircleDashed']) {
+    assert.ok(has36(panel36, icon36), `【P1】语义图标 ${icon36} 必须在面板里`)
+  }
+  assert.ok(!has36(panel36, 'GitBranch') && !/<Circle\s/.test(panel36),
+    '【P1】不得回灌 GitBranch / 通用 Circle 图标')
+
+  // 6) esbuild 真跑纯函数：默认折叠集合 / 懒加载层级 / 展开全部 / 搜索用完整树。
+  const { build: build36 } = await import('esbuild')
+  const { fileURLToPath: toPath36 } = await import('node:url')
+  const bundle36 = async (relative: string) => {
+    const res = await build36({
+      entryPoints: [toPath36(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(res.outputFiles[0].text).toString('base64')}`)
+  }
+  const nt36 = await bundle36('../src/domain/graph/nodeTree.ts') as {
+    toNodeTreeRoom: (input: unknown) => unknown
+    buildNodeTree: (input: unknown) => any
+    makeRoomRootKey: (roomPath: string) => string
+    defaultExpandedKeys: (rootKey: string) => Set<string>
+    toggleExpandedKeys: (keys: ReadonlySet<string>, key: string) => Set<string>
+    ensureExpandedKeys: (keys: ReadonlySet<string>, key: string) => Set<string>
+    collectNodeTreeKeys: (root: any) => string[]
+    flattenTreeForSearch: (root: any, query: string) => Array<{ id: string }>
+  }
+  const room36 = nt36.toNodeTreeRoom({
+    roomPath: 'kb', roomName: 'KB',
+    nodes: [
+      { id: 'A', label: 'A', childCount: 1 }, { id: 'B', label: 'B' },
+      { id: 'C', label: 'C' }, { id: 'F', label: 'F' },
+    ],
+    edges: [
+      { id: 'e1', source: 'A', target: 'B', relation: 'subordinate' },
+      { id: 'e2', source: 'B', target: 'C', relation: 'subordinate' },
+    ],
+  })
+  const resolve36 = (r: string, id: string) => `${r}/${id}`
+  const rootKey36 = nt36.makeRoomRootKey('kb')
+  assert.equal(rootKey36, 'room-root:kb', '【P0】房间虚拟根 key 编码唯一')
+  const def36 = nt36.defaultExpandedKeys(rootKey36)
+  assert.deepEqual([...def36], [rootKey36], '【P0】默认展开集合只有房间根，其余全部折叠')
+
+  const lazy36 = nt36.buildNodeTree({
+    root: room36, rooms: {}, resolveChildRoomPath: resolve36, expandedKeys: def36,
+  })
+  assert.equal(lazy36.origin, 'room-root', '【P0】懒加载树顶层仍是房间虚拟根')
+  assert.deepEqual(lazy36.children.map((n: any) => n.id), ['A', 'F'],
+    '【P0】默认仍能看到房间第一层')
+  const aLazy36 = lazy36.children.find((n: any) => n.id === 'A')
+  assert.deepEqual(aLazy36.children, [], '【P0】折叠节点一行子树都不构造')
+  assert.equal(aLazy36.hasChildren, true, '【P0】折叠节点仍要能显示展开箭头')
+  assert.equal(aLazy36.hasChildRoom, true, '【P0】可进入房间标记与懒加载无关')
+  assert.equal(aLazy36.roomLoaded, false, '【P0】未展开绝不读子房间')
+
+  const one36 = nt36.buildNodeTree({
+    root: room36, rooms: {}, resolveChildRoomPath: resolve36,
+    expandedKeys: nt36.toggleExpandedKeys(def36, 'kb:A'),
+  })
+  const aOne36 = one36.children.find((n: any) => n.id === 'A')
+  assert.deepEqual(aOne36.children.map((n: any) => n.id), ['B'],
+    '【P0】展开 A 只构建它的直接子节点')
+  assert.equal(aOne36.children[0].hasChildren, true, '【P0】B 有子节点仍显示箭头')
+  assert.deepEqual(aOne36.children[0].children, [], '【P0】B 未展开，C 不构造')
+  assert.equal(nt36.ensureExpandedKeys(def36, rootKey36).size, 1,
+    '【P0】加载子房间时重复展开必须幂等')
+
+  const full36 = nt36.buildNodeTree({ root: room36, rooms: {}, resolveChildRoomPath: resolve36 })
+  assert.deepEqual(full36.children[0].children[0].children.map((n: any) => n.id), ['C'],
+    '【P0】不传 expandedKeys 仍构建完整树（第 35 组契约不变）')
+  const keys36 = nt36.collectNodeTreeKeys(full36)
+  assert.ok(keys36.includes('kb:C') && keys36.includes(rootKey36),
+    '【P0】展开全部必须基于完整树收集全部 key')
+  assert.deepEqual(nt36.flattenTreeForSearch(lazy36, 'c'), [],
+    '【P0】懒加载树里确实没有折叠分支')
+  assert.ok(nt36.flattenTreeForSearch(full36, 'c').some((hit) => hit.id === 'C'),
+    '【P0】搜索走完整树，默认折叠下仍能命中深层节点')
+}
+
+// --- 第 37 组：右侧列表统一视觉语言（2026-11-13，与左侧节点树同款） ---
+{
+  const read37 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const [
+    panelList37, sidebar37, linked37, attachments37, relations37,
+    node37, inlineEdit37, layout37, detailPanel37, tokens37,
+  ] = await Promise.all([
+    read37('../src/shared/ui/panelList.tsx'),
+    read37('../src/features/documents/DocumentSidebar.tsx'),
+    read37('../src/features/right-panel/components/DetailTab/LinkedDocumentList.tsx'),
+    read37('../src/features/documents/components/Layout/AttachmentsTab.tsx'),
+    read37('../src/features/right-panel/components/DetailTab/DocumentRelationPanel.tsx'),
+    read37('../src/features/documents/components/DocumentNode.tsx'),
+    read37('../src/features/documents/components/DocumentInlineEdit.tsx'),
+    read37('../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx'),
+    read37('../src/features/right-panel/components/DetailTab/DetailPanel.tsx'),
+    read37('../src/styles/tokens.css'),
+  ])
+  const has37 = (text: string, needle: string) => text.includes(needle)
+
+  // 1) 唯一视觉源：常量齐全，且四个列表 + 文档树行 + 行内编辑都消费它，禁止各自漂移。
+  assert.ok(has37(panelList37, 'export const PANEL_LIST')
+    && has37(panelList37, 'export function PanelListAction')
+    && ['header', 'body', 'row', 'rowMeta', 'badge', 'footer', 'addButton', 'icon'].every((key) => has37(panelList37, `  ${key}:`)),
+  '【P0】面板列表视觉语言必须有唯一常量源')
+  for (const [name, source] of [
+    ['文档侧栏', sidebar37], ['关联文档列表', linked37], ['附件列表', attachments37],
+    ['引用关系列表', relations37], ['文档树节点', node37], ['行内编辑', inlineEdit37],
+  ] as const) {
+    assert.ok(has37(source, 'PANEL_LIST'), `【P0】${name}必须复用 PANEL_LIST，禁止自带一套样式`)
+  }
+
+  // 2) 常量里引用的每个颜色变量都必须在 tokens.css 定义（--color-background-primary 曾导致透明背景）。
+  const usedVars37 = [...new Set([...panelList37.matchAll(/var\(--(color-[a-z-]+)\)/g)].map((m) => m[1]))]
+  assert.ok(usedVars37.length >= 8, '【P0】视觉常量应覆盖标题/行/徽章等色板')
+  assert.deepEqual(usedVars37.filter((v) => !has37(tokens37, `--${v}:`)), [],
+    '【P0】视觉常量只能用 tokens.css 里真实定义过的颜色变量')
+  const styled37 = [panelList37, sidebar37, linked37, attachments37, relations37, node37, layout37, detailPanel37]
+  assert.ok(styled37.every((s) => !has37(s, '--color-background-primary')),
+    '【P0】禁回灌未定义的 --color-background-primary（背景会变透明）')
+  assert.ok(has37(layout37, 'bg-[var(--color-surface)]')
+    && !has37(layout37, 'bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]')
+    && !has37(detailPanel37, 'bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]'),
+  '【P0】侧栏 / 详情面板必须是纯 surface 背景，去掉旧渐变')
+
+  // 3) rail 由汉字按钮换成语义图标，但原有稳定选择器与诊断属性必须保留。
+  assert.ok(has37(layout37, '<FileText className="h-4 w-4" />')
+    && has37(layout37, '<Paperclip className="h-4 w-4" />')
+    && has37(layout37, '<Link2 className="h-4 w-4" />')
+    && has37(layout37, 'data-tm-backlinks-rail=""')
+    && !/>\s*文\s*<\/button>/.test(layout37)
+    && !/>\s*附\s*<\/button>/.test(layout37)
+    && !/>\s*引\s*<\/button>/.test(layout37),
+  '【P0】rail 三个页签用语义图标而非「文/附/引」汉字，且保留 data-tm-backlinks-rail')
+  assert.ok(!has37(sidebar37, '📄') && has37(sidebar37, 'title="还没有文档"'),
+    '【P0】文档空态去掉 emoji，改用统一 EmptyState')
+
+  // 4) 双行结构：来源 / 尺寸等元信息独占第二行，状态徽章不污染标题行文本匹配。
+  assert.ok(has37(linked37, '来源：') && has37(linked37, 'PANEL_LIST.rowMeta')
+    && has37(linked37, 'PANEL_LIST.badge') && has37(linked37, '回收站') && has37(linked37, '已删除'),
+  '【P0】关联文档行必须有第二行来源与状态徽章')
+  assert.ok(has37(attachments37, 'PANEL_LIST.rowMeta') && has37(attachments37, 'KB · ')
+    && has37(attachments37, 'PANEL_LIST.footer'),
+  '【P0】附件行必须显示大小/类型元信息与底部说明')
+  assert.ok(has37(relations37, 'PANEL_LIST.badge') && has37(relations37, '处'),
+  '【P0】引用关系行的引用次数徽章只在第二行')
+
+  // 5) 旧业务契约不得因换皮丢失（GUI 阶段 E/F 与双链回归都依赖这些选择器）。
+  assert.ok(has37(linked37, 'title="关联已有文档"') && has37(linked37, 'title="移除关联"')
+    && has37(linked37, 'title="在所属节点打开"') && has37(linked37, 'title="从回收站恢复"'),
+  '【P0】关联文档列表的添加/移除/打开/恢复按钮 title 必须保留')
+  assert.ok(has37(attachments37, 'title="上传附件"') && has37(attachments37, 'title="插入到文档"')
+    && has37(attachments37, 'title="删除附件"'),
+  '【P0】附件列表的上传/插入/删除按钮 title 必须保留')
+  assert.ok(has37(relations37, 'data-tm-backlinks-panel') && has37(relations37, 'data-tm-backlink-item')
+    && has37(relations37, 'data-tm-outgoing-item'),
+  '【P0】引用关系面板的 data-tm-* 诊断契约必须保留')
+  assert.ok(has37(sidebar37, 'ref={scrollContainerRef}') && has37(sidebar37, 'onScroll={handleSidebarScroll}')
+    && has37(sidebar37, 'role="tree" aria-label="文档列表"'),
+  '【P0】文档侧栏滚动位置持久化与树语义必须保留')
+  assert.ok(has37(node37, 'data-document-title') && has37(node37, 'FolderTree') && has37(node37, 'FileText')
+    && !has37(node37, 'topoDocumentTypeIcon'),
+  '【P0】文档树缺省图标改用语义图标，但 data-document-title 必须保留')
+}
+
+// --- 第 38 组：性能监控系统（2026-11-14，契约 / 埋点 / 统计 / 页面四层） ---
+{
+  const read38 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const files38 = {
+    contract: '../src/shared/observability/performanceContract.ts',
+    metrics: '../src/shared/observability/performanceMetrics.ts',
+    statistics: '../src/shared/observability/performanceStatistics.ts',
+    perfLog: '../src/core/performance-log.ts',
+    runtime: '../src/core/performance-runtime.ts',
+    publicApi: '../src/plugins/public/api.ts',
+    bootstrap: '../src/plugins/bootstrap.ts',
+    main: '../src/main.tsx',
+    tab: '../src/plugins/builtin/monitor/PerformanceTab.tsx',
+    hook: '../src/plugins/builtin/monitor/performance/usePerformanceSamples.ts',
+    toolbar: '../src/plugins/builtin/monitor/performance/PerformanceToolbar.tsx',
+    overview: '../src/plugins/builtin/monitor/performance/PerformanceOverview.tsx',
+    table: '../src/plugins/builtin/monitor/performance/MetricStatisticsTable.tsx',
+    charts: '../src/plugins/builtin/monitor/performance/PerformanceCharts.tsx',
+    slow: '../src/plugins/builtin/monitor/performance/SlowSamplesPanel.tsx',
+    roomLoader: '../src/hooks/useGraph/useGraphRoomLoader.ts',
+    session: '../src/features/right-panel/model/useDetailDocumentSession.ts',
+    kbList: '../src/features/kb/model/useHomeKnowledgeBases.ts',
+    kbImport: '../src/features/kb/model/useHomeImportKB.ts',
+    nodeCrud: '../src/hooks/useGraph/nodeCrudOperations.ts',
+    edgeOps: '../src/hooks/useGraph/edgeOperations.ts',
+    detailDocs: '../src/features/right-panel/model/useDetailDocuments.ts',
+    attachments: '../src/features/documents/components/Layout/AttachmentsTab.tsx',
+    search: '../src/features/documents/unifiedTree/useUnifiedTreeSearch.ts',
+    relations: '../src/features/right-panel/model/useDocumentRelations.ts',
+  } as const
+  const entries38 = Object.entries(files38) as Array<[keyof typeof files38, string]>
+  const sources38 = Object.fromEntries(
+    await Promise.all(entries38.map(async ([key, relative]) => [key, await read38(relative)] as const)),
+  ) as Record<keyof typeof files38, string>
+  const has38 = (key: keyof typeof files38, needle: string) => sources38[key].includes(needle)
+
+  // 1) 唯一真源：注册表字段 + 宿主定义仍从 shared 派生，public 层同步了新增字段。
+  for (const needle of [
+    'export const PERFORMANCE_ACTION', 'export const PERFORMANCE_CATEGORIES',
+    'export const PERFORMANCE_METRICS', 'export const PERFORMANCE_METRIC_SPECS',
+    'export const PERFORMANCE_METRIC_SPEC_BY_ID', 'sampleRate: number',
+    'minIntervalMs: number', 'description: string', 'thresholdMs: number',
+  ]) {
+    assert.ok(has38('contract', needle), `【P0】性能契约缺少 ${needle}`)
+  }
+  assert.ok(has38('metrics', 'PERFORMANCE_METRIC_SPECS.map')
+    && has38('metrics', 'export function extractPerformanceSamples'),
+  '【P0】指标定义必须从注册表派生，禁止再维护第二份 id 清单')
+  assert.ok(has38('publicApi', "from '@/shared/observability/performanceContract'")
+    && has38('publicApi', 'category?: PerformanceCategoryId')
+    && has38('publicApi', 'sessionId?: string')
+    && has38('publicApi', 'traceId?: string'),
+  '【P0】插件公共 API 必须同步分类 / 会话 / 链路字段')
+  assert.ok(has38('bootstrap', 'PERFORMANCE_METRIC_DEFINITIONS')
+    && has38('bootstrap', 'extractPerformanceSamples'),
+  '【P0】宿主仍从 shared 提供定义与反解样本，不能改成另一套读取')
+
+  // 2) 埋点上报层：统一入口 + 采样节流 + 会话元数据 + 旧契约兼容 + 自动观测。
+  for (const needle of [
+    'export function recordPerformance', 'export function startPerformanceSpan',
+    'export async function measurePerformance', 'export async function logPerformanceMetric',
+    'export function markPerformanceMetricStart', 'export function takePerformanceMetricStart',
+    'export const PERFORMANCE_SESSION_ID', 'function shouldReport',
+    'sessionId: PERFORMANCE_SESSION_ID', 'params.category = spec.category',
+  ]) {
+    assert.ok(has38('perfLog', needle), `【P0】统一埋点层缺少 ${needle}`)
+  }
+  assert.ok(has38('perfLog', 'if (options.force || options.success === false) return true'),
+    '【P0】失败样本必须绕过采样/节流，不能出现「越慢越看不见」')
+  assert.ok(has38('runtime', 'PerformanceObserver')
+    && has38('runtime', 'PERFORMANCE_METRICS.longTask')
+    && has38('runtime', 'PERFORMANCE_METRICS.appStartup')
+    && has38('main', 'startRuntimePerformanceObserver()')
+    && has38('main', 'reportAppStartup(performance.now())'),
+  '【P0】启动耗时与长任务必须在首帧前启动自动观测')
+
+  // 3) 业务埋点真实接入：每条链路都必须走 PERFORMANCE_METRICS 常量，不是裸字符串。
+  const instrumentation38: Array<[keyof typeof files38, string]> = [
+    ['roomLoader', 'PERFORMANCE_METRICS.roomLoad'],
+    ['session', 'PERFORMANCE_METRICS.detailSave'],
+    ['session', 'PERFORMANCE_METRICS.detailRead'],
+    ['session', 'PERFORMANCE_METRICS.nodeSelect'],
+    ['kbList', 'PERFORMANCE_METRICS.kbListLoad'],
+    ['kbImport', 'PERFORMANCE_METRICS.kbImport'],
+    ['nodeCrud', 'PERFORMANCE_METRICS.nodeCreate'],
+    ['nodeCrud', 'PERFORMANCE_METRICS.nodeDelete'],
+    ['edgeOps', 'PERFORMANCE_METRICS.edgeCreate'],
+    ['detailDocs', 'PERFORMANCE_METRICS.documentExport'],
+    ['attachments', 'PERFORMANCE_METRICS.attachmentUpload'],
+    ['search', 'PERFORMANCE_METRICS.documentSearch'],
+    ['relations', 'PERFORMANCE_METRICS.documentRelations'],
+  ]
+  for (const [key, needle] of instrumentation38) {
+    assert.ok(has38(key, needle), `【P0】${key} 必须接入 ${needle}`)
+  }
+  assert.equal(new Set(instrumentation38.map(([, n]) => n)).size, 13,
+    '【P0】13 条业务链路埋点不得重复占坑')
+
+  // 4) 页面分层与渲染契约：拆分为数据 / 工具条 / 概览 / 表格 / 图表 / 明细。
+  const viewContracts38: Array<[keyof typeof files38, string]> = [
+    ['hook', 'filterPerformanceSamples'],
+    ['toolbar', '性能监控</h1>'],
+    ['toolbar', 'TIME_RANGE_LABELS'],
+    ['overview', 'overview.p95Ms'],
+    ['table', 'p95Ms'],
+    ['charts', 'TimeBucket'],
+    ['slow', 'rankSlowSamples'],
+  ]
+  for (const [key, needle] of viewContracts38) {
+    assert.ok(has38(key, needle), `【P0】页面组件 ${key} 缺少 ${needle}`)
+  }
+  for (const needle of [
+    'PerformanceToolbar', 'PerformanceOverview', 'MetricStatisticsTable',
+    'TimeBucketChart', 'DistributionChart', 'TrendChart', 'ActiveMetricSummary',
+    'SlowSamplesPanel', 'usePerformanceSamples', 'computeMetricStatistics',
+    'computeCategoryStatistics', 'bucketPerformanceSamples', 'computeTrend',
+  ]) {
+    assert.ok(has38('tab', needle), `【P0】性能页组装层缺少 ${needle}`)
+  }
+  assert.ok(!has38('tab', 'slice(-24)'), '【P0】趋势图不得回灌硬编码 24 个样本')
+  const uiSources38 = ['toolbar', 'overview', 'table', 'charts', 'slow', 'tab'] as const
+  assert.ok(uiSources38.every((key) => !/#[0-9a-fA-F]{6}/.test(sources38[key])),
+    '【P0】性能页颜色只能引用 tokens.css 变量，禁止硬编码 hex（单色制）')
+  assert.ok(uiSources38.every((key) => !has38(key, '@/core/') && !has38(key, 'window.electronAPI')),
+    '【P0】性能页必须守插件边界，不得直连 core / electronAPI')
+
+  // 5) 铁律：esbuild 打包真跑纯函数（契约、样本反解、统计聚合），不是查源码字面量。
+  const { build: build38 } = await import('esbuild')
+  const { fileURLToPath: fileURLToPath38 } = await import('node:url')
+  const load38 = async (relative: string) => {
+    const result = await build38({
+      entryPoints: [fileURLToPath38(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+  const contract38 = await load38(files38.contract) as {
+    PERFORMANCE_METRICS: Record<string, string>
+    PERFORMANCE_METRIC_IDS: string[]
+    PERFORMANCE_METRIC_SPECS: Array<{
+      id: string; category: string; thresholdMs: number; sampleRate: number; minIntervalMs: number
+    }>
+    PERFORMANCE_CATEGORIES: Record<string, { color: string }>
+    resolvePerformanceMetricSpec: (id: string) => { id: string } | null
+  }
+  const metrics38 = await load38(files38.metrics) as {
+    PERFORMANCE_METRIC_DEFINITION_LIST: Array<{
+      id: string; label: string; shortLabel: string; color: string
+      thresholdMs: number; category: string
+    }>
+    extractPerformanceSamples: (entries: unknown[]) => Array<Record<string, unknown>>
+  }
+  const stats38 = await load38(files38.statistics) as {
+    filterPerformanceSamples: (samples: unknown[], filters: Record<string, unknown>) => Array<Record<string, unknown>>
+    computeMetricStatistics: (samples: unknown[], definitions: unknown[]) => Array<Record<string, any>>
+    computeCategoryStatistics: (samples: unknown[]) => Array<Record<string, any>>
+    computePerformanceOverview: (samples: unknown[], definitions: unknown[]) => Record<string, any>
+    bucketPerformanceSamples: (samples: unknown[], count: number) => Array<Record<string, any>>
+    computeTrend: (samples: unknown[]) => Record<string, any>
+    rankSlowSamples: (samples: unknown[], limit: number) => Array<Record<string, any>>
+    formatSampleContext: (sample: unknown) => string
+    isSlowSample: (sample: unknown) => boolean
+  }
+
+  assert.equal(contract38.PERFORMANCE_METRIC_IDS.length, 21, '【P0】注册表应有 21 项指标')
+  assert.equal(new Set(contract38.PERFORMANCE_METRIC_IDS).size, 21, '【P0】指标 id 不得重复')
+  assert.equal(contract38.PERFORMANCE_METRIC_SPECS.length, 21, '【P0】每项指标都要有完整定义')
+  for (const spec of contract38.PERFORMANCE_METRIC_SPECS) {
+    assert.ok(contract38.PERFORMANCE_CATEGORIES[spec.category], `【P0】${spec.id} 的分类必须存在`)
+    assert.ok(spec.thresholdMs > 0, `【P0】${spec.id} 必须有正阈值`)
+    assert.ok(spec.sampleRate > 0 && spec.sampleRate <= 1, `【P0】${spec.id} 采样率必须落在 (0,1]`)
+    assert.ok(spec.minIntervalMs >= 0, `【P0】${spec.id} 节流间隔不得为负`)
+  }
+  assert.equal(contract38.resolvePerformanceMetricSpec('not_a_metric'), null, '【P0】未知指标必须被拒绝')
+  assert.equal(contract38.resolvePerformanceMetricSpec('room_load')?.id, 'room_load')
+  assert.equal(metrics38.PERFORMANCE_METRIC_DEFINITION_LIST.length, 21,
+    '【P0】展示定义必须与注册表一一对应')
+  assert.ok(metrics38.PERFORMANCE_METRIC_DEFINITION_LIST.every((d) => d.color.startsWith('var(--')),
+    '【P0】指标颜色必须是 tokens.css 变量，不能漂移成 hex')
+
+  const base38 = Date.parse('2026-11-14T10:00:00.000Z')
+  const makeSample38 = (
+    id: string, metric: string, durationMs: number, success: boolean,
+    offsetSec: number, params: Record<string, unknown> = {},
+  ) => {
+    const definition = metrics38.PERFORMANCE_METRIC_DEFINITION_LIST.find((item) => item.id === metric)!
+    return {
+      id, metric,
+      label: definition.label, shortLabel: definition.shortLabel,
+      color: definition.color, thresholdMs: definition.thresholdMs,
+      category: definition.category,
+      durationMs, success,
+      timestamp: new Date(base38 + offsetSec * 1000).toISOString(),
+      timestampMs: base38 + offsetSec * 1000,
+      sessionId: 'session-38', source: 'verify:critical', params,
+    }
+  }
+  const samples38 = [
+    makeSample38('a', 'room_load', 100, true, 0, { roomPath: 'KB/房间 A' }),
+    makeSample38('b', 'room_load', 200, true, 60),
+    makeSample38('c', 'room_load', 900, true, 120),
+    makeSample38('d', 'room_load', 50, false, 180, { error: '读取失败' }),
+    makeSample38('e', 'node_select', 120, true, 240),
+    makeSample38('f', 'detail_save', 400, true, 300),
+    makeSample38('g', 'detail_save', 20, false, 360),
+    makeSample38('h', 'kb_import', 6000, true, 420),
+    makeSample38('i', 'long_task', 150, true, -1200),
+  ]
+
+  // 反解：老日志无 category 也能补齐；未来/未知指标不整批丢弃。
+  const parsed38 = metrics38.extractPerformanceSamples([
+    { id: 'log-38', timestamp: new Date(base38).toISOString(), action: '性能:记录', module: 'useGraph',
+      params: { metric: 'room_load', durationMs: 320, success: true, sessionId: 's-38', roomPath: 'KB/房间 A' } },
+    { id: 'log-39', timestamp: new Date(base38).toISOString(), action: '性能:记录',
+      params: { metric: 'future_metric', durationMs: 12 } },
+    { id: 'log-40', timestamp: new Date(base38).toISOString(), action: '节点:创建', params: {} },
+  ])
+  assert.equal(parsed38.length, 2, '【P0】只反解性能 action，且未知指标样本不能丢')
+  assert.equal(parsed38[0].category, 'navigation')
+  assert.equal(parsed38[0].sessionId, 's-38')
+  assert.equal(parsed38[0].source, 'useGraph')
+  assert.equal(parsed38[1].label, 'future_metric')
+
+  const metricStats38 = stats38.computeMetricStatistics(samples38, metrics38.PERFORMANCE_METRIC_DEFINITION_LIST)
+  const room38 = metricStats38.find((item) => item.metric === 'room_load')!
+  assert.equal(room38.count, 4)
+  assert.equal(room38.successRate, 75, '【P0】成功率 = 成功样本 / 全部样本')
+  assert.equal(room38.slowCount, 1, '【P0】慢操作只统计成功且超阈值的样本')
+  assert.equal(room38.failCount, 1)
+  assert.equal(room38.p50Ms, 150)
+  assert.ok(Math.abs(room38.p95Ms - 795) < 0.001, '【P0】P95 必须是线性插值分位数')
+  assert.ok(Math.abs(room38.p99Ms - 879) < 0.001, '【P0】P99 必须是线性插值分位数')
+  assert.equal(room38.avgMs, 312.5)
+  assert.equal(stats38.isSlowSample({ success: false, durationMs: 99999, thresholdMs: 1 }), false,
+    '【P0】失败样本永远不算慢操作')
+
+  const overview38 = stats38.computePerformanceOverview(samples38, metrics38.PERFORMANCE_METRIC_DEFINITION_LIST)
+  assert.equal(overview38.total, 9)
+  assert.equal(overview38.failCount, 2)
+  assert.equal(overview38.slowCount, 4)
+  assert.equal(overview38.activeMetricCount, 5)
+  assert.equal(overview38.sessionCount, 1)
+  assert.equal(overview38.coveredMetricCount, 21)
+  assert.equal(stats38.computeCategoryStatistics(samples38).reduce((sum, item) => sum + item.count, 0), 9,
+    '【P0】分类统计不得漏样本或重复计数')
+
+  const filtered38 = (filters: Record<string, unknown>) => stats38.filterPerformanceSamples(samples38, filters)
+  assert.equal(filtered38({ status: 'failed' }).length, 2, '【P0】状态筛选：仅失败')
+  assert.equal(filtered38({ status: 'slow' }).length, 4, '【P0】状态筛选：仅慢操作')
+  assert.equal(filtered38({ categories: ['navigation'] }).length, 4, '【P0】分类筛选')
+  assert.equal(filtered38({ metrics: ['room_load'] }).length, 4, '【P0】指标筛选')
+  assert.equal(filtered38({ keyword: '房间' }).length, 4, '【P0】关键词应命中上下文与指标名')
+  assert.equal(filtered38({ range: '15m', nowMs: base38 + 600_000 }).length, 8,
+    '【P0】近 15 分钟必须剔除 20 分钟前的长任务样本')
+  assert.equal(filtered38({}).length, 9, '【P0】默认筛选必须恒等，不裁剪样本')
+
+  const buckets38 = stats38.bucketPerformanceSamples(samples38, 5)
+  assert.equal(buckets38.length, 5, '【P0】时间分桶数量固定')
+  assert.equal(buckets38.reduce((sum, bucket) => sum + bucket.count, 0), 9,
+    '【P0】分桶后样本总数守恒')
+  assert.ok(buckets38.some((bucket) => bucket.count === 0), '【P0】空桶必须保留以暴露操作空档')
+  assert.equal(stats38.computeTrend(samples38).direction, 'up', '【P0】后半段 P95 变慢必须识别为上升')
+  assert.equal(stats38.computeTrend(samples38.slice(0, 3)).direction, 'flat', '【P0】样本太少不得给趋势结论')
+  assert.deepEqual(stats38.rankSlowSamples(samples38, 3).map((s) => s.durationMs), [6000, 900, 400],
+    '【P0】最慢样本按耗时降序且受 limit 约束')
+  assert.equal(stats38.formatSampleContext(samples38[0]), 'KB/房间 A')
+  assert.equal(stats38.formatSampleContext(samples38[3]), '失败：读取失败')
+}
+
+// --- 第 39 组：画布操作性能埋点（规模上下文 / 两段后台成本 / 分桶统计 / 链路追溯） ---
+{
+  const read39 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const files39 = {
+    contract: '../src/shared/observability/performanceContract.ts',
+    metrics: '../src/shared/observability/performanceMetrics.ts',
+    statistics: '../src/shared/observability/performanceStatistics.ts',
+    perfLog: '../src/core/performance-log.ts',
+    context: '../src/hooks/useGraph/canvasPerformanceContext.ts',
+    graphOps: '../src/hooks/useGraph/graphOperations.ts',
+    storage: '../src/core/storage/service.ts',
+    nodeCrud: '../src/hooks/useGraph/nodeCrudOperations.ts',
+    edgeOps: '../src/hooks/useGraph/edgeOperations.ts',
+    nodeChange: '../src/hooks/useGraph/nodeChangeOperations.ts',
+    canvasModel: '../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts',
+    toolbar: '../src/plugins/builtin/monitor/performance/PerformanceToolbar.tsx',
+    scalePanel: '../src/plugins/builtin/monitor/performance/ScaleBucketsPanel.tsx',
+    tracePanel: '../src/plugins/builtin/monitor/performance/TraceWaterfallPanel.tsx',
+    slowPanel: '../src/plugins/builtin/monitor/performance/SlowSamplesPanel.tsx',
+    tab: '../src/plugins/builtin/monitor/PerformanceTab.tsx',
+  } as const
+  const entries39 = Object.entries(files39) as Array<[keyof typeof files39, string]>
+  const sources39 = Object.fromEntries(
+    await Promise.all(entries39.map(async ([key, relative]) => [key, await read39(relative)] as const)),
+  ) as Record<keyof typeof files39, string>
+  const has39 = (key: keyof typeof files39, needle: string) => sources39[key].includes(needle)
+
+  // 1) 契约：画布分类 + 4 个新指标 + operation 维度与阈值表。
+  for (const needle of [
+    "canvas: { id: 'canvas'", 'canvasEdit:', 'canvasGesture:', 'graphMetaBuild:', 'graphMetaFlush:',
+    'export const CANVAS_OPERATIONS', 'export const CANVAS_OPERATION_THRESHOLDS',
+    'export function canvasOperationThreshold',
+  ]) {
+    assert.ok(has39('contract', needle), `【P0】画布性能契约缺少 ${needle}`)
+  }
+
+  // 2) 埋点层：慢样本绕过节流、operation 阈值写回样本、链路 id；旧契约不能丢。
+  for (const needle of [
+    'export function newPerformanceTraceId', 'if (durationMs > thresholdMs) return true',
+    'params.thresholdMs = thresholdMs', 'if (options.force || options.success === false) return true',
+  ]) {
+    assert.ok(has39('perfLog', needle), `【P0】埋点层缺少 ${needle}`)
+  }
+  assert.ok(has39('metrics', 'asNumber(params.thresholdMs)'),
+    '【P0】样本反解必须采纳 operation 阈值，统计口径不能分叉')
+
+  // 3) 规模上下文只读 O(1)，且各条链路的埋点点位真实存在（注释里的反例不算代码）。
+  const contextCode39 = sources39.context
+    .split('\n')
+    .filter((line) => !/^\s*(\/\*|\*|\/\/)/.test(line))
+    .join('\n')
+  assert.ok(has39('context', 'export function readCanvasScale')
+    && has39('context', 'export function formatCanvasScaleLabel')
+    && has39('context', 'state.nodes.length')
+    && !contextCode39.includes('.map('),
+  '【P0】规模上下文必须零遍历，禁止为了埋点扫描节点')
+  for (const [key, needle] of [
+    ['graphOps', 'PERFORMANCE_METRICS.graphMetaBuild'],
+    ['graphOps', 'buildMetaFromNodesEdges('],
+    ['storage', 'PERFORMANCE_METRICS.graphMetaFlush'],
+    ['storage', 'backend.writeLayout('],
+    ['nodeCrud', 'CANVAS_OPERATIONS.create'],
+    ['nodeCrud', 'CANVAS_OPERATIONS.delete'],
+    ['edgeOps', 'CANVAS_OPERATIONS.edgeCreate'],
+    ['nodeChange', 'PERFORMANCE_METRICS.canvasEdit'],
+    ['nodeChange', 'CANVAS_OPERATIONS.deleteBatch'],
+    ['nodeChange', 'PERFORMANCE_METRICS.canvasGesture'],
+    ['nodeChange', 'beginGesture('],
+    ['nodeChange', 'endGesture('],
+    ['canvasModel', 'PERFORMANCE_METRICS.canvasGesture'],
+    ['canvasModel', 'finishViewportGesture'],
+    ['canvasModel', 'frameCount'],
+  ] as Array<[keyof typeof files39, string]>) {
+    assert.ok(has39(key, needle), `【P0】${key} 缺少画布埋点 ${needle}`)
+  }
+
+  // 4) 页面：规模筛选 / 分桶视图 / 链路瀑布 / 慢样本联动 / 插件边界。
+  for (const [key, needle] of [
+    ['toolbar', 'SCALE_BUCKET_LABELS'],
+    ['toolbar', 'aria-label="节点规模"'],
+    ['scalePanel', 'avgPerUnitMs'],
+    ['scalePanel', '随规模劣化'],
+    ['tracePanel', 'offsetMs'],
+    ['tracePanel', 'shortTraceId'],
+    ['slowPanel', 'onSelectTrace'],
+    ['tab', 'computeScaleStatistics'],
+    ['tab', 'computeOperationStatistics'],
+    ['tab', 'groupByTrace'],
+    ['tab', 'ScaleBucketsPanel'],
+    ['tab', 'TraceWaterfallPanel'],
+  ] as Array<[keyof typeof files39, string]>) {
+    assert.ok(has39(key, needle), `【P0】性能页缺少 ${needle}`)
+  }
+  for (const key of ['scalePanel', 'tracePanel', 'slowPanel', 'tab'] as const) {
+    assert.ok(!/#[0-9a-fA-F]{6}/.test(sources39[key]), `【P0】${key} 颜色不得硬编码 hex`)
+    assert.ok(!has39(key, '@/core/'), `【P0】${key} 不得直连 core`)
+  }
+
+  // 5) 铁律：esbuild 打包真跑契约与统计纯函数，不只查源码字面量。
+  const { build: build39 } = await import('esbuild')
+  const { fileURLToPath: fileURLToPath39 } = await import('node:url')
+  const load39 = async (relative: string) => {
+    const result = await build39({
+      entryPoints: [fileURLToPath39(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+  const contract39 = await load39(files39.contract) as {
+    PERFORMANCE_METRIC_IDS: string[]
+    CANVAS_OPERATION_THRESHOLDS: Record<string, number>
+    canvasOperationThreshold: (operation: string) => number | null
+  }
+  const stats39 = await load39(files39.statistics) as {
+    scaleBucketOf: (nodeCount: number) => string
+    computeScaleStatistics: (samples: unknown[]) => Array<Record<string, any>>
+    computeScaleSensitivity: (samples: unknown[], groupBy?: string) => Array<Record<string, any>>
+    computeOperationStatistics: (samples: unknown[]) => Array<Record<string, any>>
+    perUnitMs: (sample: unknown) => number
+    groupByTrace: (samples: unknown[]) => Array<Record<string, any>>
+    filterPerformanceSamples: (samples: unknown[], filters: Record<string, unknown>) => unknown[]
+    formatSampleContext: (sample: unknown) => string
+  }
+
+  assert.equal(contract39.PERFORMANCE_METRIC_IDS.length, 21, '【P0】画布 6 指标必须进注册表')
+  assert.equal(contract39.canvasOperationThreshold('delete_batch'), 400)
+  assert.equal(contract39.canvasOperationThreshold('meta_build'), 100)
+  assert.equal(contract39.canvasOperationThreshold('no_such_operation'), null)
+
+  const base39 = Date.parse('2026-11-14T12:00:00.000Z')
+  const mk39 = (
+    id: string, metric: string, durationMs: number, offsetSec: number,
+    params: Record<string, unknown>, traceId?: string,
+  ) => ({
+    id, metric, label: metric, shortLabel: metric, color: 'var(--color-accent)',
+    category: 'canvas', thresholdMs: 100, durationMs, success: true,
+    timestamp: new Date(base39 + offsetSec * 1000).toISOString(),
+    timestampMs: base39 + offsetSec * 1000,
+    source: 'verify:critical', params,
+    ...(traceId ? { traceId } : {}),
+  })
+  const samples39 = [
+    mk39('s1', 'canvas_edit', 10, 0,
+      { operation: 'create', nodeCount: 100, affectedCount: 1, scaleLabel: '100 节点', contextKey: 'room/a' }, 't1'),
+    mk39('s2', 'canvas_edit', 12, 10,
+      { operation: 'create', nodeCount: 5000, affectedCount: 1, contextKey: 'room/c' }, 't3'),
+    mk39('s3', 'graph_meta_build', 10, 0.01,
+      { operation: 'meta_build', nodeCount: 100, contextKey: 'room/a' }),
+    mk39('s4', 'graph_meta_build', 200, 0.02,
+      { operation: 'meta_build', nodeCount: 5000, contextKey: 'room/a' }),
+    mk39('s5', 'graph_meta_flush', 320, 0.4,
+      { operation: 'meta_flush', nodeCount: 5000, contextKey: 'room/a' }),
+    mk39('s6', 'canvas_gesture', 260, 20,
+      { operation: 'drag', nodeCount: 5000, affectedCount: 20, contextKey: 'room/b' }, 't2'),
+  ]
+
+  assert.equal(stats39.scaleBucketOf(199), 'lt200')
+  assert.equal(stats39.scaleBucketOf(200), '200-1k', '【P0】分桶边界必须左闭右开')
+  assert.equal(stats39.scaleBucketOf(20000), '20k+')
+  const bucketStats39 = stats39.computeScaleStatistics(samples39)
+  assert.equal(bucketStats39.reduce((sum, item) => sum + item.count, 0), 6,
+    '【P0】规模分桶后样本总数守恒')
+  assert.equal(bucketStats39.find((item) => item.bucket === '5k-20k').count, 4)
+  const sensitivity39 = stats39.computeScaleSensitivity(samples39, 'operation')
+  assert.equal(sensitivity39.find((item) => item.key === 'meta_build').scaleSensitive, true,
+    '【P0】随节点数陡升的操作必须被识别为规模敏感')
+  assert.equal(sensitivity39.find((item) => item.key === 'create').scaleSensitive, false,
+    '【P0】基本持平的操作不能被误标为规模敏感')
+  assert.equal(stats39.perUnitMs(samples39[5]), 13, '【P0】每节点成本 = 耗时 / 受影响节点数')
+  const opStats39 = stats39.computeOperationStatistics(samples39)
+  assert.equal(opStats39.find((item) => item.operation === 'drag').avgPerUnitMs, 13)
+  assert.equal(stats39.filterPerformanceSamples(samples39, {
+    scaleBucket: 'lt200', nowMs: base39 + 60_000,
+  }).length, 2, '【P0】规模筛选必须只保留该桶样本')
+  const traces39 = stats39.groupByTrace(samples39)
+  assert.equal(traces39.length, 3, '【P0】链路数 = 独立 traceId 数')
+  const mainTrace39 = traces39.find((item) => item.traceId === 't1')
+  assert.equal(mainTrace39.spans.length, 4,
+    '【P0】同房间的后台构建 / 写盘必须归并进主链路')
+  assert.equal(mainTrace39.slow, true)
+  assert.ok(mainTrace39.totalMs >= 720, '【P0】链路总耗时必须覆盖最后一段的偏移 + 耗时')
+  assert.equal(stats39.formatSampleContext({ params: { scaleLabel: '5000 节点', roomPath: 'room/a' } }),
+    '5000 节点', '【P0】慢样本上下文必须优先显示规模摘要')
+  assert.equal(stats39.formatSampleContext({ params: { nodeCount: 5000 } }), '5000 节点',
+    '【P0】写盘侧只落数字字段时也要能生成规模摘要')
+}
+
+// --- 第 40 组：查询 / LOD / 剩余画布动作 + 动态规模阈值 + operation 筛选 ---
+{
+  const read40 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const files40 = {
+    contract: '../src/shared/observability/performanceContract.ts',
+    statistics: '../src/shared/observability/performanceStatistics.ts',
+    perfLog: '../src/core/performance-log.ts',
+    context: '../src/hooks/useGraph/canvasPerformanceContext.ts',
+    semanticLod: '../src/features/graph/GraphCanvas/model/useSemanticLod.ts',
+    searchBox: '../src/features/graph/GraphCanvas/components/NodeSearchBox.tsx',
+    canvasModel: '../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts',
+    useNodeTree: '../src/features/graph/GraphPage/model/useNodeTree.ts',
+    treePanel: '../src/features/graph/GraphPage/components/NodeTreePanel.tsx',
+    edgeOps: '../src/hooks/useGraph/edgeOperations.ts',
+    nodeCrud: '../src/hooks/useGraph/nodeCrudOperations.ts',
+    mirror: '../src/hooks/useGraph/selectionMirrorOperations.ts',
+    subtree: '../src/hooks/useGraph/selectionSubtreeOperations.ts',
+    treeOrder: '../src/hooks/useGraph/nodeTreeOperations.ts',
+    toolbar: '../src/plugins/builtin/monitor/performance/PerformanceToolbar.tsx',
+    overview: '../src/plugins/builtin/monitor/performance/PerformanceOverview.tsx',
+    tab: '../src/plugins/builtin/monitor/PerformanceTab.tsx',
+  } as const
+  const entries40 = Object.entries(files40) as Array<[keyof typeof files40, string]>
+  const sources40 = Object.fromEntries(
+    await Promise.all(entries40.map(async ([key, relative]) => [key, await read40(relative)] as const)),
+  ) as Record<keyof typeof files40, string>
+  const has40 = (key: keyof typeof files40, needle: string) => sources40[key].includes(needle)
+
+  // 1) 契约：查询 / LOD 两个新指标、10 个新动作维度、动态阈值纯函数。
+  for (const needle of [
+    'canvasQuery:', 'canvasLod:', "lodRecompute: 'lod_recompute'", "treeExpand: 'tree_expand'",
+    "search: 'search'", "locate: 'locate'", "edgeDelete: 'edge_delete'",
+    'export const SCALE_ADJUSTED_OPERATIONS', 'export function thresholdForScale',
+  ]) {
+    assert.ok(has40('contract', needle), `【P0】性能契约缺少 ${needle}`)
+  }
+  assert.ok(has40('perfLog', 'thresholdForScale(baseThreshold, nodeCount, operation)'),
+    '【P0】上报层必须用动态规模阈值，且同时驱动采样与 params.thresholdMs')
+  assert.ok(has40('context', 'export function startCanvasSpan'),
+    '【P0】画布埋点必须统一走 startCanvasSpan，禁止各处手拼规模上下文')
+
+  // 2) 查询与 LOD 链路：只在真正重算 / 真正搜索时上报，点位真实存在。
+  for (const [key, needle] of [
+    ['semanticLod', 'PERFORMANCE_METRICS.canvasLod'],
+    ['semanticLod', 'CANVAS_OPERATIONS.lodRecompute'],
+    ['semanticLod', 'hiddenCount: visibility.hiddenNodeIds.size'],
+    ['searchBox', 'CANVAS_OPERATIONS.search'],
+    ['searchBox', 'resultCount: result.length'],
+    ['canvasModel', 'CANVAS_OPERATIONS.locate'],
+    ['treePanel', "trigger: 'node-tree'"],
+    ['useNodeTree', 'CANVAS_OPERATIONS.treeExpand'],
+    ['useNodeTree', 'perfSpan.fail(error)'],
+    ['edgeOps', 'CANVAS_OPERATIONS.edgeDelete'],
+    ['edgeOps', 'CANVAS_OPERATIONS.anchorAdjust'],
+    ['nodeCrud', 'CANVAS_OPERATIONS.batchStyle'],
+    ['mirror', 'CANVAS_OPERATIONS.mirror'],
+    ['subtree', 'CANVAS_OPERATIONS.subtreeSelect'],
+    ['treeOrder', 'CANVAS_OPERATIONS.treeOrder'],
+  ] as Array<[keyof typeof files40, string]>) {
+    assert.ok(has40(key, needle), `【P0】${key} 缺少画布埋点 ${needle}`)
+  }
+
+  // 3) 统计与页面：operation 维度筛选、规模敏感 Top3、插件边界。
+  assert.ok(has40('statistics', 'filters.operation && filters.operation')
+    && has40('statistics', "readSampleScale(sample).operation !== filters.operation"),
+  '【P0】统计层必须支持按画布动作筛选')
+  assert.ok(has40('statistics', 'export const CANVAS_OPERATION_OPTIONS'))
+  for (const [key, needle] of [
+    ['toolbar', 'aria-label="画布动作"'],
+    ['toolbar', 'CANVAS_OPERATION_OPTIONS'],
+    ['overview', '规模敏感动作 Top3'],
+    ['tab', 'sensitiveOperations={operations}'],
+  ] as Array<[keyof typeof files40, string]>) {
+    assert.ok(has40(key, needle), `【P0】性能页缺少 ${needle}`)
+  }
+  for (const key of ['toolbar', 'overview', 'tab'] as const) {
+    assert.ok(!/#[0-9a-fA-F]{6}/.test(sources40[key]), `【P0】${key} 颜色不得硬编码 hex`)
+    assert.ok(!has40(key, '@/core/'), `【P0】${key} 不得直连 core`)
+  }
+
+  // 4) 铁律：esbuild 真跑契约与统计纯函数。
+  const { build: build40 } = await import('esbuild')
+  const { fileURLToPath: fileURLToPath40 } = await import('node:url')
+  const load40 = async (relative: string) => {
+    const result = await build40({
+      entryPoints: [fileURLToPath40(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+  const contract40 = await load40(files40.contract) as {
+    PERFORMANCE_METRIC_IDS: string[]
+    CANVAS_OPERATION_THRESHOLDS: Record<string, number>
+    CANVAS_OPERATION_LABELS: Record<string, string>
+    canvasOperationThreshold: (operation: string) => number | null
+    thresholdForScale: (base: number, nodeCount: number, operation?: string) => number
+  }
+  const stats40 = await load40(files40.statistics) as {
+    CANVAS_OPERATION_OPTIONS: Array<{ value: string; label: string }>
+    filterPerformanceSamples: (samples: unknown[], filters: Record<string, unknown>) => unknown[]
+  }
+
+  assert.equal(contract40.PERFORMANCE_METRIC_IDS.length, 21, '【P0】查询 / LOD 指标必须进注册表')
+  assert.equal(contract40.canvasOperationThreshold('lod_recompute'), 120)
+  assert.equal(contract40.canvasOperationThreshold('search'), 120)
+  assert.ok(Object.keys(contract40.CANVAS_OPERATION_THRESHOLDS).every(
+    (key) => typeof contract40.CANVAS_OPERATION_LABELS[key] === 'string',
+  ), '【P0】每个动作都必须有中文标签')
+
+  // 动态阈值：小图恒等、O(N) 动作随规模单调放宽、交互类与无 operation 恒等、有上限。
+  assert.equal(contract40.thresholdForScale(100, 0, 'meta_build'), 100)
+  assert.equal(contract40.thresholdForScale(100, 200, 'meta_build'), 100)
+  const mid40 = contract40.thresholdForScale(100, 1000, 'meta_build')
+  const large40 = contract40.thresholdForScale(100, 20000, 'meta_build')
+  assert.ok(mid40 > 100, '【P0】万级节点的全量构建必须按规模放宽阈值，否则全部标红')
+  assert.ok(large40 > mid40, '【P0】规模阈值必须单调不减')
+  assert.ok(contract40.thresholdForScale(100, 1e9, 'meta_build') <= 800,
+    '【P0】规模放宽必须有上限，异常峰值仍要能判慢')
+  assert.equal(contract40.thresholdForScale(100, 5000, 'create'), 100,
+    '【P0】交互类动作不得按规模放宽阈值')
+  assert.equal(contract40.thresholdForScale(100, 5000, ''), 100,
+    '【P0】非画布指标不得被动态阈值影响')
+
+  const base40 = Date.parse('2026-11-14T12:00:00.000Z')
+  const mk40 = (id: string, operation: string) => ({
+    id, metric: 'canvas_query', label: '查询', shortLabel: '查询',
+    color: 'var(--color-accent)', category: 'canvas', thresholdMs: 300,
+    durationMs: 20, success: true,
+    timestamp: new Date(base40).toISOString(), timestampMs: base40,
+    source: 'verify:critical',
+    params: { operation, nodeCount: 500, contextKey: 'room/a' },
+  })
+  const samples40 = [mk40('q1', 'search'), mk40('q2', 'locate'), mk40('q3', 'drag')]
+  assert.equal(stats40.filterPerformanceSamples(samples40, {
+    operation: 'search', nowMs: base40 + 60_000,
+  }).length, 1, '【P0】动作筛选必须只保留该 operation 的样本')
+  assert.equal(stats40.filterPerformanceSamples(samples40, {
+    operation: 'all', nowMs: base40 + 60_000,
+  }).length, 3, '【P0】全部动作不得误过滤')
+  assert.equal(stats40.CANVAS_OPERATION_OPTIONS.length,
+    Object.keys(contract40.CANVAS_OPERATION_THRESHOLDS).length + 1,
+    '【P0】下拉选项必须与契约动作一一对应')
+  assert.ok(stats40.CANVAS_OPERATION_OPTIONS.some((option) => option.value === 'lod_recompute'))
+}
+
+// --- 第 41 组：规模阈值标定（纯函数 + 取样脚本 + 慢样本生效阈值） ---
+{
+  const read41 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const files41 = {
+    statistics: '../src/shared/observability/performanceStatistics.ts',
+    cli: '../scripts/analyze-performance-scale.mts',
+    slowPanel: '../src/plugins/builtin/monitor/performance/SlowSamplesPanel.tsx',
+    pkg: '../package.json',
+  } as const
+  const entries41 = Object.entries(files41) as Array<[keyof typeof files41, string]>
+  const sources41 = Object.fromEntries(
+    await Promise.all(entries41.map(async ([key, relative]) => [key, await read41(relative)] as const)),
+  ) as Record<keyof typeof files41, string>
+  const has41 = (key: keyof typeof files41, needle: string) => sources41[key].includes(needle)
+
+  // 1) 静态：标定算法、取样脚本、页面生效阈值列、npm 入口都必须真实存在。
+  for (const needle of [
+    'export function computeScaleCalibration', 'export function computeCalibrationSummary',
+    'export type CalibrationVerdict', "too_tight: '阈值过紧'", 'successCount',
+    'group.filter((sample) => sample.success)',
+  ]) {
+    assert.ok(has41('statistics', needle), `【P0】统计层缺少标定能力 ${needle}`)
+  }
+  for (const needle of [
+    'analyze-performance-scale', '--input', '--out', '--strict',
+    'buildSyntheticSamples', 'computeScaleCalibration', 'thresholdForScale', 'esbuildBuild',
+    '合成基准，仅用于自检算法',
+  ]) {
+    assert.ok(has41('cli', needle), `【P0】标定脚本缺少 ${needle}`)
+  }
+  for (const needle of ['生效阈值', 'formatDuration(sample.thresholdMs)', '超阈 ', '失败不判慢', 'colSpan={8}']) {
+    assert.ok(has41('slowPanel', needle), `【P0】慢样本面板缺少 ${needle}`)
+  }
+  assert.ok(has41('pkg', '"perf:calibrate"'), '【P0】必须提供 npm 标定入口')
+  assert.ok(!/#[0-9a-fA-F]{6}/.test(sources41.slowPanel), '【P0】慢样本面板颜色不得硬编码 hex')
+
+  // 2) 铁律：esbuild 真跑标定纯函数，四类判定与建议系数方向都要验。
+  const { build: build41 } = await import('esbuild')
+  const { fileURLToPath: toPath41 } = await import('node:url')
+  const load41 = async (relative: string) => {
+    const result = await build41({
+      entryPoints: [toPath41(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+  const contract41 = await load41('../src/shared/observability/performanceContract.ts') as {
+    thresholdForScale: (base: number, nodeCount: number, operation?: string) => number
+  }
+  const stats41 = await load41(files41.statistics) as {
+    computeScaleCalibration: (samples: unknown[], minSamples?: number) => Array<Record<string, unknown>>
+    computeCalibrationSummary: (rows: Array<Record<string, unknown>>) => Record<string, unknown>
+    CALIBRATION_MIN_SAMPLES: number
+  }
+
+  const base41 = Date.parse('2026-11-14T12:00:00.000Z')
+  let seq41 = 0
+  const mk41 = (
+    operation: string, nodeCount: number, durationMs: number, thresholdMs: number,
+    success = true,
+  ) => {
+    seq41 += 1
+    const timestampMs = base41 + seq41 * 1000
+    return {
+      id: `cal-${seq41}`, metric: 'canvas_edit', label: operation, shortLabel: operation,
+      color: 'var(--color-accent)', category: 'canvas', thresholdMs, durationMs, success,
+      timestamp: new Date(timestampMs).toISOString(), timestampMs, source: 'verify:critical',
+      params: { operation, nodeCount, affectedCount: 1, scaleLabel: `${nodeCount} 节点` },
+    }
+  }
+  const tightThreshold = contract41.thresholdForScale(100, 2500, 'meta_build')
+  const looseThreshold = contract41.thresholdForScale(120, 25000, 'lod_recompute')
+  const tight41 = Array.from({ length: 6 }, () => mk41('meta_build', 2500, 600, tightThreshold))
+  const loose41 = Array.from({ length: 6 }, () => mk41('lod_recompute', 25000, 50, looseThreshold))
+  const healthy41 = [80, 83, 86, 89, 92, 95].map((ms) => mk41('create', 80, ms, 120))
+  const insufficient41 = [100, 110].map((ms) => mk41('search', 600, ms, 120))
+  const failed41 = mk41('create', 80, 9999, 120, false)
+
+  const rows41 = stats41.computeScaleCalibration([...tight41, ...loose41, ...healthy41, ...insufficient41])
+  const row41 = (operation: string) => {
+    const found = rows41.find((row) => row.operation === operation)
+    assert.ok(found, `【P0】缺少 ${operation} 的标定分组`)
+    return found as Record<string, unknown>
+  }
+  const tight41Row = row41('meta_build')
+  assert.equal(tight41Row.verdict, 'too_tight', '【P0】慢率 100% 且 P95 越线必须判阈值过紧')
+  assert.ok(Number(tight41Row.suggestedFactor) > Number(tight41Row.appliedFactor),
+    '【P0】过紧分组的建议倍数必须高于当前放宽倍数')
+  const loose41Row = row41('lod_recompute')
+  assert.equal(loose41Row.verdict, 'too_loose', '【P0】零慢样本且 P95 远低于阈值必须判阈值过松')
+  assert.ok(Number(loose41Row.suggestedFactor) < Number(loose41Row.appliedFactor),
+    '【P0】过松分组的建议倍数必须低于当前放宽倍数')
+  assert.equal(row41('create').verdict, 'healthy')
+  assert.equal(row41('search').verdict, 'insufficient')
+  assert.equal(stats41.CALIBRATION_MIN_SAMPLES, 5)
+
+  // 失败样本单独计：9999ms 不得污染 P95，也不得拉高慢率。
+  const rowsWithFailure41 = stats41.computeScaleCalibration([
+    ...tight41, ...loose41, ...healthy41, failed41, ...insufficient41,
+  ])
+  const createWithFailure41 = rowsWithFailure41.find((row) => row.operation === 'create') as Record<string, unknown>
+  assert.equal(createWithFailure41.count, 7, '【P0】失败样本仍要出现在分组总数里')
+  assert.equal(createWithFailure41.successCount, 6)
+  assert.equal(createWithFailure41.p95Ms, row41('create').p95Ms,
+    '【P0】失败样本的异常耗时绝不能进入 P95')
+  assert.equal(createWithFailure41.slowCount, 0, '【P0】失败样本永远不算慢操作')
+
+  const summary41 = stats41.computeCalibrationSummary(rows41)
+  assert.equal(summary41.tooTight, 1)
+  assert.equal(summary41.tooLoose, 1)
+  assert.equal(summary41.healthy, 1)
+  assert.equal(summary41.insufficient, 1)
+  assert.equal((summary41.worst as Record<string, unknown>).operation, 'meta_build',
+    '【P0】汇总必须指出最该调参的动作')
+}
+
+// --- 第 42 组：真实样本闭环（日志 JSONL 反解 + 页面导出 + 标定面板） ---
+{
+  const read42 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const files42 = {
+    cli: '../scripts/analyze-performance-scale.mts',
+    metrics: '../src/shared/observability/performanceMetrics.ts',
+    toolbar: '../src/plugins/builtin/monitor/performance/PerformanceToolbar.tsx',
+    tab: '../src/plugins/builtin/monitor/PerformanceTab.tsx',
+    panel: '../src/plugins/builtin/monitor/performance/ScaleCalibrationPanel.tsx',
+  } as const
+  const entries42 = Object.entries(files42) as Array<[keyof typeof files42, string]>
+  const sources42 = Object.fromEntries(
+    await Promise.all(entries42.map(async ([key, relative]) => [key, await read42(relative)] as const)),
+  ) as Record<keyof typeof files42, string>
+  const has42 = (key: keyof typeof files42, needle: string) => sources42[key].includes(needle)
+
+  // 1) 静态：CLI 复用宿主反解、工具条导出、组装层接线、标定面板都要真实存在。
+  for (const needle of [
+    'PERFORMANCE_ACTION', '../src/shared/observability/performanceMetrics.ts',
+    'extractPerformanceSamples(logRows)', '条日志 →', '宿主导出的样本',
+  ]) {
+    assert.ok(has42('cli', needle), `【P0】标定脚本缺少日志样本闭环 ${needle}`)
+  }
+  for (const needle of ["typeof value === 'string'", 'JSON.parse(value)', '宿主反解']) {
+    assert.ok(has42('metrics', needle), `【P0】宿主反解器缺少字符串 params 容错 ${needle}`)
+  }
+  for (const needle of ['onExport', '导出样本', 'Download', 'disabled={totalCount === 0}']) {
+    assert.ok(has42('toolbar', needle), `【P0】性能工具条缺少 ${needle}`)
+  }
+  for (const needle of [
+    'computeScaleCalibration(samples)', 'computeCalibrationSummary(calibrationRows)',
+    'ScaleCalibrationPanel', 'onExport={handleExportSamples}', 'topomind-perf-samples-',
+    '不受页面筛选影响',
+  ]) {
+    assert.ok(has42('tab', needle), `【P0】性能页缺少 ${needle}`)
+  }
+  for (const needle of [
+    'CALIBRATION_VERDICT_LABELS', 'ScaleCalibrationRow', 'color-mix',
+    '失败样本不进 P95', 'colSpan={11}',
+  ]) {
+    assert.ok(has42('panel', needle), `【P0】标定面板缺少 ${needle}`)
+  }
+  for (const key of ['toolbar', 'tab', 'panel'] as const) {
+    assert.ok(!/#[0-9a-fA-F]{6}/.test(sources42[key]), `【P0】${key} 颜色不得硬编码 hex`)
+    assert.ok(!has42(key, '@/core/') && !has42(key, 'window.electronAPI'),
+      `【P0】${key} 不得直连 core / electronAPI`)
+  }
+
+  // 2) 铁律：esbuild 真跑宿主的日志反解器，并把反解结果直接喂给标定算法。
+  const { build: build42 } = await import('esbuild')
+  const { fileURLToPath: toPath42 } = await import('node:url')
+  const load42 = async (relative: string) => {
+    const result = await build42({
+      entryPoints: [toPath42(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+  const contract42 = await load42('../src/shared/observability/performanceContract.ts') as {
+    PERFORMANCE_ACTION: string
+    thresholdForScale: (base: number, nodeCount: number, operation?: string) => number
+  }
+  const metrics42 = await load42('../src/shared/observability/performanceMetrics.ts') as {
+    extractPerformanceSamples: (entries: unknown[]) => Array<Record<string, unknown>>
+  }
+  const stats42 = await load42('../src/shared/observability/performanceStatistics.ts') as {
+    computeScaleCalibration: (samples: unknown[]) => Array<Record<string, unknown>>
+  }
+  const { PERFORMANCE_ACTION: action42, thresholdForScale: thresholdForScale42 } = contract42
+  const threshold42 = thresholdForScale42(100, 2500, 'meta_build')
+  const base42 = Date.parse('2026-11-15T02:00:00.000Z')
+  const perfRow42 = (index: number, durationMs: number, success = true, stringParams = false) => {
+    const params = {
+      metric: 'graph_meta_build', durationMs, success, thresholdMs: threshold42,
+      operation: 'meta_build', nodeCount: 2500, edgeCount: 3200, sessionId: 'verify-42',
+    }
+    return {
+      id: `log-42-${index}`,
+      timestamp: new Date(base42 + index * 1000).toISOString(),
+      action: action42,
+      module: 'useGraph',
+      params: stringParams ? JSON.stringify(params) : params,
+    }
+  }
+  const logRows42 = [
+    ...Array.from({ length: 6 }, (_, i) => perfRow42(i, 600)),
+    perfRow42(6, 9999, false),
+    perfRow42(7, 620, true, true),
+    {
+      id: 'log-42-other', timestamp: new Date(base42 + 8000).toISOString(),
+      action: '节点:创建', module: 'useGraph', params: { nodeId: 'node-42' },
+    },
+  ]
+  const samples42 = metrics42.extractPerformanceSamples(logRows42)
+  assert.equal(samples42.length, 8, '【P0】非性能日志行必须被反解器过滤')
+  assert.ok(samples42.every((sample) => sample.metric === 'graph_meta_build'),
+    '【P0】日志 metric 必须从 params 反解，不能兜底成 canvas_edit')
+  assert.equal(samples42.filter((sample) => sample.success === false).length, 1,
+    '【P0】失败样本标记必须原样保留')
+  assert.equal(samples42[0].thresholdMs, threshold42, '【P0】生效阈值必须从 params 反解')
+  assert.equal((samples42[0].params as Record<string, unknown>).nodeCount, 2500,
+    '【P0】规模上下文必须随反解保留')
+  assert.ok(samples42.some((sample) => sample.durationMs === 620),
+    '【P0】旧日志的字符串 params 必须先还原再反解')
+
+  const rows42 = stats42.computeScaleCalibration(samples42)
+  const metaRow42 = rows42.find((row) => row.operation === 'meta_build')
+  assert.ok(metaRow42, '【P0】日志反解出的样本必须能形成标定分组')
+  assert.equal(metaRow42.count, 8)
+  assert.equal(metaRow42.successCount, 7)
+  assert.equal(metaRow42.slowCount, 7, '【P0】失败样本永远不算慢操作')
+  assert.equal(metaRow42.verdict, 'too_tight')
+  assert.ok(Number(metaRow42.suggestedFactor) > Number(metaRow42.appliedFactor),
+    '【P0】过紧分组的建议倍数必须高于当前放宽倍数')
+
+  // 3) 端到端：真的把日志 JSONL 交给 CLI 跑一遍，验证报告口径与样本数。
+  const { writeFile: writeFile42, mkdtemp: mkdtemp42, rm: rm42 } = await import('node:fs/promises')
+  const { tmpdir: tmpdir42 } = await import('node:os')
+  const { join: join42 } = await import('node:path')
+  const { spawnSync: spawnSync42 } = await import('node:child_process')
+  const tempDir42 = await mkdtemp42(join42(tmpdir42(), 'tm-perf-42-'))
+  try {
+    const logPath42 = join42(tempDir42, 'logs.jsonl')
+    const reportPath42 = join42(tempDir42, 'report.md')
+    await writeFile42(logPath42, logRows42.map((row) => JSON.stringify(row)).join('\n'), 'utf8')
+    const run42 = spawnSync42(process.execPath, [
+      '--experimental-strip-types',
+      toPath42(new URL(files42.cli, import.meta.url)),
+      '--input', logPath42, '--out', reportPath42,
+    ], { encoding: 'utf8', timeout: 60_000 })
+    assert.equal(run42.status, 0, `【P0】标定脚本必须能直接吃日志 JSONL：${run42.stderr}`)
+    const report42 = await readFile(reportPath42, 'utf8')
+    assert.ok(report42.includes(`9 条日志 → 8 条${action42}样本`),
+      '【P0】报告必须标明日志反解来源与反解条数')
+    assert.ok(report42.includes('- 样本数：8'), '【P0】非性能日志不得混入标定分母')
+    assert.ok(report42.includes('| 阈值过紧 | 1 |'), '【P0】日志样本必须能算出过紧分组')
+  } finally {
+    await rm42(tempDir42, { recursive: true, force: true }).catch(() => {})
+  }
 }
 
 console.log('Critical regression checks verified')

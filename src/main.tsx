@@ -10,6 +10,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { bootstrapCommandRegistry } from './application/commands'
 import { PlatformProvider } from './core/platform-context'
+import { reportAppStartup, startRuntimePerformanceObserver } from './core/performance-runtime'
 import { StorageProvider } from './core/storage'
 import { bootstrapPlugins } from './plugins'
 import { useThemeStore } from './stores/themeStore'
@@ -26,6 +27,8 @@ const root = createRoot(container)
 useThemeStore.getState().initializeTheme()
 bootstrapCommandRegistry()
 bootstrapPlugins()
+// 运行时观测在首帧前启动：buffered 长任务包含启动/模块求值阶段的阻塞。
+startRuntimePerformanceObserver()
 
 // Suppress harmless ResizeObserver loop warning.
 // It is emitted by the browser when a ResizeObserver callback resizes an observed
@@ -74,3 +77,8 @@ root.render(
     </PlatformProvider>
   </StrictMode>
 )
+
+// performance.now() 从导航起点计时，双 rAF 确保 React 已提交首帧再上报启动耗时。
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => reportAppStartup(performance.now()))
+})

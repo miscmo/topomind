@@ -1,4 +1,15 @@
-import { PERFORMANCE_ACTION, PERFORMANCE_METRICS, type PerformanceMetricId } from './performanceContract'
+/**
+ * 性能样本解析与展示元数据。
+ * 指标定义全部由 performanceContract 的注册表派生，本文件不再维护第二份 id 清单。
+ */
+import {
+  PERFORMANCE_ACTION,
+  PERFORMANCE_CATEGORIES,
+  PERFORMANCE_METRIC_SPECS,
+  resolvePerformanceMetricSpec,
+  type PerformanceCategoryId,
+  type PerformanceMetricId,
+} from './performanceContract'
 
 export interface PerformanceMetricDefinition {
   id: PerformanceMetricId
@@ -6,38 +17,33 @@ export interface PerformanceMetricDefinition {
   shortLabel: string
   color: string
   thresholdMs: number
+  category: PerformanceCategoryId
+  categoryLabel: string
+  description: string
+  sampleRate: number
 }
 
-export const PERFORMANCE_METRIC_DEFINITIONS: Record<PerformanceMetricId, PerformanceMetricDefinition> = {
-  [PERFORMANCE_METRICS.roomLoad]: {
-    id: PERFORMANCE_METRICS.roomLoad,
-    label: '房间加载',
-    shortLabel: '加载',
-    color: '#3b82f6',
-    thresholdMs: 400,
-  },
-  [PERFORMANCE_METRICS.nodeSelect]: {
-    id: PERFORMANCE_METRICS.nodeSelect,
-    label: '节点选中响应',
-    shortLabel: '选中',
-    color: '#10b981',
-    thresholdMs: 150,
-  },
-  [PERFORMANCE_METRICS.detailRead]: {
-    id: PERFORMANCE_METRICS.detailRead,
-    label: '详情文档读取',
-    shortLabel: '读取',
-    color: '#8b5cf6',
-    thresholdMs: 200,
-  },
-  [PERFORMANCE_METRICS.detailSave]: {
-    id: PERFORMANCE_METRICS.detailSave,
-    label: '详情文档保存',
-    shortLabel: '保存',
-    color: '#f59e0b',
-    thresholdMs: 300,
-  },
-}
+/** 宿主 API 与监控页面共用的指标定义表；顺序即页面展示顺序。 */
+export const PERFORMANCE_METRIC_DEFINITIONS: Record<PerformanceMetricId, PerformanceMetricDefinition> =
+  Object.fromEntries(
+    PERFORMANCE_METRIC_SPECS.map((spec) => [
+      spec.id,
+      {
+        id: spec.id,
+        label: spec.label,
+        shortLabel: spec.shortLabel,
+        color: PERFORMANCE_CATEGORIES[spec.category].color,
+        thresholdMs: spec.thresholdMs,
+        category: spec.category,
+        categoryLabel: PERFORMANCE_CATEGORIES[spec.category].label,
+        description: spec.description,
+        sampleRate: spec.sampleRate,
+      } satisfies PerformanceMetricDefinition,
+    ]),
+  ) as Record<PerformanceMetricId, PerformanceMetricDefinition>
+
+export const PERFORMANCE_METRIC_DEFINITION_LIST: PerformanceMetricDefinition[] =
+  PERFORMANCE_METRIC_SPECS.map((spec) => PERFORMANCE_METRIC_DEFINITIONS[spec.id])
 
 export interface LogLikeEntry {
   id?: string
@@ -54,15 +60,28 @@ export interface PerformanceSample {
   shortLabel: string
   color: string
   thresholdMs: number
+  category: PerformanceCategoryId
   durationMs: number
   success: boolean
   timestamp: string
   timestampMs: number
   module?: string
+  sessionId?: string
+  source?: string
+  traceId?: string
   params: Record<string, unknown>
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
+  // 旧日志可能把 params 存成 JSON 字符串；宿主反解与标定 CLI 共用这一层容错，
+  // 否则这些行会因为取不到 metric 被整条丢掉。
+  if (typeof value === 'string') {
+    try {
+      return asRecord(JSON.parse(value) as unknown)
+    } catch {
+      return {}
+    }
+  }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   return value as Record<string, unknown>
 }
@@ -85,30 +104,46 @@ function asBoolean(value: unknown, fallback = true): boolean {
   return fallback
 }
 
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined
+}
+
+/**
+ * 从日志条目反解性能样本。日志仍是唯一持久化介质，因此这里必须容错：
+ * 老日志没有 category/sessionId，注册表里已删除的指标也不能让整批样本消失。
+ */
 export function extractPerformanceSamples(entries: LogLikeEntry[]): PerformanceSample[] {
   return entries.flatMap((entry) => {
     if (entry.action !== PERFORMANCE_ACTION) return []
     const params = asRecord(entry.params)
     const metric = params.metric
-    if (typeof metric !== 'string' || !(metric in PERFORMANCE_METRIC_DEFINITIONS)) return []
+    if (typeof metric !== 'string' || !metric) return []
     const durationMs = asNumber(params.durationMs)
     if (durationMs === null) return []
-    const definition = PERFORMANCE_METRIC_DEFINITIONS[metric as PerformanceMetricId]
+
+    const spec = resolvePerformanceMetricSpec(metric)
+    const category = spec?.category ?? 'runtime'
+    const categoryMeta = PERFORMANCE_CATEGORIES[category]
+    const definition = spec ? PERFORMANCE_METRIC_DEFINITIONS[spec.id] : null
     const timestamp = entry.timestamp || new Date(0).toISOString()
     const timestampMs = Number.isFinite(Date.parse(timestamp)) ? Date.parse(timestamp) : 0
 
     return [{
       id: entry.id ?? `${metric}-${timestamp}-${durationMs}`,
-      metric: definition.id,
-      label: definition.label,
-      shortLabel: definition.shortLabel,
-      color: definition.color,
-      thresholdMs: definition.thresholdMs,
+      metric: metric as PerformanceMetricId,
+      label: definition?.label ?? metric,
+      shortLabel: definition?.shortLabel ?? metric.slice(0, 4),
+      color: definition?.color ?? categoryMeta.color,
+      thresholdMs: asNumber(params.thresholdMs) ?? definition?.thresholdMs ?? 1000,
+      category,
       durationMs,
       success: asBoolean(params.success, true),
       timestamp,
       timestampMs,
       module: entry.module,
+      sessionId: asString(params.sessionId),
+      source: asString(params.source) ?? entry.module,
+      traceId: asString(params.traceId),
       params,
     }]
   }).sort((a, b) => a.timestampMs - b.timestampMs)
