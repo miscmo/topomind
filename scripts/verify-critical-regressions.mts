@@ -5516,8 +5516,11 @@ const edge = (
   assert.ok(configServiceSource.includes('setRoomProfiles(normalizeRoomProfiles(config.roomProfiles))'), '启动时必须 hydrate 图型')
   assert.ok(lodHookSource.includes('resolveGraphProfileLodPolicy') && lodHookSource.includes('inferGraphProfile('),
     'LOD hook 必须消费图型策略与自动推断')
-  assert.ok(lodHookSource.includes("mode: 'auto'") && lodHookSource.includes('base.subordinateEdgeCount'),
-    '【P0】图型推断必须复用第一次可见性计划的树统计，不得重新遍历全图')
+  assert.ok(lodHookSource.includes('resolvePolicy:') && lodHookSource.includes('stats.subordinateEdgeCount')
+    && lodHookSource.includes('singlePass: true'),
+    '【P0】图型推断必须在同一趟可见性计算里完成，不得重新遍历全图')
+  assert.equal((lodHookSource.match(/computeLodVisibility\(/g) ?? []).length, 1,
+    '【P0】每次 LOD 计划重算只能调用一次 computeLodVisibility，禁止第二遍全图遍历')
   assert.ok(canvasSource.includes('storage.writeConfig({ roomProfiles: map })'), '画布切换图型必须真写盘')
   assert.ok(canvasSource.includes('configuredProfileId'), '画布必须按当前房间取图型')
   assert.ok(controlSource.includes('data-tm-graph-profile-select') && controlSource.includes('data-tm-graph-profile-effective'),
@@ -8275,7 +8278,7 @@ const edge = (
     makeSample38('f', 'detail_save', 400, true, 300),
     makeSample38('g', 'detail_save', 20, false, 360),
     makeSample38('h', 'kb_import', 6000, true, 420),
-    makeSample38('i', 'long_task', 150, true, -1200),
+    makeSample38('i', 'long_task', 250, true, -1200),
   ]
 
   // 反解：老日志无 category 也能补齐；未来/未知指标不整批丢弃。
@@ -8925,6 +8928,104 @@ const edge = (
   } finally {
     await rm42(tempDir42, { recursive: true, force: true }).catch(() => {})
   }
+}
+
+// --- 第 43 组：真实监控数据排查后的 P0/P1 修复（计时 TTL / 加载去重 / LOD 单次遍历 / 长任务归因） ---
+{
+  const read43 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const files43 = {
+    starts: '../src/shared/observability/performanceStarts.ts',
+    perfLog: '../src/core/performance-log.ts',
+    runtime: '../src/core/performance-runtime.ts',
+    contract: '../src/shared/observability/performanceContract.ts',
+    roomLoader: '../src/hooks/useGraph/useGraphRoomLoader.ts',
+    lod: '../src/domain/graph/lod.ts',
+    lodHook: '../src/features/graph/GraphCanvas/model/useSemanticLod.ts',
+  } as const
+  const entries43 = Object.entries(files43) as Array<[keyof typeof files43, string]>
+  const sources43 = Object.fromEntries(
+    await Promise.all(entries43.map(async ([key, relative]) => [key, await read43(relative)] as const)),
+  ) as Record<keyof typeof files43, string>
+  const has43 = (key: keyof typeof files43, needle: string) => sources43[key].includes(needle)
+
+  // 1) 静态接线：五项改动都必须真实落在生产代码里，缺一即视为回退。
+  for (const needle of ['PERFORMANCE_START_TTL_MS', 'consumeStart', 'pruneStaleStarts']) {
+    assert.ok(has43('starts', needle), `【P0】计时起点纯函数层缺少 ${needle}`)
+  }
+  for (const needle of ['consumeStart(', 'pruneStaleStarts(', 'getRecentPerformanceContext']) {
+    assert.ok(has43('perfLog', needle), `【P0】上报层未接入 ${needle}`)
+  }
+  for (const needle of ['getRecentPerformanceContext', 'recentMetric', 'recentContext']) {
+    assert.ok(has43('runtime', needle), `【P0】长任务观测缺少归因上下文 ${needle}`)
+  }
+  assert.ok(has43('contract', "category: 'runtime', thresholdMs: 200"),
+    '【P0】long_task 慢阈值必须与 ≥50ms 上报门槛拉开，否则慢率无判别力')
+  for (const needle of ['inflightGraphRef', 'graphShared', 'supersededBy', 'layoutMs', 'readMs', 'applyMs']) {
+    assert.ok(has43('roomLoader', needle), `【P0】房间加载缺少 ${needle}`)
+  }
+  assert.ok(!has43('roomLoader', 'discarded: true'),
+    '【P0】被取代的加载请求不得再上报 success:false 的性能样本')
+  for (const needle of ['resolvePolicy', 'LodGraphStats', 'skipCoverageProtection = resolved']) {
+    assert.ok(has43('lod', needle), `【P0】LOD 纯函数层缺少单次遍历能力 ${needle}`)
+  }
+  for (const needle of ['resolvePolicy:', 'singlePass: true', 'recomputedTwice: false']) {
+    assert.ok(has43('lodHook', needle), `【P0】LOD hook 未接入单次遍历 ${needle}`)
+  }
+  assert.equal((sources43.lodHook.match(/computeLodVisibility\(/g) ?? []).length, 1,
+    '【P0】每次计划重算只能调用一次 computeLodVisibility')
+
+  // 2) esbuild 真跑：计时起点 TTL 与 LOD resolvePolicy 都是零依赖纯函数。
+  const { build: build43 } = await import('esbuild')
+  const { fileURLToPath: toPath43 } = await import('node:url')
+  const loadBundled43 = async (relative: string) => {
+    const result = await build43({
+      entryPoints: [toPath43(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+  const starts43 = await loadBundled43(files43.starts)
+  assert.equal(starts43.PERFORMANCE_START_TTL_MS, 1000)
+  const now43 = 100_000
+  const pending43 = new Map<string, { startedAt: number }>([
+    ['stale', { startedAt: now43 - 5000 }],
+    ['fresh', { startedAt: now43 - 10 }],
+  ])
+  assert.equal(starts43.consumeStart(pending43, 'stale', now43), null,
+    '【P0】陈旧计时起点必须被丢弃，否则会产出小时级假慢样本')
+  assert.equal(starts43.consumeStart(pending43, 'fresh', now43), now43 - 10,
+    '【P0】有效期内的计时起点必须原样返回')
+  assert.equal(pending43.size, 0, '【P0】消费后必须删除 key')
+  pending43.set('stale2', { startedAt: now43 - 5000 })
+  starts43.pruneStaleStarts(pending43, now43)
+  assert.equal(pending43.size, 0, '【P0】mark 时必须清理未被消费的过期起点')
+
+  const lod43 = await loadBundled43(files43.lod)
+  const nodes43 = [
+    { id: 'r', position: { x: 0, y: 0 } },
+    { id: 'c1', position: { x: 100, y: 0 } },
+    { id: 'c2', position: { x: 200, y: 0 } },
+  ]
+  const edges43 = [
+    { id: 'e1', source: 'r', target: 'c1', relation: 'subordinate' },
+    { id: 'e2', source: 'r', target: 'c2', relation: 'subordinate' },
+  ]
+  let policyCalls43 = 0
+  let stats43: Record<string, number> | null = null
+  const planned43 = lod43.computeLodVisibility({
+    nodes: nodes43, edges: edges43, zoom: 0.2,
+    resolvePolicy: (stats: Record<string, number>) => {
+      policyCalls43 += 1
+      stats43 = stats
+      return { mode: 'off', skipCoverageProtection: true }
+    },
+  })
+  assert.equal(policyCalls43, 1, '【P0】一次可见性计算只能解析一次 policy')
+  assert.equal(stats43?.subordinateEdgeCount, 2, '【P0】policy 回调必须拿到本趟遍历产出的树统计')
+  assert.equal(stats43?.totalNodeCount, 3, '【P0】policy 回调必须拿到节点规模')
+  assert.equal(planned43.reason, 'off', '【P0】回调返回的最终 mode 必须在同一趟计算里生效')
+  const legacy43 = lod43.computeLodVisibility({ nodes: nodes43, edges: edges43, zoom: 0.2, mode: 'off' })
+  assert.equal(legacy43.reason, 'off', '【P0】不带 resolvePolicy 的旧调用必须保持兼容')
 }
 
 console.log('Critical regression checks verified')

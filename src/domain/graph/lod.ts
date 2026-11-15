@@ -168,6 +168,20 @@ export interface LodEdgeLike {
   data?: { relation?: string }
 }
 
+/** 图结构统计：图型推断的唯一输入，与 LOD 模式无关，可在一次遍历里顺带产出。 */
+export interface LodGraphStats {
+  totalNodeCount: number
+  edgeCount: number
+  subordinateEdgeCount: number
+  treeCoverage: number
+}
+
+/** 由图型 / 用户偏好解析出的最终 LOD 策略。 */
+export interface LodPolicyOverride {
+  mode?: LodMode
+  skipCoverageProtection?: boolean
+}
+
 export interface LodVisibilityInput {
   nodes: readonly LodNodeLike[]
   edges: readonly LodEdgeLike[]
@@ -197,6 +211,12 @@ export interface LodVisibilityInput {
    * 必须与置顶按钮共用同一个来源，否则点选节点后深度栏会一直空白。
    */
   selectedNodeId?: string | null
+  /**
+   * 可选：拿到图结构统计后、决定 LOD 模式前回调一次。
+   * 「图型推断 → policy」链路用它把两次 computeLodVisibility 合成一次：
+   * 统计与 policy 无关，回调返回的 mode / skipCoverageProtection 直接用于本次计算。
+   */
+  resolvePolicy?: (stats: LodGraphStats) => LodPolicyOverride | null
 }
 
 export type LodReason = 'active' | 'forced' | 'off' | 'no-tree' | 'low-coverage'
@@ -379,13 +399,22 @@ export function computeLodVisibility(input: LodVisibilityInput): LodVisibility {
   // 判定一律用 lodRatio，displayPercent 仍回吐真实读数（面板显示 5% 而不是 20%）。
   const lodRatio = Math.max(LOD_FLOOR_RATIO, ratio)
   const stage = resolveLodStage(rawZoom)
-  const mode: LodMode = input.mode ?? 'auto'
   const nodeIds = nodes.map((node) => node.id)
   const projected = projectEdges(edges)
   const subordinateEdges = projected.filter((edge) => isSubordinate(edge.relation))
   const { hierarchy } = buildHierarchy(nodeIds, subordinateEdges)
   const treeNodeCount = nodeIds.length - hierarchy.free.length
   const treeCoverage = nodeIds.length > 0 ? treeNodeCount / nodeIds.length : 0
+  // 单次遍历闭环：图型推断所需的统计此刻已全部算出，回调在同一趟计算里解析最终
+  // policy，避免「先跑一遍 auto 出统计、再跑一遍 override 出可见集合」的两遍全图遍历。
+  const resolved = input.resolvePolicy?.({
+    totalNodeCount: nodeIds.length,
+    edgeCount: edges.length,
+    subordinateEdgeCount: subordinateEdges.length,
+    treeCoverage,
+  })
+  const mode: LodMode = resolved?.mode ?? input.mode ?? 'auto'
+  const skipCoverageProtection = resolved?.skipCoverageProtection ?? input.skipCoverageProtection
   const rootIds = new Set(hierarchy.roots)
   const freeIds = new Set(hierarchy.free)
 
@@ -464,7 +493,7 @@ export function computeLodVisibility(input: LodVisibilityInput): LodVisibility {
   } else if (
     treeCoverage < LOD_TREE_COVERAGE_THRESHOLD
     && mode !== 'force'
-    && !input.skipCoverageProtection
+    && !skipCoverageProtection
   ) {
     active = false
     reason = 'low-coverage'

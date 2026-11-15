@@ -19,6 +19,11 @@ import {
   type PerformanceMetricId,
 } from '@/shared/observability/performanceContract'
 import { logWrite } from './log-backend'
+import {
+  consumeStart,
+  pruneStaleStarts,
+  type PendingPerformanceStart,
+} from '@/shared/observability/performanceStarts'
 
 export { PERFORMANCE_ACTION, PERFORMANCE_METRICS }
 export type { PerformanceLogParams, PerformanceMetricId }
@@ -34,25 +39,48 @@ export function newPerformanceTraceId(scope = 'canvas'): string {
   return `${scope}:${PERFORMANCE_SESSION_ID}:${traceSequence}`
 }
 
-const performanceMetricStarts = new Map<string, number>()
+const performanceMetricStarts = new Map<string, PendingPerformanceStart>()
 const lastReportAt = new Map<string, number>()
+
+/**
+ * 自动观测指标（long_task）的归因上下文。只记「有分量」的操作，
+ * 避免 detail_save 这类高频短样本把最近上下文刷成无关指标。
+ */
+const RECENT_CONTEXT_MIN_MS = 50
+const RECENT_CONTEXT_TTL_MS = 2000
+let recentOperation: { metric: string; contextKey: string; at: number } | null = null
+
+/** 返回最近 2 秒内最可能引发长任务的操作；供 PerformanceObserver 写进 contextKey。 */
+export function getRecentPerformanceContext(): { metric: string; contextKey: string } | null {
+  if (!recentOperation || performance.now() - recentOperation.at > RECENT_CONTEXT_TTL_MS) return null
+  return { metric: recentOperation.metric, contextKey: recentOperation.contextKey }
+}
 
 function getMetricStartKey(metric: PerformanceMetricId, contextKey = 'default'): string {
   return `${metric}:${contextKey}`
 }
 
-/** 旧契约：跨模块传递计时起点（React 渲染会打断同步调用链）。 */
+/**
+ * 旧契约：跨模块传递计时起点（React 渲染会打断同步调用链）。
+ * 写入前先清理过期起点，避免未消费的 key 长期堆积。
+ */
 export function markPerformanceMetricStart(metric: PerformanceMetricId, contextKey = 'default'): void {
-  performanceMetricStarts.set(getMetricStartKey(metric, contextKey), performance.now())
+  const now = performance.now()
+  pruneStaleStarts(performanceMetricStarts, now)
+  performanceMetricStarts.set(getMetricStartKey(metric, contextKey), { startedAt: now })
 }
 
-/** 旧契约：取出并删除计时起点。 */
+/**
+ * 旧契约：取出并删除计时起点。
+ * 陈旧起点（> PERFORMANCE_START_TTL_MS）一律丢弃：它是上一次未被消费的点击残留，
+ * 不是本次交互的耗时。TTL 之外的真实卡顿应由 startPerformanceSpan 覆盖。
+ */
 export function takePerformanceMetricStart(metric: PerformanceMetricId, contextKey = 'default'): number | null {
-  const key = getMetricStartKey(metric, contextKey)
-  const startedAt = performanceMetricStarts.get(key)
-  if (startedAt === undefined) return null
-  performanceMetricStarts.delete(key)
-  return startedAt
+  return consumeStart(
+    performanceMetricStarts,
+    getMetricStartKey(metric, contextKey),
+    performance.now(),
+  )
 }
 
 export interface PerformanceReportOptions {
@@ -98,6 +126,16 @@ async function writePerformanceSample(
   const now = performance.now()
   const spec = resolvePerformanceMetricSpec(metric)
   const operation = typeof options.params?.operation === 'string' ? options.params.operation : ''
+  if (metric !== PERFORMANCE_METRICS.longTask
+    && Number.isFinite(durationMs)
+    && durationMs >= RECENT_CONTEXT_MIN_MS) {
+    const roomPath = typeof options.params?.roomPath === 'string' ? options.params.roomPath : ''
+    recentOperation = {
+      metric,
+      contextKey: options.contextKey || roomPath || operation || metric,
+      at: now,
+    }
+  }
   const nodeCount = typeof options.params?.nodeCount === 'number' ? options.params.nodeCount : 0
   const baseThreshold = canvasOperationThreshold(operation) ?? spec?.thresholdMs ?? Number.POSITIVE_INFINITY
   // 全量构建 / LOD 重算等 O(N) 动作按节点数放宽阈值；交互类保持固定阈值。

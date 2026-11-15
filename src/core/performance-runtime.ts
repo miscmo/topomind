@@ -7,7 +7,7 @@
  * 长任务上，而启动耗时是所有后续操作的基线。采样/节流由统一上报层负责。
  */
 import { PERFORMANCE_METRICS } from '@/shared/observability/performanceContract'
-import { recordPerformance } from './performance-log'
+import { getRecentPerformanceContext, recordPerformance } from './performance-log'
 
 const LONGTASK_MIN_MS = 50
 
@@ -26,12 +26,18 @@ export function startRuntimePerformanceObserver(): () => void {
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if (entry.duration < LONGTASK_MIN_MS) continue
+        // 长任务本身没有业务语义，附带最近一次有分量的操作 / 房间，
+        // 让监控页能按 contextKey 把阻塞归到具体链路，而不是只看到一堆匿名卡顿。
+        const recent = getRecentPerformanceContext()
         recordPerformance(PERFORMANCE_METRICS.longTask, entry.duration, {
           module: 'PerformanceObserver',
+          contextKey: recent?.contextKey,
           params: {
             entryType: entry.entryType,
             name: entry.name,
             startTime: Math.round(entry.startTime),
+            recentMetric: recent?.metric ?? '',
+            recentContext: recent?.contextKey ?? '',
           },
         })
       }

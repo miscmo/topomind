@@ -8,7 +8,8 @@
  *      hierarchyKey 命中缓存 → 不重建树；
  *   3. applyLodNodeHidden / applyLodEdgeHidden 只改真正需要变 hidden / 淡入淡出的对象，
  *      其余复用原引用；状态不变时直接返回 store 原数组，拖动零拷贝；
- *   4. 图型推断直接复用第一次可见性计划里的树统计，**不重新遍历全图**；
+ *   4. 图型推断与最终可见性在**同一趟** computeLodVisibility 里完成（resolvePolicy 回调），
+ *      不再「先跑 auto 出统计、再跑 override 出可见集合」遍历两遍全图；
  *   5. 淡出对象先保持挂载 LOD_FADE_MS 再真正卸载，上限 N 个，避免大图缩放时挂太多临终节点。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -160,24 +161,24 @@ export function useSemanticLod(options: UseSemanticLodOptions) {
       previousVisibleNodeIds: previousVisibleRef.current,
       selectedNodeId,
     }
-    // 第一次计划同时产出图型推断所需的树统计，避免第二次遍历全图。
-    const base = computeLodVisibility({ ...common, mode: 'auto' })
-    const inferred = inferGraphProfile({
-      nodeCount: base.totalNodeCount,
-      edgeCount: edges.length,
-      subordinateEdgeCount: base.subordinateEdgeCount,
-      treeCoverage: base.treeCoverage,
+    // 图型推断与可见性计算合并在一次遍历里：纯函数层拿到树统计后同步回调，
+    // 返回最终 mode / skipCoverageProtection，不再跑第二遍全图。
+    let effectiveProfileId: ConcreteGraphProfileId = 'network'
+    let policy: GraphProfileLodPolicy = { mode: 'auto', skipCoverageProtection: false, source: 'profile' }
+    const visibility = computeLodVisibility({
+      ...common,
+      resolvePolicy: (stats) => {
+        const inferred = inferGraphProfile({
+          nodeCount: stats.totalNodeCount,
+          edgeCount: stats.edgeCount,
+          subordinateEdgeCount: stats.subordinateEdgeCount,
+          treeCoverage: stats.treeCoverage,
+        })
+        effectiveProfileId = resolveEffectiveGraphProfileId(configuredProfileId, inferred)
+        policy = resolveGraphProfileLodPolicy(effectiveProfileId, prefs.mode)
+        return { mode: policy.mode, skipCoverageProtection: policy.skipCoverageProtection }
+      },
     })
-    const effectiveProfileId = resolveEffectiveGraphProfileId(configuredProfileId, inferred)
-    const policy = resolveGraphProfileLodPolicy(effectiveProfileId, prefs.mode)
-    const needsOverride = policy.mode !== 'auto' || policy.skipCoverageProtection
-    const visibility = needsOverride
-      ? computeLodVisibility({
-        ...common,
-        mode: policy.mode,
-        skipCoverageProtection: policy.skipCoverageProtection,
-      })
-      : base
     previousVisibleRef.current = visibility.visibleNodeIds
     const next: LodPlan = { visibility, effectiveProfileId, policy }
     cacheRef.current = { signature, plan: next }
@@ -185,7 +186,9 @@ export function useSemanticLod(options: UseSemanticLodOptions) {
       hiddenCount: visibility.hiddenNodeIds.size,
       visibleCount: visibility.visibleNodeIds.size,
       displayPercent: visibility.displayPercent,
-      recomputedTwice: needsOverride,
+      // 字段名保留以兼容旧看板；恒 false + singlePass 用于确认单次遍历已生效。
+      recomputedTwice: false,
+      singlePass: true,
       effectiveProfileId,
     })
     return next

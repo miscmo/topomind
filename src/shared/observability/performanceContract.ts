@@ -142,8 +142,8 @@ export const PERFORMANCE_METRIC_SPECS: readonly PerformanceMetricSpec[] = [
   },
   {
     id: PERFORMANCE_METRICS.longTask, label: '主线程长任务', shortLabel: '长任务',
-    category: 'runtime', thresholdMs: 100, sampleRate: 1, minIntervalMs: 200,
-    description: 'PerformanceObserver 捕获的 ≥50ms 主线程阻塞，durationMs 为阻塞时长',
+    category: 'runtime', thresholdMs: 200, sampleRate: 1, minIntervalMs: 200,
+    description: 'PerformanceObserver 捕获的 ≥50ms 主线程阻塞，durationMs 为阻塞时长；>200ms 计慢并带最近操作上下文',
   },
   {
     id: PERFORMANCE_METRICS.canvasEdit, label: '画布编辑操作', shortLabel: '编辑',
