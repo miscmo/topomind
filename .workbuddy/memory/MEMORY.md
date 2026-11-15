@@ -12,10 +12,15 @@
 - `thresholdForScale` 只在埋点侧写进 `params.thresholdMs`，**不改 `isSlowSample` 语义**；只对 `SCALE_ADJUSTED_OPERATIONS` 对数放宽（0.6 / 上限 8 倍），**清单 5 项** `delete_batch/search/tree_expand/batch_style/subtree_select`；`meta_build/meta_flush/lod_recompute` 已按真实标定移除，别加回；改清单须同步第 40/44 组硬编码断言。
 - 手势耗时口径唯一源 `shared/observability/gestureTiming.ts` 的 `resolveGestureSampleTiming`：`durationMs = maxFrameMs`、总时长存 `elapsedMs`、单帧 resize 返回 null 不上报；两处埋点共用，禁再拿 `performance.now()-startedAt` 当 durationMs。
 - 标定闭环：`computeScaleCalibration`/`computeCalibrationSummary` + `scripts/analyze-performance-scale.mts`（`perf:calibrate`；`--input` 吃 JSON/JSONL/`{samples}`/宿主日志 JSONL、`--out`、`--strict`、无输入合成基准）。CLI 必须 esbuild 打包加载；页面「导出样本」产出 `{samples:[...]}`，`ScaleCalibrationPanel` 基于**未筛选** samples。`performanceMetrics.ts` 的 `asRecord` 兼容字符串 params，勿删。
-- `PerformanceTab` 只做编排、`resolvedActive` 纯派生零 effect；门禁第 38–47 组（**指标数 21 / 13 条链路硬编码**，扩指标必同步）。`detail_save` 采样率 0.2（慢/失败强制上报），`detail_read` 未降采样；`public/api.ts` 新字段一律可选；颜色只用 `tokens.css` 变量 + `color-mix`，禁 hex / `${color}16`。
+- `PerformanceTab` 只做编排、`resolvedActive` 纯派生零 effect；门禁第 38–48 组（**指标数 21 / 13 条链路硬编码**，扩指标必同步）。`detail_save` 采样率 0.2（慢/失败强制上报），`detail_read` 未降采样；`public/api.ts` 新字段一律可选；颜色只用 `tokens.css` 变量 + `color-mix`，禁 hex / `${color}16`。
 - **多选热路径**：选中态唯一写入通道 `graphStore.applySelectionChanges(nextNodes, changedNodes)`（O(K) 刷 nodesMap + `selectionOnlyNodeArrays` WeakSet 让 zundo equality O(1) 短路，真实业务改动仍进历史），**禁回 `setNodes`**；`domain/graph/incrementalNodes.ts` 的 `createNodeIndexCache` 按数组引用缓存 id→index，共用 `graphNodeIndexCache`。
 - **LOD 签名铁律**：`buildLodPlanSignature` 满缩放**只剔除 selectedKey，必须保留 selectedNodeId**（左上角深度/类型诊断同源派生，去掉会让 GUI 阶段 Q 失败）；缩小时两者都进签名。`lod.ts` 的 `isLodFullZoom` 同源；满缩放短路只跳 hidden/折叠/边遍历，**hierarchy/排序/压力曲线不能跳**。
 - 其余口径：`useSemanticLod` 单遍 `computeLodVisibility`（`resolvePolicy`，`singlePass:true`）；`performanceStarts.ts` 的 1000ms TTL；`useGraphRoomLoader` 的 `inflightGraphRef` 共享读盘（丢弃请求只 logAction 不算失败）；`long_task` 阈值 200ms 带归因；`saveLater/saveNow` 全量 `buildMetaFromNodesEdges`；`graphStore.getState()` O(1) 取规模字段，统一 `readCanvasScale()` 且**必须容忍 mock store 缺字段**。
+
+## 房间加载（勿回退，详见 2026-11-15.md）
+- 唯一轻量摘要层 `electron/services/room-summary-service.js`（IO 注入）：一次父目录 readdir 替代 N 次 `existsSync`；v2 只数 nodes 分片 key（不读边分片、不合并 meta）；`hasDetail` 只看 `_docs` 文件名（不扫描对账、不回写 tree.json）；未知 version 降级空摘要、v1 读索引 children；返回 `{position?,childCount,hasDetail}` 不变，`file-service.js` 只做参数校验后委托。真实 1469 节点主进程 IO 187.6→31.9ms（5.9×）、stat 1813→0，新旧 1469 路径逐字段 0 差异。
+- `roomLoader.ts` 只调一次 `graphMetaToRoomGraph`（`buildNodes`/`buildEdges` 复用 `roomGraphOverride`）；`graphStore.replaceGraph` 不得重复 `buildNodesMap`。门禁第 48 组含内存 fs 真跑 + 4 次反向验证。
+- **刻意未做**：两次 IPC 合并（第二次只传 1469 路径/summary，收益有限）；`saveLater` 合并 meta 构建（debounce 到期读 store 可能已切房间，有写错房间风险，收益 ~68ms）；切换房间前置串行保存；`room_load` 只到 `setLoading(false)`，加载后 1562ms 长任务是监控盲区。
 
 ## 性能契约 / 存储
 - 新建 `createChildNodeOptimistic` 零 await、同步 `setNodes([...store.nodes,newNode])`；删除 `deleteChildNode` 只 `await storage.deleteCard` → `temporal.pause()` 包 remove → `void saveLater`；批量样式唯一源 `applyNodeStylePatch`/`clearNodeStyles`。禁回灌 `loadRoom`/`saveNow`/全量 `setNodes(map(...))`。
@@ -40,5 +45,5 @@
 
 ## 已知未修 / 待办
 - **hierarchy 已修（第 47 组）**：`graphHierarchy.ts` 的 `attach` 只重算 `edge.target` 子树（旧实现从 parent 全量重遍历，宽树 O(N²)）；5000 节点星形 `buildHierarchy` 1401.7→3.5ms、full/mid LOD 2092.9→17.2 / 2763.1→49.3ms。门禁含独立 BFS oracle + `Map.set` 线性计数断言 + 两次反向验证，**别改回从 source 起遍历**；满缩放签名因 `selectedNodeId` 变化失效会重跑 `computeLodVisibility`，这才是多选每帧大头。
-- 多选 P1 剩余**逐项核查后不做**：rAF 合并（pointermove 已 coalesced、受控选中态迟一帧有风险）、每节点订阅合并（三个 O(1) 布尔 selector，合并需 useShallow 反而更贵）、关 `elevateNodesOnSelect`（`@xyflow/system` 的 `adoptUserNodes` 每帧 O(N) 与该开关无关，关掉只省一个三元判断却丢置顶）；右栏文档 `useDeferredValue` 防抖**早已实现**（`DetailPanel.tsx` / `useStyleSettingsModel.ts`），旧清单误记。真实 5k+ 节点 Shift 拖框基线待宿主日志。
+- 多选 P1 剩余**核查后不做**：rAF 合并（pointermove 已 coalesced）、订阅合并（三个 O(1) 布尔，useShallow 更贵）、关 `elevateNodesOnSelect`（`adoptUserNodes` O(N) 与开关无关）；右栏 `useDeferredValue` 防抖**早已实现**（旧清单误记）。真实 5k+ 拖框基线待宿主日志。
 - 监控边界：单日查询、页面 5000 条窗口、趋势前半/后半、无越线告警；阈值 0.6 系数待 5k+ 真实样本再判。
