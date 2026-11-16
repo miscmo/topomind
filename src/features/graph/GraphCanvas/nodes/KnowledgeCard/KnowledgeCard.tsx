@@ -30,6 +30,7 @@ import { useGraphContext } from '../../../../../contexts/GraphContext'
 import { Link2 } from 'lucide-react'
 import { useLinkedDocumentStore } from '../../../linkedDocumentStore'
 import { tabStore } from '../../../../../stores/tabs/tabStore'
+import { useRightPanelStore } from '../../../../../stores/rightPanelStore'
 import { useActiveCanvasReadOnly } from '../../../../../stores/canvasReadOnlyStore'
 import { detailTierForZoom } from '../../../../../domain/graph/zoomScale'
 import {
@@ -428,6 +429,9 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                     onClick={(e) => {
                       e.stopPropagation()
                       e.preventDefault()
+                      const rightPanel = useRightPanelStore.getState()
+                      rightPanel.applyRightPanelAutoVisibility(true)
+                      rightPanel.setRightPanelTab('detail')
                       useLinkedDocumentStore.getState().requestLinkedView(id, tabStore.getState().activeTabId ?? '')
                     }}
                   >

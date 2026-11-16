@@ -9739,6 +9739,7 @@ const edge = (
     layout: '../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx',
     container: '../src/features/right-panel/RightPanelContainer.tsx',
     detail: '../src/features/right-panel/components/DetailTab/DetailPanel.tsx',
+    card: '../src/features/graph/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx',
   }
   const entries49 = Object.entries(files49) as Array<[keyof typeof files49, string]>
   const src49 = Object.fromEntries(await Promise.all(
@@ -9767,6 +9768,9 @@ const edge = (
   assert.ok(src49.detail.includes('data-tm-right-panel-pin=')
     && src49.detail.includes('onClick={toggleRightPanelPinned}'),
   '【右栏】空状态也必须保留 pin 入口，否则画布点击清空选中后无法解除固定')
+  assert.ok(src49.card.includes('rightPanel.applyRightPanelAutoVisibility(true)')
+    && src49.card.includes("rightPanel.setRightPanelTab('detail')"),
+  '【右栏】关联文档图标点击必须展开右栏并切回详情，复用统一自动显隐通道')
 
   const { build: build49 } = await import('esbuild')
   const { fileURLToPath: toPath49 } = await import('node:url')

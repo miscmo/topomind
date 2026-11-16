@@ -996,6 +996,14 @@ async function main() {
       JSON.stringify(diskAfterSave['node-a']?.linkedDocuments))
 
     // ---- 阶段 C：链环标记与右栏关联视图 ----
+    // 先折叠右栏，验证「点击卡片上的关联图标」本身就能把右栏打开。
+    await setRightPanelCollapsed(page, true)
+    const collapsedBeforeBadgeC = await page.evaluate(() => {
+      const right = document.querySelector('.right-panel-container')
+      return !!right && getComputedStyle(right).display === 'none'
+    })
+    check('【阶段 C】关联图标点击前右栏已折叠', collapsedBeforeBadgeC)
+
     const badge = await page.evaluate(() => {
       const b = [...document.querySelectorAll('button')].find((b) => (b.getAttribute('title') || '').includes('篇关联文档'))
       return { exists: !!b, title: b?.getAttribute('title') || '' }
@@ -1004,6 +1012,11 @@ async function main() {
     await page.evaluate(() => [...document.querySelectorAll('button')]
       .find((b) => (b.getAttribute('title') || '').includes('篇关联文档'))?.click())
     await sleep(1500)
+    const badgeExpandedC = await waitFor(page, () => {
+      const right = document.querySelector('.right-panel-container')
+      return !!right && getComputedStyle(right).display !== 'none'
+    }, 6000)
+    check('【阶段 C】点击关联文档图标自动展开右栏', badgeExpandedC)
     const linkedView = await page.evaluate(({ link, own }) => ({
       hasLinkedTitle: (document.body.innerText || '').includes(link),
       hasOwnTitle: (document.body.innerText || '').includes(own),
