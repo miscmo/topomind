@@ -6,9 +6,10 @@
  * 关联文档属于别的节点，读写 / 附件 / 草稿 / 缓存键一律用 documentCardPath，
  * 否则会把内容写到当前节点的 _docs 目录（本需求最大的事故风险）。
  */
-import { FolderOpen, Link2, MapPin } from 'lucide-react'
+import { FolderOpen, Link2, MapPin, Pin, PinOff } from 'lucide-react'
 import { useCallback, useDeferredValue, useEffect, memo, useMemo, useRef, useState } from 'react'
 import { useGraphStore, useGraphStoreApi, useSelectedNodeId } from '../../../../stores/graphStore'
+import { useRightPanelStore } from '../../../../stores/rightPanelStore'
 import { DocumentWorkspace } from '../../../../features/documents/DocumentWorkspace'
 import { tabStore, useGraphSession } from '../../../../stores/tabs/tabStore'
 import { useStorage } from '../../../../core/storage'
@@ -53,6 +54,10 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
 
   const storage = useStorage()
   const graphStoreApi = useGraphStoreApi()
+  // 空状态下也要能取消 pin：画布点击会清空选中，文档布局随之卸载，
+  // 固定入口必须放在 DetailPanel 这一层，否则 pin 后点击画布就再也解不开。
+  const isRightPanelPinned = useRightPanelStore((s) => s.rightPanelPinned)
+  const toggleRightPanelPinned = useRightPanelStore((s) => s.toggleRightPanelPinned)
 
   const childCount = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.childCount ?? 0 : 0)
   const nodeLabel = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.label ?? '' : '')
@@ -432,7 +437,19 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
   // ===== Empty state =====
   if (!selectedNodeId || !hasSelectedNode) {
     return (
-      <div id="detail-panel" className="w-full flex-1 flex flex-col min-h-0 min-w-0 bg-[var(--color-surface)] shrink-0 overflow-hidden transition-opacity">
+      <div id="detail-panel" className="relative w-full flex-1 flex flex-col min-h-0 min-w-0 bg-[var(--color-surface)] shrink-0 overflow-hidden transition-opacity">
+        <button
+          type="button"
+          className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[var(--color-text-muted)] bg-transparent transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] ${
+            isRightPanelPinned ? '!bg-[var(--color-accent-soft)] !text-[var(--color-accent)]' : ''
+          }`}
+          onClick={toggleRightPanelPinned}
+          title={isRightPanelPinned ? '已固定右侧面板（点击取消固定）' : '固定右侧面板（不随节点/画布点击自动折叠）'}
+          aria-label={isRightPanelPinned ? '取消固定右侧面板' : '固定右侧面板'}
+          data-tm-right-panel-pin={isRightPanelPinned ? 'true' : 'false'}
+        >
+          {isRightPanelPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+        </button>
         <div className="p-4 text-xs text-[var(--color-text-muted)] text-center mt-[40%]">选择一个节点查看详情</div>
       </div>
     )

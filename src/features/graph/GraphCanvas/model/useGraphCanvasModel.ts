@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, type Viewport, type NodeChange, type Node, type Edge } from '@xyflow/react'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
+import { useRightPanelStore } from '../../../../stores/rightPanelStore'
 import { getActiveCanvasReadOnly, isCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { useGraphStore, useGraphStoreApi } from '../../../../stores/graphStore'
 import { CANVAS_OPERATIONS } from '../../../../shared/observability/performanceContract'
@@ -213,7 +214,9 @@ export function useGraphCanvasModel({
     graph.onNodesChange(nextChanges)
   }, [graph, onNodesChangeIntercept])
 
-  const handlePaneClick = useCallback(() => {
+  // 只有 React Flow 真正派发的画布点击（带事件对象）才触发右栏自动折叠；
+  // 关系浮层关闭等程序化 onPaneClick 不带事件，不能把用户正在看的面板一起收掉。
+  const handlePaneClick = useCallback((event?: React.MouseEvent) => {
     onCloseContextMenu?.()
     
     // Check if format painter is active, if so, exit format painter mode
@@ -229,6 +232,7 @@ export function useGraphCanvasModel({
     setIsSearchOpen(false)
     
     graph.onPaneClick()
+    if (event) useRightPanelStore.getState().applyRightPanelAutoVisibility(false)
   }, [graph, onCloseContextMenu])
 
   const updateZoomLevel = useCallback((nextZoom: number) => {

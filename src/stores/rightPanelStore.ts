@@ -21,31 +21,50 @@ export type StylePanelTab = 'nodes' | 'edges' | 'relations'
 interface RightPanelStore {
   rightPanelCollapsed: boolean
   rightPanelMaximized: boolean
+  /** 固定展开：开启后所有折叠入口（节点/画布自动、标题栏、拖拽、双击）都不生效。 */
+  rightPanelPinned: boolean
   rightPanelWidth: number
   rightPanelTab: RightPanelTab
   stylePanelTab: StylePanelTab
   collapseRightPanel: () => void
   expandRightPanel: () => void
   toggleRightPanelMaximized: () => void
+  toggleRightPanelPinned: () => void
+  /** 点击节点/画布后的自动显隐；pin 开启时整段逻辑短路。 */
+  applyRightPanelAutoVisibility: (hasDocument: boolean) => void
   setRightPanelWidth: (width: number) => void
   setRightPanelTab: (tab: RightPanelTab) => void
   setStylePanelTab: (tab: StylePanelTab) => void
   resetRightPanel: () => void
 }
 
-export const RIGHT_PANEL_INITIAL_STATE: Pick<RightPanelStore, 'rightPanelCollapsed' | 'rightPanelMaximized' | 'rightPanelWidth' | 'rightPanelTab' | 'stylePanelTab'> = {
+export const RIGHT_PANEL_INITIAL_STATE: Pick<RightPanelStore, 'rightPanelCollapsed' | 'rightPanelMaximized' | 'rightPanelPinned' | 'rightPanelWidth' | 'rightPanelTab' | 'stylePanelTab'> = {
   rightPanelCollapsed: false,
   rightPanelMaximized: false,
+  rightPanelPinned: false,
   rightPanelWidth: 600,
   rightPanelTab: 'detail',
   stylePanelTab: 'nodes',
 }
 
-export const useRightPanelStore = create<RightPanelStore>((set) => ({
+export const useRightPanelStore = create<RightPanelStore>((set, get) => ({
   ...RIGHT_PANEL_INITIAL_STATE,
-  collapseRightPanel: () => set({ rightPanelCollapsed: true }),
+  collapseRightPanel: () => {
+    // pin 的语义是「始终展开」：标题栏 / 拖拽 / 双击 / 自动折叠统一在这里挡住。
+    if (get().rightPanelPinned) return
+    set({ rightPanelCollapsed: true })
+  },
   expandRightPanel: () => set({ rightPanelCollapsed: false }),
   toggleRightPanelMaximized: () => set((state) => ({ rightPanelMaximized: !state.rightPanelMaximized })),
+  // 固定即展开：按钮只在面板可见时可达，这里仍显式展开，避免样式面板等路径留下半折叠态。
+  toggleRightPanelPinned: () => set((state) => ({
+    rightPanelPinned: !state.rightPanelPinned,
+    rightPanelCollapsed: state.rightPanelPinned ? state.rightPanelCollapsed : false,
+  })),
+  applyRightPanelAutoVisibility: (hasDocument) => {
+    if (get().rightPanelPinned) return
+    set({ rightPanelCollapsed: !hasDocument })
+  },
   setRightPanelWidth: (width) => set({ rightPanelWidth: Math.max(RIGHT_PANEL_WIDTH_FLOOR, Math.round(width)) }),
   setRightPanelTab: (rightPanelTab) => set({ rightPanelTab }),
   setStylePanelTab: (stylePanelTab) => set({ stylePanelTab }),

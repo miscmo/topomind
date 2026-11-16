@@ -811,6 +811,8 @@ async function main() {
         bubbles: true, cancelable: true, button: 0, clientX: 700, clientY: 300,
       }))
     })
+    // 这是真实 DOM 事件，会按新交互规则自动折叠右栏；后续关联视图用例需要展开基线。
+    await setRightPanelCollapsed(page, false)
 
     // ---- 阶段 A / T：统一树按需加载 + 文档树路径 + 上限 8 ----
     check('右键菜单含「关联已有文档…」', await openLinkDialog(page) &&
@@ -2984,6 +2986,134 @@ async function main() {
       baseLayout.rightVisible && !collapsedLayout.rightVisible && expandedLayout.rightVisible
       && JSON.stringify(baseLayout.right) === JSON.stringify(expandedLayout.right),
       JSON.stringify({ base: baseLayout.right, collapsed: collapsedLayout.right, expanded: expandedLayout.right }))
+
+    // ===== 阶段 W：右栏自动显隐 + pin 固定（点击有文档节点展开 / 空白与无文档节点折叠） =====
+    await page.evaluate(() => {
+      const group = document.querySelector('[aria-label="右侧面板分区"]')
+      const detailTab = [...(group?.querySelectorAll('button') ?? [])]
+        .find((b) => (b.textContent || '').trim() === '详情')
+      detailTab?.click()
+    })
+    await setRightPanelCollapsed(page, false)
+    await waitFor(page, () => !!document.querySelector('[data-tm-right-panel-pin]'), 6000)
+
+    const pinPlacementW = await page.evaluate(() => {
+      const fullscreen = document.querySelector('button[aria-label="最大化面板"], button[aria-label="还原面板"]')
+      const rail = fullscreen?.parentElement
+      const labels = [...(rail?.querySelectorAll('button') ?? [])]
+        .map((b) => b.getAttribute('aria-label') || '')
+      return {
+        labels,
+        fullscreenIndex: labels.findIndex((l) => l === '最大化面板' || l === '还原面板'),
+        pinIndex: labels.findIndex((l) => l === '固定右侧面板' || l === '取消固定右侧面板'),
+        pins: document.querySelectorAll('[data-tm-right-panel-pin]').length,
+      }
+    })
+    check('【阶段 W】pin 按钮在全屏按钮正下方且唯一',
+      pinPlacementW.fullscreenIndex >= 0
+      && pinPlacementW.pinIndex === pinPlacementW.fullscreenIndex + 1
+      && pinPlacementW.pins === 1,
+      JSON.stringify(pinPlacementW))
+
+    const rightPanelVisibleW = () => page.evaluate(() => {
+      const right = document.querySelector('.right-panel-container')
+      return !!right && getComputedStyle(right).display !== 'none'
+    })
+    const clickPaneW = () => page.evaluate(() => {
+      const pane = document.querySelector('.react-flow__pane')
+      if (!pane) return false
+      const r = pane.getBoundingClientRect()
+      pane.dispatchEvent(new MouseEvent('click', {
+        bubbles: true, cancelable: true, button: 0, buttons: 1,
+        clientX: Math.round(r.left + 20), clientY: Math.round(r.top + 20),
+      }))
+      return true
+    })
+    const clickNodeW = (id) => page.evaluate((nodeId) => {
+      const node = document.querySelector(`.react-flow__node[data-id="${nodeId}"]`)
+      if (!node) return false
+      const r = node.getBoundingClientRect()
+      node.dispatchEvent(new MouseEvent('click', {
+        bubbles: true, cancelable: true, button: 0, buttons: 1,
+        clientX: Math.round(r.left + r.width / 2), clientY: Math.round(r.top + r.height / 2),
+      }))
+      return true
+    }, id)
+    const waitPanelW = async (visible) => {
+      const end = Date.now() + 6000
+      while (Date.now() < end) {
+        const ok = await page.evaluate((wantVisible) => {
+          const right = document.querySelector('.right-panel-container')
+          return !!right && (getComputedStyle(right).display !== 'none') === wantVisible
+        }, visible)
+        if (ok) return true
+        await sleep(200)
+      }
+      return false
+    }
+
+    check('【阶段 W】点击空白画布自动折叠右栏',
+      await clickPaneW() && await waitPanelW(false),
+      JSON.stringify({ visible: await rightPanelVisibleW() }))
+
+    check('【阶段 W】点击有自身文档的节点自动展开右栏',
+      await clickNodeW('node-a') && await waitPanelW(true),
+      JSON.stringify({ visible: await rightPanelVisibleW() }))
+
+    check('【阶段 W】点击无文档节点自动折叠右栏',
+      await clickNodeW('lod-c1') && await waitPanelW(false),
+      JSON.stringify({ visible: await rightPanelVisibleW() }))
+
+    check('【阶段 W】重新点击有文档节点可再次展开',
+      await clickNodeW('node-a') && await waitPanelW(true),
+      JSON.stringify({ visible: await rightPanelVisibleW() }))
+
+    const pinClickedW = await page.evaluate(() => {
+      const button = document.querySelector('button[aria-label="固定右侧面板"]')
+      button?.click()
+      return !!button
+    })
+    const pinnedW = await waitFor(page, () =>
+      document.querySelector('.right-panel-container')?.getAttribute('data-tm-right-panel-pinned') === 'true', 6000)
+    check('【阶段 W】点击 pin 后面板进入固定展开态', pinClickedW && pinnedW && await rightPanelVisibleW(),
+      JSON.stringify({ pinClickedW, pinnedW }))
+
+    await clickNodeW('lod-c1')
+    await sleep(200)
+    const stillOpenAfterNoDocW = await rightPanelVisibleW()
+    check('【阶段 W】pin 后点击无文档节点不再自动折叠', stillOpenAfterNoDocW,
+      JSON.stringify({ visible: stillOpenAfterNoDocW }))
+
+    await clickPaneW()
+    await sleep(200)
+    const stillOpenAfterPaneW = await rightPanelVisibleW()
+    check('【阶段 W】pin 后点击空白画布不再自动折叠', stillOpenAfterPaneW,
+      JSON.stringify({ visible: stillOpenAfterPaneW }))
+
+    const manualCollapseBlockedW = await page.evaluate(() => {
+      const button = document.querySelector('button[aria-label="折叠右侧面板"]')
+      button?.click()
+      return !!button
+    })
+    await sleep(200)
+    const stillOpenAfterManualW = await rightPanelVisibleW()
+    check('【阶段 W】pin 后标题栏折叠入口也被挡住',
+      manualCollapseBlockedW && stillOpenAfterManualW,
+      JSON.stringify({ clicked: manualCollapseBlockedW, visible: stillOpenAfterManualW }))
+
+    const unpinClickedW = await page.evaluate(() => {
+      const button = document.querySelector('button[aria-label="取消固定右侧面板"]')
+      button?.click()
+      return !!button
+    })
+    const unpinnedW = await waitFor(page, () =>
+      document.querySelector('.right-panel-container')?.getAttribute('data-tm-right-panel-pinned') === 'false', 6000)
+    check('【阶段 W】再次点击 pin 可取消固定', unpinClickedW && unpinnedW && await rightPanelVisibleW(),
+      JSON.stringify({ unpinClickedW, unpinnedW }))
+
+    check('【阶段 W】取消 pin 后自动折叠恢复',
+      await clickPaneW() && await waitPanelW(false),
+      JSON.stringify({ visible: await rightPanelVisibleW() }))
 
     // ===== 阶段 X：新建节点即时呈现（同步插入内存 + 后台合并落盘） =====
     // 旧实现为 1 个新节点会重载整房间，节点多时点击后要等半秒。这里从「点下菜单项」

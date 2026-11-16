@@ -24,6 +24,7 @@ function getRightPanelBounds() {
 export default memo(function RightPanelContainer({ tabId, isActive = true }: RightPanelContainerProps) {
   const collapsed = useRightPanelStore((s) => s.rightPanelCollapsed)
   const maximized = useRightPanelStore((s) => s.rightPanelMaximized)
+  const pinned = useRightPanelStore((s) => s.rightPanelPinned)
   const width = useRightPanelStore((s) => s.rightPanelWidth)
   const activeTab = useRightPanelStore((s) => s.rightPanelTab)
   const setWidth = useRightPanelStore((s) => s.setRightPanelWidth)
@@ -87,6 +88,7 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
     <div
       className={`${collapsed ? 'hidden' : 'flex'} h-full shrink-0 right-panel-container ${maximized ? 'absolute inset-0 z-30 bg-[var(--color-canvas-bg)] w-full' : 'absolute inset-y-0 right-0 z-30'}`}
       data-tm-right-panel-overlay="true"
+      data-tm-right-panel-pinned={pinned ? 'true' : 'false'}
       aria-hidden={collapsed}
     >
       {!maximized && willAutoCollapse && isResizing && (

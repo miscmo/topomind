@@ -394,6 +394,8 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
 
   const isMaximized = useRightPanelStore((s) => s.rightPanelMaximized)
   const toggleMaximized = useRightPanelStore((s) => s.toggleRightPanelMaximized)
+  const isRightPanelPinned = useRightPanelStore((s) => s.rightPanelPinned)
+  const toggleRightPanelPinned = useRightPanelStore((s) => s.toggleRightPanelPinned)
 
   // 锁定按知识库(kbPath)维度隔离：只取当前知识库自己的锁定状态，避免切库后串扰
   const selectedNodeIdRaw = useSelectedNodeId()
@@ -497,6 +499,16 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
               ) : (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
               )}
+            </button>
+            <button
+              type="button"
+              className={`${RAIL_BUTTON} ${isRightPanelPinned ? RAIL_BUTTON_ACTIVE : ''}`}
+              onClick={toggleRightPanelPinned}
+              title={isRightPanelPinned ? '已固定右侧面板（点击取消固定）' : '固定右侧面板（不随节点/画布点击自动折叠）'}
+              aria-label={isRightPanelPinned ? '取消固定右侧面板' : '固定右侧面板'}
+              data-tm-right-panel-pin={isRightPanelPinned ? 'true' : 'false'}
+            >
+              {isRightPanelPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
             </button>
             <button
               type="button"

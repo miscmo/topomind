@@ -9728,4 +9728,98 @@ const edge = (
     '【P0】摘要读取不得触碰 edges 分片（childCount 只依赖 nodes 分片）')
 }
 
+// --- 第 49 组：右栏自动显隐 + pin 固定（2026-11-16） ---
+// 点击有自身文档（hasDetail）的节点展开，点击空白画布或无文档节点折叠；
+// pin 开启后所有折叠入口统一在 store 短路，关系浮层的程序化 onPaneClick 不触发自动折叠。
+{
+  const files49 = {
+    store: '../src/stores/rightPanelStore.ts',
+    events: '../src/hooks/useGraph/graphEventHandlers.ts',
+    canvas: '../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts',
+    layout: '../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx',
+    container: '../src/features/right-panel/RightPanelContainer.tsx',
+    detail: '../src/features/right-panel/components/DetailTab/DetailPanel.tsx',
+  }
+  const entries49 = Object.entries(files49) as Array<[keyof typeof files49, string]>
+  const src49 = Object.fromEntries(await Promise.all(
+    entries49.map(async ([key, relative]) => [key, await readFile(new URL(relative, import.meta.url), 'utf8')] as const),
+  )) as Record<keyof typeof files49, string>
+
+  assert.ok(src49.store.includes('rightPanelPinned: boolean')
+    && src49.store.includes('toggleRightPanelPinned: () => void')
+    && src49.store.includes('applyRightPanelAutoVisibility: (hasDocument: boolean) => void'),
+  '【右栏】store 必须同时暴露 pin 状态、切换动作与统一自动显隐动作')
+  assert.ok(src49.store.includes('if (get().rightPanelPinned) return'),
+    '【右栏】pin 必须在 store 层短路所有折叠入口，不能散落在各调用方')
+  assert.ok(src49.events.includes('useRightPanelStore.getState().applyRightPanelAutoVisibility(nodeHasDocument(node.data))'),
+    '【右栏】节点点击必须把「是否有自身文档」交给统一动作')
+  const hasDocumentFn49 = src49.events.match(/function nodeHasDocument\([\s\S]*?\r?\n\}/)?.[0] ?? ''
+  assert.ok(hasDocumentFn49.includes('return data?.hasDetail === true')
+    && !hasDocumentFn49.includes('linkedDocuments'),
+  '【右栏】有文档只认本节点 hasDetail，关联文档不算')
+  assert.ok(src49.canvas.includes('if (event) useRightPanelStore.getState().applyRightPanelAutoVisibility(false)'),
+    '【右栏】只有带事件的真实画布点击才自动折叠，程序化 onPaneClick 必须排除')
+  assert.ok(src49.layout.includes('data-tm-right-panel-pin=')
+    && src49.layout.includes('onClick={toggleRightPanelPinned}'),
+  '【右栏】全屏按钮下必须有可定位的 pin 按钮')
+  assert.ok(src49.container.includes('data-tm-right-panel-pinned='),
+    '【右栏】容器必须暴露 pin 状态供端到端回归读取')
+  assert.ok(src49.detail.includes('data-tm-right-panel-pin=')
+    && src49.detail.includes('onClick={toggleRightPanelPinned}'),
+  '【右栏】空状态也必须保留 pin 入口，否则画布点击清空选中后无法解除固定')
+
+  const { build: build49 } = await import('esbuild')
+  const { fileURLToPath: toPath49 } = await import('node:url')
+  const bundle49 = await build49({
+    entryPoints: [toPath49(new URL(files49.store, import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const storeModule49 = await import(
+    `data:text/javascript;base64,${Buffer.from(bundle49.outputFiles[0].text).toString('base64')}`
+  ) as {
+    useRightPanelStore: {
+      getState: () => {
+        rightPanelCollapsed: boolean
+        rightPanelPinned: boolean
+        resetRightPanel: () => void
+        applyRightPanelAutoVisibility: (hasDocument: boolean) => void
+        toggleRightPanelPinned: () => void
+        collapseRightPanel: () => void
+        expandRightPanel: () => void
+      }
+    }
+  }
+  const panel49 = storeModule49.useRightPanelStore
+  panel49.getState().resetRightPanel()
+  assert.equal(panel49.getState().rightPanelCollapsed, false)
+  assert.equal(panel49.getState().rightPanelPinned, false)
+
+  panel49.getState().applyRightPanelAutoVisibility(false)
+  assert.equal(panel49.getState().rightPanelCollapsed, true,
+    '【右栏】无文档节点/画布点击必须折叠')
+  panel49.getState().applyRightPanelAutoVisibility(true)
+  assert.equal(panel49.getState().rightPanelCollapsed, false,
+    '【右栏】有文档节点点击必须展开')
+
+  panel49.getState().toggleRightPanelPinned()
+  assert.equal(panel49.getState().rightPanelPinned, true)
+  assert.equal(panel49.getState().rightPanelCollapsed, false, '【右栏】pin 时面板必须保持展开')
+  panel49.getState().applyRightPanelAutoVisibility(false)
+  panel49.getState().collapseRightPanel()
+  assert.equal(panel49.getState().rightPanelCollapsed, false,
+    '【右栏】pin 必须同时挡住自动折叠与手动折叠')
+
+  panel49.getState().toggleRightPanelPinned()
+  assert.equal(panel49.getState().rightPanelPinned, false)
+  assert.equal(panel49.getState().rightPanelCollapsed, false,
+    '【右栏】取消 pin 不应把面板意外折叠')
+  panel49.getState().applyRightPanelAutoVisibility(false)
+  assert.equal(panel49.getState().rightPanelCollapsed, true,
+    '【右栏】取消 pin 后自动折叠必须恢复')
+  panel49.getState().applyRightPanelAutoVisibility(true)
+  panel49.getState().resetRightPanel()
+  assert.equal(panel49.getState().rightPanelCollapsed, false)
+  assert.equal(panel49.getState().rightPanelPinned, false)
+}
+
 console.log('Critical regression checks verified')
