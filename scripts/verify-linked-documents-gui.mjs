@@ -133,8 +133,19 @@ async function cdpReachable() {
 
 async function connectOrLaunch() {
   if (await cdpReachable()) return { browser: null, spawned: null }
-  const exe = path.join(process.cwd(), 'node_modules', 'electron', 'dist',
-    process.platform === 'win32' ? 'electron.exe' : 'electron')
+  // macOS 的 electron 包把可执行文件放在 Electron.app 内，且具体相对路径由
+  // path.txt 给出；Linux/Windows 才是 dist/electron(.exe)。此前只按后者拼接，
+  // 导致 darwin 上门禁必然报「找不到 electron 可执行文件」。
+  const electronRoot = path.join(process.cwd(), 'node_modules', 'electron')
+  const exe = process.platform === 'darwin'
+    ? (() => {
+        const pathTxt = path.join(electronRoot, 'path.txt')
+        const rel = fs.existsSync(pathTxt)
+          ? fs.readFileSync(pathTxt, 'utf8').trim()
+          : 'Electron.app/Contents/MacOS/Electron'
+        return path.join(electronRoot, 'dist', rel)
+      })()
+    : path.join(electronRoot, 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron')
   if (!fs.existsSync(exe)) throw new Error('找不到 electron 可执行文件: ' + exe)
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE // 否则主进程会被当成纯 Node 启动
@@ -306,14 +317,39 @@ async function enterWorkspace(page) {
   return workspaceReady
 }
 
+/**
+ * Electron 刚被拉起时 CDP 已可连接，但 renderer 的 main frame 可能还没 attach，
+ * 此时访问 page.url() 会抛 "Requesting main frame too early!"。轮询到页面就绪为止。
+ */
+async function findRendererPage(browser, timeoutMs = 20000) {
+  const deadline = Date.now() + timeoutMs
+  let lastError = null
+  while (Date.now() < deadline) {
+    let pages = []
+    try {
+      pages = await browser.pages()
+    } catch (e) {
+      lastError = e
+    }
+    for (const candidate of pages) {
+      try {
+        if (candidate.url().includes('index.html')) return candidate
+      } catch (e) {
+        lastError = e
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+  throw new Error('找不到 renderer 页面' + (lastError ? ': ' + lastError.message : ''))
+}
+
 async function main() {
   setupWorkDir()
   const { spawned } = await connectOrLaunch()
   // BlockNote 编辑器 focus / scrollIntoView 偶发 CDP 长调用，默认 180s 会把整轮 GUI 打断。
   const browser = await puppeteer.connect({ browserURL: CDP_URL, defaultViewport: null, protocolTimeout: 300000 })
   try {
-    const page = (await browser.pages()).find((p) => p.url().includes('index.html'))
-    if (!page) throw new Error('找不到 renderer 页面')
+    const page = await findRendererPage(browser)
 
     check('隔离测试库构造完成', fs.existsSync(DOC_A) && fs.existsSync(DOC_B))
     check('进入工作空间并渲染两个节点', await enterWorkspace(page))

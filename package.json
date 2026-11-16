@@ -38,7 +38,7 @@
     "directories": {
       "output": "release"
     },
-    "icon": "build/icon.svg",
+    "icon": "build/icon.png",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",

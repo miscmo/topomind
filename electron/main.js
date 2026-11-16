@@ -36,6 +36,8 @@ const DIST_RENDERER_DIR = [
   || nodePath.join(APP_PATH, 'dist');
 const SETUP_WINDOW_WIDTH = 680;
 const SETUP_WINDOW_HEIGHT = 420;
+const WORKSPACE_MIN_WIDTH = 900;
+const WORKSPACE_MIN_HEIGHT = 600;
 const HOME_WINDOW_WIDTH = 1400;
 const HOME_WINDOW_HEIGHT = 900;
 const WINDOW_BACKGROUND_COLOR = '#ffffff';
@@ -502,9 +504,7 @@ function registerIPC() {
   // ----- App handlers -----
   ipcMain.handle('app:navigateHome', function() {
     if (win && !win.isDestroyed()) {
-      win.setResizable(true);
-      win.setMinimumSize(900, 600);
-      win.setMaximumSize(0, 0);
+      applyWorkspaceWindowConstraints();
 
       // 如果有工作目录，尝试读取其保存的状态
       let state = null;
@@ -566,9 +566,7 @@ function registerIPC() {
     }
     var ok = LogService.enterWorkDir(normalizedWorkDir);
     if (win && !win.isDestroyed()) {
-      win.setResizable(true);
-      win.setMinimumSize(900, 600);
-      win.setMaximumSize(0, 0);
+      applyWorkspaceWindowConstraints();
 
       // 尝试读取已保存的窗口状态
       let state = null;
@@ -653,6 +651,12 @@ function registerIPC() {
   });
   ipcMain.handle('app:window:toggleMaximize', function() {
     if (win && !win.isDestroyed()) {
+      // macOS 在 resizable:false 时 maximize() 会静默失败。工作区本应已由
+      // applyWorkspaceWindowConstraints() 打开，这里再兜一次底，避免切换工作目录
+      // 等路径残留的尺寸锁让最大化按钮点了没反应。setup 视图不兜底，保持固定窗口。
+      if (LogService.getCurrentWorkDir() && !win.isResizable()) {
+        win.setResizable(true);
+      }
       if (win.isMaximized()) {
         win.unmaximize();
       } else {
@@ -762,13 +766,21 @@ if (process.env.TOPOMIND_PROFILE && process.env.TOPOMIND_PROFILE !== 'prod') {
 
 function createWindow() {
   const preloadPath = nodePath.join(DIST_ELECTRON_DIR, 'preload.js');
+  const isMac = process.platform === 'darwin';
 
   win = new BrowserWindow({
     width: SETUP_WINDOW_WIDTH, height: SETUP_WINDOW_HEIGHT,
-    minWidth: SETUP_WINDOW_WIDTH, minHeight: SETUP_WINDOW_HEIGHT,
-    maxWidth: SETUP_WINDOW_WIDTH, maxHeight: SETUP_WINDOW_HEIGHT,
     useContentSize: true,
-    frame: false,
+    // setup 阶段固定窗口只用 resizable:false 表达。绝不要用 minWidth===maxWidth、
+    // minHeight===maxHeight 去"锁"尺寸：AppKit 会把窗口尺寸夹死，导致工作区里
+    // 鼠标拖边缘看似无效、win.maximize() 也被夹回 setup 尺寸（macOS 尤其明显）。
+    // 进入工作区时由 applyWorkspaceWindowConstraints() 打开 resizable 并设最小尺寸。
+    resizable: false,
+    // macOS: frame:false 无边框窗口没有原生 resize handle；用 hidden 标题栏保留
+    // 原生窗口边框的 resize/zoom 能力，视觉上仍无标题栏。Windows/Linux 维持原样。
+    ...(isMac
+      ? { titleBarStyle: 'hidden' }
+      : { frame: false }),
     center: true,
     show: false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
@@ -784,6 +796,13 @@ function createWindow() {
       sandbox: true,
     },
   });
+
+  // titleBarStyle:'hidden' 下 macOS 仍会显示原生红绿灯，它会盖住自定义标题栏左上角的
+  // logo/菜单。窗口控制已由 CustomTitleBar 的三个按钮 + 双击标题栏接管，故隐藏原生按钮。
+  if (isMac && typeof win.setWindowButtonVisibility === 'function') {
+    win.setWindowButtonVisibility(false);
+  }
+
   if (IS_DEV) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
@@ -886,6 +905,30 @@ function openLearningStatisticsWindow() {
   }
 }
 
+/**
+ * 进入工作区时解除 setup 窗口的尺寸锁。
+ *
+ * 只做两件确定的事：打开 resizable、设置工作区最小尺寸。全程不调用
+ * setMaximumSize —— 旧实现靠 setMaximumSize(0, 0) 去"解除"构造时写死的
+ * maxWidth/maxHeight，这个 0 是否被 AppKit 当作「无限制」是平台/版本相关的
+ * 隐式行为，正是 macOS 上拖不动、maximize() 无效的根因。现在构造时根本不设
+ * 最大尺寸，也就没有任何需要解除的约束。
+ */
+function applyWorkspaceWindowConstraints() {
+  if (!win || win.isDestroyed()) return;
+  win.setResizable(true);
+  win.setMinimumSize(WORKSPACE_MIN_WIDTH, WORKSPACE_MIN_HEIGHT);
+  if (IS_DEV) {
+    console.log('[window:constraints] workspace', {
+      platform: process.platform,
+      resizable: win.isResizable(),
+      minSize: win.getMinimumSize(),
+      maxSize: typeof win.getMaximumSize === 'function' ? win.getMaximumSize() : null,
+      maximizable: typeof win.isMaximizable === 'function' ? win.isMaximizable() : null,
+    });
+  }
+}
+
 function resetMainWindowToSetup() {
   if (!win || win.isDestroyed()) return;
   
@@ -895,7 +938,6 @@ function resetMainWindowToSetup() {
   
   win.setResizable(false);
   win.setMinimumSize(SETUP_WINDOW_WIDTH, SETUP_WINDOW_HEIGHT);
-  win.setMaximumSize(SETUP_WINDOW_WIDTH, SETUP_WINDOW_HEIGHT);
   win.setContentSize(SETUP_WINDOW_WIDTH, SETUP_WINDOW_HEIGHT);
   win.center();
   
@@ -1008,7 +1050,37 @@ function handleRendererSchemeRequest(request) {
   }
 }
 
+/**
+ * 解析 macOS Dock 图标路径。
+ * - dev: APP_PATH 指向仓库根，build/icon.png 可直接读取。
+ * - packaged: build/ 不进 asar，electron-builder 会把图标落到 Contents/Resources。
+ * 找不到就返回 null（打包后 .app bundle 自带图标，无需运行时再设）。
+ */
+function resolveDockIconPath() {
+  const resourceDir = process.resourcesPath || '';
+  const candidates = [
+    nodePath.join(APP_PATH, 'build', 'icon.png'),
+    nodePath.join(resourceDir, 'icon.png'),
+    nodePath.join(resourceDir, 'icon.icns'),
+    nodePath.join(resourceDir, 'electron.icns'),
+  ];
+  return candidates.find((p) => p && nodeFs.existsSync(p)) || null;
+}
+
 app.whenReady().then(function() {
+  // BrowserWindow.icon 在 macOS 上被 Electron 忽略；dev 模式跑的是 Electron 自带 bundle，
+  // Dock 默认显示 Electron 图标。必须显式设置运行时 Dock 图标才会显示自定义图标。
+  if (process.platform === 'darwin' && app.dock && typeof app.dock.setIcon === 'function') {
+    const dockIconPath = resolveDockIconPath();
+    if (dockIconPath) {
+      try {
+        app.dock.setIcon(dockIconPath);
+      } catch (err) {
+        console.error('[app:dock-icon] failed to set dock icon:', err);
+      }
+    }
+  }
+
   protocol.handle('local-file', async (request) => {
     try {
       const filePath = parseLocalFileUrl(request.url);
