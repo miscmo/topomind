@@ -719,7 +719,7 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   font-size: 0.6em;
   line-height: 1;
 }
-.tm-smart-block-menu__tile:hover .tm-smart-block-menu__tile-fill {
+.tm-smart-block-menu__tile:hover:not([disabled]):not([aria-disabled="true"]):not([data-disabled="true"]) .tm-smart-block-menu__tile-fill {
   background: var(--color-hover-bg);
 }
 /* Current block's format is reflected as a *selected* tile (filled accent
@@ -785,6 +785,29 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   color: var(--color-text-muted);
   font-size: 13px;
   letter-spacing: 0.02em;
+}
+/* 缩进 / 对齐复用顶部块类型磁贴的图标语言：一行 2 个缩进、一行 3 个对齐，
+   与顶部网格同列宽、同间距、同选中态；文案只放在 tooltip / aria-label。 */
+.tm-smart-block-menu__icon-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 32px);
+  gap: 12px;
+  padding: 2px 18px 8px;
+  justify-content: start;
+}
+.tm-smart-block-menu__icon-actions--align {
+  grid-template-columns: repeat(3, 32px);
+  padding-bottom: 12px;
+}
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[disabled],
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[aria-disabled="true"],
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[data-disabled="true"] {
+  cursor: not-allowed;
+}
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[disabled] .tm-smart-block-menu__tile-fill,
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[aria-disabled="true"] .tm-smart-block-menu__tile-fill,
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[data-disabled="true"] .tm-smart-block-menu__tile-fill {
+  opacity: 0.45;
 }
 
 .tm-smart-block-menu__feedback {

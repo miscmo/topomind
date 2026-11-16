@@ -378,6 +378,38 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     }
   }, [attachmentInsertTargetKey])
 
+  // 光标回到文档首块时，ProseMirror 的 scrollRectIntoView 会把首块顶对齐滚动容器上沿，
+  // 把 .bn-editor 的 24px 顶部留白整段滚掉（实测 Ctrl+Home 后 scrollTop 停在 30、H1 距
+  // 容器顶 0），表现为首块 H1 上方空白被切、字顶贴住工具栏。scrollMargin / CSS
+  // scroll-padding 都拦不住这段由 Transaction.scrollIntoView 触发的对齐，因此在选区
+  // 变化后的一帧内检测：光标落在首块且 scrollTop 处于「伪滚动」区间（0, 48] 时归零。
+  // 真实阅读位置（>= MIN_RESTORE_SCROLL_TOP）与其它块的光标定位都不受影响。
+  useEffect(() => {
+    let frame: number | null = null
+    const unsubscribe = editor.onSelectionChange(() => {
+      if (frame !== null) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        frame = null
+        const scrollContainer = scrollContainerRef.current
+        if (!scrollContainer) return
+        const top = scrollContainer.scrollTop
+        if (top <= 0 || top > MIN_RESTORE_SCROLL_TOP) return
+        try {
+          const cursorBlockId = editor.getTextCursorPosition().block.id
+          if (editor.document[0]?.id === cursorBlockId) {
+            scrollContainer.scrollTop = 0
+          }
+        } catch {
+          // 选区尚未稳定时读取失败，忽略即可，不干扰编辑
+        }
+      })
+    })
+    return () => {
+      unsubscribe()
+      if (frame !== null) cancelAnimationFrame(frame)
+    }
+  }, [editor])
+
   // 滚动联动（scroll-spy）：根据滚动位置计算“当前所在标题”，把其 block id 上抛，
   // 供右上角浮动目录高亮选中态。用 requestAnimationFrame 节流，避免滚动时频繁重排。
   useEffect(() => {

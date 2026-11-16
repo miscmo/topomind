@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from 'react'
+import { AlignCenter, AlignLeft, AlignRight, IndentDecrease, IndentIncrease } from 'lucide-react'
 import { useComponentsContext, useExtensionState } from '@blocknote/react'
 import { useSmartBlockNoteEditor, type SmartDocumentPartialBlock } from '../smartDocumentEditorTypes'
 import { SideMenuExtension } from '@blocknote/core/extensions'
@@ -21,6 +22,12 @@ import { SmartSubMenu, SmartSubMenuDropdown, SmartSubMenuTrigger } from './Smart
 // 菜单每次打开都是重新挂载的，方向若只存在组件内 state 会丢失。这里记在模块级，
 // 让「连续在上方插入多个块」不必每次重开菜单都再切一次方向（不落盘，仅本次会话）。
 let lastInsertPlacement: SmartDocumentInsertPlacement = 'after'
+
+const SMART_DOCUMENT_ALIGNMENT_ACTIONS = [
+  { value: 'left', label: '左对齐', Icon: AlignLeft },
+  { value: 'center', label: '居中', Icon: AlignCenter },
+  { value: 'right', label: '右对齐', Icon: AlignRight },
+] as const
 
 function createTableBlock() {
   return {
@@ -206,26 +213,36 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
 
       {mode === 'edit' ? (
         <div className="tm-smart-block-menu__section">
-          <SmartSubMenu position="right">
-            <SmartSubMenuTrigger>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__row" subTrigger><span>缩进和对齐</span><span>›</span></Components.Generic.Menu.Item>
-            </SmartSubMenuTrigger>
-            <SmartSubMenuDropdown className="bn-menu-dropdown tm-smart-block-menu__sub">
+          {/* 缩进与对齐直接平铺在一级菜单：复用顶部块类型磁贴的图标按钮语言，
+              一次点击即可执行，不再经过二级菜单。文案只留在 tooltip/aria-label。 */}
+          <div className="tm-smart-block-menu__icon-actions" role="group" aria-label="缩进">
+            <Components.Generic.Menu.Item
+              className="tm-smart-block-menu__tile"
+              data-tm-block-menu-action="unnest"
+              aria-label="减少缩进"
+              {...disabledItemProps(!canUnnestTargetBlock)}
+              onClick={() => canUnnestTargetBlock && runOnTargetBlock(() => editor.unnestBlock())}
+            ><span className="tm-smart-block-menu__tile-fill" title="减少缩进"><IndentDecrease size={16} strokeWidth={2} /></span></Components.Generic.Menu.Item>
+            <Components.Generic.Menu.Item
+              className="tm-smart-block-menu__tile"
+              data-tm-block-menu-action="nest"
+              aria-label="增加缩进"
+              {...disabledItemProps(!canNestTargetBlock)}
+              onClick={() => canNestTargetBlock && runOnTargetBlock(() => editor.nestBlock())}
+            ><span className="tm-smart-block-menu__tile-fill" title="增加缩进"><IndentIncrease size={16} strokeWidth={2} /></span></Components.Generic.Menu.Item>
+          </div>
+          <div className="tm-smart-block-menu__icon-actions tm-smart-block-menu__icon-actions--align" role="group" aria-label="对齐方式">
+            {SMART_DOCUMENT_ALIGNMENT_ACTIONS.map(({ value, label, Icon }) => (
               <Components.Generic.Menu.Item
-                className="tm-smart-block-menu__subitem"
-                {...disabledItemProps(!canUnnestTargetBlock)}
-                onClick={() => canUnnestTargetBlock && runOnTargetBlock(() => editor.unnestBlock())}
-              ><span>减少缩进</span></Components.Generic.Menu.Item>
-              <Components.Generic.Menu.Item
-                className="tm-smart-block-menu__subitem"
-                {...disabledItemProps(!canNestTargetBlock)}
-                onClick={() => canNestTargetBlock && runOnTargetBlock(() => editor.nestBlock())}
-              ><span>增加缩进</span></Components.Generic.Menu.Item>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextAlignment)} checked={block.props?.textAlignment === 'left'} onClick={() => supportsTextAlignment && setAlignment('left')}><span>左对齐</span></Components.Generic.Menu.Item>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextAlignment)} checked={block.props?.textAlignment === 'center'} onClick={() => supportsTextAlignment && setAlignment('center')}><span>居中</span></Components.Generic.Menu.Item>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextAlignment)} checked={block.props?.textAlignment === 'right'} onClick={() => supportsTextAlignment && setAlignment('right')}><span>右对齐</span></Components.Generic.Menu.Item>
-            </SmartSubMenuDropdown>
-          </SmartSubMenu>
+                key={value}
+                className={`tm-smart-block-menu__tile${block.props?.textAlignment === value ? ' tm-smart-block-menu__tile--active' : ''}`}
+                data-tm-block-menu-action={`align-${value}`}
+                aria-label={label}
+                {...disabledItemProps(!supportsTextAlignment)}
+                onClick={() => supportsTextAlignment && setAlignment(value)}
+              ><span className="tm-smart-block-menu__tile-fill" title={label}><Icon size={16} strokeWidth={2} /></span></Components.Generic.Menu.Item>
+            ))}
+          </div>
           <SmartSubMenu position="right">
             <SmartSubMenuTrigger>
               <Components.Generic.Menu.Item className="tm-smart-block-menu__row" subTrigger><span>颜色</span><span>›</span></Components.Generic.Menu.Item>

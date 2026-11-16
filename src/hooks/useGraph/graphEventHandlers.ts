@@ -8,7 +8,6 @@ import { generateId } from './graphBuilder'
 import type { GraphOperations } from './graphOperations'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { useGraphUiStore } from '../../stores/graphUiStore'
-import { useRightPanelStore } from '../../stores/rightPanelStore'
 import { isCanvasReadOnly } from '../../stores/canvasReadOnlyStore'
 import type { GraphState } from '../../stores/graphStore'
 import type { StoreApi } from 'zustand'
@@ -39,14 +38,6 @@ function pointerPointFromEvent(event: Event): EdgePopupAnchor | null {
     return { x: mouse.clientX, y: mouse.clientY }
   }
   return null
-}
-
-/**
- * 右栏自动显隐只认本节点已物化文档（hasDetail）。linkedDocuments 指向别的节点，
- * 语义是「关联引用」而非「这个节点有文档」，不能混进来，否则无自身文档的节点也会常驻右栏。
- */
-function nodeHasDocument(data: KnowledgeNodeData | undefined): boolean {
-  return data?.hasDetail === true
 }
 
 export interface GraphEventHandlerDeps {
@@ -250,8 +241,9 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       if (!event.shiftKey) {
         markPerformanceMetricStart(PERFORMANCE_METRICS.nodeSelect, node.id)
       }
+      // 单击节点只负责选中；右栏由卡片上的文档图标按钮显式展开，
+      // 避免浮层盖住节点导致双击标题重命名被打断。
       ops.selectNode(node.id, event.shiftKey)
-      useRightPanelStore.getState().applyRightPanelAutoVisibility(nodeHasDocument(node.data))
       setSelectedEdgeId(null)
       ops.setSelectedEdgeInGraph(null)
     },

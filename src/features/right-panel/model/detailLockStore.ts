@@ -1,38 +1,47 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
+/**
+ * 锁定的不只是一个裸 nodeId：nodeId 是房间内相对 id，脱离原房间就无法定位文档目录。
+ * 必须同时带上锁定发生时的 roomPath（以及展示用的 label / childCount），
+ * 这样在同一个知识库内切到别的房间后，右栏仍能按原房间路径读到锁定节点的文档。
+ */
+export interface DetailLockTarget {
+  nodeId: string
+  roomPath: string
+  label: string
+  childCount: number
+}
+
 interface DetailLockStore {
-  // 按知识库(kbPath)维度存储锁定节点：key = kbPath，value = 锁定的节点 id 或 null。
-  // 这样不同知识库的锁定互不影响；切回某知识库时该库的锁定仍保留。
-  lockedByKb: Record<string, string | null>
-  // 在指定知识库锁定到指定节点
-  lockNode: (kbPath: string, nodeId: string) => void
-  // 解除指定知识的锁定
+  // 按知识库(kbPath)维度存储锁定节点：key = kbPath，value = 锁定目标或 null。
+  // 锁定在整个知识库内有效，切房间不清空，只有显式解锁才解除。
+  lockedByKb: Record<string, DetailLockTarget | null>
+  lockNode: (kbPath: string, target: DetailLockTarget) => void
   unlock: (kbPath: string) => void
-  // 切换：指定知识库已锁定时解锁；未锁定时若传入 nodeId 则锁定该节点
-  toggleLock: (kbPath: string, nodeId: string | null) => void
+  toggleLock: (kbPath: string, target: DetailLockTarget | null) => void
 }
 
 export const useDetailLockStore = create<DetailLockStore>()(
   persist(
     (set) => ({
       lockedByKb: {},
-      lockNode: (kbPath, nodeId) => {
-        if (!kbPath || !nodeId) return
-        set((state) => ({ lockedByKb: { ...state.lockedByKb, [kbPath]: nodeId } }))
+      lockNode: (kbPath, target) => {
+        if (!kbPath || !target?.nodeId) return
+        set((state) => ({ lockedByKb: { ...state.lockedByKb, [kbPath]: target } }))
       },
       unlock: (kbPath) => {
         if (!kbPath) return
         set((state) => ({ lockedByKb: { ...state.lockedByKb, [kbPath]: null } }))
       },
-      toggleLock: (kbPath, nodeId) =>
+      toggleLock: (kbPath, target) =>
         set((state) => {
           if (!kbPath) return state
           const current = state.lockedByKb[kbPath] ?? null
           // 已锁定 -> 解锁
           if (current) return { lockedByKb: { ...state.lockedByKb, [kbPath]: null } }
           // 未锁定且有目标节点 -> 锁定
-          if (nodeId) return { lockedByKb: { ...state.lockedByKb, [kbPath]: nodeId } }
+          if (target?.nodeId) return { lockedByKb: { ...state.lockedByKb, [kbPath]: target } }
           // 未锁定且无目标节点 -> 不变
           return state
         }),
@@ -40,11 +49,20 @@ export const useDetailLockStore = create<DetailLockStore>()(
     {
       name: 'topomind-detail-lock-storage',
       storage: createJSONStorage(() => localStorage),
-      version: 1,
+      version: 2,
       partialize: (state) => ({ lockedByKb: state.lockedByKb }),
-      // 旧版本持久化的是单一全局 lockedNodeId（无知识库维度），切换知识库会串扰；
-      // 升级时直接丢弃旧的全局锁定，由各知识库重新按需锁定。
-      migrate: () => ({ lockedByKb: {} } as DetailLockStore),
+      // v1 只存裸 nodeId，没有房间信息，跨房间必然解析到错误路径。
+      // 升级时保留 nodeId 但 roomPath 留空：渲染侧仍按当前房间解析（旧行为），
+      // 用户重新锁定一次即可获得跨房间能力。
+      migrate: (persisted, version) => {
+        if (version >= 2) return persisted as DetailLockStore
+        const old = (persisted as { lockedByKb?: Record<string, string | null> } | undefined)?.lockedByKb ?? {}
+        const lockedByKb: Record<string, DetailLockTarget | null> = {}
+        for (const [kbPath, nodeId] of Object.entries(old)) {
+          lockedByKb[kbPath] = nodeId ? { nodeId, roomPath: '', label: '', childCount: 0 } : null
+        }
+        return { lockedByKb } as DetailLockStore
+      },
     },
   ),
 )

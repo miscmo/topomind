@@ -6,7 +6,7 @@
  * 关联文档属于别的节点，读写 / 附件 / 草稿 / 缓存键一律用 documentCardPath，
  * 否则会把内容写到当前节点的 _docs 目录（本需求最大的事故风险）。
  */
-import { FolderOpen, Link2, MapPin, Pin, PinOff } from 'lucide-react'
+import { FolderOpen, Link2, Lock, MapPin, Pin, PinOff } from 'lucide-react'
 import { useCallback, useDeferredValue, useEffect, memo, useMemo, useRef, useState } from 'react'
 import { useGraphStore, useGraphStoreApi, useSelectedNodeId } from '../../../../stores/graphStore'
 import { useRightPanelStore } from '../../../../stores/rightPanelStore'
@@ -44,12 +44,18 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
   const deferredSelectedNodeId = useDeferredValue(rawSelectedNodeId)
   const graphSession = useGraphSession(tabId)
   const kbPath = graphSession.kbPath
-  const lockedNodeId = useDetailLockStore((s) => (kbPath ? (s.lockedByKb[kbPath] ?? null) : null))
+  const lockedTarget = useDetailLockStore((s) => (kbPath ? (s.lockedByKb[kbPath] ?? null) : null))
+  const unlock = useDetailLockStore((s) => s.unlock)
+  const lockedNodeId = lockedTarget?.nodeId ?? null
   const selectedNodeId = lockedNodeId ?? deferredSelectedNodeId
+  const lockedRoomPath = lockedTarget?.roomPath ?? ''
   const resolveNodePath = useCallback((nodeId: string) => {
     const session = tabStore.getState().getGraphSession(tabId)
-    return resolveRoomChildRef(session.roomPath || session.kbPath, nodeId)
-  }, [tabId])
+    // 锁定节点可能属于另一个房间：文档目录按锁定时记录的房间解析，
+    // 不能用当前房间路径，否则会读到空目录或别的节点。
+    const roomPath = lockedRoomPath || session.roomPath || session.kbPath
+    return resolveRoomChildRef(roomPath, nodeId)
+  }, [tabId, lockedRoomPath])
   const nodePath = selectedNodeId ? resolveNodePath(selectedNodeId) : null
 
   const storage = useStorage()
@@ -59,9 +65,15 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
   const isRightPanelPinned = useRightPanelStore((s) => s.rightPanelPinned)
   const toggleRightPanelPinned = useRightPanelStore((s) => s.toggleRightPanelPinned)
 
-  const childCount = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.childCount ?? 0 : 0)
-  const nodeLabel = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.label ?? '' : '')
-  const hasSelectedNode = useGraphStore((s) => selectedNodeId ? s.nodesMap.has(selectedNodeId) : false)
+  const graphChildCount = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.childCount ?? 0 : 0)
+  const graphNodeLabel = useGraphStore((s) => selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.label ?? '' : '')
+  const nodeInCurrentRoom = useGraphStore((s) => selectedNodeId ? s.nodesMap.has(selectedNodeId) : false)
+  // 当前房间的 nodesMap 只含本房间节点；锁定目标在别的房间时不能因此进空状态。
+  const lockedOutsideRoom = !!lockedTarget && !!lockedRoomPath
+    && lockedRoomPath !== (graphSession.roomPath || graphSession.kbPath)
+  const childCount = nodeInCurrentRoom ? graphChildCount : (lockedTarget?.childCount ?? 0)
+  const nodeLabel = graphNodeLabel || lockedTarget?.label || ''
+  const hasSelectedNode = nodeInCurrentRoom || lockedOutsideRoom
   // selector 必须返回稳定引用：返回 `?? []` 会让画布拖动时右栏每帧重渲染。
   const storedLinkedDocuments = useGraphStore((s) => (
     selectedNodeId ? s.nodesMap.get(selectedNodeId)?.data.linkedDocuments : undefined
@@ -450,7 +462,21 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
         >
           {isRightPanelPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
         </button>
-        <div className="p-4 text-xs text-[var(--color-text-muted)] text-center mt-[40%]">选择一个节点查看详情</div>
+        {lockedTarget && (
+          <button
+            type="button"
+            className="absolute left-2 top-10 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[var(--color-accent)] bg-[var(--color-accent-soft)] transition-colors hover:bg-[var(--color-hover-bg)]"
+            onClick={() => unlock(kbPath)}
+            title={`已锁定节点${nodeLabel ? `：${nodeLabel}` : ''}（点击解锁）`}
+            aria-label="解锁节点"
+            data-tm-detail-unlock-empty="true"
+          >
+            <Lock className="h-4 w-4" />
+          </button>
+        )}
+        <div className="p-4 text-xs text-[var(--color-text-muted)] text-center mt-[40%]">
+          {lockedTarget ? `已锁定节点${nodeLabel ? `：${nodeLabel}` : ''}，点击左上角解锁` : '选择一个节点查看详情'}
+        </div>
       </div>
     )
   }

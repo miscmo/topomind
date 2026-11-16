@@ -157,6 +157,18 @@ textarea:focus-visible,
   pointer-events: var(--tm-detail-hit, auto);
 }
 
+/* 文档图标本身只有几个像素，靠伪元素把命中区扩到 ~20px；
+   不占 flex 宽度，标题装饰测量（trailingWidth）保持逐像素不变。 */
+.tm-card-doc-icon {
+  position: relative;
+}
+.tm-card-doc-icon::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 4px;
+}
+
 /* 【P1.75】折叠子树徽标与细节淡出互补：镜头越远、卡片细节越淡，主干上的 +N
    越清晰；放大回去时计数归零、徽标随之卸载。max() 保证中景半淡出时仍可读。
    pointer-events 恒为 none（组件里也声明了），徽标绝不抢节点的拖拽 / 点击。 */

@@ -400,11 +400,15 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
   // 锁定按知识库(kbPath)维度隔离：只取当前知识库自己的锁定状态，避免切库后串扰
   const selectedNodeIdRaw = useSelectedNodeId()
   const activeTabId = useTabStore((s) => s.activeTabId)
-  const kbPath = useGraphSession(activeTabId).kbPath
-  const lockedNodeId = useDetailLockStore((s) => (kbPath ? (s.lockedByKb[kbPath] ?? null) : null))
+  const graphSession = useGraphSession(activeTabId)
+  const kbPath = graphSession.kbPath
+  const lockedTarget = useDetailLockStore((s) => (kbPath ? (s.lockedByKb[kbPath] ?? null) : null))
   const toggleLock = useDetailLockStore((s) => s.toggleLock)
-  const isLocked = lockedNodeId !== null
-  const lockedNodeLabel = useGraphStore((s) => (lockedNodeId ? s.nodesMap.get(lockedNodeId)?.data.label ?? '' : ''))
+  const isLocked = lockedTarget !== null
+  const lockedGraphLabel = useGraphStore((s) => (lockedTarget?.nodeId ? s.nodesMap.get(lockedTarget.nodeId)?.data.label ?? '' : ''))
+  const lockedNodeLabel = lockedTarget?.label || lockedGraphLabel
+  const selectedNodeLabel = useGraphStore((s) => (selectedNodeIdRaw ? s.nodesMap.get(selectedNodeIdRaw)?.data.label ?? '' : ''))
+  const selectedNodeChildCount = useGraphStore((s) => (selectedNodeIdRaw ? s.nodesMap.get(selectedNodeIdRaw)?.data.childCount ?? 0 : 0))
 
   const { isResizing: isSidebarResizing, handleMouseDown: handleSidebarResizeMouseDown } = useResizePanel({
     initialWidth: detailSidebarWidth,
@@ -513,7 +517,12 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             <button
               type="button"
               className={`${RAIL_BUTTON} ${isLocked ? RAIL_BUTTON_ACTIVE : ''}`}
-              onClick={() => toggleLock(kbPath, selectedNodeIdRaw)}
+              onClick={() => toggleLock(kbPath, isLocked ? null : selectedNodeIdRaw ? {
+                nodeId: selectedNodeIdRaw,
+                roomPath: graphSession.roomPath || graphSession.kbPath,
+                label: selectedNodeLabel,
+                childCount: selectedNodeChildCount,
+              } : null)}
               disabled={!isLocked && !selectedNodeIdRaw}
               title={isLocked ? `已锁定节点${lockedNodeLabel ? `：${lockedNodeLabel}` : ''}（点击解锁）` : '锁定当前节点（固定显示该节点内容，不受选中变化影响）'}
               aria-label={isLocked ? '解锁节点' : '锁定当前节点'}

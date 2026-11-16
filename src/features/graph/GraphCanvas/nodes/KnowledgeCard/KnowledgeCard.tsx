@@ -31,6 +31,7 @@ import { Link2 } from 'lucide-react'
 import { useLinkedDocumentStore } from '../../../linkedDocumentStore'
 import { tabStore } from '../../../../../stores/tabs/tabStore'
 import { useRightPanelStore } from '../../../../../stores/rightPanelStore'
+import { useDetailPanelStore } from '../../../../../features/right-panel/model/detailPanelStore'
 import { useActiveCanvasReadOnly } from '../../../../../stores/canvasReadOnlyStore'
 import { detailTierForZoom } from '../../../../../domain/graph/zoomScale'
 import {
@@ -172,7 +173,17 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     selectNode
   } = actions
 
-  const { updateNodeEmojis } = useGraphContext()
+  const { updateNodeEmojis, selectNode: selectGraphNode } = useGraphContext()
+  // 文档图标的点击在 pointerdown 阶段就执行：hover 引起的卡片微布局变化可能让
+  // mousedown/mouseup 落到不同元素，click 被浏览器重定向到节点本体，表现为
+  // 「第一下只选中、第二下才展开」。click 只兜底键盘/程序化触发（detail === 0）。
+  const openOwnDocument = useCallback(() => {
+    selectGraphNode(id)
+    const rightPanel = useRightPanelStore.getState()
+    rightPanel.applyRightPanelAutoVisibility(true)
+    rightPanel.setRightPanelTab('detail')
+    useDetailPanelStore.getState().setDetailViewForNode(id, 'own')
+  }, [id, selectGraphNode])
   const [editingEmojiIndex, setEditingEmojiIndex] = useState<number | null>(null)
   const [emojiPickerPosition, setEmojiPickerPosition] = useState<{ x: number, y: number } | null>(null)
   const cardRootRef = useRef<HTMLDivElement>(null)
@@ -477,7 +488,27 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
               卡片宽度不会因缩放抖动，测量侧与渲染侧仍然同源。 */}
           <div className="tm-card-detail absolute right-[6px] top-1/2 z-50 flex -translate-y-1/2 items-center justify-end gap-[2px] shrink-0">
             {hasDetail && (
-              <div className="flex items-center justify-center shrink-0 text-[var(--color-text-muted)] leading-none" title="包含详情" style={docIconStyle}>
+              <button
+                type="button"
+                className="tm-card-doc-icon flex items-center justify-center shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)] rounded leading-none cursor-pointer border-none bg-transparent nodrag nowheel"
+                title="包含详情 · 点击在右栏查看本节点文档"
+                data-tm-doc-icon={id}
+                style={docIconStyle}
+                onPointerDownCapture={(event) => {
+                  if (event.button !== 0 || !event.isPrimary) return
+                  event.stopPropagation()
+                  openOwnDocument()
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  event.preventDefault()
+                  // 真实鼠标已由 pointerdown 处理；这里只接键盘 / 程序化 click。
+                  if (event.detail === 0) openOwnDocument()
+                }}
+              >
                 <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={docIconSvgStyle}>
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
@@ -485,7 +516,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                   <line x1="16" y1="17" x2="8" y2="17"></line>
                   <polyline points="10 9 9 9 8 9"></polyline>
                 </svg>
-              </div>
+              </button>
             )}
             {hasChildBadge && (
               <div

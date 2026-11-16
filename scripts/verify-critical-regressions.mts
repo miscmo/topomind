@@ -9752,12 +9752,16 @@ const edge = (
   '【右栏】store 必须同时暴露 pin 状态、切换动作与统一自动显隐动作')
   assert.ok(src49.store.includes('if (get().rightPanelPinned) return'),
     '【右栏】pin 必须在 store 层短路所有折叠入口，不能散落在各调用方')
-  assert.ok(src49.events.includes('useRightPanelStore.getState().applyRightPanelAutoVisibility(nodeHasDocument(node.data))'),
-    '【右栏】节点点击必须把「是否有自身文档」交给统一动作')
-  const hasDocumentFn49 = src49.events.match(/function nodeHasDocument\([\s\S]*?\r?\n\}/)?.[0] ?? ''
-  assert.ok(hasDocumentFn49.includes('return data?.hasDetail === true')
-    && !hasDocumentFn49.includes('linkedDocuments'),
-  '【右栏】有文档只认本节点 hasDetail，关联文档不算')
+  const clickBody49 = src49.events.slice(
+    src49.events.indexOf('const onNodeClick'),
+    src49.events.indexOf('const onEdgeClick'),
+  )
+  assert.ok(clickBody49.includes('ops.selectNode(node.id, event.shiftKey)')
+    && !clickBody49.includes('applyRightPanelAutoVisibility'),
+  '【右栏】单击节点只做选中，不再触发面板显隐（展开改由文档图标按钮触发）')
+  assert.ok(src49.store.includes('applyRightPanelAutoVisibility: (hasDocument: boolean) => void')
+    && src49.canvas.includes('if (event) useRightPanelStore.getState().applyRightPanelAutoVisibility(false)'),
+  '【右栏】统一自动显隐通道与点空白折叠保持不变')
   assert.ok(src49.canvas.includes('if (event) useRightPanelStore.getState().applyRightPanelAutoVisibility(false)'),
     '【右栏】只有带事件的真实画布点击才自动折叠，程序化 onPaneClick 必须排除')
   assert.ok(src49.layout.includes('data-tm-right-panel-pin=')
@@ -9769,8 +9773,13 @@ const edge = (
     && src49.detail.includes('onClick={toggleRightPanelPinned}'),
   '【右栏】空状态也必须保留 pin 入口，否则画布点击清空选中后无法解除固定')
   assert.ok(src49.card.includes('rightPanel.applyRightPanelAutoVisibility(true)')
-    && src49.card.includes("rightPanel.setRightPanelTab('detail')"),
-  '【右栏】关联文档图标点击必须展开右栏并切回详情，复用统一自动显隐通道')
+    && src49.card.includes("rightPanel.setRightPanelTab('detail')")
+    && src49.card.includes('requestLinkedView'),
+  '【右栏】关联文档图标点击必须展开右栏并切到关联视图，复用统一自动显隐通道')
+  assert.ok(src49.card.includes('data-tm-doc-icon={id}')
+    && src49.card.includes('setDetailViewForNode(id, \'own\')')
+    && src49.card.includes('title="包含详情 · 点击在右栏查看本节点文档"'),
+  '【右栏】本节点文档图标必须可点击，且点击后切回本节点文档视图')
 
   const { build: build49 } = await import('esbuild')
   const { fileURLToPath: toPath49 } = await import('node:url')
@@ -9824,6 +9833,181 @@ const edge = (
   panel49.getState().resetRightPanel()
   assert.equal(panel49.getState().rightPanelCollapsed, false)
   assert.equal(panel49.getState().rightPanelPinned, false)
+}
+
+// --- 第 50 组：块编辑菜单缩进/对齐平铺为一级按钮（2026-11-16） ---
+// 缩进两个按钮、对齐三个按钮直接出现在块编辑菜单一级，点击即执行；
+// 旧的「缩进和对齐」二级菜单入口不得回灌，底层仍走 nest/unnest/updateBlock。
+{
+  const menu50 = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/components/SmartDocumentBlockMenu.tsx', import.meta.url,
+  ), 'utf8')
+  const css50 = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.css', import.meta.url,
+  ), 'utf8')
+
+  assert.ok(menu50.includes("import { AlignCenter, AlignLeft, AlignRight, IndentDecrease, IndentIncrease } from 'lucide-react'")
+    && menu50.includes('data-tm-block-menu-action="unnest"')
+    && menu50.includes('data-tm-block-menu-action="nest"')
+    && menu50.includes('title="减少缩进"') && menu50.includes('aria-label="减少缩进"')
+    && menu50.includes('title="增加缩进"') && menu50.includes('aria-label="增加缩进"')
+    && menu50.includes('<IndentDecrease size={16} strokeWidth={2} />')
+    && menu50.includes('<IndentIncrease size={16} strokeWidth={2} />'),
+  '【块菜单】缩进必须是一级纯图标按钮，文案只在 tooltip/aria-label')
+  assert.ok(menu50.includes('data-tm-block-menu-action={`align-${value}`}')
+    && menu50.includes("{ value: 'left', label: '左对齐', Icon: AlignLeft }")
+    && menu50.includes("{ value: 'center', label: '居中', Icon: AlignCenter }")
+    && menu50.includes("{ value: 'right', label: '右对齐', Icon: AlignRight }")
+    && menu50.includes('<Icon size={16} strokeWidth={2} />'),
+  '【块菜单】对齐必须由数据驱动平铺为工具栏同款 lucide 图标按钮')
+  assert.ok(!menu50.includes('<span>减少缩进</span>')
+    && !menu50.includes('<span>增加缩进</span>')
+    && !menu50.includes('<span>{label}</span>'),
+  '【块菜单】一级按钮不得回灌文字标签')
+  assert.ok(!menu50.includes('缩进和对齐'),
+  '【块菜单】不得回灌「缩进和对齐」二级菜单入口')
+  assert.ok(menu50.includes('editor.unnestBlock()')
+    && menu50.includes('editor.nestBlock()')
+    && menu50.includes('editor.updateBlock(block, { props: { textAlignment } })'),
+  '【块菜单】平铺按钮必须复用原 nest/unnest/updateBlock 回调，不能只改外观')
+  assert.ok(menu50.includes("block.props?.textAlignment === value ? ' tm-smart-block-menu__tile--active' : ''")
+    && menu50.includes('tm-smart-block-menu__tile-fill'),
+  '【块菜单】当前对齐态必须复用磁贴 active 样式并由 block.props.textAlignment 派生')
+  assert.ok(css50.includes('.tm-smart-block-menu__icon-actions {')
+    && css50.includes('grid-template-columns: repeat(2, 32px)')
+    && css50.includes('.tm-smart-block-menu__icon-actions--align {')
+    && css50.includes('grid-template-columns: repeat(3, 32px)'),
+  '【块菜单】缩进/对齐必须与顶部磁贴同列宽同间距，分别按 2 列、3 列平铺')
+}
+
+// --- 第 51 组：单击只选中，右栏改由卡片文档图标显式展开（2026-11-16） ---
+// 撤销「单击自动展开 + 双击延迟取消」：选中链路完全不碰右栏，
+// 本节点文档图标变成按钮，点击后走统一自动显隐通道并切回本节点文档视图。
+{
+  const events51 = await readFile(new URL(
+    '../src/hooks/useGraph/graphEventHandlers.ts', import.meta.url,
+  ), 'utf8')
+  const card51 = await readFile(new URL(
+    '../src/features/graph/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx', import.meta.url,
+  ), 'utf8')
+  const baseCss51 = await readFile(new URL('../src/styles/base.css', import.meta.url), 'utf8')
+  const clickBody51 = events51.slice(
+    events51.indexOf('const onNodeClick'),
+    events51.indexOf('const onEdgeClick'),
+  )
+
+  assert.ok(clickBody51.includes('ops.selectNode(node.id, event.shiftKey)')
+    && !clickBody51.includes('applyRightPanelAutoVisibility')
+    && !clickBody51.includes('setTimeout')
+    && !clickBody51.includes('event.detail'),
+  '【节点点击】单击只做选中，不得触发右栏显隐，也不得残留双击分流逻辑')
+  assert.ok(!events51.includes('nodeHasDocument')
+    && !events51.includes('useRightPanelStore')
+    && !events51.includes('rightPanelVisibilityTimerRef'),
+  '【节点点击】事件层不得残留右栏状态与待执行 timer')
+
+  const docIconAt51 = card51.indexOf('data-tm-doc-icon={id}')
+  assert.ok(docIconAt51 > 0, '【文档图标】必须有可定位的 data-tm-doc-icon 标记')
+  const docButton51 = card51.slice(
+    card51.lastIndexOf('{hasDetail && (', docIconAt51),
+    docIconAt51 + 1400,
+  )
+  assert.ok(docButton51.includes('<button')
+    && docButton51.includes('type="button"')
+    && docButton51.includes('onPointerDown={(event) => event.stopPropagation()}')
+    && docButton51.includes('onDoubleClick={(event) => event.stopPropagation()}'),
+  '【文档图标】必须是独立按钮且不把点击冒泡成选中/重命名')
+  assert.ok(docButton51.includes('title="包含详情 · 点击在右栏查看本节点文档"')
+    && docButton51.includes('openOwnDocument()')
+    && card51.includes('const openOwnDocument = useCallback(() => {')
+    && card51.includes('selectGraphNode(id)')
+    && card51.includes('rightPanel.applyRightPanelAutoVisibility(true)')
+    && card51.includes("rightPanel.setRightPanelTab('detail')")
+    && card51.includes("setDetailViewForNode(id, 'own')"),
+  '【文档图标】点击必须选中本节点、展开右栏并切回本节点文档而非关联视图')
+  assert.ok(docButton51.includes('onPointerDownCapture={(event) => {')
+    && docButton51.includes('event.button !== 0 || !event.isPrimary')
+    && docButton51.includes('onMouseDown={(event) => event.stopPropagation()}')
+    && docButton51.includes('if (event.detail === 0) openOwnDocument()'),
+  '【文档图标】真实鼠标必须在 pointerdown 即展开，click 只兜底键盘/程序化触发')
+  assert.ok(baseCss51.includes('.tm-card-doc-icon {')
+    && baseCss51.includes('.tm-card-doc-icon::before {')
+    && baseCss51.includes('inset: -5px'),
+  '【文档图标】必须用伪元素放大命中区，且不改 flex 宽度')
+  assert.ok(card51.includes('requestLinkedView')
+    && card51.includes('title={`${linkedDocumentCount} 篇关联文档 · 点击在右栏查看`}'),
+  '【关联图标】链环按钮原有的展开关联视图语义不得回退')
+}
+
+// --- 第 52 组：节点锁定在知识库内跨房间持续有效（2026-11-16） ---
+// 旧实现只存裸 nodeId，切房间后用当前房间解析 nodePath，且 hasSelectedNode=false
+// 导致右栏进空状态、解锁按钮随 DocumentWorkspace 一起卸载，用户无法自救。
+{
+  const lock52 = await readFile(new URL(
+    '../src/features/right-panel/model/detailLockStore.ts', import.meta.url,
+  ), 'utf8')
+  const panel52 = await readFile(new URL(
+    '../src/features/right-panel/components/DetailTab/DetailPanel.tsx', import.meta.url,
+  ), 'utf8')
+  const layout52 = await readFile(new URL(
+    '../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx', import.meta.url,
+  ), 'utf8')
+
+  assert.ok(lock52.includes('roomPath: string')
+    && lock52.includes('label: string')
+    && lock52.includes('childCount: number')
+    && lock52.includes('lockedByKb: Record<string, DetailLockTarget | null>'),
+  '【跨房间锁定】锁定目标必须携带原房间路径，不能只存裸 nodeId')
+  assert.ok(lock52.includes('version: 2')
+    && lock52.includes('migrate: (persisted, version) => {')
+    && lock52.includes("roomPath: '', label: '', childCount: 0"),
+  '【跨房间锁定】v1 裸 nodeId 持久化数据必须迁移，旧锁不能按当前房间误解析')
+
+  assert.ok(panel52.includes('const roomPath = lockedRoomPath || session.roomPath || session.kbPath'),
+    '【跨房间锁定】文档目录必须按锁定时的房间解析，禁止用当前房间路径')
+  assert.ok(panel52.includes('const lockedOutsideRoom = !!lockedTarget && !!lockedRoomPath')
+    && panel52.includes('const hasSelectedNode = nodeInCurrentRoom || lockedOutsideRoom'),
+  '【跨房间锁定】锁定节点不在当前 nodesMap 时不得进空状态')
+  assert.ok(panel52.includes('data-tm-detail-unlock-empty="true"')
+    && panel52.includes('onClick={() => unlock(kbPath)}')
+    && panel52.includes('aria-label="解锁节点"'),
+  '【跨房间锁定】空状态也必须保留解锁入口，避免无法自救')
+
+  const lockCall52 = layout52.slice(layout52.indexOf('onClick={() => toggleLock('), layout52.indexOf('disabled={!isLocked'))
+  assert.ok(lockCall52.includes('nodeId: selectedNodeIdRaw')
+    && lockCall52.includes('roomPath: graphSession.roomPath || graphSession.kbPath')
+    && lockCall52.includes('label: selectedNodeLabel')
+    && lockCall52.includes('childCount: selectedNodeChildCount')
+    && lockCall52.includes('isLocked ? null :'),
+  '【跨房间锁定】锁定动作必须写入房间路径与节点展示信息，解锁仍走同一入口')
+}
+
+// --- 第 53 组：首块 H1 顶部留白不被光标定位滚动吃掉 ---
+// Ctrl+Home / 点击把光标移回首块时，ProseMirror 把首块顶对齐滚动容器上沿，
+// scrollTop 停在约 30px，恰好滚掉 .bn-editor 的 24px 顶部留白。scrollMargin 与
+// CSS scroll-padding 都拦不住这段对齐，因此在选区变化后一帧内检测伪滚动并归零。
+{
+  const editor53 = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx', import.meta.url,
+  ), 'utf8')
+  const effect53 = editor53.slice(
+    editor53.indexOf('const unsubscribe = editor.onSelectionChange'),
+    editor53.indexOf('const padTop = getEditorTopInset(editorRoot)'),
+  )
+
+  assert.ok(effect53.includes('editor.onSelectionChange')
+    && effect53.includes('requestAnimationFrame'),
+  '【首块 H1 留白】必须订阅选区变化并在一帧后校正，PM 滚动发生在选区变化同一 tick')
+  assert.ok(effect53.includes('const top = scrollContainer.scrollTop')
+    && effect53.includes('top <= 0 || top > MIN_RESTORE_SCROLL_TOP')
+    && effect53.includes('scrollContainer.scrollTop = 0'),
+  '【首块 H1 留白】仅对 (0, MIN_RESTORE_SCROLL_TOP] 伪滚动归零，真实阅读位置不动')
+  assert.ok(effect53.includes('editor.getTextCursorPosition().block.id')
+    && effect53.includes('editor.document[0]?.id === cursorBlockId'),
+  '【首块 H1 留白】仅当光标落在文档首块才归零，其它块的光标定位不受影响')
+  assert.ok(effect53.includes('unsubscribe()')
+    && effect53.includes('cancelAnimationFrame(frame)'),
+  '【首块 H1 留白】卸载时必须退订并取消待执行帧，避免切文档后误滚')
 }
 
 console.log('Critical regression checks verified')

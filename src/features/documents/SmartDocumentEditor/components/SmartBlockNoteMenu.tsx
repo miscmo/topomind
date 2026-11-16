@@ -2,7 +2,7 @@ import { type ReactNode } from 'react'
 import { Menu as MantineMenu, type MenuProps } from '@mantine/core'
 
 // 复刻 @blocknote/mantine 的 Menu 子菜单（sub）包装，但把 transitionProps 的 exitDelay
-// 从 250 改为 0：修复块编辑菜单中相邻两组子菜单（如“缩进和对齐”与“颜色”）hover 切换时，
+// 从 250 改为 0：修复块编辑菜单中相邻两组子菜单（如“颜色”与“插入块”）hover 切换时，
 // 上一个子菜单仍在 250ms 淡出动画中、下一个已出现，导致两个子菜单同时可见的问题。
 // 预期表现：鼠标离开上一项时上一项立即关闭，再进入下一项才打开下一项。
 // 注：@blocknote/mantine 的 Menu.tsx 用 assertEmpty(rest) 禁止从外部覆盖 transitionProps，

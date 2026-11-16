@@ -3052,6 +3052,12 @@ async function main() {
       }))
       return true
     }, id)
+    const clickDocIconW = (id) => page.evaluate((nodeId) => {
+      const button = document.querySelector(`.react-flow__node[data-id="${nodeId}"] [data-tm-doc-icon="${nodeId}"]`)
+      if (!button) return false
+      button.click()
+      return true
+    }, id)
     const waitPanelW = async (visible) => {
       const end = Date.now() + 6000
       while (Date.now() < end) {
@@ -3069,17 +3075,42 @@ async function main() {
       await clickPaneW() && await waitPanelW(false),
       JSON.stringify({ visible: await rightPanelVisibleW() }))
 
-    check('【阶段 W】点击有自身文档的节点自动展开右栏',
-      await clickNodeW('node-a') && await waitPanelW(true),
+    await clickNodeW('node-a')
+    await sleep(450)
+    check('【阶段 W】单击有文档节点只选中，不自动展开右栏',
+      !await rightPanelVisibleW(),
       JSON.stringify({ visible: await rightPanelVisibleW() }))
 
-    check('【阶段 W】点击无文档节点自动折叠右栏',
-      await clickNodeW('lod-c1') && await waitPanelW(false),
+    check('【阶段 W】点击本节点文档图标展开右栏',
+      await clickDocIconW('node-a') && await waitPanelW(true),
       JSON.stringify({ visible: await rightPanelVisibleW() }))
 
-    check('【阶段 W】重新点击有文档节点可再次展开',
-      await clickNodeW('node-a') && await waitPanelW(true),
+    check('【阶段 W】无文档节点不渲染文档图标',
+      await page.evaluate(() =>
+        !document.querySelector('.react-flow__node[data-id="lod-c1"] [data-tm-doc-icon]')))
+
+    check('【阶段 W】点击空白画布折叠后，文档图标可再次展开',
+      await clickPaneW() && await waitPanelW(false)
+      && await clickDocIconW('node-a') && await waitPanelW(true),
       JSON.stringify({ visible: await rightPanelVisibleW() }))
+
+    // 回归真实鼠标「第一次只选中」：hover 微布局变化会让 mouseup 落到节点本体，
+    // click 因此被重定向。动作必须在 pointerdown 就完成，不能等 click。
+    await clickPaneW()
+    await waitPanelW(false)
+    const pointerDownHitW = await page.evaluate(() => {
+      const button = document.querySelector('.react-flow__node[data-id="node-a"] [data-tm-doc-icon="node-a"]')
+      if (!button) return false
+      button.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, button: 0, buttons: 1,
+        isPrimary: true, pointerType: 'mouse',
+      }))
+      return true
+    })
+    await clickNodeW('node-a')
+    check('【阶段 W】pointerdown 即展开，click 被重定向到节点也不丢失首次点击',
+      pointerDownHitW && await waitPanelW(true),
+      JSON.stringify({ pointerDownHitW, visible: await rightPanelVisibleW() }))
 
     const pinClickedW = await page.evaluate(() => {
       const button = document.querySelector('button[aria-label="固定右侧面板"]')
@@ -3094,7 +3125,7 @@ async function main() {
     await clickNodeW('lod-c1')
     await sleep(200)
     const stillOpenAfterNoDocW = await rightPanelVisibleW()
-    check('【阶段 W】pin 后点击无文档节点不再自动折叠', stillOpenAfterNoDocW,
+    check('【阶段 W】pin 后单击节点不折叠右栏', stillOpenAfterNoDocW,
       JSON.stringify({ visible: stillOpenAfterNoDocW }))
 
     await clickPaneW()
@@ -3275,6 +3306,265 @@ async function main() {
       trashItemsY.some((n) => n.includes('lod-root') && !n.endsWith('.trash.json'))
       && trashMetaY.some((m) => m.label === 'LOD 树根'),
       JSON.stringify({ items: trashItemsY.slice(0, 4), labels: trashMetaY.map((m) => m.label) }))
+
+    // ===== 阶段 Z：块编辑菜单缩进 / 对齐平铺为一级按钮（不再进二级菜单） =====
+    await setNodeTreeCollapsed(page, true)
+    await setRightPanelCollapsed(page, true)
+    // 右栏现在只由文档图标显式展开，单击节点不再触发。
+    const iconClickedZ = await page.evaluate(() => {
+      const button = document.querySelector('.react-flow__node[data-id="node-a"] [data-tm-doc-icon]')
+      if (!button) return false
+      button.click()
+      return true
+    })
+    const editorReadyZ = await waitFor(page, () => !!document.querySelector('.bn-editor'), 10000)
+    const diagZ = await page.evaluate(() => ({
+      panelVisible: (() => {
+        const right = document.querySelector('.right-panel-container')
+        return !!right && getComputedStyle(right).display !== 'none'
+      })(),
+      panelText: (document.querySelector('.right-panel-container')?.innerText || '').slice(0, 120),
+      tabButtons: [...document.querySelectorAll('button')]
+        .map((b) => b.textContent?.trim())
+        .filter((t) => t === '文档' || t === '附件' || t === '引用关系')
+        .slice(0, 6),
+    }))
+    check('【阶段 Z】点击文档图标可打开右栏编辑器', iconClickedZ && editorReadyZ,
+      JSON.stringify({ iconClickedZ, editorReadyZ, ...diagZ }))
+    const blockBoxZ = await page.evaluate(() => {
+      const el = document.querySelector('.bn-block-content')
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.left + 20), y: Math.round(r.top + r.height / 2) }
+    })
+    if (blockBoxZ) await page.mouse.move(blockBoxZ.x, blockBoxZ.y)
+    check('【阶段 Z】块拖拽手柄可定位',
+      await waitFor(page, () => !!document.querySelector('[data-test="dragHandle"]'), 8000))
+    await page.evaluate(() => {
+      const svg = document.querySelector('[data-test="dragHandle"]')
+      const btn = svg?.closest('button')
+      if (btn) btn.click()
+    })
+    const menuOpenZ = await waitFor(page, () => !!document.querySelector('[data-tm-block-menu-action]'), 6000)
+    const oldTriggerZ = await page.evaluate(() => [...document.querySelectorAll('.tm-smart-block-menu__row')]
+      .some((el) => (el.textContent || '').includes('缩进和对齐')))
+    check('【阶段 Z】块菜单直接打开且无「缩进和对齐」二级入口', menuOpenZ && !oldTriggerZ,
+      JSON.stringify({ menuOpenZ, oldTriggerZ }))
+    const actionsZ = await page.evaluate(() => [...document.querySelectorAll('[data-tm-block-menu-action]')]
+      .map((el) => ({
+        action: el.getAttribute('data-tm-block-menu-action'),
+        label: el.getAttribute('aria-label'),
+        title: el.querySelector('.tm-smart-block-menu__tile-fill')?.getAttribute('title'),
+        text: el.textContent?.trim(),
+        icon: !!el.querySelector('svg'),
+        width: Math.round(el.getBoundingClientRect().width),
+        height: Math.round(el.getBoundingClientRect().height),
+      })))
+    check('【阶段 Z】缩进两个 + 对齐三个纯图标按钮平铺在一级菜单',
+      actionsZ.length === 5
+      && actionsZ.map((a) => a.action).join(',') === 'unnest,nest,align-left,align-center,align-right'
+      && actionsZ.map((a) => a.label).join(',') === '减少缩进,增加缩进,左对齐,居中,右对齐'
+      && actionsZ.every((a) => a.icon && a.text === '' && a.title === a.label
+        && a.width <= 40 && a.height <= 40),
+      JSON.stringify(actionsZ))
+    await page.evaluate(() => document.querySelector('[data-tm-block-menu-action="align-center"]')?.click())
+    const alignedZ = await waitFor(page, () =>
+      !!document.querySelector('.bn-block-content[data-text-alignment="center"]'), 5000)
+    const menuClosedZ = await page.evaluate(() => !document.querySelector('[data-tm-block-menu-action]'))
+    check('【阶段 Z】点击居中立即写入块并关闭菜单', alignedZ && menuClosedZ,
+      JSON.stringify({ alignedZ, menuClosedZ }))
+
+    // ===== 阶段 AA：双击节点标题重命名，第一下单击不得展开右栏盖住节点 =====
+    await setRightPanelCollapsed(page, true)
+    const titleSelectorAA = '.react-flow__node[data-id="node-a"] [title="双击编辑标题"]'
+    let titleReadyAA = await waitFor(page, () =>
+      !!document.querySelector('.react-flow__node[data-id="node-a"] [title="双击编辑标题"]'), 5000)
+    if (!titleReadyAA) {
+      // 兜底：若上一阶段的选中态被编辑器抢走，先单击选中（合成事件 detail=0）。
+      await page.evaluate(() => {
+        const node = document.querySelector('.react-flow__node[data-id="node-a"]')
+        if (!node) return
+        const r = node.getBoundingClientRect()
+        node.dispatchEvent(new MouseEvent('click', {
+          bubbles: true, cancelable: true, button: 0, buttons: 1,
+          clientX: Math.round(r.left + r.width / 2), clientY: Math.round(r.top + r.height / 2),
+        }))
+      })
+      titleReadyAA = await waitFor(page, () =>
+        !!document.querySelector('.react-flow__node[data-id="node-a"] [title="双击编辑标题"]'), 5000)
+    }
+    const titleBoxAA = await page.evaluate((selector) => {
+      const el = document.querySelector(selector)
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+    }, titleSelectorAA)
+    let editingAA = false
+    if (titleBoxAA) {
+      // 真实双击：单击/双击现在都不碰右栏，不需要任何时间间隔技巧。
+      await page.mouse.click(titleBoxAA.x, titleBoxAA.y, { clickCount: 2, delay: 90 })
+      editingAA = await waitFor(page, () =>
+        !!document.querySelector('.react-flow__node[data-id="node-a"] input'), 5000)
+    }
+    const panelVisibleAA = await page.evaluate(() => {
+      const right = document.querySelector('.right-panel-container')
+      return !!right && getComputedStyle(right).display !== 'none'
+    })
+    check('【阶段 AA】双击标题进入重命名且右栏保持折叠',
+      titleReadyAA && editingAA && !panelVisibleAA,
+      JSON.stringify({ titleReadyAA, editingAA, panelVisibleAA }))
+    await page.keyboard.press('Escape')
+
+    const docIconOpenedAA = await page.evaluate(() => {
+      const button = document.querySelector('.react-flow__node[data-id="node-a"] [data-tm-doc-icon]')
+      if (!button) return false
+      button.click()
+      return true
+    })
+    const panelAfterIconAA = await waitFor(page, () => {
+      const right = document.querySelector('.right-panel-container')
+      return !!right && getComputedStyle(right).display !== 'none'
+    }, 6000)
+    const ownDocShownAA = await page.evaluate(() =>
+      (document.querySelector('.right-panel-container')?.innerText || '').includes('A 自身文档'))
+    check('【阶段 AA】点击文档图标展开右栏并显示本节点文档',
+      docIconOpenedAA && panelAfterIconAA && ownDocShownAA,
+      JSON.stringify({ docIconOpenedAA, panelAfterIconAA, ownDocShownAA }))
+
+    // ===== 阶段 AC：节点锁定在整个知识库内有效，切房间后仍显示原节点文档 =====
+    const lockClickedAC = await page.evaluate(() => {
+      const btn = document.querySelector('button[aria-label="锁定当前节点"]')
+      btn?.click()
+      return !!btn
+    })
+    const lockedAC = await waitFor(page, () =>
+      !!document.querySelector('button[aria-label="解锁节点"]'), 6000)
+    check('【阶段 AC】可锁定当前节点', lockClickedAC && lockedAC,
+      JSON.stringify({ lockClickedAC, lockedAC }))
+
+    await openNodeMenu(page, 'node-a')
+    const enterClickedAC = await page.evaluate(() => {
+      const items = [...document.querySelectorAll('button,[role="menuitem"]')]
+      const item = items.find((el) => (el.textContent || '').trim().startsWith('进入节点'))
+      item?.click()
+      return !!item
+    })
+    const roomSwitchedAC = await waitFor(page, () =>
+      !!document.querySelector('.react-flow__node[data-id="aa"]'), 10000)
+    check('【阶段 AC】已进入房间 A 的子房间 B', enterClickedAC && roomSwitchedAC,
+      JSON.stringify({ enterClickedAC, roomSwitchedAC }))
+
+    await sleep(700)
+    const lockedStateAC = await page.evaluate(() => {
+      const right = document.querySelector('.right-panel-container')
+      return {
+        visible: !!right && getComputedStyle(right).display !== 'none',
+        text: (right?.innerText || '').slice(0, 160),
+        empty: (right?.innerText || '').includes('选择一个节点查看详情'),
+        unlock: !!document.querySelector('button[aria-label="解锁节点"]'),
+      }
+    })
+    check('【阶段 AC】切到别的房间仍显示锁定节点文档且可解锁',
+      lockedStateAC.visible && lockedStateAC.text.includes('A 自身文档')
+      && !lockedStateAC.empty && lockedStateAC.unlock,
+      JSON.stringify(lockedStateAC))
+
+    const unlockClickedAC = await page.evaluate(() => {
+      const btn = document.querySelector('button[aria-label="解锁节点"]')
+      btn?.click()
+      return !!btn
+    })
+    // 解锁后当前房间没有选中节点，右栏进空状态；空状态不渲染「锁定当前节点」按钮，
+    // 因此以「解锁按钮消失」作为解除依据。
+    const unlockedAC = await waitFor(page, () =>
+      !document.querySelector('button[aria-label="解锁节点"]'), 6000)
+    const emptyAfterUnlockAC = await waitFor(page, () =>
+      (document.querySelector('.right-panel-container')?.innerText || '').includes('选择一个节点查看详情'), 6000)
+    check('【阶段 AC】解锁后右栏恢复跟随当前房间选中',
+      unlockClickedAC && unlockedAC && emptyAfterUnlockAC,
+      JSON.stringify({ unlockClickedAC, unlockedAC, emptyAfterUnlockAC }))
+
+    // ===== 阶段 AD：首块 H1 顶部留白不被光标定位滚动吃掉 =====
+    // Node 侧把 doc_a 重写成「首块 H1 + 大量正文」的可滚动文档，reload 后打开，
+    // 光标从文末 Ctrl+Home 回首块：修复前 scrollTop 停在 30、H1 距容器顶 0（字顶被切），
+    // 修复后选区归零、H1 距容器顶回到 30（24px 留白完整）。
+    const longBlocksAD = [
+      { id: 'h1-first-ad', type: 'heading', props: { level: 1 }, content: '首块 H1 顶部留白测试' },
+      ...Array.from({ length: 30 }, (_, i) => ({ id: `ad-p-${i}`, type: 'paragraph', content: `正文第 ${i + 1} 段 ` + '填充文本 '.repeat(20) })),
+      { id: 'h1-last-ad', type: 'heading', props: { level: 1 }, content: '文末 H1' },
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `ad-z-${i}`, type: 'paragraph', content: `结尾 ${i}` })),
+    ]
+    fs.writeFileSync(DOC_A, JSON.stringify({
+      schema: 'topomind.smart-document', id: 'doc_a', version: 1,
+      title: OWN_TITLE, blocks: longBlocksAD, metadata: {},
+    }, null, 2), 'utf8')
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await sleep(2200)
+    await page.evaluate((name) => {
+      const els = [...document.querySelectorAll('*')].filter((e) =>
+        e.children.length === 0 && (e.textContent || '').includes(name))
+      if (els.length) els[0].parentElement?.click()
+    }, KB_NAME)
+    const workspaceReadyAD = await waitFor(page, () =>
+      !!document.querySelector('.react-flow__node[data-id="node-a"]'), 12000)
+    await setNodeTreeCollapsed(page, true)
+    // 点文档图标显式展开右栏并打开本节点文档
+    await page.evaluate(() => {
+      const icon = document.querySelector('.react-flow__node[data-id="node-a"] [data-tm-doc-icon]')
+      if (!icon) return
+      icon.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }))
+      icon.click()
+    })
+    const editorReadyAD = await waitFor(page, () => !!document.querySelector('.bn-editor h1'), 12000)
+    await sleep(500)
+
+    const measureTopAD = () => page.evaluate(() => {
+      const sc = document.querySelector('.tm-smart-editor-scroll')
+      const ed = document.querySelector('.bn-editor')
+      const h1 = ed?.querySelector('h1')
+      if (!sc || !ed || !h1) return null
+      const scTop = sc.getBoundingClientRect().top
+      const h1Top = h1.getBoundingClientRect().top
+      return {
+        scrollTop: Math.round(sc.scrollTop),
+        scrollHeight: sc.scrollHeight,
+        clientHeight: sc.clientHeight,
+        h1FromScrollerTop: Math.round(h1Top - scTop),
+        editorPadTop: parseFloat(getComputedStyle(ed).paddingTop),
+      }
+    })
+    const beforeScrollAD = await measureTopAD()
+    // 滚到底部并点末尾段，让光标离开首块
+    await page.evaluate(() => {
+      const sc = document.querySelector('.tm-smart-editor-scroll')
+      if (sc) sc.scrollTop = sc.scrollHeight
+    })
+    await sleep(300)
+    const bottomPointAD = await page.evaluate(() => {
+      const els = document.querySelectorAll('.bn-editor .bn-inline-content')
+      const el = els[els.length - 1]
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.left + 20), y: Math.round(r.top + r.height / 2) }
+    })
+    if (bottomPointAD) await page.mouse.click(bottomPointAD.x, bottomPointAD.y)
+    await sleep(300)
+    const atBottomAD = await measureTopAD()
+    // Ctrl+Home 把光标移回首块 H1
+    await page.keyboard.down('Control')
+    await page.keyboard.press('Home')
+    await page.keyboard.up('Control')
+    await sleep(500)
+    const afterHomeAD = await measureTopAD()
+
+    check('【阶段 AD】可滚动长文档光标回首块后顶部留白完整（字顶不被切）',
+      workspaceReadyAD && editorReadyAD
+      && beforeScrollAD && beforeScrollAD.scrollHeight > beforeScrollAD.clientHeight
+      && atBottomAD && atBottomAD.scrollTop > 100
+      && afterHomeAD && afterHomeAD.scrollTop === 0
+      && afterHomeAD.h1FromScrollerTop >= 24
+      && afterHomeAD.editorPadTop === 24,
+      JSON.stringify({ workspaceReadyAD, editorReadyAD, beforeScrollAD, atBottomAD, afterHomeAD }))
   } finally {
     browser.disconnect()
     if (spawned) spawned.kill()
