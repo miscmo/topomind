@@ -10,7 +10,7 @@
  * - 交互一律 nodrag / nowheel，避免被画布平移缩放手势抢走。
  */
 import { Panel, useReactFlow } from '@xyflow/react'
-import { ChevronDown, Lock, Map, MapPin, Minus, Pin, Plus } from 'lucide-react'
+import { ChevronDown, Lock, Map, MapPin, Minus, Pin, Plus, Redo2, Undo2 } from 'lucide-react'
 import {
   COMPACT_START_PERCENT,
   MAX_RAW_ZOOM,
@@ -53,6 +53,10 @@ import {
 } from '../model/canvasStatusPreferences'
 import RoomPathList, { compactRoomPath, useRoomPathItems } from '../../../layout/Breadcrumb/Breadcrumb'
 import RoomHistory, { useRecentRooms } from '../../../layout/RoomHistory/RoomHistory'
+import {
+  describeMoveEntry,
+  useNodeMoveHistoryStore,
+} from '../../GraphPage/model/nodeMoveHistoryStore'
 
 interface LodControlProps {
   /** 房间路径 / 最近打开都按当前 KB tab 取，抽屉与画布同属一个 tab */
@@ -79,6 +83,9 @@ interface LodControlProps {
   onProfileChange: (profileId: GraphProfileId) => void
   onTogglePin: (nodeId: string) => void
   onClearPin: () => void
+  /** 常驻撤销 / 前进：跨房间移动历史，与成功 toast 的撤销共用同一入口 */
+  onMoveUndo?: () => void
+  onMoveRedo?: () => void
 }
 
 const MODE_OPTIONS: Array<{ value: LodMode; label: string; title: string }> = [
@@ -130,12 +137,24 @@ export default function LodControl({
   onProfileChange,
   onTogglePin,
   onClearPin,
+  onMoveUndo,
+  onMoveRedo,
 }: LodControlProps) {
   const reactFlow = useReactFlow()
   const prefs = useCanvasStatusPreferences()
   const pathItems = useRoomPathItems(tabId)
   const path = compactRoomPath(pathItems)
   const recent = useRecentRooms(tabId)
+  // 节点移动历史是运行时栈：只订阅三个标量/数组引用，移动完成与撤销时才重渲染本面板。
+  const undoStack = useNodeMoveHistoryStore((s) => s.undoStack)
+  const redoStack = useNodeMoveHistoryStore((s) => s.redoStack)
+  const moveBusy = useNodeMoveHistoryStore((s) => s.busy)
+  const undoEntry = undoStack[undoStack.length - 1]
+  const redoEntry = redoStack[redoStack.length - 1]
+  // 与画布写闸门一致：缩小视图只读期不触发后端 relocate。
+  const moveLocked = readOnlyState.readOnly || moveBusy
+  const canUndoMove = !!onMoveUndo && undoStack.length > 0 && !moveLocked
+  const canRedoMove = !!onMoveRedo && redoStack.length > 0 && !moveLocked
 
   const hiddenCount = visibility.hiddenNodeIds.size
   const coveragePercent = Math.round(visibility.treeCoverage * 100)
@@ -246,6 +265,43 @@ export default function LodControl({
               className={`h-3.5 w-3.5 transition-transform duration-150 ${prefs.drawerOpen ? '' : '-rotate-90'}`}
               aria-hidden="true"
             />
+          </button>
+        </div>
+
+        {/* 节点移动历史：常驻工具条，抽屉整体折叠后仍可用。
+            toast 的「撤销」6 秒后会自动消失，这里给一个不受时限、且能「前进」重做的入口。
+            两个按钮 DOM 常驻，禁用时只置灰 + 改 tooltip，绝不条件卸载（GUI 回归读 data 属性）。 */}
+        <div
+          data-tm-move-history=""
+          data-tm-move-history-undo-count={undoStack.length}
+          data-tm-move-history-redo-count={redoStack.length}
+          data-tm-move-history-busy={moveBusy ? 'true' : 'false'}
+          data-tm-move-history-locked={readOnlyState.readOnly ? 'true' : 'false'}
+          className="flex items-center gap-1 border-t border-[var(--color-border-light)] px-2.5 py-1.5"
+        >
+          <button
+            type="button"
+            data-tm-move-undo=""
+            disabled={!canUndoMove}
+            aria-label="撤销上一次节点移动"
+            title={readOnlyState.readOnly ? '只读视图：回到 100% 解锁' : describeMoveEntry(undoEntry, 'undo')}
+            onClick={onMoveUndo}
+            className="nodrag nowheel flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-[var(--color-border-light)] px-1 py-1 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <Undo2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span className="truncate">撤销{undoStack.length > 0 ? ` ${undoStack.length}` : ''}</span>
+          </button>
+          <button
+            type="button"
+            data-tm-move-redo=""
+            disabled={!canRedoMove}
+            aria-label="前进重做节点移动"
+            title={readOnlyState.readOnly ? '只读视图：回到 100% 解锁' : describeMoveEntry(redoEntry, 'redo')}
+            onClick={onMoveRedo}
+            className="nodrag nowheel flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-[var(--color-border-light)] px-1 py-1 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <span className="truncate">前进{redoStack.length > 0 ? ` ${redoStack.length}` : ''}</span>
+            <Redo2 className="h-3 w-3 shrink-0" aria-hidden="true" />
           </button>
         </div>
 

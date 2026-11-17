@@ -108,6 +108,21 @@ export function useGraph(tabId: string) {
     hasPendingSave: storageApi.hasPendingGraphSave,
   })
 
+  /**
+   * 原地刷新当前房间，绝不改变用户视角所在的房间。
+   *
+   * loadRoom 只替换图状态，不会动 tab 会话的 roomPath / roomHistory。跨房间移动的
+   * 撤销/前进若传 sourceRoomPath 之类的硬编码路径，画布会显示 A 而面包屑仍是 B，
+   * 之后 navigateToChildRoom 又按会话里的 B 解析子房间路径，导致再也进不去 B。
+   * 因此这里只按「会话当前显示的房间」重载，并保留现有节点布局与相机视口。
+   */
+  const refreshCurrentRoom = useCallback(async () => {
+    const session = getActiveGraphSession()
+    const dirPath = session.roomPath || session.kbPath || ''
+    if (!dirPath) return
+    await loadRoom(dirPath, true, true)
+  }, [getActiveGraphSession, loadRoom])
+
   const createEdge = useCallback(async (source: string, target: string) => {
     if (!source || !target || source === target) return null
     const edgeId = generateId('e-')
@@ -134,6 +149,7 @@ export function useGraph(tabId: string) {
     const noResult = (): Promise<boolean> => Promise.resolve(false)
     return {
     loadRoom,
+    refreshCurrentRoom,
     navigateBack: navigation.navigateBack,
     navigateToRoom: navigation.navigateToRoom,
     navigateToRoot: navigation.navigateToRoot,
@@ -182,6 +198,7 @@ export function useGraph(tabId: string) {
   }, [
     tabId,
     loadRoom,
+    refreshCurrentRoom,
     navigation.navigateBack,
     navigation.navigateToRoom,
     navigation.navigateToRoot,

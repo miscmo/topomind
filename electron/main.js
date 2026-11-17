@@ -345,8 +345,11 @@ function registerIPC() {
   ipcMain.handle('fs:moveTopoDocumentToCard', function(e, rootDir, sourceCardPath, documentId, targetCardPath) {
     return fileService.moveTopoDocumentToCard(requireActiveWorkDir(rootDir), sourceCardPath, documentId, targetCardPath);
   });
-  ipcMain.handle('fs:moveTopoNodesToRoom', function(e, rootDir, sourceRoomPath, nodeIds, targetRoomPath) {
-    return fileService.moveTopoNodesToRoom(requireActiveWorkDir(rootDir), sourceRoomPath, nodeIds, targetRoomPath);
+  ipcMain.handle('fs:moveTopoNodesToRoom', function(e, rootDir, sourceRoomPath, nodeIds, targetRoomPath, options) {
+    return fileService.moveTopoNodesToRoom(requireActiveWorkDir(rootDir), sourceRoomPath, nodeIds, targetRoomPath, options);
+  });
+  ipcMain.handle('fs:listRoomNodeTargets', function(e, rootDir) {
+    return fileService.listRoomNodeTargets(requireActiveWorkDir(rootDir));
   });
   ipcMain.handle('fs:readTopoDocument', function(e, rootDir, cardPath, documentId) {
     return fileService.readTopoDocument(requireActiveWorkDir(rootDir), cardPath, documentId);

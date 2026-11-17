@@ -40,13 +40,22 @@ const edgeTypes = {
   curve: FloatingEdge,
 }
 
+/** 画布专属 props：撤销 / 前进只给左侧画布状态面板用，不进 useGraphCanvasModel。 */
+interface GraphCanvasProps extends UseGraphCanvasModelProps {
+  onMoveUndo?: () => void
+  onMoveRedo?: () => void
+}
+
 export default memo(function GraphCanvas({
   tabId,
   onNodeContextMenu,
   onEdgeContextMenu,
   onPaneContextMenu,
+  onSelectionContextMenu,
   onCloseContextMenu,
-}: UseGraphCanvasModelProps) {
+  onMoveUndo,
+  onMoveRedo,
+}: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const { state, graph, actions } = useGraphCanvasModel({
@@ -54,6 +63,7 @@ export default memo(function GraphCanvas({
     onNodeContextMenu,
     onEdgeContextMenu,
     onPaneContextMenu,
+    onSelectionContextMenu,
     onCloseContextMenu,
   })
 
@@ -85,6 +95,7 @@ export default memo(function GraphCanvas({
     handleEdgeDoubleClick,
     handleEdgeContextMenu,
     handlePaneContextMenu,
+    handleSelectionContextMenu,
     setIsSearchOpen,
     handleSearchSelectNode,
   } = actions
@@ -287,6 +298,7 @@ export default memo(function GraphCanvas({
       data-tm-canvas-compact={compactZoom ? 'true' : 'false'}
       data-tm-canvas-wheel-sensitivity={wheelSensitivity.toFixed(3)}
       onMouseDown={actions.handleCanvasMouseDown}
+      onContextMenu={actions.handleCanvasContextMenuFallback}
       onWheelCapture={handleWheelCapture}
       onMouseEnter={actions.handleCanvasMouseEnter}
       onMouseMove={actions.handleCanvasMouseMove}
@@ -368,6 +380,7 @@ export default memo(function GraphCanvas({
         onEdgeDoubleClick={handleEdgeDoubleClick}
         onPaneClick={handlePaneClick}
         onPaneContextMenu={handlePaneContextMenu}
+        onSelectionContextMenu={handleSelectionContextMenu}
         onEdgeContextMenu={handleEdgeContextMenu}
 
         onMove={handleMove}
@@ -430,6 +443,8 @@ export default memo(function GraphCanvas({
           onProfileChange={handleProfileChange}
           onTogglePin={lod.togglePin}
           onClearPin={lod.clearPin}
+          onMoveUndo={onMoveUndo}
+          onMoveRedo={onMoveRedo}
         />
         <ViewportReturnButton tabId={tabId} />
         <CanvasMiniMap

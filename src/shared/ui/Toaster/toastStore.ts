@@ -23,9 +23,11 @@ let toastSeq = 0
 
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
-  pushToast: ({ level = 'info', title, message, duration = 5000 }) => {
+  // action 必须原样带进 toast：Toaster 会渲染它（如「撤销」）。
+  // 早期实现解构时漏掉 action，导致所有带撤销入口的 toast 按钮从未显示。
+  pushToast: ({ level = 'info', title, message, action, duration = 5000 }) => {
     const id = `toast-${++toastSeq}`
-    set((state) => ({ toasts: [...state.toasts, { id, level, title, message, duration }] }))
+    set((state) => ({ toasts: [...state.toasts, { id, level, title, message, action, duration }] }))
     return id
   },
   dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),

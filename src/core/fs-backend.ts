@@ -106,6 +106,23 @@ export interface FSBTrashTopoDocumentItem extends FSBTrashItem {
 }
 
 /** 全库文档候选项（选择关联文档 / 插入文档引用时用）。 */
+/** 全库可作为「移动目标房间」的节点（一次扫描，渲染层本地搜索过滤）。 */
+export interface FSBRoomNodeTarget {
+  /** 目标房间路径（相对 kbs），可直接作为 moveTopoNodesToRoom 的 targetRoomPath */
+  path: string
+  /** 显示名 */
+  name: string
+  /** 父链显示名，' / ' 分隔 */
+  breadcrumb: string
+  /** 是否为知识库根房间 */
+  isRoot: boolean
+}
+
+/** 跨房间移动的可选参数：撤销时按目标 basename 精确恢复原坐标。 */
+export interface FSBNodeMoveOptions {
+  positionsByNode?: Record<string, { x: number; y: number } | null>
+}
+
 export interface FSBDocumentCandidate {
   docId: string
   title: string
@@ -183,7 +200,8 @@ export interface FSB {
   clearTrashTopoDocuments: (rootDir: string, cardPath: string) => Promise<void>
   moveTopoDocument: (rootDir: string, cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   moveTopoDocumentToCard: (rootDir: string, sourceCardPath: string, documentId: string, targetCardPath: string) => Promise<MoveTopoDocumentToCardResult>
-  moveTopoNodesToRoom: (rootDir: string, sourceRoomPath: string, nodeIds: string[], targetRoomPath: string) => Promise<MoveTopoNodesToRoomResult>
+  moveTopoNodesToRoom: (rootDir: string, sourceRoomPath: string, nodeIds: string[], targetRoomPath: string, options?: FSBNodeMoveOptions) => Promise<MoveTopoNodesToRoomResult>
+  listRoomNodeTargets: (rootDir: string) => Promise<FSBRoomNodeTarget[]>
   repairTopoDocuments: (rootDir: string, cardPath: string) => Promise<TopoDocumentRepairResult>
   exportTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<TopoDocumentExportPayload>
   openTopoDocumentFolder: (rootDir: string, cardPath: string, documentId: string) => Promise<boolean>
@@ -262,8 +280,10 @@ const FSBImpl: FSB = {
     _call('fs:moveTopoDocument', rootDir, cardPath, documentId, newParentId, newSortOrder) as Promise<TopoDocumentManifestItem>,
   moveTopoDocumentToCard: (rootDir, sourceCardPath, documentId, targetCardPath) =>
     _call('fs:moveTopoDocumentToCard', rootDir, sourceCardPath, documentId, targetCardPath) as Promise<MoveTopoDocumentToCardResult>,
-  moveTopoNodesToRoom: (rootDir, sourceRoomPath, nodeIds, targetRoomPath) =>
-    _call('fs:moveTopoNodesToRoom', rootDir, sourceRoomPath, nodeIds, targetRoomPath) as Promise<MoveTopoNodesToRoomResult>,
+  moveTopoNodesToRoom: (rootDir, sourceRoomPath, nodeIds, targetRoomPath, options) =>
+    _call('fs:moveTopoNodesToRoom', rootDir, sourceRoomPath, nodeIds, targetRoomPath, options ?? {}) as Promise<MoveTopoNodesToRoomResult>,
+  listRoomNodeTargets: (rootDir) =>
+    _call('fs:listRoomNodeTargets', rootDir) as Promise<FSBRoomNodeTarget[]>,
   listDocumentCandidates: (rootDir) =>
     _call('fs:listDocumentCandidates', rootDir) as Promise<FSBDocumentCandidate[]>,
   listUnifiedTreeLevel: (rootDir, parentKey) =>

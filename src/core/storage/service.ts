@@ -224,8 +224,11 @@ export function createStore(backend: StorageBackend) {
     async moveTopoDocumentToCard(cardPath: string, documentId: string, targetCardPath: string) {
       try { return await backend.moveTopoDocumentToCard(cardPath, documentId, targetCardPath) } catch (e) { logger.catch('Store.moveTopoDocumentToCard', `跨节点移动文档失败: ${cardPath}/${documentId} -> ${targetCardPath}`, e); throw e }
     },
-    async moveTopoNodesToRoom(sourceRoomPath: string, nodeIds: string[], targetRoomPath: string) {
-      try { return await backend.moveTopoNodesToRoom(sourceRoomPath, nodeIds, targetRoomPath) } catch (e) { logger.catch('Store.moveTopoNodesToRoom', `跨房间移动节点失败: ${sourceRoomPath} -> ${targetRoomPath}`, e); throw e }
+    async moveTopoNodesToRoom(sourceRoomPath: string, nodeIds: string[], targetRoomPath: string, options?: { positionsByNode?: Record<string, { x: number; y: number } | null> }) {
+      try { return await backend.moveTopoNodesToRoom(sourceRoomPath, nodeIds, targetRoomPath, options) } catch (e) { logger.catch('Store.moveTopoNodesToRoom', `跨房间移动节点失败: ${sourceRoomPath} -> ${targetRoomPath}`, e); throw e }
+    },
+    async listRoomNodeTargets() {
+      try { return await backend.listRoomNodeTargets() } catch (e) { logger.catch('Store.listRoomNodeTargets', '列出全库移动目标节点失败', e); throw e }
     },
     async repairTopoDocuments(cardPath: string) {
       try { return await backend.repairTopoDocuments(cardPath) } catch (e) { logger.catch('Store.repairTopoDocuments', `修复多类型文档失败: ${cardPath}`, e); throw e }

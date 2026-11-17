@@ -4,7 +4,7 @@ import type { EdgeRelationDefinition } from '../../domain/graph/edgeRelations'
 import type { GraphProfileId } from '../../domain/graph/graphProfiles'
 import type { KBListItem } from '../../types'
 import type { DefaultEdgeStyle, DefaultEditorStyle } from '../../domain/style/styleTypes'
-import type { FSBTrashItem, FSBTrashTopoDocumentItem, FSBDocumentCandidate, UnifiedTreeLevel } from '../fs-backend'
+import type { FSBTrashItem, FSBTrashTopoDocumentItem, FSBDocumentCandidate, UnifiedTreeLevel, FSBRoomNodeTarget, FSBNodeMoveOptions } from '../fs-backend'
 import type { LinkedDocumentRef, DocumentResolution, DocumentBacklink, DocumentRelations } from '../../domain/graph/linkedDocuments'
 import type { TopoDocumentType } from '../topoDocumentTypes'
 
@@ -112,6 +112,8 @@ export interface MoveTopoNodesToRoomResult {
   sourceRoomPath: string
   /** 旧 basename → 新 basename 的改名映射（目标房间同名冲突时产生） */
   renamed: Record<string, string>
+  /** 移动前的原始坐标（键为移动后的 basename），撤销时原样写回 */
+  positions: Record<string, { x: number; y: number } | null>
 }
 
 export interface AttachmentItem {
@@ -214,8 +216,11 @@ export interface NodeMoveStorageBackend {
   moveTopoNodesToRoom: (
     sourceRoomPath: string,
     nodeIds: string[],
-    targetRoomPath: string
+    targetRoomPath: string,
+    options?: FSBNodeMoveOptions
   ) => Promise<MoveTopoNodesToRoomResult>
+  /** 全库可作为移动目标房间的节点清单，供移动对话框本地搜索（空 query 不扫描正文）。 */
+  listRoomNodeTargets: () => Promise<FSBRoomNodeTarget[]>
 }
 
 export interface ConfigStorageBackend {

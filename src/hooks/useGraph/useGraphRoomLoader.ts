@@ -39,10 +39,15 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
   const inflightGraphRef = useRef(new Map<string, Promise<LoadedRoomGraph>>())
 
   const loadRoom = useCallback(
-    async (dirPath: string, preserveCurrentNodeLayout = false) => {
+    async (dirPath: string, preserveCurrentNodeLayout = false, preserveViewport = false) => {
       const startedAt = performance.now()
       const requestSeq = ++loadRequestSeqRef.current
       const store = storeApi.getState()
+      /**
+       * 原地刷新（跨房间移动撤销 / 前进）必须保留当前 pan/zoom：
+       * 磁盘 meta 里的视口可能是上一次手势落盘前的旧值，直接套用会让相机跳一下。
+       */
+      const currentViewport = preserveViewport ? { ...store.viewport } : null
       const layoutStartedAt = performance.now()
       const currentNodeLayout = preserveCurrentNodeLayout
         ? new Map(store.nodes.map((node) => [node.id, {
@@ -102,7 +107,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
               }
             })
           : loaded.nodes
-        replaceGraphSession(storeApi as GraphStoreApi, nextNodes, loaded.edges, {
+        replaceGraphSession(storeApi as GraphStoreApi, nextNodes, loaded.edges, currentViewport ?? {
           x: loaded.meta.viewport.pan.x,
           y: loaded.meta.viewport.pan.y,
           zoom: loaded.meta.viewport.zoom,
@@ -120,6 +125,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
           layoutMs,
           readMs,
           applyMs,
+          preserveViewport,
         })
         void logPerformanceMetric(PERFORMANCE_METRICS.roomLoad, performance.now() - startedAt, {
           success: true,

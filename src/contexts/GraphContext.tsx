@@ -15,6 +15,8 @@ import type { Node, Edge, NodeChange, EdgeChange, Connection, FinalConnectionSta
 export interface GraphContextValue {
   // Room lifecycle
   loadRoom: (dirPath: string) => Promise<void>
+  /** 原地刷新会话当前房间（不切房间、不跳相机）；跨房间移动的撤销/前进专用 */
+  refreshCurrentRoom: () => Promise<void>
   navigateBack: () => Promise<void>
   navigateToRoom: (index: number) => Promise<void>
   navigateToRoot: () => Promise<void>
@@ -74,6 +76,7 @@ type GraphContextSource = Pick<ReturnType<typeof useGraph>, keyof GraphContextVa
 function createGraphContextValue(graph: GraphContextSource): GraphContextValue {
   return {
     loadRoom: graph.loadRoom,
+    refreshCurrentRoom: graph.refreshCurrentRoom,
     navigateBack: graph.navigateBack,
     navigateToRoom: graph.navigateToRoom,
     navigateToRoot: graph.navigateToRoot,

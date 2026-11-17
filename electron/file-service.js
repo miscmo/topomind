@@ -35,6 +35,7 @@ import {
   createLinkedDocumentWriter,
 } from './services/document-id-service.js';
 import { createUnifiedDocumentTreeService } from './services/unified-document-tree-service.js';
+import { childRect, planRoomPlacement } from './services/room-placement-service.js';
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_TEXT_FILE_BYTES = 5 * 1024 * 1024;
@@ -1430,8 +1431,11 @@ function _fs_moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetC
 //    一端在集合内、一端在源房间其余节点 → 丢弃（与源房间的连线不保留）；两端都不在集合内 → 留源房间。
 //  - 目标房间同名节点自动重命名（foo → foo-1），并同步改写 intra-batch 连线引用。
 //  - 防环：目标房间不能等于任一被移动节点路径，也不能是其后代子房间。
-// 返回 { moved:[新basename], keptEdges, droppedEdges, targetRoomPath, sourceRoomPath, renamed:{old:new} }。
-function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPath) {
+//  - 落点：整批节点保持相对布局（同一个 dx/dy 平移）挪进目标房间空白区域，
+//    不与目标房间已有节点叠放；options.positionsByNode 用于撤销时精确恢复原坐标。
+// 返回 { moved:[新basename], keptEdges, droppedEdges, targetRoomPath, sourceRoomPath,
+//        renamed:{old:new}, positions:{newBasename:{x,y}|null} }。
+function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPath, options) {
   rootDir = _fs_requireValidWorkDir(rootDir);
   var norm = function (ref) {
     return String(ref || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
@@ -1495,6 +1499,41 @@ function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPat
     renameMap[oldId] = newId;
     newChildren[newId] = Object.assign({}, sourceChildren[oldId]);
   });
+
+  // 【批量移动落点】源/目标房间坐标系互相独立，直接复制 x/y 会压在目标房间已有
+  // 节点上。整批只做一次平移：内部相对布局与内部连线视觉形态完全不变。
+  // 原始坐标随结果返回，撤销时通过 options.positionsByNode 精确写回。
+  var originalPositions = {};
+  var movingRects = movedList.map(function (oldId) {
+    var c = sourceChildren[oldId];
+    originalPositions[renameMap[oldId]] = (Number.isFinite(c.x) && Number.isFinite(c.y))
+      ? { x: c.x, y: c.y } : null;
+    return childRect(c);
+  });
+  var restorePositions = (options && options.positionsByNode && typeof options.positionsByNode === 'object')
+    ? options.positionsByNode : null;
+  if (restorePositions) {
+    Object.keys(newChildren).forEach(function (newId) {
+      var pos = restorePositions[newId];
+      if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+        newChildren[newId].x = pos.x;
+        newChildren[newId].y = pos.y;
+      } else {
+        delete newChildren[newId].x;
+        delete newChildren[newId].y;
+      }
+    });
+  } else {
+    var occupiedRects = Object.keys(targetChildren).map(function (k) { return childRect(targetChildren[k]); });
+    var placement = planRoomPlacement(movingRects, occupiedRects);
+    if (placement.relocated) {
+      movingRects.forEach(function (r, i) {
+        var child = newChildren[renameMap[movedList[i]]];
+        child.x = r.x + placement.dx;
+        child.y = r.y + placement.dy;
+      });
+    }
+  }
 
   // 物理 relocate：源目录 → 目标目录（使用新 basename）。
   // 若某被移动节点是另一被移动节点的后代，其目录已随祖先一起搬走（srcNodeDir 不存在），
@@ -1577,6 +1616,7 @@ function _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPat
     targetRoomPath: targetRoomPath,
     sourceRoomPath: sourceRoomPath,
     renamed: renameMap,
+    positions: originalPositions,
   };
 }
 
@@ -2020,8 +2060,8 @@ const fileService = {
       return documentService.moveTopoDocumentToCard(rootDir, sourceCardPath, documentId, targetCardPath);
     },
 
-    moveTopoNodesToRoom: function(rootDir, sourceRoomPath, nodeIds, targetRoomPath) {
-      return _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPath);
+    moveTopoNodesToRoom: function(rootDir, sourceRoomPath, nodeIds, targetRoomPath, options) {
+      return _fs_moveTopoNodesToRoom(rootDir, sourceRoomPath, nodeIds, targetRoomPath, options);
     },
 
     repairTopoDocuments: function(rootDir, cardPath) {
@@ -2180,6 +2220,59 @@ Object.assign(fileService, {
   /** 全库文档候选：兼容入口（旧调用方 / 回归脚本），新选择器一律走统一树按需加载。 */
   listDocumentCandidates: function(rootDir) {
     return documentIndexService.listDocumentCandidates(_fs_requireValidWorkDir(rootDir));
+  },
+
+  /**
+   * 全库可作为「移动目标房间」的节点清单（一次扫描，渲染层本地过滤搜索）。
+   * 每个节点既是一张卡片、也可以下钻成房间，因此 path 就是可直接传给
+   * moveTopoNodesToRoom 的 targetRoomPath；轻量节点（无物理目录）同样可入，
+   * 但不再向下递归。只按逻辑 meta 的 children 枚举，与画布所见保持一致。
+   */
+  listRoomNodeTargets: function(rootDir) {
+    var validRoot = _fs_requireValidWorkDir(rootDir);
+    var kbs = _fs_resolveKbsPath(validRoot, '');
+    var MAX_TARGETS = 20000;
+    var MAX_DEPTH = 32;
+    var SKIP_DIRS = { _graph: 1, _docs: 1, _attach: 1, _trash: 1, images: 1, node_modules: 1 };
+    var out = [];
+    var visited = {};
+    var listDirs = function (abs) {
+      try {
+        return nodeFs.readdirSync(abs, { withFileTypes: true }).filter(function (e) {
+          return e.isDirectory() && e.name.charAt(0) !== '.' && !SKIP_DIRS[e.name];
+        });
+      } catch { return []; }
+    };
+    var hasOwnRoom = function (abs) {
+      return nodeFs.existsSync(nodePath.join(abs, '_graph.json'));
+    };
+    var walk = function (roomPath, crumbs, depth) {
+      if (depth > MAX_DEPTH || out.length >= MAX_TARGETS || visited[roomPath]) return;
+      visited[roomPath] = true;
+      var meta;
+      try { meta = graphMetaService.readGraphMeta(validRoot, roomPath); } catch { return; }
+      var children = (meta && meta.children && typeof meta.children === 'object' && !Array.isArray(meta.children))
+        ? meta.children : {};
+      var dir;
+      try { dir = _fs_resolveKbsPath(validRoot, roomPath); } catch { return; }
+      Object.keys(children).forEach(function (key) {
+        if (out.length >= MAX_TARGETS) return;
+        // 异常 key 可能让下游路径越界，直接跳过。
+        if (!key || key === '.' || key === '..' || key.indexOf('/') >= 0 || key.indexOf('\\') >= 0) return;
+        var child = children[key] || {};
+        var name = (typeof child.name === 'string' && child.name) ? child.name : key;
+        var childPath = roomPath + '/' + key;
+        out.push({ path: childPath, name: name, breadcrumb: crumbs.join(' / '), isRoot: false });
+        var childDir = nodePath.join(dir, key);
+        if (hasOwnRoom(childDir)) walk(childPath, crumbs.concat(name), depth + 1);
+      });
+    };
+    listDirs(kbs).forEach(function (kb) {
+      if (out.length >= MAX_TARGETS) return;
+      out.push({ path: kb.name, name: kb.name, breadcrumb: '', isRoot: true });
+      walk(kb.name, [kb.name], 1);
+    });
+    return out;
   },
 
   /** 统一资源树：只返回 parentKey 的直接子层，绝不递归子孙。 */

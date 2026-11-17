@@ -5,6 +5,7 @@ import { logAction } from '../../core/log-backend'
 import { markPerformanceMetricStart, PERFORMANCE_METRICS } from '../../core/performance-log'
 import type { EdgeStylePatch, KnowledgeNodeData } from '../../types'
 import { generateId } from './graphBuilder'
+import { shouldResetSelectionOnContextMenu } from './contextMenuSelection'
 import type { GraphOperations } from './graphOperations'
 import { resolveRoomChildRef } from '../../domain/graph/path-utils'
 import { useGraphUiStore } from '../../stores/graphUiStore'
@@ -331,9 +332,14 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
       setSelectedEdgeId(null)
       ops.setSelectedEdgeInGraph(null)
       markPerformanceMetricStart(PERFORMANCE_METRICS.nodeSelect, node.id)
-      ops.selectNode(node.id)
+      // 右键落在多选集合内时必须保留整批选中。旧实现无条件 selectNode(node.id)
+      // 会把 nodes[].selected 重置成单选，导致框选 / 选中子树 / Shift 点选后
+      // 一右键就「多选模式消失」，批量移动只剩一个节点。
+      // 右键落在集合外才切到单选（此时菜单语义就是只操作这一个节点）。
+      const selectedIds = storeApi.getState().selectedNodeIds
+      if (shouldResetSelectionOnContextMenu(selectedIds, node.id)) ops.selectNode(node.id)
     },
-    [ops, setSelectedEdgeId]
+    [ops, setSelectedEdgeId, storeApi]
   )
 
   const onConnectStart = useCallback((_: unknown, params: { nodeId?: string | null }) => {

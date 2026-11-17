@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree } from 'lucide-react'
+import { Plus, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree, X } from 'lucide-react'
 
 interface MenuItem {
   label: string
@@ -37,6 +37,13 @@ interface GraphPageContextMenuProps {
   onEdgeStyle: (edgeId: string) => void
   onAddEmoji: (nodeId: string, position: { x: number, y: number }) => void
   onMoveToRoom: (nodeId: string) => void
+  /** 打开菜单时的选中快照，用于多选批量移动入口 */
+  selectedCount: number
+  targetInSelection: boolean
+  /** 右键落在 xyflow 多选选区包围盒上：渲染批量操作菜单 */
+  selectionMenu: boolean
+  onMoveSelectionToRoom: () => void
+  onClearSelection: () => void
   onLinkDocument: (nodeId: string) => void
   onClose: () => void
 }
@@ -55,6 +62,11 @@ export default memo(function GraphPageContextMenu({
   onEdgeStyle,
   onAddEmoji,
   onMoveToRoom,
+  selectedCount,
+  targetInSelection,
+  selectionMenu,
+  onMoveSelectionToRoom,
+  onClearSelection,
   onLinkDocument,
   onClose,
 }: GraphPageContextMenuProps) {
@@ -64,95 +76,142 @@ export default memo(function GraphPageContextMenu({
 
   const isEdge = type === 'edge'
   const isPane = type === 'pane'
+  // 右键落在框选集合内时，明确提示这会移动整批节点，而不是只移动右键的那一个。
+  const moveToRoomLabel = targetInSelection && selectedCount > 1
+    ? `移动选中 ${selectedCount} 个节点到房间…`
+    : '移动到房间…'
 
-  const items: MenuEntry[] = isPane
-    ? [
-        {
-          label: '新建节点',
-          icon: <Plus className="w-4 h-4" />,
-          shortcut: 'Double Click',
-          action: async () => {
-            await onNewChild({ x, y })
-            onClose()
-          },
-        },
-      ]
-    : isEdge
-      ? [
-          {
-            label: '连线样式',
-            icon: <Palette className="w-4 h-4" />,
-            action: async () => {
-              if (targetId) await onEdgeStyle(targetId)
-              onClose()
-            },
-          },
-          { separator: true },
-          {
-            label: '删除连线',
-            icon: <Trash2 className="w-4 h-4" />,
-            shortcut: 'Backspace',
-            action: async () => {
-              if (targetId) await onEdgeDelete(targetId)
-              onClose()
-            },
-            danger: true,
-          },
-        ]
-      : [
-          {
-            label: '进入节点',
-            icon: <Maximize2 className="w-4 h-4" />,
-            shortcut: 'Enter',
-            action: async () => {
-              if (targetId) await onEnterNode(targetId)
-              onClose()
-            },
-          },
-          {
-            label: '选中子树',
-            icon: <ListTree className="w-4 h-4" />,
-            action: () => {
-              if (targetId) onSelectSubtree(targetId)
-              onClose()
-            },
-          },
-          {
-            label: '添加表情',
-            icon: <SmilePlus className="w-4 h-4" />,
-            action: async () => {
-              if (targetId) await onAddEmoji(targetId, { x, y })
-              onClose()
-            },
-          },
-          {
-            label: '关联已有文档…',
-            icon: <Link2 className="w-4 h-4" />,
-            action: async () => {
-              if (targetId) await onLinkDocument(targetId)
-              onClose()
-            },
-          },
-          {
-            label: '移动到房间…',
-            icon: <FolderInput className="w-4 h-4" />,
-            action: async () => {
-              if (targetId) await onMoveToRoom(targetId)
-              onClose()
-            },
-          },
-          { separator: true },
-          {
-            label: '删除节点',
-            icon: <Trash2 className="w-4 h-4" />,
-            shortcut: 'Backspace',
-            action: async () => {
-              if (targetId) await onDelete(targetId)
-              onClose()
-            },
-            danger: true,
-          },
-        ]
+  // 框选后右键画布空白处也能发起批量移动，不必再逐个右键选中节点。
+  const paneItems: MenuEntry[] = [
+    {
+      label: '新建节点',
+      icon: <Plus className="w-4 h-4" />,
+      shortcut: 'Double Click',
+      action: async () => {
+        await onNewChild({ x, y })
+        onClose()
+      },
+    },
+  ]
+  if (selectedCount > 0) {
+    paneItems.push({ separator: true })
+    paneItems.push({
+      label: `移动选中 ${selectedCount} 个节点到房间…`,
+      icon: <FolderInput className="w-4 h-4" />,
+      action: () => {
+        onMoveSelectionToRoom()
+        onClose()
+      },
+    })
+  }
+
+  // 框选 / 选中子树 / Shift 点选后，xyflow 的选区包围盒覆盖在节点上方，
+  // 右键只会走 onSelectionContextMenu。这里给整批节点一个明确的批量菜单，
+  // 集合来自打开菜单时冻结的快照，不受菜单期间选中态变化影响。
+  const selectionItems: MenuEntry[] = [
+    {
+      label: `移动选中 ${selectedCount} 个节点到房间…`,
+      icon: <FolderInput className="w-4 h-4" />,
+      disabled: selectedCount === 0,
+      action: () => {
+        onMoveSelectionToRoom()
+        onClose()
+      },
+    },
+    {
+      label: '取消选择',
+      icon: <X className="w-4 h-4" />,
+      action: () => {
+        onClearSelection()
+        onClose()
+      },
+    },
+  ]
+
+  const edgeItems: MenuEntry[] = [
+    {
+      label: '连线样式',
+      icon: <Palette className="w-4 h-4" />,
+      action: async () => {
+        if (targetId) await onEdgeStyle(targetId)
+        onClose()
+      },
+    },
+    { separator: true },
+    {
+      label: '删除连线',
+      icon: <Trash2 className="w-4 h-4" />,
+      shortcut: 'Backspace',
+      action: async () => {
+        if (targetId) await onEdgeDelete(targetId)
+        onClose()
+      },
+      danger: true,
+    },
+  ]
+
+  const nodeItems: MenuEntry[] = [
+    {
+      label: '进入节点',
+      icon: <Maximize2 className="w-4 h-4" />,
+      shortcut: 'Enter',
+      action: async () => {
+        if (targetId) await onEnterNode(targetId)
+        onClose()
+      },
+    },
+    {
+      label: '选中子树',
+      icon: <ListTree className="w-4 h-4" />,
+      action: () => {
+        if (targetId) onSelectSubtree(targetId)
+        onClose()
+      },
+    },
+    {
+      label: '添加表情',
+      icon: <SmilePlus className="w-4 h-4" />,
+      action: async () => {
+        if (targetId) await onAddEmoji(targetId, { x, y })
+        onClose()
+      },
+    },
+    {
+      label: '关联已有文档…',
+      icon: <Link2 className="w-4 h-4" />,
+      action: async () => {
+        if (targetId) await onLinkDocument(targetId)
+        onClose()
+      },
+    },
+    {
+      label: moveToRoomLabel,
+      icon: <FolderInput className="w-4 h-4" />,
+      action: async () => {
+        if (targetId) await onMoveToRoom(targetId)
+        onClose()
+      },
+    },
+    { separator: true },
+    {
+      label: '删除节点',
+      icon: <Trash2 className="w-4 h-4" />,
+      shortcut: 'Backspace',
+      action: async () => {
+        if (targetId) await onDelete(targetId)
+        onClose()
+      },
+      danger: true,
+    },
+  ]
+
+  const items: MenuEntry[] = selectionMenu
+    ? selectionItems
+    : isPane
+      ? paneItems
+      : isEdge
+        ? edgeItems
+        : nodeItems
 
   const navigableItems = useMemo(
     () => items.filter((item): item is MenuItem => !('separator' in item)),

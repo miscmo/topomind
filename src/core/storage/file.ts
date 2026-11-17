@@ -1,5 +1,5 @@
 import { FSB } from '../fs-backend'
-import type { FSBDocumentCandidate, UnifiedTreeLevel } from '../fs-backend'
+import type { FSBDocumentCandidate, UnifiedTreeLevel, FSBRoomNodeTarget, FSBNodeMoveOptions } from '../fs-backend'
 import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem, TopoDocumentMetaPatch, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
 import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, EdgeAnchor, GraphNodeKind } from '../../types'
@@ -422,8 +422,12 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.moveTopoDocumentToCard(requireRootDir(), cardPath, documentId, targetCardPath)
     },
 
-    moveTopoNodesToRoom: async (sourceRoomPath: string, nodeIds: string[], targetRoomPath: string): Promise<MoveTopoNodesToRoomResult> => {
-      return FSB.moveTopoNodesToRoom(requireRootDir(), sourceRoomPath, nodeIds, targetRoomPath)
+    moveTopoNodesToRoom: async (sourceRoomPath: string, nodeIds: string[], targetRoomPath: string, options?: FSBNodeMoveOptions): Promise<MoveTopoNodesToRoomResult> => {
+      return FSB.moveTopoNodesToRoom(requireRootDir(), sourceRoomPath, nodeIds, targetRoomPath, options)
+    },
+
+    listRoomNodeTargets: async (): Promise<FSBRoomNodeTarget[]> => {
+      return FSB.listRoomNodeTargets(requireRootDir())
     },
 
     repairTopoDocuments: async (cardPath: string) => {

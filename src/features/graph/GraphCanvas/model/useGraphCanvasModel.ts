@@ -34,6 +34,10 @@ export interface UseGraphCanvasModelProps {
   onNodeContextMenu?: (nodeId: string, event: React.MouseEvent) => void
   onEdgeContextMenu?: (edgeId: string, event: React.MouseEvent) => void
   onPaneContextMenu?: (x: number, y: number) => void
+  /** 选区包围盒上的右键：xyflow 会用 .react-flow__nodesselection-rect 覆盖选中区域，
+   *  此时 node / pane 的右键回调都不会触发，必须单独接 onSelectionContextMenu。
+   *  nodeIds 是 xyflow 内部认为的选中集合，用于单选时回落到完整节点菜单。 */
+  onSelectionContextMenu?: (x: number, y: number, nodeIds: string[]) => void
   onCloseContextMenu?: () => void
 }
 
@@ -42,6 +46,7 @@ export function useGraphCanvasModel({
   onNodeContextMenu,
   onEdgeContextMenu,
   onPaneContextMenu,
+  onSelectionContextMenu,
   onCloseContextMenu,
 }: UseGraphCanvasModelProps) {
   const showGrid = useGraphUiStore((s) => s.showGrid)
@@ -527,6 +532,44 @@ export function useGraphCanvasModel({
     onPaneContextMenu?.(event.clientX, event.clientY)
   }, [onPaneContextMenu, onCloseContextMenu, tabId])
 
+  /**
+   * 多选（框选 / 选中子树 / Shift 点选）后，xyflow 会在选中节点包围盒上盖一层
+   * .react-flow__nodesselection-rect (pointer-events: all, z-index 3)。右键落在它上面时
+   * 既不是 node、也不是 pane，旧实现两个回调都收不到 → 「右键呼不出任何菜单」。
+   * 这里统一转成和 pane 右键相同的入口，由页面层用冻结的选中快照渲染多选菜单。
+   */
+  const handleSelectionContextMenu = useCallback((event: React.MouseEvent, selectedNodes: Node[]) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (isCanvasReadOnly(tabId)) {
+      onCloseContextMenu?.()
+      return
+    }
+    onSelectionContextMenu?.(event.clientX, event.clientY, selectedNodes.map((node) => node.id))
+  }, [onSelectionContextMenu, onCloseContextMenu, tabId])
+
+  /**
+   * 容器级兜底：上面三个 xyflow 回调都会 stopPropagation，被它们接住的事件不会冒泡到这里。
+   * 只有「某个 react-flow 内部覆盖层把右键吞了、三个回调都没接到」时才会走到这里 ——
+   * 这正是「框选后右键呼不出任何菜单」这类问题的通用形态。此时仍给画布一个可用菜单，
+   * 而不是让右键毫无反应。工具栏 / 搜索框 / 缩略图等控件不在白名单内，不抢它们的菜单。
+   */
+  const handleCanvasContextMenuFallback = useCallback((event: React.MouseEvent) => {
+    if (event.defaultPrevented) return
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const insideGraphLayer = target.closest(
+      '.react-flow__pane, .react-flow__node, .react-flow__edge, .react-flow__nodesselection, .react-flow__selection, .react-flow__viewport'
+    )
+    if (!insideGraphLayer) return
+    event.preventDefault()
+    if (isCanvasReadOnly(tabId)) {
+      onCloseContextMenu?.()
+      return
+    }
+    onPaneContextMenu?.(event.clientX, event.clientY)
+  }, [tabId, onPaneContextMenu, onCloseContextMenu])
+
   const flushConnectionTargetSearch = useCallback(() => {
     if (!connectingSourceId || !snapCandidateIndex) return
     const pendingPoint = pendingConnectionPointRef.current
@@ -668,6 +711,8 @@ export function useGraphCanvasModel({
       handleEdgeDoubleClick,
       handleEdgeContextMenu,
       handlePaneContextMenu,
+      handleSelectionContextMenu,
+      handleCanvasContextMenuFallback,
       handleConnectionMouseMove,
       handleConnectionMouseLeave,
       handleCanvasMouseEnter,
