@@ -3565,6 +3565,301 @@ async function main() {
       && afterHomeAD.h1FromScrollerTop >= 24
       && afterHomeAD.editorPadTop === 24,
       JSON.stringify({ workspaceReadyAD, editorReadyAD, beforeScrollAD, atBottomAD, afterHomeAD }))
+
+    // ===== 阶段 AE：块编辑侧栏不得压在层级面包屑栏 / 面包屑下拉上 =====
+    // 侧栏是 portal 到 body 的浮层，不受正文滚动容器裁剪。贴顶块的侧栏或展开菜单
+    // 一旦越过正文上边界，必须被越界守卫隐藏；面包屑下拉展开期间整条侧栏也要让位，
+    // 既不能视觉穿透，也不能接收鼠标事件。
+    await page.evaluate(() => {
+      const sc = document.querySelector('.tm-smart-editor-scroll')
+      if (sc) sc.scrollTop = 0
+    })
+    await sleep(200)
+    const firstH1PointAE = await page.evaluate(() => {
+      const h1 = document.querySelector('.bn-editor h1')
+      if (!h1) return null
+      const r = h1.getBoundingClientRect()
+      return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2) }
+    })
+    if (firstH1PointAE) await page.mouse.move(firstH1PointAE.x, firstH1PointAE.y)
+    let handlePointAE = null
+    for (let i = 0; i < 24 && !handlePointAE; i++) {
+      handlePointAE = await page.evaluate(() => {
+        const b = document.querySelector('.tm-smart-side-menu-hit-area .bn-button[draggable="true"]')
+        if (!b) return null
+        const r = b.getBoundingClientRect()
+        return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null
+      })
+      if (!handlePointAE) await sleep(250)
+    }
+    if (handlePointAE) await page.mouse.click(handlePointAE.x, handlePointAE.y)
+    await sleep(350)
+
+    const boundStateAE = await page.evaluate(() => {
+      const sc = document.querySelector('.tm-smart-editor-scroll')
+      const area = document.querySelector('.tm-smart-side-menu-hit-area')
+      const menu = document.querySelector('.tm-smart-block-menu')
+      if (!sc || !area) return null
+      const scTop = sc.getBoundingClientRect().top
+      const menuTop = menu ? menu.getBoundingClientRect().top : null
+      const style = getComputedStyle(area)
+      return {
+        scTop: Math.round(scTop),
+        menuTop: menuTop == null ? null : Math.round(menuTop),
+        hasMenu: !!menu,
+        outsideFlag: area.getAttribute('data-tm-side-menu-outside') === 'true',
+        visibility: style.visibility,
+        pointerEvents: style.pointerEvents,
+      }
+    })
+    const menuCrossesTopAE = !!boundStateAE && boundStateAE.menuTop != null
+      && boundStateAE.menuTop < boundStateAE.scTop - 1
+    // 越界守卫生效对象只有侧栏手柄（＋/⠿），不是展开的块菜单。贴顶块的手柄
+    // 本身仍在正文区内，必须正常显示；菜单向上 flip 越过顶部是正常弹层行为，
+    // 也不能被当成越界隐藏（否则就是用户反馈的「菜单一闪而过」）。
+    check('【阶段 AE】贴顶块手柄不误隐藏，菜单向上 flip 越过顶部仍稳定可交互',
+      !!handlePointAE && !!boundStateAE && !!boundStateAE.hasMenu
+      && !boundStateAE.outsideFlag
+      && boundStateAE.visibility === 'visible' && boundStateAE.pointerEvents === 'auto',
+      JSON.stringify({ handlePointAE, boundStateAE, menuCrossesTopAE }))
+
+    // 复用这个已经向上 flip、menuTop 越过 scrollerTop 的菜单，连续采样确认它
+    // 稳定存在（旧实现会在此后 150ms 把菜单隐藏＝一闪而过）。
+    const flipSamplesAE = []
+    for (let i = 0; i < 12; i++) {
+      flipSamplesAE.push(await page.evaluate(() => {
+        const menu = document.querySelector('.tm-smart-block-menu')
+        const area = document.querySelector('.tm-smart-side-menu-hit-area')
+        const sc = document.querySelector('.tm-smart-editor-scroll')
+        return {
+          menu: !!menu,
+          menuTop: menu ? Math.round(menu.getBoundingClientRect().top) : null,
+          menuVis: menu ? getComputedStyle(menu).visibility : null,
+          outside: area?.getAttribute('data-tm-side-menu-outside') ?? null,
+          scTop: sc ? Math.round(sc.getBoundingClientRect().top) : null,
+        }
+      }))
+      await sleep(90)
+    }
+    check('【阶段 AE】菜单向上 flip 越过顶部后持续稳定，不一闪而过',
+      menuCrossesTopAE
+      && flipSamplesAE.every((s) => s.menu && s.menuVis === 'visible' && s.outside !== 'true'),
+      JSON.stringify({ menuCrossesTopAE, flipSamplesAE }))
+
+    const crumbClickedAE = await page.evaluate(() => {
+      const crumb = document.querySelector('[data-tm-document-breadcrumb]')
+      const button = crumb?.querySelector('button')
+      if (!button) return false
+      button.click()
+      return true
+    })
+    const dropdownReadyAE = await waitFor(page, () =>
+      !!document.querySelector('[data-tm-breadcrumb-dropdown]'), 6000)
+    await sleep(250)
+    const hiddenStateAE = await page.evaluate(() => {
+      const crumb = document.querySelector('[data-tm-document-breadcrumb]')
+      const area = document.querySelector('.tm-smart-side-menu-hit-area')
+      const menu = document.querySelector('.tm-smart-block-menu')
+      const areaStyle = area ? getComputedStyle(area) : null
+      const menuStyle = menu ? getComputedStyle(menu) : null
+      return {
+        openFlag: crumb?.getAttribute('data-tm-breadcrumb-dropdown-open') ?? null,
+        hasArea: !!area,
+        areaVisibility: areaStyle?.visibility ?? null,
+        areaPointerEvents: areaStyle?.pointerEvents ?? null,
+        menuVisibility: menuStyle?.visibility ?? null,
+        menuPointerEvents: menuStyle?.pointerEvents ?? null,
+      }
+    })
+    check('【阶段 AE】面包屑下拉展开时块侧栏与菜单完全让位且鼠标不可达',
+      crumbClickedAE && dropdownReadyAE && hiddenStateAE.openFlag === 'true'
+      && hiddenStateAE.hasArea
+      && hiddenStateAE.areaVisibility === 'hidden' && hiddenStateAE.areaPointerEvents === 'none'
+      && (hiddenStateAE.menuVisibility === null || hiddenStateAE.menuVisibility === 'hidden')
+      && (hiddenStateAE.menuPointerEvents === null || hiddenStateAE.menuPointerEvents === 'none'),
+      JSON.stringify({ crumbClickedAE, dropdownReadyAE, hiddenStateAE }))
+
+    await page.evaluate(() => {
+      const crumb = document.querySelector('[data-tm-document-breadcrumb]')
+      crumb?.querySelector('button')?.click()
+    })
+    await sleep(250)
+    // 再点正文让块菜单收起、侧栏回到正文区内：守卫用标记保留 DOM，
+    // 越界条件消失后必须恢复可见可点，不能永久隐藏整条侧栏。
+    const bodyPointAE = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.bn-editor .bn-inline-content')]
+        .find((node) => (node.textContent || '').includes('正文第 1 段'))
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.left + 20), y: Math.round(r.top + r.height / 2) }
+    })
+    if (bodyPointAE) await page.mouse.click(bodyPointAE.x, bodyPointAE.y)
+    await sleep(350)
+    const restoredAE = await page.evaluate(() => {
+      const crumb = document.querySelector('[data-tm-document-breadcrumb]')
+      const area = document.querySelector('.tm-smart-side-menu-hit-area')
+      return {
+        openFlag: crumb?.getAttribute('data-tm-breadcrumb-dropdown-open') ?? null,
+        outsideFlag: area?.getAttribute('data-tm-side-menu-outside') ?? null,
+        visibility: area ? getComputedStyle(area).visibility : null,
+        pointerEvents: area ? getComputedStyle(area).pointerEvents : null,
+      }
+    })
+    check('【阶段 AE】面包屑下拉关闭且菜单收起后块侧栏恢复可交互',
+      restoredAE.openFlag === 'false' && !!bodyPointAE
+      // 点正文后 BlockNote 可能直接卸载侧栏（visibility=null），也是「已恢复」。
+      && (restoredAE.visibility === null
+        || (restoredAE.outsideFlag !== 'true'
+          && restoredAE.visibility === 'visible' && restoredAE.pointerEvents === 'auto')),
+      JSON.stringify({ bodyPointAE, restoredAE }))
+
+    // 直接兜住用户反馈的回归：正常（非贴顶）块点击手柄必须能弹出菜单。
+    const normalPointAE = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.bn-editor .bn-inline-content')]
+        .find((node) => (node.textContent || '').includes('正文第 2 段'))
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2) }
+    })
+    if (normalPointAE) await page.mouse.move(normalPointAE.x, normalPointAE.y)
+    let normalHandleAE = null
+    for (let i = 0; i < 24 && !normalHandleAE; i++) {
+      normalHandleAE = await page.evaluate(() => {
+        const b = document.querySelector('.tm-smart-side-menu-hit-area .bn-button[draggable="true"]')
+        if (!b) return null
+        const r = b.getBoundingClientRect()
+        return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null
+      })
+      if (!normalHandleAE) await sleep(250)
+    }
+    if (normalHandleAE) await page.mouse.click(normalHandleAE.x, normalHandleAE.y)
+    await sleep(350)
+    const normalMenuAE = await page.evaluate(() => {
+      const menu = document.querySelector('.tm-smart-block-menu')
+      const area = document.querySelector('.tm-smart-side-menu-hit-area')
+      return {
+        hasMenu: !!menu,
+        menuVisibility: menu ? getComputedStyle(menu).visibility : null,
+        areaVisibility: area ? getComputedStyle(area).visibility : null,
+        outsideFlag: area?.getAttribute('data-tm-side-menu-outside') ?? null,
+      }
+    })
+    check('【阶段 AE】正常块点击手柄仍能弹出块菜单（未落位坐标不得误判越界）',
+      !!normalPointAE && !!normalHandleAE && normalMenuAE.hasMenu
+      && normalMenuAE.menuVisibility === 'visible'
+      && normalMenuAE.areaVisibility === 'visible'
+      && normalMenuAE.outsideFlag !== 'true',
+      JSON.stringify({ normalPointAE, normalHandleAE, normalMenuAE }))
+
+    // 用户反馈的完整路径：面包屑下拉开 → 关 → 再点块手柄，菜单一闪而过。
+    const reopenCrumbAE = await page.evaluate(() => {
+      const crumb = document.querySelector('[data-tm-document-breadcrumb]')
+      const button = crumb?.querySelector('button')
+      if (!button) return false
+      button.click()
+      return true
+    })
+    await sleep(250)
+    // 真实鼠标点正文，走面包屑的 handleClickOutside 关闭下拉
+    const closePointAE = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.bn-editor .bn-inline-content')]
+        .find((node) => (node.textContent || '').includes('正文第 3 段'))
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.left + 20), y: Math.round(r.top + r.height / 2) }
+    })
+    if (closePointAE) await page.mouse.click(closePointAE.x, closePointAE.y)
+    await sleep(300)
+    const closedFlagAE = await page.evaluate(() =>
+      document.querySelector('[data-tm-document-breadcrumb]')?.getAttribute('data-tm-breadcrumb-dropdown-open') ?? null)
+
+    const block4PointAE = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.bn-editor .bn-inline-content')]
+        .find((node) => (node.textContent || '').includes('正文第 4 段'))
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2) }
+    })
+    if (block4PointAE) await page.mouse.move(block4PointAE.x, block4PointAE.y)
+    let handle4AE = null
+    for (let i = 0; i < 24 && !handle4AE; i++) {
+      handle4AE = await page.evaluate(() => {
+        const b = document.querySelector('.tm-smart-side-menu-hit-area .bn-button[draggable="true"]')
+        if (!b) return null
+        const r = b.getBoundingClientRect()
+        return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null
+      })
+      if (!handle4AE) await sleep(250)
+    }
+    if (handle4AE) await page.mouse.click(handle4AE.x, handle4AE.y)
+    const samplesAfterCrumbAE = []
+    for (let i = 0; i < 12; i++) {
+      samplesAfterCrumbAE.push(await page.evaluate(() => {
+        const menu = document.querySelector('.tm-smart-block-menu')
+        const area = document.querySelector('.tm-smart-side-menu-hit-area')
+        const sc = document.querySelector('.tm-smart-editor-scroll')
+        return {
+          menu: !!menu,
+          menuVis: menu ? getComputedStyle(menu).visibility : null,
+          menuTop: menu ? Math.round(menu.getBoundingClientRect().top) : null,
+          areaVis: area ? getComputedStyle(area).visibility : null,
+          outside: area?.getAttribute('data-tm-side-menu-outside') ?? null,
+          crumbOpen: document.querySelector('[data-tm-document-breadcrumb]')?.getAttribute('data-tm-breadcrumb-dropdown-open') ?? null,
+          scTop: sc ? Math.round(sc.getBoundingClientRect().top) : null,
+        }
+      }))
+      await sleep(100)
+    }
+    check('【阶段 AE】面包屑下拉开→关后块菜单不会一闪而过',
+      reopenCrumbAE && closedFlagAE === 'false' && !!block4PointAE && !!handle4AE
+      && samplesAfterCrumbAE.slice(-4).every((s) =>
+        s.menu && s.menuVis === 'visible' && s.areaVis === 'visible' && s.outside !== 'true'),
+      JSON.stringify({ reopenCrumbAE, closedFlagAE, block4PointAE, handle4AE, samplesAfterCrumbAE }))
+
+    // 更短的操作间隔：下拉仍开着时直接点手柄位置（点击先关下拉、落到正文），
+    // 紧接着再点手柄。逐帧复算必须让隐藏状态在这一帧内恢复。
+    const quickOpenAE = await page.evaluate(() => {
+      const crumb = document.querySelector('[data-tm-document-breadcrumb]')
+      const button = crumb?.querySelector('button')
+      if (!button) return false
+      button.click()
+      return true
+    })
+    await sleep(180)
+    if (handle4AE) await page.mouse.click(handle4AE.x, handle4AE.y)
+    await sleep(150)
+    const quickClosedAE = await page.evaluate(() =>
+      document.querySelector('[data-tm-document-breadcrumb]')?.getAttribute('data-tm-breadcrumb-dropdown-open') === 'false')
+    if (block4PointAE) await page.mouse.move(block4PointAE.x, block4PointAE.y)
+    await sleep(180)
+    let quickHandleAE = null
+    for (let i = 0; i < 24 && !quickHandleAE; i++) {
+      quickHandleAE = await page.evaluate(() => {
+        const b = document.querySelector('.tm-smart-side-menu-hit-area .bn-button[draggable="true"]')
+        if (!b) return null
+        const r = b.getBoundingClientRect()
+        return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null
+      })
+      if (!quickHandleAE) await sleep(200)
+    }
+    if (quickHandleAE) await page.mouse.click(quickHandleAE.x, quickHandleAE.y)
+    await sleep(400)
+    const quickMenuAE = await page.evaluate(() => {
+      const menu = document.querySelector('.tm-smart-block-menu')
+      const area = document.querySelector('.tm-smart-side-menu-hit-area')
+      return {
+        menu: !!menu,
+        menuVis: menu ? getComputedStyle(menu).visibility : null,
+        areaVis: area ? getComputedStyle(area).visibility : null,
+        outside: area?.getAttribute('data-tm-side-menu-outside') ?? null,
+        crumbOpen: document.querySelector('[data-tm-document-breadcrumb]')?.getAttribute('data-tm-breadcrumb-dropdown-open') ?? null,
+      }
+    })
+    check('【阶段 AE】短间隔连续操作后块菜单仍稳定显示（隐藏状态不粘滞）',
+      quickOpenAE && quickClosedAE && !!quickHandleAE
+      && quickMenuAE.menu && quickMenuAE.menuVis === 'visible'
+      && quickMenuAE.areaVis === 'visible' && quickMenuAE.outside !== 'true',
+      JSON.stringify({ quickOpenAE, quickClosedAE, quickHandleAE, quickMenuAE }))
   } finally {
     browser.disconnect()
     if (spawned) spawned.kill()

@@ -162,14 +162,14 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
     
     if (children.length === 0) {
       return (
-        <div className="absolute top-full left-0 mt-1 w-48 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded shadow-lg z-50 text-xs text-[var(--color-text-muted)] px-3">
+        <div data-tm-breadcrumb-dropdown="" className="absolute top-full left-0 mt-1 w-48 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded shadow-lg z-50 text-xs text-[var(--color-text-muted)] px-3">
           (空)
         </div>
       )
     }
 
         return (
-          <div className="absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[280px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,var(--color-text-muted)_34%,transparent)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full">
+          <div data-tm-breadcrumb-dropdown="" className="absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[280px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,var(--color-text-muted)_34%,transparent)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full">
         {children.map(child => {
           const Icon = child.icon || topoDocumentTypeIcon(child.type) || File
           const IconComp = typeof Icon === 'string' ? null : (Icon as React.ComponentType<{ size?: number }>)
@@ -196,7 +196,12 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
   }
 
   return (
-    <div className="flex items-center text-[12px] text-[var(--color-text-muted)] select-none" ref={breadcrumbRef}>
+    <div
+      className="flex items-center text-[12px] text-[var(--color-text-muted)] select-none"
+      ref={breadcrumbRef}
+      data-tm-document-breadcrumb=""
+      data-tm-breadcrumb-dropdown-open={openDropdownId ? 'true' : 'false'}
+    >
       {breadcrumbItems.map((item, index) => {
         const isLast = index === breadcrumbItems.length - 1
         const isOpen = openDropdownId === item.id

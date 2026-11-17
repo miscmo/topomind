@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { AddBlockButton, SideMenu, type SideMenuProps, useExtensionState } from '@blocknote/react'
 import { useSmartBlockNoteEditor } from '../smartDocumentEditorTypes'
 import { SideMenuExtension } from '@blocknote/core/extensions'
@@ -97,6 +97,85 @@ function useSideMenuVerticalNudge(
   }, [referenceY, blockElement, blockType])
 }
 
+/**
+ * 侧栏（以及展开后的块菜单）是 portal 到 body 的浮层，不受编辑器滚动容器裁剪。
+ * 当块贴着正文顶部时，浮层会越过滚动区上边界，压在文档层级面包屑栏上；
+ * 面包屑下拉展开后，菜单还会以更高 z-index 穿透下拉列表。
+ * 这里只判断上边界：向下超出正文底部不挡面包屑，仍可正常使用。
+ * 命中的浮层保留 DOM（只加标记由 CSS 隐藏），这样滚动/菜单收起后能自动恢复。
+ */
+function useSideMenuTopBoundGuard(
+  areaRef: React.RefObject<HTMLDivElement | null>,
+  editor: ReturnType<typeof useSmartBlockNoteEditor>,
+  referenceY: number | undefined,
+  blockId: string | undefined,
+) {
+  const [outside, setOutside] = useState(false)
+
+  useLayoutEffect(() => {
+    const area = areaRef.current
+    const scroller = editor.domElement?.closest<HTMLElement>('.tm-smart-editor-scroll')
+    if (!area || !scroller || referenceY == null || !blockId) {
+      setOutside((prev) => (prev ? false : prev))
+      return
+    }
+
+    // 只判断侧栏命中区（＋/⠿ 手柄）本身是否越过正文上边界：贴顶 / 滚出顶部的
+    // 块手柄才会压在面包屑栏上。绝不能把展开后的块菜单（.tm-smart-block-menu）
+    // 算进来——它是 400px+ 的大浮层，点击靠近视口底部的块时 floating-ui 会把它
+    // 向上 flip，顶部自然越过 scrollerTop，这是正常弹层行为；旧实现把它当越界，
+    // 150ms 后隐藏，正是用户看到的「菜单一闪而过」（与面包屑下拉无关）。
+    // 面包屑下拉展开期间的让位由 CSS 的 body:has(...) 规则单独负责。
+    const measure = () => {
+      const scrollerTop = scroller.getBoundingClientRect().top
+      const rect = area.getBoundingClientRect()
+      // rect.top ≈ 0 是 floating-ui 尚未落位的临时坐标，跳过，避免误判越界。
+      return rect.height > 0 && rect.top > 0 && rect.top < scrollerTop - 1
+    }
+
+    // 越界需持续一段时间才隐藏，避开 floating-ui 落位 / scroll 的中间态；
+    // 不再越界立即恢复。逐帧复算保证状态不粘滞。
+    let pendingTimer: ReturnType<typeof setTimeout> | null = null
+    const evaluate = (confirmed: boolean) => {
+      if (!measure()) {
+        if (pendingTimer !== null) {
+          clearTimeout(pendingTimer)
+          pendingTimer = null
+        }
+        setOutside((prev) => (prev ? false : prev))
+        return
+      }
+      if (confirmed) {
+        pendingTimer = null
+        setOutside((prev) => (prev ? prev : true))
+        return
+      }
+      if (pendingTimer === null) {
+        pendingTimer = setTimeout(() => evaluate(true), 150)
+      }
+    }
+
+    const check = () => evaluate(false)
+    let raf = 0
+    const tick = () => {
+      check()
+      raf = requestAnimationFrame(tick)
+    }
+
+    check()
+    raf = requestAnimationFrame(tick)
+    scroller.addEventListener('scroll', check, { passive: true })
+
+    return () => {
+      cancelAnimationFrame(raf)
+      if (pendingTimer !== null) clearTimeout(pendingTimer)
+      scroller.removeEventListener('scroll', check)
+    }
+  }, [areaRef, editor, referenceY, blockId])
+
+  return outside
+}
+
 export function SmartDocumentSideMenu(props: SideMenuProps) {
   const editor = useSmartBlockNoteEditor()
   const sideMenuState = useExtensionState(SideMenuExtension, {
@@ -120,6 +199,7 @@ export function SmartDocumentSideMenu(props: SideMenuProps) {
 
   const areaRef = useRef<HTMLDivElement | null>(null)
   useSideMenuVerticalNudge(sideMenuState?.referenceY, blockElement, block?.type, areaRef)
+  const outsideTopBound = useSideMenuTopBoundGuard(areaRef, editor, sideMenuState?.referenceY, block?.id)
 
   if (!block) {
     return null
@@ -130,6 +210,7 @@ export function SmartDocumentSideMenu(props: SideMenuProps) {
       ref={areaRef}
       className="tm-smart-side-menu-hit-area"
       data-smart-document-side-menu
+      data-tm-side-menu-outside={outsideTopBound ? 'true' : undefined}
       style={{ paddingRight: `${blockIndent + SIDE_MENU_TEXT_GAP}px` }}
     >
       <SideMenu {...props}>

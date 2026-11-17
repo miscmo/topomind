@@ -10010,4 +10010,48 @@ const edge = (
   '【首块 H1 留白】卸载时必须退订并取消待执行帧，避免切文档后误滚')
 }
 
+// --- 第 54 组：块编辑侧栏不得压在文档层级面包屑栏上 ---
+// 侧栏是 portal 到 body 的浮层，不受正文滚动容器裁剪：贴顶块的侧栏/块菜单会
+// 越过正文上边界压住面包屑栏，展开后还会以更高 z-index 穿透面包屑下拉列表。
+// 修复口径：越界直接隐藏且不可点；面包屑下拉展开期间整条侧栏让位。
+{
+  const side54 = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/components/SmartDocumentSideMenu.tsx', import.meta.url,
+  ), 'utf8')
+  const css54 = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.css', import.meta.url,
+  ), 'utf8')
+  const crumb54 = await readFile(new URL(
+    '../src/features/right-panel/components/DetailTab/DocumentBreadcrumb.tsx', import.meta.url,
+  ), 'utf8')
+
+  assert.ok(side54.includes('function useSideMenuTopBoundGuard(')
+    && side54.includes("closest<HTMLElement>('.tm-smart-editor-scroll')")
+    && side54.includes("const scrollerTop = scroller.getBoundingClientRect().top")
+    && side54.includes('const rect = area.getBoundingClientRect()')
+    && side54.includes('rect.height > 0 && rect.top > 0 && rect.top < scrollerTop - 1')
+    // 铁律：越界判据只能看侧栏手柄 area，绝不能把展开的块菜单算进来。
+    // 块菜单向上 flip 越过顶部是正常弹层行为，把它当越界会让菜单一闪而过。
+    && !side54.includes("document.querySelector<HTMLElement>('.tm-smart-block-menu')")
+    && !side54.includes("area.querySelector<HTMLElement>('.tm-smart-block-menu')")
+    && !side54.includes('menuObserver'),
+  '【块侧栏越界】只按滚动区上边界判断侧栏手柄本身，绝不把展开菜单纳入越界判据')
+  assert.ok(side54.includes('data-tm-side-menu-outside={outsideTopBound ? \'true\' : undefined}')
+    && side54.includes('setTimeout(() => evaluate(true), 150)')
+    && side54.includes('const check = () => evaluate(false)')
+    && side54.includes("scroller.addEventListener('scroll', check, { passive: true })")
+    && side54.includes('raf = requestAnimationFrame(tick)')
+    && side54.includes('cancelAnimationFrame(raf)'),
+  '【块侧栏越界】必须逐帧复算并去抖确认，避免隐藏状态粘滞')
+  assert.ok(css54.includes('.tm-smart-side-menu-hit-area[data-tm-side-menu-outside="true"],')
+    && css54.includes('body:has([data-tm-breadcrumb-dropdown-open="true"]) .tm-smart-side-menu-hit-area,')
+    && css54.includes('body:has([data-tm-breadcrumb-dropdown-open="true"]) .tm-smart-block-menu {')
+    && css54.includes('visibility: hidden !important;')
+    && css54.includes('pointer-events: none !important;'),
+  '【块侧栏越界】越界/面包屑下拉期间必须视觉隐藏且完全不接收鼠标')
+  assert.ok(crumb54.includes("data-tm-breadcrumb-dropdown-open={openDropdownId ? 'true' : 'false'}")
+    && crumb54.includes('data-tm-breadcrumb-dropdown=""'),
+  '【面包屑下拉】必须暴露开关标记，供 body 级 :has 规则关掉块编辑侧栏')
+}
+
 console.log('Critical regression checks verified')

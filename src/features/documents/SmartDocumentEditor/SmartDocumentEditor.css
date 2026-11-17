@@ -248,6 +248,18 @@
   pointer-events: none;
 }
 
+/* 侧栏是 portal 到 body 的浮层，不受正文滚动容器裁剪；文档层级面包屑栏在它上方、
+   且处在更高层叠上下文。两种情况下必须让位，既不能视觉穿透也不能接收鼠标：
+   1) 侧栏/展开的块菜单越过正文滚动区上边界（贴顶块）——由 JS 打标记；
+   2) 面包屑下拉正在展开——从 body 用 :has 感知（下拉是面包屑的子节点）。
+   菜单项本身也单独列一条，避免它被别的 portal 挂到命中区之外。 */
+.tm-smart-side-menu-hit-area[data-tm-side-menu-outside="true"],
+body:has([data-tm-breadcrumb-dropdown-open="true"]) .tm-smart-side-menu-hit-area,
+body:has([data-tm-breadcrumb-dropdown-open="true"]) .tm-smart-block-menu {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .tm-smart-side-menu-hit-area {
   display: flex;
   /* 常态必须可交互（!important 覆盖 BlockNote 默认给 .bn-side-menu 设的 pointer-events:none）。
