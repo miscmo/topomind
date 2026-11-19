@@ -10054,4 +10054,158 @@ const edge = (
   '【面包屑下拉】必须暴露开关标记，供 body 级 :has 规则关掉块编辑侧栏')
 }
 
+// --- 第 55 组：斜杠菜单 / 空行 + 号菜单（SuggestionMenu）样式与边界 ---
+// 两个入口共用 BlockNote 内置 SuggestionMenu，浮层 portal 到 body（不在 .bn-mantine
+// 祖先下）。真实 DOM 是 .bn-suggestion-menu-item + [aria-selected="true"]；旧样式误用
+// .bn-menu-item + [data-selected="true"]，高亮/配色从未命中，菜单长期是默认灰。
+// 边界须取滚动容器（state 持有），size 直接给面板限高，保证顶端/底端完整显示。
+{
+  const editor55 = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx', import.meta.url,
+  ), 'utf8')
+  const css55 = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.css', import.meta.url,
+  ), 'utf8')
+
+  const menuBlock55 = css55.slice(
+    css55.indexOf('   斜杠菜单 / 空行 + 号菜单（BlockNote SuggestionMenu）'),
+    css55.indexOf('/* 加载态 / 空结果', css55.indexOf('.bn-suggestion-menu {')),
+  )
+  assert.ok(menuBlock55.includes('.bn-suggestion-menu .bn-suggestion-menu-item:hover')
+    && menuBlock55.includes('.bn-suggestion-menu .bn-suggestion-menu-item[aria-selected="true"]')
+    && !css55.includes('.bn-suggestion-menu .bn-menu-item'),
+  '【斜杠菜单】命中项必须用真实 DOM 类名 .bn-suggestion-menu-item + aria-selected，不得用 .bn-menu-item')
+  assert.ok(menuBlock55.includes('.bn-suggestion-menu-label')
+    && menuBlock55.includes('.bn-mt-suggestion-menu-item-section[data-position="left"]')
+    && menuBlock55.includes('.bn-mt-suggestion-menu-item-title')
+    && menuBlock55.includes('.bn-mt-suggestion-menu-item-subtitle'),
+  '【斜杠菜单】必须自包含覆盖分组标题/图标槽/标题/副文本，不依赖 portal 外的 .bn-mantine')
+  assert.ok(menuBlock55.includes('overflow-y: auto !important')
+    && menuBlock55.includes('overscroll-behavior: contain !important')
+    && menuBlock55.includes('max-height: min(520px, calc(100vh - 96px))'),
+  '【斜杠菜单】面板须可内部滚动且有兜底限高，但不能用 !important 盖掉中间件动态高度')
+  assert.ok(!menuBlock55.includes('max-height: inherit !important'),
+  '【斜杠菜单】不得用 max-height:inherit!important——会压过 size 中间件、把菜单压成细缝')
+
+  const slashCtrl55 = editor55.slice(
+    editor55.indexOf('<SuggestionMenuController'),
+    editor55.indexOf('<FormattingToolbarController'),
+  )
+  assert.ok(slashCtrl55.includes('boundary: slashMenuBoundary ?? undefined')
+    && !slashCtrl55.includes('boundary: scrollContainerRef.current'),
+  '【斜杠菜单】flip/shift/size 边界须取 state 边界，不得用首帧为 null 的 ref.current')
+  assert.ok(slashCtrl55.includes("querySelector<HTMLElement>('.bn-suggestion-menu')")
+    && slashCtrl55.includes('panel.style.maxHeight = maxHeight')
+    && slashCtrl55.includes('elements.floating.style.maxHeight = maxHeight'),
+  '【斜杠菜单】size 必须同时约束浮层根与面板本体，portal 包装层截断继承链时仍完整显示')
+  assert.ok(editor55.includes('const attachScrollContainer = useCallback(')
+    && editor55.includes('setSlashMenuBoundary(node)')
+    && editor55.includes('ref={attachScrollContainer}')
+    && editor55.includes('const [slashMenuBoundary, setSlashMenuBoundary] = useState<HTMLDivElement | null>(null)'),
+  '【斜杠菜单】滚动容器须用 callback ref 写入 state，保证边界元素稳定可用')
+}
+
+// --- 第 56 组：附件引用路径 hover 浮层 ---
+// 图片/附件块 hover 时锚定展示文档中真正持久化的相对引用 `_attach/xxx`，
+// 并异步补充绝对本地路径。路径归一化从 attachmentPath.ts 单一真源导入；
+// 浮层 portal 到 body，绝不进 ProseMirror DOM（历史踩坑：块内 widget 破坏布局）。
+{
+  const editor56 = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx', import.meta.url,
+  ), 'utf8')
+  const registry56 = await readFile(new URL(
+    '../src/features/documents/services/documentEditorRegistry.tsx', import.meta.url,
+  ), 'utf8')
+  const pathUtil56 = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/attachmentPath.ts', import.meta.url,
+  ), 'utf8')
+
+  assert.ok(pathUtil56.includes('export function normalizeAttachmentRef')
+    && pathUtil56.includes('export function getAttachmentRefFromBlockProps')
+    && pathUtil56.includes('export function canDeriveAttachmentRefFromUrl')
+    && registry56.includes("from '../SmartDocumentEditor/attachmentPath'")
+    && !registry56.includes('function normalizeAttachmentRef('),
+  '【附件路径】路径归一化必须走 attachmentPath.ts 单一真源，registry 不得再本地定义')
+  assert.ok(editor56.includes('.bn-block-content[data-content-type="image"]')
+    && editor56.includes('.bn-block-content[data-content-type="file"]')
+    && editor56.includes("editorRoot.addEventListener('mouseover', handleMouseOver)"),
+  '【附件路径】hover 须同时覆盖图片块与文件块，且用 editorRoot 事件委托')
+  // hover-intent：停留一会儿才弹，划过不弹；块内子元素移动不重置；真正离开撤销待打开。
+  assert.ok(editor56.includes('const attachmentPathOpenTimerRef = useRef<number | null>(null)')
+    && editor56.includes('const pendingAttachmentBlockRef = useRef<string | null>(null)')
+    && editor56.includes('const scheduleAttachmentPathOpen = useCallback(')
+    && editor56.includes('}, 400)')
+    && editor56.includes('scheduleAttachmentPathOpen(container, blockId)')
+    && editor56.includes('window.clearTimeout(attachmentPathOpenTimerRef.current)'),
+  '【附件路径】浮层须 hover 停留 400ms 才打开，块内移动不重置，离开撤销待打开（划过不弹）')
+  assert.ok(editor56.includes('getAttachmentRefFromBlockProps(props,')
+    && editor56.includes('storage.getAttachmentAbsoluteUrl(attachmentCardPath, attachmentRef)')
+    && editor56.includes('storage.showAttachmentInFolder(attachmentCardPath, current.attachmentRef)'),
+  '【附件路径】须展示规范相对引用、异步补绝对路径，并提供「在文件夹中显示」')
+  assert.ok(editor56.includes('attachmentInsertTargetKey, attachmentCardPath, onTocActiveChange')
+    && editor56.includes('prevProps.attachmentCardPath === nextProps.attachmentCardPath')
+    && registry56.includes('attachmentCardPath={attachmentCardPath}'),
+  '【附件路径】解析/定位附件须用节点路径 attachmentCardPath，不得误用文档路径 attachmentInsertTargetKey')
+  assert.ok(editor56.includes('tm-attachment-path-menu')
+    && editor56.includes('onMouseEnter={cancelAttachmentPathClose}')
+    && editor56.includes('onMouseLeave={scheduleAttachmentPathClose}'),
+  '【附件路径】浮层须 portal 到 body 且不进 ProseMirror DOM，鼠标可移入浮层操作')
+  assert.ok(editor56.includes('const requestId = ++attachmentPathRequestRef.current')
+    && editor56.includes('if (requestId !== attachmentPathRequestRef.current) return')
+    && editor56.includes("event.target.closest('.tm-attachment-path-menu')"),
+  '【附件路径】异步绝对路径须防竞态，点击浮层内部不得被外部 mousedown 关掉')
+}
+
+// --- 第 57 组：媒体块（图片/文件/视频）对齐浮层 ---
+// 根因：core 的 getSelection() 对 NodeSelection（"node" in selection）返回 undefined，
+// 依赖它取当前块的对齐按钮从未渲染，只剩 BlockNote 空的工具条壳（视觉上是小圆点）。
+// 修复：ImageAlignToolbar 从 data-id + editor.getBlock() 取块并 updateBlock(textAlignment)，
+// 同时用 CSS 隐藏空壳工具条。颜色只用 tokens.css。
+{
+  const alignCmp = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/components/ImageAlignToolbar.tsx', import.meta.url,
+  ), 'utf8')
+  const alignCss = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.css', import.meta.url,
+  ), 'utf8')
+
+  assert.ok(alignCmp.includes("new Set(['image', 'file', 'video'])")
+    && alignCmp.includes('.bn-block[data-id]')
+    && alignCmp.includes('editor.getBlock(blockId)')
+    && alignCmp.includes('editor.updateBlock(block, { props: { textAlignment: value } })'),
+  '【图片对齐】须覆盖 image/file/video，从 data-id + getBlock 取块，禁依赖对 NodeSelection 失效的 getSelection()')
+  const alignCode57 = alignCmp.slice(alignCmp.indexOf('const MEDIA_BLOCK_TYPES'))
+  assert.ok(!alignCode57.includes('editor.getSelection()')
+    && alignCmp.includes('.ProseMirror-selectednode'),
+  '【图片对齐】不得用 getSelection() 取当前块，须按真实 DOM 选中态判定媒体块')
+  assert.ok(alignCmp.includes("const topCandidate = rect.top - TOOLBAR_HEIGHT - EDGE_GAP")
+    && alignCmp.includes("placement: Placement = topCandidate >= EDGE_GAP ? 'top' : 'bottom'")
+    && alignCmp.includes('content.querySelector<HTMLElement>(\'img, video, .bn-file-block-content, [data-file-block]\') ?? content')
+    && alignCmp.includes('const centerX = rect.left + rect.width / 2')
+    && alignCmp.includes('centerX - TOOLBAR_WIDTH / 2')
+    && alignCmp.includes('window.innerWidth - TOOLBAR_WIDTH - EDGE_GAP'),
+  '【图片对齐】浮层须按媒体本身矩形水平居中、顶部不足翻到下方、左右视口钳制（不得按块容器左边缘贴左）')
+  assert.ok(alignCss.includes('.bn-formatting-toolbar:empty')
+    && alignCss.includes('display: none !important'),
+  '【图片对齐】必须隐藏选中媒体块时空的格式化工具条壳（小圆点）')
+  assert.ok(alignCss.includes('.tm-image-align-toolbar')
+    && alignCss.includes('background: var(--color-surface-elevated)')
+    && alignCss.includes('background: var(--color-accent-soft)')
+    && alignCss.includes('border-radius: var(--radius-lg)')
+    && alignCss.includes('box-shadow: var(--shadow-popover)'),
+  '【图片对齐】浮层样式须走 tokens.css 设计令牌，选中态用 accent-soft')
+  // portal 到 body 的浮层默认 z-index:auto 会被标题栏/右栏盖住（DOM 渲染了但肉眼看不到），
+  // 必须与其它浮层一样显式抬高层级，否则功能形同虚设。
+  const alignRootCss57 = alignCss.slice(
+    alignCss.indexOf('.tm-image-align-toolbar {'),
+    alignCss.indexOf('@keyframes tm-image-align-toolbar-in'),
+  )
+  assert.ok(alignRootCss57.includes('z-index: 4000'),
+  '【图片对齐】portal 到 body 的浮层必须显式抬高 z-index，否则被标题栏/右栏盖住导致不可见')
+  assert.ok(alignCmp.includes('onMouseDown={(event) => event.preventDefault()}')
+    && alignCmp.includes('aria-pressed={state.alignment === value}')
+    && alignCmp.includes('data-tm-image-align-value={value}'),
+  '【图片对齐】点击按钮不得让编辑器失焦，且须暴露选中态与可测试标记')
+}
+
 console.log('Critical regression checks verified')

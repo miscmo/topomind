@@ -86,6 +86,7 @@
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@fontsource/inter": "^5.2.8",
+    "@floating-ui/react": "^0.27.19",
     "@mantine/core": "^9.3.1",
     "@mantine/hooks": "^9.3.1",
     "@radix-ui/react-slot": "^1.2.5",

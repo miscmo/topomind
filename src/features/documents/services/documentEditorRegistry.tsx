@@ -4,6 +4,7 @@ import type { TopoDocumentType } from '../../../core/storage'
 import type { TocItem } from '../types/workspaceTypes'
 import { normalizeSmartDocumentContent } from '../SmartDocumentEditor/smartDocumentTypes'
 import type { BlockNoteBlock, SmartDocumentContent } from '../SmartDocumentEditor/smartDocumentTypes'
+import { canDeriveAttachmentRefFromUrl, getAttachmentFileNameFromRef, getAttachmentRefFromBlockProps, normalizeAttachmentRef } from '../SmartDocumentEditor/attachmentPath'
 import { normalizeMindMapDocumentContent } from '../MindMapDocumentEditor/mindMapDocumentTypes'
 import { normalizeFlowchartDocumentContent } from '../FlowchartDocumentEditor/flowchartDocumentTypes'
 import { useStorage } from '../../../core/storage'
@@ -25,57 +26,6 @@ function parseJsonValue(value: unknown) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
-}
-
-function normalizeAttachmentRef(value: string): string {
-  const normalized = value.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+/, '')
-  return normalized.startsWith('_attach/') ? normalized : `_attach/${normalized.split('/').pop() || normalized}`
-}
-
-function getAttachmentFileNameFromRef(value: string): string {
-  const normalized = normalizeAttachmentRef(value)
-  return normalized.split('/').pop() || normalized
-}
-
-function extractAttachmentFileNameFromUrl(value: string): string | null {
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  const withoutQuery = trimmed.split('#')[0]?.split('?')[0] || ''
-  const normalized = withoutQuery.replace(/^local-file:\/\//i, '').replace(/^file:\/\//i, '')
-  const rawName = normalized.split(/[/\\]/).pop() || ''
-  if (!rawName) return null
-  try {
-    return decodeURIComponent(rawName)
-  } catch {
-    return rawName
-  }
-}
-
-function canDeriveAttachmentRefFromUrl(value: string): boolean {
-  const trimmed = value.trim()
-  return /^local-file:\/\//i.test(trimmed)
-    || /^file:\/\//i.test(trimmed)
-    || /^\.?\/?_attach[\\/]/i.test(trimmed)
-}
-
-function getAttachmentRefFromBlockProps(
-  props: Record<string, unknown>,
-  knownAttachmentNames: Set<string>
-): string | null {
-  if (typeof props.attachmentRef === 'string' && props.attachmentRef.trim()) {
-    return normalizeAttachmentRef(props.attachmentRef)
-  }
-  if (typeof props.url === 'string') {
-    if (!canDeriveAttachmentRefFromUrl(props.url)) return null
-    const fileName = extractAttachmentFileNameFromUrl(props.url)
-    if (fileName) {
-      return normalizeAttachmentRef(fileName)
-    }
-  }
-  if (typeof props.name === 'string' && knownAttachmentNames.has(props.name)) {
-    return normalizeAttachmentRef(props.name)
-  }
-  return null
 }
 
 function mapBlocksRecursively(
@@ -416,6 +366,7 @@ function SmartDocumentAdapter({
           onBlockLastModifiedChange={onBlockLastModifiedChange}
           onOpenDocumentByDocId={onOpenDocumentByDocId}
           attachmentInsertTargetKey={attachmentInsertTargetKey}
+          attachmentCardPath={attachmentCardPath}
         />
       </ErrorBoundary>
     </Suspense>

@@ -1,59 +1,52 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlignCenter, AlignLeft, AlignRight } from 'lucide-react'
-import { NodeSelection } from '@tiptap/pm/state'
 import { useSmartBlockNoteEditor } from '../smartDocumentEditorTypes'
 
 /**
- * 图片 / 文件 / 视频等「媒体块」被整块选中（NodeSelection）时，在块上方弹出对齐浮层。
+ * 图片 / 文件 / 视频等「媒体块」被整块选中时，在块上方弹出对齐浮层。
  *
- * 为什么要自己实现：当前 BlockNote 版本的 `FormattingToolbarExtension` 在媒体块被
- * NodeSelection 选中、且 `doc.textBetween(from,to)` 长度为 0 时，会强制把格式化工具条
- * 的 open 状态置为 false（见 `@blocknote/core` 的 `FormattingToolbar.ts` 里的 `r()`）。
- * 这导致旧版「点图片 → 上方弹出对齐工具条」的能力在当前版本丢失——即便我们在自定义
- * 格式化工具条里加了对齐按钮也不会渲染（控制器根本不 open）。
+ * 为什么不复用 BlockNote 自带的格式化工具条对齐按钮：
+ * `editor.getSelection()` 的底层实现（core 的 `getSelection()`）会在
+ * `selection.empty || "node" in selection` 时直接返回 undefined——媒体块被
+ * NodeSelection 整块选中时正好命中后者，导致任何依赖 getSelection() 取当前块的
+ * 逻辑都拿不到块，对齐按钮/旧浮层因此从未渲染（只剩一个空的格式化工具条壳）。
  *
- * 因此这里绕开 BlockNote 的 open 判定，自己监听 selection / 滚动 / 缩放，用 fixed 浮层
- * 把对齐按钮定位到媒体块上方，点击直接 `updateBlock(textAlignment)` 驱动图片对齐。
+ * 这里改为从真实 DOM 事件委托定位媒体块：点击/选区变化时从 `.bn-block-content`
+ * 上的 `data-id` 找到块容器，再用 `editor.getBlock(id)` 取块（该 API 不依赖选区
+ * 形态），用 `editor.updateBlock(..., textAlignment)` 驱动对齐。
+ *
+ * 视觉/交互：portal 到 body 的 fixed 浮层，按块的 boundingRect 定位；贴近视口
+ * 顶部时自动翻到块下方，左右做边界钳制，保证浮层完整可见。
  */
 
 const MEDIA_BLOCK_TYPES = new Set(['image', 'file', 'video'])
 type AlignValue = 'left' | 'center' | 'right'
+type Placement = 'top' | 'bottom'
 
 type ToolbarState = {
   top: number
   left: number
   blockId: string
   alignment: AlignValue
+  placement: Placement
 }
 
-function AlignButton({
-  value,
-  active,
-  onClick,
-}: {
-  value: AlignValue
-  active: boolean
-  onClick: (v: AlignValue) => void
-}) {
-  const Icon = value === 'left' ? AlignLeft : value === 'center' ? AlignCenter : AlignRight
-  const label = value === 'left' ? '左对齐' : value === 'center' ? '居中' : '右对齐'
-  const className = active
-    ? 'tm-image-align-btn flex h-7 w-7 items-center justify-center rounded bg-[var(--color-accent)] text-white transition-colors'
-    : 'tm-image-align-btn flex h-7 w-7 items-center justify-center rounded text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-hover-bg)]'
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      data-tm-image-align-value={value}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={() => onClick(value)}
-      className={className}
-    >
-      <Icon size={16} />
-    </button>
-  )
+const TOOLBAR_HEIGHT = 38
+const TOOLBAR_WIDTH = 118
+const EDGE_GAP = 8
+
+const ALIGN_ITEMS: { value: AlignValue; label: string; Icon: typeof AlignLeft }[] = [
+  { value: 'left', label: '左对齐', Icon: AlignLeft },
+  { value: 'center', label: '居中对齐', Icon: AlignCenter },
+  { value: 'right', label: '右对齐', Icon: AlignRight },
+]
+
+function findMediaBlockContent(target: EventTarget | null): HTMLElement | null {
+  if (!(target instanceof Element)) return null
+  const content = target.closest<HTMLElement>('.bn-block-content[data-content-type]')
+  if (!content) return null
+  return MEDIA_BLOCK_TYPES.has(content.dataset.contentType ?? '') ? content : null
 }
 
 export function ImageAlignToolbar() {
@@ -62,66 +55,91 @@ export function ImageAlignToolbar() {
 
   useEffect(() => {
     let raf = 0
-    const compute = () => {
-      const view = editor.prosemirrorView
-      if (!view) {
+
+    const compute = (content: HTMLElement) => {
+      const blockId = content.closest<HTMLElement>('.bn-block[data-id]')?.getAttribute('data-id')
+      if (!blockId) {
         setState(null)
         return
       }
-      const sel = view.state.selection
-      // 只对「媒体块整块选中」弹出，文字选区留给右侧自定义格式化工具条处理。
-      if (!(sel instanceof NodeSelection)) {
-        setState(null)
-        return
-      }
-      const node = sel.node
-      if (!MEDIA_BLOCK_TYPES.has(node.type.name)) {
-        setState(null)
-        return
-      }
-      const dom = view.nodeDOM(sel.from) as HTMLElement | null
-      if (!dom || typeof dom.getBoundingClientRect !== 'function') {
-        setState(null)
-        return
-      }
-      const rect = dom.getBoundingClientRect()
-      const block = editor.getSelection()?.blocks?.[0]
-      if (!block) {
+      const block = editor.getBlock(blockId)
+      if (!block || !MEDIA_BLOCK_TYPES.has(block.type)) {
         setState(null)
         return
       }
       const raw = (block.props as Record<string, unknown>)?.textAlignment
       const alignment: AlignValue = raw === 'center' || raw === 'right' ? (raw as AlignValue) : 'left'
-      setState({ top: rect.top, left: rect.left, blockId: block.id, alignment })
+
+      // 以「图片本身」而非块容器为锚点：媒体块容器通常横跨整个编辑器宽度，
+      // 若按容器左边缘定位，浮层会一直贴在左侧。这里优先取内部 img/video/file
+      // 的实际渲染矩形，让浮层水平居中于可见媒体，并锚在它正上方。
+      const media =
+        content.querySelector<HTMLElement>('img, video, .bn-file-block-content, [data-file-block]') ?? content
+      const rect = media.getBoundingClientRect()
+      // 顶部空间不足则翻到块下方，避免浮层被视口顶部 / 编辑器顶部工具栏裁切。
+      const topCandidate = rect.top - TOOLBAR_HEIGHT - EDGE_GAP
+      const placement: Placement = topCandidate >= EDGE_GAP ? 'top' : 'bottom'
+      const top = placement === 'top' ? topCandidate : rect.bottom + EDGE_GAP
+      // 水平居中于媒体，同时钳制在视口内。
+      const centerX = rect.left + rect.width / 2
+      const maxLeft = Math.max(EDGE_GAP, window.innerWidth - TOOLBAR_WIDTH - EDGE_GAP)
+      const left = Math.max(EDGE_GAP, Math.min(centerX - TOOLBAR_WIDTH / 2, maxLeft))
+      setState({ top, left, blockId, alignment, placement })
     }
 
-    const schedule = () => {
+    const recomputeFromDom = () => {
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(compute)
+      raf = requestAnimationFrame(() => {
+        const view = editor.prosemirrorView
+        const selected = view?.dom.querySelector<HTMLElement>(
+          '.bn-block-content[data-content-type].ProseMirror-selectednode',
+        )
+        const content = selected ?? (view?.dom.querySelector<HTMLElement>(
+          '.bn-block-content[data-content-type="image"].ProseMirror-selectednode',
+        ) ?? null)
+        if (content && MEDIA_BLOCK_TYPES.has(content.dataset.contentType ?? '')) {
+          compute(content)
+        } else {
+          setState(null)
+        }
+      })
     }
 
-    const unsubSelection = editor.onSelectionChange?.(schedule)
-    const unsubChange = editor.onChange?.(schedule)
-    window.addEventListener('scroll', schedule, true)
-    window.addEventListener('resize', schedule)
-    schedule()
+    const onClick = (event: MouseEvent) => {
+      const content = findMediaBlockContent(event.target)
+      if (content) compute(content)
+      else recomputeFromDom()
+    }
+    const onSelectionChange = () => recomputeFromDom()
+    const onScrollResize = () => recomputeFromDom()
+
+    const root = editor.prosemirrorView?.dom
+    root?.addEventListener('click', onClick, true)
+    const unsubSelection = editor.onSelectionChange?.(onSelectionChange)
+    const unsubChange = editor.onChange?.(onSelectionChange)
+    window.addEventListener('scroll', onScrollResize, true)
+    window.addEventListener('resize', onScrollResize)
+    // 首帧：若打开文档时已经有媒体块处于选中态，也要能显示浮层。
+    recomputeFromDom()
 
     return () => {
       cancelAnimationFrame(raf)
+      root?.removeEventListener('click', onClick, true)
       if (typeof unsubSelection === 'function') unsubSelection()
       if (typeof unsubChange === 'function') unsubChange()
-      window.removeEventListener('scroll', schedule, true)
-      window.removeEventListener('resize', schedule)
+      window.removeEventListener('scroll', onScrollResize, true)
+      window.removeEventListener('resize', onScrollResize)
     }
   }, [editor])
 
   const handleAlign = useCallback(
     (value: AlignValue) => {
       if (!state) return
-      const block = editor.getSelection()?.blocks?.find((b) => b.id === state.blockId)
-      if (block) {
-        editor.updateBlock(block, { props: { textAlignment: value } })
-      }
+      const block = editor.getBlock(state.blockId)
+      if (!block) return
+      editor.updateBlock(block, { props: { textAlignment: value } })
+      // updateBlock 触发 onChange → recomputeFromDom，这里直接同步一次让按钮立即高亮。
+      setState((prev) => (prev && prev.blockId === state.blockId ? { ...prev, alignment: value } : prev))
     },
     [editor, state],
   )
@@ -130,19 +148,28 @@ export function ImageAlignToolbar() {
 
   return createPortal(
     <div
-      data-tm-image-align-toolbar=""
-      onMouseDown={(e) => e.preventDefault()}
-      style={{
-        position: 'fixed',
-        top: Math.max(8, state.top - 44),
-        left: state.left,
-        zIndex: 1200,
-      }}
-      className="tm-image-align-toolbar flex items-center gap-1 rounded-md border border-[var(--color-border-light)] bg-[var(--color-surface)] p-1 shadow-md"
+      data-tm-image-align-toolbar={state.placement}
+      onMouseDown={(event) => event.preventDefault()}
+      className="tm-image-align-toolbar"
+      style={{ position: 'fixed', top: state.top, left: state.left }}
+      role="toolbar"
+      aria-label="图片对齐"
     >
-      <AlignButton value="left" active={state.alignment === 'left'} onClick={handleAlign} />
-      <AlignButton value="center" active={state.alignment === 'center'} onClick={handleAlign} />
-      <AlignButton value="right" active={state.alignment === 'right'} onClick={handleAlign} />
+      {ALIGN_ITEMS.map(({ value, label, Icon }) => (
+        <button
+          key={value}
+          type="button"
+          className="tm-image-align-toolbar__btn"
+          data-kind={value}
+          data-tm-image-align-value={value}
+          aria-label={label}
+          aria-pressed={state.alignment === value}
+          title={label}
+          onClick={() => handleAlign(value)}
+        >
+          <Icon size={16} strokeWidth={2} />
+        </button>
+      ))}
     </div>,
     document.body,
   )

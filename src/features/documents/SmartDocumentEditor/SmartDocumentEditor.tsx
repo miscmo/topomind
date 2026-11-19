@@ -7,6 +7,7 @@ import { getMultiColumnSlashMenuItems } from '@blocknote/xl-multi-column'
 import { filterSuggestionItems } from '@blocknote/core'
 import { SideMenuExtension } from '@blocknote/core/extensions'
 import { insertMermaid } from 'blocknote-mermaid'
+import { autoUpdate, flip, offset, shift, size } from '@floating-ui/react'
 
 import type { SmartDocumentEditorProps } from './types'
 import { useSmartDocumentEditorModel } from './model/useSmartDocumentEditorModel'
@@ -32,6 +33,8 @@ import type { FSBDocumentCandidate } from '../../../core/fs-backend'
 import { getEditorTopInset } from './smartDocumentUtils'
 import { buildHeadingNumberStyles, isSameHeadingNumbering } from './headingNumbering'
 import { buildEditorLayoutVars, normalizeEditorLayout } from './editorLayout'
+import { useStorage } from '../../../core/storage'
+import { getAttachmentRefFromBlockProps } from './attachmentPath'
 
 import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
@@ -53,26 +56,54 @@ type ImagePreviewState = {
   alt: string
 }
 
+/** 附件引用路径浮层：hover 图片/附件块时锚定显示，不进 ProseMirror DOM。 */
+type AttachmentPathMenuState = {
+  blockId: string
+  attachmentRef: string
+  absoluteUrl: string | null
+  top: number
+  left: number
+}
+
+/** BlockNote 块的宽松形状（只用到 id / props / children，避免依赖第三方泛型）。 */
+type AttachmentBlockNode = {
+  id: string
+  props?: Record<string, unknown>
+  children?: AttachmentBlockNode[]
+}
+
 /**
- * BlockNote 的 SuggestionMenu 用 `key={group}` 渲染分组标题，且只在相邻项 group 变化时插入。
- * 默认斜杠菜单、多列菜单与自定义项来自不同数据源，直接拼接会让 group 交替出现
- * （中文词典里「基础」在默认项和多列项中各有一段），同一列表就会出现两个
- * key="基础" 的分组标题，React 报 duplicate key，菜单上也会出现两个「基础」标题。
- * 这里按 group 稳定归拢（组内保持原顺序），保证每个分组只出现一次连续段。
- * filterSuggestionItems 只做过滤、不改变顺序，所以输入查询过滤后依然成立。
+ * 斜杠菜单分组归一化：默认项（中文词典）、多列扩展、mermaid 与自定义项来自不同数据源，
+ * group 名混杂中英文（「基本块 / 基础 / 基础区块 / Other / Media」会同时出现），且直接
+ * 拼接时同名分组交替出现——菜单按「相邻项 group 变化」插入分组标题并以 group 为 key，
+ * 重复出现会报 React duplicate key、同一分组显示多次。
+ * 这里把所有项归到一套固定的中文分组，按固定顺序稳定排列（组内保持原顺序），
+ * 既解决 key 冲突，也让菜单结构清爽一致。filterSuggestionItems 只过滤不改序，过滤后依然成立。
  */
-function groupSlashMenuItems<T extends { group?: string }>(items: T[]): T[] {
-  const groups = new Map<string, T[]>()
-  for (const item of items) {
-    const group = item.group ?? ''
-    const bucket = groups.get(group)
-    if (bucket) {
-      bucket.push(item)
-    } else {
-      groups.set(group, [item])
-    }
+const SLASH_MENU_GROUP_ORDER = ['标题', '列表', '基础', '媒体', '布局', '高级'] as const
+type SlashMenuGroup = (typeof SLASH_MENU_GROUP_ORDER)[number]
+
+const SLASH_MENU_GROUP_BY_KEY: Record<string, SlashMenuGroup> = {
+  heading: '标题', heading_2: '标题', heading_3: '标题',
+  heading_4: '标题', heading_5: '标题', heading_6: '标题',
+  toggle_heading: '标题', toggle_heading_2: '标题', toggle_heading_3: '标题',
+  bullet_list: '列表', numbered_list: '列表', check_list: '列表', toggle_list: '列表',
+  paragraph: '基础', quote: '基础', divider: '基础', code_block: '基础', table: '基础',
+  image: '媒体', video: '媒体', audio: '媒体', file: '媒体', emoji: '媒体',
+}
+
+function normalizeSlashMenuItems(items: DefaultReactSuggestionItem[]): DefaultReactSuggestionItem[] {
+  const rankOf = (group: string | undefined) => {
+    const index = SLASH_MENU_GROUP_ORDER.indexOf(group as SlashMenuGroup)
+    return index === -1 ? SLASH_MENU_GROUP_ORDER.length : index
   }
-  return [...groups.values()].flat()
+  return items
+    .map((item) => {
+      const key = (item as { key?: string }).key
+      const group = (key && SLASH_MENU_GROUP_BY_KEY[key]) || item.group
+      return { ...item, group }
+    })
+    .sort((a, b) => rankOf(a.group) - rankOf(b.group))
 }
 
 const SUPPORTED_CODE_LANGUAGES = Object.entries(customCodeBlockOptions.supportedLanguages ?? {}).map(([value, config]) => ({
@@ -87,6 +118,26 @@ const SUPPORTED_CODE_LANGUAGES_MAP = customCodeBlockOptions.supportedLanguages a
  * 位置，恢复它只会把 .bn-editor 的顶部留白滚掉，让首块 H1 看起来被上沿裁掉。
  */
 const MIN_RESTORE_SCROLL_TOP = 48
+
+const ATTACHMENT_BLOCK_SELECTOR = '.bn-block-content[data-content-type="image"], .bn-block-content[data-content-type="file"]'
+
+function getAttachmentBlockContainer(target: EventTarget | null): HTMLElement | null {
+  if (!(target instanceof Element)) return null
+  return target.closest(ATTACHMENT_BLOCK_SELECTOR) as HTMLElement | null
+}
+
+function getAttachmentBlockId(element: HTMLElement): string | null {
+  return element.closest('[data-node-type="blockContainer"][data-id], [data-node-type="blockOuter"][data-id]')?.getAttribute('data-id') ?? null
+}
+
+function findAttachmentBlock(blocks: readonly AttachmentBlockNode[], id: string): AttachmentBlockNode | null {
+  for (const block of blocks) {
+    if (block.id === id) return block
+    const found = block.children ? findAttachmentBlock(block.children, id) : null
+    if (found) return found
+  }
+  return null
+}
 
 function getCodeBlockContainer(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null
@@ -119,7 +170,7 @@ function openExternalLink(href: string) {
 }
 
 export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: SmartDocumentEditorProps) {
-  const { readOnly = false, attachmentInsertTargetKey, onTocActiveChange } = props
+  const { readOnly = false, attachmentInsertTargetKey, attachmentCardPath, onTocActiveChange } = props
   const {
     editor,
     handleChange,
@@ -172,6 +223,15 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   )
   const editorRootRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  // 斜杠菜单浮层 portal 到 body，floating-ui 的 flip/shift/size 必须以正文滚动容器
+  // 为边界，才能在顶端/底端呼出时把菜单夹在工具栏与状态栏之间。ref.current 在首次
+  // 渲染为 null、且菜单打开由 BlockNote 内部状态驱动不一定触发本组件重渲染，因此用
+  // state 持有边界元素：callback ref 挂载后再渲染一次，middleware 才能拿到真实边界。
+  const [slashMenuBoundary, setSlashMenuBoundary] = useState<HTMLDivElement | null>(null)
+  const attachScrollContainer = useCallback((node: HTMLDivElement | null) => {
+    scrollContainerRef.current = node
+    setSlashMenuBoundary(node)
+  }, [])
   const [showBackToTop, setShowBackToTop] = useState(false)
   const [hoveredCodeBlock, setHoveredCodeBlock] = useState<HoveredCodeBlockState | null>(null)
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
@@ -188,6 +248,21 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   const [linkMenu, setLinkMenu] = useState<{ href: string; top: number; left: number } | null>(null)
   const linkMenuRef = useRef<HTMLDivElement>(null)
   const lastLinkMenuOpenRef = useRef<{ t: number; href: string } | null>(null)
+  // 附件引用路径浮层：hover 图片/附件块弹出。ref 与 state 同步，供 DOM 事件回调
+  // 读取当前浮层归属（事件监听只注册一次，不能依赖闭包里的 state）。
+  const [attachmentPathMenu, setAttachmentPathMenu] = useState<AttachmentPathMenuState | null>(null)
+  const attachmentPathMenuRef = useRef<AttachmentPathMenuState | null>(null)
+  attachmentPathMenuRef.current = attachmentPathMenu
+  const attachmentPathCloseTimerRef = useRef<number | null>(null)
+  // hover-intent：鼠标停在图片/附件块上一小会儿才弹路径浮层，划过不弹。
+  const attachmentPathOpenTimerRef = useRef<number | null>(null)
+  const pendingAttachmentBlockRef = useRef<string | null>(null)
+  // 定时器回调经 ref 取最新的 open 函数，避免与 schedule 的定义顺序/依赖循环。
+  const openAttachmentPathMenuRef = useRef<(container: HTMLElement, blockId: string) => void>(() => {})
+  const attachmentPathRequestRef = useRef(0)
+  const [attachmentPathCopied, setAttachmentPathCopied] = useState(false)
+  const attachmentPathCopyTimerRef = useRef<number | null>(null)
+  const storage = useStorage()
   // 文档双链：由 `[[` InputRule / 斜杠菜单打开的浮层请求（模块级桥只负责传一次性请求）。
   const [docLinkPicker, setDocLinkPicker] = useState<DocumentLinkPickerRequest | null>(null)
   const onOpenDocumentByDocIdRef = useRef(props.onOpenDocumentByDocId)
@@ -273,6 +348,113 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     setEditorLinkClickHandler(({ href, rect }) => openLinkMenu(href, rect))
     return () => setEditorLinkClickHandler(null)
   }, [openLinkMenu])
+
+  const cancelAttachmentPathClose = useCallback(() => {
+    if (attachmentPathCloseTimerRef.current !== null) {
+      window.clearTimeout(attachmentPathCloseTimerRef.current)
+      attachmentPathCloseTimerRef.current = null
+    }
+  }, [])
+
+  const cancelAttachmentPathOpen = useCallback(() => {
+    if (attachmentPathOpenTimerRef.current !== null) {
+      window.clearTimeout(attachmentPathOpenTimerRef.current)
+      attachmentPathOpenTimerRef.current = null
+    }
+    pendingAttachmentBlockRef.current = null
+  }, [])
+
+  const closeAttachmentPathMenu = useCallback(() => {
+    cancelAttachmentPathClose()
+    cancelAttachmentPathOpen()
+    // 让在途的绝对路径请求失效，防止慢响应写回已经关闭/切换的浮层。
+    attachmentPathRequestRef.current += 1
+    setAttachmentPathMenu(null)
+    setAttachmentPathCopied(false)
+  }, [cancelAttachmentPathClose, cancelAttachmentPathOpen])
+
+  const scheduleAttachmentPathClose = useCallback(() => {
+    cancelAttachmentPathOpen()
+    cancelAttachmentPathClose()
+    attachmentPathCloseTimerRef.current = window.setTimeout(() => {
+      attachmentPathCloseTimerRef.current = null
+      attachmentPathRequestRef.current += 1
+      setAttachmentPathMenu(null)
+      setAttachmentPathCopied(false)
+    }, 180)
+  }, [cancelAttachmentPathClose, cancelAttachmentPathOpen])
+
+  // hover-intent：定时器回调才真正打开。若期间鼠标已移走 / 切到别的块，
+  // pending 会被清空，这里据此放弃，避免“划过也弹”和弹到已离开的块上。
+  const scheduleAttachmentPathOpen = useCallback((container: HTMLElement, blockId: string) => {
+    if (pendingAttachmentBlockRef.current === blockId && attachmentPathOpenTimerRef.current !== null) return
+    cancelAttachmentPathOpen()
+    pendingAttachmentBlockRef.current = blockId
+    attachmentPathOpenTimerRef.current = window.setTimeout(() => {
+      attachmentPathOpenTimerRef.current = null
+      if (pendingAttachmentBlockRef.current !== blockId) return
+      pendingAttachmentBlockRef.current = null
+      openAttachmentPathMenuRef.current(container, blockId)
+    }, 400)
+  }, [cancelAttachmentPathOpen])
+
+  const openAttachmentPathMenu = useCallback((container: HTMLElement, blockId: string) => {
+    cancelAttachmentPathOpen()
+    const block = findAttachmentBlock(editor.document as unknown as AttachmentBlockNode[], blockId)
+    if (!block) return
+    const props = (block.props ?? {}) as Record<string, unknown>
+    // 展示端拿不到全库附件名清单；用当前块的 name 自成一集，兼容只有 name 的旧块。
+    const name = typeof props.name === 'string' ? props.name : null
+    const attachmentRef = getAttachmentRefFromBlockProps(props, name ? new Set([name]) : new Set<string>())
+    if (!attachmentRef) return
+
+    const rect = container.getBoundingClientRect()
+    const menuWidth = 340
+    const menuHeight = 168
+    const margin = 8
+    // 优先放在块上方；上方空间不足则翻到下方，最后夹在视口内（与链接菜单同一策略）。
+    let top = rect.top - menuHeight - 6
+    if (top < margin) top = rect.bottom + 6
+    let left = rect.right - menuWidth
+    if (left < margin) left = rect.left
+    left = Math.max(margin, Math.min(left, window.innerWidth - menuWidth - margin))
+    top = Math.max(margin, Math.min(top, window.innerHeight - menuHeight - margin))
+
+    cancelAttachmentPathClose()
+    const requestId = ++attachmentPathRequestRef.current
+    setAttachmentPathMenu({ blockId, attachmentRef, absoluteUrl: null, top, left })
+    setAttachmentPathCopied(false)
+
+    // 绝对路径是增强信息：取不到也不影响展示相对引用（文档里真正存的那一条）。
+    if (attachmentCardPath) {
+      void storage.getAttachmentAbsoluteUrl(attachmentCardPath, attachmentRef)
+        .then((url) => {
+          if (requestId !== attachmentPathRequestRef.current) return
+          setAttachmentPathMenu((prev) => (prev && prev.blockId === blockId ? { ...prev, absoluteUrl: url } : prev))
+        })
+        .catch(() => { /* 绝对路径取不到时只展示相对引用 */ })
+    }
+  }, [editor, attachmentCardPath, storage, cancelAttachmentPathClose, cancelAttachmentPathOpen])
+  // 供 hover-intent 定时器回调取用（定义顺序在上，随渲染同步为最新闭包）。
+  openAttachmentPathMenuRef.current = openAttachmentPathMenu
+
+  const copyAttachmentRef = useCallback(() => {
+    const current = attachmentPathMenuRef.current
+    if (!current) return
+    void navigator.clipboard.writeText(current.attachmentRef).then(() => {
+      if (attachmentPathMenuRef.current?.blockId !== current.blockId) return
+      setAttachmentPathCopied(true)
+      if (attachmentPathCopyTimerRef.current !== null) window.clearTimeout(attachmentPathCopyTimerRef.current)
+      attachmentPathCopyTimerRef.current = window.setTimeout(() => setAttachmentPathCopied(false), 1600)
+    }).catch(() => { /* 剪贴板不可用时保持原样，不打断查看 */ })
+  }, [])
+
+  const showAttachmentInFolder = useCallback(() => {
+    const current = attachmentPathMenuRef.current
+    if (!current || !attachmentCardPath) return
+    void storage.showAttachmentInFolder(attachmentCardPath, current.attachmentRef).catch(() => {})
+    closeAttachmentPathMenu()
+  }, [attachmentCardPath, storage, closeAttachmentPathMenu])
 
   // 文档双链 chip 的点击 / `[[` 选择器的打开都从 ProseMirror 深处的节点视图发出来，
   // 通过模块级桥把一次性请求交给本组件；回调走 ref，注册只做一次，不受 props 陈旧影响。
@@ -609,6 +791,79 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     }
   }, [linkMenu])
 
+  // hover 图片/附件块弹出引用路径浮层。mouseover/out 都做同块判定，避免在
+  // 图片内部子元素间移动时反复开关；浮层 portal 到 body，进入浮层时由
+  // onMouseEnter 取消延迟关闭，保证两个操作按钮可点。
+  useEffect(() => {
+    const editorRoot = editorRootRef.current
+    if (!editorRoot) return
+
+    const handleMouseOver = (event: MouseEvent) => {
+      if (event.buttons !== 0) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const container = getAttachmentBlockContainer(target)
+      if (!container || !editorRoot.contains(container)) return
+      const blockId = getAttachmentBlockId(container)
+      if (!blockId) return
+      if (attachmentPathMenuRef.current?.blockId === blockId) {
+        cancelAttachmentPathClose()
+        return
+      }
+      // 停留一会儿才打开；块内子元素间移动不会重置计时（同 blockId 直接返回）。
+      scheduleAttachmentPathOpen(container, blockId)
+    }
+
+    const handleMouseOut = (event: MouseEvent) => {
+      const from = getAttachmentBlockContainer(event.target)
+      if (!from) return
+      const next = getAttachmentBlockContainer(event.relatedTarget)
+      if (next !== from) {
+        // 真正离开块：撤销尚未触发的打开，并对已打开的浮层走延迟关闭。
+        // scheduleAttachmentPathClose 内部会无条件取消 pending 打开定时器。
+        scheduleAttachmentPathClose()
+      }
+    }
+
+    editorRoot.addEventListener('mouseover', handleMouseOver)
+    editorRoot.addEventListener('mouseout', handleMouseOut)
+    return () => {
+      editorRoot.removeEventListener('mouseover', handleMouseOver)
+      editorRoot.removeEventListener('mouseout', handleMouseOut)
+    }
+  }, [scheduleAttachmentPathOpen, cancelAttachmentPathClose, scheduleAttachmentPathClose])
+
+  useEffect(() => {
+    if (!attachmentPathMenu) return
+    const ownerDocument = editorRootRef.current?.ownerDocument ?? document
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return
+      if (event.target.closest('.tm-attachment-path-menu')) return
+      closeAttachmentPathMenu()
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeAttachmentPathMenu()
+    }
+    const handleScroll = () => closeAttachmentPathMenu()
+    const scrollContainer = scrollContainerRef.current
+
+    ownerDocument.addEventListener('mousedown', handlePointerDown, true)
+    ownerDocument.addEventListener('keydown', handleKeyDown)
+    scrollContainer?.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      ownerDocument.removeEventListener('mousedown', handlePointerDown, true)
+      ownerDocument.removeEventListener('keydown', handleKeyDown)
+      scrollContainer?.removeEventListener('scroll', handleScroll)
+    }
+  }, [attachmentPathMenu, closeAttachmentPathMenu])
+
+  // 卸载时清掉延迟打开/关闭与复制反馈定时器，避免对已卸载组件 setState。
+  useEffect(() => () => {
+    if (attachmentPathOpenTimerRef.current !== null) window.clearTimeout(attachmentPathOpenTimerRef.current)
+    if (attachmentPathCloseTimerRef.current !== null) window.clearTimeout(attachmentPathCloseTimerRef.current)
+    if (attachmentPathCopyTimerRef.current !== null) window.clearTimeout(attachmentPathCopyTimerRef.current)
+  }, [])
+
   useEffect(() => {
     if (!imagePreview) return
 
@@ -877,7 +1132,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 
   const slashMenuItems = useMemo(() => {
     const mathItem = {
-      title: '块级数学公式 (KaTeX)',
+      title: '数学公式',
       onItemClick: () => {
         editor.insertBlocks(
           [
@@ -890,8 +1145,8 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
           'after',
         )
       },
-      aliases: ['math', 'equation', 'latex', 'katex'],
-      group: 'Media',
+      aliases: ['math', 'equation', 'latex', 'katex', '公式'],
+      group: '高级',
       icon: <span>∑</span>,
       subtext: '插入块级 LaTeX 数学公式',
     }
@@ -905,15 +1160,17 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
         })
       },
       aliases: ['link', 'doc', 'ref', 'doclink', '引用', '双链', '文档引用'],
-      group: 'Media',
+      group: '高级',
       icon: <Link2 size={16} />,
       subtext: '插入指向另一篇文档的行内引用（也可直接输入 [[）',
     }
 
-    return groupSlashMenuItems([
+    return normalizeSlashMenuItems([
       ...getDefaultReactSlashMenuItems(editor),
-      ...getMultiColumnSlashMenuItems(editor),
-      insertMermaid(),
+      // 多列扩展自带英文/多语言分组（Basic blocks 等），统一归入「布局」。
+      ...getMultiColumnSlashMenuItems(editor).map((item) => ({ ...item, group: '布局' })),
+      // mermaid 插件的条目是英文分组与文案，一并归一。
+      { ...insertMermaid(), group: '高级', subtext: '插入 Mermaid 图表' },
       mathItem,
       docLinkItem,
     ] as unknown as DefaultReactSuggestionItem[])
@@ -936,7 +1193,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
         onStyleChange={commitEditorStyle}
         disabled={readOnly}
       />
-      <div ref={scrollContainerRef} data-paper-bg={defaultEditorStyle.paperBackground ?? 'plain'} className="flex-1 min-h-0 overflow-y-auto tm-smart-editor-scroll" spellCheck={false}>
+      <div ref={attachScrollContainer} data-paper-bg={defaultEditorStyle.paperBackground ?? 'plain'} className="flex-1 min-h-0 overflow-y-auto tm-smart-editor-scroll" spellCheck={false}>
         <div
           ref={editorRootRef}
         className="smart-document-content relative min-h-full"
@@ -957,6 +1214,48 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
             triggerCharacter="/"
             portalElement={null}
             getItems={getSlashMenuItems}
+            floatingUIOptions={{
+              useFloatingOptions: {
+                placement: 'bottom-start',
+                // BlockNote 内置的 autoUpdate 关闭了 elementResize：菜单刚打开时内容
+                // 还是 loading 占位（很小），autoPlacement 据此选了「向下」；等内容加载
+                // 完、菜单变高后位置不再重算，底部呼出的菜单会被 size 中间件压成一条细缝。
+                // 这里恢复对浮层尺寸的监听，内容就绪后重新走一遍定位中间件。
+                whileElementsMounted: (reference, floating, update) =>
+                  autoUpdate(reference, floating, update, { elementResize: true }),
+                // 浮层是 fixed 定位、挂在 body 下，默认边界是整个视口：菜单会压过编辑器
+                // 面板的工具栏 / 状态栏。把三个中间件的边界统一收进编辑器滚动容器。
+                // 边界取自 state（见 attachScrollContainer），不是 ref.current——后者首帧
+                // 为 null 且菜单打开未必触发本组件重渲染，会退化成视口边界。
+                middleware: [
+                  offset(6),
+                  flip({
+                    boundary: slashMenuBoundary ?? undefined,
+                    padding: 8,
+                    // 上下都翻不下时仍优先贴边，配合 size 的高度约束完整显示。
+                    fallbackPlacements: ['bottom-start', 'top-start'],
+                  }),
+                  shift({ boundary: slashMenuBoundary ?? undefined, padding: 8 }),
+                  size({
+                    boundary: slashMenuBoundary ?? undefined,
+                    padding: 8,
+                    apply({ elements, availableHeight }) {
+                      const maxHeight = `${Math.max(0, Math.floor(availableHeight))}px`
+                      elements.floating.style.maxHeight = maxHeight
+                      // 面板本体也要限高并内部滚动；portal 包装层可能截断继承链，
+                      // 直接写内联值最稳，优先级也高于 CSS 的兜底 max-height。
+                      const panel = elements.floating.querySelector<HTMLElement>('.bn-suggestion-menu')
+                      if (panel) panel.style.maxHeight = maxHeight
+                    },
+                  }),
+                ],
+              },
+              elementProps: {
+                onMouseDownCapture: (event: ReactMouseEvent) => event.preventDefault(),
+                // 浮层 portal 到 body，默认 z-index 80 会被 z-[3000] 的标题栏盖住，抬到其上。
+                style: { zIndex: 4000 },
+              },
+            }}
           />
           <FormattingToolbarController formattingToolbar={SmartDocumentFormattingToolbar} portalElement={null} />
           <SideMenuController
@@ -1131,6 +1430,54 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
         </div>,
         document.body,
       ) : null}
+      {attachmentPathMenu && typeof document !== 'undefined' ? createPortal(
+        <div
+          className="tm-attachment-path-menu fixed z-[1400] w-[340px] rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] p-2.5 flex flex-col gap-2"
+          style={{ top: attachmentPathMenu.top, left: attachmentPathMenu.left }}
+          role="dialog"
+          aria-label="附件引用路径"
+          onMouseEnter={cancelAttachmentPathClose}
+          onMouseLeave={scheduleAttachmentPathClose}
+        >
+          <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-secondary)]">
+            <Link2 className="w-3 h-3 shrink-0" />
+            <span>附件引用路径</span>
+          </div>
+          <div
+            className="text-[12px] leading-[1.5] text-[var(--color-text-primary)] break-all font-medium"
+            title={attachmentPathMenu.attachmentRef}
+          >
+            {attachmentPathMenu.attachmentRef}
+          </div>
+          {attachmentPathMenu.absoluteUrl ? (
+            <div
+              className="text-[11px] leading-[1.4] text-[var(--color-text-secondary)] break-all max-h-[3em] overflow-hidden"
+              title={attachmentPathMenu.absoluteUrl}
+            >
+              {attachmentPathMenu.absoluteUrl}
+            </div>
+          ) : null}
+          <div className="flex gap-2 pt-0.5">
+            <button
+              type="button"
+              className="flex-1 h-8 rounded-md bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[12px] font-medium cursor-pointer border-none transition-colors hover:opacity-90"
+              onClick={copyAttachmentRef}
+            >
+              {attachmentPathCopied ? '已复制' : '复制引用路径'}
+            </button>
+            <button
+              type="button"
+              className="flex-1 h-8 rounded-md border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)] text-[12px] cursor-pointer transition-colors hover:bg-[var(--color-hover-bg)] disabled:opacity-50"
+              onClick={showAttachmentInFolder}
+              disabled={!attachmentCardPath}
+              title={attachmentCardPath ? '在系统文件管理中定位该附件' : '当前文档未关联附件目录'}
+            >
+              在文件夹中显示
+            </button>
+          </div>
+        </div>,
+        document.body,
+      ) : null}
       {docLinkPicker && typeof document !== 'undefined' ? (
         <DocumentLinkPicker
           rect={docLinkPicker.rect}
@@ -1144,6 +1491,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
 }, (prevProps, nextProps) => (
   prevProps.readOnly === nextProps.readOnly
   && prevProps.attachmentInsertTargetKey === nextProps.attachmentInsertTargetKey
+  && prevProps.attachmentCardPath === nextProps.attachmentCardPath
   // 编号配置变化必须放行重渲染，否则开关点了没反应；但不能直接比 value 引用
   // （每次正文编辑都会变，会让整个编辑器跟着输入重渲染），只比归一化后的三项配置值。
   && isSameHeadingNumbering(prevProps.value?.numbering, nextProps.value?.numbering)

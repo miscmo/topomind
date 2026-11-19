@@ -2,7 +2,6 @@
 .bn-formatting-toolbar,
 .bn-formatting-toolbar .bn-select,
 .bn-menu-dropdown,
-.bn-suggestion-menu,
 .bn-mantine .mantine-Popover-dropdown,
 .bn-mantine .mantine-Menu-dropdown {
   background: var(--color-surface-elevated) !important;
@@ -14,9 +13,305 @@
   color: var(--color-text-primary) !important;
 }
 
-.bn-formatting-toolbar,
-.bn-suggestion-menu {
+.bn-formatting-toolbar {
   padding: 6px !important;
+}
+
+/* 媒体块（图片/文件/视频）被整块选中时，BlockNote 仍会打开格式化工具条，但
+   项目自定义工具条在当前选区形态下不渲染任何按钮（getSelection() 对
+   NodeSelection 返回 undefined），只剩一个 6px padding + 边框的空壳，视觉上
+   就是图片上方一个浅灰小圆点。彻底隐藏这个空壳；有内容的工具条不受影响。 */
+.bn-formatting-toolbar:empty {
+  display: none !important;
+}
+
+/* ==========================================================================
+   图片对齐浮层（媒体块整块选中时出现在块上方）
+   --------------------------------------------------------------------------
+   独立于 BlockNote 格式化工具条的 fixed 浮层，portal 到 body。由
+   ImageAlignToolbar.tsx 从 data-id + editor.getBlock() 驱动，绕开对媒体块
+   NodeSelection 失效的 getSelection()。颜色/圆角/阴影全部取自 tokens.css，
+   与斜杠菜单、块菜单、附件路径浮层同一套设计语言。
+   ========================================================================== */
+.tm-image-align-toolbar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  animation: tm-image-align-toolbar-in 120ms ease-out;
+  /* portal 到 body 的 fixed 浮层，默认 z-index:auto 会被标题栏(z-[3000])、
+     右栏(z-30) 等盖住——与其它浮层一致抬到标题栏之上，保证肉眼可见。 */
+  z-index: 4000;
+}
+
+@keyframes tm-image-align-toolbar-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tm-image-align-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.tm-image-align-toolbar__btn:hover {
+  background: var(--color-hover-bg);
+  color: var(--color-text-primary);
+}
+
+.tm-image-align-toolbar__btn[aria-pressed="true"] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.tm-image-align-toolbar__btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ==========================================================================
+   斜杠菜单 / 空行 + 号菜单（BlockNote SuggestionMenu）
+   --------------------------------------------------------------------------
+   两个入口共用同一个浮层：输入 `/` 触发，或空块左侧 + 号（AddBlockButton 内部
+   调用 openSuggestionMenu("/")）。浮层 portal 到 document.body（controller 传
+   portalElement={null}，BlockNote 解析为 body），因此**不在 .bn-mantine 祖先
+   下**——Mantine 默认的 `.bn-mantine .bn-suggestion-menu*` 规则全部不生效，
+   必须在这里写一套自包含样式，且不依赖 .bn-mantine。
+
+   真实 DOM（@blocknote/react SuggestionMenu.tsx + @blocknote/mantine）：
+     #bn-suggestion-menu.bn-suggestion-menu[role=listbox]      ← 面板
+       .bn-suggestion-menu-label                              ← 分组小标题
+       .bn-suggestion-menu-item[role=option][aria-selected]    ← 一行
+         .bn-mt-suggestion-menu-item-section[data-position=left]  ← 图标槽
+         .bn-mt-suggestion-menu-item-body
+            .bn-mt-suggestion-menu-item-title                 ← 标题
+            .bn-mt-suggestion-menu-item-subtitle              ← 副文本
+         .bn-mt-suggestion-menu-item-section[data-position=right] ← 徽标
+       .bn-suggestion-menu-loader / 空态 .bn-suggestion-menu-item
+
+   旧样式误写成 `.bn-menu-item` + `[data-selected="true"]`，与真实 DOM 完全不
+   符，导致 hover / 键盘选中高亮、文字色、图标槽、副文本全部落到 BlockNote 的
+   默认灰。这里按应用风格（tokens.css + .tm-smart-block-menu 的设计语言）重做。
+
+   高度与边界：外层 floating 容器由 floating-ui 的 size 中间件按「编辑器滚动
+   容器」为 boundary 动态写入 maxHeight，中间件同时把该值直接写到面板本体；
+   面板自身 `overflow-y: auto` 滚动。这样顶端/底端呼出时面板在可视区内完整显示、
+   内容超出时内部滚动，而不是被裁成细缝或压到工具栏下。CSS 里只留一个非
+   !important 的兜底 max-height（中间件未算出的首帧用），不能盖掉动态值。
+   ========================================================================== */
+.bn-suggestion-menu {
+  box-sizing: border-box !important;
+  width: 328px !important;
+  max-width: calc(100vw - 24px) !important;
+  /* 兜底高度：floating-ui 的 size 中间件会按「滚动容器」为 boundary 直接给面板
+     写入内联 maxHeight（优先级高于此处），顶端/底端呼出时据此内部滚动。此处不能用
+     !important，否则会盖掉中间件的动态值、把菜单压成细缝；也不依赖 inherit，
+     避免 portal 包装层截断继承链。 */
+  max-height: min(520px, calc(100vh - 96px));
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 6px !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--color-surface-elevated) !important;
+  box-shadow: var(--shadow-popover) !important;
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-family);
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+.bn-suggestion-menu::-webkit-scrollbar {
+  width: 8px;
+}
+.bn-suggestion-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.bn-suggestion-menu::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+.bn-suggestion-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* 分组小标题：细分隔线 + 紧凑大写小字，和块编辑菜单同一套语言。 */
+.bn-suggestion-menu .bn-suggestion-menu-label {
+  display: block !important;
+  margin: 4px 0 0 !important;
+  padding: 9px 8px 5px !important;
+  border-top: 1px solid var(--color-border-subtle) !important;
+  background: transparent !important;
+  color: var(--color-text-muted) !important;
+  font-family: var(--font-family);
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  user-select: none;
+  cursor: default;
+}
+.bn-suggestion-menu .bn-suggestion-menu-label:first-child {
+  margin-top: 0 !important;
+  padding-top: 6px !important;
+  border-top: none !important;
+}
+
+/* 菜单行：内缩圆角、淡底选中；高度交给内容，副文本两行不挤。 */
+.bn-suggestion-menu .bn-suggestion-menu-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-height: 46px !important;
+  height: auto !important;
+  margin: 1px 0 !important;
+  padding: 6px 8px !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-md) !important;
+  background: transparent !important;
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-family);
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 110ms ease, border-color 110ms ease;
+}
+.bn-suggestion-menu .bn-suggestion-menu-item[aria-selected="true"],
+.bn-suggestion-menu .bn-suggestion-menu-item:hover {
+  background: var(--color-selected-bg) !important;
+  border-color: color-mix(in srgb, var(--color-accent) 22%, transparent) !important;
+  color: var(--color-text-primary) !important;
+}
+.bn-suggestion-menu .bn-suggestion-menu-item[data-disabled],
+.bn-suggestion-menu .bn-suggestion-menu-item:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* 图标槽：淡面圆角小方块，选中时染成 accent，和磁贴/块菜单一致。 */
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 auto;
+  color: var(--color-text-secondary) !important;
+}
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="left"] {
+  width: 34px !important;
+  height: 34px !important;
+  margin-right: 10px !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--color-surface) !important;
+  transition: background-color 110ms ease, border-color 110ms ease, color 110ms ease;
+}
+.bn-suggestion-menu .bn-suggestion-menu-item[aria-selected="true"] .bn-mt-suggestion-menu-item-section[data-position="left"],
+.bn-suggestion-menu .bn-suggestion-menu-item:hover .bn-mt-suggestion-menu-item-section[data-position="left"] {
+  background: var(--color-accent-soft) !important;
+  border-color: color-mix(in srgb, var(--color-accent) 26%, transparent) !important;
+  color: var(--color-accent) !important;
+}
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="left"] svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="left"] > span {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  line-height: 1;
+}
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="right"] {
+  margin-left: 8px !important;
+}
+
+/* 标题 / 副文本：主次分明，过长省略，不让长说明撑破面板。 */
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-body {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: center !important;
+  gap: 1px !important;
+  min-width: 0 !important;
+  padding-right: 0 !important;
+}
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-title {
+  margin: 0 !important;
+  padding: 0 !important;
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-family);
+  font-size: 13px !important;
+  font-weight: 550 !important;
+  line-height: 1.35 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-subtitle {
+  margin: 0 !important;
+  padding: 0 !important;
+  color: var(--color-text-muted) !important;
+  font-family: var(--font-family);
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.bn-suggestion-menu .bn-suggestion-menu-item[aria-selected="true"] .bn-mt-suggestion-menu-item-title,
+.bn-suggestion-menu .bn-suggestion-menu-item:hover .bn-mt-suggestion-menu-item-title {
+  color: var(--color-text-primary) !important;
+}
+
+/* 加载态 / 空结果：弱化为次级信息，不伪装成可点行。 */
+.bn-suggestion-menu .bn-suggestion-menu-loader {
+  height: 3px !important;
+  width: 100% !important;
+  margin: 8px 4px 4px !important;
+  border-radius: 999px !important;
+  background: var(--color-hover-bg) !important;
+  overflow: hidden !important;
+}
+.bn-suggestion-menu .bn-suggestion-menu-loader span {
+  display: block !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, transparent, var(--color-accent), transparent) !important;
+}
+.bn-suggestion-menu .bn-suggestion-menu-item:not([role="option"]) {
+  justify-content: center !important;
+  color: var(--color-text-muted) !important;
+  font-size: 12px !important;
+  cursor: default !important;
 }
 
 .bn-formatting-toolbar {
@@ -50,8 +345,8 @@
 
 .bn-menu-dropdown .bn-menu-item:hover,
 .bn-menu-dropdown .bn-menu-item[data-selected="true"],
-.bn-suggestion-menu .bn-menu-item:hover,
-.bn-suggestion-menu .bn-menu-item[data-selected="true"],
+.bn-suggestion-menu .bn-suggestion-menu-item:hover,
+.bn-suggestion-menu .bn-suggestion-menu-item[aria-selected="true"],
 .bn-mantine .mantine-Menu-item:hover,
 .bn-mantine .mantine-Menu-item[aria-selected="true"],
 .bn-formatting-toolbar .mantine-Menu-item:hover,
@@ -121,7 +416,7 @@
 }
 
 .bn-menu-dropdown .bn-menu-item,
-.bn-suggestion-menu .bn-menu-item,
+.bn-suggestion-menu .bn-suggestion-menu-item,
 .bn-mantine .mantine-Menu-item,
 .bn-mantine .mantine-Menu-label,
 .bn-formatting-toolbar .mantine-Menu-item,
@@ -1372,49 +1667,25 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   background: transparent !important;
 }
 
-/* ---------- 标题留白：变量化，场景只改倍数 ----------
-   标题上方的空白来自 padding-top，等于 gap系数 × 字号 × 间距比 × 场景倍数。
-   以前各级各自写死 padding，导致：① 数值整体偏大（H1 上 58.8px）；② 文档首块
-   也照加；③ 标题紧跟标题时两块留白叠加（H1→H2 之间近 75px）。
-
-   规则：留白表达的是「这一节与上一节的距离」，不是标题的固定附属物，所以
-   - 基准收紧：正常（正文→标题）间距按层级递减，H1 40px 到 H6 18px
-   - 首块（--tm-heading-gap-scale: 0）：文档开头不该顶一块空白
-   - 连续标题（0.38 / 底部 0.4）：章节头之间是「从属」关系，不是「分隔」关系，
-     留白应明显小于标题与正文之间
-
-   em 相对标题**自身字号**，因此系数接近、像素自然递减。 */
+/* ---------- 标题留白 ----------
+   按需求约定：标题不再有刻意的上方大留白，改为上下对称的小 padding
+   （同一组 --tm-heading-gap-y 值，随「标题间距」设置缩放）。
+   标题与上文之间的距离主要由块间距（--topomind-smart-block-spacing）承担；
+   连续标题时前一块的下间距会收紧（见下方 --tm-heading-gap-bottom-override）。 */
 .smart-document-content .bn-block-content[data-content-type="heading"] {
-  padding-top: var(
-    --tm-heading-gap-top-override,
-    calc(var(--tm-heading-gap-top, 0.9em) * var(--topomind-smart-heading-spacing-ratio, 1.5))
+  padding-top: calc(
+    var(--tm-heading-gap-y, 0.25em) * var(--topomind-smart-heading-spacing-ratio, 1.5)
   ) !important;
   padding-bottom: var(
     --tm-heading-gap-bottom-override,
-    calc(var(--tm-heading-gap-bottom, 0.25em) * var(--topomind-smart-heading-spacing-ratio, 1.5))
+    calc(var(--tm-heading-gap-y, 0.25em) * var(--topomind-smart-heading-spacing-ratio, 1.5))
   ) !important;
   margin-top: 0 !important;
   margin-bottom: 0 !important;
 }
 
-/* 场景覆盖值定义在 .bn-block-outer 上：标题块与侧栏都从它继承，收紧时不会各走各的。
-   用「覆盖」而不是「倍数」：连续标题之间要的是**统一的小间距**，若按倍数缩放，
-   字号大的那对标题间距反而更大（H1→H2 25px / H3→H4 18px，松紧不一）。
-   基准取正文字号而非标题字号，因此与级别无关。 */
-.smart-document-content .bn-block-outer:first-child {
-  --tm-heading-gap-top-override: 0px;
-}
-
-/* 连续标题：后一块的上间距 */
-.smart-document-content
-  .bn-block-outer:has(.bn-block-content[data-content-type="heading"])
-  + .bn-block-outer:has(.bn-block-content[data-content-type="heading"]) {
-  --tm-heading-gap-top-override: calc(
-    0.4 * var(--topomind-smart-body-font-size, 16px) * var(--topomind-smart-heading-spacing-ratio, 1.5)
-  );
-}
-
-/* 连续标题：前一块的下间距也收紧（否则两块之间仍是两块留白相加）。
+/* 连续标题：前一块的下间距收紧（否则两块标题之间的留白叠加过大）。覆盖值定义在
+   .bn-block-outer 上，标题块与侧栏都从它继承，收紧时不会各走各的。
    注意：:has() 不能嵌套 :has()，所以「下一块是标题」只能用后代选择器写在
    同一个 :has() 里，不能写成 :has(+ .x:has(...)) —— 那样整条规则会被丢弃。 */
 .smart-document-content
@@ -1433,47 +1704,41 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h1) {
   font-size: 1.75em !important; /* 28px */
   line-height: 1.3 !important;
-  --tm-heading-gap-top: 0.95em; /* 40px */
-  --tm-heading-gap-bottom: 0.4em;
+  --tm-heading-gap-y: 0.4em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h2) {
   font-size: 1.45em !important; /* 23.2px */
   line-height: 1.35 !important;
-  --tm-heading-gap-top: 0.92em; /* 32px */
-  --tm-heading-gap-bottom: 0.35em;
+  --tm-heading-gap-y: 0.35em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h3) {
   font-size: 1.25em !important; /* 20px */
   font-weight: 600 !important;
   line-height: 1.4 !important;
-  --tm-heading-gap-top: 0.9em; /* 27px */
-  --tm-heading-gap-bottom: 0.3em;
+  --tm-heading-gap-y: 0.3em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h4) {
   font-size: 1.12em !important; /* 17.9px */
   font-weight: 600 !important;
   line-height: 1.4 !important;
-  --tm-heading-gap-top: 0.86em; /* 23px */
-  --tm-heading-gap-bottom: 0.25em;
+  --tm-heading-gap-y: 0.25em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h5) {
   font-size: 1.0em !important; /* 16px，与正文同大，靠字重与间距区分 */
   font-weight: 600 !important;
   line-height: 1.4 !important;
-  --tm-heading-gap-top: 0.83em; /* 20px */
-  --tm-heading-gap-bottom: 0.2em;
+  --tm-heading-gap-y: 0.2em;
 }
 
 .smart-document-content .bn-block-content[data-content-type="heading"]:has(> h6) {
   font-size: 0.9em !important; /* 14.4px */
   font-weight: 600 !important;
   line-height: 1.4 !important;
-  --tm-heading-gap-top: 0.83em; /* 18px */
-  --tm-heading-gap-bottom: 0.2em;
+  --tm-heading-gap-y: 0.2em;
 }
 
 /* Lists spacing */
