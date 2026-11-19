@@ -49,9 +49,23 @@ function DocumentLinkRenderer(props: DocumentLinkRenderProps) {
 
 /** 复制到外部时只保留纯文本 chip，不把编辑器里的 SVG 图标带出去。 */
 function DocumentLinkExternalRenderer(props: DocumentLinkRenderProps) {
+  const docId = props.inlineContent.props.docId || ''
+  const title = normalizeDocumentLinkTitle(props.inlineContent.props.title)
+
   return (
-    <span ref={(node) => { props.contentRef(node) }} className="tm-doc-link-external">
-      {normalizeDocumentLinkTitle(props.inlineContent.props.title)}
+    // 属性必须与 docLinkModel.createDocumentLinkHtml() 一致：BlockNote 的
+    // getInlineContentParseRules 靠 [data-inline-content-type] 识别节点，
+    // propsToAttributes 再从 data-doc-id / data-title 读回 propSchema。
+    // 少了它们，一旦系统剪贴板丢掉 `blocknote/html` 只能走 text/html 兜底，
+    // 文档双链就会退化成纯文本、稳定 docId 永久丢失。
+    <span
+      ref={(node) => { props.contentRef(node) }}
+      className="tm-doc-link-external"
+      data-inline-content-type={DOC_LINK_INLINE_TYPE}
+      data-doc-id={docId}
+      data-title={title}
+    >
+      {title}
     </span>
   )
 }

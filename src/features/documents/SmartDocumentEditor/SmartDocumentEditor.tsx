@@ -53,6 +53,28 @@ type ImagePreviewState = {
   alt: string
 }
 
+/**
+ * BlockNote 的 SuggestionMenu 用 `key={group}` 渲染分组标题，且只在相邻项 group 变化时插入。
+ * 默认斜杠菜单、多列菜单与自定义项来自不同数据源，直接拼接会让 group 交替出现
+ * （中文词典里「基础」在默认项和多列项中各有一段），同一列表就会出现两个
+ * key="基础" 的分组标题，React 报 duplicate key，菜单上也会出现两个「基础」标题。
+ * 这里按 group 稳定归拢（组内保持原顺序），保证每个分组只出现一次连续段。
+ * filterSuggestionItems 只做过滤、不改变顺序，所以输入查询过滤后依然成立。
+ */
+function groupSlashMenuItems<T extends { group?: string }>(items: T[]): T[] {
+  const groups = new Map<string, T[]>()
+  for (const item of items) {
+    const group = item.group ?? ''
+    const bucket = groups.get(group)
+    if (bucket) {
+      bucket.push(item)
+    } else {
+      groups.set(group, [item])
+    }
+  }
+  return [...groups.values()].flat()
+}
+
 const SUPPORTED_CODE_LANGUAGES = Object.entries(customCodeBlockOptions.supportedLanguages ?? {}).map(([value, config]) => ({
   value,
   label: config.name,
@@ -888,13 +910,13 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       subtext: '插入指向另一篇文档的行内引用（也可直接输入 [[）',
     }
 
-    return [
+    return groupSlashMenuItems([
       ...getDefaultReactSlashMenuItems(editor),
       ...getMultiColumnSlashMenuItems(editor),
       insertMermaid(),
       mathItem,
       docLinkItem,
-    ] as unknown as DefaultReactSuggestionItem[]
+    ] as unknown as DefaultReactSuggestionItem[])
   }, [editor])
 
   const getSlashMenuItems = useCallback(async (query: string) => (

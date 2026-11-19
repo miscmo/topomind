@@ -1,5 +1,7 @@
 import { type ReactNode, useState } from 'react'
 import { AlignCenter, AlignLeft, AlignRight, IndentDecrease, IndentIncrease } from 'lucide-react'
+// 第二行单独 import：第一行的整串文本被回归断言当作契约钉住，不要合并两行。
+import { ChevronRight, Copy, CopyPlus, Palette, Plus, Scissors, Trash2 } from 'lucide-react'
 import { useComponentsContext, useExtensionState } from '@blocknote/react'
 import { useSmartBlockNoteEditor, type SmartDocumentPartialBlock } from '../smartDocumentEditorTypes'
 import { SideMenuExtension } from '@blocknote/core/extensions'
@@ -117,7 +119,34 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
         className={`tm-smart-block-menu__tile${active ? ' tm-smart-block-menu__tile--active' : ''}`}
         onClick={() => applyToCurrentBlock(action)}
       >
-        <span className="tm-smart-block-menu__tile-fill">{renderActionIcon(action)}</span>
+        <span className="tm-smart-block-menu__tile-fill" title={action.label}>{renderActionIcon(action)}</span>
+      </Components.Generic.Menu.Item>
+    )
+  }
+
+  // 统一的菜单行：左侧 16px 图标、中间标签、右侧快捷键或状态提示。
+  // 图标让扫读更快，也让「一级动作」和上面的块类型磁贴形成清晰的层级区分。
+  const renderRow = (options: {
+    label: string
+    Icon: typeof Copy
+    onClick?: () => void
+    shortcut?: string
+    hint?: string
+    danger?: boolean
+    subTrigger?: boolean
+  }) => {
+    const Icon = options.Icon
+    return (
+      <Components.Generic.Menu.Item
+        className={`tm-smart-block-menu__row${options.danger ? ' tm-smart-block-menu__row--danger' : ''}`}
+        subTrigger={options.subTrigger}
+        onClick={options.onClick}
+      >
+        <span className="tm-smart-block-menu__row-icon"><Icon size={15} strokeWidth={1.8} /></span>
+        <span className="tm-smart-block-menu__row-label">{options.label}</span>
+        {options.hint ? <span className="tm-smart-block-menu__row-hint">{options.hint}</span> : null}
+        {options.shortcut ? <kbd className="tm-smart-block-menu__kbd">{options.shortcut}</kbd> : null}
+        {options.subTrigger ? <ChevronRight className="tm-smart-block-menu__chevron" size={14} strokeWidth={1.8} /> : null}
       </Components.Generic.Menu.Item>
     )
   }
@@ -125,11 +154,11 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
   const renderInsertRow = (action: SmartDocumentBlockMenuAction) => (
     <Components.Generic.Menu.Item
       key={action.key}
-      className="tm-smart-block-menu__row tm-smart-block-menu__row--icon"
+      className="tm-smart-block-menu__row"
       onClick={() => mode === 'insert' ? applyToCurrentBlock(action) : insertBlock(action, insertPlacement)}
     >
-      <span>{action.icon}</span>
-      <span>{action.label}</span>
+      <span className="tm-smart-block-menu__row-glyph">{action.icon}</span>
+      <span className="tm-smart-block-menu__row-label">{action.label}</span>
     </Components.Generic.Menu.Item>
   )
 
@@ -206,53 +235,64 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
 
   return (
     <Components.Generic.Menu.Dropdown className={`bn-menu-dropdown tm-smart-block-menu tm-smart-block-menu--${mode} ${mode === 'edit' ? 'bn-drag-handle-menu' : ''}`}>
-      {mode === 'insert' ? <div className="tm-smart-block-menu__label">文字块</div> : null}
-      <div className="tm-smart-block-menu__quick">
-        {SMART_DOCUMENT_TEXT_ACTIONS.map(renderQuickAction)}
+      <div className="tm-smart-block-menu__section tm-smart-block-menu__section--first">
+        <div className="tm-smart-block-menu__group-title">{mode === 'insert' ? '文字块' : '转换为'}</div>
+        <div className="tm-smart-block-menu__quick">
+          {SMART_DOCUMENT_TEXT_ACTIONS.map(renderQuickAction)}
+        </div>
       </div>
 
       {mode === 'edit' ? (
         <div className="tm-smart-block-menu__section">
-          {/* 缩进与对齐直接平铺在一级菜单：复用顶部块类型磁贴的图标按钮语言，
-              一次点击即可执行，不再经过二级菜单。文案只留在 tooltip/aria-label。 */}
-          <div className="tm-smart-block-menu__icon-actions" role="group" aria-label="缩进">
-            <Components.Generic.Menu.Item
-              className="tm-smart-block-menu__tile"
-              data-tm-block-menu-action="unnest"
-              aria-label="减少缩进"
-              {...disabledItemProps(!canUnnestTargetBlock)}
-              onClick={() => canUnnestTargetBlock && runOnTargetBlock(() => editor.unnestBlock())}
-            ><span className="tm-smart-block-menu__tile-fill" title="减少缩进"><IndentDecrease size={16} strokeWidth={2} /></span></Components.Generic.Menu.Item>
-            <Components.Generic.Menu.Item
-              className="tm-smart-block-menu__tile"
-              data-tm-block-menu-action="nest"
-              aria-label="增加缩进"
-              {...disabledItemProps(!canNestTargetBlock)}
-              onClick={() => canNestTargetBlock && runOnTargetBlock(() => editor.nestBlock())}
-            ><span className="tm-smart-block-menu__tile-fill" title="增加缩进"><IndentIncrease size={16} strokeWidth={2} /></span></Components.Generic.Menu.Item>
-          </div>
-          <div className="tm-smart-block-menu__icon-actions tm-smart-block-menu__icon-actions--align" role="group" aria-label="对齐方式">
-            {SMART_DOCUMENT_ALIGNMENT_ACTIONS.map(({ value, label, Icon }) => (
+          <div className="tm-smart-block-menu__group-title">格式</div>
+          {/* 两组动作平铺在一级菜单，一次点击即可执行：左侧短标签说明用途，
+              右侧分段控件承载状态；文案只留在 tooltip/aria-label。 */}
+          <div className="tm-smart-block-menu__control-row">
+            <span className="tm-smart-block-menu__control-label">缩进</span>
+            <div className="tm-smart-block-menu__icon-actions" role="group" aria-label="缩进">
               <Components.Generic.Menu.Item
-                key={value}
-                className={`tm-smart-block-menu__tile${block.props?.textAlignment === value ? ' tm-smart-block-menu__tile--active' : ''}`}
-                data-tm-block-menu-action={`align-${value}`}
-                aria-label={label}
-                {...disabledItemProps(!supportsTextAlignment)}
-                onClick={() => supportsTextAlignment && setAlignment(value)}
-              ><span className="tm-smart-block-menu__tile-fill" title={label}><Icon size={16} strokeWidth={2} /></span></Components.Generic.Menu.Item>
-            ))}
+                className="tm-smart-block-menu__tile"
+                data-tm-block-menu-action="unnest"
+                aria-label="减少缩进"
+                {...disabledItemProps(!canUnnestTargetBlock)}
+                onClick={() => canUnnestTargetBlock && runOnTargetBlock(() => editor.unnestBlock())}
+              ><span className="tm-smart-block-menu__tile-fill" title="减少缩进"><IndentDecrease size={16} strokeWidth={2} /></span></Components.Generic.Menu.Item>
+              <Components.Generic.Menu.Item
+                className="tm-smart-block-menu__tile"
+                data-tm-block-menu-action="nest"
+                aria-label="增加缩进"
+                {...disabledItemProps(!canNestTargetBlock)}
+                onClick={() => canNestTargetBlock && runOnTargetBlock(() => editor.nestBlock())}
+              ><span className="tm-smart-block-menu__tile-fill" title="增加缩进"><IndentIncrease size={16} strokeWidth={2} /></span></Components.Generic.Menu.Item>
+            </div>
+          </div>
+          <div className="tm-smart-block-menu__control-row">
+            <span className="tm-smart-block-menu__control-label">对齐</span>
+            <div className="tm-smart-block-menu__icon-actions tm-smart-block-menu__icon-actions--align" role="group" aria-label="对齐方式">
+              {SMART_DOCUMENT_ALIGNMENT_ACTIONS.map(({ value, label, Icon }) => (
+                <Components.Generic.Menu.Item
+                  key={value}
+                  className={`tm-smart-block-menu__tile${block.props?.textAlignment === value ? ' tm-smart-block-menu__tile--active' : ''}`}
+                  data-tm-block-menu-action={`align-${value}`}
+                  aria-label={label}
+                  {...disabledItemProps(!supportsTextAlignment)}
+                  onClick={() => supportsTextAlignment && setAlignment(value)}
+                ><span className="tm-smart-block-menu__tile-fill" title={label}><Icon size={16} strokeWidth={2} /></span></Components.Generic.Menu.Item>
+              ))}
+            </div>
           </div>
           <SmartSubMenu position="right">
             <SmartSubMenuTrigger>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__row" subTrigger><span>颜色</span><span>›</span></Components.Generic.Menu.Item>
+              {renderRow({ label: '颜色', Icon: Palette, subTrigger: true })}
             </SmartSubMenuTrigger>
             <SmartSubMenuDropdown className="bn-menu-dropdown tm-smart-block-menu__sub">
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextColor)} checked={block.props?.textColor === 'default'} onClick={() => supportsTextColor && setTextColor('default')}><span>默认文字</span></Components.Generic.Menu.Item>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextColor)} checked={block.props?.textColor === 'red'} onClick={() => supportsTextColor && setTextColor('red')}><span>红色文字</span></Components.Generic.Menu.Item>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextColor)} checked={block.props?.textColor === 'blue'} onClick={() => supportsTextColor && setTextColor('blue')}><span>蓝色文字</span></Components.Generic.Menu.Item>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsBackgroundColor)} checked={block.props?.backgroundColor === 'yellow'} onClick={() => supportsBackgroundColor && setBackgroundColor('yellow')}><span>黄色背景</span></Components.Generic.Menu.Item>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsBackgroundColor)} checked={block.props?.backgroundColor === 'default'} onClick={() => supportsBackgroundColor && setBackgroundColor('default')}><span>清除背景</span></Components.Generic.Menu.Item>
+              <div className="tm-smart-block-menu__group-title tm-smart-block-menu__group-title--sub">文字颜色</div>
+              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextColor)} checked={block.props?.textColor === 'default'} onClick={() => supportsTextColor && setTextColor('default')}><span className="tm-smart-block-menu__swatch tm-smart-block-menu__swatch--default" /><span>默认文字</span></Components.Generic.Menu.Item>
+              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextColor)} checked={block.props?.textColor === 'red'} onClick={() => supportsTextColor && setTextColor('red')}><span className="tm-smart-block-menu__swatch tm-smart-block-menu__swatch--red" /><span>红色文字</span></Components.Generic.Menu.Item>
+              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsTextColor)} checked={block.props?.textColor === 'blue'} onClick={() => supportsTextColor && setTextColor('blue')}><span className="tm-smart-block-menu__swatch tm-smart-block-menu__swatch--blue" /><span>蓝色文字</span></Components.Generic.Menu.Item>
+              <div className="tm-smart-block-menu__group-title tm-smart-block-menu__group-title--sub">背景颜色</div>
+              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsBackgroundColor)} checked={block.props?.backgroundColor === 'yellow'} onClick={() => supportsBackgroundColor && setBackgroundColor('yellow')}><span className="tm-smart-block-menu__swatch tm-smart-block-menu__swatch--yellow" /><span>黄色背景</span></Components.Generic.Menu.Item>
+              <Components.Generic.Menu.Item className="tm-smart-block-menu__subitem" {...disabledItemProps(!supportsBackgroundColor)} checked={block.props?.backgroundColor === 'default'} onClick={() => supportsBackgroundColor && setBackgroundColor('default')}><span className="tm-smart-block-menu__swatch tm-smart-block-menu__swatch--clear" /><span>清除背景</span></Components.Generic.Menu.Item>
             </SmartSubMenuDropdown>
           </SmartSubMenu>
         </div>
@@ -260,24 +300,26 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
 
       {mode === 'edit' ? (
         <div className="tm-smart-block-menu__section">
-          <Components.Generic.Menu.Item className="tm-smart-block-menu__row" onClick={() => void copyBlockText()}><span>复制</span><kbd>Ctrl+C</kbd></Components.Generic.Menu.Item>
-          <Components.Generic.Menu.Item className="tm-smart-block-menu__row" onClick={() => void cutBlock()}><span>剪切</span><kbd>Ctrl+X</kbd></Components.Generic.Menu.Item>
-          <Components.Generic.Menu.Item className="tm-smart-block-menu__row" onClick={removeBlock}><span>删除</span><kbd>Delete</kbd></Components.Generic.Menu.Item>
-          <Components.Generic.Menu.Item className="tm-smart-block-menu__row" onClick={duplicateBlock}><span>创建副本</span><kbd>Ctrl+D</kbd></Components.Generic.Menu.Item>
+          <div className="tm-smart-block-menu__group-title">操作</div>
+          {renderRow({ label: '复制', Icon: Copy, shortcut: 'Ctrl+C', onClick: () => void copyBlockText() })}
+          {renderRow({ label: '剪切', Icon: Scissors, shortcut: 'Ctrl+X', onClick: () => void cutBlock() })}
+          {renderRow({ label: '创建副本', Icon: CopyPlus, shortcut: 'Ctrl+D', onClick: duplicateBlock })}
+          {renderRow({ label: '删除', Icon: Trash2, shortcut: 'Delete', danger: true, onClick: removeBlock })}
           {feedback ? <div className="tm-smart-block-menu__feedback" role="status" aria-live="polite">{feedback}</div> : null}
         </div>
       ) : null}
 
       <div className="tm-smart-block-menu__section">
+        <div className="tm-smart-block-menu__group-title">{mode === 'edit' ? '插入' : '常用'}</div>
         {mode === 'edit' ? (
           <SmartSubMenu position="right">
             <SmartSubMenuTrigger>
-              <Components.Generic.Menu.Item className="tm-smart-block-menu__row" subTrigger>
-                <span>插入块</span>
-                <span className="tm-smart-block-menu__row-hint">
-                  {insertPlacement === 'before' ? '上方' : '下方'} ›
-                </span>
-              </Components.Generic.Menu.Item>
+              {renderRow({
+                label: '插入块',
+                Icon: Plus,
+                hint: insertPlacement === 'before' ? '上方' : '下方',
+                subTrigger: true,
+              })}
             </SmartSubMenuTrigger>
             <SmartSubMenuDropdown className="bn-menu-dropdown tm-smart-block-menu__sub">
               {/* 方向切换放在子菜单顶部：一个入口覆盖上/下两个方向，父菜单行直接显示当前方向。
@@ -307,10 +349,7 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
             </SmartSubMenuDropdown>
           </SmartSubMenu>
         ) : (
-          <>
-            <div className="tm-smart-block-menu__label tm-smart-block-menu__label--section">常用</div>
-            {SMART_DOCUMENT_MEDIA_ACTIONS.map(renderInsertRow)}
-          </>
+          <>{SMART_DOCUMENT_MEDIA_ACTIONS.map(renderInsertRow)}</>
         )}
       </div>
 

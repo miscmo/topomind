@@ -130,6 +130,17 @@ export function useSmartDocumentEditorModel({
         return defaultPasteHandler()
       }
 
+      // 应用内复制：BlockNote 会把 ProseMirror 的内部 slice 写进自定义 MIME
+      // `blocknote/html`。默认处理器优先消费它，能原样还原块类型与属性
+      // （包括待办块 checkListItem 的 checked 状态）。绝不能把这份 HTML
+      // 交给下面的 DOMPurify / 未知标签转义链：待办块的
+      // `<input type="checkbox">` 会被当成非 HTML 标签转义成字面文本，
+      // 复选框丢失、待办退化成普通段落。
+      // 系统剪贴板若丢掉自定义 MIME，下面的 checkbox 放行逻辑继续兜底。
+      if (clipboardData.types.includes('blocknote/html')) {
+        return defaultPasteHandler()
+      }
+
       const hasHtml = clipboardData.types.includes('text/html')
       const hasExplicitMarkdown = clipboardData.types.includes('text/markdown')
       const isVsCode = clipboardData.types.includes('vscode-editor-data')

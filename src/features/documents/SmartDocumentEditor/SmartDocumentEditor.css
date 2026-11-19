@@ -653,65 +653,94 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
 .smart-document-content .bn-block-content[data-content-type="checkListItem"] > div > input {
   accent-color: var(--color-accent);
 }
+/* --- 块编辑菜单（拖拽手柄 / + 按钮）---------------------------------------
+   设计基线：Notion / Figma / Linear 的分组菜单 —— 分组小标题、内缩圆角行、
+   图标 + 快捷键胶囊、破坏性操作单独染色。格式区改用 macOS / Figma 属性面板的
+   「短标签 + 分段控件」布局：缩进两个按钮、对齐三个按钮都是一级动作，各自收在
+   一个浅色槽里，右侧对齐形成整齐的控件列，不再需要二级菜单，也不再是散落的裸图标。 */
 .tm-smart-block-menu {
-  width: 246px;
-  max-height: 420px;
+  width: 260px;
+  /* 加了分组标题后内容约 490px，420px 会把「删除 / 插入块」截到滚动区里；
+     放开到 520px 让一级动作一屏可见，同时给小屏留出 96px 上下余量。 */
+  max-height: min(520px, calc(100vh - 96px));
   padding: 0 !important;
   border: 1px solid var(--color-border) !important;
-  border-radius: 12px !important;
+  border-radius: var(--radius-lg) !important;
   background: var(--titlebar-menu-bg) !important;
   backdrop-filter: blur(24px) !important;
   -webkit-backdrop-filter: blur(24px) !important;
   box-shadow: var(--shadow-popover) !important;
   overflow-y: auto;
-  /* 同上：菜单滚到首尾后不要把滚动量透传给编辑器正文 */
   overscroll-behavior: contain;
   color: var(--color-text-primary);
+  font-family: var(--font-family);
   /* BlockNote 的 Mantine 菜单 withinPortal={false}，内联在编辑器 DOM 内，
-     z-index 走 Mantine 默认 popover 值（~300），远低于 CustomTitleBar 的
-     z-[3000]。在最上面的块点开时菜单贴着标题栏下沿，会被标题栏盖住上沿。
-     这里把菜单抬到标题栏之上。编辑器容器 .smart-document-content 是 relative
-     但不建新 stacking context，所以此 z-index 能直接与标题栏比较并胜出。 */
+     默认 popover z-index（~300）会被 z-[3000] 的标题栏盖住上沿，这里抬到标题栏之上。 */
   z-index: 4000 !important;
 }
-.tm-smart-block-menu__label {
-  padding: 16px 18px 6px;
-  color: var(--color-text-secondary);
-  font-size: 14px;
-  line-height: 1.3;
+
+/* 分组：细分隔线 + 小标题，把「转换 / 格式 / 操作 / 插入」四段语义分开。 */
+.tm-smart-block-menu__section {
+  padding: 5px 8px 6px;
+  border-top: 1px solid var(--color-border-subtle);
 }
+.tm-smart-block-menu__section--first,
+.tm-smart-block-menu__section:first-child {
+  padding-top: 7px;
+  border-top: none;
+}
+.tm-smart-block-menu__group-title {
+  padding: 4px 8px 6px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  user-select: none;
+}
+.tm-smart-block-menu__group-title--sub {
+  padding: 8px 8px 5px;
+}
+/* 兼容旧 label 类名（若外部 children 仍在用），统一到同一套小标题语言。 */
+.tm-smart-block-menu__label,
 .tm-smart-block-menu__label--section {
-  padding: 0 18px 8px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
 }
+
+/* 块类型磁贴：等分铺满内容区，选中态用淡 accent 底而不是整块实心蓝。 */
 .tm-smart-block-menu__quick {
   display: grid;
-  grid-template-columns: repeat(5, 32px);
-  gap: 10px 12px;
-  padding: 14px 18px 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  padding: 0 4px;
 }
 .tm-smart-block-menu__tile {
   border: none;
   background: transparent;
   padding: 0 !important;
+  min-height: 0 !important;
   cursor: pointer;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
+  border-radius: var(--radius-md);
 }
-/* The visible 32x28 box lives on our OWN span, not on BlockNote's
-   `.bn-menu-item`, so Mantine/BlockNote's menu-item styles can never override
-   the selected highlight or the tile sizing. */
+/* Mantine/BlockNote 的全局 hover 会给按钮本体加背景；磁贴的可视区域是自己的
+   span，这里把按钮透明化，避免出现双层底色和方角高亮。 */
+.tm-smart-block-menu .tm-smart-block-menu__tile:hover,
+.tm-smart-block-menu .tm-smart-block-menu__tile[data-selected="true"] {
+  background: transparent !important;
+}
 .tm-smart-block-menu__tile-fill {
-  width: 32px;
+  width: 100%;
   height: 28px;
   min-height: 28px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-primary);
-  /* Keep the glyph at the menu's default text size (14px). This span is NOT a
-     `.bn-menu-item`, so BlockNote/Mantine's menu-item font-size no longer
-     overrides ours -- if we set 17px here it would actually render at 17px and
-     look noticeably bigger than the rest of the menu. */
+  color: var(--color-text-secondary);
   font-size: 14px;
   line-height: 1;
   display: inline-flex;
@@ -719,97 +748,85 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
   justify-content: center;
   white-space: nowrap;
   text-align: center;
-  transition: background-color 80ms ease, color 80ms ease;
+  transition: background-color 110ms ease, color 110ms ease, box-shadow 110ms ease;
 }
 .tm-smart-block-menu__tile-fill sub {
-  color: var(--color-primary);
+  color: var(--color-accent);
   font-size: 0.6em;
   line-height: 1;
 }
 .tm-smart-block-menu__subitem sub {
-  color: var(--color-primary);
+  color: var(--color-accent);
   font-size: 0.6em;
   line-height: 1;
 }
-.tm-smart-block-menu__tile:hover:not([disabled]):not([aria-disabled="true"]):not([data-disabled="true"]) .tm-smart-block-menu__tile-fill {
+.tm-smart-block-menu__tile:hover:not([disabled]):not([aria-disabled="true"]):not([data-disabled="true"]) .tm-smart-block-menu__tile-fill,
+.tm-smart-block-menu__tile[data-selected="true"] .tm-smart-block-menu__tile-fill {
   background: var(--color-hover-bg);
+  color: var(--color-text-primary);
 }
-/* Current block's format is reflected as a *selected* tile (filled accent
-   background + white glyph), not a checkmark. This is on our own span, so it
-   is unaffected by BlockNote/Mantine's menu-item styling. */
 .tm-smart-block-menu__tile--active .tm-smart-block-menu__tile-fill,
 .tm-smart-block-menu__tile--active:hover .tm-smart-block-menu__tile-fill {
-  background: var(--color-accent);
-  color: #ffffff;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 .tm-smart-block-menu__tile--active .tm-smart-block-menu__tile-fill sub {
-  color: #ffffff;
+  color: var(--color-accent);
 }
-.tm-smart-block-menu__section {
-  padding: 8px 0;
-  border-top: 1px solid var(--color-border-subtle);
-}
-.tm-smart-block-menu__row {
-  width: 100%;
-  min-height: 32px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-primary);
-  padding: 0 18px;
-  display: flex !important;
+
+/* 格式区：短标签 + 右对齐的分段控件，两行右边界齐平。 */
+.tm-smart-block-menu__control-row {
+  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 14px;
-  line-height: 1.35;
-  text-align: left;
-  cursor: pointer;
-  white-space: nowrap;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 6px 2px;
 }
-.tm-smart-block-menu__row > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tm-smart-block-menu__row--icon {
-  display: grid !important;
-  grid-template-columns: 22px 1fr;
-  justify-content: initial;
-}
-.tm-smart-block-menu__row:hover {
-  background: var(--color-hover-bg);
-}
-.tm-smart-block-menu__row--muted {
-  color: var(--color-text-secondary);
-}
-.tm-smart-block-menu__row kbd {
-  color: var(--color-text-muted);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 400;
-}
-/* 子菜单触发行右侧的「当前值 + 箭头」（如 插入块 → 「下方 ›」），
-   比 `›` 更弱一档，避免和左侧标题抢注意力。 */
-.tm-smart-block-menu__row-hint {
+.tm-smart-block-menu__control-label {
   flex: none;
-  overflow: visible;
+  width: 32px;
   color: var(--color-text-muted);
-  font-size: 13px;
-  letter-spacing: 0.02em;
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
 }
-/* 缩进 / 对齐复用顶部块类型磁贴的图标语言：一行 2 个缩进、一行 3 个对齐，
-   与顶部网格同列宽、同间距、同选中态；文案只放在 tooltip / aria-label。 */
+/* 浅槽 + 细边框把零散图标收成一个整体，这是标准 segmented control 的外壳。
+   两排都从标签后的同一位置起排（左边界齐平）——若改成右对齐，2 格槽与 3 格槽
+   的左边界会错开 34px，看起来像「少了一个按钮」。 */
 .tm-smart-block-menu__icon-actions {
   display: grid;
   grid-template-columns: repeat(2, 32px);
-  gap: 12px;
-  padding: 2px 18px 8px;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
   justify-content: start;
 }
 .tm-smart-block-menu__icon-actions--align {
   grid-template-columns: repeat(3, 32px);
-  padding-bottom: 12px;
+}
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile {
+  width: 32px;
+  height: 28px;
+}
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile-fill {
+  width: 32px;
+  height: 28px;
+  min-height: 28px;
+  color: var(--color-text-secondary);
+}
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile:hover:not([disabled]):not([aria-disabled="true"]):not([data-disabled="true"]) .tm-smart-block-menu__tile-fill {
+  background: color-mix(in srgb, var(--color-surface-elevated) 72%, transparent);
+  color: var(--color-text-primary);
+}
+/* 当前对齐值 = 槽里浮起的一片白底 + accent 图标，与项目 SegmentedControl 同语言。 */
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile--active .tm-smart-block-menu__tile-fill,
+.tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile--active:hover .tm-smart-block-menu__tile-fill {
+  background: var(--color-surface-elevated);
+  color: var(--color-accent);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 40%, transparent);
 }
 .tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[disabled],
 .tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[aria-disabled="true"],
@@ -819,66 +836,190 @@ html[data-theme='dark'] .bn-block-content[data-content-type="codeBlock"] .shiki 
 .tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[disabled] .tm-smart-block-menu__tile-fill,
 .tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[aria-disabled="true"] .tm-smart-block-menu__tile-fill,
 .tm-smart-block-menu__icon-actions .tm-smart-block-menu__tile[data-disabled="true"] .tm-smart-block-menu__tile-fill {
-  opacity: 0.45;
+  opacity: 0.38;
 }
 
-.tm-smart-block-menu__feedback {
-  padding: 6px 18px 2px;
+/* 菜单行：图标 + 标签 + 快捷键胶囊 / 状态提示。
+   Mantine 会把 children 包进 [data-menu-item-label]（默认只有 flex:1，不是 flex 容器），
+   必须显式把它变成 flex，否则行内三段会挤成普通 inline 流。 */
+.tm-smart-block-menu__row > [data-menu-item-label],
+.tm-smart-block-menu__subitem > [data-menu-item-label] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.tm-smart-block-menu__row {
+  width: 100%;
+  min-height: 32px;
+  border: none;
+  background: transparent !important;
+  color: var(--color-text-primary) !important;
+  padding: 0 10px !important;
+  border-radius: var(--radius-md);
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tm-smart-block-menu .tm-smart-block-menu__row:hover,
+.tm-smart-block-menu .tm-smart-block-menu__row[data-selected="true"] {
+  background: var(--color-hover-bg) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--color-text-primary) !important;
+}
+.tm-smart-block-menu__row-icon,
+.tm-smart-block-menu__row-glyph {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+.tm-smart-block-menu__row-glyph {
+  font-size: 14px;
+  line-height: 1;
+}
+.tm-smart-block-menu__row:hover .tm-smart-block-menu__row-icon {
   color: var(--color-text-secondary);
-  font-size: 12px;
+}
+.tm-smart-block-menu__row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-smart-block-menu__kbd {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted);
+  color: var(--color-text-muted);
+  font-family: var(--font-family);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+.tm-smart-block-menu__row-hint {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.tm-smart-block-menu__chevron {
+  flex: none;
+  color: var(--color-text-muted);
+}
+/* 破坏性操作独立染色并固定放在分组末尾。 */
+.tm-smart-block-menu .tm-smart-block-menu__row--danger,
+.tm-smart-block-menu .tm-smart-block-menu__row--danger .tm-smart-block-menu__row-icon {
+  color: var(--color-danger) !important;
+}
+.tm-smart-block-menu .tm-smart-block-menu__row--danger:hover,
+.tm-smart-block-menu .tm-smart-block-menu__row--danger[data-selected="true"] {
+  background: var(--color-danger-soft) !important;
+  color: var(--color-danger) !important;
+}
+.tm-smart-block-menu__row:disabled,
+.tm-smart-block-menu__row[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tm-smart-block-menu .tm-smart-block-menu__tile:focus-visible,
+.tm-smart-block-menu .tm-smart-block-menu__row:focus-visible,
+.tm-smart-block-menu .tm-smart-block-menu__subitem:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  outline-offset: 1px;
+}
+.tm-smart-block-menu__feedback {
+  margin: 4px 6px 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 11px;
   line-height: 1.4;
 }
+
+/* 二级菜单沿用同一套行高、圆角与 hover，避免父子菜单像两个时代的控件。 */
 .tm-smart-block-menu__sub {
-  min-width: 174px;
-  padding: 8px 0 !important;
+  min-width: 184px;
+  padding: 6px !important;
   border: 1px solid var(--color-border) !important;
-  border-radius: 12px !important;
+  border-radius: var(--radius-lg) !important;
   background: var(--titlebar-menu-bg) !important;
   backdrop-filter: blur(24px) !important;
   -webkit-backdrop-filter: blur(24px) !important;
   box-shadow: var(--shadow-popover) !important;
-  /* 子菜单跟随父菜单浮在标题栏之上（高于 4000 的父级、高于标题栏 3000） */
   z-index: 4001 !important;
 }
-/* 子菜单顶部的方向切换（上方/下方）。与下方块类型列表用一条分隔线隔开，
-   表明它改的是「插入到哪」，而不是又一个可点的块类型。 */
 .tm-smart-block-menu__subheader {
-  padding: 0 14px 8px;
+  padding: 2px 4px 8px;
   margin: 0 0 6px;
   border-bottom: 1px solid var(--color-border-subtle);
 }
 .tm-smart-block-menu__subitem {
   width: 100%;
-  min-height: 32px;
+  min-height: 30px;
   border: none;
-  background: transparent;
-  color: var(--color-text-primary);
-  padding: 0 14px;
+  background: transparent !important;
+  color: var(--color-text-primary) !important;
+  padding: 0 8px !important;
+  border-radius: var(--radius-md);
   display: flex !important;
   align-items: center;
-  gap: 12px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 13px;
   cursor: pointer;
   text-align: left;
 }
-.tm-smart-block-menu__subitem:hover {
-  background: var(--color-hover-bg);
+.tm-smart-block-menu .tm-smart-block-menu__subitem:hover,
+.tm-smart-block-menu .tm-smart-block-menu__subitem[data-selected="true"] {
+  background: var(--color-hover-bg) !important;
+  border-radius: var(--radius-md) !important;
 }
 .tm-smart-block-menu__subitem:disabled,
 .tm-smart-block-menu__subitem[aria-disabled="true"] {
-  color: var(--color-text-muted);
+  color: var(--color-text-muted) !important;
   cursor: not-allowed;
-  opacity: 0.52;
+  opacity: 0.5;
 }
 .tm-smart-block-menu__subitem:disabled:hover,
 .tm-smart-block-menu__subitem[aria-disabled="true"]:hover {
-  background: transparent;
+  background: transparent !important;
+}
+/* 颜色选项前的色块：比纯文字更快扫读，也不额外占一行。 */
+.tm-smart-block-menu__swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+}
+.tm-smart-block-menu__swatch--default { background: var(--color-text-primary); }
+.tm-smart-block-menu__swatch--red { background: var(--color-danger); }
+.tm-smart-block-menu__swatch--blue { background: var(--color-accent); }
+.tm-smart-block-menu__swatch--yellow {
+  background: color-mix(in srgb, var(--color-warning) 65%, var(--color-surface-elevated));
+}
+.tm-smart-block-menu__swatch--clear {
+  background: linear-gradient(135deg, transparent 44%, var(--color-danger) 44%, var(--color-danger) 56%, transparent 56%);
 }
 .tm-smart-block-menu__footer {
-  padding: 10px 18px 14px;
+  padding: 10px 12px 12px;
   border-top: 1px solid var(--color-border-subtle);
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.6;
 }
 

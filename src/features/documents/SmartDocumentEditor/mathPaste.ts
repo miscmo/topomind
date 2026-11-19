@@ -5,14 +5,19 @@ import { normalizeFenceIndentation } from './fenceNormalize.ts'
 const SANITIZE_OPTIONS = {
   ALLOWED_TAGS: [
     'a',
+    'audio',
     'blockquote',
     'br',
     'caption',
     'code',
     'col',
     'colgroup',
+    'details',
     'div',
+    'embed',
     'em',
+    'figcaption',
+    'figure',
     'h1',
     'h2',
     'h3',
@@ -22,14 +27,20 @@ const SANITIZE_OPTIONS = {
     'hr',
     'i',
     'img',
+    // BlockNote 的待办块（checkListItem）复制时序列化为
+    // `<li><input type="checkbox" checked="">...</li>`，必须放行这个 input，
+    // 否则复选框会在粘贴时被 DOMPurify 剥掉、待办退化成普通段落。
+    'input',
     'li',
     'ol',
     'p',
     'pre',
     's',
+    'source',
     'span',
     'strong',
     'sub',
+    'summary',
     'sup',
     'table',
     'tbody',
@@ -37,12 +48,18 @@ const SANITIZE_OPTIONS = {
     'th',
     'thead',
     'tr',
+    'track',
     'u',
     'ul',
+    'video',
   ],
   ALLOWED_ATTR: [
     'alt',
+    // 待办复选框的 type/checked/disabled 三个属性缺一不可：
+    // checked 决定勾选态，type 决定 BlockNote 能否识别成 checkListItem。
+    'checked',
     'colspan',
+    'controls',
     'data-content-type',
     // 文档双链：BlockNote 把 propSchema 的 docId/title 序列化成这两个属性，
     // 少放行一个粘贴后引用就会退化成普通文本或丢掉目标 docId。
@@ -53,13 +70,24 @@ const SANITIZE_OPTIONS = {
     'data-inline-content-type',
     'data-language',
     'data-latex',
+    'disabled',
     'height',
     'href',
+    'loop',
+    'muted',
+    // details/summary（折叠列表、可折叠标题）的展开态。
+    'open',
+    'poster',
+    'preload',
     'rel',
     'rowspan',
     'src',
+    // BlockNote 的 textColor/backgroundColor 用 inline style 序列化颜色，
+    // style 的具体取值由 sanitizeEditorHtml 的 hook 收紧（见下）。
+    'style',
     'target',
     'title',
+    'type',
     'width',
   ],
   KEEP_CONTENT: true,
@@ -67,8 +95,45 @@ const SANITIZE_OPTIONS = {
   ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|local-file):|data:image\/(?:bmp|gif|jpeg|jpg|png|svg\+xml|webp);base64,|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
 }
 
+// `style` 只为保住 BlockNote 的文字色/背景色才放行。DOMPurify 只校验属性名，
+// 不校验 CSS 取值，因此这里把 style 收紧成一份纯白名单（属性 + 取值），
+// 挡住网页剪贴板里的 url(javascript:)、expression()、position:fixed 等。
+// DOMPurify 默认放行所有 data-* 属性，所以本 hook 不需要处理自定义块属性。
+const SAFE_COLOR_VALUE = /^(?:#[\da-f]{3,8}|(?:rgb|rgba|hsl|hsla)\(\s*[\d.,%\s]+\s*\)|[a-z]+(?:-[a-z]+)*)$/i
+const SAFE_TEXT_ALIGN_VALUE = /^(?:left|right|center|justify|start|end)$/i
+
+function restrictInlineStyle(value: string): string {
+  const kept: string[] = []
+  for (const part of value.split(';')) {
+    const colon = part.indexOf(':')
+    if (colon <= 0) continue
+    const property = part.slice(0, colon).trim().toLowerCase()
+    const raw = part.slice(colon + 1).trim()
+    if ((property === 'color' || property === 'background-color') && SAFE_COLOR_VALUE.test(raw)) {
+      kept.push(`${property}: ${raw}`)
+    } else if (property === 'text-align' && SAFE_TEXT_ALIGN_VALUE.test(raw)) {
+      kept.push(`${property}: ${raw}`)
+    }
+  }
+  return kept.join('; ')
+}
+
 function sanitizeEditorHtml(html: string): string {
-  return DOMPurify.sanitize(html, SANITIZE_OPTIONS)
+  // hook 同步 add/remove，避免污染全局 DOMPurify 实例（本项目只有此处用它）。
+  DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
+    if (data.attrName !== 'style') return
+    const safe = restrictInlineStyle(data.attrValue)
+    if (safe) {
+      data.attrValue = safe
+    } else {
+      data.keepAttr = false
+    }
+  })
+  try {
+    return DOMPurify.sanitize(html, SANITIZE_OPTIONS)
+  } finally {
+    DOMPurify.removeHook('uponSanitizeAttribute')
+  }
 }
 
 function escapeHtml(value: string): string {
@@ -90,14 +155,14 @@ function escapeHtml(value: string): string {
 // them into literal text is what previously leaked "<html> <body> ..." noise
 // into pasted documents.
 const KNOWN_HTML_TAGS = new Set([
-  'a', 'abbr', 'address', 'article', 'aside', 'b', 'blockquote', 'br', 'body', 'caption',
-  'cite', 'code', 'col', 'colgroup', 'dd', 'del', 'details', 'dfn', 'div', 'dl',
-  'dt', 'em', 'figcaption', 'figure', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5',
-  'h6', 'head', 'header', 'hr', 'html', 'i', 'img', 'ins', 'kbd', 'li', 'link',
-  'main', 'mark', 'meta', 'nav', 'ol', 'p', 'pre', 'q', 's', 'samp', 'script',
-  'section', 'small', 'span', 'strong', 'style', 'sub', 'summary', 'sup',
-  'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'time', 'title', 'tr', 'u',
-  'ul', 'var',
+  'a', 'abbr', 'address', 'article', 'aside', 'audio', 'b', 'blockquote', 'br', 'body',
+  'caption', 'cite', 'code', 'col', 'colgroup', 'dd', 'del', 'details', 'dfn', 'div',
+  'dl', 'dt', 'em', 'embed', 'figcaption', 'figure', 'footer', 'h1', 'h2', 'h3',
+  'h4', 'h5', 'h6', 'head', 'header', 'hr', 'html', 'i', 'img', 'ins',
+  'kbd', 'li', 'link', 'main', 'mark', 'meta', 'nav', 'ol', 'p', 'pre',
+  'q', 's', 'samp', 'script', 'section', 'small', 'source', 'span', 'strong', 'style',
+  'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'time',
+  'title', 'tr', 'track', 'u', 'ul', 'var', 'video',
 ])
 
 /**
@@ -120,7 +185,17 @@ export function escapeUnknownHtmlTags(html: string): string {
     (match, slash: string, tagName: string, offset: number, full: string) => {
       const after = full.slice(offset + match.length)
       const isTagBoundary = after.length === 0 || /^[\s>/]/.test(after)
-      if (isTagBoundary && KNOWN_HTML_TAGS.has(tagName.toLowerCase())) {
+      // BlockNote 复制待办块时写出 `<input type="checkbox" checked="">`。
+      // input 不在 KNOWN_HTML_TAGS 里，若一并转义，复选框会变成字面文本
+      // 「<input type="checkbox" checked="">」且待办块退化。这里只放行
+      // checkbox 形态；`<input type="text">` 等仍按未知标签转义，避免
+      // 粘贴 HTML 源码示例时把标签吞成真实表单元素。
+      const isCheckboxInput = slash === '' && tagName.toLowerCase() === 'input' && (() => {
+        const tagEnd = after.indexOf('>')
+        const attributes = tagEnd === -1 ? after : after.slice(0, tagEnd)
+        return /\btype\s*=\s*(?:"checkbox"|'checkbox'|checkbox\b)/i.test(attributes)
+      })()
+      if (isTagBoundary && (KNOWN_HTML_TAGS.has(tagName.toLowerCase()) || isCheckboxInput)) {
         return match
       }
       return `&lt;${slash}${tagName}`
@@ -139,7 +214,10 @@ export function escapeUnknownHtmlTags(html: string): string {
 export function hasMeaningfulHtmlStructure(html: string): boolean {
   if (!html) return false
   const stripped = stripClipboardMetaTags(html)
-  return /<(?:p|div|h[1-6]|ul|ol|li|table|tr|td|th|blockquote|pre|img|hr|br|strong|b|em|i|u|s|del|a|code|mark|sub|sup|span)\b/i.test(stripped)
+  // 媒体 / 折叠 / 待办标签也算「有结构」：否则只含 <video> 或
+  // <details> 的剪贴板 HTML 会被误判成纯 inline 文本，改走 text/plain
+  // 的 markdown 分支，媒体块和折叠结构直接消失。
+  return /<(?:p|div|h[1-6]|ul|ol|li|table|tr|td|th|blockquote|pre|img|hr|br|strong|b|em|i|u|s|del|a|code|mark|sub|sup|span|video|audio|embed|figure|figcaption|details|summary|input)\b/i.test(stripped)
 }
 
 /**
