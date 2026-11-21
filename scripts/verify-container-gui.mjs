@@ -1,5 +1,5 @@
 /**
- * 容器节点 + Excalidraw 编辑态 GUI 冒烟。
+ * 容器节点（只读预览）+ Excalidraw 全屏编辑态 GUI 冒烟。
  *
  * 用法（项目根目录执行）：
  *   node scripts/verify-container-gui.mjs
@@ -7,9 +7,10 @@
  * 与 verify-linked-documents-gui.mjs 完全隔离：独立临时工作区、独立 Electron profile、
  * 独立 CDP 端口（默认 9223），不会连到别的测试实例或用户正在使用的应用。
  *
- * 真跑主链路：右键新建流程图容器 → 元数据/载荷落盘 → 双击激活（lazy chunk 挂载）
- *   → 字体与语言包离线可用 → 真实鼠标画一个矩形 → 400ms debounce 落盘
- *   → 退出编辑（flush → 卸载实例 → SVG 预览）→ reload 重开房间数据仍在。
+ * 真跑主链路：右键新建流程图容器 → 元数据/载荷落盘 → 双击进入全屏编辑
+ *   （节点内零编辑器实例、全屏层脱离画布 transform）→ 字体与语言包离线可用
+ *   → 真实鼠标画一个矩形 → 400ms debounce 落盘 → 退出编辑（flush → 卸载实例
+ *   → 节点回到 SVG 预览）→ reload 重开房间数据仍在。
  * 这几步是静态门禁和 build 都覆盖不到的运行时路径（历史上 jotai 分包就是在这里白屏）。
  */
 import puppeteer from 'puppeteer'
@@ -263,7 +264,7 @@ async function main() {
       document.querySelector('[data-tm-container-card]')?.getAttribute('data-tm-container-card'))
     check('节点 id 与磁盘目录名一致', nodeId === meta.cardId, `${nodeId} vs ${meta.cardId}`)
 
-    // ---- 2. 激活编辑态（lazy chunk 真正挂载）----
+    // ---- 2. 双击进入全屏编辑（lazy chunk 真正挂载）----
     const beforeActivate = await page.evaluate((id) => {
       const el = document.querySelector(`[data-tm-container-card="${id}"]`)
       const vp = document.querySelector('.react-flow__viewport')
@@ -281,13 +282,43 @@ async function main() {
       return true
     }, nodeId)
     const editorReady = await waitFor(page, () =>
-      !!document.querySelector('[data-tm-container-surface="active"] .excalidraw'), 25000)
-    check('双击激活后 Excalidraw 编辑器完成懒加载挂载', dblClicked && editorReady,
+      !!document.querySelector('[data-tm-fullscreen-editor] [data-tm-container-surface="active"] .excalidraw'), 25000)
+    check('双击进入全屏后 Excalidraw 编辑器完成懒加载挂载', dblClicked && editorReady,
       JSON.stringify({ dblClicked, editorReady, beforeActivate,
         after: await page.evaluate((id) => ({
           active: document.querySelector(`[data-tm-container-card="${id}"]`)?.getAttribute('data-tm-container-active'),
           text: (document.querySelector(`[data-tm-container-card="${id}"]`)?.innerText || '').slice(0, 120),
         }), nodeId) }))
+
+    // 全屏层必须是 body 直属的 fixed 层：嵌在 .react-flow__viewport 的 CSS transform 内
+    // 会让 Excalidraw 的指针坐标整体偏移，正是「节点内编辑很难操作 / 鼠标定位不准」的根因。
+    const fullscreen = await page.evaluate((id) => {
+      const host = document.querySelector('[data-tm-fullscreen-editor]')
+      const node = document.querySelector(`[data-tm-container-card="${id}"]`)
+      const surface = document.querySelector('[data-tm-container-surface="active"]')
+      if (!host) return { present: false }
+      const r = host.getBoundingClientRect()
+      return {
+        present: true,
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+        viewportW: window.innerWidth,
+        viewportH: window.innerHeight,
+        insideFlowViewport: !!host.closest('.react-flow__viewport'),
+        parentIsBody: host.parentElement === document.body,
+        surfaceInsideHost: !!surface && host.contains(surface),
+        excalidrawInsideNode: node ? node.querySelectorAll('.excalidraw').length : -1,
+      }
+    }, nodeId)
+    check('全屏编辑模式：铺满工作区、脱离画布 transform、节点内零编辑器实例',
+      fullscreen.present
+      && fullscreen.width >= fullscreen.viewportW - 2
+      && fullscreen.height >= fullscreen.viewportH - 40
+      && fullscreen.insideFlowViewport === false
+      && fullscreen.parentIsBody === true
+      && fullscreen.surfaceInsideHost === true
+      && fullscreen.excalidrawInsideNode === 0,
+      JSON.stringify(fullscreen))
 
     const runtime = await page.evaluate(() => {
       const surface = document.querySelector('[data-tm-container-surface="active"]')
@@ -331,15 +362,9 @@ async function main() {
         cdnFallbacks: cdnFallbacks.length, pageErrors: pageErrors.slice(0, 3) }))
 
     // ---- 4. 真实鼠标绘制 ----
-    // 节点默认 360x240，经画布 0.65 缩放后 canvas 只有 ~150x90，拖拽容易越界。
-    // 临时放大节点外框（仅测试 DOM，不改磁盘），让真实鼠标手势有稳定落点。
-    await page.evaluate((id) => {
-      const node = document.querySelector(`.react-flow__node[data-id="${id}"]`)
-      if (!node) return
-      node.style.width = '900px'
-      node.style.height = '620px'
-    }, nodeId)
-    await sleep(700) // 等 Excalidraw 的 ResizeObserver 重排 canvas
+    // 全屏编辑器铺满工作区，canvas 视口足够大，手势直接用视口坐标即可；
+    // v1.3 需要临时放大节点外框才能画，正是节点内编辑难用的实证。
+    await sleep(400) // 等全屏层的 ResizeObserver 完成首轮 canvas 布局
     const toolPicked = await page.evaluate(() => {
       const surface = document.querySelector('[data-tm-container-surface="active"]')
       if (!surface) return 'no-surface'
@@ -439,9 +464,10 @@ async function main() {
       JSON.stringify({ toolPicked, toolState, canvasRect, hit, drawn, usedPointerFallback, elementCount,
         types: afterDraw?.payload?.scene?.elements?.map((e) => e.type).slice(0, 3) }))
 
-    // ---- 5. 退出编辑：flush → 卸载实例 → SVG 预览 ----
+    // ---- 5. 退出编辑：flush → 卸载全屏实例 → 节点重读盘重建 SVG 预览 ----
     const exited = await page.evaluate(() => {
-      const btn = [...document.querySelectorAll('[data-tm-container-card] button')]
+      const host = document.querySelector('[data-tm-fullscreen-editor]')
+      const btn = [...(host?.querySelectorAll('button') ?? [])]
         .find((b) => (b.textContent || '').trim() === '退出编辑')
       if (!btn) return false
       btn.click()
@@ -453,13 +479,15 @@ async function main() {
       const preview = document.querySelector('[data-tm-container-preview]')
       return {
         activeSurface: !!surface,
+        fullscreenGone: !document.querySelector('[data-tm-fullscreen-editor]'),
         excalidrawInstances: document.querySelectorAll('.excalidraw').length,
         preview: !!preview,
         svgChildren: preview ? preview.querySelectorAll('svg').length : 0,
       }
     })
-    check('退出编辑后实例卸载并切回 SVG 预览（真实 DOM 挂载）',
-      exited && !afterExit.activeSurface && afterExit.excalidrawInstances === 0
+    check('退出全屏后实例卸载、节点切回 SVG 预览（真实 DOM 挂载）',
+      exited && !afterExit.activeSurface && afterExit.fullscreenGone
+      && afterExit.excalidrawInstances === 0
       && afterExit.preview && afterExit.svgChildren === 1,
       JSON.stringify({ exited, ...afterExit }))
 

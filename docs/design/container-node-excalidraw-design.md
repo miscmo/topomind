@@ -1,12 +1,14 @@
 # TopoMind 容器节点 + Excalidraw 技术方案
 
-- 版本：v1.3
-- 日期：2026-11-21（fact-check 修正 + P0–P5 全阶段落地完成）
-- 状态：已实现；实现清单、门禁结果与对本文的技术偏差见 §13
+- 版本：v1.4
+- 日期：2026-11-21（v1.4 全屏编辑改造）
+- 状态：已实现；v1.3 实现清单见 §13，v1.4 全屏改造见 §14
 - 交接对象：实现 agent
 - 本文只描述技术方案，不含实现代码
-- 口径优先级：**§12「修正记录」是逐条核对当前源码后形成的最终口径**，与前文任何表格、
-  行号、判定条件冲突时一律以 §12 为准；v1.0 中已被推翻的结论在 §12 逐条列出。
+- 口径优先级：**§14「全屏编辑改造」覆盖 §6.2 / §6.4 / §12 中一切「节点内编辑」口径**。
+  §12 是 v1.3 阶段逐条核对源码后的最终口径，其中两态模型、编辑缩放门槛、
+  节点内事件仲裁、失活策略等条款已被 v1.4 取代；其余（数据协议、X6 退场、
+  资源自托管、只读解耦的大原则）继续有效。v1.0 中已被推翻的结论仍在 §12 逐条列出。
 
 ---
 
@@ -340,7 +342,11 @@ export interface ContainerRendererRegistration {
 - 复用 `KnowledgeCard` 的基础设施：`memo`、`onPointerDownCapture={selectNode}`、`Handle`、
   `nodrag nowheel`、`useActiveCanvasReadOnly()`、`detailTierForZoom`、CSS 变量 `--tm-glyph-comp`。
 
-### 6.2 两态模型（v1.1 修正：与画布只读解耦）
+### 6.2 两态模型（v1.1 修正：与画布只读解耦）〔v1.4 已废弃，见 §14〕
+
+> **v1.4 覆盖**：节点内编辑已被移除。节点**永久只读预览**，双击打开全屏编辑器，
+> 表中「编辑」态不再发生在节点内；100% 缩放门槛、缩放下降失活、
+> `minEditDisplayPercent` 全部删除。本节仅保留 v1.3 的决策演进记录，实现口径以 §14 为准。
 
 | 状态 | 条件 | 渲染 | Excalidraw 实例 |
 | --- | --- | --- | --- |
@@ -374,7 +380,13 @@ export interface ContainerRendererRegistration {
   - v1 **不落盘**；节点卸载后重新进入时重新生成（由并发上限与 LRU 控制抖动）。
 - 生成失败时显示简化占位框，不影响节点本身。
 
-### 6.4 事件仲裁（关键新增复杂度，v1.1 修正）
+### 6.4 事件仲裁（关键新增复杂度，v1.1 修正）〔v1.4 部分废弃，见 §14〕
+
+> **v1.4 覆盖**：本节描述「编辑器嵌在节点内」时的仲裁。全屏编辑器 portal 到
+> `document.body` 后，滚轮不再流经画布，第 1 条的守卫退化为防御性代码；第 2 条的
+> `handleKeyboardGlobally=false` 改为 `true`（全屏层焦点未必落在编辑器容器内）；
+> 第 5 条的保存链路整体从 `ContainerCard` 上移到 `ContainerFullscreenEditorHost`，
+> 失焦触发条件也从「缩放下降」换成「退出 / 切房间 / 切标签 / 关窗」。
 
 1. **滚轮（方向已修正）**：`handleWheelCapture:265-267` 只对 `.react-flow__pane` 内 target 生效，
    容器内部 target 会 `if (!pane) return` 直接放行且**未** `stopPropagation`，事件仍会冒泡到
@@ -707,3 +719,106 @@ HEAD 版本的 `FlowchartDocumentEditor` 会因 `@antv/x6` 缺失而无法构建
     命中浮层而非 `excalidraw__canvas.interactive`）。
 13. **已知噪声**：Excalidraw 的 `FontFace` src 永远附带 `esm.sh` fallback URL，离线 Electron 下
     会产生约 230 条失败请求。自托管 URL 优先成功、功能不受影响；v1 不拦截，也未计入门禁失败。
+
+---
+
+## 14. 全屏编辑改造（v1.4，2026-11-21）
+
+### 14.1 触发与根因
+
+用户实测反馈：双击进入节点内编辑后「在节点中编辑时很难操作」，且「鼠标的定位也有问题」，
+要求改为**全屏编辑模式，节点只是查看预览**。
+
+根因两条，都绑定在「编辑器嵌在 React Flow 节点内」这一形态上：
+
+1. **坐标偏移**：React Flow 用 `.react-flow__viewport` 上的 CSS `transform: translate/scale` 承载
+   整张图；Excalidraw 依据 `getBoundingClientRect()` 与原生 `clientX/clientY` 换算场景坐标。
+   节点内编辑时画布 raw zoom 常为 0.65（显示 100%），缩放与平移叠加后指针落点与绘制位置
+   不一致，节点越小、缩放越偏，偏差越明显。`nodrag` / `nowheel` / `stopPropagation` 只能挡事件，
+   改不了几何包含块。
+2. **可用面积与门槛**：节点默认 360×240，经 0.65 缩放后实际只有约 234×156 CSS 像素，再扣掉
+   Excalidraw 工具栏，绘图区极小；v1.3 还要求显示比 ≥100% 才允许激活，GUI 冒烟甚至要临时
+   把节点 DOM 撑到 900×620 才能稳定完成一次真实鼠标拖拽。
+
+结论：这不是参数调优问题，而是**编辑器的挂载层级错了**。唯一编辑器实例应抬到与画布平级、
+不受 transform 影响的层；节点退回纯展示。
+
+### 14.2 新模型
+
+| 层 | 职责 | 生命周期 |
+| --- | --- | --- |
+| `ContainerCard`（节点内） | **只读**：读一次载荷 → SVG 预览（`exportToSvg` + `replaceChildren`） | 常驻，零编辑器实例 |
+| `activeContainerStore`（UI store） | 全局恰好一个会话：`nodeId / tabId / cardPath / documentId / containerType / title`；`revision` 作为「已落盘」信号 | 不落盘，不进 `_graph.json` |
+| `ContainerFullscreenEditorHost`（GraphPage 级，portal 到 body） | 全屏编辑器 + 顶栏 + 保存状态；**独占**读盘 / 400ms debounce / `registerTabSaver` / 卸载 flush | 仅 `isActive && session.tabId === tabId` 时挂载，换容器用 key 重建 |
+| `ExcalidrawContainerEditor`（lazy） | 唯一 Excalidraw 实例 | 跟随宿主，全局最多 1 个 |
+
+交互链路：双击节点 → 写会话 → 宿主挂载全屏层；退出按钮 / Esc → `flush()` → `bumpRevision()`
+→ `deactivate()`；节点观察到 `isEditingThis` 变 false 且 revision 变化 → 重读磁盘 → 重建 SVG。
+编辑期间节点不读盘，避免 400ms debounce 打成无效 IO。
+
+### 14.3 关键实现约束
+
+- **必须 portal 到 `document.body` 且 `position: fixed`**：这是「脱离 transform 包含块」的硬条件。
+  宿主挂在 `GraphPage` 内、`GraphCanvas` 的**兄弟**位置，React 事件不会沿树回流到画布的
+  `onWheelCapture`；React context（`StorageProvider` / `GraphContextProvider`）由 portal 保留。
+- **`top: 32px`**：保留自定义标题栏的窗口拖拽区、菜单与关闭按钮；`z-index: 2800` 低于标题栏
+  chrome（3000–3002）、高于工作区浮层，模态框与通知仍可覆盖全屏层。
+- **Esc 在 window 捕获阶段收口**：全屏刚打开时焦点还在画布节点上，编辑器容器内收不到按键。
+  文本编辑中（`input / textarea / contenteditable`）的 Esc 让给 Excalidraw 结束文本。
+- **`handleKeyboardGlobally` 改为 true**：全屏层焦点未必在 Excalidraw 容器内，工具快捷键
+  （r/o/v…）需要它自己监听 document。`useShortcut` 的 global Ctrl+F 仍按
+  `data-tm-container-surface="active"` 让位，编辑器内 `onKeyDownCapture` 再拦一次。
+- **保存链路整体上移**：`registerTabSaver(tabId, flush, isDirty)` 由宿主注册；退出 / 切房间 /
+  切标签 / 关窗 / 卸载都走同一份 `flush()`，失败保留 dirty 由后续动作重试。
+- **编辑与缩放彻底解耦**：删除 `minEditDisplayPercent`、缩放下降失活、`zoom >= 1` 类判定；
+  `toDisplayPercent(zoom)` 只保留给节点预览的 LOD 可见性（`PREVIEW_MIN_DISPLAY_PERCENT = 60`）。
+- **多标签页**：会话带 `tabId`；切走标签的宿主 effect 会 `deactivate`，切回来不会残留上次全屏层。
+  切房间仍由 `GraphCanvas` 收口，但只影响属于本 tab 的会话。
+
+### 14.4 删除 / 变更清单
+
+| 项 | v1.3 | v1.4 |
+| --- | --- | --- |
+| 节点内编辑器挂载 | `editing && Editor` | 删除，节点只有 `Preview` |
+| `ContainerCard` 的 `flush` / `registerTabSaver` / `onChange` | 有 | 删除，移到宿主 |
+| 节点「退出编辑」按钮 | 卡片标题栏 | 删除；改到全屏顶栏 |
+| `minEditDisplayPercent` / `isAtMaxZoom` 失活 effect | 有 | 删除 |
+| `ContainerEditorProps.onRequestDeactivate` | 有 | 删除，关闭由宿主独占 |
+| `activeContainerStore.activeId` | `string \| null` | `session` 对象 + `revision` |
+| `handleKeyboardGlobally` | `false` | `true` |
+
+落盘协议（`.exdraw.json` / `tree.json` / `containerRef` / surface 分离 / X6 退场 / 资源自托管）
+**完全不变**，因此本次改造不涉及数据迁移，也不需要改节点创建入口。
+
+### 14.5 门禁同步
+
+- `verify-critical-regressions.mts` 的 P4 断言整体改写：节点必须零编辑器实例 / 零 saver /
+  零缩放门槛；宿主必须 portal + fixed + 独占读写 + `bumpRevision`；宿主挂在 GraphPage；
+  会话带 `tabId` / `cardPath` / `revision`；画布不得再按缩放失活。
+- `verify-container-gui.mjs` 新增运行时断言：全屏层铺满工作区、`parentElement === document.body`、
+  `closest('.react-flow__viewport') === null`、surface 在宿主内、节点内 `.excalidraw` 数为 0；
+  删除 v1.3 为绕开小画布而临时撑大节点 DOM 的夹具；退出按钮与卸载断言改到全屏层。
+
+### 14.6 验证结果（2026-11-21）
+
+| 门禁 | 结果 |
+| --- | --- |
+| `npm run typecheck` | 通过 |
+| `npm run verify:critical` | 通过（`Critical regression checks verified`，P4 断言已换为全屏契约） |
+| `npm run verify:lint:baseline` | 通过（0 errors / 0 files） |
+| `npm run build` | 通过（renderer + `dist-electron/main.js` + `preload.js`；见下方构建注记） |
+| `npm run verify:container:gui` | **17/17**，`CONTAINER_GUI_VERIFIED` |
+
+GUI 冒烟的关键实测数据（1400×900 视口）：
+
+- 全屏层 `1400×868`、`parentElement === document.body`、
+  `closest('.react-flow__viewport') === null`、节点内 `.excalidraw` 数 = 0、全局实例数 = 1。
+- 编辑画布 `1400×824`（顶部 32px 标题栏 + 44px 全屏顶栏），对比 v1.3 节点内约 150×90；
+  真实 `page.mouse` 拖拽一次即绘出矩形并落盘，`usedPointerFallback: false`，
+  不再需要 v1.3 的「临时撑大节点 DOM」与合成 PointerEvent 兜底——鼠标定位问题已消除。
+- 退出全屏后实例数归零、节点重读盘生成 1 个 SVG；reload 重开房间后预览由落盘数据重建。
+- 自托管 `Excalifont` 200、`pageErrors: []`；`esm.sh` fallback 约 230 条为 v1 已知噪声，不计入门禁。
+
+构建注记：`vite` 默认 `emptyOutDir` 会一次删除 345 个旧产物，被宿主 safe-delete 守卫
+（`SAFE_DELETE_BULK_CONFIRM_REQUIRED`）拦截。这与代码无关，处理方式是先 `mv dist` 移走旧产物、
+留空 `dist/` 目录再构建，之后清理备份；`scripts/build.mjs` 本身不做递归删除，无需改动。

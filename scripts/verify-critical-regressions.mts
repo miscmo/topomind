@@ -304,6 +304,7 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     canvasSrc, registerSrc, cardSrc, editorSrc, assetsSrc, builderSrc,
     menuSrc, actionsSrc, modelSrc, pkgSrc, viteSrc,
     syncSrc, buildEntrySrc, gitignoreSrc, mainSrc,
+    hostSrc, graphPageSrc, storeSrc,
   ] = await Promise.all([
     readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8'),
     readFile(new URL('../src/features/graph/GraphCanvas/containers/registerContainers.tsx', import.meta.url), 'utf-8'),
@@ -320,6 +321,9 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     readFile(new URL('../scripts/build.mjs', import.meta.url), 'utf-8'),
     readFile(new URL('../.gitignore', import.meta.url), 'utf-8'),
     readFile(new URL('../src/main.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphCanvas/containers/ContainerFullscreenEditorHost.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphPage/GraphPage.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphCanvas/containers/activeContainerStore.ts', import.meta.url), 'utf-8'),
   ])
   assert.ok(viteSrc.includes("id.includes('/jotai/')")
     && viteSrc.includes("id.includes('/jotai-scope/')")
@@ -332,30 +336,52 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     '【P3】Editor 必须 lazy，预览必须是独立渲染器，主 chunk 不得含 Excalidraw')
   assert.ok(registerSrc.includes("import './excalidrawContainerType'"),
     '【P2】领域 spec 必须在宿主装配时完成注册')
-  assert.ok(cardSrc.includes('editing && Editor') && cardSrc.includes('registerTabSaver')
-    && cardSrc.includes('flush()') && cardSrc.includes('displayPercent >= PREVIEW_MIN_DISPLAY_PERCENT'),
-  '【P4】容器必须两态渲染、失活 flush、并挂 close-guard saver')
+  // ---- v1.4：编辑从「节点内嵌」改为「全屏覆盖」，节点永久只读预览 ----
+  assert.ok(!cardSrc.includes('<Editor')
+    && !cardSrc.includes('registerTabSaver')
+    && !cardSrc.includes('minEditDisplayPercent')
+    && cardSrc.includes('<Preview')
+    && cardSrc.includes('activate({')
+    && cardSrc.includes('displayPercent >= PREVIEW_MIN_DISPLAY_PERCENT'),
+  '【P4-v1.4】节点必须退化为只读预览：零编辑器实例、零 saver、零缩放编辑门槛')
   assert.ok(cardSrc.includes('isCanvasReadOnly') === false,
     '【P4】容器内容编辑不得绑画布只读闸门（大房间 LOD hidden>0 会永远只读）')
+  assert.ok(hostSrc.includes('createPortal(')
+    && hostSrc.includes('document.body')
+    && hostSrc.includes("position: 'fixed'")
+    && hostSrc.includes('data-tm-fullscreen-editor')
+    && hostSrc.includes('registerTabSaver')
+    && hostSrc.includes('bumpRevision()')
+    && hostSrc.includes('writeTopoDocument')
+    && hostSrc.includes('readTopoDocument'),
+  '【P4-v1.4】全屏宿主必须 portal 到 body、独占读写与 close-guard、并广播预览刷新')
+  assert.ok(graphPageSrc.includes('ContainerFullscreenEditorHost')
+    && graphPageSrc.includes('isActive={isActive}'),
+  '【P4-v1.4】宿主必须挂在 GraphPage 且与 GraphCanvas 同级，滚轮/按键不回流画布')
+  assert.ok(storeSrc.includes('tabId') && storeSrc.includes('cardPath')
+    && storeSrc.includes('revision') && storeSrc.includes('bumpRevision'),
+  '【P4-v1.4】会话必须携带完整读写上下文 + 预览刷新信号')
   assert.ok(editorSrc.includes('data-shortcut-scope="excalidraw"')
     && editorSrc.includes('data-tm-container-surface={active ?')
     && editorSrc.includes('viewModeEnabled={!active}')
     && editorSrc.includes('event.stopPropagation()')
-    && editorSrc.includes("UIOptions={{ tools: { image: false } }}"),
-  '【P4】编辑态必须隔离快捷键、阻断滚轮、禁图片、并用 viewMode 双保险')
+    && editorSrc.includes("UIOptions={{ tools: { image: false } }}")
+    && editorSrc.includes('handleKeyboardGlobally'),
+  '【P4】编辑态必须隔离快捷键、阻断滚轮、禁图片、并用 viewMode/全局键盘双保险')
   assert.ok(canvasSrc.includes('[data-tm-container-surface="active"]')
     && canvasSrc.includes('deactivateActiveContainer')
-    && canvasSrc.includes('!isAtMaxZoom(zoomLevel)'),
-  '【P4】外层需 active-surface 滚轮双保险 + 切房间/缩放下降失活')
+    && !canvasSrc.includes('!isAtMaxZoom(zoomLevel)'),
+  '【P4-v1.4】外层保留 active-surface 防御与切房间收口，但不得再按缩放强制失活')
   // 回归锁：显示 100% 的 raw zoom 是 ZOOM_REFERENCE=0.65，拿裸 transform[2] 跟 1 比
-  // 会让容器在最大缩放时也永远进不了编辑态（GUI 冒烟实测发现）。
+  // 会让预览 LOD 判定错位；编辑入口则已彻底与缩放解耦。
   assert.ok(cardSrc.includes('toDisplayPercent(zoom)')
-    && cardSrc.includes('minEditDisplayPercent')
-    && registerSrc.includes('minEditDisplayPercent: 100')
+    && cardSrc.includes('PREVIEW_MIN_DISPLAY_PERCENT')
+    && !cardSrc.includes('minEditDisplayPercent')
+    && !registerSrc.includes('minEditDisplayPercent')
     && !cardSrc.includes('minEditZoom')
     && !cardSrc.includes('zoom >= 1')
     && !canvasSrc.includes('zoomLevel < 1'),
-  '【P4】编辑门槛必须按显示百分比判定（100% = raw 0.65），禁止裸 zoom>=1 比较')
+  '【P4-v1.4】预览 LOD 仍按显示百分比；编辑入口与缩放彻底解耦，禁止裸 zoom 比较')
   assert.ok(modelSrc.includes('data-tm-container-surface="active"'),
     '【P4】全局捕获阶段的 Ctrl+F 必须自行让位给活跃容器')
   assert.ok(assetsSrc.includes('document.baseURI') && assetsSrc.includes('EXCALIDRAW_ASSET_PATH'),

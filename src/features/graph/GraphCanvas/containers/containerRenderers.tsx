@@ -2,7 +2,8 @@
  * 容器渲染层注册表。
  *
  * 领域层按 container.type 决定「数据是什么」，渲染层按同一 key 决定「怎么画」。
- * Editor 必须是 lazy 组件：万级节点画布里绝不能为每个容器挂载编辑器实例。
+ * Preview 挂在节点内（只读 SVG），Editor 由全屏宿主按会话 lazy 挂载，
+ * 全局同时最多一个实例：万级节点画布里绝不能为每个容器挂载编辑器。
  */
 import type { ComponentType } from 'react'
 
@@ -21,9 +22,9 @@ export interface ContainerEditorProps {
   cardPath: string
   content: unknown
   title: string
+  /** 全屏会话期间恒为 true；保留字段供渲染器做 viewMode / 事件闸门双保险。 */
   active: boolean
   onChange: (next: unknown) => void
-  onRequestDeactivate: () => void
 }
 
 export interface ContainerRendererRegistration {
@@ -31,9 +32,6 @@ export interface ContainerRendererRegistration {
   Preview: ComponentType<ContainerPreviewProps>
   /** 必须是 React.lazy 产出的组件，保证主 chunk 不含编辑器实现。 */
   Editor: ComponentType<ContainerEditorProps>
-  /** 进入编辑态所需的最小**显示百分比**（0-100，100 = 常规阅读比例 / 镜头上限）。
-   * 注意 React Flow 的 `transform[2]` 是 raw zoom，100% 对应 0.65，绝不能拿它直接跟 1 比。 */
-  minEditDisplayPercent: number
 }
 
 const CONTAINER_RENDERER_REGISTRY = new Map<string, ContainerRendererRegistration>()

@@ -31,7 +31,6 @@ import {
   wheelDeltaStep,
   semanticZoomVarsForZoom,
   isCompactZoom,
-  isAtMaxZoom,
   wheelSensitivityForZoom,
 } from '../../../domain/graph/zoomScale'
 import { computeCanvasReadOnly } from '../../../domain/graph/canvasReadOnly'
@@ -63,7 +62,6 @@ export default memo(function GraphCanvas({
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
-  const activeContainerId = useActiveContainerStore((s) => s.activeId)
   const { state, graph, actions } = useGraphCanvasModel({
     tabId,
     onNodeContextMenu,
@@ -106,18 +104,14 @@ export default memo(function GraphCanvas({
     handleSearchSelectNode,
   } = actions
 
-  // 切页 / 切房间：容器编辑实例必须在房间重建前卸载（ContainerCard 会在失活时先 flush）。
+  // 切房间：属于本标签页的全屏会话必须在房间重建前收口（宿主卸载时会先 flush）。
+  // v1.4 不再按缩放失活：全屏编辑器独立于画布镜头，缩小画布不该强制关闭它。
   useEffect(() => {
-    deactivateActiveContainer()
+    const current = useActiveContainerStore.getState().session
+    if (current?.tabId === tabId) deactivateActiveContainer(current.nodeId)
   }, [tabId, roomPath])
 
-  // 缩放降到 100% 以下只给预览；不自动恢复编辑态，保持「用户显式激活」语义。
-  // zoomLevel 是 raw 值，100% = 0.65，必须走 zoomScale 的显示比判定。
-  useEffect(() => {
-    if (activeContainerId && !isAtMaxZoom(zoomLevel)) deactivateActiveContainer(activeContainerId)
-  }, [activeContainerId, zoomLevel])
-
-  // 点击画布空白 = 失焦，同样先 flush 再回到预览。
+  // 点击画布空白 = 失焦，同样先 flush 再回到只读预览。
   const handlePaneClickWithDeactivate = useCallback((event?: React.MouseEvent) => {
     deactivateActiveContainer()
     handlePaneClick(event)
@@ -285,8 +279,8 @@ export default memo(function GraphCanvas({
     if (event.ctrlKey || event.metaKey || event.altKey) return
     const target = event.target as Element | null
     if (!target) return
-    // 活跃容器表面的滚轮属于编辑器内容（缩放/平移白板），绝不能被外层画布接管。
-    // 容器自身也会 stopPropagation，这里做双保险，防止子层事件边界未来被改动。
+    // 全屏编辑器 portal 在 body 上，滚轮已不会流到画布；保留 active-surface 判断作
+    // 防御，万一未来把宿主搬回画布内，白板缩放/平移也不会被外层镜头接管。
     if (target.closest('[data-tm-container-surface="active"]')) return
     const pane = target.closest('.react-flow__pane')
     if (!pane) return

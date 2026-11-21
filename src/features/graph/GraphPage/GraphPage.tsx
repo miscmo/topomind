@@ -8,6 +8,7 @@ import { registerGraphApi } from '../linkedDocumentStore'
 import { useLearningTrackerContextStore } from '../../learning-tracker/model/learningTrackerContextStore'
 import RightPanelContainer from '../../right-panel/RightPanelContainer'
 import GraphCanvas from '../GraphCanvas'
+import { ContainerFullscreenEditorHost } from '../GraphCanvas/containers/ContainerFullscreenEditorHost'
 import GraphPageContextMenu from './components/GraphPageContextMenu'
 import NodeTreePanel from './components/NodeTreePanel'
 import { NodeMoveToRoomDialog } from './components/NodeMoveToRoomDialog'
@@ -95,6 +96,9 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
             onClose={moveDialogProps.closeMoveToRoom}
           />
         )}
+        {/* v1.4 全屏编辑：与 GraphCanvas 同级（不是它的后代），React 事件不会回流到画布。
+            组件内部 portal 到 document.body，彻底脱离 .react-flow__viewport 的 transform。 */}
+        <ContainerFullscreenEditorHost tabId={tabId} isActive={isActive} />
       </div>
     </GraphContextProvider>
   )

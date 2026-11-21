@@ -3,6 +3,9 @@
  *
  * 新增一种容器只需在这里加一行注册 + 一个 spec：外层关系树、选中、LOD、
  * 从属校验、生命周期搬运全部零改动。Editor 必须 lazy，主 chunk 不含 Excalidraw。
+ *
+ * v1.4：编辑由 ContainerFullscreenEditorHost 全屏承载，与画布缩放彻底解耦，
+ * 因此不再有「进入编辑所需的最小显示百分比」这类门槛。
  */
 import { lazy } from 'react'
 import { registerContainerRenderer } from './containerRenderers'
@@ -18,7 +21,4 @@ registerContainerRenderer({
   type: EXCALIDRAW_CONTAINER_TYPE,
   Preview: ContainerSvgPreview,
   Editor: ExcalidrawEditor,
-  // 显示比不足 100% 时只给预览：手绘线条在缩小状态下不可读，也避免误触编辑。
-  // 100% 对应 raw zoom 0.65（ZOOM_REFERENCE），不是 1。
-  minEditDisplayPercent: 100,
 })

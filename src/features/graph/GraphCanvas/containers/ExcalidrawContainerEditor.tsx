@@ -1,8 +1,11 @@
 /**
- * 唯一允许挂载 Excalidraw 实例的地方。必须由 React.lazy 加载，且全局同时只有一个活跃容器。
+ * 唯一允许挂载 Excalidraw 实例的地方。必须由 React.lazy 加载，且只在全屏会话期间挂载。
  *
- * 该组件不自己落盘：onChange 只把归一化后的载荷交给 ContainerCard，由后者做
- * debounce / close-guard flush，保证「失焦 / 缩放下降 / 切房间 / 关窗」都能收口。
+ * 该组件不自己落盘：onChange 只把归一化后的载荷交给 ContainerFullscreenEditorHost，
+ * 由后者做 debounce / close-guard flush，保证「退出 / 切房间 / 切标签 / 关窗」都能收口。
+ *
+ * v1.4：宿主 portal 到 document.body 的 fixed 层，本组件不再嵌在
+ * .react-flow__viewport 的 CSS transform 内，Excalidraw 的指针坐标与视口一致。
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Excalidraw } from '@excalidraw/excalidraw'
@@ -21,7 +24,7 @@ interface ExcalidrawApiLike {
 }
 
 export const ExcalidrawContainerEditor = memo(function ExcalidrawContainerEditor({
-  nodeId, documentId, content, title, active, onChange, onRequestDeactivate,
+  nodeId, documentId, content, title, active, onChange,
 }: ContainerEditorProps) {
   const apiRef = useRef<ExcalidrawApiLike | null>(null)
   const [versionError, setVersionError] = useState(false)
@@ -79,16 +82,12 @@ export const ExcalidrawContainerEditor = memo(function ExcalidrawContainerEditor
   }, [active, versionError, title, onChange])
 
   const handleKeyDownCapture = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape' && active) {
-      event.stopPropagation()
-      onRequestDeactivate()
-      return
-    }
-    // Ctrl/Cmd+F 是全局捕获阶段快捷键，容器编辑态必须拦下，避免穿透到外层搜索。
+    // Esc 由全屏宿主在 window 捕获阶段统一收口（那里还要让位给 Excalidraw 文本编辑）。
+    // Ctrl/Cmd+F 是全局捕获阶段快捷键，容器编辑态必须拦下，避免穿透到外层节点搜索。
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
       event.stopPropagation()
     }
-  }, [active, onRequestDeactivate])
+  }, [])
 
   if (versionError) {
     return (
@@ -113,7 +112,9 @@ export const ExcalidrawContainerEditor = memo(function ExcalidrawContainerEditor
         initialData={initialData}
         onChange={handleChange as never}
         viewModeEnabled={!active}
-        handleKeyboardGlobally={false}
+        // 全屏层是独立的 body 直属层，焦点未必落在 Excalidraw 内部容器；
+        // 交给它自己监听 document，工具快捷键（r/o/v…）才不会在刚打开时失灵。
+        handleKeyboardGlobally
         theme="light"
         langCode="zh-CN"
         UIOptions={{ tools: { image: false } }}
