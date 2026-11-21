@@ -279,7 +279,11 @@ async function openLinkDialog(page) {
 }
 
 async function enterWorkspace(page) {
-  await page.setViewport({ width: 1400, height: 900 })
+  // 诊断用：块侧栏菜单是 portal 浮层，坐标断言对视口高度敏感。允许用
+  // TOPOMIND_GUI_VIEWPORT=1600x1000 之类复跑，判定失败是布局/坐标依赖还是业务回归。
+  // 默认仍是历史基线 1400x900，未指定时行为完全不变。
+  const [vw, vh] = (process.env.TOPOMIND_GUI_VIEWPORT || '1400x900').split('x').map(Number)
+  await page.setViewport({ width: vw, height: vh })
   await page.evaluate((dir) => {
     localStorage.setItem('topomind_last_workspace', dir)
     localStorage.setItem('topomind_recent_workspaces', JSON.stringify([{ path: dir, lastOpened: Date.now() }]))

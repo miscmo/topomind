@@ -5,6 +5,9 @@ import { useGraphStore } from '../../../stores/graphStore'
 import { MIRROR_MIN_SELECTED_NODES } from '../../../domain/graph/mirrorSelection'
 import { PaintRoller } from 'lucide-react'
 import KnowledgeCard from './nodes/KnowledgeCard'
+import ContainerCard from './nodes/ContainerCard'
+// 容器注册表静态装配（副作用）：必须在任何节点渲染前完成注册。
+import './containers/registerContainers'
 import FloatingEdge from './edges/FloatingEdge'
 import { SmartGuidesRenderer } from './SmartGuidesRenderer'
 import { CardSnappedConnectionLine } from './components/CardSnappedConnectionLine'
@@ -28,12 +31,14 @@ import {
   wheelDeltaStep,
   semanticZoomVarsForZoom,
   isCompactZoom,
+  isAtMaxZoom,
   wheelSensitivityForZoom,
 } from '../../../domain/graph/zoomScale'
 import { computeCanvasReadOnly } from '../../../domain/graph/canvasReadOnly'
 import { clearCanvasReadOnly, publishCanvasReadOnly } from '../../../stores/canvasReadOnlyStore'
+import { useActiveContainerStore, deactivateActiveContainer } from './containers/activeContainerStore'
 
-const nodeTypes = { knowledgeCard: KnowledgeCard }
+const nodeTypes = { knowledgeCard: KnowledgeCard, containerCard: ContainerCard }
 const edgeTypes = {
   smoothstep: FloatingEdge,
   straight: FloatingEdge,
@@ -58,6 +63,7 @@ export default memo(function GraphCanvas({
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
+  const activeContainerId = useActiveContainerStore((s) => s.activeId)
   const { state, graph, actions } = useGraphCanvasModel({
     tabId,
     onNodeContextMenu,
@@ -99,6 +105,23 @@ export default memo(function GraphCanvas({
     setIsSearchOpen,
     handleSearchSelectNode,
   } = actions
+
+  // 切页 / 切房间：容器编辑实例必须在房间重建前卸载（ContainerCard 会在失活时先 flush）。
+  useEffect(() => {
+    deactivateActiveContainer()
+  }, [tabId, roomPath])
+
+  // 缩放降到 100% 以下只给预览；不自动恢复编辑态，保持「用户显式激活」语义。
+  // zoomLevel 是 raw 值，100% = 0.65，必须走 zoomScale 的显示比判定。
+  useEffect(() => {
+    if (activeContainerId && !isAtMaxZoom(zoomLevel)) deactivateActiveContainer(activeContainerId)
+  }, [activeContainerId, zoomLevel])
+
+  // 点击画布空白 = 失焦，同样先 flush 再回到预览。
+  const handlePaneClickWithDeactivate = useCallback((event?: React.MouseEvent) => {
+    deactivateActiveContainer()
+    handlePaneClick(event)
+  }, [handlePaneClick])
 
   // 语义缩放的视觉变量挂在最外层容器上，由所有节点继承。
   // 必须用连续 zoomLevel（不是 2% 台阶的 lodZoom）：compensation ≈ glyphScale/ratio，
@@ -262,6 +285,9 @@ export default memo(function GraphCanvas({
     if (event.ctrlKey || event.metaKey || event.altKey) return
     const target = event.target as Element | null
     if (!target) return
+    // 活跃容器表面的滚轮属于编辑器内容（缩放/平移白板），绝不能被外层画布接管。
+    // 容器自身也会 stopPropagation，这里做双保险，防止子层事件边界未来被改动。
+    if (target.closest('[data-tm-container-surface="active"]')) return
     const pane = target.closest('.react-flow__pane')
     if (!pane) return
     if (target.closest('.react-flow__panel, .react-flow__minimap, .nowheel')) return
@@ -378,7 +404,7 @@ export default memo(function GraphCanvas({
         onNodeContextMenu={handleNodeContextMenu}
         onEdgeClick={handleEdgeClick}
         onEdgeDoubleClick={handleEdgeDoubleClick}
-        onPaneClick={handlePaneClick}
+        onPaneClick={handlePaneClickWithDeactivate}
         onPaneContextMenu={handlePaneContextMenu}
         onSelectionContextMenu={handleSelectionContextMenu}
         onEdgeContextMenu={handleEdgeContextMenu}

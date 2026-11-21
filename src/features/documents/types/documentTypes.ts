@@ -1,4 +1,5 @@
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
+import { isPanelDocumentType } from '../../../core/topoDocumentTypes'
 import { getTopoDocumentTypeDefinition } from '../services/documentTypeRegistry'
 
 export const TOPO_DOCUMENT_PATH_PREFIX = '__topo__/'
@@ -27,8 +28,11 @@ export function topoDocumentTypeIcon(type: TopoDocumentType) {
 }
 
 export function buildDocumentTree(topoDocuments: TopoDocumentManifestItem[]) {
-  // Sort by sortOrder first
-  const sorted = [...topoDocuments].sort((a, b) => a.sortOrder - b.sortOrder)
+  // 文档树只渲染 panel surface：container-only 载荷与已退场的 compat 类型都在这里隐藏，
+  // 但 tree.json 与磁盘文件保持原样，绝不写回删除条目。
+  const sorted = topoDocuments
+    .filter((doc) => isPanelDocumentType(doc.type))
+    .sort((a, b) => a.sortOrder - b.sortOrder)
   const documentIds = new Set(sorted.map((doc) => doc.id))
   const documentById = new Map(sorted.map((doc) => [doc.id, doc]))
   const hasValidParent = (doc: TopoDocumentManifestItem) => {

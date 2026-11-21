@@ -6,6 +6,7 @@ import { normalizeCurveControl } from './edgeCurve.ts'
 import { normalizeLinkedDocuments } from './linkedDocuments.ts'
 import { normalizeEdgeRelationLabel, readEdgeRelationId } from './edgeRelations.ts'
 import { normalizeTreeOrder } from './treeOrder.ts'
+import { normalizeContainerRef } from './containerRef.ts'
 
 const DEFAULT_VIEWPORT = { zoom: 1, pan: { x: 0, y: 0 } }
 const DEFAULT_NODE_SIZE = { width: 120, height: 52 }
@@ -73,7 +74,7 @@ function normalizeArrowSize(value: unknown): number | undefined {
 
 /** P1：只放行已知枚举，未知值回落 undefined（等价 knowledge），避免脏值污染磁盘。 */
 function normalizeNodeKind(value: unknown): GraphNodeKind | undefined {
-  return value === 'knowledge' || value === 'shape' ? value : undefined
+  return value === 'knowledge' || value === 'shape' || value === 'container' ? value : undefined
 }
 
 function normalizeCard(value: unknown, fallbackRef: string): CardInfo {
@@ -115,6 +116,7 @@ export function normalizeGraphMeta(input: unknown): GraphMeta {
       id,
       card,
       kind: normalizeNodeKind(rawNode.kind),
+      container: normalizeContainerRef(rawNode.container),
       height: asFiniteNumber(rawNode.height, DEFAULT_NODE_SIZE.height),
       width: asFiniteNumber(rawNode.width, DEFAULT_NODE_SIZE.width),
       widthMode: rawNode.widthMode === 'manual' ? 'manual' : (rawNode.widthMode === 'auto' ? 'auto' : undefined),

@@ -21,11 +21,7 @@ import {
   type DocumentTreeRowLayout,
 } from '../src/features/documents/model/documentStickyAncestors.ts'
 import type { TopoDocumentManifestItem } from '../src/core/storage/index.ts'
-import { planFlowchartCellSync } from '../src/features/documents/FlowchartDocumentEditor/flowchartCellSync.ts'
-import {
-  normalizeFlowchartDocumentContent,
-  type FlowchartCell,
-} from '../src/features/documents/FlowchartDocumentEditor/flowchartDocumentTypes.ts'
+import { TOPO_DOCUMENT_TYPES, TOPO_PANEL_DOCUMENT_TYPES, isTopoDocumentType, isPanelDocumentType } from '../src/core/topoDocumentTypes.ts'
 import {
   buildPastedImageHtml,
   cloneSmartDocumentBlockWithoutIds,
@@ -151,102 +147,244 @@ import { EDGE_ARROW_SIZE_LIMIT, EDGE_LINE_WIDTH_LIMIT, MAIN_EDGE_WIDTH_RATIO } f
 import { buildEdgeView } from '../src/hooks/useGraph/edgeView.ts'
 import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../src/stores/themeStore.ts'
 
-const node = (id: string, overrides: Partial<FlowchartCell> = {}): FlowchartCell => ({
-  id,
-  shape: 'rect',
-  x: 0,
-  y: 0,
-  width: 120,
-  height: 60,
-  attrs: { label: { text: id } },
-  data: {},
-  ...overrides,
-})
-
-const edge = (
-  id: string,
-  source: string,
-  target: string,
-  overrides: Partial<FlowchartCell> = {},
-): FlowchartCell => ({
-  id,
-  shape: 'edge',
-  source: { cell: source },
-  target: { cell: target },
-  attrs: {},
-  data: {},
-  labels: [],
-  ...overrides,
-})
-
 {
-  const cells = [node('a'), node('b'), edge('ab', 'a', 'b')]
-  assert.deepEqual(planFlowchartCellSync(cells, cells), {
-    removeEdgeIds: [],
-    removeNodeIds: [],
-    addNodes: [],
-    updateNodes: [],
-    addEdges: [],
-    updateEdges: [],
-  })
+  // 【P1】X6 flowchart 退场 + Excalidraw 容器载荷接入。
+  // 旧的 flowchartCellSync / normalizeFlowchartDocumentContent 断言随编辑器目录一并删除，
+  // 改为守住「旧数据零丢失 + 容器载荷零暴露」这两条新的回归红线。
+  assert.deepEqual([...TOPO_DOCUMENT_TYPES], ['smart', 'mindmap', 'excalidraw'],
+    '【P1】落盘类型全集必须新增 excalidraw、移除 flowchart')
+  assert.deepEqual([...TOPO_PANEL_DOCUMENT_TYPES], ['smart', 'mindmap'],
+    '【P1】右栏 surface 只能有智能文档与思维导图')
+
+  const [
+    fileServiceSource, docIdSource, hostSource, editorRegistrySource,
+    treeSource, sidebarSource, packageSource, typeRegistrySource,
+  ] = await Promise.all([
+    readFile(new URL('../electron/file-service.js', import.meta.url), 'utf-8'),
+    readFile(new URL('../electron/services/document-id-service.js', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/DocumentEditorHost.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/services/documentEditorRegistry.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/types/documentTypes.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/model/useDocumentSidebarModel.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../package.json', import.meta.url), 'utf-8'),
+    // Node 的 strip-types 不解析无扩展名相对导入，注册表只做静态门禁。
+    readFile(new URL('../src/features/documents/services/documentTypeRegistry.ts', import.meta.url), 'utf-8'),
+  ])
+
+  assert.equal(isTopoDocumentType('excalidraw'), true, '【P1】容器载荷必须能通过落盘类型校验')
+  assert.equal(isTopoDocumentType('flowchart'), false, '【P1】旧 flowchart 不得再进渲染层枚举')
+  assert.equal(isPanelDocumentType('excalidraw'), false, '【P1】容器载荷不得出现在右栏新建菜单/文档树')
+  assert.ok(typeRegistrySource.includes("surface: 'panel' | 'container-only'")
+    && typeRegistrySource.includes("surface: 'container-only'")
+    && typeRegistrySource.includes('export function getPanelDocumentTypes()')
+    && typeRegistrySource.includes('return TOPO_PANEL_DOCUMENT_TYPES'),
+  '【P1】注册表必须区分 panel/container-only surface，并提供右栏专用类型列表')
+
+  // 主进程 compat：flowchart 必须继续被归一化 / 扫描 / 重映射，否则 tree.json 条目会被静默删除。
+  assert.ok(fileServiceSource.includes("excalidraw: '.exdraw.json'")
+    && fileServiceSource.includes("flowchart: '.tflow.json'")
+    && fileServiceSource.includes("excalidraw: 'topomind.excalidraw-document'")
+    && fileServiceSource.includes("flowchart: 'topomind.flowchart-document'"),
+  '【P1】主进程扩展名表/schema 表必须同时包含新载荷与旧 flowchart compat 类型')
+  const creatableBlock = fileServiceSource.slice(
+    fileServiceSource.indexOf('const TOPO_CREATABLE_DOCUMENT_TYPES'),
+    fileServiceSource.indexOf('function _fs_isPlainObject'),
+  )
+  assert.ok(creatableBlock.includes('excalidraw: true') && !creatableBlock.includes('flowchart'),
+    '【P1】可新建类型白名单必须排除 flowchart')
+  assert.ok(fileServiceSource.includes('hasOwnProperty.call(TOPO_CREATABLE_DOCUMENT_TYPES, type)'),
+    '【P1】_fs_createTopoDocument 必须有 creatable 守卫，否则旧流程图还能被新建')
+  assert.ok(fileServiceSource.includes("if (type === 'excalidraw')")
+    && fileServiceSource.includes('TOPO_DOCUMENT_SCHEMAS.excalidraw'),
+  '【P1】新建容器载荷必须生成 excalidraw 空场景，不能落到 X6 分支')
+  assert.ok(fileServiceSource.includes('documentExtensions: Object.values(TOPO_DOCUMENT_EXTENSIONS)'),
+    '【P1】roomSummary hasDetail 必须自动跟随扩展名表，容器节点才会被判定为有详情')
+
+  assert.ok(docIdSource.includes("excalidraw: '.exdraw.json'")
+    && docIdSource.includes("flowchart: '.tflow.json'")
+    && docIdSource.includes('(tdoc|tmind|exdraw|tflow)')
+    && docIdSource.includes('.json$/i.test(entry.name)'),
+  '【P1】全库扫描正则必须认 .exdraw.json 且继续认 .tflow.json，否则旧条目会丢')
+
+  assert.ok(hostSource.includes('getPanelDocumentTypes()')
+    && hostSource.includes('!adapter')
+    && hostSource.includes('retiredContent'),
+  '【P1】右栏必须隐藏容器载荷，并在 adapter 缺失时显示下线占位而不是崩溃')
+  assert.ok(hostSource.includes('adapter?.hasToc') && hostSource.includes('adapter?.hasStats'),
+    '【P1】下线占位仍会走 DocumentWorkspaceLayout，TOC/统计读取 adapter 必须判空')
+  assert.ok(!editorRegistrySource.includes('FlowchartDocumentAdapter')
+    && !editorRegistrySource.includes('@antv/x6')
+    && editorRegistrySource.includes('Partial<Record<TopoDocumentType, DocumentEditorTypeAdapter>>')
+    && editorRegistrySource.includes('DocumentEditorTypeAdapter | undefined'),
+  '【P1】编辑器注册表必须移除 X6 适配器，并把查找结果声明为可空')
+  assert.ok(treeSource.includes('isPanelDocumentType(doc.type)')
+    && sidebarSource.includes('isPanelDocumentType(createType)'),
+  '【P1】文档树与右键创建动作都必须按 surface 过滤，不能只靠菜单隐藏')
+  assert.ok(!packageSource.includes('@antv/x6'), '【P1】X6 依赖必须全部移除')
 }
 
 {
-  const current = [node('a', { data: { obsolete: true }, zIndex: 1 })]
-  const next = [node('a', { x: 80 })]
-  const plan = planFlowchartCellSync(current, next)
-  assert.deepEqual(plan.removeEdgeIds, [])
-  assert.deepEqual(plan.removeNodeIds, [])
-  assert.deepEqual(plan.addNodes, [])
-  assert.equal(plan.updateNodes.length, 1)
-  assert.deepEqual(plan.updateNodes[0].removeKeys, ['zIndex'])
-  assert.equal(plan.updateNodes[0].cell.x, 80)
-}
+  // 【P2/P3/P4】容器载荷纯函数真跑 + 注册表 / 预览队列 / 两态接线静态门禁。
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const { readdir } = await import('node:fs/promises')
+  const bundle = async (rel: string) => {
+    const result = await build({
+      entryPoints: [fileURLToPath(new URL(rel, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+      banner: { js: 'globalThis.window = globalThis.window || {};' },
+    })
+    return await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  }
 
-{
-  const current = [node('a'), node('b'), edge('ab', 'a', 'b')]
-  const next = [node('b')]
-  const plan = planFlowchartCellSync(current, next)
-  assert.deepEqual(plan.removeEdgeIds, ['ab'])
-  assert.deepEqual(plan.removeNodeIds, ['a'])
-}
-
-{
-  const current = [node('a'), node('b'), edge('ab', 'a', 'b')]
-  const next = [node('a', { shape: 'polygon' }), node('b'), edge('ab', 'a', 'b')]
-  const plan = planFlowchartCellSync(current, next)
-  assert.deepEqual(plan.removeEdgeIds, ['ab'])
-  assert.deepEqual(plan.removeNodeIds, ['a'])
-  assert.deepEqual(plan.addNodes.map((cell) => cell.id), ['a'])
-  assert.deepEqual(plan.addEdges.map((cell) => cell.id), ['ab'])
-  assert.deepEqual(plan.updateNodes, [])
-  assert.deepEqual(plan.updateEdges, [])
-}
-
-{
-  const current = [node('a'), node('b'), edge('ab', 'a', 'b')]
-  const next = [node('a'), node('b'), node('c'), edge('ab', 'a', 'c')]
-  const plan = planFlowchartCellSync(current, next)
-  assert.deepEqual(plan.addNodes.map((cell) => cell.id), ['c'])
-  assert.equal(plan.updateEdges.length, 1)
-  assert.deepEqual(plan.updateEdges[0].cell.target, { cell: 'c' })
-}
-
-{
-  const normalized = normalizeFlowchartDocumentContent({
-    version: 2,
-    title: '兼容旧边类型',
-    cells: [
-      node('a'),
-      node('b'),
-      edge('ab', 'a', 'b', { shape: 'custom-edge' }),
-      edge('invalid', 'a', 'missing'),
-    ],
+  const doc = await bundle('../src/features/documents/ExcalidrawDocument/excalidrawDocumentTypes.ts')
+  const empty = doc.createEmptyExcalidrawDocumentContent('空板')
+  assert.equal(empty.schema, 'topomind.excalidraw-document', '【P2】空载荷必须带正确 schema')
+  assert.deepEqual(empty.scene.elements, [], '【P2】空载荷必须是空场景')
+  const normalized = doc.normalizeExcalidrawDocumentContent({
+    title: ' 白板 ', version: 1,
+    scene: {
+      elements: [
+        { id: 'a', type: 'rectangle', version: 2, x: 1 },
+        { id: 'b', type: 'rectangle', isDeleted: true },
+        { id: 'a', type: 'rectangle' },
+      ],
+      appState: { viewBackgroundColor: '#ffffff', zoom: 999, scrollX: 5, selectedElementIds: { a: true } },
+    },
   }, '回退标题')
+  assert.equal(normalized.scene.elements.length, 1, '【P2】删除元素与重复 id 必须被过滤')
+  assert.equal(normalized.title, '白板', '【P2】标题必须去空白')
+  assert.equal(normalized.scene.appState.zoom, 30, '【P2】zoom 必须有界归一化')
+  assert.equal(normalized.scene.appState.selectedElementIds, undefined,
+    '【P2】绝不落完整 AppState（选中态 / UI 状态不得持久化）')
+  assert.throws(() => doc.normalizeExcalidrawDocumentContent({ version: 2 }, 'x'),
+    '【P2】未知 version 必须抛错，绝不静默覆盖看不懂的数据')
+  assert.equal(doc.normalizeExcalidrawDocumentContent(null, '回退标题').title, '回退标题',
+    '【P2】缺失载荷必须回落空场景')
+  const versionA = doc.excalidrawSceneVersion(normalized)
+  const versionB = doc.excalidrawSceneVersion({
+    ...normalized, scene: { ...normalized.scene, elements: [{ id: 'a', type: 'rectangle', version: 3 }] },
+  })
+  assert.notEqual(versionA, versionB, '【P2】scene version 变化必须让预览缓存失效')
 
-  assert.equal(normalized.cells.length, 3)
-  assert.deepEqual(normalized.cells.map((cell) => cell.id), ['a', 'b', 'ab'])
-  assert.equal(normalized.cells[2].shape, 'edge')
+  const registry = await bundle('../src/domain/container/containerTypes.ts')
+  assert.equal(registry.getContainerType('probe'), undefined, '【P2】未注册类型必须返回 undefined 而不是抛错')
+  registry.registerContainerType({
+    id: 'probe', documentType: 'smart', schema: 'x', version: 1,
+    createEmpty: () => ({}), normalize: () => ({}), serialize: () => '{}',
+  })
+  assert.equal(registry.getContainerType('probe').id, 'probe', '【P2】注册项必须按 container.type 可查')
+  assert.equal(registry.listContainerTypes().length, 1, '【P2】注册表必须可枚举，供后续扩展')
+  assert.throws(() => registry.registerContainerType({ id: '' }), '【P2】非法 spec 必须拒绝注册')
+
+  const queue = await bundle('../src/features/graph/GraphCanvas/containers/svgPreviewQueue.ts')
+  let running = 0
+  let peak = 0
+  await Promise.all(Array.from({ length: 9 }, () => queue.enqueueSvgRender(async () => {
+    running += 1
+    peak = Math.max(peak, running)
+    await new Promise((resolve) => setTimeout(resolve, 4))
+    running -= 1
+    return {}
+  })))
+  assert.ok(peak <= queue.SVG_PREVIEW_MAX_CONCURRENCY && peak > 1,
+    `【P2】SVG 导出必须有并发闸门且确实并发（peak=${peak}）`)
+  queue.clearSvgPreviewCache()
+  for (let i = 0; i < queue.SVG_PREVIEW_CACHE_LIMIT + 12; i += 1) {
+    queue.putCachedSvg(`key-${i}`, { cloneNode: () => ({ tag: i }) })
+  }
+  assert.equal(queue.svgPreviewCacheSize(), queue.SVG_PREVIEW_CACHE_LIMIT, '【P2】预览缓存必须有界 LRU')
+  assert.equal(queue.getCachedSvg('key-0'), undefined, '【P2】最久未用条目必须被淘汰')
+  assert.ok(queue.cloneCachedSvg(`key-${queue.SVG_PREVIEW_CACHE_LIMIT + 11}`) !== null,
+    '【P2】缓存命中必须返回可挂载的副本，不能复用同一个 DOM 节点')
+  queue.clearSvgPreviewCache()
+  assert.equal(queue.svgPreviewCacheSize(), 0)
+
+  const [
+    canvasSrc, registerSrc, cardSrc, editorSrc, assetsSrc, builderSrc,
+    menuSrc, actionsSrc, modelSrc, pkgSrc, viteSrc,
+    syncSrc, buildEntrySrc, gitignoreSrc, mainSrc,
+  ] = await Promise.all([
+    readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphCanvas/containers/registerContainers.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphCanvas/nodes/ContainerCard/ContainerCard.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphCanvas/containers/ExcalidrawContainerEditor.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphCanvas/containers/excalidrawAssets.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/hooks/useGraph/graphBuilder.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphPage/components/GraphPageContextMenu.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphPage/model/useNodeActions.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../package.json', import.meta.url), 'utf-8'),
+    readFile(new URL('../vite.config.js', import.meta.url), 'utf-8'),
+    readFile(new URL('../scripts/sync-excalidraw-assets.mjs', import.meta.url), 'utf-8'),
+    readFile(new URL('../scripts/build.mjs', import.meta.url), 'utf-8'),
+    readFile(new URL('../.gitignore', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/main.tsx', import.meta.url), 'utf-8'),
+  ])
+  assert.ok(viteSrc.includes("id.includes('/jotai/')")
+    && viteSrc.includes("id.includes('/jotai-scope/')")
+    && viteSrc.includes('return \'react-vendor\''),
+  '【P3】Excalidraw 的 jotai 依赖必须并入 react-vendor；拆成 lib-jotai 会造成跨 chunk 循环 init 并白屏')
+  assert.ok(canvasSrc.includes('containerCard: ContainerCard')
+    && builderSrc.includes("roomNode.kind === 'container' ? 'containerCard' : 'knowledgeCard'"),
+  '【P2】nodeTypes 与 graphBuilder 必须同时按 kind 映射 containerCard')
+  assert.ok(registerSrc.includes('lazy(() => import(') && registerSrc.includes('Preview: ContainerSvgPreview'),
+    '【P3】Editor 必须 lazy，预览必须是独立渲染器，主 chunk 不得含 Excalidraw')
+  assert.ok(registerSrc.includes("import './excalidrawContainerType'"),
+    '【P2】领域 spec 必须在宿主装配时完成注册')
+  assert.ok(cardSrc.includes('editing && Editor') && cardSrc.includes('registerTabSaver')
+    && cardSrc.includes('flush()') && cardSrc.includes('displayPercent >= PREVIEW_MIN_DISPLAY_PERCENT'),
+  '【P4】容器必须两态渲染、失活 flush、并挂 close-guard saver')
+  assert.ok(cardSrc.includes('isCanvasReadOnly') === false,
+    '【P4】容器内容编辑不得绑画布只读闸门（大房间 LOD hidden>0 会永远只读）')
+  assert.ok(editorSrc.includes('data-shortcut-scope="excalidraw"')
+    && editorSrc.includes('data-tm-container-surface={active ?')
+    && editorSrc.includes('viewModeEnabled={!active}')
+    && editorSrc.includes('event.stopPropagation()')
+    && editorSrc.includes("UIOptions={{ tools: { image: false } }}"),
+  '【P4】编辑态必须隔离快捷键、阻断滚轮、禁图片、并用 viewMode 双保险')
+  assert.ok(canvasSrc.includes('[data-tm-container-surface="active"]')
+    && canvasSrc.includes('deactivateActiveContainer')
+    && canvasSrc.includes('!isAtMaxZoom(zoomLevel)'),
+  '【P4】外层需 active-surface 滚轮双保险 + 切房间/缩放下降失活')
+  // 回归锁：显示 100% 的 raw zoom 是 ZOOM_REFERENCE=0.65，拿裸 transform[2] 跟 1 比
+  // 会让容器在最大缩放时也永远进不了编辑态（GUI 冒烟实测发现）。
+  assert.ok(cardSrc.includes('toDisplayPercent(zoom)')
+    && cardSrc.includes('minEditDisplayPercent')
+    && registerSrc.includes('minEditDisplayPercent: 100')
+    && !cardSrc.includes('minEditZoom')
+    && !cardSrc.includes('zoom >= 1')
+    && !canvasSrc.includes('zoomLevel < 1'),
+  '【P4】编辑门槛必须按显示百分比判定（100% = raw 0.65），禁止裸 zoom>=1 比较')
+  assert.ok(modelSrc.includes('data-tm-container-surface="active"'),
+    '【P4】全局捕获阶段的 Ctrl+F 必须自行让位给活跃容器')
+  assert.ok(assetsSrc.includes('document.baseURI') && assetsSrc.includes('EXCALIDRAW_ASSET_PATH'),
+    '【P3】file:// 下必须给绝对 asset URL，不能有 CDN 回落')
+  assert.ok(mainSrc.includes('ensureExcalidrawAssets()')
+    && editorSrc.includes('ensureExcalidrawAssets()'),
+  '【P3】asset path 必须在主入口同步设置（Excalidraw 子 effect 早于容器父 effect，晚设置会全量回落 esm.sh CDN）')
+  assert.ok(syncSrc.includes("'fonts'") && syncSrc.includes("'locales'")
+    && syncSrc.includes('cpSync') && syncSrc.includes('.sync-stamp.json'),
+  '【P3】字体/语言包必须由同步脚本从依赖包复制，且带版本 stamp 保证幂等')
+  assert.ok(buildEntrySrc.includes('sync-excalidraw-assets.mjs')
+    && pkgSrc.includes('"predev"')
+    && gitignoreSrc.includes('/public/excalidraw-assets/'),
+  '【P3】15MB 自托管资源不入库，但 predev / build 必须能自动补齐，否则干净 clone 会离线缺字')
+  // 已同步过的工作区顺带校验内容；干净 clone 未跑同步时由上面的挂钩断言兜底。
+  try {
+    const fontDirs = await readdir(fileURLToPath(new URL('../public/excalidraw-assets/fonts', import.meta.url)))
+    assert.ok(fontDirs.includes('Excalifont') && fontDirs.includes('Virgil'),
+      '【P3】自托管字体必须含 Excalifont / Virgil')
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+  assert.ok(pkgSrc.includes('"@excalidraw/excalidraw"'), '【P3】编辑器依赖必须锁定在 dependencies')
+  assert.ok(menuSrc.includes('新建流程图容器')
+    && actionsSrc.includes("type: 'excalidraw'")
+    && actionsSrc.includes('updateNode(cardId')
+    && actionsSrc.includes('graph.refreshCurrentRoom()')
+    && actionsSrc.includes('isActiveCanvasReadOnly()'),
+  '【P2】创建入口必须是唯一路径：只读校验 → 建载荷 → 更新单节点 → 原地刷新')
 }
 
 {
@@ -2547,7 +2685,67 @@ const edge = (
   assert.equal(mapper.roomGraphToGraphMeta(room).nodes['n-shape'].kind, 'shape', 'roomGraphToGraphMeta 不得丢 kind')
   const rfOutput = builder.buildNodes('', mapper.roomGraphToGraphMeta(room), {}, '')
   assert.equal(rfOutput.find((n: any) => n.id === 'n-shape').data.kind, 'shape', 'buildNodes 必须把 kind 放回 node.data')
-  assert.equal(rfOutput[0].type, 'knowledgeCard', '本轮只做 schema 预留，nodeTypes 仍统一为 knowledgeCard')
+  assert.equal(rfOutput[0].type, 'knowledgeCard', '普通 / shape 节点仍统一为 knowledgeCard，容器不回归')
+  const containerKindMeta = builder.buildMetaFromNodesEdges([
+    {
+      id: 'n-container', position: { x: 3, y: 4 }, width: 360, height: 240,
+      data: { label: '白板', kind: 'container', container: { type: 'excalidraw', documentId: 'doc_a' } },
+    },
+  ], [], { zoom: 1, pan: { x: 0, y: 0 } })
+  const rfContainerKind = builder.buildNodes('', normalizer.normalizeGraphMeta(containerKindMeta), {}, '')
+  assert.equal(rfContainerKind[0].type, 'containerCard', '【P2】kind=container 必须映射到 containerCard')
+  assert.equal(rfContainerKind[0].data.kind, 'container', '【P2】容器节点 kind 必须随 data 往返')
+  assert.deepEqual(rfContainerKind[0].data.container, { type: 'excalidraw', documentId: 'doc_a' },
+    '【P2】容器载荷指针必须与 nodeTypes 一起从磁盘恢复')
+
+  // 容器载荷指针：与 kind / linkedDocuments 同一条端到端链，7 处白名单任一漏写都会暴露。
+  // 静态计数专门防「只在类型里加字段、map 本体没写」这种历史踩过的坑。
+  const containerWhitelist = [
+    ['../src/types/graph.ts', 'container?: ContainerRef', 2],
+    ['../src/domain/graph/model.ts', 'container?: ContainerRef', 2],
+    ['../src/domain/graph/graphMapper.ts', 'container: normalizeContainerRef(', 2],
+    ['../src/domain/graph/normalizeGraphMeta.ts', 'container: normalizeContainerRef(', 1],
+    ['../src/core/storage/file.ts', 'container: normalizeContainerRef(', 2],
+    ['../src/core/fs-backend.ts', 'container?: ContainerRef', 1],
+    ['../src/hooks/useGraph/graphBuilder.ts', 'container: normalizeContainerRef(', 1],
+  ] as const
+  for (const [rel, needle, expected] of containerWhitelist) {
+    const source = await readFile(new URL(rel, import.meta.url), 'utf-8')
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    assert.equal((source.match(new RegExp(escaped, 'g')) ?? []).length, expected,
+      `【容器节点】${rel} 必须真实透传 container（7 处白名单）`)
+  }
+  const containerModule = await bundle('../src/domain/graph/containerRef.ts')
+  assert.equal(containerModule.normalizeContainerRef({ type: 'excalidraw' }), undefined,
+    '【容器节点】缺少 documentId 的指针不得落盘')
+  assert.equal(containerModule.normalizeContainerRef('excalidraw'), undefined,
+    '【容器节点】非对象指针不得落盘')
+  assert.deepEqual(containerModule.normalizeContainerRef({ type: '  excalidraw  ', documentId: ' doc_a ', evil: 1 }),
+    { type: 'excalidraw', documentId: 'doc_a' },
+    '【容器节点】归一化必须去空白、丢未知字段')
+
+  const sampleContainer = { type: 'excalidraw', documentId: 'doc_0123456789abcdef0123456789abcdef' }
+  const rfWithContainer = rfInput.map((node, i) => ({
+    ...node,
+    data: { ...node.data, container: i === 0 ? sampleContainer : undefined },
+  }))
+  const builtContainer = builder.buildMetaFromNodesEdges(rfWithContainer, [], { zoom: 1, pan: { x: 0, y: 0 } })
+  assert.deepEqual(builtContainer.nodes['n-shape'].container, sampleContainer, 'buildMetaFromNodesEdges 必须写出 container')
+  const normalizedContainer = normalizer.normalizeGraphMeta(builtContainer)
+  assert.deepEqual(normalizedContainer.nodes['n-shape'].container, sampleContainer, 'normalizeGraphMeta 不得吞掉 container')
+  const diskContainer = JSON.parse(JSON.stringify(fileAdapter.convertGraphToFSB(normalizedContainer, '')))
+  assert.deepEqual(diskContainer.children['n-shape'].container, sampleContainer, 'container 必须真的出现在 _graph.json 序列化结果里')
+  assert.equal(diskContainer.children['n-know'].container, undefined, '普通节点不得写入空 container（旧档零迁移）')
+  const restoredContainer = normalizer.normalizeGraphMeta(fileAdapter.convertFSBToGraph(diskContainer, ''))
+  assert.deepEqual(restoredContainer.nodes['n-shape'].container, sampleContainer, 'convertFSBToGraph 读入不得丢 container')
+  const roomContainer = mapper.graphMetaToRoomGraph('', restoredContainer)
+  assert.deepEqual(roomContainer.nodes['n-shape'].container, sampleContainer, 'graphMetaToRoomGraph 不得丢 container')
+  const metaContainer = mapper.roomGraphToGraphMeta(roomContainer)
+  assert.deepEqual(metaContainer.nodes['n-shape'].container, sampleContainer, 'roomGraphToGraphMeta 不得丢 container')
+  const rfContainerBack = builder.buildNodes('', metaContainer, {}, '')
+  assert.deepEqual(rfContainerBack.find((n: any) => n.id === 'n-shape').data.container, sampleContainer, 'buildNodes 必须把 container 放回 node.data')
+  assert.equal(normalizer.normalizeGraphMeta({ nodes: { old: { id: 'old', card: { ref: 'old', name: '旧' }, kind: 'unknown-kind' } } }).nodes.old.kind, undefined,
+    '【容器节点】未知 kind 必须降级为 knowledge，旧档零迁移')
 
   // 节点关联文档：与 kind 同一条端到端链，7 处白名单任一漏写都会在这里暴露。
   const linksModule = await bundle('../src/domain/graph/linkedDocuments.ts')
@@ -5956,8 +6154,10 @@ const edge = (
   // 2026-11-12 新增第四处：双击连线编辑关系名，只读时也一律不弹浮层。
   assert.equal((modelSource18.match(/if \(isCanvasReadOnly\(tabId\)\) return/g) ?? []).length, 4,
     '【只读】撤销 / 重做 / 快捷键新建节点 / 双击编辑连线四处都必须拦')
-  assert.equal((modelSource18.match(/if \(isCanvasReadOnly\(tabId\)\) \{/g) ?? []).length, 3,
-    '【只读】节点 / 连线 / 画布三种右键菜单都必须不弹出')
+  // node / edge / pane / selection / fallback 五个右键入口都必须拦。
+  // 2026-11-21 校正：旧断言写死 3，而实现早已增至 5 处（含多选与兜底入口），属过时断言。
+  assert.equal((modelSource18.match(/if \(isCanvasReadOnly\(tabId\)\) \{/g) ?? []).length, 5,
+    '【只读】节点 / 连线 / 画布 / 多选 / 兜底五种右键菜单都必须不弹出')
 
   const handlersSource18 = await readSrc('src/hooks/useGraph/graphEventHandlers.ts')
   assert.ok(handlersSource18.includes('if (isCanvasReadOnly(tabId)) return')
@@ -9672,8 +9872,9 @@ const edge = (
   // c4：未知版本 → 与旧 readGraphMeta 抛错一样降级为空摘要。
   fileMap48.set(`${root48}/c4/_graph.json`, { version: 3, children: { q: {} } })
   dirMap48.set(`${root48}/c4/_docs`, ['doc_x.tdoc.json'])
-  // c5：目录物化但没有 _graph.json，只有文档 → childCount 0 / hasDetail true。
-  dirMap48.set(`${root48}/c5/_docs`, ['doc_b.tmind.json'])
+  // c5：目录物化但没有 _graph.json，只有容器载荷 → childCount 0 / hasDetail true。
+  // 只放 .exdraw.json，专门验证 P1 新扩展名确实被 hasDetail 识别（不是被 tmind 兜底）。
+  dirMap48.set(`${root48}/c5/_docs`, ['scene_a.exdraw.json'])
 
   const service48 = createRoomSummaryService({
     readdirNames: (absDir: string) => {
@@ -9691,7 +9892,7 @@ const edge = (
     dirname: (p: string) => p.slice(0, p.lastIndexOf('/')),
     basename: (p: string) => p.slice(p.lastIndexOf('/') + 1),
     resolveKbsPath: (_root: string, rel: string) => `/kb/${rel}`,
-    documentExtensions: ['.tdoc.json', '.tmind.json', '.tflow.json'],
+    documentExtensions: ['.tdoc.json', '.tmind.json', '.exdraw.json', '.tflow.json'],
     shardCount: 16,
   })
 
@@ -9711,7 +9912,7 @@ const edge = (
   assert.equal(result48['room/c4'].childCount, 0, '【P0】未知版本必须降级为空摘要')
   assert.equal(result48['room/c4'].hasDetail, false, '【P0】未知版本不得继续探测 _docs')
   assert.equal(result48['room/c5'].childCount, 0)
-  assert.equal(result48['room/c5'].hasDetail, true, '【P0】物化但无索引的目录仍要识别文档')
+  assert.equal(result48['room/c5'].hasDetail, true, '【P1】物化但无索引的目录只要有 .exdraw.json 容器载荷就必须识别为有详情')
   assert.equal(Object.keys(result48).length, 1005, '【P0】重复路径必须去重且每个路径都有摘要')
   for (const ghost of ghostPaths48) {
     assert.equal(result48[ghost].childCount, 0)

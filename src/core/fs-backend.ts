@@ -4,7 +4,7 @@
  */
 import { logger } from './logger'
 import type { ElectronAPI } from '../types/electron-api'
-import type { EdgeRelation, EdgeWeight } from '../types'
+import type { EdgeRelation, EdgeWeight, GraphNodeKind, ContainerRef } from '../types'
 import type { TopoDocumentCreateInput, TopoDocumentExportPayload, TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentRepairResult, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './storage/service'
 import type { TopoDocumentType } from './topoDocumentTypes'
 import type { LinkedDocumentRef, DocumentResolution, DocumentBacklink, DocumentRelations } from '../domain/graph/linkedDocuments'
@@ -45,8 +45,10 @@ export interface FSBRoomNodeSummary {
 
 export interface FSBGraphMeta {
   children?: Record<string, FSBKBInfo & {
-    /** P1 schema 预留：知识节点 / 画布形状节点 */
-    kind?: 'knowledge' | 'shape'
+    /** P1 schema 预留：知识节点 / 画布形状节点 / 容器节点 */
+    kind?: GraphNodeKind
+    /** 容器载荷指针；读写两侧共用 normalizeContainerRef 归一化 */
+    container?: ContainerRef
     x?: number
     y?: number
     width?: number

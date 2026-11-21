@@ -17,11 +17,24 @@ export type AppView = 'setup' | 'workspace'
 
 /**
  * 节点种类（P1 schema 预留）。
- * 'knowledge' = 知识卡片（可下钻成房间、可挂文档）；'shape' = 纯画布图形节点
- * （流程图等，永不物化目录、永不下钻）。缺省一律按 'knowledge' 处理，旧档零迁移。
- * 本轮只做持久化往返，不注册新的 React Flow nodeTypes；新增形状节点时无需再改格式白名单。
+ * 'knowledge' = 知识卡片（可下钻成房间、可挂文档）；
+ * 'shape' = 纯画布图形节点（永不物化目录、永不下钻）；
+ * 'container' = 可选容器节点（仍是关系树普通节点，内部挂载一个组件载荷）。
+ * 缺省一律按 'knowledge' 处理，旧档零迁移。具体容器能力由 container.type 查注册表，
+ * 新增容器类型无需再改这里或任何格式白名单。
  */
-export type GraphNodeKind = 'knowledge' | 'shape'
+export type GraphNodeKind = 'knowledge' | 'shape' | 'container'
+
+/**
+ * 容器载荷指针。documentId 指向本节点 `_docs/tree.json` 中的文档条目，
+ * 不含任何路径，因此跨房间移动 / 导入导出 / 撤销都能靠目录搬运自动跟随。
+ */
+export interface ContainerRef {
+  /** 容器类型 id（v1 = 'excalidraw'），按容器注册表查渲染器 */
+  type: string
+  /** doc_<32hex>，指向本节点文档清单中的条目 */
+  documentId: string
+}
 
 /**
  * _graph.json 中的 children 条目
@@ -30,6 +43,8 @@ export type GraphNodeKind = 'knowledge' | 'shape'
 export interface GraphChild {
   name: string
   kind?: GraphNodeKind
+  /** 容器载荷指针；缺省 = 普通知识节点 */
+  container?: ContainerRef
   x?: number
   y?: number
   width?: number
@@ -143,6 +158,8 @@ export interface KnowledgeNodeData {
   label: string
   /** 节点种类（P1 schema 预留，缺省 = knowledge） */
   kind?: GraphNodeKind
+  /** 容器载荷指针；按 container.type 查渲染器注册表 */
+  container?: ContainerRef
   /** 父节点 ID（顶层 KB 无 parent） */
   parent?: string
   /** 卡片引用路径 */
@@ -194,7 +211,7 @@ export interface KnowledgeNodeStyle {
 }
 
 /** TopoMind 知识卡片节点 */
-export type KnowledgeNode = Node<KnowledgeNodeData, 'knowledgeCard'>
+export type KnowledgeNode = Node<KnowledgeNodeData, 'knowledgeCard' | 'containerCard'>
 
 /** TopoMind 边 */
 export type KnowledgeEdge = Edge<{

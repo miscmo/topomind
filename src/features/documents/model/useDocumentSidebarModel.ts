@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
 import { topoDocumentIdFromPath, topoDocumentPath, buildDocumentTree } from '../types/documentTypes'
-import { TOPO_DOCUMENT_TYPES } from '../services/documentTypeRegistry'
+import { isPanelDocumentType } from '../../../core/topoDocumentTypes'
 import { useGraphStoreApi } from '../../../stores/graphStore'
 import { scrollChildIntoView } from '../SmartDocumentEditor/smartDocumentUtils'
 import { useConfirmStore } from '../../../shared/ui/ConfirmModal/confirmStore'
@@ -373,7 +373,7 @@ export function useDocumentSidebarModel({
       if (onMoveDocumentToCard) onMoveDocumentToCard(targetId)
     } else if (action.startsWith('create:')) {
       const createType = action.slice('create:'.length) as TopoDocumentType
-      if (!TOPO_DOCUMENT_TYPES.includes(createType)) return
+      if (!isPanelDocumentType(createType)) return
       
       let initialValue = ''
       if (topoDocuments.length === 0 && nodeId) {

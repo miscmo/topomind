@@ -2,7 +2,7 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import { FilePlus, Download, PenLine, Trash2, ChevronRight, Smile, Palette, FolderInput } from 'lucide-react'
 import type { DocumentContextMenuState } from '../model/useDocumentSidebarModel'
-import { getTopoDocumentTypeDefinition, TOPO_DOCUMENT_TYPES } from '../services/documentTypeRegistry'
+import { getTopoDocumentTypeDefinition, getPanelDocumentTypes } from '../services/documentTypeRegistry'
 
 interface DocumentContextMenuProps {
   contextMenu: DocumentContextMenuState | null
@@ -54,7 +54,7 @@ export const DocumentContextMenu: React.FC<DocumentContextMenuProps> = ({
         </button>
         {activeSubmenu === 'create' && (
           <div className="absolute left-[calc(100%-4px)] top-[-6px] min-w-[160px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[1200] backdrop-blur-xl animate-in fade-in slide-in-from-left-1 duration-100">
-            {TOPO_DOCUMENT_TYPES.map((type) => {
+            {getPanelDocumentTypes().map((type) => {
               const definition = getTopoDocumentTypeDefinition(type)
               return (
                 <button

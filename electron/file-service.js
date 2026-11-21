@@ -537,12 +537,21 @@ const TOPO_DOCUMENT_MANIFEST = 'tree.json';
 const TOPO_DOCUMENT_EXTENSIONS = {
   smart: '.tdoc.json',
   mindmap: '.tmind.json',
+  excalidraw: '.exdraw.json',
+  // compat：X6 流程图退场后仍须保留扫描/归一化能力，避免旧 tree.json 条目被删。
   flowchart: '.tflow.json',
 };
 const TOPO_DOCUMENT_SCHEMAS = {
   smart: 'topomind.smart-document',
   mindmap: 'topomind.mindmap-document',
+  excalidraw: 'topomind.excalidraw-document',
   flowchart: 'topomind.flowchart-document',
+};
+// 只放行可新建的类型。flowchart 仅作「只索引不渲染」的 compat 类型存在。
+const TOPO_CREATABLE_DOCUMENT_TYPES = {
+  smart: true,
+  mindmap: true,
+  excalidraw: true,
 };
 
 function _fs_isPlainObject(value) {
@@ -834,6 +843,20 @@ function _fs_createTopoDocumentInitialContent(type, title, timestamp) {
       metadata: { createdAt: timestamp, updatedAt: timestamp, editor: 'simple-mind-map' }
     };
   }
+  if (type === 'excalidraw') {
+    return {
+      schema: TOPO_DOCUMENT_SCHEMAS.excalidraw,
+      version: 1,
+      title: title,
+      scene: {
+        elements: [],
+        appState: { viewBackgroundColor: '#ffffff' },
+      },
+      metadata: { createdAt: timestamp, updatedAt: timestamp, editor: 'excalidraw' },
+    };
+  }
+  // compat：旧 flowchart 文档在文件缺失 / 回收站恢复时仍可生成兜底内容，
+  // 但 _fs_createTopoDocument 已被 creatable 守卫拦住，不会再新建。
   if (type === 'flowchart') {
     return {
       schema: TOPO_DOCUMENT_SCHEMAS.flowchart,
@@ -940,6 +963,10 @@ async function _fs_openTopoDocumentFolder(rootDir, cardPath, documentId) {
 
 function _fs_createTopoDocument(rootDir, cardPath, input) {
   var type = _fs_normalizeTopoDocumentType(input && input.type);
+  // flowchart 只作 compat 保留在扩展名表里，绝不允许再新建。
+  if (!Object.prototype.hasOwnProperty.call(TOPO_CREATABLE_DOCUMENT_TYPES, type)) {
+    throw new Error('该文档类型已下线，不能新建: ' + type);
+  }
   var title = String(input && input.title || '').trim();
   if (!title) throw new Error('文档名称不能为空');
   var now = Date.now();

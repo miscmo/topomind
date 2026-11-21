@@ -111,6 +111,43 @@ try {
     zoom: 1, pan: { x: 0, y: 0 },
   })
   for (const id of ['A', 'B', 'C', 'X', 'Y']) fs.mkdirSync(path.join(kbs, 'KB1', id), { recursive: true })
+
+  // ===== 容器载荷 + 旧 X6 兼容：节点目录整体搬运必须零损失 =====
+  // tree.json 里同时放 excalidraw 新载荷与 flowchart 旧条目，
+  // 真跑 listTopoDocuments 会触发主进程 normalize + reconcile（历史上会静默删 flowchart）。
+  const docsA = path.join(kbs, 'KB1', 'A', '_docs')
+  fs.mkdirSync(docsA, { recursive: true })
+  const now = Date.now()
+  const treeItem = (id, type, title, file, order) => ({
+    id, type, title, path: file, parentId: null, sortOrder: order,
+    createdAt: now, updatedAt: now, version: 1,
+  })
+  fs.writeFileSync(path.join(docsA, 'doc_a.tdoc.json'), JSON.stringify({ schema: 'topomind.smart-document', title: '智能文档' }))
+  fs.writeFileSync(path.join(docsA, 'scene_a.exdraw.json'), JSON.stringify({
+    schema: 'topomind.excalidraw-document', version: 1, title: '白板',
+    scene: { elements: [{ id: 'e1', type: 'rectangle' }], appState: { viewBackgroundColor: '#ffffff' } },
+  }))
+  fs.writeFileSync(path.join(docsA, 'legacy_a.tflow.json'), JSON.stringify({ schema: 'topomind.flowchart-document', title: '旧流程图' }))
+  fs.writeFileSync(path.join(docsA, 'tree.json'), JSON.stringify({
+    version: 2,
+    documents: {
+      doc_a: treeItem('doc_a', 'smart', '智能文档', 'doc_a.tdoc.json', 1),
+      doc_b: treeItem('doc_b', 'excalidraw', '白板', 'scene_a.exdraw.json', 2),
+      doc_c: treeItem('doc_c', 'flowchart', '旧流程图', 'legacy_a.tflow.json', 3),
+    },
+  }))
+  const listDocIds = (cardPath) => fileService.listTopoDocuments(workDir, cardPath).map((d) => d.id).sort()
+  assert.deepEqual(listDocIds('KB1/A'), ['doc_a', 'doc_b', 'doc_c'],
+    '【容器 compat】主进程 normalize/reconcile 后 tree.json 三条都必须在（flowchart 不得被静默丢弃）')
+  const treeAfterRead = JSON.parse(fs.readFileSync(path.join(docsA, 'tree.json'), 'utf-8'))
+  assert.ok(treeAfterRead.documents.doc_b && treeAfterRead.documents.doc_c,
+    '【容器 compat】读文档不得写回删除 .exdraw.json / .tflow.json 条目')
+  const readDocAsText = (cardPathParts, file) => fs.readFileSync(
+    path.join(kbs, ...cardPathParts, '_docs', file), 'utf-8',
+  )
+  assert.ok(readDocAsText(['KB1', 'A'], 'scene_a.exdraw.json').includes('topomind.excalidraw-document'))
+  assert.ok(readDocAsText(['KB1', 'A'], 'legacy_a.tflow.json').includes('topomind.flowchart-document'))
+
   // 目标房间 Dest 已有节点 D，且坐标与 A 完全相同 → 必然触发空白区平移。
   writeRoom('KB1/Dest', {
     children: { D: node('已有节点 D', 100, 100) },
@@ -139,6 +176,12 @@ try {
     '内部连线引用必须随迁入保持有效（含改名映射）',
   )
   assert.equal(targetAfter.children.D.x, 100, '目标房间已有节点坐标不得被改动')
+  assert.ok(readDocAsText(['KB1', 'Dest', 'A'], 'scene_a.exdraw.json').includes('topomind.excalidraw-document'),
+    '【容器载荷】跨房间移动后 .exdraw.json 必须随整目录一起搬走')
+  assert.ok(readDocAsText(['KB1', 'Dest', 'A'], 'legacy_a.tflow.json').includes('topomind.flowchart-document'),
+    '【容器 compat】跨房间移动后旧 .tflow.json 物理文件仍在')
+  assert.deepEqual(listDocIds('KB1/Dest/A'), ['doc_a', 'doc_b', 'doc_c'],
+    '【容器 compat】跨房间移动后 tree.json 三条索引仍完整')
 
   const before = { A: node('节点 A', 100, 100), B: node('节点 B', 320, 100), C: node('节点 C', 100, 250) }
   const dxA = targetAfter.children.A.x - before.A.x
@@ -166,6 +209,10 @@ try {
   }
   assert.equal(readRoom('KB1/Dest').children.D.x, 100, '撤销不得改动目标房间已有节点')
   assert.deepEqual(restored.edges.map((e) => e.id).sort(), ['e1', 'e2', 'e4'], '撤销后内部连线回到源房间')
+  assert.ok(readDocAsText(['KB1', 'A'], 'scene_a.exdraw.json').includes('topomind.excalidraw-document'),
+    '【容器载荷】撤销移动后 .exdraw.json 必须跟着目录回来')
+  assert.deepEqual(listDocIds('KB1/A'), ['doc_a', 'doc_b', 'doc_c'],
+    '【容器 compat】撤销移动后 tree.json 索引仍完整')
 
   // ===== 3) 全库节点搜索清单 =====
   writeRoom('KB1/A', {

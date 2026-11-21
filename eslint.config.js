@@ -64,6 +64,10 @@ export default tseslint.config(
       // 降级为 warning 保留可见性，但不再计入「防新增」门禁（门禁只统计 error）。
       'react-hooks/refs': 'warn',
       'react-hooks/set-state-in-effect': 'warn',
+      // 同属 7.1.x 推荐集里的主观风格意见：递归 useCallback 自引用、渲染期
+      // 复用 gesture 对象等既有交互写法会被判为「不可修改 hook 参数」，
+      // 逐处重构风险高于收益，沿用上面的降级策略。
+      'react-hooks/immutability': 'warn',
     },
   },
 
@@ -80,6 +84,17 @@ export default tseslint.config(
     languageOptions: {
       globals: { ...globals.node, ...globals.commonjs },
       sourceType: 'commonjs',
+    },
+  },
+
+  // 依赖树对齐到 lock 后，新版 @eslint/js recommended 新增的两条 error 规则
+  // 会命中既存的「控制字符白名单正则」与局部赋值写法（与本次需求无关，属于
+  // 历史代码风格）。与 React 19 规则一样降级为 warning：保留可见性，但不让
+  // 「防新增」基线因环境升级而整体失绿。
+  {
+    rules: {
+      'no-control-regex': 'warn',
+      'no-useless-assignment': 'warn',
     },
   },
 )

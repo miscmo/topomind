@@ -15,6 +15,7 @@ import { STYLE_CONFIG_DEFAULTS } from '../../domain/style/styleDefaults'
 import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 import { normalizeCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
 import { normalizeLinkedDocuments } from '../../domain/graph/linkedDocuments'
+import { normalizeContainerRef } from '../../domain/graph/containerRef'
 import { normalizeEdgeRelationLabel, readEdgeRelationId } from '../../domain/graph/edgeRelations'
 import { normalizeTreeOrder } from '../../domain/graph/treeOrder.ts'
 import { buildEdgeView } from './edgeView'
@@ -74,6 +75,8 @@ export function buildMetaFromNodesEdges(
       name: node.data.label,
       // P1：kind 随 node.data 一路写进 RoomGraphNode → GraphMeta.nodes → _graph.json。
       kind: node.data.kind,
+      // 容器载荷指针同样随节点写盘；只放在 node.data 里会在刷新后丢失。
+      container: normalizeContainerRef(node.data.container),
       position: node.position,
       size: {
         width: collapsedWidth,
@@ -200,16 +203,16 @@ export function buildNodes(
 
     return {
       id: nodeId,
-      // P1 本轮只做 schema 往返，形状节点的 nodeTypes 还未注册，type 仍统一为 knowledgeCard。
-      // 后续接流程图节点时只需在这里按 roomNode.kind 映射 type + 在 GraphCanvas 注册 nodeTypes，
-      // 不必再改 _graph.json / convert* / normalize* 的格式白名单。
-      type: 'knowledgeCard',
+      // kind 只做粗分类：container 走容器渲染器，其余（knowledge / shape / 旧档缺省）
+      // 一律回落 knowledgeCard。新增容器类型不必再改这里。
+      type: roomNode.kind === 'container' ? 'containerCard' : 'knowledgeCard',
       position,
       width: isExpanded ? (roomNode.expandedWidth ?? roomNode.size?.width) : roomNode.size?.width,
       height: isExpanded ? (roomNode.expandedHeight ?? roomNode.size?.height) : roomNode.size?.height,
       data: {
         label: roomNode.name || basenameRef(childPath),
         kind: roomNode.kind,
+        container: roomNode.container,
         parent: dirPath || kbPath || undefined,
         cardRef: roomNode.cardRef || nodeId,
         domainColor: roomNode.color, // Only use explicitly saved color

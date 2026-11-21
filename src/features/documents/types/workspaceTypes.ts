@@ -20,7 +20,7 @@ export interface DocumentContextMenuState {
 }
 
 export interface DocumentInlineEditState {
-  mode: 'create' | 'createTopoSmart' | 'createTopoMindMap' | 'createTopoFlowchart' | 'rename'
+  mode: 'create' | 'createTopoSmart' | 'createTopoMindMap' | 'rename'
   targetId: string | null
   parentId: string | null
   value: string

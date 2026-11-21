@@ -2,7 +2,8 @@ import { FSB } from '../fs-backend'
 import type { FSBDocumentCandidate, UnifiedTreeLevel, FSBRoomNodeTarget, FSBNodeMoveOptions } from '../fs-backend'
 import type { StorageBackend, TopoDocumentCreateInput, TopoDocumentManifestItem, TopoDocumentMetaPatch, MoveTopoDocumentToCardResult, MoveTopoNodesToRoomResult } from './service'
 import type { CardInfo, GraphMeta } from '../../domain/graph/model'
-import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, EdgeAnchor, GraphNodeKind } from '../../types'
+import type { EdgeRelation, EdgeWeight, EdgeArrowShape, EdgeArrowPosition, KnowledgeNodeStyle, EdgeAnchor, GraphNodeKind, ContainerRef } from '../../types'
+import { normalizeContainerRef } from '../../domain/graph/containerRef'
 import { basenameRef, joinRefs, normalizeRef } from '../../domain/graph/path-utils'
 import { normalizeEdgeAnchor } from '../../domain/graph/edgeAnchors'
 import { normalizeCurveControl, type CurveControl } from '../../domain/graph/edgeCurve'
@@ -14,6 +15,8 @@ interface FSBGraphChild {
   name: string
   /** P1 schema：知识节点 / 画布形状节点，缺省 = knowledge */
   kind?: GraphNodeKind
+  /** 容器载荷指针；必须写在双向 map 本体里，否则画面生效但重开丢失 */
+  container?: ContainerRef
   x?: number
   y?: number
   width?: number
@@ -70,7 +73,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 
 /** 与 normalizeGraphMeta 同规则：只放行已知枚举，未知值回落缺省 knowledge。 */
 const normalizeNodeKind = (value: unknown): GraphNodeKind | undefined => (
-  value === 'knowledge' || value === 'shape' ? value : undefined
+  value === 'knowledge' || value === 'shape' || value === 'container' ? value : undefined
 )
 
 const toCardInfo = (parentCardPath: string, key: string, rawChild: unknown): CardInfo => {
@@ -112,6 +115,7 @@ export function convertFSBToGraph(raw: FSBGraphLike, _roomRef = ''): GraphMeta {
       id: ref,
       card: { ref, name: child.name, updatedAt: undefined },
       kind: normalizeNodeKind(child.kind),
+      container: normalizeContainerRef(child.container),
       height: Number.isFinite(child.height) ? child.height as number : 52,
       width: Number.isFinite(child.width) ? child.width as number : 120,
       widthMode: child.widthMode === 'manual' ? 'manual' : (child.widthMode === 'auto' ? 'auto' : undefined),
@@ -191,6 +195,8 @@ export function convertGraphToFSB(meta: GraphMeta, _roomRef = ''): {
       // P1：kind 必须写在 map 本体里。历史上只在返回类型加字段、漏写 map，
       // 结果画面生效但 _graph.json 从来没有该值，重开知识库全部复位。
       kind: normalizeNodeKind(node.kind),
+      // 必须写在 map 本体里：历史上只在返回类型加字段，画面生效但从未落盘。
+      container: normalizeContainerRef(node.container),
       x: node.position?.x,
       y: node.position?.y,
       width: node.width,

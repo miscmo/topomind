@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree, X } from 'lucide-react'
+import { Plus, Workflow, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree, X } from 'lucide-react'
 
 interface MenuItem {
   label: string
@@ -30,6 +30,7 @@ interface GraphPageContextMenuProps {
   type: 'node' | 'edge' | 'pane' | null
   targetId: string | null
   onNewChild: (position?: { x: number; y: number }) => void
+  onNewContainerChild: (position?: { x: number; y: number }) => void
   onEnterNode: (nodeId: string) => void
   onSelectSubtree: (nodeId: string) => void
   onDelete: (nodeId: string) => void
@@ -55,6 +56,7 @@ export default memo(function GraphPageContextMenu({
   type,
   targetId,
   onNewChild,
+  onNewContainerChild,
   onEnterNode,
   onSelectSubtree,
   onDelete,
@@ -89,6 +91,14 @@ export default memo(function GraphPageContextMenu({
       shortcut: 'Double Click',
       action: async () => {
         await onNewChild({ x, y })
+        onClose()
+      },
+    },
+    {
+      label: '新建流程图容器',
+      icon: <Workflow className="w-4 h-4" />,
+      action: async () => {
+        await onNewContainerChild({ x, y })
         onClose()
       },
     },

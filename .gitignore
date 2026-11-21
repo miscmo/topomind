@@ -13,6 +13,8 @@ test-results/
 graphify-out/
 stats.html
 /.workbuddy
+# Excalidraw 字体/语言包是依赖自带产物（约 15MB），由 predev / build 自动同步，不入库
+/public/excalidraw-assets/
 /build-validation*
 /outputs
 /build-document*

@@ -379,6 +379,9 @@ export function useGraphCanvasModel({
 
   useShortcut(['Control+f', 'Meta+f'], (event) => {
     if (activeTabId !== tabId) return
+    // global 快捷键在 window 捕获阶段执行，比容器 onKeyDownCapture 更早，
+    // 只能在回调里自行让位给活跃容器，否则白板内查找会被外层节点搜索截走。
+    if (document.querySelector('[data-tm-container-surface="active"]')) return
     event.preventDefault()
     setIsSearchOpen(true)
     logAction('快捷键:搜索节点', 'GraphCanvas', { source: 'shortcut' })

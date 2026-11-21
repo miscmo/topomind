@@ -138,7 +138,13 @@ export default defineConfig({
             // ← @xyflow/react, which sits in react-vendor.)
             id.includes('use-sync-external-store') ||
             id.includes('/zustand/') ||
-            id.includes('zustand')
+            id.includes('zustand') ||
+            // Excalidraw 0.18 引入的 jotai / jotai-scope 会在模块顶层调用
+            // React.createContext。若按「每包一个 lib-* chunk」拆开，
+            // react-vendor → lib-jotai → react-vendor 形成跨 chunk 循环 init，
+            // 生产构建会白屏（Cannot read properties of undefined (reading 'createContext')）。
+            id.includes('/jotai/') ||
+            id.includes('/jotai-scope/')
           ) {
             return 'react-vendor'
           }

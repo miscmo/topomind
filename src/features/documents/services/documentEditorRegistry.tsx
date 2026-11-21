@@ -6,12 +6,10 @@ import { normalizeSmartDocumentContent } from '../SmartDocumentEditor/smartDocum
 import type { BlockNoteBlock, SmartDocumentContent } from '../SmartDocumentEditor/smartDocumentTypes'
 import { canDeriveAttachmentRefFromUrl, getAttachmentFileNameFromRef, getAttachmentRefFromBlockProps, normalizeAttachmentRef } from '../SmartDocumentEditor/attachmentPath'
 import { normalizeMindMapDocumentContent } from '../MindMapDocumentEditor/mindMapDocumentTypes'
-import { normalizeFlowchartDocumentContent } from '../FlowchartDocumentEditor/flowchartDocumentTypes'
 import { useStorage } from '../../../core/storage'
 
 const SmartDocumentEditor = lazy(() => import('../SmartDocumentEditor/SmartDocumentEditor').then(m => ({ default: m.SmartDocumentEditor })))
 const MindMapDocumentEditor = lazy(() => import('../MindMapDocumentEditor/MindMapDocumentEditor').then(m => ({ default: m.MindMapDocumentEditor })))
-const FlowchartDocumentEditor = lazy(() => import('../FlowchartDocumentEditor/FlowchartDocumentEditor').then(m => ({ default: m.FlowchartDocumentEditor })))
 
 function parseJsonValue(value: unknown) {
   if (value && typeof value === 'object') return value
@@ -392,26 +390,9 @@ function MindMapDocumentAdapter({ value, title, onChange, onTocChange, onTocItem
   )
 }
 
-function FlowchartDocumentAdapter({ value, title, onChange, onTocChange, onTocItemClickReady, onWordCountChange, attachmentInsertTargetKey }: DocumentEditorAdapterProps) {
-  const { objectValue, handleChange } = useStructuredDocumentValue(value, title, normalizeFlowchartDocumentContent, onChange)
-  const documentInstanceKey = attachmentInsertTargetKey || title
-
-  React.useEffect(() => {
-    onTocChange([])
-    onTocItemClickReady(null)
-    onWordCountChange(null)
-  }, [onTocChange, onTocItemClickReady, onWordCountChange])
-
-  return (
-    <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-muted-foreground">加载编辑器...</div>}>
-      <ErrorBoundary label="流程图编辑器" resetKeys={[documentInstanceKey]}>
-        <FlowchartDocumentEditor key={documentInstanceKey} value={objectValue} onChange={handleChange} />
-      </ErrorBoundary>
-    </Suspense>
-  )
-}
-
-export const DOCUMENT_EDITOR_REGISTRY: Record<TopoDocumentType, DocumentEditorTypeAdapter> = {
+// container-only 载荷（excalidraw）与已退场的 compat 类型（flowchart）没有右栏编辑器，
+// 因此用 Partial：查找失败由 DocumentEditorHost 显示「已下线」占位，不再直接崩。
+export const DOCUMENT_EDITOR_REGISTRY: Partial<Record<TopoDocumentType, DocumentEditorTypeAdapter>> = {
   smart: {
     type: 'smart',
     render: (props) => <SmartDocumentAdapter {...props} />,
@@ -422,12 +403,8 @@ export const DOCUMENT_EDITOR_REGISTRY: Record<TopoDocumentType, DocumentEditorTy
     type: 'mindmap',
     render: (props) => <MindMapDocumentAdapter {...props} />,
   },
-  flowchart: {
-    type: 'flowchart',
-    render: (props) => <FlowchartDocumentAdapter {...props} />,
-  },
 }
 
-export function getDocumentEditorAdapter(type: TopoDocumentType): DocumentEditorTypeAdapter {
+export function getDocumentEditorAdapter(type: TopoDocumentType): DocumentEditorTypeAdapter | undefined {
   return DOCUMENT_EDITOR_REGISTRY[type]
 }

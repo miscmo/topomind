@@ -5,6 +5,10 @@
 // @blocknote/react 在自身模块加载时就把 defaultBlockSpecs 的 propSchema 捕获进渲染闭包，
 // 若注入晚于它，core 会写入 lastModified 而渲染层不认识 → 渲染崩溃。
 import './features/documents/SmartDocumentEditor/patchBlockSpecs'
+// Excalidraw 在**子组件渲染时**就构造 FontFace 并固化 URL 列表（自托管 + esm.sh fallback）。
+// 放在容器组件的 useEffect 会晚于子 effect，导致动态字体全部回落 CDN、离线缺字。
+// 这里在主 chunk 模块体同步设置，保证 lazy editor chunk 加载前 window 变量已就绪。
+import { ensureExcalidrawAssets } from './features/graph/GraphCanvas/containers/excalidrawAssets'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
@@ -23,6 +27,8 @@ import './styles/base.css'
 import './styles/tokens.css'
 
 const container = document.getElementById('root')!
+// 必须早于任何 React 渲染 / lazy chunk 加载：见文件头 import 处的说明。
+ensureExcalidrawAssets()
 const root = createRoot(container)
 useThemeStore.getState().initializeTheme()
 bootstrapCommandRegistry()

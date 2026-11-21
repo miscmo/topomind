@@ -47,6 +47,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
   const [contextMenu, setContextMenu] = useState<PageContextMenuState>(CLOSED_MENU)
   const {
     handleNewChild,
+    handleNewContainerChild,
     handleEnterNode,
     handleDelete,
     handleEdgeDelete,
@@ -172,6 +173,11 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
     handleNewChild(flowPosition)
   }, [handleNewChild, screenToFlowPosition])
 
+  const handleContextMenuNewContainerChild = useCallback((position?: { x: number; y: number }) => {
+    const flowPosition = position ? screenToFlowPosition(position) : undefined
+    void handleNewContainerChild(flowPosition)
+  }, [handleNewContainerChild, screenToFlowPosition])
+
   const handleCanvasEdgeContextMenu = useCallback((edgeId: string, event: React.MouseEvent) => {
     openEdgeMenu(edgeId, event)
   }, [openEdgeMenu])
@@ -197,6 +203,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
       targetInSelection: contextMenu.targetInSelection,
       selectionMenu: contextMenu.selectionMenu,
       onNewChild: handleContextMenuNewChild,
+      onNewContainerChild: handleContextMenuNewContainerChild,
       onEnterNode: handleEnterNode,
       onSelectSubtree: (nodeId: string) => {
         // 右键指定了明确的根：即使画布当前选中了别的节点，也只选中这一棵子树。

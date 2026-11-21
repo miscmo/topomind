@@ -3,7 +3,7 @@ import { DocumentWorkspaceLayout } from './components/Layout/DocumentWorkspaceLa
 import type { DetailSidebarTab, TocItem } from './types/workspaceTypes'
 import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
 import { topoDocumentIdFromPath } from './types/documentTypes'
-import { getTopoDocumentTypeDefinition, TOPO_DOCUMENT_TYPES } from './services/documentTypeRegistry'
+import { getTopoDocumentTypeDefinition, getPanelDocumentTypes } from './services/documentTypeRegistry'
 import { getDocumentEditorAdapter } from './services/documentEditorRegistry'
 import { DocumentStatusBar } from './components/Layout/DocumentStatusBar'
 import { useGraphStoreApi } from '../../stores/graphStore'
@@ -99,10 +99,10 @@ export function DocumentEditorHost({
               className="max-w-[380px]"
               icon={<FilePlus className="h-6 w-6" />}
               title="当前节点还没有文档"
-              description="创建一个智能文档开始记录，也可以新建思维导图或流程图。"
+              description="创建一个智能文档开始记录，也可以新建思维导图。"
               action={
                 <>
-                {TOPO_DOCUMENT_TYPES.map((type, index) => {
+                {getPanelDocumentTypes().map((type, index) => {
                   const definition = getTopoDocumentTypeDefinition(type)
                   return (
                     <button
@@ -136,25 +136,39 @@ export function DocumentEditorHost({
     )
   }
 
+  // 旧档 / 旧链接仍可能指向已退场的 flowchart 或 container-only 载荷。
+  // 这两类都没有右栏 adapter，必须显式给占位，不能让 render() 打到 undefined。
   const adapter = getDocumentEditorAdapter(activeTopoDocument.type)
   const loadingContent = (
     <div className="h-full min-h-0 flex items-center justify-center bg-[var(--color-surface)] p-6">
       <div className="text-[13px] text-[var(--color-text-muted)]">正在加载文档内容...</div>
     </div>
   )
-  const editorContent = !isContentLoaded ? loadingContent : adapter.render({
-    value,
-    title: activeTopoDocument.title,
-    onChange,
-    attachmentCardPath,
-    attachmentInsertTargetKey: activeDetailDocumentPath,
-    onTocChange: setSmartTocItems,
-    onTocItemClickReady: handleSmartTocItemClickReady,
-    onTocActiveChange: setSmartActiveTocId,
-    onWordCountChange: setDocumentStats,
-    onBlockLastModifiedChange: setBlockLastModified,
-    onOpenDocumentByDocId,
-  })
+  const retiredContent = (
+    <div className="h-full min-h-0 flex flex-col items-center justify-center gap-2 bg-[var(--color-surface)] p-6 text-center">
+      <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">该文档类型已下线或仅属于画布容器</div>
+      <div className="max-w-[420px] text-[12px] leading-5 text-[var(--color-text-muted)]">
+        文件仍保留在节点目录中，未被删除或转换；右栏不再提供编辑与重建入口。
+      </div>
+    </div>
+  )
+  const editorContent = !adapter
+    ? retiredContent
+    : !isContentLoaded
+      ? loadingContent
+      : adapter.render({
+          value,
+          title: activeTopoDocument.title,
+          onChange,
+          attachmentCardPath,
+          attachmentInsertTargetKey: activeDetailDocumentPath,
+          onTocChange: setSmartTocItems,
+          onTocItemClickReady: handleSmartTocItemClickReady,
+          onTocActiveChange: setSmartActiveTocId,
+          onWordCountChange: setDocumentStats,
+          onBlockLastModifiedChange: setBlockLastModified,
+          onOpenDocumentByDocId,
+        })
 
   return (
     <DocumentWorkspaceLayout
@@ -173,14 +187,14 @@ export function DocumentEditorHost({
       activeDetailDocumentPath={activeDetailDocumentPath}
       detailSidebarTab={detailSidebarTab}
       onDetailSidebarTabChange={onDetailSidebarTabChange}
-      tocItems={adapter.hasToc ? smartTocItems : undefined}
-      onTocItemClick={adapter.hasToc ? smartTocItemClick ?? undefined : undefined}
-      activeTocId={adapter.hasToc ? smartActiveTocId : undefined}
+      tocItems={adapter?.hasToc ? smartTocItems : undefined}
+      onTocItemClick={adapter?.hasToc ? smartTocItemClick ?? undefined : undefined}
+      activeTocId={adapter?.hasToc ? smartActiveTocId : undefined}
       editorContent={editorContent}
       renderStatusBar={({ saveStatus, lastSavedAt, saveError }) => (
         <DocumentStatusBar
-          stats={adapter.hasStats ? documentStats : null}
-          blockLastModified={adapter.hasStats ? blockLastModified : null}
+          stats={adapter?.hasStats ? documentStats : null}
+          blockLastModified={adapter?.hasStats ? blockLastModified : null}
           saveStatus={saveStatus}
           saveError={saveError}
           lastSavedAt={lastSavedAt}
