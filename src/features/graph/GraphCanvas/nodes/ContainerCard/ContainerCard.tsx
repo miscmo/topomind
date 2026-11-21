@@ -1,16 +1,25 @@
 /**
- * 容器节点（v1.4）：关系树上的普通节点，**只读预览**，永远不挂载编辑器。
+ * 容器节点（v1.5）：关系树上的普通节点，**只读预览**，永远不挂载编辑器。
  *
  * 双击只把会话写进 activeContainerStore，由 ContainerFullscreenEditorHost 在
  * document.body 上开全屏编辑器；宿主落盘后 bump revision，本节点据此重读一次
  * 磁盘并重建 SVG 预览。编辑与画布缩放彻底解耦，也不再受 React Flow transform
  * 影响 Excalidraw 的指针坐标。
+ *
+ * v1.5：节点边框可拖拽调整尺寸。刻意拆成两层壳——
+ *   - 锚点壳 overflow-visible：NodeResizer 的 8 个手柄画在边框外侧，
+ *     若沿用单层 overflow-hidden，手柄会被直接裁掉（KnowledgeCard 同理用 overflow-visible）；
+ *   - 视觉壳 overflow-hidden：只负责圆角、边框与 SVG 预览裁切。
+ * 尺寸链路完全复用既有 NodeResizer → onNodesChange(dimensions) → applyNodeDimensionChanges
+ * → buildMetaFromNodesEdges → _graph.json，不新增任何持久化字段。
  */
 import { memo, useEffect, useMemo, useState } from 'react'
-import { Handle, Position, type NodeProps, useStore } from '@xyflow/react'
+import { Handle, NodeResizer, Position, type NodeProps, useStore } from '@xyflow/react'
 import type { KnowledgeNode } from '../../../../../types'
 import { useStorage } from '../../../../../core/storage'
 import { tabStore } from '../../../../../stores/tabs/tabStore'
+import { useActiveCanvasReadOnly } from '../../../../../stores/canvasReadOnlyStore'
+import { useGraphUiStore } from '../../../../../stores/graphUiStore'
 import { resolveRoomChildRef } from '../../../../../domain/graph/path-utils'
 import { toDisplayPercent } from '../../../../../domain/graph/zoomScale'
 import { useGraphContext } from '../../../../../contexts/GraphContext'
@@ -39,6 +48,11 @@ function ContainerCard({ id, data, selected }: NodeProps<KnowledgeNode>) {
   const session = useActiveContainerStore((state) => state.session)
   const revision = useActiveContainerStore((state) => state.revision)
   const activate = useActiveContainerStore((state) => state.activate)
+  // 只读闸门只影响「布局写操作」（拖节点 / 拉连线 / resize），不碰容器内容编辑：
+  // 全屏宿主独立读写，缩小画布或大房间 LOD 隐藏节点时仍可双击进编辑器。
+  const canvasReadOnly = useActiveCanvasReadOnly()
+  const nodeSizeLimits = useGraphUiStore((state) => state.nodeSizeLimits)
+  const [hovered, setHovered] = useState(false)
 
   const [loaded, setLoaded] = useState<{ key: string; value: unknown } | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -72,13 +86,21 @@ function ContainerCard({ id, data, selected }: NodeProps<KnowledgeNode>) {
   }, [docKey, cardPath, containerRef?.documentId, spec, storage, title, revision, isEditingThis])
 
   const Preview = renderer?.Preview
+  // 与 KnowledgeCard 一致：只读期不挂手柄，避免出现「拖了却不动」；
+  // 全屏会话中节点被覆盖层挡住，也没必要保留手柄。
+  const showResizeHandles = !canvasReadOnly && !isEditingThis && (hovered || !!selected)
 
   return (
     <div
       data-tm-container-card={id}
       data-tm-container-active={isEditingThis ? 'true' : 'false'}
+      data-tm-container-resizable={showResizeHandles ? 'true' : 'false'}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
       onPointerDownCapture={() => graph.selectNode(id)}
       onDoubleClick={(event) => {
+        // 拖完边框松手时的双击余波落在手柄上，不能误开全屏编辑器。
+        if ((event.target as Element | null)?.closest?.('.react-flow__resize-control')) return
         event.stopPropagation()
         if (!containerRef || !renderer) return
         activate({
@@ -90,39 +112,56 @@ function ContainerCard({ id, data, selected }: NodeProps<KnowledgeNode>) {
           title,
         })
       }}
-      className={`relative flex h-full w-full flex-col overflow-hidden rounded-lg border bg-[var(--color-surface)] ${
-        selected ? 'border-[var(--color-accent)]' : 'border-[var(--color-border)]'
-      }`}
-      title="双击进入全屏编辑（节点仅显示预览）"
+      className="relative h-full w-full overflow-visible"
+      title="双击进入全屏编辑（节点仅显示预览）；拖拽边框可调整节点大小"
     >
       <Handle type="target" position={Position.Left} className="w-0 h-0 border-none opacity-0" isConnectable={false} />
       <Handle type="source" position={Position.Right} className="w-0 h-0 border-none opacity-0" />
-      <div className="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-2 text-[11px] font-semibold text-[var(--color-text-primary)]">
-        <span className="truncate">{title}</span>
-        {isEditingThis && (
-          <span className="shrink-0 rounded bg-[var(--color-hover-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-muted)]">
-            全屏编辑中
-          </span>
-        )}
-      </div>
-      <div className="relative min-h-0 flex-1">
-        {!renderer || !spec || !containerRef ? (
-          <ContainerMessage text={`未知容器类型：${containerRef?.type ?? '未配置'}（原始数据已保留）`} />
-        ) : loadError ? (
-          <ContainerMessage text="载荷读取失败或版本不受支持，原始文件已保留" />
-        ) : content === undefined ? (
-          <ContainerMessage text="正在加载容器内容..." />
-        ) : Preview ? (
-          <Preview
-            nodeId={id}
-            documentId={containerRef.documentId}
-            content={content}
-            title={title}
-            visible={displayPercent >= PREVIEW_MIN_DISPLAY_PERCENT}
-          />
-        ) : (
-          <ContainerMessage text="容器缺少预览渲染器" />
-        )}
+
+      {showResizeHandles && (
+        <NodeResizer
+          isVisible
+          minWidth={nodeSizeLimits.minWidth}
+          minHeight={nodeSizeLimits.minHeight}
+          maxWidth={nodeSizeLimits.maxWidth}
+          maxHeight={nodeSizeLimits.maxHeight}
+          handleClassName="w-2 h-2 bg-[var(--color-surface)] border-[1.5px] border-[var(--color-accent)] rounded-sm shadow-sm z-30"
+          lineClassName="border-transparent z-20"
+        />
+      )}
+
+      <div
+        className={`absolute inset-0 flex flex-col overflow-hidden rounded-lg border bg-[var(--color-surface)] ${
+          selected ? 'border-[var(--color-accent)]' : 'border-[var(--color-border)]'
+        }`}
+      >
+        <div className="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-2 text-[11px] font-semibold text-[var(--color-text-primary)]">
+          <span className="truncate">{title}</span>
+          {isEditingThis && (
+            <span className="shrink-0 rounded bg-[var(--color-hover-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-muted)]">
+              全屏编辑中
+            </span>
+          )}
+        </div>
+        <div className="relative min-h-0 flex-1">
+          {!renderer || !spec || !containerRef ? (
+            <ContainerMessage text={`未知容器类型：${containerRef?.type ?? '未配置'}（原始数据已保留）`} />
+          ) : loadError ? (
+            <ContainerMessage text="载荷读取失败或版本不受支持，原始文件已保留" />
+          ) : content === undefined ? (
+            <ContainerMessage text="正在加载容器内容..." />
+          ) : Preview ? (
+            <Preview
+              nodeId={id}
+              documentId={containerRef.documentId}
+              content={content}
+              title={title}
+              visible={displayPercent >= PREVIEW_MIN_DISPLAY_PERCENT}
+            />
+          ) : (
+            <ContainerMessage text="容器缺少预览渲染器" />
+          )}
+        </div>
       </div>
     </div>
   )

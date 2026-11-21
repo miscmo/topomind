@@ -304,7 +304,7 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     canvasSrc, registerSrc, cardSrc, editorSrc, assetsSrc, builderSrc,
     menuSrc, actionsSrc, modelSrc, pkgSrc, viteSrc,
     syncSrc, buildEntrySrc, gitignoreSrc, mainSrc,
-    hostSrc, graphPageSrc, storeSrc,
+    hostSrc, graphPageSrc, storeSrc, previewSrc,
   ] = await Promise.all([
     readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8'),
     readFile(new URL('../src/features/graph/GraphCanvas/containers/registerContainers.tsx', import.meta.url), 'utf-8'),
@@ -324,6 +324,7 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     readFile(new URL('../src/features/graph/GraphCanvas/containers/ContainerFullscreenEditorHost.tsx', import.meta.url), 'utf-8'),
     readFile(new URL('../src/features/graph/GraphPage/GraphPage.tsx', import.meta.url), 'utf-8'),
     readFile(new URL('../src/features/graph/GraphCanvas/containers/activeContainerStore.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphCanvas/containers/ContainerSvgPreview.tsx', import.meta.url), 'utf-8'),
   ])
   assert.ok(viteSrc.includes("id.includes('/jotai/')")
     && viteSrc.includes("id.includes('/jotai-scope/')")
@@ -382,6 +383,21 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && !cardSrc.includes('zoom >= 1')
     && !canvasSrc.includes('zoomLevel < 1'),
   '【P4-v1.4】预览 LOD 仍按显示百分比；编辑入口与缩放彻底解耦，禁止裸 zoom 比较')
+  // ---- v1.5：节点边框可拖拽 resize，SVG 预览按节点内容区实测尺寸等比适配 ----
+  assert.ok(cardSrc.includes('<NodeResizer')
+    && cardSrc.includes('overflow-visible')
+    && cardSrc.includes('overflow-hidden')
+    && cardSrc.includes('useActiveCanvasReadOnly()')
+    && cardSrc.includes('closest') && cardSrc.includes('.react-flow__resize-control')
+    && cardSrc.includes('nodeSizeLimits'),
+  '【P4-v1.5】容器必须可拖拽边框：双层壳不裁手柄、遵守画布只读、双击不被手柄误触发、尺寸上限同源')
+  assert.ok(previewSrc.includes('ResizeObserver')
+    && previewSrc.includes('preserveAspectRatio')
+    && previewSrc.includes('xMidYMid meet')
+    && previewSrc.includes('data-tm-container-preview-fit="node"')
+    && previewSrc.includes('syncSvgSize')
+    && previewSrc.includes("removeAttribute('width')"),
+  '【P4-v1.5】SVG 预览必须去掉固定尺寸、按内容区实测尺寸等比适配并随 resize 实时同步')
   assert.ok(modelSrc.includes('data-tm-container-surface="active"'),
     '【P4】全局捕获阶段的 Ctrl+F 必须自行让位给活跃容器')
   assert.ok(assetsSrc.includes('document.baseURI') && assetsSrc.includes('EXCALIDRAW_ASSET_PATH'),

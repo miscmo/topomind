@@ -1,11 +1,12 @@
 # TopoMind 容器节点 + Excalidraw 技术方案
 
-- 版本：v1.4
-- 日期：2026-11-21（v1.4 全屏编辑改造）
-- 状态：已实现；v1.3 实现清单见 §13，v1.4 全屏改造见 §14
+- 版本：v1.5
+- 日期：2026-11-21（v1.5 节点尺寸可拖拽 + 预览自适应）
+- 状态：已实现；v1.3 实现清单见 §13，v1.4 全屏改造见 §14，v1.5 尺寸改造见 §15
 - 交接对象：实现 agent
 - 本文只描述技术方案，不含实现代码
-- 口径优先级：**§14「全屏编辑改造」覆盖 §6.2 / §6.4 / §12 中一切「节点内编辑」口径**。
+- 口径优先级：**§14「全屏编辑改造」覆盖 §6.2 / §6.4 / §12 中一切「节点内编辑」口径；
+  §15「尺寸可拖拽」覆盖 §6 中「容器节点固定 360×240 / 单层卡片壳」口径**。
   §12 是 v1.3 阶段逐条核对源码后的最终口径，其中两态模型、编辑缩放门槛、
   节点内事件仲裁、失活策略等条款已被 v1.4 取代；其余（数据协议、X6 退场、
   资源自托管、只读解耦的大原则）继续有效。v1.0 中已被推翻的结论仍在 §12 逐条列出。
@@ -822,3 +823,87 @@ GUI 冒烟的关键实测数据（1400×900 视口）：
 构建注记：`vite` 默认 `emptyOutDir` 会一次删除 345 个旧产物，被宿主 safe-delete 守卫
 （`SAFE_DELETE_BULK_CONFIRM_REQUIRED`）拦截。这与代码无关，处理方式是先 `mv dist` 移走旧产物、
 留空 `dist/` 目录再构建，之后清理备份；`scripts/build.mjs` 本身不做递归删除，无需改动。
+
+---
+
+## 15. v1.5：容器节点尺寸可拖拽 + 预览自适应（2026-11-21）
+
+### 15.1 诉求与根因
+
+v1.4 把容器节点固定为 360×240（`handleNewContainerChild` 写死值），卡片根节点是单层
+`overflow-hidden`。用户需要像普通知识卡片一样拖边框改尺寸，且预览要跟着节点一起变大变小。
+两个问题必须同时解决：
+
+1. **手柄会被裁掉**：`NodeResizer` 的 8 个控制点画在节点边框外侧，单层 `overflow-hidden`
+   根节点会把手柄全部裁掉。`KnowledgeCard` 一直用「`overflow-visible` 锚点壳 +
+   内层 `overflow-hidden` 视觉壳」，正是这个原因。
+2. **预览没有显式适配契约**：`exportToSvg` 返回的是「场景边界」尺寸（带固定
+   `width`/`height` 属性），v1.4 只靠 CSS `width:100%;height:100%` 隐式拉伸。节点尺寸变化时
+   虽能跟随，但无法验证「SVG 渲染框是否真的等于内容区」，也没有处理缺 `viewBox` 的导出、
+   以及宽高比差异大时的留白底色。
+
+### 15.2 改动口径
+
+| 项 | v1.4 | v1.5 |
+| --- | --- | --- |
+| 容器根节点 | 单层 `overflow-hidden` | 锚点壳 `overflow-visible` + 视觉壳 `absolute inset-0 overflow-hidden` |
+| 尺寸调整 | 无（写死 360×240） | `NodeResizer`，上下限取 `graphUiStore.nodeSizeLimits`（默认 120×52 ~ 640×480） |
+| 手柄显示 | — | hover 或 selected，且画布可写、无全屏会话 |
+| 双击 | 任意位置都进全屏 | 落在 `.react-flow__resize-control` 上时不进（拖完边框的双击余波） |
+| 预览 SVG | 固定 `width`/`height` + CSS 100% | 去掉固定尺寸、补 `viewBox` 兜底、`xMidYMid meet` 等比缩放、`ResizeObserver` 回写实测像素 |
+| 预览底色 | 透明，留白露出卡片底色 | 用 `scene.appState.viewBackgroundColor` 填充内容区 |
+
+**落盘零变更**：尺寸链路完整复用既有
+`NodeResizer → onNodesChange('dimensions') → applyNodeDimensionChanges → saveLater →
+buildMetaFromNodesEdges → roomGraphToGraphMeta → convertGraphToFSB → _graph.json`。
+`width / height / expanded / expandedWidth / expandedHeight` 本来就在节点字段白名单里，
+容器无需新增字段，也不需要数据迁移或改创建入口。
+
+**只读边界**：resize 是「画布布局写操作」，与 `canvasReadOnly` 保持一致地受闸门约束
+（缩小镜头 / 大房间有隐藏节点时不挂手柄，避免「拖了却不动」；
+`filterReadOnlyNodeChanges` 另会拦掉 `resizing:true` 的 change 作双保险）。
+**容器内容编辑不受影响**：全屏宿主独立读写，任何缩放下双击都能进编辑器——
+这是 §12「只读解耦」原则的延续，不是回退。
+
+### 15.3 预览适配的实现约束
+
+- SVG 只改布局，不碰 `viewBox` / `defs` / 字体 / 背景矩形；缺 `viewBox` 时从原
+  `width`/`height` 构造等价 `viewBox`，避免某些导出版本把内容裁成左上角一小块。
+- `preserveAspectRatio="xMidYMid meet"` = 整幅白板完整可见、等比缩放、居中、不裁切；
+  节点宽高比与场景差异大时的留白由场景底色填充，看起来是白板而不是空洞。
+- `ResizeObserver` 观测 holder，把 `clientWidth/clientHeight` 回写到 SVG 的
+  `width`/`height` 属性并更新 `data-tm-container-preview-size`。SVG 仍按 scene version
+  缓存，**拖拽时绝不重新导出**——这是逐帧 resize 不卡的前提。
+- holder 只在「可见 + 载荷正常 + 有元素 + 导出成功」分支渲染，因此 ResizeObserver 的
+  effect 依赖必须带齐这些条件，否则 holder 换 DOM 后观察器会挂在旧节点上。
+
+### 15.4 门禁同步
+
+- `verify-critical-regressions.mts`：新增两条 P4-v1.5 静态锁（NodeResizer + 双层壳 +
+  只读闸门 + 双击排除；ResizeObserver + viewBox meet + 去固定尺寸 + fit 标记）。
+- `verify-container-gui.mjs`：新增真实鼠标拖右下角手柄、尺寸落盘、SVG 渲染框与内容区
+  严格对齐（屏幕像素与 `clientWidth` 两套口径各验一次）、reload 后尺寸保持等断言。
+
+### 15.5 验证结果（2026-11-21）
+
+| 门禁 | 结果 |
+| --- | --- |
+| `npm run typecheck` | 通过 |
+| `npm run verify:critical` | 通过（`Critical regression checks verified`，新增两条 P4-v1.5 静态锁） |
+| `npm run verify:lint:baseline` | 通过（0 errors / 0 files） |
+| `npm run verify:plugins` | 通过 |
+| `node scripts/verify-multi-select-move.mjs` | 通过 |
+| `git diff --check` | 通过 |
+| `npm run build` | 通过（renderer + `dist-electron/main.js` + `preload.js`） |
+| `npm run verify:container:gui` | **20/20**，`CONTAINER_GUI_VERIFIED`（原 17 项 + resize / 预览适配 / 重开保持 3 项） |
+
+GUI 实测（1400×900 视口，画布 raw zoom 0.65）：
+
+- 真实鼠标从右下角手柄拖 120×90 屏幕像素：内容区由 `233×137` 变为 `352×226`（屏幕像素），
+  `clientWidth/Height` 由 `358×210` 变为 `542×348`（CSS 布局像素）。
+- SVG 渲染框始终与内容区严格相等（`svgW === holderW`、`svgH === holderH`，误差 0），
+  `width`/`height` 属性同步为 `542`/`348`，`data-tm-container-preview-size` 为 `542x348`；
+  `viewBox="0 0 90 70"` + `preserveAspectRatio="xMidYMid meet"` 保证等比不裁切。
+- `_graph.json` 写入 `expandedWidth: 544` / `expandedHeight: 378`（`width: 360` 作为
+  collapsed 基准保留）；reload 重开后内容区仍为 `352×226`、SVG 仍由落盘数据重建并适配。
+- v1.4 全屏编辑链路原有 17 项断言全部继续通过，`pageErrors: []`、自托管字体 200。

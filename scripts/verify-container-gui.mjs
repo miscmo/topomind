@@ -10,7 +10,8 @@
  * 真跑主链路：右键新建流程图容器 → 元数据/载荷落盘 → 双击进入全屏编辑
  *   （节点内零编辑器实例、全屏层脱离画布 transform）→ 字体与语言包离线可用
  *   → 真实鼠标画一个矩形 → 400ms debounce 落盘 → 退出编辑（flush → 卸载实例
- *   → 节点回到 SVG 预览）→ reload 重开房间数据仍在。
+ *   → 节点回到 SVG 预览）→ 真实鼠标拖拽边框调整节点尺寸并验证预览等比适配
+ *   → reload 重开房间，数据与尺寸都仍在。
  * 这几步是静态门禁和 build 都覆盖不到的运行时路径（历史上 jotai 分包就是在这里白屏）。
  */
 import puppeteer from 'puppeteer'
@@ -497,7 +498,100 @@ async function main() {
       JSON.stringify({ before: afterDraw?.payload?.scene?.elements?.length,
         after: savedOnExit?.payload?.scene?.elements?.length }))
 
-    // ---- 6. reload 重开房间 ----
+    // ---- 6. 真实鼠标拖拽边框调整节点尺寸 + 预览按新尺寸等比适配 ----
+    // clientWidth 是 CSS 布局像素，getBoundingClientRect 是屏幕像素（乘了画布 zoom）；
+    // 两者都要验：SVG 属性跟前者对齐，实际渲染框跟后者对齐。
+    const readPreviewBox = (id) => page.evaluate((nodeId) => {
+      const holder = document.querySelector(`[data-tm-container-preview="${nodeId}"]`)
+      const svg = holder?.querySelector('svg')
+      const hr = holder?.getBoundingClientRect()
+      const sr = svg?.getBoundingClientRect()
+      const card = document.querySelector(`[data-tm-container-card="${nodeId}"]`)
+      return {
+        holderW: Math.round(hr?.width ?? 0),
+        holderH: Math.round(hr?.height ?? 0),
+        clientW: holder?.clientWidth ?? 0,
+        clientH: holder?.clientHeight ?? 0,
+        svgW: Math.round(sr?.width ?? 0),
+        svgH: Math.round(sr?.height ?? 0),
+        sizeAttr: holder?.getAttribute('data-tm-container-preview-size') ?? null,
+        fit: holder?.getAttribute('data-tm-container-preview-fit') ?? null,
+        viewBox: svg?.getAttribute('viewBox') ?? null,
+        aspect: svg?.getAttribute('preserveAspectRatio') ?? null,
+        intrinsicW: svg?.getAttribute('width') ?? null,
+        intrinsicH: svg?.getAttribute('height') ?? null,
+        cardOverflow: card ? getComputedStyle(card).overflow : null,
+      }
+    }, id)
+
+    const beforeResize = await readPreviewBox(nodeId)
+    const nodeRect = await page.evaluate((id) => {
+      const r = document.querySelector(`.react-flow__node[data-id="${id}"]`)?.getBoundingClientRect()
+      return r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null
+    }, nodeId)
+    if (nodeRect) {
+      const cx = nodeRect.x + nodeRect.w / 2
+      const cy = nodeRect.y + nodeRect.h / 2
+      await page.mouse.move(cx, cy)
+      await sleep(250)
+      // 选中节点让手柄稳定挂载：拖到边框外时 hover 会消失，selected 不会。
+      await page.mouse.click(cx, cy)
+      await sleep(400)
+    }
+    const resizeHandle = await page.evaluate((id) => {
+      const node = document.querySelector(`.react-flow__node[data-id="${id}"]`)
+      const list = [...(node?.querySelectorAll('.react-flow__resize-control') ?? [])]
+        .map((el) => {
+          const r = el.getBoundingClientRect()
+          return {
+            x: r.x + r.width / 2, y: r.y + r.height / 2,
+            right: r.right, bottom: r.bottom, w: r.width, h: r.height,
+          }
+        })
+        .filter((h) => h.w > 0 && h.h > 0 && h.w <= 24 && h.h <= 24)
+      // 右下角手柄：right + bottom 最大
+      list.sort((a, b) => (b.right + b.bottom) - (a.right + a.bottom))
+      return list[0] ?? null
+    }, nodeId)
+    let dragDone = false
+    if (resizeHandle) {
+      await page.mouse.move(resizeHandle.x, resizeHandle.y)
+      await sleep(150)
+      await page.mouse.down()
+      await sleep(100)
+      await page.mouse.move(resizeHandle.x + 120, resizeHandle.y + 90, { steps: 14 })
+      await sleep(150)
+      await page.mouse.up()
+      dragDone = true
+    }
+    await sleep(1600) // dimensions change → saveLater → IPC 落盘余量
+    const afterResize = await readPreviewBox(nodeId)
+    let diskChild = null
+    for (let i = 0; i < 25; i += 1) {
+      diskChild = readGraph().children?.[nodeId] ?? null
+      if (Math.max(diskChild?.expandedWidth ?? 0, diskChild?.width ?? 0) > 420) break
+      await sleep(300)
+    }
+    const diskWidth = Math.max(diskChild?.expandedWidth ?? 0, diskChild?.width ?? 0)
+    check('真实鼠标拖拽容器边框可调整节点大小并落盘',
+      dragDone && afterResize.holderW > beforeResize.holderW + 55
+      && afterResize.holderH > beforeResize.holderH + 35
+      && diskWidth > 420,
+      JSON.stringify({ dragDone, resizeHandle,
+        before: { w: beforeResize.holderW, h: beforeResize.holderH },
+        after: { w: afterResize.holderW, h: afterResize.holderH },
+        disk: { width: diskChild?.width, expandedWidth: diskChild?.expandedWidth, expanded: diskChild?.expanded } }))
+    check('预览 SVG 随节点尺寸等比适配（撑满内容区 + viewBox meet + 不裁切）',
+      afterResize.fit === 'node' && afterResize.cardOverflow === 'visible'
+      && afterResize.aspect === 'xMidYMid meet' && !!afterResize.viewBox
+      && Math.abs(afterResize.svgW - afterResize.holderW) <= 2
+      && Math.abs(afterResize.svgH - afterResize.holderH) <= 2
+      && afterResize.sizeAttr === `${afterResize.clientW}x${afterResize.clientH}`
+      && afterResize.intrinsicW === String(afterResize.clientW)
+      && afterResize.intrinsicH === String(afterResize.clientH),
+      JSON.stringify({ beforeResize, afterResize }))
+
+    // ---- 7. reload 重开房间 ----
     await page.reload({ waitUntil: 'networkidle2' })
     await sleep(2200)
     await openKnowledgeBase(page)
@@ -510,6 +604,15 @@ async function main() {
       && (afterReload?.payload?.scene?.elements?.length ?? 0) > 0,
       JSON.stringify({ reopened, previewBack,
         elements: afterReload?.payload?.scene?.elements?.length }))
+    const afterReloadBox = await readPreviewBox(nodeId)
+    const reloadedChild = readGraph().children?.[nodeId] ?? null
+    check('重开后节点尺寸与预览适配均保持',
+      Math.abs(afterReloadBox.holderW - afterResize.holderW) <= 12
+      && Math.abs(afterReloadBox.svgW - afterReloadBox.holderW) <= 2
+      && afterReloadBox.fit === 'node'
+      && Math.max(reloadedChild?.expandedWidth ?? 0, reloadedChild?.width ?? 0) > 420,
+      JSON.stringify({ afterResize: { w: afterResize.holderW, h: afterResize.holderH },
+        afterReloadBox, reloadedChild }))
     check('重开后仍无渲染进程异常', pageErrors.length === 0 && selfHostedFailures.length === 0,
       JSON.stringify({ pageErrors: pageErrors.slice(0, 3), selfHostedFailures: selfHostedFailures.slice(0, 3) }))
   } finally {
