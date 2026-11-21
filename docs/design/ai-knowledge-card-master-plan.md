@@ -4,7 +4,7 @@
 - 日期：2026-11-20
 - 状态：方案已定，待分阶段实现
 - 定位：**主需求文档**（贯穿“流程图 → 容器节点 → 自定义节点 → AI 知识卡片”全部讨论）
-- 细分子方案：`docs/design/container-node-excalidraw-design.md`（容器 + Excalidraw 的文件级实现细节）
+- 细分子方案：`docs/design/container-node-excalidraw-design.md` 已升级 **v1.1（2026-11-21）**，合并了源码 fact-check 修正；阶段 1-4 的实现口径以该文档 **§12 修正记录**为最终依据
 - 本文只描述需求、选型与实施步骤，不含实现代码
 
 ---
@@ -194,7 +194,7 @@ interface CardSpec {
 ## 7. 贯穿全局的四条硬约束
 
 1. **单活跃 + 缩略图**：任何时刻最多一个容器挂载编辑器；其余用导出 SVG 或受限组件离屏渲染的预览。失焦、Esc、缩放下降、切房间一律 flush 后卸载回预览。
-2. **事件仲裁**：外层 `onWheelCapture` 对 `[data-tm-container-surface="active"]` 直接 return；内层 `data-shortcut-scope` 隔离快捷键；内部选中不调用 `graphStore.applySelectionChanges`；只读判定复用 `computeCanvasReadOnly`。
+2. **事件仲裁**：活跃容器表面 `onWheelCapture` 用 `stopPropagation()` 阻断事件冒泡到 xyflow 的 d3-zoom（外层 `onWheelCapture` 再加 `[data-tm-container-surface="active"]` 守卫做双保险）；内层 `data-shortcut-scope` 隔离快捷键；内部选中不调用 `graphStore.applySelectionChanges`；**容器内容编辑与 `computeCanvasReadOnly` 解耦**（该闸门是 `!atMaxZoom || hidden > 0`，大房间 LOD 必然 `hidden > 0`，直接复用会导致容器永远不可编辑），它只继续保护外层图结构写操作。
 3. **生命周期零改造**：跨房间移动/撤销/删除/导入导出复用现有目录搬运；原地刷新一律 `graph.refreshCurrentRoom()`，禁止传源/目标路径调 `loadRoom`；关闭走 `flushAllTabs`。
 4. **安全与回滚**：CardSpec 与 Excalidraw 载荷内禁止绝对路径与可执行脚本；所有 AI 写入走既有 store 写入口，保证可撤销；未知 schema version 抛错且不回写。
 
@@ -235,7 +235,9 @@ verify:linked:gui
 
 ## 10. 交接说明
 
-- **实现 agent 请先读** `docs/design/container-node-excalidraw-design.md`：它包含阶段 1-4 的文件级改动清单、schema、扩展名表、断言文件行号与 GUI 清单。
+- **实现 agent 请先读** `docs/design/container-node-excalidraw-design.md` **v1.1 的 §12 修正记录**：
+  v1.0 的事实基线（白名单处数、扩展名表处数、旧 flowchart 条目保留方式、`DocumentEditorHost` 判空、
+  `:2550` 断言、复制节点）已被逐条修正；阶段 1-4 以修正后的口径实现。
 - **本文是主需求文档**：阶段 5-8 的 CardSpec、AI 生成、设计器、HTML 逃生舱以本文的第 4、5、6 节为准。
 - 每阶段结束按第 8 节门禁验收后再进入下一阶段；不要把阶段 2（删 X6）和阶段 4（接 Excalidraw）合成一次提交，以便回滚。
 - 用户原始诉求中的“画布上画流程图”“节点可放任意组件”“AI 自己写卡片”，分别由阶段 4、阶段 5/8、阶段 6/7 交付；三者共用同一套容器与 CardSpec 模型。
