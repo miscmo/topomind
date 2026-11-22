@@ -1,6 +1,6 @@
 import { memo, useMemo, useRef, useEffect, useState, useCallback, useId, type CSSProperties, type WheelEvent as ReactWheelEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, ChevronUp, Copy, Link2, WrapText, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Copy, Link2, Paperclip, WrapText, X } from 'lucide-react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { FormattingToolbarController, SideMenuController, SuggestionMenuController, getDefaultReactSlashMenuItems, type DefaultReactSuggestionItem } from '@blocknote/react'
 import { getMultiColumnSlashMenuItems } from '@blocknote/xl-multi-column'
@@ -33,8 +33,7 @@ import type { FSBDocumentCandidate } from '../../../core/fs-backend'
 import { getEditorTopInset } from './smartDocumentUtils'
 import { buildHeadingNumberStyles, isSameHeadingNumbering } from './headingNumbering'
 import { buildEditorLayoutVars, normalizeEditorLayout } from './editorLayout'
-import { useStorage } from '../../../core/storage'
-import { getAttachmentRefFromBlockProps } from './attachmentPath'
+import { getAttachmentFileNameFromRef, getAttachmentRefFromBlockProps } from './attachmentPath'
 
 import 'katex/dist/katex.min.css'
 import '@blocknote/mantine/style.css'
@@ -56,11 +55,14 @@ type ImagePreviewState = {
   alt: string
 }
 
-/** 附件引用路径浮层：hover 图片/附件块时锚定显示，不进 ProseMirror DOM。 */
+/**
+ * 附件文件名 tooltip：hover 图片/附件块停稳后锚定显示，纯信息、不可交互，
+ * portal 到 body 不进 ProseMirror DOM。附件默认都在当前节点目录内，引用里的
+ * 目录段对用户没有意义，因此只保留文件名。
+ */
 type AttachmentPathMenuState = {
   blockId: string
-  attachmentRef: string
-  absoluteUrl: string | null
+  fileName: string
   top: number
   left: number
 }
@@ -248,21 +250,16 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   const [linkMenu, setLinkMenu] = useState<{ href: string; top: number; left: number } | null>(null)
   const linkMenuRef = useRef<HTMLDivElement>(null)
   const lastLinkMenuOpenRef = useRef<{ t: number; href: string } | null>(null)
-  // 附件引用路径浮层：hover 图片/附件块弹出。ref 与 state 同步，供 DOM 事件回调
-  // 读取当前浮层归属（事件监听只注册一次，不能依赖闭包里的 state）。
+  // 附件文件名 tooltip：hover 图片/附件块停稳后弹出。ref 与 state 同步，供 DOM
+  // 事件回调读取当前归属（事件监听只注册一次，不能依赖闭包里的 state）。
   const [attachmentPathMenu, setAttachmentPathMenu] = useState<AttachmentPathMenuState | null>(null)
   const attachmentPathMenuRef = useRef<AttachmentPathMenuState | null>(null)
   attachmentPathMenuRef.current = attachmentPathMenu
-  const attachmentPathCloseTimerRef = useRef<number | null>(null)
-  // hover-intent：鼠标停在图片/附件块上一小会儿才弹路径浮层，划过不弹。
+  // hover-intent：鼠标停在图片/附件块上一小会儿才弹提示，划过不弹。
   const attachmentPathOpenTimerRef = useRef<number | null>(null)
   const pendingAttachmentBlockRef = useRef<string | null>(null)
   // 定时器回调经 ref 取最新的 open 函数，避免与 schedule 的定义顺序/依赖循环。
   const openAttachmentPathMenuRef = useRef<(container: HTMLElement, blockId: string) => void>(() => {})
-  const attachmentPathRequestRef = useRef(0)
-  const [attachmentPathCopied, setAttachmentPathCopied] = useState(false)
-  const attachmentPathCopyTimerRef = useRef<number | null>(null)
-  const storage = useStorage()
   // 文档双链：由 `[[` InputRule / 斜杠菜单打开的浮层请求（模块级桥只负责传一次性请求）。
   const [docLinkPicker, setDocLinkPicker] = useState<DocumentLinkPickerRequest | null>(null)
   const onOpenDocumentByDocIdRef = useRef(props.onOpenDocumentByDocId)
@@ -349,13 +346,6 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     return () => setEditorLinkClickHandler(null)
   }, [openLinkMenu])
 
-  const cancelAttachmentPathClose = useCallback(() => {
-    if (attachmentPathCloseTimerRef.current !== null) {
-      window.clearTimeout(attachmentPathCloseTimerRef.current)
-      attachmentPathCloseTimerRef.current = null
-    }
-  }, [])
-
   const cancelAttachmentPathOpen = useCallback(() => {
     if (attachmentPathOpenTimerRef.current !== null) {
       window.clearTimeout(attachmentPathOpenTimerRef.current)
@@ -364,25 +354,12 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     pendingAttachmentBlockRef.current = null
   }, [])
 
+  // 纯展示 tooltip：鼠标移开（或滚动/Escape/按下鼠标）立即隐藏，不做延迟保活，
+  // 也不需要浮层内 mousedown 白名单——pointer-events:none 让鼠标事件直接穿透。
   const closeAttachmentPathMenu = useCallback(() => {
-    cancelAttachmentPathClose()
     cancelAttachmentPathOpen()
-    // 让在途的绝对路径请求失效，防止慢响应写回已经关闭/切换的浮层。
-    attachmentPathRequestRef.current += 1
     setAttachmentPathMenu(null)
-    setAttachmentPathCopied(false)
-  }, [cancelAttachmentPathClose, cancelAttachmentPathOpen])
-
-  const scheduleAttachmentPathClose = useCallback(() => {
-    cancelAttachmentPathOpen()
-    cancelAttachmentPathClose()
-    attachmentPathCloseTimerRef.current = window.setTimeout(() => {
-      attachmentPathCloseTimerRef.current = null
-      attachmentPathRequestRef.current += 1
-      setAttachmentPathMenu(null)
-      setAttachmentPathCopied(false)
-    }, 180)
-  }, [cancelAttachmentPathClose, cancelAttachmentPathOpen])
+  }, [cancelAttachmentPathOpen])
 
   // hover-intent：定时器回调才真正打开。若期间鼠标已移走 / 切到别的块，
   // pending 会被清空，这里据此放弃，避免“划过也弹”和弹到已离开的块上。
@@ -407,54 +384,26 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     const name = typeof props.name === 'string' ? props.name : null
     const attachmentRef = getAttachmentRefFromBlockProps(props, name ? new Set([name]) : new Set<string>())
     if (!attachmentRef) return
+    // 附件默认都在当前节点目录内，目录段是冗余信息：只展示文件名。
+    const fileName = getAttachmentFileNameFromRef(attachmentRef)
 
+    // tooltip 固定在图片块正下方居中：块上方是媒体块选中后的对齐工具条区域，
+    // 放上面会与之重叠。下方空间不足时把提示夹在视口内（仍贴着图片下沿），
+    // 不再翻回上方。水平用 translate(-50%) 居中，按最大半宽做视口夹取，
+    // 不依赖固定的 340×168 估算（旧操作面板尺寸会让小提示飘得很远）。
     const rect = container.getBoundingClientRect()
-    const menuWidth = 340
-    const menuHeight = 168
+    const maxHalfWidth = 140  // 与 .tm-attachment-tooltip 的 max-w-[280px] 对应
     const margin = 8
-    // 优先放在块上方；上方空间不足则翻到下方，最后夹在视口内（与链接菜单同一策略）。
-    let top = rect.top - menuHeight - 6
-    if (top < margin) top = rect.bottom + 6
-    let left = rect.right - menuWidth
-    if (left < margin) left = rect.left
-    left = Math.max(margin, Math.min(left, window.innerWidth - menuWidth - margin))
-    top = Math.max(margin, Math.min(top, window.innerHeight - menuHeight - margin))
-
-    cancelAttachmentPathClose()
-    const requestId = ++attachmentPathRequestRef.current
-    setAttachmentPathMenu({ blockId, attachmentRef, absoluteUrl: null, top, left })
-    setAttachmentPathCopied(false)
-
-    // 绝对路径是增强信息：取不到也不影响展示相对引用（文档里真正存的那一条）。
-    if (attachmentCardPath) {
-      void storage.getAttachmentAbsoluteUrl(attachmentCardPath, attachmentRef)
-        .then((url) => {
-          if (requestId !== attachmentPathRequestRef.current) return
-          setAttachmentPathMenu((prev) => (prev && prev.blockId === blockId ? { ...prev, absoluteUrl: url } : prev))
-        })
-        .catch(() => { /* 绝对路径取不到时只展示相对引用 */ })
-    }
-  }, [editor, attachmentCardPath, storage, cancelAttachmentPathClose, cancelAttachmentPathOpen])
+    const tipHeight = 28
+    const minLeft = margin + maxHalfWidth
+    const maxLeft = Math.max(minLeft, window.innerWidth - margin - maxHalfWidth)
+    const left = Math.max(minLeft, Math.min(rect.left + rect.width / 2, maxLeft))
+    const maxTop = Math.max(margin, window.innerHeight - tipHeight - margin)
+    const top = Math.max(margin, Math.min(rect.bottom + 6, maxTop))
+    setAttachmentPathMenu({ blockId, fileName, top, left })
+  }, [editor, cancelAttachmentPathOpen])
   // 供 hover-intent 定时器回调取用（定义顺序在上，随渲染同步为最新闭包）。
   openAttachmentPathMenuRef.current = openAttachmentPathMenu
-
-  const copyAttachmentRef = useCallback(() => {
-    const current = attachmentPathMenuRef.current
-    if (!current) return
-    void navigator.clipboard.writeText(current.attachmentRef).then(() => {
-      if (attachmentPathMenuRef.current?.blockId !== current.blockId) return
-      setAttachmentPathCopied(true)
-      if (attachmentPathCopyTimerRef.current !== null) window.clearTimeout(attachmentPathCopyTimerRef.current)
-      attachmentPathCopyTimerRef.current = window.setTimeout(() => setAttachmentPathCopied(false), 1600)
-    }).catch(() => { /* 剪贴板不可用时保持原样，不打断查看 */ })
-  }, [])
-
-  const showAttachmentInFolder = useCallback(() => {
-    const current = attachmentPathMenuRef.current
-    if (!current || !attachmentCardPath) return
-    void storage.showAttachmentInFolder(attachmentCardPath, current.attachmentRef).catch(() => {})
-    closeAttachmentPathMenu()
-  }, [attachmentCardPath, storage, closeAttachmentPathMenu])
 
   // 文档双链 chip 的点击 / `[[` 选择器的打开都从 ProseMirror 深处的节点视图发出来，
   // 通过模块级桥把一次性请求交给本组件；回调走 ref，注册只做一次，不受 props 陈旧影响。
@@ -791,9 +740,9 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     }
   }, [linkMenu])
 
-  // hover 图片/附件块弹出引用路径浮层。mouseover/out 都做同块判定，避免在
-  // 图片内部子元素间移动时反复开关；浮层 portal 到 body，进入浮层时由
-  // onMouseEnter 取消延迟关闭，保证两个操作按钮可点。
+  // hover 图片/附件块停稳后弹出附件文件名 tooltip。mouseover/out 都做同块判定，
+  // 避免在图片内部子元素间移动时反复开关；tooltip portal 到 body 且
+  // pointer-events:none，鼠标事件直接穿透，不需要移入保活或点击白名单。
   useEffect(() => {
     const editorRoot = editorRootRef.current
     if (!editorRoot) return
@@ -806,10 +755,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       if (!container || !editorRoot.contains(container)) return
       const blockId = getAttachmentBlockId(container)
       if (!blockId) return
-      if (attachmentPathMenuRef.current?.blockId === blockId) {
-        cancelAttachmentPathClose()
-        return
-      }
+      if (attachmentPathMenuRef.current?.blockId === blockId) return
       // 停留一会儿才打开；块内子元素间移动不会重置计时（同 blockId 直接返回）。
       scheduleAttachmentPathOpen(container, blockId)
     }
@@ -819,9 +765,8 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       if (!from) return
       const next = getAttachmentBlockContainer(event.relatedTarget)
       if (next !== from) {
-        // 真正离开块：撤销尚未触发的打开，并对已打开的浮层走延迟关闭。
-        // scheduleAttachmentPathClose 内部会无条件取消 pending 打开定时器。
-        scheduleAttachmentPathClose()
+        // 真正离开块：撤销尚未触发的打开，已显示的 tooltip 立即隐藏。
+        closeAttachmentPathMenu()
       }
     }
 
@@ -831,16 +776,13 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       editorRoot.removeEventListener('mouseover', handleMouseOver)
       editorRoot.removeEventListener('mouseout', handleMouseOut)
     }
-  }, [scheduleAttachmentPathOpen, cancelAttachmentPathClose, scheduleAttachmentPathClose])
+  }, [scheduleAttachmentPathOpen, closeAttachmentPathMenu])
 
   useEffect(() => {
     if (!attachmentPathMenu) return
     const ownerDocument = editorRootRef.current?.ownerDocument ?? document
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!(event.target instanceof Element)) return
-      if (event.target.closest('.tm-attachment-path-menu')) return
-      closeAttachmentPathMenu()
-    }
+    // tooltip 是 pointer-events:none 的纯展示层，不必为它留 mousedown 白名单。
+    const handlePointerDown = () => closeAttachmentPathMenu()
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeAttachmentPathMenu()
     }
@@ -857,12 +799,15 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     }
   }, [attachmentPathMenu, closeAttachmentPathMenu])
 
-  // 卸载时清掉延迟打开/关闭与复制反馈定时器，避免对已卸载组件 setState。
+  // 卸载时清掉 hover-intent 定时器，避免对已卸载组件 setState。
   useEffect(() => () => {
     if (attachmentPathOpenTimerRef.current !== null) window.clearTimeout(attachmentPathOpenTimerRef.current)
-    if (attachmentPathCloseTimerRef.current !== null) window.clearTimeout(attachmentPathCloseTimerRef.current)
-    if (attachmentPathCopyTimerRef.current !== null) window.clearTimeout(attachmentPathCopyTimerRef.current)
   }, [])
+
+  // 切换节点/文档时立即收起，避免上一个文档的附件名浮在新编辑器上。
+  useEffect(() => {
+    closeAttachmentPathMenu()
+  }, [attachmentCardPath, closeAttachmentPathMenu])
 
   useEffect(() => {
     if (!imagePreview) return
@@ -1449,49 +1394,18 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       ) : null}
       {attachmentPathMenu && typeof document !== 'undefined' ? createPortal(
         <div
-          className="tm-attachment-path-menu tm-fade-enter fixed z-[1400] w-[340px] rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] p-2.5 flex flex-col gap-2"
-          style={{ top: attachmentPathMenu.top, left: attachmentPathMenu.left }}
-          role="dialog"
-          aria-label="附件引用路径"
-          onMouseEnter={cancelAttachmentPathClose}
-          onMouseLeave={scheduleAttachmentPathClose}
+          className="tm-attachment-tooltip tm-fade-enter pointer-events-none fixed z-[1400] flex max-w-[280px] items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2.5 py-1.5 shadow-[var(--shadow-lg)]"
+          style={{
+            top: attachmentPathMenu.top,
+            left: attachmentPathMenu.left,
+            transform: 'translate(-50%, 0)',
+          }}
+          role="tooltip"
         >
-          <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-secondary)]">
-            <Link2 className="w-3 h-3 shrink-0" />
-            <span>附件引用路径</span>
-          </div>
-          <div
-            className="text-[12px] leading-[1.5] text-[var(--color-text-primary)] break-all font-medium"
-            title={attachmentPathMenu.attachmentRef}
-          >
-            {attachmentPathMenu.attachmentRef}
-          </div>
-          {attachmentPathMenu.absoluteUrl ? (
-            <div
-              className="text-[11px] leading-[1.4] text-[var(--color-text-secondary)] break-all max-h-[3em] overflow-hidden"
-              title={attachmentPathMenu.absoluteUrl}
-            >
-              {attachmentPathMenu.absoluteUrl}
-            </div>
-          ) : null}
-          <div className="flex gap-2 pt-0.5">
-            <button
-              type="button"
-              className="flex-1 h-8 rounded-md bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[12px] font-medium cursor-pointer border-none transition-colors hover:opacity-90"
-              onClick={copyAttachmentRef}
-            >
-              {attachmentPathCopied ? '已复制' : '复制引用路径'}
-            </button>
-            <button
-              type="button"
-              className="flex-1 h-8 rounded-md border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)] text-[12px] cursor-pointer transition-colors hover:bg-[var(--color-hover-bg)] disabled:opacity-50"
-              onClick={showAttachmentInFolder}
-              disabled={!attachmentCardPath}
-              title={attachmentCardPath ? '在系统文件管理中定位该附件' : '当前文档未关联附件目录'}
-            >
-              在文件夹中显示
-            </button>
-          </div>
+          <Paperclip className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" />
+          <span className="min-w-0 truncate text-[11.5px] font-medium leading-[1.4] text-[var(--color-text-primary)]">
+            {attachmentPathMenu.fileName}
+          </span>
         </div>,
         document.body,
       ) : null}

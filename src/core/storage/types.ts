@@ -169,6 +169,10 @@ export interface TopoDocumentStorageBackend {
   deleteTopoDocument: (cardPath: string, documentId: string) => Promise<void>
   listTrashTopoDocuments: (cardPath: string) => Promise<FSBTrashTopoDocumentItem[]>
   restoreTrashTopoDocument: (cardPath: string, trashName: string) => Promise<TopoDocumentManifestItem>
+  /** CardSpec 媒体资源：返回 file:// URL（不存在/非法返回 null） */
+  resolveCardAssetUrl: (cardPath: string, relPath: string) => Promise<string | null>
+  /** CardSpec 媒体资源：弹窗选择并导入 _docs/assets/，取消返回 null */
+  importCardAsset: (cardPath: string) => Promise<{ src: string } | null>
   clearTrashTopoDocuments: (cardPath: string) => Promise<void>
   moveTopoDocument: (cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   moveTopoDocumentToCard: (cardPath: string, documentId: string, targetCardPath: string) => Promise<MoveTopoDocumentToCardResult>

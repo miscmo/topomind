@@ -10,6 +10,8 @@ import type { ComponentType } from 'react'
 export interface ContainerPreviewProps {
   nodeId: string
   documentId: string
+  /** 节点磁盘路径（相对 kbs）；媒体类载荷（cardspec）解析 _docs/assets/ 资源时必须。 */
+  cardPath: string
   content: unknown
   title: string
   /** 只在 LOD 可见集合内才生成 SVG；不可见时显示静态占位，不排队、不导出。 */

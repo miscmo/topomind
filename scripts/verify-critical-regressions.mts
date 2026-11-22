@@ -151,8 +151,8 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   // 【P1】X6 flowchart 退场 + Excalidraw 容器载荷接入。
   // 旧的 flowchartCellSync / normalizeFlowchartDocumentContent 断言随编辑器目录一并删除，
   // 改为守住「旧数据零丢失 + 容器载荷零暴露」这两条新的回归红线。
-  assert.deepEqual([...TOPO_DOCUMENT_TYPES], ['smart', 'mindmap', 'excalidraw'],
-    '【P1】落盘类型全集必须新增 excalidraw、移除 flowchart')
+  assert.deepEqual([...TOPO_DOCUMENT_TYPES], ['smart', 'mindmap', 'excalidraw', 'cardspec'],
+    '【P1】落盘类型全集必须包含 excalidraw 与 cardspec、移除 flowchart')
   assert.deepEqual([...TOPO_PANEL_DOCUMENT_TYPES], ['smart', 'mindmap'],
     '【P1】右栏 surface 只能有智能文档与思维导图')
 
@@ -172,8 +172,10 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   ])
 
   assert.equal(isTopoDocumentType('excalidraw'), true, '【P1】容器载荷必须能通过落盘类型校验')
+  assert.equal(isTopoDocumentType('cardspec'), true, '【P1】知识卡片载荷必须能通过落盘类型校验')
   assert.equal(isTopoDocumentType('flowchart'), false, '【P1】旧 flowchart 不得再进渲染层枚举')
   assert.equal(isPanelDocumentType('excalidraw'), false, '【P1】容器载荷不得出现在右栏新建菜单/文档树')
+  assert.equal(isPanelDocumentType('cardspec'), false, '【P1】知识卡片载荷不得出现在右栏新建菜单/文档树')
   assert.ok(typeRegistrySource.includes("surface: 'panel' | 'container-only'")
     && typeRegistrySource.includes("surface: 'container-only'")
     && typeRegistrySource.includes('export function getPanelDocumentTypes()')
@@ -182,29 +184,36 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
 
   // 主进程 compat：flowchart 必须继续被归一化 / 扫描 / 重映射，否则 tree.json 条目会被静默删除。
   assert.ok(fileServiceSource.includes("excalidraw: '.exdraw.json'")
+    && fileServiceSource.includes("cardspec: '.cardspec.json'")
     && fileServiceSource.includes("flowchart: '.tflow.json'")
     && fileServiceSource.includes("excalidraw: 'topomind.excalidraw-document'")
+    && fileServiceSource.includes("cardspec: 'topomind.card-spec'")
     && fileServiceSource.includes("flowchart: 'topomind.flowchart-document'"),
   '【P1】主进程扩展名表/schema 表必须同时包含新载荷与旧 flowchart compat 类型')
   const creatableBlock = fileServiceSource.slice(
     fileServiceSource.indexOf('const TOPO_CREATABLE_DOCUMENT_TYPES'),
     fileServiceSource.indexOf('function _fs_isPlainObject'),
   )
-  assert.ok(creatableBlock.includes('excalidraw: true') && !creatableBlock.includes('flowchart'),
-    '【P1】可新建类型白名单必须排除 flowchart')
+  assert.ok(creatableBlock.includes('excalidraw: true') && creatableBlock.includes('cardspec: true') && !creatableBlock.includes('flowchart'),
+    '【P1】可新建类型白名单必须放行 excalidraw/cardspec 并排除 flowchart')
   assert.ok(fileServiceSource.includes('hasOwnProperty.call(TOPO_CREATABLE_DOCUMENT_TYPES, type)'),
     '【P1】_fs_createTopoDocument 必须有 creatable 守卫，否则旧流程图还能被新建')
   assert.ok(fileServiceSource.includes("if (type === 'excalidraw')")
     && fileServiceSource.includes('TOPO_DOCUMENT_SCHEMAS.excalidraw'),
   '【P1】新建容器载荷必须生成 excalidraw 空场景，不能落到 X6 分支')
+  assert.ok(fileServiceSource.includes("if (type === 'cardspec')")
+    && fileServiceSource.includes('TOPO_DOCUMENT_SCHEMAS.cardspec')
+    && fileServiceSource.includes("layout: 'stack'"),
+  '【P1】新建知识卡片载荷必须生成 cardspec 空卡片（stack 布局 + 空组件表）')
   assert.ok(fileServiceSource.includes('documentExtensions: Object.values(TOPO_DOCUMENT_EXTENSIONS)'),
     '【P1】roomSummary hasDetail 必须自动跟随扩展名表，容器节点才会被判定为有详情')
 
   assert.ok(docIdSource.includes("excalidraw: '.exdraw.json'")
+    && docIdSource.includes("cardspec: '.cardspec.json'")
     && docIdSource.includes("flowchart: '.tflow.json'")
-    && docIdSource.includes('(tdoc|tmind|exdraw|tflow)')
+    && docIdSource.includes('(tdoc|tmind|exdraw|cardspec|tflow)')
     && docIdSource.includes('.json$/i.test(entry.name)'),
-  '【P1】全库扫描正则必须认 .exdraw.json 且继续认 .tflow.json，否则旧条目会丢')
+  '【P1】全库扫描正则必须认 .exdraw.json / .cardspec.json 且继续认 .tflow.json，否则旧条目会丢')
 
   assert.ok(hostSource.includes('getPanelDocumentTypes()')
     && hostSource.includes('!adapter')
@@ -266,6 +275,51 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     ...normalized, scene: { ...normalized.scene, elements: [{ id: 'a', type: 'rectangle', version: 3 }] },
   })
   assert.notEqual(versionA, versionB, '【P2】scene version 变化必须让预览缓存失效')
+
+  // 【P5】CardSpec 纯函数真跑：schema / 去重 / 脏值 / src 安全 / 未知类型保留 / hash 失效。
+  const card = await bundle('../src/features/documents/CardSpecDocument/cardSpecTypes.ts')
+  assert.equal(card.CARDSPEC_DOCUMENT_SCHEMA, 'topomind.card-spec', '【P5】CardSpec 载荷必须带正确 schema')
+  const emptyCard = card.createEmptyCardSpecContent('空卡')
+  assert.equal(emptyCard.layout, 'stack', '【P5】空卡片必须是 stack 布局')
+  assert.deepEqual(emptyCard.components, [], '【P5】空卡片必须是空组件表')
+  const normalizedCard = card.normalizeCardSpecContent({
+    version: 1, title: '  卡片  ', layout: 'grid',
+    components: [
+      { id: 'a', type: 'title', props: { text: '标题', level: 2 } },
+      { id: 'a', type: 'text', props: { text: '重复 id' } },
+      { id: 'b', type: 'badge', props: { text: 'ok', tone: 'zzz' } },
+      { id: 'c', type: 'image', props: { src: '../secret.png' } },
+      { id: 'd', type: 'future', props: { x: 1 } },
+      { id: 'e', type: 'progress', props: { value: 999 } },
+    ],
+  }, '回退标题')
+  assert.equal(normalizedCard.title, '卡片', '【P5】标题必须去空白')
+  assert.equal(normalizedCard.layout, 'grid', '【P5】布局必须按枚举归一化')
+  assert.equal(normalizedCard.components.length, 5, '【P5】重复 id 组件必须被丢弃')
+  assert.equal(normalizedCard.components.find((c: any) => c.id === 'b').props.tone, 'neutral',
+    '【P5】非法 tone 必须回落默认值')
+  assert.equal(normalizedCard.components.find((c: any) => c.id === 'c').degraded, 'invalid-src',
+    '【P5】越界资源路径必须标记降级')
+  assert.equal(normalizedCard.components.find((c: any) => c.id === 'c').props.src, '../secret.png',
+    '【P5】非法 src 必须保留原值但不渲染')
+  assert.equal(normalizedCard.components.find((c: any) => c.id === 'd').degraded, 'unknown-type',
+    '【P5】未知组件类型必须保留并降级占位')
+  assert.equal(normalizedCard.components.find((c: any) => c.id === 'd').props.x, 1,
+    '【P5】未知组件 props 不得被抹除')
+  assert.equal(normalizedCard.components.find((c: any) => c.id === 'e').props.value, 100,
+    '【P5】progress 必须有界归一化')
+  assert.throws(() => card.normalizeCardSpecContent({ version: 2 }, 'x'),
+    '【P5】未知 version 必须抛错，绝不静默覆盖看不懂的数据')
+  const imageExts = card.CARD_IMAGE_EXTENSIONS
+  assert.equal(card.isValidCardAssetSrc('assets/a.png', imageExts), true, '【P5】合法图片相对路径必须放行')
+  assert.equal(card.isValidCardAssetSrc('assets/../a.png', imageExts), false, '【P5】.. 必须拒绝')
+  assert.equal(card.isValidCardAssetSrc('/abs/a.png', imageExts), false, '【P5】绝对路径必须拒绝')
+  assert.equal(card.isValidCardAssetSrc('http://x/a.png', imageExts), false, '【P5】远程 URL 必须拒绝')
+  assert.equal(card.isValidCardAssetSrc('assets/a.exe', imageExts), false, '【P5】非法扩展名必须拒绝')
+  const roundTrip = card.normalizeCardSpecContent(JSON.parse(card.serializeCardSpecContent(normalizedCard)), '回退标题')
+  assert.deepEqual(roundTrip.components, normalizedCard.components, '【P5】serialize → normalize 往返组件不丢')
+  assert.notEqual(card.cardSpecContentVersion(normalizedCard), card.cardSpecContentVersion(emptyCard),
+    '【P5】内容变化必须让预览缓存失效')
 
   const registry = await bundle('../src/domain/container/containerTypes.ts')
   assert.equal(registry.getContainerType('probe'), undefined, '【P2】未注册类型必须返回 undefined 而不是抛错')
@@ -422,11 +476,16 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   }
   assert.ok(pkgSrc.includes('"@excalidraw/excalidraw"'), '【P3】编辑器依赖必须锁定在 dependencies')
   assert.ok(menuSrc.includes('新建流程图容器')
-    && actionsSrc.includes("type: 'excalidraw'")
+    && menuSrc.includes('新建知识卡片容器')
+    // 创建入口已按容器变体参数化：两种载荷共用同一条「建节点 → 建载荷 → 更新单节点 → 原地刷新」链路。
+    && actionsSrc.includes("excalidraw: { name: '流程图容器'")
+    && actionsSrc.includes("cardspec: { name: '知识卡片容器'")
+    && actionsSrc.includes('createContainerChild(position,')
+    && actionsSrc.includes('type: config.documentType')
     && actionsSrc.includes('updateNode(cardId')
     && actionsSrc.includes('graph.refreshCurrentRoom()')
     && actionsSrc.includes('isActiveCanvasReadOnly()'),
-  '【P2】创建入口必须是唯一路径：只读校验 → 建载荷 → 更新单节点 → 原地刷新')
+  '【P2】创建入口必须是唯一路径：只读校验 → 建载荷 → 更新单节点 → 原地刷新（excalidraw / cardspec 共用）')
 }
 
 {
@@ -10348,10 +10407,12 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   '【斜杠菜单】滚动容器须用 callback ref 写入 state，保证边界元素稳定可用')
 }
 
-// --- 第 56 组：附件引用路径 hover 浮层 ---
-// 图片/附件块 hover 时锚定展示文档中真正持久化的相对引用 `_attach/xxx`，
-// 并异步补充绝对本地路径。路径归一化从 attachmentPath.ts 单一真源导入；
-// 浮层 portal 到 body，绝不进 ProseMirror DOM（历史踩坑：块内 widget 破坏布局）。
+// --- 第 56 组：附件文件名 hover tooltip ---
+// 图片/附件块 hover 停稳后只展示附件文件名：附件默认都在当前节点目录内，
+// 相对引用与绝对本地路径都是冗余信息，操作按钮也由「附件」Tab 承载。
+// 文件名提取仍走 attachmentPath.ts 单一真源；tooltip portal 到 body、
+// pointer-events:none，绝不进 ProseMirror DOM（历史踩坑：块内 widget 破坏布局），
+// 也不抢鼠标/点击事件。
 {
   const editor56 = await readFile(new URL(
     '../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx', import.meta.url,
@@ -10382,21 +10443,33 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && editor56.includes('window.clearTimeout(attachmentPathOpenTimerRef.current)'),
   '【附件路径】浮层须 hover 停留 400ms 才打开，块内移动不重置，离开撤销待打开（划过不弹）')
   assert.ok(editor56.includes('getAttachmentRefFromBlockProps(props,')
-    && editor56.includes('storage.getAttachmentAbsoluteUrl(attachmentCardPath, attachmentRef)')
-    && editor56.includes('storage.showAttachmentInFolder(attachmentCardPath, current.attachmentRef)'),
-  '【附件路径】须展示规范相对引用、异步补绝对路径，并提供「在文件夹中显示」')
+    && editor56.includes('getAttachmentFileNameFromRef(attachmentRef)')
+    && !editor56.includes('getAttachmentAbsoluteUrl(attachmentCardPath')
+    && !editor56.includes('showAttachmentInFolder(attachmentCardPath')
+    && !editor56.includes('复制引用路径')
+    && !editor56.includes('在文件夹中显示'),
+  '【附件文件名】只展示文件名：引用仍走 attachmentPath.ts 单一真源，不再异步补绝对路径、不再放操作按钮')
   assert.ok(editor56.includes('attachmentInsertTargetKey, attachmentCardPath, onTocActiveChange')
     && editor56.includes('prevProps.attachmentCardPath === nextProps.attachmentCardPath')
     && registry56.includes('attachmentCardPath={attachmentCardPath}'),
   '【附件路径】解析/定位附件须用节点路径 attachmentCardPath，不得误用文档路径 attachmentInsertTargetKey')
-  assert.ok(editor56.includes('tm-attachment-path-menu')
-    && editor56.includes('onMouseEnter={cancelAttachmentPathClose}')
-    && editor56.includes('onMouseLeave={scheduleAttachmentPathClose}'),
-  '【附件路径】浮层须 portal 到 body 且不进 ProseMirror DOM，鼠标可移入浮层操作')
-  assert.ok(editor56.includes('const requestId = ++attachmentPathRequestRef.current')
-    && editor56.includes('if (requestId !== attachmentPathRequestRef.current) return')
-    && editor56.includes("event.target.closest('.tm-attachment-path-menu')"),
-  '【附件路径】异步绝对路径须防竞态，点击浮层内部不得被外部 mousedown 关掉')
+  assert.ok(editor56.includes('tm-attachment-tooltip tm-fade-enter pointer-events-none')
+    && editor56.includes('role="tooltip"')
+    && editor56.includes('max-w-[280px]')
+    && editor56.includes('{attachmentPathMenu.fileName}')
+    && !editor56.includes('onMouseEnter={cancelAttachmentPathClose}')
+    && !editor56.includes('onMouseLeave={scheduleAttachmentPathClose}'),
+  '【附件文件名】提示须是 portal 到 body 的纯展示 tooltip：单行小尺寸、只显示文件名、不可交互、不做移入保活')
+  assert.ok(editor56.includes("if (event.key === 'Escape') closeAttachmentPathMenu()")
+    && editor56.includes('const handleScroll = () => closeAttachmentPathMenu()')
+    && !editor56.includes('}, 180)')
+    && !editor56.includes("event.target.closest('.tm-attachment-path-menu')"),
+  '【附件文件名】鼠标移开立即隐藏（无延迟保活），Escape/滚动/按下鼠标即关闭，不再设浮层内 mousedown 白名单')
+  assert.ok(editor56.includes('Math.min(rect.bottom + 6, maxTop)')
+    && editor56.includes("transform: 'translate(-50%, 0)'")
+    && !editor56.includes('rect.top - 6')
+    && !editor56.includes("translate(-50%, -100%)"),
+  '【附件文件名】提示须锚定图片块下方：块上方是媒体对齐工具条区域，放上面会与之重叠')
 }
 
 // --- 第 57 组：媒体块（图片/文件/视频）对齐浮层 ---
@@ -10828,6 +10901,8 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
 // ===== 65) 文档列表项 hover 快捷工具：添加子节点 / 编辑样式 / 删除 =====
 // 三个动作必须复用既有命令链路（内联新建、带确认的删除、统一的 meta 写入），
 // 且样式字段要有后端白名单校验，不能让任意 CSS 值写进 manifest。
+// 工具显隐只跟随鼠标 hover，与选中态无关：既不能 isActive 常显，也不能用
+// group-focus-within（点击行会把焦点留在行上，鼠标离开后按钮照样常显）。
 {
   const read65 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
   const row65 = await read65('src/features/documents/components/DocumentNode.tsx')
@@ -10842,14 +10917,15 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
 
   const NO_RESERVED_SLOT = (src: string) =>
     src.includes('h-4 shrink-0 items-center gap-0.5')
-    && src.includes('hidden group-hover:!flex group-focus-within:!flex')
-    && /isActive\s*\?\s*'flex'/.test(src)
+    && src.includes('hidden group-hover:!flex')
+    && !/isActive\s*\?\s*'flex'/.test(src)
+    && !src.includes('group-focus-within:!flex')
     && !src.includes('opacity-0 group-hover:opacity-100')
   assert.ok(row65.includes('data-tm-document-quick-actions') && NO_RESERVED_SLOT(row65)
     && row65.includes('!sticky'),
-    '【文档列表快捷工具】当前选中项必须常驻显示工具；其余行默认 hidden 彻底脱离布局（不预留右侧宽度、标题用满整行），仅 hover / 键盘聚焦时才作为 flex 子项插入并占空间；h-4 锁高避免整列行高跳动；sticky 路径提示行不提供操作')
+    '【文档列表快捷工具】工具显隐只随鼠标 hover，与选中态/焦点态无关：不得 isActive 常显或 focus-within 常显；其余行默认 hidden 彻底脱离布局（不预留右侧宽度、标题用满整行），仅 hover 时作为 flex 子项插入并占空间；h-4 锁高避免整列行高跳动；sticky 路径提示行不提供操作')
   assert.ok(NO_RESERVED_SLOT(linked65),
-    '【文档列表快捷工具】关联文档列表必须与文档树同一套「选中常显 + hover 插入」契约，不能退回 opacity-0 常驻占位')
+    '【文档列表快捷工具】关联文档列表必须与文档树同一套「只随 hover 显隐」契约，不能退回选中常显或 opacity-0 常驻占位')
   assert.ok(row65.includes('title="添加子文档"') && row65.includes('title="编辑样式"')
     && row65.includes('title="删除"') && row65.includes('QUICK_ACTION_EVENTS')
     && row65.includes('onQuickCreate={onQuickCreate}'),
@@ -11109,6 +11185,72 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     assert.ok((await read67(file67)).includes('data-tm-overlay="none"'),
       `【浮层渐隐渐出】${file67} 的行内工具必须标记 data-tm-overlay="none"`)
   }
+}
+
+{
+  // 【P5】CardSpec 知识卡片容器：IPC / 路径越界 / 渲染约束 / 装配接线回归红线。
+  const readP5 = (rel: string) => readFile(new URL(rel, import.meta.url), 'utf-8')
+  const [
+    preloadP5, mainP5, fsP5, fsbP5, storeP5, typesP5, fileAdapterP5,
+    registryP5, cardTypeP5, cardNodeP5, componentP5, previewP5, menuP5,
+  ] = await Promise.all([
+    readP5('../electron/preload.js'),
+    readP5('../electron/main.js'),
+    readP5('../electron/file-service.js'),
+    readP5('../src/core/fs-backend.ts'),
+    readP5('../src/core/storage/service.ts'),
+    readP5('../src/core/storage/types.ts'),
+    readP5('../src/core/storage/file.ts'),
+    readP5('../src/features/graph/GraphCanvas/containers/registerContainers.tsx'),
+    readP5('../src/features/graph/GraphCanvas/containers/cardSpecContainerType.ts'),
+    readP5('../src/features/graph/GraphCanvas/nodes/ContainerCard/ContainerCard.tsx'),
+    readP5('../src/features/graph/GraphCanvas/containers/cardspec/CardComponentView.tsx'),
+    readP5('../src/features/graph/GraphCanvas/containers/cardspec/CardSpecPreview.tsx'),
+    readP5('../src/features/graph/GraphPage/components/GraphPageContextMenu.tsx'),
+  ])
+
+  for (const channel of ['fs:resolveCardAssetUrl', 'fs:importCardAsset']) {
+    assert.ok(preloadP5.includes(`'${channel}'`), `【P5】${channel} 必须在 preload IPC 白名单里`)
+    assert.ok(mainP5.includes(`ipcMain.handle('${channel}'`), `【P5】${channel} 必须注册主进程 handler`)
+    assert.ok(fsbP5.includes(`'${channel}'`), `【P5】${channel} 必须由 fs-backend 发出`)
+    assert.ok(fileAdapterP5.includes(`FSB.${channel.replace('fs:', '')}(requireRootDir()`),
+      `【P5】${channel} 的 file backend 必须注入 rootDir`)
+  }
+  assert.ok(storeP5.includes('backend.resolveCardAssetUrl(') && storeP5.includes('backend.importCardAsset('),
+    '【P5】store 层必须透传媒体资源调用')
+  assert.ok(typesP5.includes('resolveCardAssetUrl:') && typesP5.includes('importCardAsset:'),
+    '【P5】StorageBackend 契约必须声明媒体资源方法')
+  assert.ok(fsP5.includes('realpathSync') && fsP5.includes("from './services/card-asset-path.js'"),
+    '【P5】资源解析必须共用纯路径规则并做 realpath 防符号链接逃逸')
+  assert.ok(registryP5.includes('CARDSPEC_CONTAINER_TYPE') && registryP5.includes('CardSpecPreview')
+    && registryP5.includes('CardSpecEditor') && registryP5.includes('./cardSpecContainerType'),
+  '【P5】卡容器必须同时注册领域 spec、只读预览与 lazy 编辑器')
+  assert.ok(cardTypeP5.includes('registerContainerType(CARDSPEC_CONTAINER_SPEC)')
+    && cardTypeP5.includes("documentType: 'cardspec'"),
+  '【P5】领域 spec 必须指向 cardspec 文档类型')
+  assert.ok(cardNodeP5.includes('cardPath={cardPath}'),
+    '【P5】节点外壳必须把 cardPath 传给预览，否则媒体资源无法解析')
+  assert.ok(menuP5.includes('新建知识卡片容器'),
+    '【P5】右键菜单必须提供知识卡片容器创建入口')
+  assert.ok(componentP5.includes('preload="metadata"') && componentP5.includes('HTML 组件（默认关闭）')
+    && componentP5.includes('whitespace-pre-wrap') && !componentP5.includes('dangerouslySetInnerHTML'),
+  '【P5】媒体禁止自动播放、HTML 组件永不渲染、文本纯渲染无注入面')
+  assert.ok(previewP5.includes('visible') && previewP5.includes('normalizeCardSpecContent'),
+    '【P5】节点内预览必须受 LOD 闸门并再次校验载荷')
+
+  // 路径规则真跑：主进程与门禁共用同一份纯函数，越界输入一律抛错。
+  const assetPath = await import(new URL('../electron/services/card-asset-path.js', import.meta.url).href)
+  assert.equal(assetPath.normalizeCardAssetRelPath('assets/a.png'), 'assets/a.png',
+    '【P5】合法资源相对路径必须放行')
+  for (const bad of [
+    '../secret.png', 'assets/../secret.png', '/abs/secret.png', 'C:/secret.png',
+    'http://x/a.png', 'data:image/png;base64,AAA', 'assets/sub/a.png', 'assets\\a.png', '',
+  ]) {
+    assert.throws(() => assetPath.normalizeCardAssetRelPath(bad), undefined,
+      `【P5】非法资源路径必须拒绝: ${bad || '(空)'}`)
+  }
+  assert.equal(assetPath.cardAssetCategory('a.mp3'), 'audio', '【P5】音频扩展名必须命中规则')
+  assert.equal(assetPath.cardAssetCategory('a.exe'), null, '【P5】未知扩展名必须拒绝导入')
 }
 
 console.log('Critical regression checks verified')

@@ -19,6 +19,14 @@ import { tabStore } from '../../../../stores/tabs/tabStore'
 import { isActiveCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { resolveRoomChildRef } from '../../../../domain/graph/path-utils'
 import { EXCALIDRAW_CONTAINER_TYPE } from '../../../documents/ExcalidrawDocument/excalidrawDocumentTypes'
+import { CARDSPEC_CONTAINER_TYPE } from '../../../documents/CardSpecDocument/cardSpecTypes'
+
+/** 容器创建参数：新增一种容器只加一个变体，创建链路不变。 */
+type ContainerVariant = 'excalidraw' | 'cardspec'
+const CONTAINER_VARIANTS: Record<ContainerVariant, { name: string; documentType: 'excalidraw' | 'cardspec'; containerType: string }> = {
+  excalidraw: { name: '流程图容器', documentType: 'excalidraw', containerType: EXCALIDRAW_CONTAINER_TYPE },
+  cardspec: { name: '知识卡片容器', documentType: 'cardspec', containerType: CARDSPEC_CONTAINER_TYPE },
+}
 
 export interface UseNodeActionsOptions {
   /** Called after an action to notify parent (e.g., for focus management) */
@@ -54,21 +62,23 @@ export function useNodeActions(options: UseNodeActionsOptions) {
    * 创建容器节点的唯一路径：先建普通节点（乐观插入）→ 在其 _docs 下建载荷文档
    * → 只更新这一个节点的 kind/container 指针 → flush + 原地刷新。
    * 载荷创建失败时保留普通知识节点，绝不留下指向空文档的容器。
+   * variant 决定载荷类型（excalidraw 白板 / cardspec 知识卡片）。
    */
-  const handleNewContainerChild = useCallback(async (position?: { x: number; y: number }) => {
+  const createContainerChild = useCallback(async (position: { x: number; y: number } | undefined, variant: ContainerVariant) => {
     if (isActiveCanvasReadOnly()) return
+    const config = CONTAINER_VARIANTS[variant]
     const tabs = tabStore.getState()
     const session = tabs.getGraphSession(tabs.activeTabId)
     const roomPath = session.roomPath || session.kbPath
     if (!roomPath) return
-    const name = '流程图容器'
-    logAction('容器:创建', 'useNodeActions', { name, roomPath, position })
+    const name = config.name
+    logAction('容器:创建', 'useNodeActions', { name, roomPath, position, variant })
     const cardId = await graph.createChildNode(name, undefined, position)
     if (!cardId) return
     const nodePath = resolveRoomChildRef(roomPath, cardId)
     try {
       const doc = await storage.createTopoDocument(nodePath, {
-        type: 'excalidraw',
+        type: config.documentType,
         title: name,
       })
       const documentId = String(doc?.id || '')
@@ -81,7 +91,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
         data: {
           ...node.data,
           kind: 'container',
-          container: { type: EXCALIDRAW_CONTAINER_TYPE, documentId },
+          container: { type: config.containerType, documentId },
           collapsedWidth: 360,
           collapsedHeight: 240,
         },
@@ -90,11 +100,19 @@ export function useNodeActions(options: UseNodeActionsOptions) {
       await graph.refreshCurrentRoom()
     } catch (e) {
       logAction('容器:创建失败', 'useNodeActions', {
-        nodeId: cardId, error: (e as Error)?.message || String(e),
+        nodeId: cardId, variant, error: (e as Error)?.message || String(e),
       })
     }
     onAction?.()
   }, [graph, onAction, storage, storeApi])
+
+  const handleNewContainerChild = useCallback(async (position?: { x: number; y: number }) => {
+    await createContainerChild(position, 'excalidraw')
+  }, [createContainerChild])
+
+  const handleNewCardSpecContainerChild = useCallback(async (position?: { x: number; y: number }) => {
+    await createContainerChild(position, 'cardspec')
+  }, [createContainerChild])
 
   const confirmAndDeleteNode = useCallback(async (nodeId: string) => {
     const node = findNodeById(nodeId)
@@ -124,6 +142,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   return {
     handleNewChild,
     handleNewContainerChild,
+    handleNewCardSpecContainerChild,
     handleEnterNode,
     handleDelete,
     handleEdgeDelete,

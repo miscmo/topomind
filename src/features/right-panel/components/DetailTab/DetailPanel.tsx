@@ -13,7 +13,7 @@ import { useRightPanelStore } from '../../../../stores/rightPanelStore'
 import { DocumentWorkspace } from '../../../../features/documents/DocumentWorkspace'
 import { tabStore, useGraphSession } from '../../../../stores/tabs/tabStore'
 import { useStorage } from '../../../../core/storage'
-import type { TopoDocumentMetaPatch } from '../../../../core/storage'
+import type { TopoDocumentMetaPatch, TopoDocumentType } from '../../../../core/storage'
 import { joinRefs, resolveRoomChildRef } from '../../../../domain/graph/path-utils'
 import { topoDocumentPath, topoDocumentIdFromPath } from '../../../../features/documents/types/documentTypes'
 import { useDetailDocuments } from '../../model/useDetailDocuments'
@@ -447,6 +447,38 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
     />
   ) : undefined), [detailView, resolvedLinks, activeLinkedDocId, linksLoading, handleSelectDocument, removeLinked, restoreLinked, openOwnerNode, openLinkDialog])
 
+  // ===== 传给 DocumentWorkspace 的回调必须保持引用稳定 =====
+  // 内联箭头会让 DocumentSidebar 的 memo 与 useDocumentSidebarModel 里的整条
+  // useCallback 链在每次父级渲染时失效，改一项样式就会重渲染整棵列表树。
+  const selectDocumentForWorkspace = useCallback((documentPath: string) => {
+    void handleSelectDocument(documentPath)
+  }, [handleSelectDocument])
+  const createTopoDocumentForWorkspace = useCallback((type: TopoDocumentType, name: string, parentId?: string | null) => {
+    if (detailView === 'linked') {
+      toast({ level: 'warn', title: '关联视图不新建文档', message: '请切换回「本节点文档」后新建' })
+      return
+    }
+    void handleCreateTopoDocument(type, name, parentId)
+  }, [detailView, handleCreateTopoDocument])
+  const exportTopoDocumentForWorkspace = useCallback((documentPath: string) => {
+    void handleExportTopoDocument(documentPath)
+  }, [handleExportTopoDocument])
+  const renameDocumentForWorkspace = useCallback((documentPath: string, name: string) => {
+    void handleRenameDocument(documentPath, name)
+  }, [handleRenameDocument])
+  const deleteDocumentForWorkspace = useCallback((documentPath: string) => {
+    void handleDeleteDocument(documentPath)
+  }, [handleDeleteDocument])
+  const moveDocumentForWorkspace = useCallback((documentId: string, newParentId: string | null, newSortOrder: number) => {
+    void handleMoveDocument(documentId, newParentId, newSortOrder)
+  }, [handleMoveDocument])
+  const moveDocumentToCardForWorkspace = useCallback((documentId: string) => {
+    setMoveToNode({ documentId })
+  }, [])
+  const updateDocumentMetaForWorkspace = useCallback((documentPath: string, patch: TopoDocumentMetaPatch) => {
+    void handleUpdateDocumentMeta(documentPath, patch)
+  }, [handleUpdateDocumentMeta])
+
   // ===== Empty state =====
   if (!selectedNodeId || !hasSelectedNode) {
     return (
@@ -591,17 +623,15 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
           activeDocumentPath={activeDocumentPath}
           detailSidebarTab={detailSidebarTab}
           onDetailSidebarTabChange={setDetailSidebarTabSafe}
-          onSelectDocument={(documentPath: string) => { void handleSelectDocument(documentPath) }}
+          onSelectDocument={selectDocumentForWorkspace}
           onOpenDocumentByDocId={(docId: string) => { void openDocumentByDocId(docId) }}
-          onCreateTopoDocument={detailView === 'linked'
-            ? () => toast({ level: 'warn', title: '关联视图不新建文档', message: '请切换回「本节点文档」后新建' })
-            : (type, name: string, parentId?: string | null) => { void handleCreateTopoDocument(type, name, parentId) }}
-          onExportTopoDocument={(documentPath: string) => { void handleExportTopoDocument(documentPath) }}
-          onRenameDocument={(documentPath: string, name: string) => { void handleRenameDocument(documentPath, name) }}
-          onDeleteDocument={(documentPath: string) => { void handleDeleteDocument(documentPath) }}
-          onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
-          onMoveDocumentToCard={(documentId: string) => { setMoveToNode({ documentId }) }}
-          onUpdateDocumentMeta={(documentPath: string, patch: TopoDocumentMetaPatch) => { void handleUpdateDocumentMeta(documentPath, patch) }}
+          onCreateTopoDocument={createTopoDocumentForWorkspace}
+          onExportTopoDocument={exportTopoDocumentForWorkspace}
+          onRenameDocument={renameDocumentForWorkspace}
+          onDeleteDocument={deleteDocumentForWorkspace}
+          onMoveDocument={moveDocumentForWorkspace}
+          onMoveDocumentToCard={moveDocumentToCardForWorkspace}
+          onUpdateDocumentMeta={updateDocumentMetaForWorkspace}
           isDocumentBusy={isDocumentBusy}
           nodeId={selectedNodeId}
         /> : (

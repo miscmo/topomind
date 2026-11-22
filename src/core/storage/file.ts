@@ -412,6 +412,14 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.listTrashTopoDocuments(requireRootDir(), cardPath)
     },
 
+    resolveCardAssetUrl: async (cardPath: string, relPath: string): Promise<string | null> => {
+      return FSB.resolveCardAssetUrl(requireRootDir(), cardPath, relPath)
+    },
+
+    importCardAsset: async (cardPath: string): Promise<{ src: string } | null> => {
+      return FSB.importCardAsset(requireRootDir(), cardPath)
+    },
+
     restoreTrashTopoDocument: async (cardPath: string, trashName: string) => {
       return FSB.restoreTrashTopoDocument(requireRootDir(), cardPath, trashName)
     },

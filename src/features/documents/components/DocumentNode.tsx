@@ -59,7 +59,31 @@ const QUICK_ACTION_EVENTS = {
   },
 }
 
-export const DocumentNode: React.FC<DocumentNodeProps> = ({
+const EMPTY_CHILDREN: TopoDocumentManifestItem[] = []
+
+/**
+ * childrenMap 每次 buildDocumentTree 都会产生新对象，但单行只关心自己的子项。
+ * 因此对该 prop 只比较「本节点的 children 内容」：改某一项样式时，只有该项
+ * 及其祖先链需要重渲染，其余行靠这个比较直接跳过。其它 props 走引用比较。
+ */
+function areDocumentNodePropsEqual(prev: DocumentNodeProps, next: DocumentNodeProps) {
+  const keys = new Set([
+    ...Object.keys(prev),
+    ...Object.keys(next),
+  ] as (keyof DocumentNodeProps)[])
+  for (const key of keys) {
+    if (key === 'childrenMap') {
+      const before = prev.childrenMap[prev.node.id] ?? EMPTY_CHILDREN
+      const after = next.childrenMap[next.node.id] ?? EMPTY_CHILDREN
+      if (before.length !== after.length || before.some((item, index) => item !== after[index])) return false
+      continue
+    }
+    if (prev[key] !== next[key]) return false
+  }
+  return true
+}
+
+function DocumentNodeView({
   node,
   level,
   activeDocumentPath,
@@ -90,7 +114,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
   onQuickCreate,
   onQuickStyle,
   onQuickDelete,
-}) => {
+}: DocumentNodeProps) {
   const isEditing = inlineEdit?.mode === 'rename' && inlineEdit.targetId === node.id
   const setRowElement = React.useCallback((element: HTMLDivElement | null) => {
     onRowElement?.(node.id, element)
@@ -248,20 +272,18 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           >
             {node.title}
           </span>
-          {/* 当前选中项常驻显示工具；其余行彻底不进入布局（不预留右侧宽度，标题用满整行），
-              只有 hover / 键盘聚焦时才以 flex 子项插入并占据右侧空间。
-              不能用 opacity-0 隐身 —— 元素仍在 flex 流里，会一直挤压标题。
+          {/* 工具显隐只跟随鼠标 hover，与选中态 / 焦点态完全无关：选中项不再常驻，
+              也不挂任何 focus 变体（点击 treeitem 后焦点会留在行上，focus-within
+              同样会让按钮在鼠标离开后一直显示）。未 hover 时彻底不进入布局
+              （不预留右侧宽度，标题用满整行），不能用 opacity-0 隐身 —— 元素仍在
+              flex 流里，会一直挤压标题。
               h-4 锁死容器高度（按钮 20px 溢出到行的 py-1 内），避免 hover 时整列行高跳动。
               与关联文档列表共用 PanelListAction 的视觉语言。sticky 路径提示行不提供操作。 */}
           {!sticky && (
             <div
               data-tm-document-quick-actions=""
               data-tm-overlay="none"
-              className={`h-4 shrink-0 items-center gap-0.5 tm-fade-enter ${
-                isActive
-                  ? 'flex'
-                  : 'hidden group-hover:!flex group-focus-within:!flex'
-              }`}
+              className="h-4 shrink-0 items-center gap-0.5 tm-fade-enter hidden group-hover:!flex"
             >
               <PanelListAction
                 {...QUICK_ACTION_EVENTS}
@@ -362,3 +384,6 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
     </React.Fragment>
   )
 }
+
+// 递归渲染仍引用这个 memo 包装后的组件，子节点才能享受到同一套跳过逻辑。
+export const DocumentNode = React.memo(DocumentNodeView, areDocumentNodePropsEqual)

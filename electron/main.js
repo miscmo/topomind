@@ -372,6 +372,27 @@ function registerIPC() {
   ipcMain.handle('fs:restoreTrashTopoDocument', function(e, rootDir, cardPath, trashName) {
     return fileService.restoreTrashTopoDocument(requireActiveWorkDir(rootDir), cardPath, trashName);
   });
+  // CardSpec 容器媒体资源：路径在主进程校验（拒绝 .. / 绝对路径 / 符号链接逃逸），
+  // 渲染层只拿 file:// URL，永不直接接触绝对路径。
+  ipcMain.handle('fs:resolveCardAssetUrl', function(e, rootDir, cardPath, relPath) {
+    var absolute = fileService.resolveCardAsset(requireActiveWorkDir(rootDir), cardPath, relPath);
+    return absolute ? pathToFileURL(absolute).href : null;
+  });
+  ipcMain.handle('fs:importCardAsset', async function(e, rootDir, cardPath) {
+    var workDir = requireActiveWorkDir(rootDir);
+    var result = await dialog.showOpenDialog({
+      title: '选择媒体文件',
+      properties: ['openFile'],
+      filters: [
+        { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] },
+        { name: '音频', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'flac'] },
+        { name: '视频', extensions: ['mp4', 'webm', 'mov'] },
+      ],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) return null;
+    var src = fileService.importCardAsset(workDir, cardPath, result.filePaths[0]);
+    return { src: src };
+  });
   ipcMain.handle('fs:clearTrashTopoDocuments', function(e, rootDir, cardPath) {
     return fileService.clearTrashTopoDocuments(requireActiveWorkDir(rootDir), cardPath);
   });

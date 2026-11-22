@@ -72,6 +72,13 @@ export function useDocumentSidebarModel({
 }: UseDocumentSidebarModelProps) {
   const graphStoreApi = useGraphStoreApi()
   const { rootItems, childrenMap } = useMemo(() => buildDocumentTree(topoDocuments), [topoDocuments])
+  // 列表数据与树结构的实时镜像：让下面的 actions 不必把 topoDocuments /
+  // childrenMap / rootItems 放进依赖数组。否则一次样式局部更新产生的新数组
+  // 会让整条 actions 链换引用，DocumentNode 的 memo 全部失效。
+  const topoDocumentsRef = useRef(topoDocuments)
+  topoDocumentsRef.current = topoDocuments
+  const treeRef = useRef({ rootItems, childrenMap })
+  treeRef.current = { rootItems, childrenMap }
   const [contextMenu, setContextMenu] = useState<DocumentContextMenuState | null>(null)
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
   const [inlineEdit, setInlineEdit] = useState<DocumentInlineEditState | null>(null)
@@ -167,7 +174,15 @@ export function useDocumentSidebarModel({
     const thumbTop = maxScroll > 0
       ? (scrollTop / maxScroll) * (trackHeight - thumbHeight)
       : 0
-    setScrollMetrics({ trackHeight, thumbHeight, thumbTop })
+    // 纯样式变更也会走这里；值没变就沿用旧对象，避免每次都多触发一轮整树渲染。
+    setScrollMetrics((previous) => (
+      previous
+      && previous.trackHeight === trackHeight
+      && previous.thumbHeight === thumbHeight
+      && previous.thumbTop === thumbTop
+        ? previous
+        : { trackHeight, thumbHeight, thumbTop }
+    ))
   }, [])
 
   useLayoutEffect(() => {
@@ -339,12 +354,12 @@ export function useDocumentSidebarModel({
 
   const startRename = useCallback((targetId: string) => {
     if (isBusy) return
-    const doc = topoDocuments.find(d => d.id === targetId)
+    const doc = topoDocumentsRef.current.find(d => d.id === targetId)
     if (!doc) return
     setContextMenu(null)
     setMetaPicker(null)
     setInlineEdit({ mode: 'rename', targetId, parentId: doc.parentId || null, value: doc.title })
-  }, [isBusy, topoDocuments])
+  }, [isBusy])
 
   const handleContextMenuAction = useCallback((action: string) => {
     if (!contextMenu) return
@@ -354,7 +369,7 @@ export function useDocumentSidebarModel({
     if (action === 'rename' && targetId) {
       startRename(targetId)
     } else if ((action === 'change-icon' || action === 'change-color') && targetId) {
-      const doc = topoDocuments.find(d => d.id === targetId)
+      const doc = topoDocumentsRef.current.find(d => d.id === targetId)
       if (doc) {
         setMetaPicker({
           mode: action === 'change-icon' ? 'icon' : 'color',
@@ -376,7 +391,7 @@ export function useDocumentSidebarModel({
       if (!isPanelDocumentType(createType)) return
       
       let initialValue = ''
-      if (topoDocuments.length === 0 && nodeId) {
+      if (topoDocumentsRef.current.length === 0 && nodeId) {
         const node = graphStoreApi.getState().nodesMap.get(nodeId)
         if (node?.data?.label) {
           initialValue = node.data.label
@@ -388,11 +403,11 @@ export function useDocumentSidebarModel({
         updateExpandedNodes(prev => new Set(prev).add(targetId))
       }
     }
-  }, [contextMenu, topoDocuments, onDeleteDocument, onExportTopoDocument, onMoveDocumentToCard, nodeId, startRename, updateExpandedNodes])
+  }, [contextMenu, onDeleteDocument, onExportTopoDocument, onMoveDocumentToCard, nodeId, startRename, updateExpandedNodes])
 
   const openIconPicker = useCallback((targetId: string, x: number, y: number) => {
     if (isBusy || !onUpdateDocumentMeta) return
-    const doc = topoDocuments.find(d => d.id === targetId)
+    const doc = topoDocumentsRef.current.find(d => d.id === targetId)
     if (!doc) return
     setContextMenu(null)
     setMetaPicker({
@@ -403,17 +418,17 @@ export function useDocumentSidebarModel({
       currentIcon: doc.icon,
       currentColor: doc.color,
     })
-  }, [isBusy, onUpdateDocumentMeta, topoDocuments])
+  }, [isBusy, onUpdateDocumentMeta])
 
   const handleApplyMeta = useCallback((mode: 'icon' | 'color', targetId: string, value: string | null) => {
     if (!onUpdateDocumentMeta) return
     setMetaPicker(null)
-    const doc = topoDocuments.find(d => d.id === targetId)
+    const doc = topoDocumentsRef.current.find(d => d.id === targetId)
     if (!doc) return
     onUpdateDocumentMeta(topoDocumentPath(targetId), mode === 'icon'
       ? { icon: value }
       : { color: value })
-  }, [onUpdateDocumentMeta, topoDocuments])
+  }, [onUpdateDocumentMeta])
 
   // ===== 列表项 hover 快捷操作 =====
   // 「添加子文档」直接复用右键新建的内联输入流程：在树下插一行输入框，回车才真正创建，
@@ -434,7 +449,7 @@ export function useDocumentSidebarModel({
 
   const openStylePanel = useCallback((targetId: string, x: number, y: number) => {
     if (isBusy || !onUpdateDocumentMeta) return
-    const doc = topoDocuments.find((d) => d.id === targetId)
+    const doc = topoDocumentsRef.current.find((d) => d.id === targetId)
     if (!doc) return
     setContextMenu(null)
     setMetaPicker({
@@ -449,7 +464,7 @@ export function useDocumentSidebarModel({
       currentFontWeight: doc.fontWeight,
       currentFontStyle: doc.fontStyle,
     })
-  }, [isBusy, onUpdateDocumentMeta, topoDocuments])
+  }, [isBusy, onUpdateDocumentMeta])
 
   const handleQuickDelete = useCallback((targetId: string) => {
     if (isBusy) return
@@ -481,7 +496,7 @@ export function useDocumentSidebarModel({
     }
 
     // Check for duplicates
-    const hasDuplicate = topoDocuments.some(d => d.id !== currentInlineEdit.targetId && d.title.trim() === nextName)
+    const hasDuplicate = topoDocumentsRef.current.some(d => d.id !== currentInlineEdit.targetId && d.title.trim() === nextName)
     if (hasDuplicate) {
       const confirm = useConfirmStore.getState().open
       const confirmed = await confirm({
@@ -490,7 +505,7 @@ export function useDocumentSidebarModel({
         confirmText: '继续创建/重命名',
         extraButtonText: '查看已存在节点',
         onExtraAction: () => {
-          const duplicateDoc = topoDocuments.find(d => d.id !== currentInlineEdit.targetId && d.title.trim() === nextName)
+          const duplicateDoc = topoDocumentsRef.current.find(d => d.id !== currentInlineEdit.targetId && d.title.trim() === nextName)
           if (duplicateDoc) {
             onSelectDocument(topoDocumentPath(duplicateDoc.id))
           }
@@ -511,7 +526,7 @@ export function useDocumentSidebarModel({
 
     cancelInlineEditOnBlurRef.current = false
     setInlineEdit(null)
-  }, [isBusy, onRenameDocument, onCreateTopoDocument, topoDocuments, onSelectDocument])
+  }, [isBusy, onRenameDocument, onCreateTopoDocument, onSelectDocument])
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -560,12 +575,12 @@ export function useDocumentSidebarModel({
     let current: string | null = id
     while (current) {
       if (current === draggedId) return
-      const currentDoc = topoDocuments.find(d => d.id === current)
+      const currentDoc = topoDocumentsRef.current.find(d => d.id === current)
       current = currentDoc ? currentDoc.parentId : null
     }
 
     setDragState({ id, position })
-  }, [draggedId, topoDocuments])
+  }, [draggedId])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -587,16 +602,16 @@ export function useDocumentSidebarModel({
 
     if (onMoveDocument) {
       if (position === 'inside') {
-        const targetChildren = targetId ? (childrenMap[targetId] || []) : rootItems
+        const targetChildren = targetId ? (treeRef.current.childrenMap[targetId] || []) : treeRef.current.rootItems
         const newSortOrder = targetChildren.length > 0 
           ? Math.max(...targetChildren.map(c => c.sortOrder)) + 1 
           : 0
         onMoveDocument(draggedId, targetId, newSortOrder)
         if (targetId) updateExpandedNodes(prev => new Set(prev).add(targetId))
       } else {
-        const targetDoc = topoDocuments.find(d => d.id === targetId)
+        const targetDoc = topoDocumentsRef.current.find(d => d.id === targetId)
         if (targetDoc) {
-          const siblings = (targetDoc.parentId ? childrenMap[targetDoc.parentId] : rootItems) || []
+          const siblings = (targetDoc.parentId ? treeRef.current.childrenMap[targetDoc.parentId] : treeRef.current.rootItems) || []
           const targetIndex = siblings.findIndex(s => s.id === targetId)
           let newSortOrder: number
           if (position === 'before') {
@@ -613,7 +628,7 @@ export function useDocumentSidebarModel({
     
     setDragState(null)
     setDraggedId(null)
-  }, [draggedId, dragState, onMoveDocument, childrenMap, rootItems, topoDocuments, updateExpandedNodes])
+  }, [draggedId, dragState, onMoveDocument, updateExpandedNodes])
 
   return {
     state: {

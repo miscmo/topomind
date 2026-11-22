@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Workflow, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree, X } from 'lucide-react'
+import { Plus, Workflow, LayoutTemplate, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree, X } from 'lucide-react'
 
 interface MenuItem {
   label: string
@@ -31,6 +31,7 @@ interface GraphPageContextMenuProps {
   targetId: string | null
   onNewChild: (position?: { x: number; y: number }) => void
   onNewContainerChild: (position?: { x: number; y: number }) => void
+  onNewCardSpecContainerChild: (position?: { x: number; y: number }) => void
   onEnterNode: (nodeId: string) => void
   onSelectSubtree: (nodeId: string) => void
   onDelete: (nodeId: string) => void
@@ -57,6 +58,7 @@ export default memo(function GraphPageContextMenu({
   targetId,
   onNewChild,
   onNewContainerChild,
+  onNewCardSpecContainerChild,
   onEnterNode,
   onSelectSubtree,
   onDelete,
@@ -99,6 +101,14 @@ export default memo(function GraphPageContextMenu({
       icon: <Workflow className="w-4 h-4" />,
       action: async () => {
         await onNewContainerChild({ x, y })
+        onClose()
+      },
+    },
+    {
+      label: '新建知识卡片容器',
+      icon: <LayoutTemplate className="w-4 h-4" />,
+      action: async () => {
+        await onNewCardSpecContainerChild({ x, y })
         onClose()
       },
     },

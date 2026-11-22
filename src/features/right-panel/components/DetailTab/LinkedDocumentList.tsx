@@ -80,11 +80,9 @@ export const LinkedDocumentList = memo(function LinkedDocumentList({
                       </span>
                     </span>
                   </button>
-                  {/* 与文档树列表一致：选中项常驻，其余行不进入布局、不预留右侧宽度，
-                      hover / 聚焦时才插入。 */}
-                  <div data-tm-overlay="none" className={`h-4 shrink-0 items-center gap-0.5 tm-fade-enter ${
-                    isActive ? 'flex' : 'hidden group-hover:!flex group-focus-within:!flex'
-                  }`}>
+                  {/* 与文档树列表一致：工具显隐只跟随鼠标 hover，与选中态 / 焦点态无关；
+                      未 hover 时不进入布局、不预留右侧宽度，hover 时才插入。 */}
+                  <div data-tm-overlay="none" className="h-4 shrink-0 items-center gap-0.5 tm-fade-enter hidden group-hover:!flex">
                     {link.status === 'trashed' && (
                       <PanelListAction title="从回收站恢复" onClick={() => onRestore(link)}>
                         <RotateCcw className="h-3.5 w-3.5" />

@@ -154,6 +154,7 @@ function ContainerCard({ id, data, selected }: NodeProps<KnowledgeNode>) {
             <Preview
               nodeId={id}
               documentId={containerRef.documentId}
+              cardPath={cardPath}
               content={content}
               title={title}
               visible={displayPercent >= PREVIEW_MIN_DISPLAY_PERCENT}

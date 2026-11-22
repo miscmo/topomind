@@ -215,6 +215,12 @@ export function createStore(backend: StorageBackend) {
     async restoreTrashTopoDocument(cardPath: string, trashName: string) {
       try { return await backend.restoreTrashTopoDocument(cardPath, trashName) } catch (e) { logger.catch('Store.restoreTrashTopoDocument', `恢复多类型文档失败: ${cardPath}/${trashName}`, e); throw e }
     },
+    async resolveCardAssetUrl(cardPath: string, relPath: string) {
+      try { return await backend.resolveCardAssetUrl(cardPath, relPath) } catch (e) { logger.catch('Store.resolveCardAssetUrl', `解析卡片媒体资源失败: ${cardPath}/${relPath}`, e); throw e }
+    },
+    async importCardAsset(cardPath: string) {
+      try { return await backend.importCardAsset(cardPath) } catch (e) { logger.catch('Store.importCardAsset', `导入卡片媒体资源失败: ${cardPath}`, e); throw e }
+    },
     async clearTrashTopoDocuments(cardPath: string) {
       try { await backend.clearTrashTopoDocuments(cardPath) } catch (e) { logger.catch('Store.clearTrashTopoDocuments', `清空多类型文档回收站失败: ${cardPath}`, e); throw e }
     },

@@ -25,6 +25,7 @@ export const DOCUMENT_EXTENSIONS = {
   smart: '.tdoc.json',
   mindmap: '.tmind.json',
   excalidraw: '.exdraw.json',
+  cardspec: '.cardspec.json',
   // compat：旧版 X6 流程图已退场，但必须继续被扫描/归一化/重映射，
   // 否则 tree.json 条目会被 reconcile 静默删除（磁盘文件仍在，索引却丢了）。
   flowchart: '.tflow.json',
@@ -805,7 +806,7 @@ export function createDocumentIndexService(deps) {
       try { entries = fs.readdirSync(docsDir, { withFileTypes: true }) } catch { continue }
       for (const entry of entries) {
         if (entry.isDirectory && entry.isDirectory()) continue
-        if (!/\.(tdoc|tmind|exdraw|tflow)\.json$/i.test(entry.name)) continue
+        if (!/\.(tdoc|tmind|exdraw|cardspec|tflow)\.json$/i.test(entry.name)) continue
         const filePath = path.join(docsDir, entry.name)
         let body
         try { body = readJsonFile(filePath) } catch { continue }

@@ -40,6 +40,14 @@ export const TOPO_DOCUMENT_TYPE_DEFINITIONS: Record<TopoDocumentType, DocumentTy
     createLogName: '容器:创建 Excalidraw 载荷',
     surface: 'container-only',
   },
+  cardspec: {
+    type: 'cardspec',
+    label: '知识卡片',
+    icon: '▣',
+    defaultTitle: '未命名卡片',
+    createLogName: '容器:创建知识卡片载荷',
+    surface: 'container-only',
+  },
 }
 
 /** 旧档 / 旧链接里可能出现的已退场类型，运行时给一个安全兜底，避免 undefined 崩溃。 */

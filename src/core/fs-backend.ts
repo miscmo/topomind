@@ -199,6 +199,10 @@ export interface FSB {
   deleteTopoDocument: (rootDir: string, cardPath: string, documentId: string) => Promise<void>
   listTrashTopoDocuments: (rootDir: string, cardPath: string) => Promise<FSBTrashTopoDocumentItem[]>
   restoreTrashTopoDocument: (rootDir: string, cardPath: string, trashName: string) => Promise<TopoDocumentManifestItem>
+  /** CardSpec 媒体资源：主进程校验后返回 file:// URL（不存在/越界返回 null） */
+  resolveCardAssetUrl: (rootDir: string, cardPath: string, relPath: string) => Promise<string | null>
+  /** CardSpec 媒体资源：弹窗选文件并导入 _docs/assets/，取消返回 null */
+  importCardAsset: (rootDir: string, cardPath: string) => Promise<{ src: string } | null>
   clearTrashTopoDocuments: (rootDir: string, cardPath: string) => Promise<void>
   moveTopoDocument: (rootDir: string, cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   moveTopoDocumentToCard: (rootDir: string, sourceCardPath: string, documentId: string, targetCardPath: string) => Promise<MoveTopoDocumentToCardResult>
@@ -276,6 +280,10 @@ const FSBImpl: FSB = {
     _call('fs:listTrashTopoDocuments', rootDir, cardPath) as Promise<FSBTrashTopoDocumentItem[]>,
   restoreTrashTopoDocument: (rootDir, cardPath, trashName) =>
     _call('fs:restoreTrashTopoDocument', rootDir, cardPath, trashName) as Promise<TopoDocumentManifestItem>,
+  resolveCardAssetUrl: (rootDir, cardPath, relPath) =>
+    _call('fs:resolveCardAssetUrl', rootDir, cardPath, relPath) as Promise<string | null>,
+  importCardAsset: (rootDir, cardPath) =>
+    _call('fs:importCardAsset', rootDir, cardPath) as Promise<{ src: string } | null>,
   clearTrashTopoDocuments: (rootDir, cardPath) =>
     _call('fs:clearTrashTopoDocuments', rootDir, cardPath) as Promise<void>,
   moveTopoDocument: (rootDir, cardPath, documentId, newParentId, newSortOrder) =>

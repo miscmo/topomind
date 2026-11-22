@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Ban, Bold, Check, FileText, Italic, Palette, Plus, RotateCcw, Smile, Trash2, X } from 'lucide-react'
 import type { TopoDocumentMetaPatch } from '../../../core/storage'
 import { PANEL_LIST } from '@/shared/ui/panelList'
@@ -19,6 +19,9 @@ import { DOCUMENT_COLOR_INPUT_FALLBACK, DOCUMENT_COLOR_PRESETS, isValidHexColor 
  */
 
 const FONT_SIZE_PRESETS = [12, 13, 14, 16, 18] as const
+
+/** 原生取色器拖动时 onChange 逐帧触发，写盘合并成一次（预览仍然即时）。 */
+const DOCUMENT_COLOR_APPLY_DELAY_MS = 120
 
 interface DocumentStyleDraft {
   icon: string | null
@@ -64,13 +67,54 @@ export function DocumentStylePanel({ title, anchor, initial, onApply, onClose }:
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
   const [iconAnchor, setIconAnchor] = useState(anchor)
 
+  // 取色器拖动会逐帧触发 onChange：draft 立即更新保证预览即时，但对父组件的
+  // 写入合并成一次。用 ref 持有最新 onApply，定时器既不会被父级重渲染重置，
+  // 也不会捕获到过期的回调。
+  const onApplyRef = useRef(onApply)
+  onApplyRef.current = onApply
+  const colorApplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingColorRef = useRef<string | null>(null)
+
+  const cancelPendingColor = useCallback(() => {
+    if (colorApplyTimerRef.current !== null) {
+      clearTimeout(colorApplyTimerRef.current)
+      colorApplyTimerRef.current = null
+    }
+    pendingColorRef.current = null
+  }, [])
+
+  const scheduleColorApply = useCallback((color: string) => {
+    pendingColorRef.current = color
+    if (colorApplyTimerRef.current !== null) clearTimeout(colorApplyTimerRef.current)
+    colorApplyTimerRef.current = setTimeout(() => {
+      colorApplyTimerRef.current = null
+      const pending = pendingColorRef.current
+      pendingColorRef.current = null
+      if (pending !== null) onApplyRef.current({ color: pending })
+    }, DOCUMENT_COLOR_APPLY_DELAY_MS)
+  }, [])
+
+  // 面板被关闭时若还有未提交的颜色，补一次写入，避免「拖完立刻关面板」丢改动。
+  useEffect(() => () => {
+    if (colorApplyTimerRef.current !== null) {
+      clearTimeout(colorApplyTimerRef.current)
+      colorApplyTimerRef.current = null
+    }
+    const pending = pendingColorRef.current
+    pendingColorRef.current = null
+    if (pending !== null) onApplyRef.current({ color: pending })
+  }, [])
+
   const apply = (patch: TopoDocumentMetaPatch, next: Partial<DocumentStyleDraft>) => {
+    // 任何非取色器的操作都应覆盖掉尚未提交的取色结果，防止旧颜色回写。
+    cancelPendingColor()
     // 面板自身的 draft 立即更新，预览不依赖父组件异步重载 manifest 后才能回显。
     setDraft((prev) => ({ ...prev, ...next }))
     onApply(patch)
   }
 
   const resetAll = () => {
+    cancelPendingColor()
     setDraft(DEFAULT_DRAFT)
     setHexInput('')
     onApply({ icon: null, color: null, fontSize: null, fontWeight: null, fontStyle: null })
@@ -253,7 +297,8 @@ export function DocumentStylePanel({ title, anchor, initial, onApply, onClose }:
                 onChange={(event) => {
                   const color = event.target.value
                   setHexInput(color)
-                  apply({ color }, { color })
+                  setDraft((prev) => ({ ...prev, color }))
+                  scheduleColorApply(color)
                 }}
               />
             </label>

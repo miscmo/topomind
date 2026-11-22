@@ -9,6 +9,12 @@ import nodeNet from 'net';
 import { shell } from 'electron';
 import { randomUUID } from 'crypto';
 import {
+  CARD_ASSET_DIR,
+  CARD_ASSET_RULES,
+  cardAssetCategory,
+  normalizeCardAssetRelPath,
+} from './services/card-asset-path.js';
+import {
   appConfigPath as pathGuardAppConfigPath,
   kbsDir as pathGuardKbsDir,
   requireValidWorkDir as pathGuardRequireValidWorkDir,
@@ -532,12 +538,66 @@ function _fs_attachmentDir(rootDir, cardPath) {
   return nodePath.join(cardDir, '_attach');
 }
 
+// ===== CardSpec 容器媒体资源（<cardId>/_docs/assets/） =====
+// 路径规则放在无 electron 依赖的纯模块，主进程与门禁脚本共用同一份校验。
+function _fs_cardAssetsDir(rootDir, cardPath) {
+  return nodePath.join(_fs_topoDocumentsDir(rootDir, cardPath), CARD_ASSET_DIR);
+}
+
+/** 解析并校验资源路径，文件存在返回绝对路径，否则返回 null；任何越界尝试一律 null。 */
+function _fs_resolveCardAsset(rootDir, cardPath, relPath) {
+  var rel = normalizeCardAssetRelPath(relPath);
+  var assetsDir = _fs_cardAssetsDir(rootDir, cardPath);
+  var target = nodePath.normalize(nodePath.join(assetsDir, rel.slice(CARD_ASSET_DIR.length + 1)));
+  var normalizedAssets = nodePath.normalize(assetsDir);
+  if (target !== normalizedAssets && target.indexOf(normalizedAssets + nodePath.sep) !== 0) return null;
+  try {
+    var realAssets = nodeFs.realpathSync(assetsDir);
+    var realTarget = nodeFs.realpathSync(target);
+    // realpath 双重校验：防符号链接逃逸出 assets 目录。
+    if (realTarget !== realAssets && realTarget.indexOf(realAssets + nodePath.sep) !== 0) return null;
+    if (!nodeFs.statSync(realTarget).isFile()) return null;
+    return realTarget;
+  } catch {
+    return null;
+  }
+}
+
+/** 把外部文件导入节点 assets 目录：类型/大小校验 + 重名自动加后缀，返回相对引用。 */
+function _fs_importCardAsset(rootDir, cardPath, sourceAbsPath) {
+  rootDir = _fs_requireValidWorkDir(rootDir);
+  var source = String(sourceAbsPath || '');
+  if (!source || !nodeFs.existsSync(source)) throw new Error('源文件不存在');
+  var stat = nodeFs.statSync(source);
+  if (!stat.isFile()) throw new Error('源路径不是文件');
+  var base = nodePath.basename(source);
+  var category = cardAssetCategory(base);
+  if (!category) throw new Error('不支持的资源类型（仅允许图片/音频/视频）');
+  var rule = CARD_ASSET_RULES[category];
+  if (stat.size > rule.maxBytes) throw new Error('文件超出大小限制（' + rule.label + '）');
+  var assetsDir = _fs_cardAssetsDir(rootDir, cardPath);
+  _fs_ensureDir(assetsDir);
+  var dot = base.lastIndexOf('.');
+  var stem = dot > 0 ? base.slice(0, dot) : base;
+  var ext = dot > 0 ? base.slice(dot) : '';
+  var candidate = base;
+  var counter = 2;
+  while (nodeFs.existsSync(nodePath.join(assetsDir, candidate))) {
+    candidate = stem + '-' + counter + ext;
+    counter += 1;
+  }
+  nodeFs.copyFileSync(source, nodePath.join(assetsDir, candidate));
+  return CARD_ASSET_DIR + '/' + candidate;
+}
+
+
 const TOPO_DOCUMENT_DIR = '_docs';
 const TOPO_DOCUMENT_MANIFEST = 'tree.json';
 const TOPO_DOCUMENT_EXTENSIONS = {
   smart: '.tdoc.json',
   mindmap: '.tmind.json',
   excalidraw: '.exdraw.json',
+  cardspec: '.cardspec.json',
   // compat：X6 流程图退场后仍须保留扫描/归一化能力，避免旧 tree.json 条目被删。
   flowchart: '.tflow.json',
 };
@@ -545,6 +605,7 @@ const TOPO_DOCUMENT_SCHEMAS = {
   smart: 'topomind.smart-document',
   mindmap: 'topomind.mindmap-document',
   excalidraw: 'topomind.excalidraw-document',
+  cardspec: 'topomind.card-spec',
   flowchart: 'topomind.flowchart-document',
 };
 // 只放行可新建的类型。flowchart 仅作「只索引不渲染」的 compat 类型存在。
@@ -552,6 +613,7 @@ const TOPO_CREATABLE_DOCUMENT_TYPES = {
   smart: true,
   mindmap: true,
   excalidraw: true,
+  cardspec: true,
 };
 
 function _fs_isPlainObject(value) {
@@ -853,6 +915,16 @@ function _fs_createTopoDocumentInitialContent(type, title, timestamp) {
         appState: { viewBackgroundColor: '#ffffff' },
       },
       metadata: { createdAt: timestamp, updatedAt: timestamp, editor: 'excalidraw' },
+    };
+  }
+  if (type === 'cardspec') {
+    return {
+      schema: TOPO_DOCUMENT_SCHEMAS.cardspec,
+      version: 1,
+      title: title,
+      layout: 'stack',
+      components: [],
+      metadata: { createdAt: timestamp, updatedAt: timestamp, generatedBy: 'user' },
     };
   }
   // compat：旧 flowchart 文档在文件缺失 / 回收站恢复时仍可生成兜底内容，
@@ -2097,6 +2169,17 @@ const fileService = {
 
     restoreTrashTopoDocument: function(rootDir, cardPath, trashName) {
       return documentService.restoreTrashTopoDocument(rootDir, cardPath, trashName);
+    },
+
+    /** CardSpec 媒体资源：校验并返回绝对路径（不存在/越界返回 null），由 main.js 转 file:// URL。 */
+    resolveCardAsset: function(rootDir, cardPath, relPath) {
+      try { return _fs_resolveCardAsset(rootDir, cardPath, relPath) }
+      catch { return null }
+    },
+
+    /** CardSpec 媒体资源：导入外部文件进节点 _docs/assets/，返回相对引用（assets/<name>）。 */
+    importCardAsset: function(rootDir, cardPath, sourceAbsPath) {
+      return _fs_importCardAsset(rootDir, cardPath, sourceAbsPath);
     },
 
     clearTrashTopoDocuments: function(rootDir, cardPath) {

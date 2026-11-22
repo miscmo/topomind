@@ -15,6 +15,28 @@ import { toast } from '../../../shared/ui/Toaster/toastStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
 import type { TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentType } from '../../../core/storage'
 
+/**
+ * 把主进程返回的更新项合并进本地列表：目标项换新对象，祖先链只换引用
+ * （递归列表的 memo 需要沿路径把新 node 传下去），其余项原样复用。
+ * 列表里没有该文档时原样返回，避免跨节点写盘把数据串到别的节点。
+ */
+function mergeDocumentMetaUpdate(
+  documents: TopoDocumentManifestItem[],
+  updated: TopoDocumentManifestItem,
+): TopoDocumentManifestItem[] {
+  if (!documents.some((item) => item.id === updated.id)) return documents
+  const ancestorIds = new Set<string>()
+  let cursor = updated.parentId ?? null
+  while (cursor && !ancestorIds.has(cursor)) {
+    ancestorIds.add(cursor)
+    cursor = documents.find((item) => item.id === cursor)?.parentId ?? null
+  }
+  return documents.map((item) => {
+    if (item.id === updated.id) return updated
+    return ancestorIds.has(item.id) ? { ...item } : item
+  })
+}
+
 export function useDetailDocuments({
   selectedNodeId,
   nodePath,
@@ -47,6 +69,20 @@ export function useDetailDocuments({
   const [topoDocumentsCardPath, setTopoDocumentsCardPath] = useState(() => nodePath ?? '')
   const [isDocumentBusy, setIsDocumentBusy] = useState(false)
   const [documentLinkNotice, setDocumentLinkNotice] = useState('')
+
+  // 列表数据的实时镜像：让文档操作回调不必把 topoDocuments 放进依赖数组。
+  // 否则一次局部样式更新会让整条回调链全部换引用、进而击穿列表的 memo。
+  const topoDocumentsRef = useRef(topoDocuments)
+  topoDocumentsRef.current = topoDocuments
+  const activeDocumentPathRef = useRef(activeDocumentPath)
+  activeDocumentPathRef.current = activeDocumentPath
+  const nodePathRef = useRef(nodePath)
+  nodePathRef.current = nodePath
+  const flushDocumentSaveRef = useRef(flushDocumentSave)
+  flushDocumentSaveRef.current = flushDocumentSave
+  // 元数据写盘串行队列：取色器 onChange / 连续点击会产生并发写，排队执行可避免
+  // 后写覆盖先写，以及后一次变更检测读到上一次尚未落盘的状态。
+  const metaWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   const documentListRequestSeqRef = useRef(0)
 
@@ -167,7 +203,7 @@ export function useDetailDocuments({
     if (!nodePath || documentPath === '') return
     const nextName = name.trim()
     if (!nextName) return
-    const targetDocument = topoDocuments.find((item) => topoDocumentPath(item.id) === documentPath)
+    const targetDocument = topoDocumentsRef.current.find((item) => topoDocumentPath(item.id) === documentPath)
     if (targetDocument && 'title' in targetDocument && targetDocument.title === nextName) return
     setIsDocumentBusy(true)
     try {
@@ -189,13 +225,13 @@ export function useDetailDocuments({
     } finally {
       setIsDocumentBusy(false)
     }
-  }, [nodePath, topoDocuments, activeDocumentPath, flushDocumentSave, storage, clearDetailDraft, clearDetailContent, loadDocuments])
+  }, [nodePath, activeDocumentPath, flushDocumentSave, storage, clearDetailDraft, clearDetailContent, loadDocuments])
 
   const handleDeleteDocument = useCallback(async (documentPath: string = activeDocumentPath) => {
     if (!selectedNodeId || !nodePath || documentPath === '') return
     const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label ?? selectedNodeId
-    const targetDocument = topoDocuments.find((item) => topoDocumentPath(item.id) === documentPath)
+    const targetDocument = topoDocumentsRef.current.find((item) => topoDocumentPath(item.id) === documentPath)
     const documentName = targetDocument ? targetDocument.title : documentPath
     const confirmed = await confirm({
       title: '删除文档',
@@ -230,7 +266,7 @@ export function useDetailDocuments({
     } finally {
       setIsDocumentBusy(false)
     }
-  }, [activeDocumentPath, clearDetailDraft, clearDetailContent, confirm, topoDocuments, loadDocuments, nodePath, selectedNodeId, storeApi, storage, setActiveDocumentPath, flushDocumentSave])
+  }, [activeDocumentPath, clearDetailDraft, clearDetailContent, confirm, loadDocuments, nodePath, selectedNodeId, storeApi, storage, setActiveDocumentPath, flushDocumentSave])
 
   const handleMoveDocument = useCallback(async (documentId: string, newParentId: string | null, newSortOrder: number) => {
     if (!nodePath) return
@@ -302,45 +338,70 @@ export function useDetailDocuments({
     } finally {
       setIsDocumentBusy(false)
     }
-  }, [activeDocumentPath, flushDocumentSave, nodePath, storage, loadDocuments, storeApi, topoDocuments])
+  }, [activeDocumentPath, flushDocumentSave, nodePath, storage, loadDocuments, storeApi])
 
-  const handleUpdateDocumentMeta = useCallback(async (documentPath: string, patch: TopoDocumentMetaPatch) => {
+  /**
+   * 文档列表项样式（图标 / 颜色 / 字号 / 字形）。
+   *
+   * 只写这一项、只更新这一项：主进程 updateTopoDocumentMeta 已经返回更新后的
+   * manifest item，无需再 loadDocuments 全量重读；也不设置 isDocumentBusy——
+   * 那个全局标志会下发到每一行，让整列图标和按钮在写盘期间一起变灰再恢复。
+   * 写盘按队列串行，避免连续取色 / 连点产生并发写和中间态读取。
+   */
+  const handleUpdateDocumentMeta = useCallback((documentPath: string, patch: TopoDocumentMetaPatch) => {
     if (!nodePath || documentPath === '') return
     const documentId = topoDocumentIdFromPath(documentPath)
     if (!documentId) return
-    const targetDocument = topoDocuments.find((item) => topoDocumentPath(item.id) === documentPath)
-    if (!targetDocument) return
-    // 仅当 patch 中所有字段都无实际变化时才跳过；组合 patch 中一个
-    // 字段相同不能阻止另一个已变化字段写盘。字体样式三件套一并纳入变更检测，
-    // 否则「编辑样式」面板里只改字号时会被误判成无变化、静默不写盘。
-    const iconChanged = patch.icon !== undefined
-      && (patch.icon?.trim() || '') !== (targetDocument.icon ?? '')
-    const colorChanged = patch.color !== undefined
-      && (patch.color || '') !== (targetDocument.color ?? '')
-    const fontSizeChanged = patch.fontSize !== undefined
-      && (patch.fontSize ?? null) !== (targetDocument.fontSize ?? null)
-    const fontWeightChanged = patch.fontWeight !== undefined
-      && (patch.fontWeight ?? null) !== (targetDocument.fontWeight ?? null)
-    const fontStyleChanged = patch.fontStyle !== undefined
-      && (patch.fontStyle ?? null) !== (targetDocument.fontStyle ?? null)
-    if (!iconChanged && !colorChanged && !fontSizeChanged && !fontWeightChanged && !fontStyleChanged) return
-    setIsDocumentBusy(true)
-    try {
-      if (documentPath === activeDocumentPath) {
-        await flushDocumentSave()
+    const targetNodePath = nodePath
+
+    const writeMeta = async () => {
+      // 写盘期间用户可能已经切到别的节点：变更检测和合并都以「目标节点」的
+      // 列表为准，不能误用当前节点的新列表。
+      const sourceDocuments = nodePathRef.current === targetNodePath
+        ? topoDocumentsRef.current
+        : (useDetailPanelStore.getState().documentListsByNodePath[targetNodePath] ?? [])
+      const targetDocument = sourceDocuments.find((item) => item.id === documentId)
+      if (!targetDocument) return
+      // 仅当 patch 中所有字段都无实际变化时才跳过；组合 patch 中一个
+      // 字段相同不能阻止另一个已变化字段写盘。字体样式三件套一并纳入变更检测，
+      // 否则「编辑样式」面板里只改字号时会被误判成无变化、静默不写盘。
+      const iconChanged = patch.icon !== undefined
+        && (patch.icon?.trim() || '') !== (targetDocument.icon ?? '')
+      const colorChanged = patch.color !== undefined
+        && (patch.color || '') !== (targetDocument.color ?? '')
+      const fontSizeChanged = patch.fontSize !== undefined
+        && (patch.fontSize ?? null) !== (targetDocument.fontSize ?? null)
+      const fontWeightChanged = patch.fontWeight !== undefined
+        && (patch.fontWeight ?? null) !== (targetDocument.fontWeight ?? null)
+      const fontStyleChanged = patch.fontStyle !== undefined
+        && (patch.fontStyle ?? null) !== (targetDocument.fontStyle ?? null)
+      if (!iconChanged && !colorChanged && !fontSizeChanged && !fontWeightChanged && !fontStyleChanged) return
+
+      try {
+        if (documentPath === activeDocumentPathRef.current) {
+          await flushDocumentSaveRef.current()
+        }
+        const updated = await storage.updateTopoDocumentMeta(targetNodePath, documentId, patch)
+        const nextDocuments = mergeDocumentMetaUpdate(sourceDocuments, updated)
+        if (nextDocuments === sourceDocuments) return
+        if (nodePathRef.current === targetNodePath) {
+          // 局部替换：只有目标项及祖先链换引用，其余行靠 memo 跳过 render。
+          topoDocumentsRef.current = nextDocuments
+          setTopoDocuments(nextDocuments)
+        }
+        setDocumentListForNodePath(targetNodePath, nextDocuments)
+        logAction('文档:修改样式', 'DetailPanel', { nodePath: targetNodePath, documentPath, patch })
+      } catch (e) {
+        // 排查提示：若主进程未重启（旧 IPC 处理器缺失），此处会捕获
+        // "No handler registered for 'fs:updateTopoDocumentMeta'" 之类的错误。
+        console.warn('[DocumentMeta] 更新文档图标/颜色失败（请确认应用已完全重启，主进程需加载最新代码）', e)
+        logger.catch('DetailPanel', 'handleUpdateDocumentMeta', e)
       }
-      await storage.updateTopoDocumentMeta(nodePath, documentId, patch)
-      await loadDocuments(nodePath)
-      logAction('文档:修改样式', 'DetailPanel', { nodePath, documentPath, patch })
-    } catch (e) {
-      // 排查提示：若主进程未重启（旧 IPC 处理器缺失），此处会捕获
-      // "No handler registered for 'fs:updateTopoDocumentMeta'" 之类的错误。
-      console.warn('[DocumentMeta] 更新文档图标/颜色失败（请确认应用已完全重启，主进程需加载最新代码）', e)
-      logger.catch('DetailPanel', 'handleUpdateDocumentMeta', e)
-    } finally {
-      setIsDocumentBusy(false)
     }
-  }, [nodePath, topoDocuments, activeDocumentPath, flushDocumentSave, storage, loadDocuments])
+
+    const result = metaWriteQueueRef.current.then(writeMeta)
+    metaWriteQueueRef.current = result.catch(() => undefined)
+  }, [nodePath, storage, setDocumentListForNodePath])
 
   const handleExportTopoDocument = useCallback(async (documentPath: string) => {
     if (!nodePath) return

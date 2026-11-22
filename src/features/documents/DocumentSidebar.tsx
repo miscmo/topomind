@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useCallback } from 'react'
 import { FileText } from 'lucide-react'
 import type { TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentType } from '../../core/storage'
 import { PANEL_LIST } from '../../shared/ui/panelList'
@@ -8,6 +8,9 @@ import { DocumentNode } from './components/DocumentNode'
 import { DocumentInlineEdit } from './components/DocumentInlineEdit'
 import { DocumentContextMenu } from './components/DocumentContextMenu'
 import { DocumentMetaPicker } from './components/DocumentMetaPicker'
+
+/** sticky 行不提供内联编辑；共用同一个空函数引用，避免每次渲染都换 props。 */
+const NOOP = () => undefined
 
 export interface DocumentSidebarProps {
   nodeId?: string
@@ -96,6 +99,12 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     handleSidebarScroll,
   } = actions
 
+  // 内联输入的值变化必须是稳定回调：内联箭头会让每个 DocumentNode 的 props
+  // 在父级渲染时全部换新引用，memo 直接失效。
+  const handleInlineEditValueChange = useCallback((value: string) => {
+    setInlineEdit(prev => prev ? { ...prev, value } : null)
+  }, [setInlineEdit])
+
   return (
     <div
       data-document-sidebar-root
@@ -143,9 +152,9 @@ export const DocumentSidebar = memo(function DocumentSidebar({
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  onInlineEditChange={() => undefined}
-                  onInlineEditBlur={() => undefined}
-                  onInlineEditKeyDown={() => undefined}
+                  onInlineEditChange={NOOP}
+                  onInlineEditBlur={NOOP}
+                  onInlineEditKeyDown={NOOP}
                   renderChildren={false}
                   sticky
                 />
@@ -185,7 +194,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  onInlineEditChange={(value) => setInlineEdit(prev => prev ? { ...prev, value } : null)}
+                  onInlineEditChange={handleInlineEditValueChange}
                   onInlineEditBlur={handleInputBlur}
                   onInlineEditKeyDown={handleInputKeyDown}
                   onRowElement={registerDocumentRow}
@@ -202,7 +211,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
                   inlineEdit={inlineEdit}
                   inlineInputRef={inlineInputRef}
                   isBusy={isBusy}
-                  onChange={(value) => setInlineEdit({ ...inlineEdit, value })}
+                  onChange={handleInlineEditValueChange}
                   onBlur={handleInputBlur}
                   onKeyDown={handleInputKeyDown}
                 />
