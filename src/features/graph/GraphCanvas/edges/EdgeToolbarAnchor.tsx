@@ -64,6 +64,7 @@ export default function EdgeToolbarAnchor({
   return (
     <div
       data-edge-toolbar-anchor=""
+      className="tm-fade-enter"
       style={{
         position: 'absolute',
         transform: `translate(${labelX}px, ${labelY}px)`,

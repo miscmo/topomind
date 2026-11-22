@@ -42,9 +42,9 @@ export default memo(function ZoomResetButton({ zoomLevel }: ZoomResetButtonProps
       aria-label="一键重置视角到 100%"
       title="一键重置视角到 100%（常规比例，保持当前平移位置）"
       onClick={handleReset}
-      className="nodrag nowheel pointer-events-auto flex h-6 items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium tabular-nums text-[var(--color-text-secondary)] transition-all duration-200 hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-text)]"
+      className="nodrag nowheel pointer-events-auto gap-0.5 font-medium tabular-nums tm-btn"
     >
-      <Focus className="h-3 w-3" aria-hidden="true" />
+      <Focus className="tm-icon tm-icon--sm" aria-hidden="true" />
       100%
     </button>
   )

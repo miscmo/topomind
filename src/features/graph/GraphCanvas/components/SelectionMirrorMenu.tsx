@@ -31,7 +31,7 @@ export default function SelectionMirrorMenu({
   onFlip,
 }: SelectionMirrorMenuProps) {
   return (
-    <Panel position="top-center" className="!m-3">
+    <Panel position="top-center" className="!m-3 tm-fade-enter">
       <div
         data-tm-selection-menu=""
         data-tm-selection-count={selectedCount}

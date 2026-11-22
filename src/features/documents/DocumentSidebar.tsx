@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { FileText } from 'lucide-react'
-import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
+import type { TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentType } from '../../core/storage'
 import { PANEL_LIST } from '../../shared/ui/panelList'
 import { EmptyState } from '../../shared/ui/EmptyState'
 import { useDocumentSidebarModel } from './model/useDocumentSidebarModel'
@@ -21,7 +21,7 @@ export interface DocumentSidebarProps {
   onDeleteDocument: (documentPath: string) => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
   onMoveDocumentToCard?: (documentId: string) => void
-  onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
+  onUpdateDocumentMeta?: (documentPath: string, patch: TopoDocumentMetaPatch) => void
 }
 
 export const DocumentSidebar = memo(function DocumentSidebar({
@@ -83,6 +83,10 @@ export const DocumentSidebar = memo(function DocumentSidebar({
     openIconPicker,
     handleContextMenuAction,
     handleApplyMeta,
+    handleQuickCreate,
+    openStylePanel,
+    handleQuickDelete,
+    handleApplyMetaPatch,
     handleInputKeyDown,
     handleInputBlur,
     handleDragStart,
@@ -187,6 +191,9 @@ export const DocumentSidebar = memo(function DocumentSidebar({
                   onRowElement={registerDocumentRow}
                   getChildRenderLimit={getChildRenderLimit}
                   onShowMoreChildren={showMoreChildren}
+                  onQuickCreate={handleQuickCreate}
+                  onQuickStyle={openStylePanel}
+                  onQuickDelete={handleQuickDelete}
                 />
               ))}
               {inlineEdit?.mode !== 'rename' && !inlineEdit?.parentId && inlineEdit && (
@@ -235,6 +242,7 @@ export const DocumentSidebar = memo(function DocumentSidebar({
         picker={metaPicker}
         onClose={() => setMetaPicker(null)}
         onApply={handleApplyMeta}
+        onApplyPatch={handleApplyMetaPatch}
       />
     </div>
   )

@@ -8,6 +8,7 @@ export {
   type TopoDocumentManifestItem,
   type TopoDocumentManifest,
   type TopoDocumentCreateInput,
+  type TopoDocumentMetaPatch,
   type TopoDocumentRepairResult,
   type TopoDocumentExportPayload,
   type MoveTopoDocumentToCardResult,

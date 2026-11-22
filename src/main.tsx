@@ -17,6 +17,7 @@ import { PlatformProvider } from './core/platform-context'
 import { reportAppStartup, startRuntimePerformanceObserver } from './core/performance-runtime'
 import { StorageProvider } from './core/storage'
 import { bootstrapPlugins } from './plugins'
+import { installOverlayExitTransition } from './shared/ui/overlayPresence'
 import { useThemeStore } from './stores/themeStore'
 import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'
@@ -25,6 +26,8 @@ import '@fontsource/inter/700.css'
 import '@xyflow/react/dist/style.css'
 import './styles/base.css'
 import './styles/tokens.css'
+import './styles/controls.css'
+import './styles/motion.css'
 
 const container = document.getElementById('root')!
 // 必须早于任何 React 渲染 / lazy chunk 加载：见文件头 import 处的说明。
@@ -33,6 +36,9 @@ const root = createRoot(container)
 useThemeStore.getState().initializeTheme()
 bootstrapCommandRegistry()
 bootstrapPlugins()
+// 全局浮层渐出代理必须早于任何 React 渲染：条件渲染的弹窗 / 浮窗关闭时
+// 会被同步 removeChild，代理要在 DOM 边界把节点接管回来播完淡出。
+installOverlayExitTransition()
 // 运行时观测在首帧前启动：buffered 长任务包含启动/模块求值阶段的阻塞。
 startRuntimePerformanceObserver()
 

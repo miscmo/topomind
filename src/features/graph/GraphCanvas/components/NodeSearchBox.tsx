@@ -80,7 +80,7 @@ export const NodeSearchBox = memo(function NodeSearchBox({
   }
 
   return (
-    <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] w-[320px] bg-[var(--color-surface)] rounded-lg shadow-[var(--shadow-popover)] border border-[var(--color-border-strong)] flex flex-col overflow-hidden">
+    <div className="tm-fade-enter absolute top-20 left-1/2 -translate-x-1/2 z-[100] w-[320px] bg-[var(--color-surface)] rounded-lg shadow-[var(--shadow-popover)] border border-[var(--color-border-strong)] flex flex-col overflow-hidden">
       <div className="flex items-center px-3 py-2 border-b border-[var(--color-border-subtle)]">
         <Search className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
         <input

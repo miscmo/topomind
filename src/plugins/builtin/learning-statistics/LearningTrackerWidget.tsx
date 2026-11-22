@@ -91,7 +91,7 @@ export const LearningTrackerWidget = memo(function LearningTrackerWidget({
       </button>
 
       {previewOpen && (
-        <div className="absolute top-[calc(100%+8px)] left-0 min-w-[320px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[4000] p-4 animate-in fade-in slide-in-from-top-2">
+        <div className="absolute top-[calc(100%+8px)] left-0 min-w-[320px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[4000] p-4 tm-popover-enter">
           <LearningQuickPreview learning={learning} workspace={workspace} />
         </div>
       )}

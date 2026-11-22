@@ -1,71 +1,170 @@
-import { ChevronDown, X } from 'lucide-react'
-import { memo, useState, useRef, useEffect } from 'react'
+import { BookOpen, MoreHorizontal, X } from 'lucide-react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import { useTabStore, type Tab } from '../../../stores/tabs/tabStore'
 import { useShortcut } from '../../../hooks/useShortcut'
 import { flushTabs, getDirtyState } from '../../../core/close-guard'
 import { logAction } from '../../../core/log-backend'
+import { TM_UI, tmUI } from '../../../shared/ui/controlStyles'
+
+/**
+ * 横向知识库 tab 栏（Chrome 式弹性宽度 + Π 形连体视觉）。
+ *
+ * 职责边界：这里只切换「工作区内已打开的知识库」（type === 'kb'）。
+ * 首页 / 设置 / 账户 / 学习记录 / 日志与性能属于全局导航，由左侧 NavRail 负责，
+ * 它们仍留在 tabStore 里（App.tsx 依赖 activeTab.viewId 决定视图显隐），只是不在此渲染。
+ *
+ * 布局边界：整条 tab 栏活在 32px 标题栏内部，是标题栏中段的 flex 子项，
+ * 不是 App.tsx 的 flex-col 兄弟；新增任何一条横向 shrink-0 兄弟都会压矮
+ * `#graph-panel`。
+ *
+ * 宽度算法（本次修复的核心，别再改回「固定宽度 + 数量预算」）：
+ *   - 测量对象必须是 `data-tm-tab-zone`（中段容器，flex-1，宽度稳定），
+ *     **绝不能测 .tm-tab-strip 自己**：strip 宽度由 tab 内容决定，测它会产生
+ *     「渲染 2 个 → 算出只放得下 1 个 → 只剩 1 个 → 算出还是 1 个」的正反馈，
+ *     表现就是「打开两个知识库也折叠成下拉」，正是用户反馈的 bug。
+ *   - 可用宽度 = zone 宽 - 恒定拖拽安全带 - 父级 gap。
+ *   - n 个 tab 能全部以最小宽度放下时，全部横向展示，每个宽度在
+ *     [--tab-min-width, --tab-max-width] 之间按可用宽度均分（Chrome 式压缩）。
+ *   - 只有「n 个都压到最小宽度仍然放不下」时，才把多出来的收进「⋯N」，
+ *     并预留 --tab-overflow-width 给按钮；激活 tab 永远留在可见列表。
+ */
+const FADE_LABEL_LENGTH = 11
+
+interface TabMetrics {
+  min: number
+  max: number
+  gap: number
+  overflow: number
+}
+
+interface ZoneSize {
+  width: number
+  gutter: number
+  gap: number
+}
+
+/** 宽度常量只在 tokens.css 里定义一份，运行时读取，避免 TS 侧出现第二份真源。 */
+function readTabMetrics(): TabMetrics {
+  const style = getComputedStyle(document.documentElement)
+  const px = (name: string, fallback: number) => {
+    const value = Number.parseFloat(style.getPropertyValue(name))
+    return Number.isFinite(value) && value > 0 ? value : fallback
+  }
+  return {
+    min: px('--tab-min-width', 88),
+    max: px('--tab-max-width', 180),
+    gap: px('--tab-gap', 4),
+    overflow: px('--tab-overflow-width', 40),
+  }
+}
 
 export default memo(function TabBar() {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const activateTab = useTabStore((s) => s.activateTab)
+
+  const kbTabs = useMemo(() => tabs.filter((tab) => tab.type === 'kb'), [tabs])
+
   const [isOpen, setIsOpen] = useState(false)
   const [closingTabId, setClosingTabId] = useState<string | null>(null)
   const [closeError, setCloseError] = useState<string | null>(null)
+  const [dirtyIds, setDirtyIds] = useState<string[]>([])
+  const [zone, setZone] = useState<ZoneSize>({ width: 0, gutter: 0, gap: 0 })
+
+  const metrics = useMemo(readTabMetrics, [])
   const rootRef = useRef<HTMLDivElement>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0]
+  // getDirtyState 是纯函数（由 registerTabSaver 的 isDirty 实时求值），没有可订阅的 store。
+  // 低频轮询只用来刷新「未保存圆点」，不读写任何业务状态，开销可忽略。
+  useEffect(() => {
+    const sync = () => {
+      const next = getDirtyState().dirtyTabIds
+      setDirtyIds((prev) =>
+        prev.length === next.length && prev.every((id, index) => id === next[index]) ? prev : next)
+    }
+    sync()
+    const timer = window.setInterval(sync, 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
-  useShortcut(['Escape'], () => {
-    if (isOpen) setIsOpen(false)
-  }, { scope: 'global', preventDefault: false })
+  // 只观察中段容器：它的宽度由标题栏左右两段决定，与 tab 内容无关，因此不会自反馈。
+  useEffect(() => {
+    const element = rootRef.current?.closest<HTMLElement>('[data-tm-tab-zone]')
+    if (!element) return
+
+    const measure = () => {
+      const gutter = element.querySelector<HTMLElement>('[data-tm-tab-drag-gutter]')
+      const next: ZoneSize = {
+        width: element.getBoundingClientRect().width,
+        gutter: gutter?.getBoundingClientRect().width ?? 0,
+        gap: Number.parseFloat(getComputedStyle(element).columnGap) || 0,
+      }
+      setZone((prev) =>
+        prev.width === next.width && prev.gutter === next.gutter && prev.gap === next.gap ? prev : next)
+    }
+
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  const layout = useMemo(() => {
+    const n = kbTabs.length
+    if (n === 0) return { visibleCount: 0, tabWidth: metrics.max, hasOverflow: false }
+    // 首帧还没测量时先按最大宽度全渲染，避免挂载瞬间闪一下溢出按钮。
+    if (zone.width <= 0) return { visibleCount: n, tabWidth: metrics.max, hasOverflow: false }
+
+    const available = Math.max(metrics.min, zone.width - zone.gutter - zone.gap)
+    const allAtMin = n * metrics.min + (n - 1) * metrics.gap
+
+    if (allAtMin <= available) {
+      // 全部放得下：一个都不折叠，宽度在 min..max 之间均分，右侧留白用于拖拽窗口。
+      const width = Math.min(metrics.max, Math.max(metrics.min,
+        (available - (n - 1) * metrics.gap) / n))
+      return { visibleCount: n, tabWidth: width, hasOverflow: false }
+    }
+
+    // 全部压到最小宽度仍放不下：预留「⋯N」按钮宽度后，尽量多展示几个，
+    // 且所有可见 tab 保持最小宽度（Chrome 行为），剩余留白交还给拖拽区。
+    const usable = Math.max(metrics.min, available - metrics.overflow - metrics.gap)
+    const fit = Math.max(1, Math.floor((usable + metrics.gap) / (metrics.min + metrics.gap)))
+    const visibleCount = Math.min(fit, n - 1)
+    return { visibleCount, tabWidth: metrics.min, hasOverflow: true }
+  }, [kbTabs.length, zone, metrics])
+
+  // 当前激活的知识库必须始终可见：空间不足时把它换进可见列表末尾。
+  const visibleTabs = useMemo(() => {
+    if (layout.visibleCount >= kbTabs.length) return kbTabs
+    const activeIndex = kbTabs.findIndex((tab) => tab.id === activeTabId)
+    if (activeIndex >= layout.visibleCount) {
+      return [...kbTabs.slice(0, Math.max(0, layout.visibleCount - 1)), kbTabs[activeIndex]]
+    }
+    return kbTabs.slice(0, layout.visibleCount)
+  }, [kbTabs, layout.visibleCount, activeTabId])
+
+  const hiddenCount = kbTabs.length - visibleTabs.length
 
   useEffect(() => {
-    if (!isOpen) {
-      return
-    }
+    if (hiddenCount === 0 && isOpen) setIsOpen(false)
+  }, [hiddenCount, isOpen])
 
-    const firstMenuItem = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')
-    firstMenuItem?.focus()
-    
-    // 创建一个全屏的透明遮罩层来拦截所有的点击事件
-    const overlay = document.createElement('div')
-    overlay.style.position = 'fixed'
-    overlay.style.inset = '0'
-    overlay.style.zIndex = '1' // 覆盖标题栏，但在当前组件（z-10）之下
-    overlay.style.setProperty('-webkit-app-region', 'no-drag')
-    
-    const handleClose = () => setIsOpen(false)
-    
-    overlay.addEventListener('pointerdown', handleClose)
-    if (rootRef.current) {
-      rootRef.current.appendChild(overlay)
-    } else {
-      document.body.appendChild(overlay)
-    }
-
-    const handleWindowPointerDown = (e: PointerEvent) => {
-      if (e.target instanceof Element && rootRef.current?.contains(e.target)) {
-        return
-      }
-      handleClose()
-    }
-    window.addEventListener('pointerdown', handleWindowPointerDown, { capture: true })
-
-    return () => {
-      overlay.removeEventListener('pointerdown', handleClose)
-      if (overlay.parentNode) {
-        overlay.parentNode.removeChild(overlay)
-      }
-      window.removeEventListener('pointerdown', handleWindowPointerDown, { capture: true })
-      window.setTimeout(() => triggerRef.current?.focus(), 0)
-    }
-  }, [isOpen])
-
-  const handleCloseTab = async (e: React.MouseEvent, tabId: string) => {
-    e.stopPropagation()
+  const handleCloseTab = useCallback(async (event: ReactMouseEvent, tabId: string) => {
+    event.stopPropagation()
+    event.preventDefault()
     if (closingTabId) return
 
     const tab = useTabStore.getState().getClosableTabInfo(tabId)
@@ -74,14 +173,10 @@ export default memo(function TabBar() {
     setCloseError(null)
     setClosingTabId(tabId)
     try {
-      const dirtyTabIds = getDirtyState().dirtyTabIds
-      if (dirtyTabIds.includes(tabId)) {
+      if (getDirtyState().dirtyTabIds.includes(tabId)) {
         const result = await flushTabs([tabId])
-        if (!result.ok) {
-          throw new Error(result.error || '保存未完成，标签页未关闭')
-        }
+        if (!result.ok) throw new Error(result.error || '保存未完成，标签页未关闭')
       }
-
       const closedTab = useTabStore.getState().closeTab(tabId)
       if (!closedTab) return
       logAction('Tab:关闭', 'TabBar', { tab: closedTab })
@@ -92,9 +187,68 @@ export default memo(function TabBar() {
     } finally {
       setClosingTabId(null)
     }
-  }
+  }, [closingTabId])
 
-  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleTabClick = useCallback((tab: Tab) => {
+    if (tab.id !== activeTabId) {
+      activateTab(tab.id)
+      logAction('切换Tab', 'TabBar', { tabId: tab.id, tabLabel: tab.label })
+    }
+    setIsOpen(false)
+  }, [activateTab, activeTabId])
+
+  // Ctrl+Tab 属于右栏显隐、Ctrl+1..9 属于左侧导航，这里只用 Alt+1..9 与 PageUp/PageDown。
+  useShortcut(Array.from({ length: 9 }, (_, index) => `Alt+${index + 1}`), (event) => {
+    const target = kbTabs[Number(event.key) - 1]
+    if (target) handleTabClick(target)
+  }, { scope: 'global' })
+
+  useShortcut(['Control+PageUp', 'Control+PageDown'], (event) => {
+    if (kbTabs.length < 2) return
+    const index = kbTabs.findIndex((tab) => tab.id === activeTabId)
+    if (index < 0) return
+    const delta = event.code.toLowerCase() === 'pagedown' ? 1 : -1
+    handleTabClick(kbTabs[(index + delta + kbTabs.length) % kbTabs.length])
+  }, { scope: 'global' })
+
+  useShortcut(['Escape'], () => {
+    if (isOpen) setIsOpen(false)
+  }, { scope: 'global', preventDefault: false })
+
+  // 标题栏是 app-region: drag 区，它会吞掉原生指针事件。菜单展开时铺一层
+  // 透明的 no-drag 遮罩来接管点击（沿用旧下拉的成熟做法）。
+  useEffect(() => {
+    if (!isOpen) return
+
+    const firstMenuItem = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')
+    firstMenuItem?.focus()
+
+    const overlay = document.createElement('div')
+    overlay.style.position = 'fixed'
+    overlay.style.inset = '0'
+    overlay.style.zIndex = '1'
+    overlay.style.setProperty('-webkit-app-region', 'no-drag')
+
+    const handleClose = () => setIsOpen(false)
+    overlay.addEventListener('pointerdown', handleClose)
+    if (rootRef.current) rootRef.current.appendChild(overlay)
+    else document.body.appendChild(overlay)
+
+    const handleWindowPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Element && rootRef.current?.contains(event.target)) return
+      handleClose()
+    }
+    window.addEventListener('pointerdown', handleWindowPointerDown, { capture: true })
+
+    return () => {
+      overlay.removeEventListener('pointerdown', handleClose)
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
+      window.removeEventListener('pointerdown', handleWindowPointerDown, { capture: true })
+      window.setTimeout(() => triggerRef.current?.focus(), 0)
+    }
+  }, [isOpen])
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
     const currentIndex = items.indexOf(document.activeElement as HTMLElement)
     if (items.length === 0) return
@@ -118,75 +272,148 @@ export default memo(function TabBar() {
     }
   }
 
-  const handleTabClick = (tab: Tab) => {
-    if (tab.id !== activeTabId) {
-      activateTab(tab.id)
-      logAction('切换Tab', 'TabBar', { tabId: tab.id, tabLabel: tab.label })
-    }
-    setIsOpen(false)
+  const handleStripKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    const nodes = Array.from(stripRef.current?.querySelectorAll<HTMLElement>('[role="tab"]') ?? [])
+    if (nodes.length === 0) return
+    const current = nodes.indexOf(document.activeElement as HTMLElement)
+    let next = current
+    if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = nodes.length - 1
+    else next = (current + (event.key === 'ArrowRight' ? 1 : -1) + nodes.length) % nodes.length
+    event.preventDefault()
+    nodes[next]?.focus()
+    nodes[next]?.click()
   }
 
   if (tabs.length === 0) return null
 
   return (
-    <div ref={rootRef} className="relative flex items-center h-full z-[3002]" style={{ WebkitAppRegion: 'no-drag' }}>
-      {/* 触发按钮 */}
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-        ref={triggerRef}
-        className={`relative z-10 h-[24px] w-[140px] flex items-center px-2 rounded-md bg-transparent text-[12px] font-medium cursor-default transition-colors ${isOpen ? 'bg-[var(--titlebar-hover)] text-[var(--titlebar-text)]' : 'text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]'}`}
-        onClick={() => setIsOpen(!isOpen)}
-        title={activeTab?.label}
+    <div
+      ref={rootRef}
+      data-tm-tab-bar=""
+      data-tm-tab-count={kbTabs.length}
+      data-tm-tab-visible={visibleTabs.length}
+      data-tm-tab-overflow={hiddenCount > 0 ? 'true' : 'false'}
+      className="relative flex items-center h-full min-w-0"
+      style={{ WebkitAppRegion: 'no-drag' }}
+    >
+      <div
+        ref={stripRef}
+        role="tablist"
+        aria-label="打开的知识库"
+        className={TM_UI.tabStrip}
+        style={{ '--tab-current-width': `${layout.tabWidth}px` } as CSSProperties}
+        onKeyDown={handleStripKeyDown}
       >
-        <span className="flex-1 min-w-0 truncate text-center">{activeTab?.label || '无标签'}</span>
-        <ChevronDown className={`h-2.5 w-2.5 shrink-0 ml-1.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
+        {kbTabs.length === 0 && (
+          <span className={TM_UI.hint} style={{ whiteSpace: 'nowrap', marginRight: 4 }}>
+            打开一个知识库开始
+          </span>
+        )}
+        {visibleTabs.map((tab) => {
+          const selected = tab.id === activeTabId
+          const dirty = dirtyIds.includes(tab.id)
+          const fade = tab.label.length > FADE_LABEL_LENGTH
+          return (
+            <div
+              key={tab.id}
+              role="tab"
+              data-tm-tab-id={tab.id}
+              aria-selected={selected}
+              aria-label={tab.label}
+              tabIndex={selected ? 0 : -1}
+              className={tmUI(selected ? TM_UI.tabActive : TM_UI.tab)}
+              title={tab.label}
+              onClick={() => handleTabClick(tab)}
+              onAuxClick={(event) => {
+                if (event.button === 1) void handleCloseTab(event, tab.id)
+              }}
+            >
+              <BookOpen className={TM_UI.tabIcon} aria-hidden="true" />
+              <span className={fade ? TM_UI.tabLabelFade : TM_UI.tabLabel}>{tab.label}</span>
+              <span className={TM_UI.tabTrailing}>
+                {dirty && <span className={TM_UI.tabDot} aria-label="未保存" />}
+                <button
+                  type="button"
+                  className={TM_UI.tabClose}
+                  aria-label={`关闭 ${tab.label}`}
+                  title={`关闭 ${tab.label}`}
+                  disabled={closingTabId !== null}
+                  onClick={(event) => { void handleCloseTab(event, tab.id) }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
+                  }}
+                >
+                  <X className={TM_UI.iconSm} aria-hidden="true" />
+                </button>
+              </span>
+            </div>
+          )
+        })}
+        {hiddenCount > 0 && (
+          <button
+            ref={triggerRef}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={isOpen}
+            className={TM_UI.tabActionCount}
+            aria-label={`更多已打开的知识库（${hiddenCount}）`}
+            title={`还有 ${hiddenCount} 个已打开的知识库`}
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            <MoreHorizontal className={TM_UI.iconSm} aria-hidden="true" />
+            <span>{hiddenCount}</span>
+          </button>
+        )}
+      </div>
 
-      {/* 下拉菜单 */}
       {isOpen && (
-          <div ref={menuRef} className="absolute top-[calc(100%+6px)] left-0 min-w-[220px] max-w-[320px] max-h-[60vh] overflow-y-auto overflow-x-hidden p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-10" role="menu" aria-label="打开的标签页" onKeyDown={handleMenuKeyDown} style={{ WebkitAppRegion: 'no-drag' }}>
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label="打开的标签页"
+          className={tmUI(TM_UI.menu, TM_UI.scroll, 'tm-fade-enter absolute top-[calc(100%+6px)] left-0 min-w-[240px] max-w-[320px] max-h-[60vh] overflow-y-auto')}
+          onKeyDown={handleMenuKeyDown}
+          style={{ WebkitAppRegion: 'no-drag', zIndex: 'var(--z-titlebar-menu)' }}
+        >
           {closeError && (
-            <div className="mx-1 mb-1 rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-2 py-1.5 text-[11px] text-[var(--color-danger)]" role="alert">
+            <div role="alert" className={TM_UI.hint} style={{ color: 'var(--color-danger)', padding: '4px 8px' }}>
               {closeError}
             </div>
           )}
-          {tabs.map((tab) => (
+          {kbTabs.map((tab) => (
             <div
               key={tab.id}
-              className={`group flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] ${tab.id === activeTabId ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-primary)]'}`}
-              onClick={() => handleTabClick(tab)}
-              onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleTabClick(tab) } }}
+              className={TM_UI.menuItem}
               role="menuitem"
               tabIndex={0}
+              data-active={tab.id === activeTabId ? 'true' : undefined}
+              onClick={() => handleTabClick(tab)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  handleTabClick(tab)
+                }
+              }}
             >
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="shrink-0 w-[16px] flex items-center justify-center">
-                  {tab.id === activeTabId && (
-                    <span className="text-[var(--color-accent)] font-bold">✓</span>
-                  )}
-                </span>
-                <span className="truncate" title={tab.label}>{tab.label}</span>
-              </div>
-              
-              {tab.id !== 'home' && (
+              <div className={TM_UI.tabMenuRow}>
+                <BookOpen className={TM_UI.iconSm} aria-hidden="true" />
+                <span className={TM_UI.tabMenuLabel} title={tab.label}>{tab.label}</span>
                 <button
                   type="button"
-                  className="shrink-0 w-[20px] h-[20px] rounded-md border-none bg-transparent flex items-center justify-center text-[var(--color-text-muted)] p-0 leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 hover:!bg-[var(--color-danger)] hover:!text-[var(--color-text-inverse)] transition-all"
-                    onClick={(e) => { void handleCloseTab(e, tab.id) }}
-                  disabled={closingTabId !== null}
+                  className={TM_UI.iconButton}
                   aria-label={`关闭 ${tab.label}`}
                   title={`关闭 ${tab.label}`}
+                  disabled={closingTabId !== null}
+                  onClick={(event) => { void handleCloseTab(event, tab.id) }}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.stopPropagation()
-                    }
+                    if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
                   }}
                 >
-                  <X className="h-2 w-2" />
+                  <X className={TM_UI.iconSm} aria-hidden="true" />
                 </button>
-              )}
+              </div>
             </div>
           ))}
         </div>

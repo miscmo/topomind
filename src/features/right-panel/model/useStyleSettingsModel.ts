@@ -1,8 +1,10 @@
 import { useCallback, useDeferredValue, useEffect, useState } from 'react'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
-import { useGraphContext } from '../../../contexts/GraphContext'
-import { useGraphStore } from '../../../stores/graphStore'
+import { useOptionalGraphContext } from '../../../contexts/GraphContext'
+// 设置页不在 GraphStoreProvider 内：用可选版本读画布选中态，缺失时得到恒空快照。
+// 绝不能改回 useGraphStore —— 那会在设置页抛 Missing GraphStoreProvider。
+import { useOptionalGraphStore } from '../../../stores/graphStore'
 import { useStorage } from '../../../core/storage'
 import { GRAPH_UI_INITIAL_STATE } from '../../../stores/graphUiStore'
 import type { KnowledgeNode, KnowledgeNodeStyle } from '../../../types'
@@ -43,23 +45,25 @@ export function useStyleSettingsModel(active = true) {
   const setNodeSizeLimits = useGraphUiStore((s) => s.setNodeSizeLimits)
   const setNodeBadgeSize = useGraphUiStore((s) => s.setNodeBadgeSize)
 
-  const graph = useGraphContext()
+  // 设置页不在 GraphContextProvider 内：拿不到画布时用可选上下文降级，
+  // 全局默认样式仍可编辑，节点 / 连线级写入自动变成空操作。
+  const graph = useOptionalGraphContext()
 
-  const selectedEdge = useGraphStore((s) => selectedEdgeId ? s.edgesMap.get(selectedEdgeId) : null)
+  const selectedEdge = useOptionalGraphStore((s) => selectedEdgeId ? s.edgesMap.get(selectedEdgeId) : null)
   // 连线两端要展示节点标题而不是内部 id —— UI 上只呈现用户能理解的内容。
   // 节点缺失或标题为空时回退为"未命名节点"，不回退成 id。
-  const selectedEdgeSourceLabel = useGraphStore((s) => {
+  const selectedEdgeSourceLabel = useOptionalGraphStore((s) => {
     const id = selectedEdge?.source
     if (!id) return ''
     return s.nodesMap.get(id)?.data.label?.trim() || '未命名节点'
   })
-  const selectedEdgeTargetLabel = useGraphStore((s) => {
+  const selectedEdgeTargetLabel = useOptionalGraphStore((s) => {
     const id = selectedEdge?.target
     if (!id) return ''
     return s.nodesMap.get(id)?.data.label?.trim() || '未命名节点'
   })
   // 面板不可见时直接订阅空数组，隐藏的面板就不会跟着选中态重渲染。
-  const selectedNodesLive = useGraphStore((s) => (active ? s.selectedNodes : EMPTY_SELECTED_NODES))
+  const selectedNodesLive = useOptionalGraphStore((s) => (active ? s.selectedNodes : EMPTY_SELECTED_NODES))
   // 框选（Shift 拖拽）期间选中集每一帧都在变，而样式面板要重算十几个取值、
   // 重建整棵 NodeStylePanel。用 deferred 值把它降级为可中断渲染：
   // 画布的选中反馈不受影响，面板在松手后追上一次即可。
@@ -178,13 +182,13 @@ export function useStyleSettingsModel(active = true) {
 
   const applyToSelectedEdge = useCallback((patch: Partial<DefaultEdgeStyle>) => {
     if (!selectedEdgeId) return
-    void graph.updateEdgeStyle(selectedEdgeId, patch)
+    void graph?.updateEdgeStyle(selectedEdgeId, patch)
   }, [selectedEdgeId, graph])
 
   const applyToSelectedNode = useCallback((patch: KnowledgeNodeStyle) => {
     if (selectedNodes.length === 0) return
     const ids = selectedNodes.map(n => n.id)
-    void graph.updateNodesStyle(ids, patch)
+    void graph?.updateNodesStyle(ids, patch)
   }, [selectedNodes, graph])
 
   const resetDefaultNodeAppearance = useCallback(() => {
@@ -208,7 +212,7 @@ export function useStyleSettingsModel(active = true) {
 
   const clearSelectedNodesStyle = useCallback(() => {
     if (selectedNodes.length === 0) return
-    void graph.clearNodesStyle(selectedNodes.map(n => n.id))
+    void graph?.clearNodesStyle(selectedNodes.map(n => n.id))
   }, [selectedNodes, graph])
 
   const applyNumberToDefaultNode = useCallback((key: NodeStyleNumberKey, value: string) => {
@@ -250,7 +254,7 @@ export function useStyleSettingsModel(active = true) {
       } as NodeDimensionChange
     })
     
-    graph.onNodesChange(changes)
+    graph?.onNodesChange(changes)
   }, [selectedNodes, defaultNodeSize, nodeSizeLimits, graph])
 
   return {

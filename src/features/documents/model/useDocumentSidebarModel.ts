@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
-import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
+import type { TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentType } from '../../../core/storage'
 import { topoDocumentIdFromPath, topoDocumentPath, buildDocumentTree } from '../types/documentTypes'
-import { isPanelDocumentType } from '../../../core/topoDocumentTypes'
+import { isPanelDocumentType, TOPO_PANEL_DOCUMENT_TYPES } from '../../../core/topoDocumentTypes'
 import { useGraphStoreApi } from '../../../stores/graphStore'
 import { scrollChildIntoView } from '../SmartDocumentEditor/smartDocumentUtils'
 import { useConfirmStore } from '../../../shared/ui/ConfirmModal/confirmStore'
@@ -43,7 +43,7 @@ export interface UseDocumentSidebarModelProps {
   onDeleteDocument: (documentPath: string) => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
   onMoveDocumentToCard?: (documentId: string) => void
-  onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
+  onUpdateDocumentMeta?: (documentPath: string, patch: TopoDocumentMetaPatch) => void
 }
 
 /**
@@ -415,6 +415,55 @@ export function useDocumentSidebarModel({
       : { color: value })
   }, [onUpdateDocumentMeta, topoDocuments])
 
+  // ===== 列表项 hover 快捷操作 =====
+  // 「添加子文档」直接复用右键新建的内联输入流程：在树下插一行输入框，回车才真正创建，
+  // 不额外弹模态；默认用面板文档类型的第一项，需要别的类型仍走右键「新建文档」。
+  const handleQuickCreate = useCallback((targetId: string) => {
+    if (isBusy) return
+    setContextMenu(null)
+    setMetaPicker(null)
+    setInlineEdit({
+      mode: 'createTopoDocument',
+      createType: TOPO_PANEL_DOCUMENT_TYPES[0],
+      targetId: null,
+      parentId: targetId,
+      value: '',
+    })
+    updateExpandedNodes((prev) => new Set(prev).add(targetId))
+  }, [isBusy, updateExpandedNodes])
+
+  const openStylePanel = useCallback((targetId: string, x: number, y: number) => {
+    if (isBusy || !onUpdateDocumentMeta) return
+    const doc = topoDocuments.find((d) => d.id === targetId)
+    if (!doc) return
+    setContextMenu(null)
+    setMetaPicker({
+      mode: 'style',
+      x,
+      y,
+      targetId,
+      title: doc.title,
+      currentIcon: doc.icon,
+      currentColor: doc.color,
+      currentFontSize: doc.fontSize,
+      currentFontWeight: doc.fontWeight,
+      currentFontStyle: doc.fontStyle,
+    })
+  }, [isBusy, onUpdateDocumentMeta, topoDocuments])
+
+  const handleQuickDelete = useCallback((targetId: string) => {
+    if (isBusy) return
+    setContextMenu(null)
+    setMetaPicker(null)
+    // handleDeleteDocument 自带确认弹窗，这里不重复确认
+    onDeleteDocument(topoDocumentPath(targetId))
+  }, [isBusy, onDeleteDocument])
+
+  const handleApplyMetaPatch = useCallback((targetId: string, patch: TopoDocumentMetaPatch) => {
+    if (!onUpdateDocumentMeta) return
+    onUpdateDocumentMeta(topoDocumentPath(targetId), patch)
+  }, [onUpdateDocumentMeta])
+
   const inlineEditRef = useRef(inlineEdit)
   inlineEditRef.current = inlineEdit
 
@@ -600,6 +649,10 @@ export function useDocumentSidebarModel({
       openIconPicker,
       handleContextMenuAction,
       handleApplyMeta,
+      handleQuickCreate,
+      openStylePanel,
+      handleQuickDelete,
+      handleApplyMetaPatch,
       handleInputKeyDown,
       handleInputBlur,
       handleDragStart,

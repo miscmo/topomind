@@ -150,7 +150,7 @@ export function ImageAlignToolbar() {
     <div
       data-tm-image-align-toolbar={state.placement}
       onMouseDown={(event) => event.preventDefault()}
-      className="tm-image-align-toolbar"
+      className="tm-image-align-toolbar tm-popover-enter"
       style={{ position: 'fixed', top: state.top, left: state.left }}
       role="toolbar"
       aria-label="图片对齐"

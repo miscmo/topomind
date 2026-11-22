@@ -149,7 +149,15 @@ export function useGraphCanvasModel({
     return buildRectSpatialIndex(candidates, 256)
   }, [connectingSourceId, nodes])
   
-  const { guideLines, onNodesChangeIntercept } = useSmartGuides(nodes as Node[])
+  // LOD 派生后真正渲染的节点由 GraphCanvas 在 useSemanticLod 之后写入这个 ref：
+  // 参考线只跟屏幕上存在的对象对齐，不再扫全图。
+  const visibleNodesRef = useRef<Node[] | null>(null)
+  const getSmartGuideZoom = useCallback(() => zoomLevelRef.current, [])
+  const getSmartGuideVisibleNodes = useCallback(() => visibleNodesRef.current, [])
+  const { guideLines, onNodesChangeIntercept } = useSmartGuides(nodes as Node[], {
+    getZoom: getSmartGuideZoom,
+    getVisibleNodes: getSmartGuideVisibleNodes,
+  })
 
   useEffect(() => {
     connectingTargetIdRef.current = connectingTargetId
@@ -703,6 +711,7 @@ export function useGraphCanvasModel({
       isInputFocused,
       isNodeInteractionActive,
     },
+    visibleNodesRef,
     graph,
     actions: {
       handleNodesChange,

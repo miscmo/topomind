@@ -195,3 +195,22 @@ textarea:focus-visible,
 #app-layout .react-flow__panel.top.left {
   margin-left: calc(12px + var(--tm-node-tree-offset, 0px)) !important;
 }
+
+/* ===== 全局导航层（2026-11-21）=====
+   导航栏是 App 层 absolute 浮层，永远不参与 #app-layout 的 flex 计算。
+   下面两条只做「让位」，画布容器尺寸、React Flow viewport、
+   缩略图视口框在任意状态下都恒定。 */
+/* 1) 非画布视图（首页 / 设置 / 插件页）导航栏常驻时，内容区整体右移一个 rail 宽度；
+      画布标签页没有 data-tm-app-view，完全不受影响。 */
+html[data-tm-nav-rail-docked='true'] [data-tm-app-view] {
+  left: var(--nav-rail-width) !important;
+}
+/* 2) 画布页导航栏展开时（常驻或 hover 唤出），左侧节点树与状态抽屉一起右移，
+      避免被 48px 的导航层盖住。与原有 --tm-node-tree-offset 叠加，
+      仍只改 left / margin-left，画布容器宽度与 React Flow Panel 数量恒定。 */
+html[data-tm-nav-rail-open='true'] #app-layout [data-tm-node-tree-panel] {
+  left: var(--nav-rail-width) !important;
+}
+html[data-tm-nav-rail-open='true'] #app-layout .react-flow__panel.top.left {
+  margin-left: calc(12px + var(--tm-node-tree-offset, 0px) + var(--nav-rail-width)) !important;
+}

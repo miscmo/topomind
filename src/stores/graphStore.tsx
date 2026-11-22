@@ -446,6 +446,27 @@ export function useGraphStore<T>(selector: (state: GraphState) => T): T {
   return useStore(store, selector)
 }
 
+/**
+ * 宿主视图（全局设置页等）不在 GraphStoreProvider 内，但仍要复用依赖画布选中态的组件，
+ * 例如从右栏迁入设置页的「节点与连线样式」分区。直接调 useGraphStore 会抛
+ * Missing GraphStoreProvider 并被 ErrorBoundary 拦下。
+ *
+ * 这里用一个模块级惰性空 store 作只读兜底：hook 调用次数恒定（不能条件调用），
+ * 不注册 setupTemporalMapSync 订阅、不暴露写接口，因此不会制造「第二个画布状态」。
+ * 画布页面拿得到真 Provider 时，行为与 useGraphStore 完全一致。
+ */
+let detachedGraphStore: GraphStoreApi | null = null
+
+function getDetachedGraphStore(): GraphStoreApi {
+  if (!detachedGraphStore) detachedGraphStore = createGraphStore()
+  return detachedGraphStore
+}
+
+export function useOptionalGraphStore<T>(selector: (state: GraphState) => T): T {
+  const store = useContext(GraphStoreContext)
+  return useStore(store ?? getDetachedGraphStore(), selector)
+}
+
 export function useSelectedNodeId() {
   return useGraphStore((s) => s.selectedNodeId)
 }

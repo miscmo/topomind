@@ -45,6 +45,16 @@
         "title": "学习速览",
         "placement": "titlebar"
       }
+    ],
+    "navItems": [
+      {
+        "id": "learning.statistics",
+        "title": "学习记录",
+        "icon": "chart",
+        "group": "workspace",
+        "order": 25,
+        "openCommand": "learning.open"
+      }
     ]
   }
 }

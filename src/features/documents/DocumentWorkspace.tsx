@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
-import type { TopoDocumentManifestItem, TopoDocumentType } from '../../core/storage'
+import type { TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentType } from '../../core/storage'
 import { DocumentSidebar } from './DocumentSidebar'
 import { DocumentEditorHost } from './DocumentEditorHost'
 import type { DetailSidebarTab } from './types/workspaceTypes'
@@ -35,7 +35,7 @@ interface DocumentWorkspaceProps {
   onDeleteDocument: (documentPath: string) => void
   onMoveDocument?: (documentId: string, newParentId: string | null, newSortOrder: number) => void
   onMoveDocumentToCard?: (documentId: string) => void
-  onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
+  onUpdateDocumentMeta?: (documentPath: string, patch: TopoDocumentMetaPatch) => void
   isDocumentBusy?: boolean
 }
 

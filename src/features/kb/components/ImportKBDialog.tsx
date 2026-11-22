@@ -55,7 +55,7 @@ export function ImportKBDialog(props: ImportKBDialogProps) {
         </div>
         <div className="p-[14px_24px] bg-[var(--color-bg)] border-t border-[var(--color-border-light)] flex justify-end gap-2.5">
           <button type="button" className="p-[8px_20px] rounded-lg border-none text-[13px] font-medium cursor-pointer transition-all duration-75 bg-[var(--color-hover-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onClose} disabled={loading || selectingDir}>取消</button>
-          <button type="button" className="p-[8px_20px] rounded-lg border-none text-[13px] font-semibold cursor-pointer transition-all duration-75 bg-[var(--color-primary)] text-[var(--color-text-inverse)] hover:bg-[var(--color-primary-hover)] hover:shadow-[var(--shadow-md)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onSubmit} disabled={loading || selectingDir || !dir}>
+          <button type="button" className="px-5 py-2 font-semibold tm-btn tm-btn--lg tm-btn--primary" onClick={onSubmit} disabled={loading || selectingDir || !dir}>
             {loading ? '导入中...' : '导入'}
           </button>
         </div>

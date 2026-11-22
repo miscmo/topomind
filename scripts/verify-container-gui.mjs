@@ -155,11 +155,18 @@ async function enterWorkspace(page, diagnose = () => {}) {
 
 /** 右栏是覆盖画布右侧的浮层；不折叠时真实鼠标会点中浮层而不是画布节点。 */
 async function setRightPanelCollapsed(page) {
-  await page.evaluate(() => {
+  // 标题栏手动折叠按钮已移除，右栏改为「按需展开 + 失焦隐藏」。
+  // 默认进入工作空间时右栏本就是收起的；若因残留状态展开，走全局 Ctrl+Tab
+  // 键盘入口收起（与 verify-linked-documents-gui 的 toggleRightPanel 一致）。
+  const alreadyHidden = await page.evaluate(() => {
     const right = document.querySelector('.right-panel-container')
-    if (!right || getComputedStyle(right).display === 'none') return
-    document.querySelector('button[aria-label="折叠右侧面板"]')?.click()
+    return !right || getComputedStyle(right).display === 'none'
   })
+  if (!alreadyHidden) {
+    await page.keyboard.down('Control')
+    await page.keyboard.press('Tab')
+    await page.keyboard.up('Control')
+  }
   return waitFor(page, () => {
     const right = document.querySelector('.right-panel-container')
     return !!right && getComputedStyle(right).display === 'none'

@@ -58,12 +58,27 @@ export interface AnalyticsContribution {
   title: string
 }
 
+/**
+ * 左侧全局导航栏图标。点击时执行 openCommand，由命令桥按需激活插件，
+ * 因此不需要运行时 renderer，纯静态声明即可被宿主发现。
+ * id 建议与 secondaryViews 的 viewId 一致，便于激活态高亮。
+ */
+export interface NavItemContribution {
+  id: string
+  title: string
+  icon?: string
+  group?: 'workspace' | 'tools' | 'account'
+  order?: number
+  openCommand: string
+}
+
 export interface PluginContributes {
   secondaryViews?: SecondaryViewContribution[]
   commands?: CommandContribution[]
   widgets?: WidgetContribution[]
   settings?: SettingContribution[]
   analytics?: AnalyticsContribution[]
+  navItems?: NavItemContribution[]
 }
 
 export interface PluginManifest {

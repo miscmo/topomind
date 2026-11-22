@@ -22,9 +22,13 @@ import { ErrorBoundary } from './features/layout/ErrorBoundary'
 import { Toaster } from './shared/ui/Toaster/Toaster'
 import { installViewportScrollGuard } from './core/viewportScrollGuard'
 import { LinkDocumentDialog } from './features/graph/components/LinkDocumentDialog'
+import NavRail from './features/layout/NavRail/NavRail'
+import { HOST_VIEW_IDS } from './features/layout/NavRail/navModel'
 
 const HomePage = lazy(() => import('./features/kb/HomePage'))
 const GraphPage = lazy(() => import('./features/graph/GraphPage'))
+const SettingsPage = lazy(() => import('./features/settings/SettingsPage'))
+const ProfilePage = lazy(() => import('./features/settings/ProfilePage'))
 
 export default memo(function App() {
   const initHomeTab = useTabStore((s) => s.initHomeTab)
@@ -96,6 +100,7 @@ export default memo(function App() {
                   上移、底部露白，且无法用滚轮滚回。 */}
               <div className="relative w-full flex-1 min-h-0 overflow-clip bg-[var(--color-surface)]">
                 <div
+                  data-tm-app-view="home"
                   className="absolute inset-0 transition-opacity duration-120 ease-in-out"
                   inert={activeTab?.type === 'home' ? undefined : true}
                   style={{
@@ -112,6 +117,7 @@ export default memo(function App() {
                   </Suspense>
                 </div>
                 <div
+                  data-tm-app-view="secondary"
                   className="absolute inset-0 transition-opacity duration-120 ease-in-out"
                   inert={activeTab?.type === 'secondary-view' ? undefined : true}
                   style={{
@@ -127,8 +133,14 @@ export default memo(function App() {
                 >
                   {activeSecondaryViewId && (
                     <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)] text-[var(--color-text-muted)] text-[13px]">加载页面中...</div>}>
-                      <ErrorBoundary label="学习统计页面" resetKeys={[activeSecondaryViewId]}>
-                        <PluginViewHost viewId={activeSecondaryViewId} />
+                      <ErrorBoundary label="二级视图页面" resetKeys={[activeSecondaryViewId]}>
+                        {activeSecondaryViewId === HOST_VIEW_IDS.settings ? (
+                          <SettingsPage />
+                        ) : activeSecondaryViewId === HOST_VIEW_IDS.profile ? (
+                          <ProfilePage />
+                        ) : (
+                          <PluginViewHost viewId={activeSecondaryViewId} />
+                        )}
                       </ErrorBoundary>
                     </Suspense>
                   )}
@@ -160,6 +172,9 @@ export default memo(function App() {
                     </Suspense>
                   </div>
                 ))}
+                {/* 全局导航层：App 层单例浮层，多知识库标签页常驻挂载也只渲染一次。
+                    绝对定位，不参与任何画布布局计算；画布页默认自动收起。 */}
+                <NavRail />
               </div>
             </div>
           )}

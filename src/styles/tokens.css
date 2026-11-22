@@ -95,6 +95,27 @@
   --right-panel-max: 600px;
   --header-height: 44px;
   --toolbar-height: 40px;
+  /* 全局导航栏：常驻宽度 / 画布页边缘触发条宽度 */
+  --nav-rail-width: 48px;
+  --nav-rail-edge-width: 6px;
+  /* 顶栏 / 横向知识库 tab：32px 是 flex-col 里唯一允许占文档流的高度。
+     禁止在 App.tsx 里再加第二条横向 shrink-0 兄弟，否则画布净高永久变小。
+     Chrome 式弹性宽度：min / max 之间按可用宽度均分，压到 min 仍放不下才溢出；
+     右侧留白由 --tab-drag-gutter 兜底，不再人为给 tab 区设百分比硬限宽。 */
+  --titlebar-height: 32px;
+  --tab-height: 26px;
+  --tab-width: 148px;
+  --tab-min-width: 88px;
+  --tab-max-width: 180px;
+  --tab-gap: 4px;
+  --tab-drag-gutter: 88px;
+  --tab-overflow-width: 40px;
+  --tab-radius-top: 8px;
+  /* Π 形连体：活跃 tab 的底色必须与它下方的工作区一致，才像「页面从 tab 里长出来」。
+     默认取内容区 surface；画布页由 controls.css 按 data-tm-active-view 换成 canvas-bg。
+     前提：顶栏底色必须比内容区深一档（见 github-light 的 --titlebar-bg），
+     否则白 tab 落在近白顶栏上完全没有轮廓，融合感等于没有。 */
+  --tab-active-bg: var(--color-surface);
 
   /* ===== Spacing ===== */
   --space-xs: 4px;
@@ -145,6 +166,35 @@
   --z-modal: 40;
   --z-contextmenu: 50;
   --z-toast: 60;
+  /* 全局导航层：0 < 画布浮层 30 < 导航 40 < 右键菜单 50 < 弹窗 10000 */
+  --z-nav-rail: 40;
+
+  /* ===== 控件级语义 token（统一设计契约，见 styles/controls.css）=====
+     这些是别名而非新色值：深浅主题自动跟随，禁止在组件里另写一份字面值。
+     新增控件只允许引用这里的变量 / controls.css 的 .tm-* 类。 */
+  --control-radius: var(--radius-md);
+  --control-radius-pill: 999px;
+  --control-height-sm: 24px;
+  --control-height-md: 28px;
+  --control-height-lg: 32px;
+  --control-height-xl: 36px;
+  --control-font: var(--font-size-sm);
+  --control-font-strong: var(--font-size-base);
+  --control-icon: 14px;
+  --control-icon-sm: 12px;
+  --control-icon-lg: 18px;
+  --control-icon-stroke: 1.8;
+  --control-transition: 150ms;
+  --control-shadow: var(--shadow-sm);
+  --control-popover-shadow: var(--shadow-popover);
+  /* 层级补全：历史组件里的 z-[100]/[1200]/[1300]/[3001]/[4000]/[10000]
+     收敛为语义变量，新控件一律引用变量，不再自造魔法层级。 */
+  --z-canvas-overlay: 100;
+  --z-popover: 1200;
+  --z-picker: 1300;
+  --z-titlebar-menu: 3001;
+  --z-widget: 4000;
+  --z-global: 10000;
 }
 
 html[data-theme='dark'], html.dark {
@@ -256,9 +306,9 @@ html[data-theme='github-light'] {
   --color-success-soft: rgba(26, 127, 55, 0.1);
   --color-search-match: #bf8700;
   --color-hover-highlight: #0969da;
-  --titlebar-bg: #f6f8fa;
+  --titlebar-bg: #eaeef2;
   --titlebar-bg-top: #ffffff;
-  --titlebar-bg-unfocused: #f3f4f6;
+  --titlebar-bg-unfocused: #e4e8ed;
   --titlebar-border: #d0d7de;
   --titlebar-text: #24292f;
   --titlebar-text-unfocused: #8c959f;

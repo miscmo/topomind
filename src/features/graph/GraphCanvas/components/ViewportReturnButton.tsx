@@ -111,7 +111,7 @@ export default function ViewportReturnButton({ tabId }: { tabId: string }) {
         data-tm-viewport-back-remaining={String(Math.ceil(remainingMs / 1000))}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className={`nodrag nowheel pointer-events-auto relative flex items-center gap-1 overflow-hidden rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] py-1 pl-1.5 pr-1 shadow-[var(--shadow-popover)] transition-all duration-200 ${
+        className={`nodrag nowheel pointer-events-auto relative flex items-center gap-1 overflow-hidden py-1 pl-1.5 pr-1 transition-all duration-200 tm-pill ${
           visible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-1.5 opacity-0'
         }`}
       >
@@ -120,9 +120,9 @@ export default function ViewportReturnButton({ tabId }: { tabId: string }) {
           data-tm-viewport-back-action=""
           onClick={handleReturn}
           title="返回跳转前的视野（稍后自动消失）"
-          className="nodrag nowheel flex items-center gap-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-hover-bg)]"
+          className="nodrag nowheel px-1.5 py-0.5 font-medium tm-pill-btn"
         >
-          <CornerUpLeft size={13} className="text-[var(--color-accent)]" aria-hidden="true" />
+          <CornerUpLeft className="tm-icon tm-icon--sm text-[var(--color-accent)]" aria-hidden="true" />
           <span className="max-w-[180px] truncate">返回「{rendered.label}」</span>
         </button>
         <button
@@ -130,9 +130,9 @@ export default function ViewportReturnButton({ tabId }: { tabId: string }) {
           data-tm-viewport-back-dismiss=""
           aria-label="关闭返回提示"
           onClick={() => dismiss(tabId)}
-          className="nodrag nowheel flex h-5 w-5 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-hover-bg)]"
+          className="nodrag nowheel text-[var(--color-text-muted)] tm-icon-btn tm-icon-btn--round"
         >
-          <X size={11} aria-hidden="true" />
+          <X className="tm-icon tm-icon--sm" aria-hidden="true" />
         </button>
         <div
           className="pointer-events-none absolute bottom-0 left-0 h-[2px] bg-[var(--color-accent)] transition-[width] duration-100 ease-linear"

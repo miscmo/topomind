@@ -4,24 +4,12 @@
  *
  * @file components/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx
  */
-import { memo, useMemo, useState, useEffect, useRef, useCallback, lazy, Suspense, useSyncExternalStore, type CSSProperties } from 'react'
-import { createPortal } from 'react-dom'
+import { memo, useMemo, useState, useEffect, useRef, useCallback, useSyncExternalStore, type CSSProperties } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps, useStore } from '@xyflow/react'
-const LazyEmojiPicker = lazy(async () => {
-  const [pickerModule, dataModule, i18nModule] = await Promise.all([
-    import('@emoji-mart/react'),
-    import('@emoji-mart/data'),
-    import('@emoji-mart/data/i18n/zh.json'),
-  ])
-  return {
-    default: (props: Record<string, unknown>) => {
-      const Picker = pickerModule.default
-      return <Picker {...props} data={dataModule.default} i18n={i18nModule.default} />
-    },
-  }
-})
 import type { KnowledgeNode } from '../../../../../types'
 import { cn } from '@/lib/utils'
+import { EmojiGlyph } from '@/shared/ui/emoji/EmojiGlyph'
+import { EmojiPickerPanel } from '@/shared/ui/emoji/EmojiPickerPanel'
 import { useKnowledgeCardModel } from './model/useKnowledgeCardModel'
 import { getTitleClampStyle } from './model/cardSizeLimits'
 import { getKnowledgeCardStyles } from './utils/styles'
@@ -237,45 +225,6 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
     transformOrigin: 'center center',
   }), [borderRadius, isConnectTarget, nodeStyle.borderWidth])
 
-  const resolvePickerPosition = useCallback((anchorRect: DOMRect, preferredPlacement: 'node' | 'emoji' = 'node') => {
-    const PICKER_WIDTH = 352
-    const PICKER_HEIGHT = 435
-    const GAP = 6
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
-
-    let x = preferredPlacement === 'emoji'
-      ? anchorRect.left - 12
-      : anchorRect.right + GAP
-    let y = preferredPlacement === 'emoji'
-      ? anchorRect.bottom + GAP
-      : anchorRect.top - 6
-
-    if (preferredPlacement === 'node' && x + PICKER_WIDTH > viewportWidth - GAP) {
-      x = anchorRect.left - PICKER_WIDTH - GAP
-    }
-    if (preferredPlacement === 'emoji' && x + PICKER_WIDTH > viewportWidth - GAP) {
-      x = Math.max(GAP, viewportWidth - PICKER_WIDTH - GAP)
-    }
-
-    if (x < GAP) x = GAP
-    if (x + PICKER_WIDTH > viewportWidth - GAP) {
-      x = Math.max(GAP, viewportWidth - PICKER_WIDTH - GAP)
-    }
-
-    if (y + PICKER_HEIGHT > viewportHeight - GAP) {
-      y = anchorRect.top - PICKER_HEIGHT - GAP
-    }
-    if (y < GAP) {
-      y = Math.max(GAP, Math.min(anchorRect.bottom + GAP, viewportHeight - PICKER_HEIGHT - GAP))
-    }
-
-    return {
-      x,
-      y,
-    }
-  }, [])
-
   useEffect(() => {
     let emojiTimer: ReturnType<typeof setTimeout> | null = null
     const handleAddEmojiEvent: AddEmojiListener = (_e) => {
@@ -283,7 +232,8 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       emojiTimer = setTimeout(() => {
         const cardRect = cardRootRef.current?.getBoundingClientRect()
         if (!cardRect) return
-        setEmojiPickerPosition(resolvePickerPosition(cardRect, 'node'))
+        // 只记录触发点，面板位置交给 floating-ui 做翻转与视口钳制
+        setEmojiPickerPosition({ x: cardRect.right, y: cardRect.top })
         setEditingEmojiIndex(null) // null means append new emoji
       }, 10)
     }
@@ -292,7 +242,7 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
       unsubscribe()
       if (emojiTimer) clearTimeout(emojiTimer)
     }
-  }, [id, resolvePickerPosition, canvasReadOnly])
+  }, [id, canvasReadOnly])
 
   const hasChildBadge = childCount > 0
 
@@ -461,11 +411,11 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
                           e.stopPropagation()
                           if (canvasReadOnly) return
                           const rect = e.currentTarget.getBoundingClientRect()
-                          setEmojiPickerPosition(resolvePickerPosition(rect, 'emoji'))
+                          setEmojiPickerPosition({ x: rect.left, y: rect.bottom })
                           setEditingEmojiIndex(index)
                         }}
                       >
-                        {emoji}
+                        <EmojiGlyph char={emoji} size="1.08em" />
                       </div>
                     ))}
                   </div>
@@ -541,54 +491,33 @@ function KnowledgeCard({ id, data, selected, dragging, width, height, resizing }
         <LodCollapseBadge nodeId={id} />
       </div>
 
-      {emojiPickerPosition && !canvasReadOnly && typeof document !== 'undefined' && createPortal(
-        <div 
-          className="fixed z-[1000] shadow-xl border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] overflow-hidden"
-          style={{ left: emojiPickerPosition.x, top: emojiPickerPosition.y }}
-          onPointerDown={e => e.stopPropagation()}
-          onDoubleClick={e => e.stopPropagation()}
-        >
-          {editingEmojiIndex !== null && (
-            <div className="w-full p-2 border-b border-[var(--color-border-light)] bg-[var(--color-hover-bg)] relative z-10">
-              <button
-                className="w-full py-1.5 text-sm text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                onClick={() => {
-                  const newEmojis = [...emojis]
-                  newEmojis.splice(editingEmojiIndex, 1)
-                  void updateNodeEmojis(id, newEmojis.length > 0 ? newEmojis : undefined)
-                  setEmojiPickerPosition(null)
-                  setEditingEmojiIndex(null)
-                }}
-              >
-                移除此表情
-              </button>
-            </div>
-          )}
-          <Suspense fallback={<div className="w-[352px] h-[360px] grid place-items-center text-sm text-[var(--color-text-muted)]">正在加载表情选择器…</div>}>
-          <LazyEmojiPicker
-            onEmojiSelect={(emoji: { native: string }) => {
-              const currentEmojis = [...emojis]
-              const newEmojis = [...currentEmojis]
-              if (editingEmojiIndex !== null) {
-                newEmojis[editingEmojiIndex] = emoji.native
-              } else {
-                newEmojis.push(emoji.native)
-              }
-              void updateNodeEmojis(id, newEmojis)
-              setEmojiPickerPosition(null)
-              setEditingEmojiIndex(null)
-            }}
-            onClickOutside={(e: MouseEvent) => {
-              const target = e.target as Element
-              if (target.closest?.('[data-context-menu-item]')) return
-              setEmojiPickerPosition(null)
-              setEditingEmojiIndex(null)
-            }}
-            theme="auto"
-          />
-          </Suspense>
-        </div>,
-        document.body
+      {emojiPickerPosition && !canvasReadOnly && typeof document !== 'undefined' && (
+        <EmojiPickerPanel
+          anchor={emojiPickerPosition}
+          title={editingEmojiIndex !== null ? '更换表情' : '添加表情'}
+          onClose={() => {
+            setEmojiPickerPosition(null)
+            setEditingEmojiIndex(null)
+          }}
+          onRemove={editingEmojiIndex !== null ? () => {
+            const newEmojis = [...emojis]
+            newEmojis.splice(editingEmojiIndex, 1)
+            void updateNodeEmojis(id, newEmojis.length > 0 ? newEmojis : undefined)
+            setEmojiPickerPosition(null)
+            setEditingEmojiIndex(null)
+          } : undefined}
+          onSelect={(emoji) => {
+            const newEmojis = [...emojis]
+            if (editingEmojiIndex !== null) {
+              newEmojis[editingEmojiIndex] = emoji
+            } else {
+              newEmojis.push(emoji)
+            }
+            void updateNodeEmojis(id, newEmojis)
+            setEmojiPickerPosition(null)
+            setEditingEmojiIndex(null)
+          }}
+        />
       )}
     </div>
   )

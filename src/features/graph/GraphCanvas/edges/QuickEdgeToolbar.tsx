@@ -109,7 +109,7 @@ function QuickEdgeToolbar({
         {relationMenuOpen && (
           <div
             data-tm-edge-relation-menu=""
-            className="nodrag nopan absolute left-0 top-full z-[11] mt-2 flex w-[238px] flex-col gap-0.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 shadow-[var(--shadow-popover)]"
+            className="tm-fade-enter nodrag nopan absolute left-0 top-full z-[11] mt-2 flex w-[238px] flex-col gap-0.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 shadow-[var(--shadow-popover)]"
             style={{ pointerEvents: 'all' }}
           >
             {relations.map((item) => (

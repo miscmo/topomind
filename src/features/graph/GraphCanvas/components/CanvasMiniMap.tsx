@@ -804,7 +804,7 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
     })
   }, [miniMapSize.height, miniMapSize.width, setMiniMapSize])
 
-  const miniMapControlButtonClassName = 'h-6 w-6 flex items-center justify-center rounded-lg text-[var(--color-text-secondary)] transition-all duration-200 hover:text-[var(--color-text)] hover:bg-[var(--color-hover-bg)] disabled:opacity-40 disabled:cursor-not-allowed'
+  const miniMapControlButtonClassName = 'tm-icon-btn'
 
   return (
     <>
@@ -830,7 +830,7 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
                     aria-label="放大缩略图"
                     disabled={miniMapSize.width >= MINI_MAP_MAX_WIDTH}
                   >
-                    <Plus className="w-3 h-3" />
+                    <Plus className="tm-icon tm-icon--sm" />
                   </button>
                   <button
                     type="button"
@@ -840,7 +840,7 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
                     aria-label="缩小缩略图"
                     disabled={miniMapSize.width <= MINI_MAP_MIN_WIDTH}
                   >
-                    <Minus className="w-3 h-3" />
+                    <Minus className="tm-icon tm-icon--sm" />
                   </button>
                 </>
               )}
@@ -852,7 +852,7 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
                 title={showMiniMap ? '关闭自动缩略图' : '开启自动缩略图'}
                 aria-label={showMiniMap ? '关闭自动缩略图' : '开启自动缩略图'}
               >
-                {showMiniMap ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                {showMiniMap ? <EyeOff className="tm-icon tm-icon--sm" /> : <Eye className="tm-icon tm-icon--sm" />}
               </button>
             </div>
           </div>

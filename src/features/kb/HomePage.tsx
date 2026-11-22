@@ -61,7 +61,7 @@ export default function HomePage() {
       <div className="flex-1 overflow-y-auto bg-background p-8 md:p-12 relative">
         <div className="mx-auto w-full max-w-7xl">
           {loading && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+            <div className="tm-fade-enter absolute inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
               <span className="ml-3 text-sm font-medium text-muted-foreground">加载中...</span>
             </div>

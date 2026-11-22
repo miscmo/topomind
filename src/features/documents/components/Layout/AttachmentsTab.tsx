@@ -110,7 +110,7 @@ const AttachmentItemRow = memo(function AttachmentItemRow({
         </div>
       </div>
       {item.isImage && isHovering && previewUrl && rect && createPortal(
-        <div style={{
+        <div className="tm-fade-enter" style={{
           position: 'fixed',
           zIndex: 9999,
           top: Math.min(rect.top, window.innerHeight - 340),

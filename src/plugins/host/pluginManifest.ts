@@ -3,6 +3,7 @@ import {
   PLUGIN_PERMISSIONS,
   type AnalyticsContribution,
   type CommandContribution,
+  type NavItemContribution,
   type PluginActivationEvent,
   type PluginKind,
   type PluginManifest,
@@ -16,6 +17,7 @@ import {
 } from '../extension-points/secondaryViews.ts'
 
 const WIDGET_PLACEMENTS = ['titlebar', 'home'] as const
+const NAV_GROUPS = ['workspace', 'tools', 'account'] as const
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -206,6 +208,33 @@ function parseAnalytics(value: unknown): AnalyticsContribution[] | undefined {
   })
 }
 
+function parseNavItems(value: unknown): NavItemContribution[] | undefined {
+  if (value == null) {
+    return undefined
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error('manifest.contributes.navItems must be an array')
+  }
+
+  return value.map((item, index) => {
+    const label = `manifest.contributes.navItems[${index}]`
+    const record = asRecord(item, label)
+    const rawOrder = record.order
+
+    return {
+      id: asString(record.id, `${label}.id`),
+      title: asString(record.title, `${label}.title`),
+      icon: typeof record.icon === 'string' ? record.icon : undefined,
+      group: (record.group == null
+        ? 'workspace'
+        : asOneOf(record.group, NAV_GROUPS, `${label}.group`)) as NavItemContribution['group'],
+      order: typeof rawOrder === 'number' && Number.isFinite(rawOrder) ? Math.round(rawOrder) : 50,
+      openCommand: asString(record.openCommand, `${label}.openCommand`),
+    }
+  })
+}
+
 export function validatePluginManifest(input: unknown): PluginManifest {
   const record = asRecord(input, 'manifest')
   const contributesRecord =
@@ -222,6 +251,7 @@ export function validatePluginManifest(input: unknown): PluginManifest {
         widgets: parseWidgets(contributesRecord.widgets),
         settings: parseSettings(contributesRecord.settings),
         analytics: parseAnalytics(contributesRecord.analytics),
+        navItems: parseNavItems(contributesRecord.navItems),
       }
     : undefined
 
@@ -241,9 +271,17 @@ export function validatePluginManifest(input: unknown): PluginManifest {
   assertUniqueIds(contributes?.commands ?? [], 'manifest.contributes.commands')
   assertUniqueIds(contributes?.widgets ?? [], 'manifest.contributes.widgets')
   assertUniqueIds(contributes?.analytics ?? [], 'manifest.contributes.analytics')
+  assertUniqueIds(contributes?.navItems ?? [], 'manifest.contributes.navItems')
   assertUniqueKeys(contributes?.settings ?? [], 'manifest.contributes.settings')
 
   const contributedCommandIds = new Set((contributes?.commands ?? []).map((command) => command.id))
+  for (const navItem of contributes?.navItems ?? []) {
+    if (!contributedCommandIds.has(navItem.openCommand)) {
+      throw new Error(
+        `manifest.contributes.navItems references missing openCommand: ${navItem.openCommand}`,
+      )
+    }
+  }
   for (const view of contributes?.secondaryViews ?? []) {
     if (view.openCommand && !contributedCommandIds.has(view.openCommand)) {
       throw new Error(
@@ -266,6 +304,10 @@ export function validatePluginManifest(input: unknown): PluginManifest {
 
   if ((contributes?.analytics?.length ?? 0) > 0 && !permissions.includes('analytics.register')) {
     throw new Error('manifest.permissions must include analytics.register when analytics are contributed')
+  }
+
+  if ((contributes?.navItems?.length ?? 0) > 0 && !permissions.includes('command.register')) {
+    throw new Error('manifest.permissions must include command.register when navItems are contributed')
   }
 
   return {

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import type { TopoDocumentManifestItem } from '../../../../core/storage'
+import type { TopoDocumentManifestItem, TopoDocumentMetaPatch } from '../../../../core/storage'
 import { topoDocumentPath, buildDocumentTree, topoDocumentTypeIcon } from '../../../../features/documents/types/documentTypes'
 import type { TopoDocumentType } from '../../../../core/storage'
 import { ChevronRight, File, Folder } from 'lucide-react'
 import { DocumentContextMenu } from '../../../../features/documents/components/DocumentContextMenu'
 import { DocumentMetaPicker, type DocumentMetaPickerState } from '../../../../features/documents/components/DocumentMetaPicker'
+import { EmojiGlyph } from '../../../../shared/ui/emoji/EmojiGlyph'
 import { usePromptStore } from '../../../../shared/ui/PromptModal/promptStore'
 
 interface DocumentBreadcrumbProps {
@@ -16,7 +17,7 @@ interface DocumentBreadcrumbProps {
   onRenameDocument?: (documentPath: string, name: string) => void
   onDeleteDocument?: (documentPath: string) => void
   onExportDocument?: (documentPath: string) => void
-  onUpdateDocumentMeta?: (documentPath: string, patch: { icon?: string | null; color?: string | null }) => void
+  onUpdateDocumentMeta?: (documentPath: string, patch: TopoDocumentMetaPatch) => void
 }
 
 export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
@@ -162,14 +163,14 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
     
     if (children.length === 0) {
       return (
-        <div data-tm-breadcrumb-dropdown="" className="absolute top-full left-0 mt-1 w-48 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded shadow-lg z-50 text-xs text-[var(--color-text-muted)] px-3">
+        <div data-tm-breadcrumb-dropdown="" className="tm-fade-enter absolute top-full left-0 mt-1 w-48 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded shadow-lg z-50 text-xs text-[var(--color-text-muted)] px-3">
           (空)
         </div>
       )
     }
 
         return (
-          <div data-tm-breadcrumb-dropdown="" className="absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[280px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,var(--color-text-muted)_34%,transparent)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full">
+          <div data-tm-breadcrumb-dropdown="" className="tm-fade-enter absolute top-full left-0 mt-1 min-w-[160px] max-w-[240px] max-h-[280px] overflow-y-auto py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-50 flex flex-col [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,var(--color-text-muted)_34%,transparent)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-text-muted)_34%,transparent)] [&::-webkit-scrollbar-thumb]:rounded-full">
         {children.map(child => {
           const Icon = child.icon || topoDocumentTypeIcon(child.type) || File
           const IconComp = typeof Icon === 'string' ? null : (Icon as React.ComponentType<{ size?: number }>)
@@ -231,7 +232,7 @@ export const DocumentBreadcrumb: React.FC<DocumentBreadcrumbProps> = ({
                     title={childCount > 0 ? `${childCount} 个子文档` : undefined}
                   >
                     <div className="opacity-60 flex items-center justify-center w-full h-full">
-                      {IconComp ? <IconComp size={12} /> : (typeof Icon === 'string' ? Icon : null)}
+                      {IconComp ? <IconComp size={12} /> : (typeof Icon === 'string' ? <EmojiGlyph char={Icon} size={12} /> : null)}
                     </div>
                     {childCount > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--color-primary)] text-[var(--color-text-inverse)] text-[10px] font-semibold leading-none ring-1 ring-[var(--color-surface)]">

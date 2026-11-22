@@ -28,6 +28,8 @@ export class PluginRegistry {
   private readonly staticViewsById = new Map<string, StaticContributionRecord>()
   private readonly staticCommandsById = new Map<string, StaticContributionRecord>()
   private readonly staticWidgetsById = new Map<string, StaticContributionRecord>()
+  /** 导航项只做静态发现，不进入 staticRecordsByPluginId：既有贡献点计数契约保持不变。 */
+  private readonly staticNavItemsById = new Map<string, StaticContributionRecord>()
   private readonly runtimeViewsById = new Map<string, RuntimeViewBinding>()
   private readonly runtimeCommandsById = new Map<string, RuntimeCommandBinding>()
   private readonly runtimeWidgetsById = new Map<string, RuntimeWidgetBinding>()
@@ -93,6 +95,22 @@ export class PluginRegistry {
       this.staticWidgetsById.set(widget.id, record)
     }
 
+    for (const navItem of manifest.contributes?.navItems ?? []) {
+      if (this.staticNavItemsById.has(navItem.id)) {
+        throw new Error(`Duplicate nav item contribution: ${navItem.id}`)
+      }
+
+      // navItem 通过命令打开，记录类型沿用 'command'；它不参与 listStaticRecords 计数，
+      // 也不产生 runtime binding，因此不会改变既有插件诊断口径。
+      this.staticNavItemsById.set(navItem.id, {
+        pluginId: manifest.id,
+        contributionType: 'command',
+        contributionId: navItem.id,
+        activationEvents: [...manifest.activationEvents],
+        manifestData: toManifestData(navItem),
+      })
+    }
+
     this.manifestsByPluginId.set(manifest.id, manifest)
     this.staticRecordsByPluginId.set(manifest.id, records)
   }
@@ -135,6 +153,20 @@ export class PluginRegistry {
 
   listStaticWidgetsByPlacement(placement: 'titlebar' | 'home'): StaticContributionRecord[] {
     return this.listStaticWidgets().filter((record) => record.manifestData.placement === placement)
+  }
+
+  getStaticNavItem(navItemId: string): StaticContributionRecord | undefined {
+    return this.staticNavItemsById.get(navItemId)
+  }
+
+  /** 按 group 顺序 + order + id 稳定排序，宿主直接消费，不需要运行时 renderer。 */
+  listStaticNavItems(): StaticContributionRecord[] {
+    return [...this.staticNavItemsById.values()].sort((a, b) => {
+      const orderA = typeof a.manifestData.order === 'number' ? a.manifestData.order : 50
+      const orderB = typeof b.manifestData.order === 'number' ? b.manifestData.order : 50
+      if (orderA !== orderB) return orderA - orderB
+      return a.contributionId.localeCompare(b.contributionId)
+    })
   }
 
   getPluginIdByViewId(viewId: string): string | undefined {

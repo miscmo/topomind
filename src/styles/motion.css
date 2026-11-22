@@ -1,0 +1,113 @@
+/**
+ * 全局浮层动效唯一真源。
+ *
+ * 设计目标（对齐 Linear / Figma / macOS 等桌面软件）：所有弹窗、浮窗的
+ * 出现与消失都是一段克制、对称的透明度过渡 —— 入场 160ms 缓出，退场 130ms
+ * 平滑淡出。位移只允许 3px，且只用于「锚定在触发点」的浮层；居中弹窗
+ * 用 0.99 的极轻微缩放，不做弹跳、不做方向性滑入。
+ *
+ * 分层规则：
+ * 1) 定位层用 .tm-popover-anchor（或组件自身的 left/top），**不得**承载动画。
+ *    凡是用 floating-ui floatingStyles 定位的元素，必须把动画放到内层子元素，
+ *    否则 @keyframes 的 transform 会覆盖定位用的 transform，表现为「从左上角飘出」。
+ * 2) 标准入场用 .tm-popover-enter；只淡入、不能有位移的场景用 .tm-fade-enter
+ *    （元素自带 -translate-x-1/2、或 floating-ui 用 transform 定位时必须用后者）。
+ * 3) 时长 / 曲线 / 位移只在本文件调整；组件里禁止再写
+ *    animate-in / fade-in / zoom-in / slide-in-from-* / 手写 @keyframes。
+ * 4) 退出统一由 .tm-popover-exit 提供，**只改 opacity，绝不碰 transform**：
+ *    全局退出代理会把已被 React 卸载的浮层临时插回原父节点原位播完这段动画，
+ *    带 transform 的浮层（floating-ui / -translate-x-1/2 / 画布锚点）同样适用。
+ */
+:root {
+  --tm-motion-duration: 160ms;
+  --tm-motion-exit-duration: 130ms;
+  --tm-motion-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  --tm-motion-easing-exit: cubic-bezier(0.4, 0, 0.6, 1);
+  --tm-popover-shift: -3px;
+  --tm-popover-origin: top left;
+}
+
+/** 只负责坐标，绝不设置 animation / transform 动画。 */
+.tm-popover-anchor {
+  position: fixed;
+  z-index: var(--z-popover);
+}
+
+@keyframes tm-popover-enter {
+  from { opacity: 0; transform: translateY(var(--tm-popover-shift)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/** 纯透明度退出：不写 transform，才能安全覆盖所有定位方式的浮层。 */
+@keyframes tm-popover-exit {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes tm-fade-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes tm-modal-panel-enter {
+  from { opacity: 0; transform: scale(0.99); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.tm-popover-enter {
+  animation: tm-popover-enter var(--tm-motion-duration) var(--tm-motion-easing) both;
+  transform-origin: var(--tm-popover-origin);
+}
+
+.tm-popover-exit {
+  animation: tm-popover-exit var(--tm-motion-exit-duration) var(--tm-motion-easing-exit) both;
+}
+
+/** 纯透明度入场，不碰 transform —— 居中浮层、transform 定位浮层专用。 */
+.tm-fade-enter {
+  animation: tm-fade-enter var(--tm-motion-duration) var(--tm-motion-easing) both;
+}
+
+.tm-modal-overlay-enter {
+  animation: tm-fade-enter var(--tm-motion-duration) var(--tm-motion-easing) both;
+}
+
+.tm-modal-panel-enter {
+  animation: tm-modal-panel-enter var(--tm-motion-duration) var(--tm-motion-easing) both;
+  transform-origin: center;
+}
+
+/**
+ * 退出代理把已被 React 卸载的浮层临时插回原父节点，播完这段淡出再真正移除。
+ * 期间该节点是 inert + 不可交互的「幽灵」：
+ *  - 不抢焦点、不吃点击，不会让右栏误判失焦，也不会吞掉下一次 Esc / 外部点击；
+ *  - 整棵子树都带 data-tm-exiting，所有「浮层是否仍打开」的查询用
+ *    :not([data-tm-exiting]) 即可把它排除，不会出现「关了却还算打开」；
+ *  - 关掉 transition，避免工具条自带的 transition-all 与淡出叠成两段动画。
+ */
+[data-tm-exiting] {
+  pointer-events: none !important;
+  transition: none !important;
+  user-select: none !important;
+}
+
+/**
+ * 系统开启「减少动态效果」时，所有走契约的浮层瞬间到位。
+ * 同时兜住历史遗留的 animate-in / animate-out，避免第三方样式绕过契约。
+ * 画布 LOD 的渐隐与延迟卸载时序耦合，不在此处强制关闭。
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --tm-motion-duration: 1ms;
+    --tm-motion-exit-duration: 1ms;
+  }
+  .tm-popover-enter,
+  .tm-popover-exit,
+  .tm-fade-enter,
+  .tm-modal-overlay-enter,
+  .tm-modal-panel-enter,
+  .animate-in,
+  .animate-out {
+    animation: none !important;
+  }
+}

@@ -41,9 +41,9 @@ export default memo(function CanvasZoomSlider({ zoomLevel }: CanvasZoomSliderPro
       data-tm-canvas-zoom-slider-value={percent}
       data-tm-canvas-zoom-slider-min={MIN_DISPLAY_PERCENT}
       data-tm-canvas-zoom-slider-max={MAX_DISPLAY_PERCENT}
-      className="nodrag nowheel pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-1.5 text-[var(--color-text-secondary)] shadow-[var(--shadow-popover)]"
+      className="nodrag nowheel pointer-events-auto gap-2 px-3 py-1.5 text-[var(--color-text-secondary)] tm-pill"
     >
-      <span className="text-[10px] tabular-nums">{MIN_DISPLAY_PERCENT}%</span>
+      <span className="tm-hint tabular-nums">{MIN_DISPLAY_PERCENT}%</span>
       <input
         type="range"
         min={MIN_DISPLAY_PERCENT}
@@ -58,7 +58,7 @@ export default memo(function CanvasZoomSlider({ zoomLevel }: CanvasZoomSliderPro
         className="nodrag nowheel pointer-events-auto w-[220px] cursor-pointer"
         style={{ accentColor: 'var(--color-accent)' }}
       />
-      <span className="text-[10px] tabular-nums">{MAX_DISPLAY_PERCENT}%</span>
+      <span className="tm-hint tabular-nums">{MAX_DISPLAY_PERCENT}%</span>
       <span
         data-tm-canvas-zoom-slider-readout=""
         className="min-w-[34px] text-right text-[11px] font-semibold tabular-nums text-[var(--color-accent)]"

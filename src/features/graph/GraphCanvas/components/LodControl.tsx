@@ -226,7 +226,7 @@ export default function LodControl({
         {/* 标题栏＝房间路径面包屑。固定宽度 + 首段/当前段压缩 + 中间省略，
             路径深度只影响 tooltip 与「位置」区内容，不影响控件尺寸。 */}
         <div className="flex items-center gap-1.5 px-2.5 py-2">
-          <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" aria-hidden="true" />
+          <MapPin className="tm-icon text-[var(--color-accent)]" aria-hidden="true" />
           <div
             data-tm-canvas-status-title=""
             data-tm-room-path-full={path.full}
@@ -244,12 +244,12 @@ export default function LodControl({
           </div>
           <span
             data-tm-canvas-status-zoom=""
-            className="shrink-0 rounded-md bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-[var(--color-accent)]"
+            className="shrink-0 font-medium tabular-nums tm-badge tm-badge--accent"
           >
             {zoomPercent}
           </span>
           {readOnlyState.readOnly && (
-            <Lock className="h-3 w-3 shrink-0 text-[var(--color-accent)]" aria-hidden="true" />
+            <Lock className="tm-icon tm-icon--sm text-[var(--color-accent)]" aria-hidden="true" />
           )}
           <button
             type="button"
@@ -259,10 +259,10 @@ export default function LodControl({
             aria-label={prefs.drawerOpen ? '折叠画布状态面板' : '展开画布状态面板'}
             title={prefs.drawerOpen ? '折叠状态面板' : '展开状态面板'}
             onClick={() => setCanvasStatusDrawerOpen(!prefs.drawerOpen)}
-            className="nodrag nowheel flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)]"
+            className="nodrag nowheel tm-icon-btn"
           >
             <ChevronDown
-              className={`h-3.5 w-3.5 transition-transform duration-150 ${prefs.drawerOpen ? '' : '-rotate-90'}`}
+              className={`tm-icon transition-transform duration-150 ${prefs.drawerOpen ? '' : '-rotate-90'}`}
               aria-hidden="true"
             />
           </button>
@@ -286,9 +286,9 @@ export default function LodControl({
             aria-label="撤销上一次节点移动"
             title={readOnlyState.readOnly ? '只读视图：回到 100% 解锁' : describeMoveEntry(undoEntry, 'undo')}
             onClick={onMoveUndo}
-            className="nodrag nowheel flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-[var(--color-border-light)] px-1 py-1 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] disabled:cursor-not-allowed disabled:opacity-45"
+            className="nodrag nowheel min-w-0 flex-1 tm-btn"
           >
-            <Undo2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <Undo2 className="tm-icon tm-icon--sm" aria-hidden="true" />
             <span className="truncate">撤销{undoStack.length > 0 ? ` ${undoStack.length}` : ''}</span>
           </button>
           <button
@@ -298,10 +298,10 @@ export default function LodControl({
             aria-label="前进重做节点移动"
             title={readOnlyState.readOnly ? '只读视图：回到 100% 解锁' : describeMoveEntry(redoEntry, 'redo')}
             onClick={onMoveRedo}
-            className="nodrag nowheel flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-[var(--color-border-light)] px-1 py-1 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] disabled:cursor-not-allowed disabled:opacity-45"
+            className="nodrag nowheel min-w-0 flex-1 tm-btn"
           >
             <span className="truncate">前进{redoStack.length > 0 ? ` ${redoStack.length}` : ''}</span>
-            <Redo2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <Redo2 className="tm-icon tm-icon--sm" aria-hidden="true" />
           </button>
         </div>
 
@@ -348,9 +348,9 @@ export default function LodControl({
                     ? `已到 ${MIN_DISPLAY_PERCENT}% 最小比例`
                     : compactZoom ? '紧凑镜头：越接近下限缩小幅度越小' : `缩小 ${Math.round(ZOOM_STEP_PERCENT * stepSensitivity)}%`}
                   onClick={() => zoomBy(-ZOOM_STEP_PERCENT)}
-                  className="nodrag nowheel flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--color-border-light)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] disabled:cursor-not-allowed disabled:opacity-45"
+                  className="nodrag nowheel tm-icon-btn tm-icon-btn--outlined"
                 >
-                  <Minus className="h-3 w-3" />
+                  <Minus className="tm-icon tm-icon--sm" />
                 </button>
                 <button
                   type="button"
@@ -359,7 +359,7 @@ export default function LodControl({
                   aria-label="回到 100% 常规视图"
                   title="点击回到 100% 常规视图（放大上限）"
                   onClick={() => { void reactFlow.zoomTo(ZOOM_REFERENCE, { duration: ZOOM_TRANSITION_MS }) }}
-                  className="nodrag nowheel min-w-0 flex-1 rounded-md border border-[var(--color-border-light)] px-1 py-1 text-center text-[11px] font-medium tabular-nums text-[var(--color-text)] hover:bg-[var(--color-hover-bg)]"
+                  className="nodrag nowheel min-w-0 flex-1 tabular-nums font-medium tm-btn"
                 >
                   {zoomPercent}
                 </button>
@@ -372,9 +372,9 @@ export default function LodControl({
                     ? '100% 已是最大比例，节点已全部展示'
                     : compactZoom ? '紧凑镜头：逐步退出紧凑区' : `放大 ${Math.round(ZOOM_STEP_PERCENT * stepSensitivity)}%`}
                   onClick={() => zoomBy(ZOOM_STEP_PERCENT)}
-                  className="nodrag nowheel flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--color-border-light)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] disabled:cursor-not-allowed disabled:opacity-45"
+                  className="nodrag nowheel tm-icon-btn tm-icon-btn--outlined"
                 >
-                  <Plus className="h-3 w-3" />
+                  <Plus className="tm-icon tm-icon--sm" />
                 </button>
               </div>
 
@@ -385,7 +385,7 @@ export default function LodControl({
                   className="mt-1.5 flex items-center gap-1.5 rounded-md bg-[var(--color-accent-soft)] px-1.5 py-1 text-[10px] font-medium text-[var(--color-accent)]"
                   title="缩小视图下画布信息失真，移动节点 / 连线、增删连线、重命名等编辑操作已全部停用"
                 >
-                  <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <Lock className="tm-icon tm-icon--sm" aria-hidden="true" />
                   <span className="min-w-0 flex-1">只读 · 回到 100% 解锁</span>
                 </div>
               )}
@@ -397,7 +397,7 @@ export default function LodControl({
                   aria-label="房间图型"
                   value={profileId}
                   onChange={(event) => onProfileChange(event.target.value as GraphProfileId)}
-                  className="nodrag nowheel min-w-0 flex-1 rounded-md border border-[var(--color-border-light)] bg-[var(--color-surface)] px-1 py-0.5 text-[11px] text-[var(--color-text)]"
+                  className="nodrag nowheel min-w-0 flex-1 tm-select"
                 >
                   {GRAPH_PROFILE_DEFINITIONS.map((item) => (
                     <option key={item.id} value={item.id}>{item.label}</option>
@@ -414,7 +414,7 @@ export default function LodControl({
                   title="缩小到最远镜头也保留该深度以内的全部节点（树根算第 1 层），可随时变更"
                   value={visibility.preservedDepth}
                   onChange={(event) => onPreservedDepthChange(Number(event.target.value))}
-                  className="nodrag nowheel min-w-0 flex-1 rounded-md border border-[var(--color-border-light)] bg-[var(--color-surface)] px-1 py-0.5 text-[11px] text-[var(--color-text)]"
+                  className="nodrag nowheel min-w-0 flex-1 tm-select"
                 >
                   {depthOptions.map((item) => (
                     <option key={item.value} value={item.value}>{item.label}</option>
@@ -430,7 +430,7 @@ export default function LodControl({
                   className="mt-1.5 flex items-center gap-1 rounded-md bg-[var(--color-accent-soft)] px-1.5 py-1 text-[10px] font-medium text-[var(--color-accent)]"
                   title={`${COMPACT_START_PERCENT}% 以下不再隐藏节点，标题文字保持可读；继续缩小只让图谱更紧凑，越接近 ${MIN_DISPLAY_PERCENT}% 幅度越小`}
                 >
-                  <Map className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <Map className="tm-icon tm-icon--sm" aria-hidden="true" />
                   <span className="min-w-0 flex-1">紧凑镜头 · 节点冻结 · 文字保持</span>
                 </div>
               )}
@@ -444,11 +444,7 @@ export default function LodControl({
                     aria-pressed={mode === option.value}
                     title={option.title}
                     onClick={() => onModeChange(option.value)}
-                    className={
-                      mode === option.value
-                        ? 'flex-1 rounded-md bg-[var(--color-accent)] px-1 py-1 text-[11px] font-medium text-[var(--color-text-inverse)]'
-                        : 'flex-1 rounded-md border border-[var(--color-border-light)] px-1 py-1 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)]'
-                    }
+                    className={mode === option.value ? 'flex-1 tm-btn tm-btn--active' : 'flex-1 tm-btn'}
                   >
                     {option.label}
                   </button>
@@ -462,9 +458,9 @@ export default function LodControl({
                   disabled={!selectedNodeId}
                   title={selectedNodeId ? '把当前选中节点置顶（始终显示）' : '先选中一个节点'}
                   onClick={() => selectedNodeId && onTogglePin(selectedNodeId)}
-                  className="flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--color-border-light)] px-1 py-1 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] disabled:cursor-not-allowed disabled:opacity-45"
+                  className="flex-1 tm-btn"
                 >
-                  <Pin className="h-3 w-3" />
+                  <Pin className="tm-icon tm-icon--sm" />
                   {isSelectedPinned ? '取消置顶' : '置顶选中'}
                 </button>
                 <span data-tm-lod-pinned-count="" className="min-w-[20px] text-center text-[10px] text-[var(--color-text-secondary)]">
@@ -476,7 +472,7 @@ export default function LodControl({
                     data-tm-lod-pin-clear=""
                     title="清除本房间全部置顶"
                     onClick={onClearPin}
-                    className="rounded-md px-1 py-1 text-[10px] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)]"
+                    className="tm-btn tm-btn--ghost"
                   >
                     清除
                   </button>
@@ -488,9 +484,9 @@ export default function LodControl({
                 data-tm-room-overview-open=""
                 title="把当前知识库的所有房间画成摘要卡片，双击进入房间（按需加载）"
                 onClick={() => useRoomOverviewStore.getState().open()}
-                className="nodrag nowheel mt-1.5 flex w-full items-center justify-center gap-1 rounded-md border border-[var(--color-border-light)] px-1 py-1 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)]"
+                className="nodrag nowheel mt-1.5 w-full tm-btn"
               >
-                <Map className="h-3 w-3" />
+                <Map className="tm-icon tm-icon--sm" />
                 知识库总览
               </button>
             </CanvasStatusSection>

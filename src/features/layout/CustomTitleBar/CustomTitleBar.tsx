@@ -1,11 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { executeCommand } from '../../../application/commands'
 import { useThemeStore, DARK_THEME, LIGHT_THEME } from '../../../stores/themeStore'
+import { useLayoutStore } from '../../../stores/layoutStore'
 import { PluginWidgetSlot } from '../../../plugins'
-import { useRightPanelStore } from '@/stores/rightPanelStore'
+import { useTabStore } from '../../../stores/tabs/tabStore'
 import { useShortcut } from '../../../hooks/useShortcut'
-import { PanelRightClose, PanelRightOpen } from 'lucide-react'
-import { SegmentedControl } from '../../../shared/ui/SegmentedControl'
+import { Menu, PanelLeft, PanelLeftClose } from 'lucide-react'
+import { TM_UI, tmUI } from '../../../shared/ui/controlStyles'
 import TabBar from '../TabBar/TabBar'
 import type { WindowControlsState } from '../../../types/electron-api'
 
@@ -26,6 +27,18 @@ interface MenuItem {
   checked?: boolean
 }
 
+/**
+ * 单条 32px 顶栏：左＝全局控制 + 学习计时 + 知识库 tab，右＝窗口控制。
+ *
+ * 2026-11-21 重构：
+ * - 最左侧软件图标移除；改为「导航栏显隐」按钮（唯一全局入口）+ 保留三条横线菜单；
+ * - 学习计时 widget 放在控制按钮之后、tab 栏之前，不再挤在右段；
+ * - 右栏折叠按钮与「详情/样式」分段控件移除：右栏改为按需展开 + 失焦隐藏，
+ *   样式设置迁入全局设置页。
+ *
+ * 右栏相关 aria-label 已不再是 GUI 契约，但 `应用菜单` / `data-tm-active-view` /
+ * `data-tm-tab-zone` 仍是，必须保留。
+ */
 const MENU_LABELS: Array<{ key: MenuKey; label: string }> = [
   { key: 'file', label: '文件' },
   { key: 'view', label: '视图' },
@@ -41,8 +54,10 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null)
   const [windowState, setWindowState] = useState<WindowControlsState>({ isMaximized: false, isFocused: true })
   const theme = useThemeStore((s) => s.theme)
-  const rightPanelCollapsed = useRightPanelStore((s) => s.rightPanelCollapsed)
-  const rightPanelTab = useRightPanelStore((s) => s.rightPanelTab)
+  const railVisible = useLayoutStore((s) => s.railVisible)
+  const toggleRailVisible = useLayoutStore((s) => s.toggleRailVisible)
+  // 仅用于 Π 形连体换底色，不参与任何画布布局计算。
+  const activeTabType = useTabStore((s) => s.tabs.find((tab) => tab.id === s.activeTabId)?.type)
 
   useEffect(() => {
     const api = window.electronAPI
@@ -71,18 +86,18 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
 
   useEffect(() => {
     if (!activeMenu) return
-    
+
     // 创建一个全屏的透明遮罩层来拦截所有的点击事件
     // 因为 Electron 的 -webkit-app-region: drag 区域会吞噬掉原生的鼠标事件
     const overlay = document.createElement('div')
     overlay.style.position = 'fixed'
     overlay.style.inset = '0'
-    overlay.style.zIndex = '3001' // 覆盖标题栏的其他区域，但在菜单（z-[3002]）之下
+    overlay.style.zIndex = '3001' // 覆盖标题栏的其他区域，但在菜单之下
     // 强制此区域不可拖拽，以保证能接收到点击事件
     overlay.style.setProperty('-webkit-app-region', 'no-drag')
-    
+
     const handleClose = () => setActiveMenu(null)
-    
+
     overlay.addEventListener('pointerdown', handleClose)
     if (rootRef.current) {
       rootRef.current.appendChild(overlay)
@@ -119,8 +134,8 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
       { label: '退出 TopoMind', shortcut: 'Alt+F4', action: () => runCommand('window.close') },
     ],
     view: [
-      { 
-        label: '主题', 
+      {
+        label: '主题',
         submenu: [
           { label: '浅色', checked: theme === LIGHT_THEME, action: () => runCommand('theme.set', { theme: LIGHT_THEME }) },
           { label: '深色', checked: theme === DARK_THEME, action: () => runCommand('theme.set', { theme: DARK_THEME }) },
@@ -128,20 +143,43 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
       },
       { label: '系统日志', action: () => runCommand('monitor.open') },
       { label: '学习统计', action: () => runCommand('learning.open') },
+      { label: '设置', action: () => runCommand('nav.openSettings') },
       { label: '命令中心', shortcut: 'Ctrl+Shift+P', disabled: true },
-      { label: '重置布局', disabled: true },
+      { label: '重置布局', action: () => runCommand('layout.reset') },
     ],
     help: [
-      { label: '快捷键', disabled: true },
+      { label: '快捷键', action: () => runCommand('nav.openSettings') },
       { label: '开发者工具', shortcut: 'F12', action: () => runCommand('window.toggleDevTools') },
-      { label: '关于 TopoMind', disabled: true },
+      { label: '关于 TopoMind', action: () => runCommand('nav.openSettings') },
     ],
   }), [runCommand, theme])
 
+  const renderMenuItem = (item: MenuItem) => (
+    <button
+      key={item.label}
+      type="button"
+      className={TM_UI.menuItem}
+      role="menuitem"
+      disabled={item.disabled}
+      onClick={() => {
+        if (item.disabled) return
+        setActiveMenu(null)
+        item.action?.()
+      }}
+      style={{ WebkitAppRegion: 'no-drag' }}
+    >
+      <span className={TM_UI.tabMenuLabel}>{item.label}</span>
+      {item.checked && <span style={{ color: 'var(--color-primary)' }}>✓</span>}
+      {item.shortcut && <span className={TM_UI.hint}>{item.shortcut}</span>}
+    </button>
+  )
+
   return (
-    <div 
-      ref={rootRef} 
-      className={`flex items-center shrink-0 h-[32px] bg-[var(--titlebar-bg)] border-b border-[var(--color-border-subtle)] text-[var(--titlebar-text)] select-none [-webkit-app-region:drag] relative z-[3000] transition-colors ${!windowState.isFocused ? '[--titlebar-bg:var(--titlebar-bg-unfocused)] [--titlebar-text:var(--titlebar-text-unfocused)] [--titlebar-muted:var(--titlebar-muted-unfocused)]' : ''}`}
+    <div
+      ref={rootRef}
+      data-tm-titlebar-unfocused={!windowState.isFocused ? 'true' : 'false'}
+      data-tm-active-view={activeTabType ?? 'system'}
+      className={`flex items-center shrink-0 h-[var(--titlebar-height)] bg-[var(--titlebar-bg)] border-b border-[var(--color-border-subtle)] text-[var(--titlebar-text)] select-none [-webkit-app-region:drag] relative z-[3000] transition-colors ${!windowState.isFocused ? '[--titlebar-bg:var(--titlebar-bg-unfocused)] [--titlebar-text:var(--titlebar-text-unfocused)] [--titlebar-muted:var(--titlebar-muted-unfocused)]' : ''}`}
       onDoubleClick={(e) => {
         // Prevent double click on specific children from maximizing
         if (e.target instanceof Element && e.target.closest(`button, [role="tab"], .truncate`)) {
@@ -150,119 +188,88 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
         runCommand('window.toggleMaximize')
       }}
     >
-      <div className="shrink-0 flex items-center pl-2 gap-2 h-full relative after:content-[''] after:absolute after:right-0 after:top-[25%] after:bottom-[25%] after:w-px after:bg-[var(--titlebar-text)] after:opacity-10 pr-2">
-        <div className="inline-flex items-center h-6 gap-[6px] px-1.5 rounded-md text-[var(--titlebar-text)]" title="TopoMind" style={{ WebkitAppRegion: 'no-drag' }}>
-          <img src="./icon.svg" alt="Logo" className="w-4 h-4 drop-shadow-sm" />
-        </div>
+      {/* 最左侧控制区：全局导航栏开关（唯一显隐入口）+ 三条横线应用菜单。 */}
+      <div className="shrink-0 flex items-center pl-2 gap-1.5 h-full relative after:content-[''] after:absolute after:right-0 after:top-[25%] after:bottom-[25%] after:w-px after:bg-[var(--titlebar-text)] after:opacity-10 pr-2">
         {mode === 'workspace' && (
-          <nav className="hidden md:flex items-stretch h-[24px] gap-[1px] min-w-0 relative z-[3002] ml-1" aria-label="应用菜单" style={{ WebkitAppRegion: 'no-drag' }}>
-            {MENU_LABELS.map((menu) => (
-              <div key={menu.key} className="relative flex items-center h-full">
-                <button
-                  type="button"
-                  aria-haspopup="true"
-                  className={`h-full px-2.5 rounded-md bg-transparent text-[12px] font-medium cursor-default transition-colors ${activeMenu === menu.key ? 'bg-[var(--titlebar-hover)] text-[var(--titlebar-text)]' : 'text-[var(--titlebar-text)] hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]'}`}
-                  onClick={() => setActiveMenu((current) => current === menu.key ? null : menu.key)}
-                  onMouseEnter={() => { if (activeMenu) setActiveMenu(menu.key) }}
-                  style={{ WebkitAppRegion: 'no-drag' }}
-                >
-                  {menu.label}
-                </button>
-                {activeMenu === menu.key && (
-                  <div className="absolute top-[calc(100%+6px)] left-0 min-w-[188px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 z-[3001]" role="menu" style={{ WebkitAppRegion: 'no-drag' }}>
-                    {menuItems[menu.key].map((item) => (
+          <button
+            type="button"
+            aria-label={railVisible ? '收起全局导航栏' : '展开全局导航栏'}
+            aria-pressed={railVisible}
+            title={railVisible ? '隐藏全局导航栏' : '显示全局导航栏'}
+            data-tm-nav-rail-toggle=""
+            className={tmUI(TM_UI.iconButton, 'h-6 w-6')}
+            onClick={toggleRailVisible}
+            style={{ WebkitAppRegion: 'no-drag' }}
+          >
+            {railVisible
+              ? <PanelLeftClose className={TM_UI.icon} aria-hidden="true" />
+              : <PanelLeft className={TM_UI.icon} aria-hidden="true" />}
+          </button>
+        )}
+        {mode === 'workspace' && (
+          <nav className="flex items-stretch h-[24px] min-w-0 relative z-[3002]" aria-label="应用菜单" style={{ WebkitAppRegion: 'no-drag' }}>
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={activeMenu !== null}
+              aria-label="应用菜单"
+              className={tmUI(TM_UI.iconButton, 'h-full w-6')}
+              onClick={() => setActiveMenu((current) => current === null ? 'file' : null)}
+              style={{ WebkitAppRegion: 'no-drag' }}
+            >
+              <Menu className={TM_UI.icon} aria-hidden="true" />
+            </button>
+            {activeMenu && (
+              <div
+                className={tmUI(TM_UI.menu, TM_UI.scroll, 'tm-fade-enter absolute top-[calc(100%+6px)] left-0 min-w-[220px] max-h-[70vh] overflow-y-auto')}
+                role="menu"
+                style={{ WebkitAppRegion: 'no-drag', zIndex: 'var(--z-titlebar-menu)' }}
+              >
+                {MENU_LABELS.map((group) => (
+                  <div key={group.key} className={TM_UI.menuGroup}>
+                    <div className={TM_UI.menuGroupTitle}>{group.label}</div>
+                    {menuItems[group.key].map((item) =>
                       item.submenu ? (
-                        <div key={item.label} className="relative group">
-                          <button
-                            type="button"
-                            className="flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] peer"
-                          >
-                            <span>{item.label}</span>
-                            <span className="text-[var(--color-text-muted)] text-[10px]">▶</span>
-                          </button>
-                          <div className="absolute top-[-6px] left-[calc(100%-4px)] min-w-[140px] p-1.5 bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] backdrop-blur-xl opacity-0 invisible hover:opacity-100 hover:visible peer-hover:opacity-100 peer-hover:visible transition-all duration-100 animate-in fade-in slide-in-from-left-1 z-[3002]" role="menu" style={{ WebkitAppRegion: 'no-drag' }}>
-                            {item.submenu.map(subItem => (
-                              <button
-                                key={subItem.label}
-                                type="button"
-                                className="flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                                disabled={subItem.disabled}
-                                 onClick={() => {
-                                  if (subItem.disabled) return
-                                  setActiveMenu(null)
-                                  subItem.action?.()
-                                }}
-                              >
-                                <span>{subItem.label}</span>
-                                {subItem.checked && <span className="text-[var(--color-primary)]">✓</span>}
-                              </button>
-                            ))}
-                          </div>
+                        <div key={item.label}>
+                          <div className={TM_UI.menuGroupTitle}>{item.label}</div>
+                          {item.submenu.map(renderMenuItem)}
                         </div>
-                      ) : (
-                        <button
-                          key={item.label}
-                          type="button"
-                          className="flex items-center justify-between gap-2.5 w-full h-8 px-2 border-none rounded-md cursor-pointer text-left text-[13px] font-medium transition-colors outline-none bg-transparent hover:bg-[var(--color-hover-bg)] text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                          disabled={item.disabled}
-                          onClick={() => {
-                            if (item.disabled) return
-                            setActiveMenu(null)
-                            item.action?.()
-                          }}
-                        >
-                          <span>{item.label}</span>
-                          {item.shortcut && <span className="text-[var(--color-text-muted)] text-[11px] font-sans tracking-widest">{item.shortcut}</span>}
-                        </button>
-                      )
-                    ))}
+                      ) : renderMenuItem(item)
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
+            )}
           </nav>
         )}
       </div>
 
+      {/* 学习计时等状态类 widget：控制按钮之后、tab 栏之前，独立占位不挤压 tab zone。 */}
+      {mode === 'workspace' && (
+        <div data-tm-titlebar-widget="" className="shrink-0 flex items-center h-full mr-2" style={{ WebkitAppRegion: 'no-drag' }}>
+          <PluginWidgetSlot placement="titlebar" />
+        </div>
+      )}
+
       <div className="flex-1 min-w-0 flex items-center justify-start h-full mx-2.5 relative" style={{ WebkitAppRegion: 'drag' }}>
         {mode === 'workspace' && (
-          <div className="h-full max-w-[65%] min-w-0 flex items-center gap-2">
+          /* data-tm-tab-zone 是 TabBar 的唯一宽度测量基准：它 flex-1、宽度稳定，
+             内部 tab 数量变化不会反过来改变它，避免「越算越窄」的自反馈。
+             右端的 drag gutter 恒定占位，再往右的剩余留白也可拖窗口。 */
+          <div data-tm-tab-zone="" className="h-full w-full min-w-0 flex items-center gap-2">
             <TabBar />
-            <PluginWidgetSlot placement="titlebar" />
+            {/* 恒定拖拽安全带：tab 再多也不能把顶栏可拖区吃光。 */}
+            <div
+              data-tm-tab-drag-gutter=""
+              className="shrink-0 h-full"
+              style={{ width: 'var(--tab-drag-gutter)', WebkitAppRegion: 'drag' }}
+            />
           </div>
         )}
       </div>
 
+      {/* 右段只剩窗口控制：右栏显隐改由业务动作与失焦自动管理。 */}
       <div className="shrink-0 flex items-center justify-end h-full">
-        {mode === 'workspace' && (
-          <>
-            <button
-              type="button"
-              className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)] aria-pressed:text-[var(--color-accent)] transition-colors"
-              onClick={() => runCommand('rightPanel.toggle')}
-              title={rightPanelCollapsed ? '展开右侧面板' : '折叠右侧面板'}
-              aria-label={rightPanelCollapsed ? '展开右侧面板' : '折叠右侧面板'}
-              style={{ WebkitAppRegion: 'no-drag' }}
-            >
-              {rightPanelCollapsed ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-            </button>
-            <div className="flex items-center h-full mx-1 mr-2 relative z-[3002]" style={{ WebkitAppRegion: 'no-drag' }}>
-              <SegmentedControl
-                size="sm"
-                grow={false}
-                fullWidth={false}
-                ariaLabel="右侧面板分区"
-                options={[
-                  { label: '详情', value: 'detail' },
-                  { label: '样式', value: 'style' },
-                ]}
-                value={rightPanelTab}
-                onChange={(tab) => runCommand('rightPanel.reveal', { tab })}
-              />
-            </div>
-            <div className="mx-1 h-[18px] w-px bg-[var(--titlebar-text)] opacity-10" />
-          </>
-        )}
         <div className="h-full inline-flex items-stretch">
           <button type="button" className="w-[46px] h-full inline-flex items-center justify-center bg-transparent text-[var(--titlebar-muted)] text-[13px] leading-none cursor-default hover:bg-[var(--titlebar-hover)] hover:text-[var(--titlebar-text)]" onClick={() => runCommand('window.minimize')} aria-label="最小化窗口" style={{ WebkitAppRegion: 'no-drag' }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">

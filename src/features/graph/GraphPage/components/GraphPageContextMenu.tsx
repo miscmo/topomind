@@ -242,9 +242,9 @@ export default memo(function GraphPageContextMenu({
   useEffect(() => {
     if (!visible) return
     const handler = (e: MouseEvent) => {
-      // Don't close if clicking inside the emoji picker (it mounts in a portal or has a specific class)
+      // Don't close if clicking inside the unified emoji picker (portal-mounted)
       const target = e.target as Element
-      if (target.closest('em-emoji-picker')) return
+      if (target.closest('[data-tm-emoji-picker]:not([data-tm-exiting])')) return
       
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose()
@@ -318,8 +318,8 @@ export default memo(function GraphPageContextMenu({
   return (
     <div
       ref={menuRef}
-      className="fixed z-[50] min-w-[200px] bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] p-1.5 overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
-      style={{ left: adjustedX, top: adjustedY, transformOrigin: 'top left' }}
+      className="fixed z-[50] min-w-[200px] bg-[var(--titlebar-menu-bg)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] p-1.5 overflow-hidden backdrop-blur-xl tm-popover-enter"
+      style={{ left: adjustedX, top: adjustedY }}
       onMouseLeave={() => setFocusedIndex(-1)}
     >
       {items.map((item, i) => {

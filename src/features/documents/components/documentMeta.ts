@@ -9,6 +9,9 @@ export const DOCUMENT_COLOR_PRESETS = [
   '#d63031', '#fdcb6e', '#00cec9', '#0984e3', '#6c5ce7', '#00b894',
 ]
 
+/** 原生取色器在未设置标题颜色时的回退值（色值字面量只留在数据层，不散进 .tsx） */
+export const DOCUMENT_COLOR_INPUT_FALLBACK = '#ffffff'
+
 /** 校验 CSS hex 颜色（#rgb / #rgba / #rrggbb / #rrggbbaa），合法才允许应用 */
 export function isValidHexColor(value: string): boolean {
   return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)

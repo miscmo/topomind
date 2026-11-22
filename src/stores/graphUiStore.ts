@@ -37,6 +37,8 @@ interface GraphUiStore {
   edgeRelations: EdgeRelationDefinition[]
   /** 是否在连线上显示关系名小标签 */
   showEdgeRelationLabels: boolean
+  /** 拖动节点时的智能参考线 / 对齐吸附（关闭后完全自由摆放） */
+  smartGuidesEnabled: boolean
   /** 房间图型（roomPath → id），由 _config.json hydrate，不进 localStorage */
   roomProfiles: Record<string, GraphProfileId>
   setShowMiniMap: (showMiniMap: boolean) => void
@@ -60,11 +62,12 @@ interface GraphUiStore {
   setNodeBadgeSize: (size: number) => void
   setEdgeRelations: (relations: EdgeRelationDefinition[]) => void
   setShowEdgeRelationLabels: (visible: boolean) => void
+  setSmartGuidesEnabled: (enabled: boolean) => void
   setRoomProfiles: (profiles: Record<string, GraphProfileId>) => void
   resetGraphUi: () => void
 }
 
-export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMap' | 'miniMapSize' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'edgeFormatPainterStyle' | 'isViewportZooming' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize' | 'edgeRelations' | 'showEdgeRelationLabels' | 'roomProfiles'> = {
+export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMap' | 'miniMapSize' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'edgeFormatPainterStyle' | 'isViewportZooming' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize' | 'edgeRelations' | 'showEdgeRelationLabels' | 'smartGuidesEnabled' | 'roomProfiles'> = {
   showGrid: true,
   showMiniMap: true,
   miniMapSize: {
@@ -80,6 +83,7 @@ export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMa
   ...STYLE_CONFIG_DEFAULTS,
   edgeRelations: normalizeEdgeRelationDefinitions(undefined),
   showEdgeRelationLabels: true,
+  smartGuidesEnabled: true,
   roomProfiles: {},
 }
 
@@ -118,6 +122,7 @@ export const useGraphUiStore = create<GraphUiStore>()(
       setNodeBadgeSize: (nodeBadgeSize) => set({ nodeBadgeSize }),
       setEdgeRelations: (edgeRelations) => set({ edgeRelations: normalizeEdgeRelationDefinitions(edgeRelations) }),
       setShowEdgeRelationLabels: (showEdgeRelationLabels) => set({ showEdgeRelationLabels }),
+      setSmartGuidesEnabled: (smartGuidesEnabled) => set({ smartGuidesEnabled }),
       setRoomProfiles: (roomProfiles) => set({ roomProfiles: normalizeRoomProfiles(roomProfiles) }),
       resetGraphUi: () => set({ ...GRAPH_UI_INITIAL_STATE }),
     }),
@@ -127,6 +132,7 @@ export const useGraphUiStore = create<GraphUiStore>()(
       partialize: (state) => ({
         showMiniMap: state.showMiniMap,
         miniMapSize: state.miniMapSize,
+        smartGuidesEnabled: state.smartGuidesEnabled,
       }),
     }
   )

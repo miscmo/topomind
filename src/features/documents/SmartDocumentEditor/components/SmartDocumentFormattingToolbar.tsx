@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlignCenter, AlignLeft, AlignRight, Check, Copy, Sigma } from 'lucide-react'
 import {
   BasicTextStyleButton,
@@ -59,25 +59,58 @@ function useCurrentTextAlignment(): 'left' | 'center' | 'right' | null {
   })
 }
 
+const COPY_FEEDBACK_MS = 1600
+
+/**
+ * 复制选中文字。navigator.clipboard.writeText 是异步的：Electron / 非安全上下文、
+ * 或点击瞬间文档失去焦点时会被拒绝，而且等 Promise 落地时工具条按钮可能已经卸载
+ * （表现为「点了复制、面板没了、剪贴板还是空的」）。因此 API 缺失或写入失败时
+ * 退回同步的 execCommand，保证一次点击必定完成一次真实写入，不依赖组件存活。
+ */
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch { /* 走下面的同步兜底 */ }
+  }
+  let textarea: HTMLTextAreaElement | null = null
+  try {
+    textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.top = '-9999px'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    textarea?.remove()
+  }
+}
+
 function CopySelectionButton({ state }: { state: SmartDocumentSelectedTextState }) {
   const Components = useComponentsContext()
-  const editor = useSmartBlockNoteEditor()
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const feedbackTimerRef = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (feedbackTimerRef.current !== null) window.clearTimeout(feedbackTimerRef.current)
+  }, [])
 
   const handleClick = useCallback(async () => {
-    if (!navigator.clipboard?.writeText) {
-      setCopyStatus('failed')
-      return
-    }
-    try {
-      await navigator.clipboard.writeText(state.rawText)
-      setCopyStatus('copied')
-    } catch {
-      setCopyStatus('failed')
-    } finally {
-      editor.focus()
-    }
-  }, [editor, state.rawText])
+    const copied = await copyTextToClipboard(state.rawText)
+    setCopyStatus(copied ? 'copied' : 'failed')
+    // 「已复制 / 复制失败」必须自动复位，否则下次选中文字时按钮还停在旧反馈上。
+    if (feedbackTimerRef.current !== null) window.clearTimeout(feedbackTimerRef.current)
+    feedbackTimerRef.current = window.setTimeout(() => {
+      feedbackTimerRef.current = null
+      setCopyStatus('idle')
+    }, COPY_FEEDBACK_MS)
+  }, [state.rawText])
 
   if (!Components) {
     return null

@@ -1257,7 +1257,24 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
               },
             }}
           />
-          <FormattingToolbarController formattingToolbar={SmartDocumentFormattingToolbar} portalElement={null} />
+          <FormattingToolbarController
+            formattingToolbar={SmartDocumentFormattingToolbar}
+            portalElement={null}
+            floatingUIOptions={{
+              elementProps: {
+                // 工具条 portal 到 body，按钮默认会抢走 contenteditable 的焦点：选区被清、
+                // 工具条随即卸载，点「复制」时异步写入还没开始按钮就没了，同时会触发
+                // 右栏「焦点移出」自动折叠。与斜杠菜单保持同一策略，在浮层根拦下
+                // mousedown 默认行为；但改链接 / 选颜色等 popover 里的输入框必须能聚焦，
+                // 否则键盘打不进去，所以放过 input / textarea / contenteditable。
+                onMouseDownCapture: (event: ReactMouseEvent) => {
+                  const target = event.target
+                  if (target instanceof Element && target.closest('input, textarea, [contenteditable="true"]')) return
+                  event.preventDefault()
+                },
+              },
+            }}
+          />
           <SideMenuController
             sideMenu={SmartDocumentSideMenu}
             floatingUIOptions={{
@@ -1350,7 +1367,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       </button>
       {imagePreview && typeof document !== 'undefined' ? createPortal(
         <div
-          className="tm-image-preview"
+          className="tm-image-preview tm-fade-enter"
           role="dialog"
           aria-modal="true"
           aria-label="图片全屏预览"
@@ -1394,7 +1411,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       {linkMenu && typeof document !== 'undefined' ? createPortal(
         <div
           ref={linkMenuRef}
-          className="tm-link-menu fixed z-[1400] min-w-[260px] max-w-[320px] rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-xl p-2 flex flex-col gap-2"
+          className="tm-link-menu tm-fade-enter fixed z-[1400] min-w-[260px] max-w-[320px] rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-xl p-2 flex flex-col gap-2"
           style={{ top: linkMenu.top, left: linkMenu.left }}
           role="menu"
           aria-label="链接操作"
@@ -1432,7 +1449,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       ) : null}
       {attachmentPathMenu && typeof document !== 'undefined' ? createPortal(
         <div
-          className="tm-attachment-path-menu fixed z-[1400] w-[340px] rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] p-2.5 flex flex-col gap-2"
+          className="tm-attachment-path-menu tm-fade-enter fixed z-[1400] w-[340px] rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] p-2.5 flex flex-col gap-2"
           style={{ top: attachmentPathMenu.top, left: attachmentPathMenu.left }}
           role="dialog"
           aria-label="附件引用路径"

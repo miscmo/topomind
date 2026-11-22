@@ -1,0 +1,128 @@
+/**
+ * 统一表情选择器的视觉契约。
+ *
+ * 只映射 token 与 emoji-picker-react v5 的 --epr-* 设计变量，不写任何字面色值、
+ * 阴影或字号常量：亮/暗色都跟随 tokens.css，避免出现第二份视觉真源。
+ * 布局、虚拟滚动、键盘导航仍由库负责，这里只做「让它长得像本产品」。
+ */
+.tm-emoji-picker {
+  width: 340px;
+  box-sizing: border-box;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  z-index: var(--z-picker);
+  overflow: hidden;
+  font-family: inherit;
+
+  --epr-bg-color: var(--color-surface);
+  --epr-text-color: var(--color-text-primary);
+  --epr-picker-border-color: transparent;
+  --epr-picker-border-radius: 0;
+  --epr-highlight-color: var(--color-primary);
+  --epr-hover-bg-color: var(--color-hover-bg);
+  --epr-focus-bg-color: var(--color-hover-bg);
+  --epr-emoji-hover-color: var(--color-hover-bg);
+  --epr-search-input-bg-color: var(--color-bg-muted);
+  --epr-search-input-bg-color-active: var(--color-surface);
+  --epr-search-border-color: var(--color-border);
+  --epr-search-border-color-active: var(--color-primary);
+  --epr-search-input-text-color: var(--color-text-primary);
+  --epr-search-input-placeholder-color: var(--color-text-muted);
+  --epr-search-input-border-radius: var(--radius-md);
+  --epr-search-input-height: 32px;
+  --epr-category-label-text-color: var(--color-text-muted);
+  --epr-category-label-bg-color: var(--color-surface);
+  --epr-category-icon-active-color: var(--color-primary);
+  --epr-category-icon-inactive-color: var(--color-text-muted);
+  --epr-font-family: inherit;
+  --epr-emoji-font-family: inherit;
+  --epr-emoji-size: 22px;
+  --epr-emoji-padding: 4px;
+  --epr-horizontal-padding: 12px;
+  --epr-header-padding: 8px 12px;
+  --epr-preview-text-color: var(--color-text-secondary);
+
+  --epr-dark-bg-color: var(--color-surface);
+  --epr-dark-text-color: var(--color-text-primary);
+  --epr-dark-picker-border-color: transparent;
+  --epr-dark-highlight-color: var(--color-primary);
+  --epr-dark-hover-bg-color: var(--color-hover-bg);
+  --epr-dark-focus-bg-color: var(--color-hover-bg);
+  --epr-dark-search-input-bg-color: var(--color-bg-muted);
+  --epr-dark-search-input-bg-color-active: var(--color-surface);
+  --epr-dark-category-label-bg-color: var(--color-surface);
+  --epr-dark-category-icon-active-color: var(--color-primary);
+  --epr-dark-category-icon-inactive-color: var(--color-text-muted);
+}
+
+.tm-emoji-picker [data-epr-part="root"],
+.tm-emoji-picker [data-epr-part="panel"] {
+  background: var(--color-surface);
+  border: 0;
+  box-shadow: none;
+}
+
+.tm-emoji-picker .tm-emoji-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-surface);
+}
+
+.tm-emoji-picker .tm-emoji-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.tm-emoji-picker .tm-emoji-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tm-emoji-picker .tm-emoji-cell,
+.tm-emoji-picker [data-epr-part="emoji"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+.tm-emoji-picker .tm-emoji-cell img {
+  pointer-events: none;
+  user-select: none;
+}
+
+.tm-emoji-picker .tm-emoji-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-muted);
+}
+
+.tm-emoji-picker .tm-emoji-preview-name {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tm-emoji-picker .tm-emoji-preview-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}

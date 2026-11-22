@@ -6,7 +6,7 @@ import { useStyleSettingsModel } from '../../model/useStyleSettingsModel'
 import { useActiveCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
 
-export default memo(function StyleSection({ active = true }: { active?: boolean }) {
+export default memo(function StyleSection({ active = true, showReadOnlyHint = true }: { active?: boolean; showReadOnlyHint?: boolean }) {
   const { state, actions } = useStyleSettingsModel(active)
   // 样式面板写的是画布上的节点 / 连线数据，同样过 useGraph 只读闸门；
   // 这里给一条明确提示，避免用户以为「点了没反应」是应用坏了。
@@ -69,7 +69,7 @@ export default memo(function StyleSection({ active = true }: { active?: boolean 
           value={activeTab}
           onChange={setActiveTab}
         />
-        {canvasReadOnly && (
+        {canvasReadOnly && showReadOnlyHint && (
           <div
             data-tm-style-panel-readonly=""
             className="mt-2 rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-[11px] text-[var(--color-accent)]"

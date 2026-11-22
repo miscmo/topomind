@@ -3,7 +3,9 @@ import type { StaticContributionRecord } from '@/plugins'
 import { toDisposable } from '@/plugins/public/disposables.ts'
 import type { Disposable } from '@/plugins/public/disposables'
 import { useTabStore } from '@/stores/tabs/tabStore'
+import { useLayoutStore } from '@/stores/layoutStore'
 import { useThemeStore, type ThemeMode } from '@/stores/themeStore'
+import { HOST_VIEW_IDS } from '@/features/layout/NavRail/navModel'
 import type { RightPanelTab } from '@/types/uiStoreTypes'
 
 type CommandSource = 'host' | 'plugin'
@@ -74,6 +76,30 @@ function createDefaultHostCommands(): HostCommandDefinition[] {
       execute: () => {
         useTabStore.getState().activateTab('home')
       },
+    },
+    {
+      id: 'nav.openSettings',
+      title: '打开设置',
+      execute: () => {
+        useTabStore.getState().openSecondaryViewTab({ viewId: HOST_VIEW_IDS.settings, label: '设置' })
+      },
+    },
+    {
+      id: 'nav.openProfile',
+      title: '打开账户与工作区',
+      execute: () => {
+        useTabStore.getState().openSecondaryViewTab({ viewId: HOST_VIEW_IDS.profile, label: '账户与工作区' })
+      },
+    },
+    {
+      id: 'nav.toggleRail',
+      title: '切换左侧导航栏',
+      execute: () => { useLayoutStore.getState().toggleRailVisible() },
+    },
+    {
+      id: 'layout.reset',
+      title: '重置布局',
+      execute: () => { useLayoutStore.getState().resetNavigation() },
     },
     {
       id: 'window.minimize',

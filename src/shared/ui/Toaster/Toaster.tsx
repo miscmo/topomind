@@ -26,7 +26,7 @@ function ToastCard({ item }: { item: ToastItem }) {
   return (
     <div
       role="alert"
-      className="pointer-events-auto flex w-[320px] max-w-[90vw] gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-3 shadow-lg"
+      className="tm-fade-enter pointer-events-auto flex w-[320px] max-w-[90vw] gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-3 shadow-lg"
     >
       <div className={`mt-0.5 h-full w-1 shrink-0 rounded-full ${style.bar}`} />
       <div className="min-w-0 flex-1">

@@ -6,6 +6,8 @@ import type { GraphContextValue } from '../../../../contexts/GraphContext'
 import { useGraphStoreApi } from '../../../../stores/graphStore'
 import { isActiveCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
+import { useTabStore } from '@/stores/tabs/tabStore'
+import { HOST_VIEW_IDS } from '@/features/layout/NavRail/navModel'
 
 export interface UseEdgeActionsOptions {
   onAction?: () => void
@@ -31,18 +33,15 @@ export function useEdgeActions(options: UseEdgeActionsOptions) {
     onAction?.()
   }, [findEdgeById, deleteElements, onAction])
 
-  // 右键菜单"连线样式"：不再弹出 JSON 编辑框，而是展开右侧面板、切到"样式"Tab
-  // 与"连线"子 Tab，并选中该连线，引导用户在面板里编辑样式。
-  // 这里显式设置各层状态，而不是依赖"选中后自动切换"的副作用——
-  // 面板折叠时 StyleSection 不会走挂载副作用，重复选中同一条连线时也不会重新触发。
+  // 右键菜单「连线样式」：样式设置已迁入全局设置页。共用 stylePanelTab，
+  // 打开设置页时自动落在「连线样式」子分区；选中该连线便于后续回画布查看。
   const handleEdgeStyle = useCallback((edgeId: string) => {
     const edge = findEdgeById(edgeId)
     if (!edge) return
-    logAction('连线:样式(面板)', 'useEdgeActions', { edgeId, edgeSource: edge.source, edgeTarget: edge.target, trigger: 'context-menu' })
-    useRightPanelStore.getState().expandRightPanel()
-    useRightPanelStore.getState().setRightPanelTab('style')
+    logAction('连线:样式(设置页)', 'useEdgeActions', { edgeId, edgeSource: edge.source, edgeTarget: edge.target, trigger: 'context-menu' })
     useRightPanelStore.getState().setStylePanelTab('edges')
     graph.selectEdge(edgeId)
+    useTabStore.getState().openSecondaryViewTab({ viewId: HOST_VIEW_IDS.settings, label: '设置' })
     onAction?.()
   }, [findEdgeById, graph, onAction])
 

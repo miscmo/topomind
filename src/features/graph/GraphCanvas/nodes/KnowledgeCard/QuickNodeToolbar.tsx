@@ -51,7 +51,7 @@ function QuickNodeToolbar({
 
   return (
     <div
-      className="absolute left-1/2 -top-[60px] z-[60] flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1.5 shadow-[var(--shadow-popover)] pointer-events-auto nodrag nowheel transition-all"
+      className="tm-fade-enter absolute left-1/2 -top-[60px] z-[60] flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1.5 shadow-[var(--shadow-popover)] pointer-events-auto nodrag nowheel transition-all"
       onPointerDown={stopEvent}
       onMouseDown={stopEvent}
       onDoubleClick={stopEvent}
@@ -101,7 +101,7 @@ function QuickNodeToolbar({
         <span className="text-[13px] font-medium min-w-[16px] text-center tracking-tight">{fontSize}</span>
         <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-50" strokeWidth={2.5} />
         {isFontSizeMenuOpen && (
-          <div className="absolute top-[calc(100%+6px)] left-1/2 -translate-x-1/2 min-w-[90px] p-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[70] flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-100">
+          <div className="absolute top-[calc(100%+6px)] left-1/2 -translate-x-1/2 min-w-[90px] p-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-popover)] z-[70] flex flex-col gap-0.5 tm-fade-enter">
             {[10, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32].map((size) => (
               <button
                 key={size}

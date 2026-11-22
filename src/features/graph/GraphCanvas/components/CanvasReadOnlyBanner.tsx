@@ -46,9 +46,9 @@ export default memo(function CanvasReadOnlyBanner({ state, zoomLevel }: CanvasRe
           data-tm-canvas-readonly-banner=""
           data-tm-canvas-readonly-reason={state.reason}
           data-tm-canvas-readonly-hidden={state.hiddenNodeCount}
-          className="nodrag nowheel pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text)] shadow-[var(--shadow-popover)]"
+          className="nodrag nowheel pointer-events-auto gap-2 px-3 py-2 text-[12px] text-[var(--color-text)] tm-pill"
         >
-          <Lock className="h-3.5 w-3.5 text-[var(--color-accent)]" aria-hidden="true" />
+          <Lock className="tm-icon text-[var(--color-accent)]" aria-hidden="true" />
           <span>
             画布只读 · 当前 {formatZoomPercent(zoomLevel)}{reasonText}，恢复 100% 后可编辑
           </span>
@@ -58,7 +58,7 @@ export default memo(function CanvasReadOnlyBanner({ state, zoomLevel }: CanvasRe
             onClick={handleRestore}
             className="nodrag nowheel pointer-events-auto ml-1 flex items-center gap-1 rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-inverse)] hover:opacity-90"
           >
-            <Focus className="h-3 w-3" aria-hidden="true" />
+            <Focus className="tm-icon tm-icon--sm" aria-hidden="true" />
             恢复 100%
           </button>
         </div>

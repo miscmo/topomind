@@ -12,7 +12,8 @@ import { topoDocumentIdFromPath, topoDocumentPath } from '../../../features/docu
 import { getTopoDocumentTypeDefinition } from '../../../features/documents/services/documentTypeRegistry'
 import { useDetailPanelStore } from './detailPanelStore'
 import { toast } from '../../../shared/ui/Toaster/toastStore'
-import type { TopoDocumentManifestItem, TopoDocumentType } from '../../../core/storage'
+import { useRightPanelStore } from '@/stores/rightPanelStore'
+import type { TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentType } from '../../../core/storage'
 
 export function useDetailDocuments({
   selectedNodeId,
@@ -133,6 +134,10 @@ export function useDetailDocuments({
     try {
       await flushDocumentSave()
       const created = await storage.createTopoDocument(nodePath, { type, title: nextName, parentId: parentId || null })
+      // 【按需展开】无文档节点新建文档：右栏可能处于自动折叠态，这里保证新建结果立刻可见。
+      // 直接用 expandRightPanel（不走 applyRightPanelAutoVisibility），避免与选中事件互相覆盖。
+      useRightPanelStore.getState().expandRightPanel()
+      useRightPanelStore.getState().setRightPanelTab('detail')
       const createdDocumentPath = topoDocumentPath(created.id)
       const createdDocumentKey = joinRefs(nodePath, createdDocumentPath)
       clearDetailDraft(createdDocumentKey)
@@ -299,19 +304,26 @@ export function useDetailDocuments({
     }
   }, [activeDocumentPath, flushDocumentSave, nodePath, storage, loadDocuments, storeApi, topoDocuments])
 
-  const handleUpdateDocumentMeta = useCallback(async (documentPath: string, patch: { icon?: string | null; color?: string | null }) => {
+  const handleUpdateDocumentMeta = useCallback(async (documentPath: string, patch: TopoDocumentMetaPatch) => {
     if (!nodePath || documentPath === '') return
     const documentId = topoDocumentIdFromPath(documentPath)
     if (!documentId) return
     const targetDocument = topoDocuments.find((item) => topoDocumentPath(item.id) === documentPath)
     if (!targetDocument) return
     // 仅当 patch 中所有字段都无实际变化时才跳过；组合 patch 中一个
-    // 字段相同不能阻止另一个已变化字段写盘。
+    // 字段相同不能阻止另一个已变化字段写盘。字体样式三件套一并纳入变更检测，
+    // 否则「编辑样式」面板里只改字号时会被误判成无变化、静默不写盘。
     const iconChanged = patch.icon !== undefined
       && (patch.icon?.trim() || '') !== (targetDocument.icon ?? '')
     const colorChanged = patch.color !== undefined
       && (patch.color || '') !== (targetDocument.color ?? '')
-    if (!iconChanged && !colorChanged) return
+    const fontSizeChanged = patch.fontSize !== undefined
+      && (patch.fontSize ?? null) !== (targetDocument.fontSize ?? null)
+    const fontWeightChanged = patch.fontWeight !== undefined
+      && (patch.fontWeight ?? null) !== (targetDocument.fontWeight ?? null)
+    const fontStyleChanged = patch.fontStyle !== undefined
+      && (patch.fontStyle ?? null) !== (targetDocument.fontStyle ?? null)
+    if (!iconChanged && !colorChanged && !fontSizeChanged && !fontWeightChanged && !fontStyleChanged) return
     setIsDocumentBusy(true)
     try {
       if (documentPath === activeDocumentPath) {
@@ -319,7 +331,7 @@ export function useDetailDocuments({
       }
       await storage.updateTopoDocumentMeta(nodePath, documentId, patch)
       await loadDocuments(nodePath)
-      logAction('文档:修改图标/颜色', 'DetailPanel', { nodePath, documentPath, patch })
+      logAction('文档:修改样式', 'DetailPanel', { nodePath, documentPath, patch })
     } catch (e) {
       // 排查提示：若主进程未重启（旧 IPC 处理器缺失），此处会捕获
       // "No handler registered for 'fs:updateTopoDocumentMeta'" 之类的错误。

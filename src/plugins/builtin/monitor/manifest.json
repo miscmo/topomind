@@ -38,6 +38,16 @@
         "id": "monitor.open",
         "title": "打开系统日志"
       }
+    ],
+    "navItems": [
+      {
+        "id": "monitor.logs",
+        "title": "日志与性能",
+        "icon": "terminal",
+        "group": "tools",
+        "order": 30,
+        "openCommand": "monitor.open"
+      }
     ]
   }
 }

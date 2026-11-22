@@ -1069,6 +1069,30 @@ function _fs_updateTopoDocumentMeta(rootDir, cardPath, documentId, patch) {
       delete found.item.color;
     }
   }
+  // 列表项的字体样式由右栏「编辑样式」面板统一写入。三个字段都只接受白名单值，
+  // 传 null / 非法值一律删除字段恢复默认，避免 manifest 被写入任意 CSS 值。
+  if (Object.prototype.hasOwnProperty.call(patch, 'fontSize')) {
+    var nextFontSize = patch.fontSize === null ? NaN : Number(patch.fontSize);
+    if (isFinite(nextFontSize) && nextFontSize >= 10 && nextFontSize <= 24) {
+      found.item.fontSize = Math.round(nextFontSize);
+    } else {
+      delete found.item.fontSize;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'fontWeight')) {
+    if (patch.fontWeight === 'normal' || patch.fontWeight === 'bold') {
+      found.item.fontWeight = patch.fontWeight;
+    } else {
+      delete found.item.fontWeight;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'fontStyle')) {
+    if (patch.fontStyle === 'normal' || patch.fontStyle === 'italic') {
+      found.item.fontStyle = patch.fontStyle;
+    } else {
+      delete found.item.fontStyle;
+    }
+  }
   found.item.updatedAt = now;
   found.manifest.documents[found.item.id] = found.item;
   _fs_writeTopoDocumentManifest(rootDir, cardPath, found.manifest);

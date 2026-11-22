@@ -56,6 +56,12 @@ export interface TopoDocumentManifestItem {
   icon?: string
   /** 自定义文档列表标题颜色（hex，如 #e74c3c），未设置时跟随主题 */
   color?: string
+  /** 列表标题字号（px），未设置时跟随主题 12px；由统一「编辑样式」面板写入 */
+  fontSize?: number
+  /** 列表标题字重 */
+  fontWeight?: 'normal' | 'bold'
+  /** 列表标题字形 */
+  fontStyle?: 'normal' | 'italic'
 }
 
 export interface TopoDocumentManifest {
@@ -73,6 +79,10 @@ export interface TopoDocumentCreateInput {
 export interface TopoDocumentMetaPatch {
   icon?: string | null
   color?: string | null
+  /** 传 null 表示清除自定义值、恢复默认 */
+  fontSize?: number | null
+  fontWeight?: 'normal' | 'bold' | null
+  fontStyle?: 'normal' | 'italic' | null
 }
 
 export interface TopoDocumentRepairResult {

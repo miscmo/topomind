@@ -1,7 +1,8 @@
-import { ChevronRight, FileText, FolderTree } from 'lucide-react'
+import { ChevronRight, FileText, FolderTree, Palette, Plus, Trash2 } from 'lucide-react'
 import React from 'react'
 import type { TopoDocumentManifestItem } from '../../../core/storage'
-import { PANEL_LIST } from '../../../shared/ui/panelList'
+import { PANEL_LIST, PanelListAction } from '../../../shared/ui/panelList'
+import { EmojiGlyph } from '../../../shared/ui/emoji/EmojiGlyph'
 import { topoDocumentPath } from '../types/documentTypes'
 import { DocumentInlineEdit } from './DocumentInlineEdit'
 import type { DocumentInlineEditState } from '../model/useDocumentSidebarModel'
@@ -36,6 +37,26 @@ interface DocumentNodeProps {
   // 未提供时表示不设上限（如 sticky 行 —— 它们 renderChildren=false，本就不渲染子项）。
   getChildRenderLimit?: (id: string) => number
   onShowMoreChildren?: (id: string) => void
+  /** hover 快捷操作：在该项下新建子文档 / 打开统一样式面板 / 删除该项 */
+  onQuickCreate?: (id: string) => void
+  onQuickStyle?: (id: string, x: number, y: number) => void
+  onQuickDelete?: (id: string) => void
+}
+
+/**
+ * 快捷按钮必须和行本身的行为隔离：行 div 同时绑了选中、双击重命名、右键菜单和
+ * HTML5 拖拽，按钮冒泡上去会导致「点删除却先把文档打开」或误触发拖动。
+ * onClick 单独在各按钮里处理，这里只拦其它事件。
+ */
+const QUICK_ACTION_EVENTS = {
+  onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => e.stopPropagation(),
+  onMouseDown: (e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation(),
+  onDoubleClick: (e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation(),
+  onContextMenu: (e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation(),
+  onDragStart: (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+  },
 }
 
 export const DocumentNode: React.FC<DocumentNodeProps> = ({
@@ -66,6 +87,9 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
   sticky = false,
   getChildRenderLimit,
   onShowMoreChildren,
+  onQuickCreate,
+  onQuickStyle,
+  onQuickDelete,
 }) => {
   const isEditing = inlineEdit?.mode === 'rename' && inlineEdit.targetId === node.id
   const setRowElement = React.useCallback((element: HTMLDivElement | null) => {
@@ -205,7 +229,7 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
               }}
             >
               {/* 自定义 emoji 保留；缺省改用语义图标：分支 / 单篇文档，颜色随选中态。 */}
-              {node.icon ? <span className="leading-none">{node.icon}</span> : (
+              {node.icon ? <EmojiGlyph char={node.icon} size={12} /> : (
                 hasChildren
                   ? <FolderTree className={isActive ? PANEL_LIST.iconActive : PANEL_LIST.icon} />
                   : <FileText className={isActive ? PANEL_LIST.iconActive : PANEL_LIST.icon} />
@@ -215,10 +239,70 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           <span
             data-document-title
             className={`block min-w-0 flex-1 truncate text-[12px] leading-[1.4] text-[var(--color-text-primary)] ${isActive ? `${PANEL_LIST.rowTitleActive} font-medium` : ''}`}
-            style={node.color ? { color: node.color } : undefined}
+            style={{
+              color: node.color || undefined,
+              fontSize: node.fontSize || undefined,
+              fontWeight: node.fontWeight || undefined,
+              fontStyle: node.fontStyle || undefined,
+            }}
           >
             {node.title}
           </span>
+          {/* 当前选中项常驻显示工具；其余行彻底不进入布局（不预留右侧宽度，标题用满整行），
+              只有 hover / 键盘聚焦时才以 flex 子项插入并占据右侧空间。
+              不能用 opacity-0 隐身 —— 元素仍在 flex 流里，会一直挤压标题。
+              h-4 锁死容器高度（按钮 20px 溢出到行的 py-1 内），避免 hover 时整列行高跳动。
+              与关联文档列表共用 PanelListAction 的视觉语言。sticky 路径提示行不提供操作。 */}
+          {!sticky && (
+            <div
+              data-tm-document-quick-actions=""
+              data-tm-overlay="none"
+              className={`h-4 shrink-0 items-center gap-0.5 tm-fade-enter ${
+                isActive
+                  ? 'flex'
+                  : 'hidden group-hover:!flex group-focus-within:!flex'
+              }`}
+            >
+              <PanelListAction
+                {...QUICK_ACTION_EVENTS}
+                title="添加子文档"
+                aria-label={`在「${node.title}」下添加子文档`}
+                disabled={isBusy}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onQuickCreate?.(node.id)
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </PanelListAction>
+              <PanelListAction
+                {...QUICK_ACTION_EVENTS}
+                title="编辑样式"
+                aria-label={`编辑「${node.title}」的样式`}
+                disabled={isBusy}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  onQuickStyle?.(node.id, rect.left, rect.bottom)
+                }}
+              >
+                <Palette className="h-3.5 w-3.5" />
+              </PanelListAction>
+              <PanelListAction
+                {...QUICK_ACTION_EVENTS}
+                title="删除"
+                aria-label={`删除「${node.title}」`}
+                disabled={isBusy}
+                className="hover:!bg-[var(--color-danger-soft)] hover:!text-[var(--color-danger)]"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onQuickDelete?.(node.id)
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </PanelListAction>
+            </div>
+          )}
         </div>
       )}
       {renderChildren && isExpanded && visibleChildren.map(child => (
@@ -249,6 +333,9 @@ export const DocumentNode: React.FC<DocumentNodeProps> = ({
           onRowElement={onRowElement}
           getChildRenderLimit={getChildRenderLimit}
           onShowMoreChildren={onShowMoreChildren}
+          onQuickCreate={onQuickCreate}
+          onQuickStyle={onQuickStyle}
+          onQuickDelete={onQuickDelete}
         />
       ))}
       {renderChildren && isExpanded && hiddenChildCount > 0 && (

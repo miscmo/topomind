@@ -92,7 +92,7 @@ function CompactRelationPopup({
       role="menu"
       aria-label={ariaLabel}
       tabIndex={-1}
-      className="nodrag nopan fixed z-[60] w-[214px] rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-popover)] outline-none"
+      className="nodrag nopan tm-popover-enter fixed z-[60] w-[214px] rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-popover)] outline-none"
       style={{ left: position.left, top: position.top, pointerEvents: 'all' }}
       onMouseDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}

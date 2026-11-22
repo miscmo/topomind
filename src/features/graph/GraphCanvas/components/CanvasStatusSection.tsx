@@ -38,10 +38,10 @@ export default memo(function CanvasStatusSection({
         aria-expanded={open}
         title={open ? `折叠${title}` : `展开${title}`}
         onClick={onToggle}
-        className="nodrag nowheel flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)]"
+        className="nodrag nowheel w-full gap-1.5 px-2.5 py-1.5 text-left tm-section-header"
       >
         <ChevronRight
-          className={`h-3 w-3 shrink-0 opacity-60 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+          className={`tm-icon tm-icon--sm opacity-60 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
           aria-hidden="true"
         />
         <span className="text-[11px] font-semibold tracking-wide">{title}</span>

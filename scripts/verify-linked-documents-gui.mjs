@@ -181,14 +181,15 @@ async function waitFor(page, fn, timeout = 10000) {
  * 页面 reload 会重置 Zustand 内存态，重载后要重新调一次。
  */
 async function setRightPanelCollapsed(page, want) {
-  await page.evaluate((wantCollapsed) => {
+  // 标题栏手动折叠按钮已移除：夹具改用全局 Ctrl+Tab 键盘入口切换显隐。
+  const current = await page.evaluate(() => {
     const right = document.querySelector('.right-panel-container')
-    if (!right) return
-    const isCollapsed = getComputedStyle(right).display === 'none'
-    if (isCollapsed === wantCollapsed) return
-    const label = wantCollapsed ? '折叠右侧面板' : '展开右侧面板'
-    document.querySelector(`button[aria-label="${label}"]`)?.click()
-  }, want)
+    return right ? getComputedStyle(right).display === 'none' : null
+  })
+  if (current === null || current === want) return
+  await page.keyboard.down('Control')
+  await page.keyboard.press('Tab')
+  await page.keyboard.up('Control')
   return want
     ? waitFor(page, () => {
       const right = document.querySelector('.right-panel-container')
@@ -458,9 +459,11 @@ async function main() {
     }, 6000)
     const layoutOpenAB = await canvasRectAB()
     await setNodeTreeCollapsed(page, true)
+    // 导航栏现在全局常驻（48px），折叠后 top-left 控件回到「rail 让位基线」，
+    // 不再是旧版的 12px 原点；位置本身仍由 CSS 变量驱动，画布几何不变。
     await waitFor(page, () => {
       const s = document.querySelector('.react-flow__panel.top.left')?.getBoundingClientRect()
-      return !!s && s.left < 20
+      return !!s && s.left >= 48 && s.left < 80
     }, 6000)
     const layoutFoldedAB = await canvasRectAB()
     // 自动避让在 rAF 里按状态抽屉实测底边定位，等两帧让位置稳定再开始拖动。
@@ -534,7 +537,7 @@ async function main() {
       JSON.stringify({ rectOpenAB, rectFoldedAB, rectReopenAB }))
     check('【阶段 AB】面板展开时状态抽屉挤到右侧，折叠后回原位且宽度不变',
       !!layoutOpenAB.status && layoutOpenAB.status.left >= 280
-      && !!layoutFoldedAB.status && layoutFoldedAB.status.left < 20
+      && !!layoutFoldedAB.status && layoutFoldedAB.status.left >= 48 && layoutFoldedAB.status.left < 80
       && layoutReopenAB.status?.left === layoutOpenAB.status.left
       && layoutOpenAB.status.width === layoutFoldedAB.status?.width,
       JSON.stringify({ open: layoutOpenAB.status, folded: layoutFoldedAB.status, reopen: layoutReopenAB.status }))
@@ -1526,13 +1529,9 @@ async function main() {
     await sleep(320)
 
     // ===== 阶段 J：连线关系管理（全局 _config.json） =====
-    await page.evaluate(() => {
-      const group = document.querySelector('[role="radiogroup"][aria-label="右侧面板分区"]')
-      const button = Array.from(group?.querySelectorAll('button') ?? [])
-        .find((item) => item.textContent?.trim() === '样式')
-      button?.click()
-    })
-    await sleep(500)
+    // 样式设置已迁入全局设置页：经左侧导航打开，样式分区与连线关系管理都在该页。
+    await page.evaluate(() => document.querySelector('[data-tm-nav-item="settings"]')?.click())
+    await sleep(650)
     // 右栏「文档编辑器」分区入口已整体移除：编辑器样式设置全部在顶部工具栏「样式」浮层
     const editorTabExists = await page.evaluate(() => {
       const group = document.querySelector('[role="radiogroup"][aria-label="样式面板分区"]')
@@ -1608,6 +1607,10 @@ async function main() {
       if (!labelToggleWritten) await sleep(200)
     }
     check('关系标签显隐开关写进工作区 _config.json', labelToggleWritten)
+
+    // 阶段 K 起需要画布：点第一个知识库 tab 切回，避免停留在设置页。
+    await page.evaluate(() => document.querySelector('[data-tm-tab-bar] [role="tab"]')?.click())
+    await sleep(400)
 
     // ===== 阶段 K：语义缩放 LOD（镜头档位 / 树根保护 / 游离先隐藏 / pin） =====
     // 测试库初始图是一棵合规树（4 树节点 + 2 游离 + 2 原有节点 = 50% 覆盖）。
@@ -2951,7 +2954,7 @@ async function main() {
         return true
       })
       if (clicked) return true
-      // 标题栏按钮在某些宿主模式下不渲染时，回落到全局 Ctrl+Tab 快捷键。
+      // 标题栏手动按钮已移除，统一走全局 Ctrl+Tab 键盘入口。
       await page.keyboard.down('Control')
       await page.keyboard.press('Tab')
       await page.keyboard.up('Control')
@@ -3005,12 +3008,7 @@ async function main() {
       JSON.stringify({ base: baseLayout.right, collapsed: collapsedLayout.right, expanded: expandedLayout.right }))
 
     // ===== 阶段 W：右栏自动显隐 + pin 固定（点击有文档节点展开 / 空白与无文档节点折叠） =====
-    await page.evaluate(() => {
-      const group = document.querySelector('[aria-label="右侧面板分区"]')
-      const detailTab = [...(group?.querySelectorAll('button') ?? [])]
-        .find((b) => (b.textContent || '').trim() === '详情')
-      detailTab?.click()
-    })
+    // 「详情/样式」分段控件已移除：右栏恒为详情，样式设置迁入设置页。
     await setRightPanelCollapsed(page, false)
     await waitFor(page, () => !!document.querySelector('[data-tm-right-panel-pin]'), 6000)
 
@@ -3138,16 +3136,15 @@ async function main() {
     check('【阶段 W】pin 后点击空白画布不再自动折叠', stillOpenAfterPaneW,
       JSON.stringify({ visible: stillOpenAfterPaneW }))
 
-    const manualCollapseBlockedW = await page.evaluate(() => {
-      const button = document.querySelector('button[aria-label="折叠右侧面板"]')
-      button?.click()
-      return !!button
-    })
+    // 界面已无手动按钮，改用 Ctrl+Tab 键盘入口验证 pin 的短路保护。
+    await page.keyboard.down('Control')
+    await page.keyboard.press('Tab')
+    await page.keyboard.up('Control')
     await sleep(200)
     const stillOpenAfterManualW = await rightPanelVisibleW()
-    check('【阶段 W】pin 后标题栏折叠入口也被挡住',
-      manualCollapseBlockedW && stillOpenAfterManualW,
-      JSON.stringify({ clicked: manualCollapseBlockedW, visible: stillOpenAfterManualW }))
+    check('【阶段 W】pin 后键盘折叠入口也被挡住',
+      stillOpenAfterManualW,
+      JSON.stringify({ visible: stillOpenAfterManualW }))
 
     const unpinClickedW = await page.evaluate(() => {
       const button = document.querySelector('button[aria-label="取消固定右侧面板"]')
@@ -3864,6 +3861,483 @@ async function main() {
       && quickMenuAE.menu && quickMenuAE.menuVis === 'visible'
       && quickMenuAE.areaVis === 'visible' && quickMenuAE.outside !== 'true',
       JSON.stringify({ quickOpenAE, quickClosedAE, quickHandleAE, quickMenuAE }))
+    // ===== 阶段 AF：全局导航层（2026-11-21）=====
+    // 与前面所有阶段共用同一 Electron 实例；只读 DOM 与偏好，不改知识库数据。
+    const shotDirAF = path.join(process.cwd(), 'outputs', 'nav-rail-preview')
+    fs.mkdirSync(shotDirAF, { recursive: true })
+    const rectAF = () => page.evaluate(() => {
+      const g = document.querySelector('#graph-panel')
+      const a = document.querySelector('#app-layout')
+      if (!g || !a) return null
+      const gr = g.getBoundingClientRect()
+      const ar = a.getBoundingClientRect()
+      return { graph: [Math.round(gr.width), Math.round(gr.height)], app: [Math.round(ar.width), Math.round(ar.height)] }
+    })
+    const beforeAF = await rectAF()
+    check('【阶段 AF】画布绝对铺满 app-layout，导航层不改变画布尺寸',
+      !!beforeAF && beforeAF.graph[0] === beforeAF.app[0] && beforeAF.graph[1] === beforeAF.app[1],
+      JSON.stringify(beforeAF))
+
+    await page.evaluate(() => (() => { const r = document.querySelector('[data-tm-nav-rail-root]'); if (r?.getAttribute('data-tm-nav-rail-visible') === 'false') document.querySelector('button[aria-label="展开全局导航栏"]')?.click() })())
+    await sleep(350)
+    const navItemsAF = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-tm-nav-item]')].map((el) => el.getAttribute('data-tm-nav-item')))
+    check('【阶段 AF】宿主与插件导航项都已渲染，笔记库 / 专注模式入口已移除',
+      ['home', 'settings', 'learning.statistics', 'monitor.logs'].every((id) => navItemsAF.includes(id))
+      && !navItemsAF.includes('library') && !navItemsAF.includes('focus'),
+      JSON.stringify(navItemsAF))
+
+    const panelAF = await page.evaluate(() => ({
+      panels: document.querySelectorAll('[data-tm-nav-panel]').length,
+      graph: (() => { const r = document.querySelector('#graph-panel')?.getBoundingClientRect(); return r ? [Math.round(r.width), Math.round(r.height)] : null })(),
+      app: (() => { const r = document.querySelector('#app-layout')?.getBoundingClientRect(); return r ? [Math.round(r.width), Math.round(r.height)] : null })(),
+    }))
+    check('【阶段 AF】导航层只剩单层导航，无二级面板且画布几何逐像素不变',
+      panelAF.panels === 0 && !!panelAF.graph && !!panelAF.app
+      && panelAF.graph[0] === panelAF.app[0] && panelAF.graph[1] === panelAF.app[1],
+    JSON.stringify(panelAF))
+
+    await page.evaluate(() => document.querySelector('[data-tm-nav-item="settings"]')?.click())
+    await sleep(800)
+    const settingsAF = await page.evaluate(() => ({
+      titles: [...document.querySelectorAll('h1')].map((h) => (h.textContent || '').trim()),
+      left: Math.round(document.querySelector('[data-tm-app-view="secondary"]')?.getBoundingClientRect().left ?? -1),
+      docked: document.documentElement.dataset.tmNavRailDocked,
+    }))
+    check('【阶段 AF】设置页可达，非画布视图为常驻导航栏让位',
+      settingsAF.titles.includes('设置') && settingsAF.left >= 40 && settingsAF.docked === 'true',
+      JSON.stringify(settingsAF))
+    await page.screenshot({ path: path.join(shotDirAF, '01-settings.png') })
+
+    await page.evaluate(() => document.querySelector('[data-tm-nav-item="home"]')?.click())
+    await sleep(700)
+    await page.screenshot({ path: path.join(shotDirAF, '02-home.png') })
+
+    // 从首页知识库总览打开画布，替代原先的笔记库二级面板入口。
+    await page.evaluate(() => document.querySelector('[aria-label^="打开知识库 "]')?.click())
+    await sleep(1000)
+    // 确保导航栏可见，拍「导航展开态」。
+    await page.evaluate(() => (() => { const r = document.querySelector('[data-tm-nav-rail-root]'); if (r?.getAttribute('data-tm-nav-rail-visible') === 'false') document.querySelector('button[aria-label="展开全局导航栏"]')?.click() })())
+    await sleep(350)
+    await page.screenshot({ path: path.join(shotDirAF, '03-canvas.png') })
+
+    // 鼠标移回画布中部触发导航层收起，拍「默认画布态」：只留 6px 边缘条。
+    await page.mouse.move(700, 500)
+    await sleep(600)
+    const defaultAF = await page.evaluate(() => {
+      const rail = document.querySelector('[data-tm-nav-rail-root]')
+      const drawer = document.querySelector('[data-tm-canvas-status-drawer]')
+      const graph = document.querySelector('#graph-panel')?.getBoundingClientRect()
+      return {
+        edge: rail?.getAttribute('data-tm-nav-rail-edge') ?? null,
+        railWidth: rail ? Math.round(rail.getBoundingClientRect().width) : null,
+        drawerLeft: drawer ? Math.round(drawer.getBoundingClientRect().left) : null,
+        graphWidth: graph ? Math.round(graph.width) : null,
+        open: document.documentElement.dataset.tmNavRailOpen ?? null,
+      }
+    })
+    check('【阶段 AF】画布页导航栏默认显示且为覆盖浮层，画布宽度恒定、状态抽屉让位',
+      defaultAF.edge === 'false' && defaultAF.railWidth !== null && defaultAF.railWidth >= 40
+      && defaultAF.drawerLeft !== null && defaultAF.drawerLeft >= 48
+      && defaultAF.graphWidth === beforeAF?.app?.[0],
+    JSON.stringify(defaultAF))
+    await page.screenshot({ path: path.join(shotDirAF, '04-canvas-default.png') })
+
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur() })
+    await page.keyboard.down('Control')
+    await page.keyboard.down('Shift')
+    await page.keyboard.press('f')
+    await page.keyboard.up('Shift')
+    await page.keyboard.up('Control')
+    await sleep(350)
+    const immersiveAF = await page.evaluate(() => ({
+      mode: document.documentElement.dataset.tmImmersive ?? null,
+      rail: !!document.querySelector('[data-tm-nav-rail-root]'),
+      panels: document.querySelectorAll('[data-tm-nav-panel]').length,
+    }))
+    check('【阶段 AF】专注模式已移除，快捷键不再产生沉浸态也不改动导航栏',
+      immersiveAF.mode === null && immersiveAF.rail && immersiveAF.panels === 0,
+    JSON.stringify(immersiveAF))
+    console.log(`[nav-rail preview] ${shotDirAF}`)
+
+    // ===== 阶段 AI：标题栏控制区重构（2026-11-21）=====
+    const chromeAI = await page.evaluate(() => {
+      const title = document.querySelector('[data-tm-titlebar-unfocused]')
+      const widget = document.querySelector('[data-tm-titlebar-widget]')
+      const zone = document.querySelector('[data-tm-tab-zone]')
+      return {
+        hasLogo: !!title?.querySelector('img[alt="Logo"]'),
+        hasToggle: !!document.querySelector('[data-tm-nav-rail-toggle]'),
+        hasHamburger: !!document.querySelector('nav[aria-label="应用菜单"] button[aria-label="应用菜单"]'),
+        widgetBeforeZone: !!widget && !!zone && !!(widget.compareDocumentPosition(zone) & Node.DOCUMENT_POSITION_FOLLOWING),
+        noManualRightPanel: !document.querySelector('button[aria-label="折叠右侧面板"]')
+          && !document.querySelector('button[aria-label="展开右侧面板"]')
+          && !document.querySelector('[aria-label="右侧面板分区"]'),
+        focusAutoHide: !!document.querySelector('[data-tm-right-panel-focus-auto-hide]'),
+      }
+    })
+    check('【阶段 AI】标题栏无软件图标、保留汉堡与全局导航开关，学习计时在 tab 前，右栏手动控件已移除',
+      !chromeAI.hasLogo && chromeAI.hasToggle && chromeAI.hasHamburger && chromeAI.widgetBeforeZone
+      && chromeAI.noManualRightPanel && chromeAI.focusAutoHide,
+      JSON.stringify(chromeAI))
+
+    // 全局开关在画布页也必须生效
+    await page.evaluate(() => document.querySelector('[data-tm-nav-rail-toggle]')?.click())
+    await sleep(320)
+    const railHiddenAI = await page.evaluate(() => ({
+      visible: document.querySelector('[data-tm-nav-rail-root]')?.getAttribute('data-tm-nav-rail-visible') ?? null,
+      width: Math.round(document.querySelector('[data-tm-nav-rail-root]')?.getBoundingClientRect().width ?? -1),
+      graphWidth: Math.round(document.querySelector('#graph-panel')?.getBoundingClientRect().width ?? -1),
+    }))
+    check('【阶段 AI】画布页点击全局开关即可隐藏导航栏，画布宽度恒定',
+      railHiddenAI.visible === 'false' && railHiddenAI.width === 0
+      && railHiddenAI.graphWidth === beforeAF?.app?.[0],
+      JSON.stringify(railHiddenAI))
+    await page.screenshot({ path: path.join(shotDirAF, '12-titlebar-rail-hidden.png') })
+
+    await page.evaluate(() => document.querySelector('[data-tm-nav-rail-toggle]')?.click())
+    await sleep(320)
+    const railRestoredAI = await page.evaluate(() =>
+      document.querySelector('[data-tm-nav-rail-root]')?.getAttribute('data-tm-nav-rail-visible') ?? null)
+    check('【阶段 AI】再次点击全局开关恢复导航栏', railRestoredAI === 'true', JSON.stringify({ railRestoredAI }))
+
+    // 系统页同样受全局开关控制；样式设置已迁入设置页
+    await page.evaluate(() => document.querySelector('[data-tm-nav-item="settings"]')?.click())
+    await sleep(650)
+    const settingsAI = await page.evaluate(() => {
+      const secondary = document.querySelector('[data-tm-app-view="secondary"]')
+      const text = secondary?.textContent ?? ''
+      return {
+        styleSection: !!document.querySelector('[data-tm-settings-style] [aria-label="样式面板分区"]'),
+        // 设置页不在 GraphStoreProvider 内，样式面板若直接 useGraphStore 会被
+        // 二级视图 ErrorBoundary 整页拦下；这里给出比 styleSection=false 更明确的证据。
+        crashed: text.includes('二级视图页面加载失败') || text.includes('Missing GraphStoreProvider'),
+        hasTitle: !!secondary?.querySelector('h1'),
+        railVisible: document.querySelector('[data-tm-nav-rail-root]')?.getAttribute('data-tm-nav-rail-visible') ?? null,
+        docked: document.documentElement.dataset.tmNavRailDocked ?? null,
+      }
+    })
+    check('【阶段 AI】设置页正常渲染，样式分区未触发 ErrorBoundary / GraphStore 崩溃',
+      !settingsAI.crashed && settingsAI.hasTitle,
+      JSON.stringify(settingsAI))
+    check('【阶段 AI】样式设置已迁入设置页，导航栏在系统页仍受同一开关控制',
+      settingsAI.styleSection && settingsAI.railVisible === 'true' && settingsAI.docked === 'true',
+      JSON.stringify(settingsAI))
+    await page.screenshot({ path: path.join(shotDirAF, '13-titlebar-settings-style.png') })
+    await page.evaluate(() => document.querySelector('[data-tm-tab-bar] [role="tab"]')?.click())
+    await sleep(400)
+
+
+    // ===== 阶段 AG：统一控件契约的运行时证据（2026-11-21）=====
+    // 静态门禁只能证明「源码写了 .tm-*」，这里实测 CSS 真的生效：
+    // 同类控件圆角一致、图标尺寸一致，且画布几何仍未被改变。
+    await page.evaluate(() => {
+      const drawer = document.querySelector('[data-tm-canvas-status-drawer]')
+      if (drawer?.getAttribute('data-tm-canvas-status-open') !== 'true') {
+        document.querySelector('[data-tm-canvas-status-toggle]')?.click()
+      }
+    })
+    await sleep(400)
+    const controlsAG = await page.evaluate(() => {
+      const toggle = document.querySelector('[data-tm-canvas-status-toggle]')
+      const zoom = document.querySelector('[data-tm-zoom-out]')
+      const select = document.querySelector('[data-tm-graph-profile-select]')
+      const radius = (el) => el ? getComputedStyle(el).borderRadius : null
+      const graph = document.querySelector('#graph-panel')?.getBoundingClientRect()
+      return {
+        toggleHasTm: toggle?.className.includes('tm-icon-btn') ?? false,
+        zoomHasTm: zoom?.className.includes('tm-icon-btn') ?? false,
+        selectHasTm: select?.className.includes('tm-select') ?? false,
+        zoomRadius: radius(zoom),
+        selectRadius: radius(select),
+        iconWidth: (() => { const i = zoom?.querySelector('svg'); return i ? Math.round(i.getBoundingClientRect().width) : null })(),
+        graphWidth: graph ? Math.round(graph.width) : null,
+      }
+    })
+    check('【阶段 AG】画布控件已套用统一 .tm-* 类，圆角/图标尺寸一致且画布宽度不变',
+      controlsAG.toggleHasTm && controlsAG.zoomHasTm && controlsAG.selectHasTm
+      && !!controlsAG.zoomRadius && controlsAG.zoomRadius === controlsAG.selectRadius
+      && controlsAG.iconWidth === 12 && controlsAG.graphWidth === beforeAF?.app?.[0],
+    JSON.stringify(controlsAG))
+    await page.screenshot({ path: path.join(shotDirAF, '05-controls-unified.png') })
+
+    // ===== 阶段 AH：横向知识库 tab 栏（2026-11-21）=====
+    // 静态门禁只能证明源码结构，这里实测：顶栏仍是 32px 且画布几何/起点不变、
+    // tab 一步直达、系统页不占 tab、拖拽安全带恒在、视觉契约真的生效。
+    await page.evaluate(() => {
+      const drawer = document.querySelector('[data-tm-canvas-status-drawer]')
+      if (drawer?.getAttribute('data-tm-canvas-status-open') === 'true') {
+        document.querySelector('[data-tm-canvas-status-toggle]')?.click()
+      }
+    })
+    await page.mouse.move(700, 500)
+    await sleep(450)
+
+    const geoAH = await page.evaluate(() => {
+      const graph = document.querySelector('#graph-panel')?.getBoundingClientRect()
+      const app = document.querySelector('#app-layout')?.getBoundingClientRect()
+      const title = document.querySelector('[data-tm-titlebar-unfocused]')?.getBoundingClientRect()
+      const gutter = document.querySelector('[data-tm-tab-drag-gutter]')?.getBoundingClientRect()
+      const bar = document.querySelector('[data-tm-tab-bar]')?.getBoundingClientRect()
+      return {
+        graph: graph ? [Math.round(graph.width), Math.round(graph.height)] : null,
+        app: app ? [Math.round(app.width), Math.round(app.height)] : null,
+        graphTop: graph ? Math.round(graph.top) : null,
+        titleHeight: title ? Math.round(title.height) : null,
+        gutter: gutter ? Math.round(gutter.width) : null,
+        barWidth: bar ? Math.round(bar.width) : null,
+        tabCount: document.querySelectorAll('[data-tm-tab-bar] [role="tab"]').length,
+        selected: document.querySelectorAll('[data-tm-tab-bar] [role="tab"][aria-selected="true"]').length,
+        tablist: !!document.querySelector('[data-tm-tab-bar] [role="tablist"]'),
+      }
+    })
+    check('【阶段 AH】32px 顶栏仍是唯一占流兄弟，画布宽高与起点完全不变',
+      !!geoAH.graph && !!geoAH.app && geoAH.graph[0] === geoAH.app[0] && geoAH.graph[1] === geoAH.app[1]
+      && geoAH.titleHeight === 32 && geoAH.graphTop === 32
+      && geoAH.graph[0] === beforeAF?.app?.[0]
+      && geoAH.gutter !== null && geoAH.gutter >= 80
+      && geoAH.tablist && geoAH.tabCount >= 1 && geoAH.selected === 1,
+      JSON.stringify(geoAH))
+
+    const styleAH = await page.evaluate(() => {
+      const barEl = document.querySelector('[data-tm-tab-bar]')
+      const stripEl = document.querySelector('[data-tm-tab-bar] [role="tablist"]')
+      const titleEl = document.querySelector('[data-tm-titlebar-unfocused]')
+      const active = document.querySelector('[data-tm-tab-bar] [role="tab"][aria-selected="true"]')
+      const cs = active ? getComputedStyle(active) : null
+      const seam = active ? getComputedStyle(active, '::after') : null
+      const icon = active?.querySelector('svg')
+      const graph = document.querySelector('#graph-panel')
+      return {
+        hasTmTab: active?.className.includes('tm-tab') ?? false,
+        height: active ? Math.round(active.getBoundingClientRect().height) : null,
+        topLeftRadius: cs?.borderTopLeftRadius ?? null,
+        bottomLeftRadius: cs?.borderBottomLeftRadius ?? null,
+        bg: cs?.backgroundColor ?? null,
+        graphBg: graph ? getComputedStyle(graph).backgroundColor : null,
+        titlebarBg: titleEl ? getComputedStyle(titleEl).backgroundColor : null,
+        seamHeight: seam?.height ?? null,
+        seamBg: seam?.backgroundColor ?? null,
+        iconWidth: icon ? Math.round(icon.getBoundingClientRect().width) : null,
+        noDrag: barEl?.style.webkitAppRegion ?? null,
+        zone: !!document.querySelector('[data-tm-tab-zone]'),
+        activeView: titleEl?.getAttribute('data-tm-active-view') ?? null,
+        hasPlus: !!document.querySelector('[data-tm-tab-bar] [aria-label="打开知识库"]'),
+        tabWidthVar: stripEl ? getComputedStyle(stripEl).getPropertyValue('--tab-current-width').trim() : null,
+      }
+    })
+    check('【阶段 AH】活跃 tab 为 Π 形连体：26px、下方直角、底色与画布一致、底缝盖住 border-b',
+      styleAH.hasTmTab && styleAH.height === 26
+      && Number.parseFloat(styleAH.topLeftRadius) > 0
+      && Number.parseFloat(styleAH.bottomLeftRadius) === 0
+      && !!styleAH.bg && styleAH.bg === styleAH.graphBg
+      && styleAH.seamHeight === '1px' && styleAH.seamBg === styleAH.bg
+      && styleAH.iconWidth === 12 && styleAH.noDrag === 'no-drag'
+      && styleAH.zone && styleAH.activeView === 'kb',
+      JSON.stringify(styleAH))
+    check('【阶段 AH】Π 形对比度：顶栏底色深一档，活跃 tab 与画布同色且明显区别于顶栏',
+      !!styleAH.titlebarBg && styleAH.titlebarBg !== styleAH.bg
+      && !!styleAH.bg && styleAH.bg === styleAH.graphBg,
+      JSON.stringify({ titlebarBg: styleAH.titlebarBg, bg: styleAH.bg, graphBg: styleAH.graphBg }))
+    check('【阶段 AH】tab 栏不再有「+」按钮，宽度由弹性 token 注入',
+      !styleAH.hasPlus && /px$/.test(styleAH.tabWidthVar ?? ''),
+      JSON.stringify({ hasPlus: styleAH.hasPlus, tabWidthVar: styleAH.tabWidthVar }))
+
+    await page.evaluate(() => (() => { const r = document.querySelector('[data-tm-nav-rail-root]'); if (r?.getAttribute('data-tm-nav-rail-visible') === 'false') document.querySelector('button[aria-label="展开全局导航栏"]')?.click() })())
+    await sleep(300)
+    await page.evaluate(() => document.querySelector('[data-tm-nav-item="settings"]')?.click())
+    await sleep(650)
+    const systemAH = await page.evaluate(() => ({
+      selected: document.querySelectorAll('[data-tm-tab-bar] [role="tab"][aria-selected="true"]').length,
+      labels: [...document.querySelectorAll('[data-tm-tab-bar] [role="tab"]')].map((el) => el.getAttribute('aria-label')),
+      // 视图是常驻挂载的，只能用 visibility 判定当前是否真的在系统页。
+      secondaryVisible: getComputedStyle(document.querySelector('[data-tm-app-view="secondary"]')).visibility === 'visible',
+    }))
+    check('【阶段 AH】系统页不出现在 tab 栏，且所有知识库 tab 呈非活跃态',
+      systemAH.secondaryVisible && systemAH.selected === 0
+      && !systemAH.labels.some((label) => ['设置', '学习统计', '系统日志', '首页'].includes(label)),
+      JSON.stringify(systemAH))
+    await page.screenshot({ path: path.join(shotDirAF, '07-tabs-system-view.png') })
+
+    const firstTabAH = await page.evaluate(() => {
+      const first = document.querySelector('[data-tm-tab-bar] [role="tab"]')
+      if (!first) return null
+      first.click()
+      return first.getAttribute('data-tm-tab-id')
+    })
+    await sleep(650)
+    const backAH = await page.evaluate(() => ({
+      selected: document.querySelectorAll('[data-tm-tab-bar] [role="tab"][aria-selected="true"]').length,
+      graphVisible: !!document.querySelector('#graph-panel'),
+      secondaryHidden: getComputedStyle(document.querySelector('[data-tm-app-view="secondary"]')).visibility === 'hidden',
+    }))
+    check('【阶段 AH】单击一个 tab 即可一步切回知识库画布',
+      !!firstTabAH && backAH.selected === 1 && backAH.graphVisible && backAH.secondaryHidden,
+      JSON.stringify({ firstTabAH, backAH }))
+
+    // 只改 tab zone 的 inline 宽度来模拟窄窗口：ResizeObserver 现在观察 zone，
+    // 改 bar 的 max-width 不会再触发重算（bar 是内容自适应宽度）。
+    await page.evaluate(() => {
+      const zone = document.querySelector('[data-tm-tab-zone]')
+      if (zone) zone.style.width = '320px'
+    })
+    await sleep(450)
+    const overflowAH = await page.evaluate(() => {
+      const zone = document.querySelector('[data-tm-tab-zone]')
+      const gutter = document.querySelector('[data-tm-tab-drag-gutter]')
+      const tab = document.querySelector('[data-tm-tab-bar] [role="tab"]')
+      const bar = document.querySelector('[data-tm-tab-bar]')
+      return {
+        zoneWidth: zone ? Math.round(zone.getBoundingClientRect().width) : null,
+        barWidth: bar ? Math.round(bar.getBoundingClientRect().width) : null,
+        gutter: gutter ? Math.round(gutter.getBoundingClientRect().width) : null,
+        overflow: !!document.querySelector('[aria-label^="更多已打开的知识库"]'),
+        visibleTabs: document.querySelectorAll('[data-tm-tab-bar] [role="tab"]').length,
+        tabWidth: tab ? Math.round(tab.getBoundingClientRect().width) : null,
+        graphWidth: Math.round(document.querySelector('#graph-panel')?.getBoundingClientRect().width ?? -1),
+      }
+    })
+    check('【阶段 AH】窄宽度下 tab 栏不撑破顶栏，拖拽安全带与画布宽度恒定',
+      overflowAH.zoneWidth !== null && overflowAH.zoneWidth <= 320
+      && overflowAH.barWidth !== null && overflowAH.barWidth <= overflowAH.zoneWidth
+      && overflowAH.gutter !== null && overflowAH.gutter >= 80
+      && overflowAH.graphWidth === beforeAF?.app?.[0],
+      JSON.stringify(overflowAH))
+    check('【阶段 AH】窄宽度下单个 tab 仍横向展示、不折叠、不出现「+」',
+      overflowAH.visibleTabs === 1 && !overflowAH.overflow
+      && !!overflowAH.tabWidth && overflowAH.tabWidth >= 88 && overflowAH.tabWidth <= 180,
+      JSON.stringify(overflowAH))
+    await page.screenshot({ path: path.join(shotDirAF, '08-tabs-overflow.png') })
+    await page.evaluate(() => {
+      const zone = document.querySelector('[data-tm-tab-zone]')
+      if (zone) zone.style.width = ''
+    })
+    await page.mouse.move(700, 500)
+    await sleep(450)
+    await page.screenshot({ path: path.join(shotDirAF, '06-tabs-canvas.png') })
+
+    // ===== 阶段 AH-v2：多个知识库必须横向并排，绝不折叠成下拉 =====
+    // 早期阶段只建一个测试库；这里在末尾动态追加两个最小知识库，由首页
+    // 知识库总览真实打开，实测 Chrome 式弹性压缩与「最小宽度后才溢出」。
+    for (const name of ['第二知识库', '第三知识库']) {
+      const dir = path.join(WORKDIR, 'kbs', name)
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, '_graph.json'), JSON.stringify({
+        children: {}, edges: [], zoom: 1, pan: { x: 0, y: 0 },
+      }), 'utf8')
+    }
+    // 首页列表只在挂载时读取一次目录，追加夹具后重载渲染进程让它重新列举。
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await waitFor(page, () => !!document.querySelector('[data-tm-nav-rail-root]'), 10000)
+    await page.evaluate(() => {
+      const r = document.querySelector('[data-tm-nav-rail-root]')
+      if (r?.getAttribute('data-tm-nav-rail-visible') === 'false') {
+        document.querySelector('button[aria-label="展开全局导航栏"]')?.click()
+      }
+    })
+    await waitFor(page, () => !!document.querySelector('[data-tm-nav-item="home"]'), 10000)
+    await sleep(600)
+    const openKBByName = async (name) => {
+      await page.evaluate(() => document.querySelector('[data-tm-nav-item="home"]')?.click())
+      await sleep(400)
+      const ready = await waitFor(page, () => !!document.querySelector('[aria-label^="打开知识库 "]'), 5000)
+      const clicked = ready && await page.evaluate((kbName) => {
+        const card = document.querySelector(`[aria-label="打开知识库 ${kbName}"]`)
+        if (!card) return false
+        card.click()
+        return true
+      }, name)
+      await sleep(700)
+      return clicked
+    }
+    const opened1 = await openKBByName(KB_NAME)
+    const opened2 = await openKBByName('第二知识库')
+    const opened3 = await openKBByName('第三知识库')
+    check('【阶段 AH】能真实打开多个知识库（夹具：追加两个库并逐一点开）',
+      opened1 && opened2 && opened3, JSON.stringify({ opened1, opened2, opened3 }))
+
+    const multiAH = await page.evaluate(() => {
+      const bar = document.querySelector('[data-tm-tab-bar]')
+      const zone = document.querySelector('[data-tm-tab-zone]')
+      const gutter = document.querySelector('[data-tm-tab-drag-gutter]')
+      const tabs = [...document.querySelectorAll('[data-tm-tab-bar] [role="tab"]')]
+      const lastRight = tabs.length ? tabs[tabs.length - 1].getBoundingClientRect().right : null
+      return {
+        count: bar?.getAttribute('data-tm-tab-count') ?? null,
+        visible: tabs.length,
+        overflowAttr: bar?.getAttribute('data-tm-tab-overflow') ?? null,
+        hasOverflowButton: !!document.querySelector('[aria-label^="更多已打开的知识库"]'),
+        hasPlus: !!document.querySelector('[data-tm-tab-bar] [aria-label="打开知识库"]'),
+        widths: tabs.map((el) => Math.round(el.getBoundingClientRect().width)),
+        zoneWidth: zone ? Math.round(zone.getBoundingClientRect().width) : null,
+        gutter: gutter ? Math.round(gutter.getBoundingClientRect().width) : null,
+        rightSpace: zone && lastRight !== null
+          ? Math.round(zone.getBoundingClientRect().right - lastRight) : null,
+      }
+    })
+    check('【阶段 AH】多个知识库横向并排不折叠，全部常驻可见且右侧保留拖拽留白',
+      Number(multiAH.count) >= 3 && multiAH.visible === Number(multiAH.count)
+      && multiAH.overflowAttr === 'false' && !multiAH.hasOverflowButton && !multiAH.hasPlus
+      && multiAH.widths.length >= 3 && multiAH.widths.every((w) => w >= 88 && w <= 180)
+      && multiAH.rightSpace !== null && multiAH.gutter !== null && multiAH.rightSpace >= multiAH.gutter,
+      JSON.stringify(multiAH))
+    await page.screenshot({ path: path.join(shotDirAF, '09-tabs-multi.png') })
+
+    // 中等宽度：三个 tab 应「压缩但一个都不折叠」。
+    await page.evaluate(() => {
+      const zone = document.querySelector('[data-tm-tab-zone]')
+      if (zone) zone.style.width = '560px'
+    })
+    await sleep(450)
+    const compressedAH = await page.evaluate(() => {
+      const bar = document.querySelector('[data-tm-tab-bar]')
+      const tabs = [...document.querySelectorAll('[data-tm-tab-bar] [role="tab"]')]
+      return {
+        count: bar?.getAttribute('data-tm-tab-count') ?? null,
+        visible: tabs.length,
+        hasOverflowButton: !!document.querySelector('[aria-label^="更多已打开的知识库"]'),
+        widths: tabs.map((el) => Math.round(el.getBoundingClientRect().width)),
+      }
+    })
+    check('【阶段 AH】空间变窄时优先压缩每个 tab，压到最小宽度前绝不折叠',
+      Number(compressedAH.count) >= 3 && compressedAH.visible === Number(compressedAH.count)
+      && !compressedAH.hasOverflowButton
+      && compressedAH.widths.length >= 3
+      && compressedAH.widths.every((w) => w >= 88 && w <= 180)
+      && compressedAH.widths[0] < multiAH.widths[0],
+      JSON.stringify({ compressedAH, before: multiAH.widths }))
+    await page.screenshot({ path: path.join(shotDirAF, '10-tabs-compressed.png') })
+
+    // 极窄宽度：三个都压到最小仍放不下，才允许出现「⋯N」。
+    await page.evaluate(() => {
+      const zone = document.querySelector('[data-tm-tab-zone]')
+      if (zone) zone.style.width = '300px'
+    })
+    await sleep(450)
+    const realOverflowAH = await page.evaluate(() => {
+      const bar = document.querySelector('[data-tm-tab-bar]')
+      const tabs = [...document.querySelectorAll('[data-tm-tab-bar] [role="tab"]')]
+      return {
+        count: bar?.getAttribute('data-tm-tab-count') ?? null,
+        visible: tabs.length,
+        overflowAttr: bar?.getAttribute('data-tm-tab-overflow') ?? null,
+        hasOverflowButton: !!document.querySelector('[aria-label^="更多已打开的知识库"]'),
+        widths: tabs.map((el) => Math.round(el.getBoundingClientRect().width)),
+      }
+    })
+    check('【阶段 AH】压到最小宽度仍放不下才出现「更多已打开知识库」',
+      Number(realOverflowAH.count) >= 3 && realOverflowAH.visible < Number(realOverflowAH.count)
+      && realOverflowAH.overflowAttr === 'true' && realOverflowAH.hasOverflowButton
+      && realOverflowAH.widths.length >= 1 && realOverflowAH.widths.every((w) => w >= 88 && w <= 92),
+      JSON.stringify(realOverflowAH))
+    await page.screenshot({ path: path.join(shotDirAF, '11-tabs-real-overflow.png') })
+    await page.evaluate(() => {
+      const zone = document.querySelector('[data-tm-tab-zone]')
+      if (zone) zone.style.width = ''
+    })
+    await page.mouse.move(700, 500)
+    await sleep(400)
+    console.log(`[tab bar preview] ${shotDirAF}`)
   } finally {
     browser.disconnect()
     if (spawned) spawned.kill()

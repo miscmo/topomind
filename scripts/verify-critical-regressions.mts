@@ -10451,4 +10451,664 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   '【图片对齐】点击按钮不得让编辑器失焦，且须暴露选中态与可测试标记')
 }
 
+// ===== 第 58 组：全局导航层（App 单例浮层 / 画布宽度恒定 / 插件可扩展）2026-11-21 =====
+{
+  const readSrc58 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const app58 = await readSrc58('src/App.tsx')
+  const rail58 = await readSrc58('src/features/layout/NavRail/NavRail.tsx')
+  const slot58 = await readSrc58('src/features/layout/NavRail/NavRailSlot.tsx')
+  const store58 = await readSrc58('src/stores/layoutStore.ts')
+  const page58 = await readSrc58('src/features/graph/GraphPage/GraphPage.tsx')
+  const canvas58 = await readSrc58('src/features/graph/GraphCanvas/GraphCanvas.tsx')
+  const tokens58 = await readSrc58('src/styles/tokens.css')
+  const css58 = await readSrc58('src/styles/base.css')
+  const manifest58 = await readSrc58('src/plugins/host/pluginManifest.ts')
+  const registry58 = await readSrc58('src/plugins/host/pluginRegistry.ts')
+  const public58 = await readSrc58('src/plugins/public/manifest.ts')
+  const monitor58 = await readSrc58('src/plugins/builtin/monitor/manifest.json')
+  const learning58 = await readSrc58('src/plugins/builtin/learning-statistics/manifest.json')
+
+  assert.equal(app58.match(/<NavRail \/>/g)?.length ?? 0, 1,
+    '【导航层】NavRail 只能是 App 层单例，放进 GraphPage 会随每个知识库标签页重复渲染')
+  assert.ok(app58.includes('data-tm-app-view="home"') && app58.includes('data-tm-app-view="secondary"'),
+    '【导航层】仅非画布视图标记让位，画布容器绝不左移')
+  assert.ok(rail58.includes('absolute inset-y-0 left-0 z-40') && !rail58.includes('flex-1'),
+    '【导航层】导航栏自身必须是 z-40 的 absolute 浮层，不参与 flex 两栏')
+  assert.ok(!page58.includes('layoutStore') && !canvas58.includes('layoutStore'),
+    '【导航层】画布 / GraphCanvas 不得订阅导航状态，否则展开收起会重算画布')
+  assert.ok(page58.includes('id="app-layout" className="relative w-full h-full"')
+    && page58.includes('id="graph-panel" className="absolute inset-0 isolate overflow-clip'),
+  '【导航层】既有画布浮层契约必须原样保留')
+  assert.ok(tokens58.includes('--nav-rail-width: 48px') && tokens58.includes('--z-nav-rail: 40'),
+    '【导航层】宽度与层级必须走 tokens.css 设计变量')
+  assert.ok(css58.includes("html[data-tm-nav-rail-docked='true'] [data-tm-app-view]")
+    && css58.includes('margin-left: calc(12px + var(--tm-node-tree-offset, 0px)) !important'),
+  '【导航层】让位只能用 CSS 变量，且原有节点树让位规则不得被删除')
+  assert.ok(css58.includes("html[data-tm-nav-rail-open='true']")
+    && rail58.includes('root.dataset.tmNavRailOpen'),
+  '【导航层】导航展开时节点树与状态抽屉必须让位，避免被 48px rail 遮住')
+  assert.ok(!css58.includes("html[data-tm-immersive='true']") && !css58.includes('data-tm-immersive'),
+    '【导航层】专注模式已移除，不得再写入沉浸态 CSS')
+  assert.ok(store58.includes('railVisible') && store58.includes('toggleRailVisible')
+    && !store58.includes('focusMode') && !store58.includes('secondaryPanel')
+    && !store58.includes('export type NavRailMode')
+    && !store58.includes('setRailMode') && !store58.includes('toggleRailMode')
+    && !store58.includes('railPeeking'),
+    '【导航层】显隐必须收敛为单一全局二态 railVisible；二级面板 / 沉浸态 / 三态 / peek 态不得回灌（仅允许旧版偏好的一次性迁移读取）')
+  assert.ok(!store58.includes('closePanel') && !store58.includes('openPanel')
+    && !rail58.includes("addEventListener('mousemove'")
+    && !rail58.includes('railPeeking')
+    && !rail58.includes('展开全局导航栏'),
+  '【导航层】边缘触发条 / 鼠标唤出 / peek 兜底 / 二级面板 / 栏内收起按钮必须移除，标题栏是唯一开关')
+  assert.ok(public58.includes('navItems?: NavItemContribution[]')
+    && manifest58.includes('parseNavItems')
+    && registry58.includes('listStaticNavItems')
+    && slot58.includes('listStaticNavItems'),
+  '【导航层】插件必须能通过 manifest 声明导航项并被宿主 slot 消费')
+  assert.ok(monitor58.includes('"navItems"') && learning58.includes('"navItems"'),
+    '【导航层】日志与学习记录两个内置插件必须贡献导航图标')
+}
+
+// ===== 59. 统一控件设计契约（2026-11-21）=====
+// 这一组不检查具体控件长什么样，而是保证「后续设计沿用统一规范」的机制本身没被拆掉。
+{
+  const readSrc59 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const main59 = await readSrc59('src/main.tsx')
+  const tokens59 = await readSrc59('src/styles/tokens.css')
+  const controls59 = await readSrc59('src/styles/controls.css')
+  const contract59 = await readSrc59('src/shared/ui/controlStyles.ts')
+  const lod59 = await readSrc59('src/features/graph/GraphCanvas/components/LodControl.tsx')
+  const guard59 = await readSrc59('scripts/verify-design-system.mjs')
+  const baseline59 = JSON.parse(await readSrc59('scripts/design-system-baseline.json'))
+  const doc59 = await readSrc59('docs/design/ui-control-system.md')
+  const pkg59 = JSON.parse(await readSrc59('package.json'))
+
+  assert.ok(main59.includes("import './styles/controls.css'"),
+    '【设计契约】controls.css 必须由 main.tsx 引入，否则所有 .tm-* 控件类失效')
+  assert.ok(tokens59.includes('--control-radius:') && tokens59.includes('--z-popover:'),
+    '【设计契约】控件级语义 token 必须放在 tokens.css 唯一真源')
+  assert.ok(controls59.includes('.tm-btn') && controls59.includes('.tm-icon-btn')
+    && controls59.includes(':disabled') && controls59.includes(':hover:not(:disabled)'),
+  '【设计契约】交互态必须集中在 controls.css，禁止组件各自手写 hover/disabled')
+  assert.ok(!controls59.replace(/\/\*[\s\S]*?\*\//g, '').includes('!important'),
+    '【设计契约】controls.css 不得用 !important 覆盖被精确断言的 className')
+  assert.ok(contract59.includes('export const TM_UI') && contract59.includes('tmUI'),
+    '【设计契约】TM_UI 常量是新增控件的唯一 TS 入口，不得退化成第二份 Tailwind 真源')
+  assert.ok(lod59.includes('tm-btn') && lod59.includes('tm-select') && lod59.includes('tm-icon'),
+    '【设计契约】画布状态抽屉已迁移到统一控件，禁止回退到手写 className')
+  assert.ok(pkg59.scripts['verify:design'] && pkg59.scripts.prebuild && pkg59.scripts.verify,
+    '【设计契约】verify:design 必须独立可跑，并挂到 prebuild 与 verify 总入口')
+  assert.ok(!String(pkg59.scripts.verify).includes('&&'),
+    '【设计契约】verify 总入口必须走 Node 顺序执行，Windows PowerShell 5.1 不支持 && 串联')
+  assert.ok(guard59.includes('design-system-baseline.json') && guard59.includes('只允许减少'),
+    '【设计契约】门禁必须采用「存量基线只减不增」策略，才能渐进收敛而不一次性改完')
+  assert.ok(baseline59.uiFiles.length > 100,
+    '【设计契约】存量基线必须登记在库，禁止删掉基线绕过门禁')
+  assert.ok(doc59.includes('唯一真源') && doc59.includes('硬性禁止'),
+    '【设计契约】规范文档必须随代码保留，后续开发者 / agent 才知道约束')
+}
+
+// ===== 60. 横向知识库 tab 与单条顶栏架构（2026-11-21）=====
+// 核心约束：32px 顶栏是 flex-col 里唯一占文档流的兄弟。把它拆成两条横条，
+// 画布净高就会永久少一档，且 #graph-panel 与 React Flow Panel 坐标全变。
+// v2（同日）：修复「两个知识库也折叠成下拉」——宽度测量对象必须是稳定的
+// tab zone 而非自适应宽度的 strip；tab 必须弹性压缩，压到最小宽度仍放不下才溢出。
+{
+  const readSrc60 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const app60 = await readSrc60('src/App.tsx')
+  const tabs60 = await readSrc60('src/features/layout/TabBar/TabBar.tsx')
+  const title60 = await readSrc60('src/features/layout/CustomTitleBar/CustomTitleBar.tsx')
+  const tokens60 = await readSrc60('src/styles/tokens.css')
+  const controls60 = await readSrc60('src/styles/controls.css')
+  const contract60 = await readSrc60('src/shared/ui/controlStyles.ts')
+  const gui60 = await readSrc60('scripts/verify-linked-documents-gui.mjs')
+
+  assert.ok(app60.includes('<CustomTitleBar mode="workspace" />')
+    && app60.includes('className="relative w-full flex-1 min-h-0 overflow-clip bg-[var(--color-surface)]"')
+    && !app60.includes('shrink-0') && !app60.includes('<TabBar') && !app60.includes('TabStrip'),
+    '【横向 tab】tab 栏必须活在 32px 标题栏内部；App.tsx 的 flex-col 里只能有一个顶栏 + 一个内容区')
+  assert.ok(title60.includes('h-[var(--titlebar-height)]') && tokens60.includes('--titlebar-height: 32px'),
+    '【横向 tab】顶栏高度必须由唯一 token 固定为 32px，禁止悄悄增高吃掉画布')
+  assert.ok(title60.includes('data-tm-tab-zone') && title60.includes('data-tm-tab-drag-gutter')
+    && tokens60.includes('--tab-drag-gutter: 88px') && !tokens60.includes('--tab-zone-max'),
+    '【横向 tab】必须有稳定的 tab zone 测量基准与恒定拖拽安全带；禁止再用百分比硬限宽把两个 tab 挤进下拉')
+  assert.ok(tabs60.includes("closest<HTMLElement>('[data-tm-tab-zone]')")
+    && tabs60.includes('observer.observe(element)') && !tabs60.includes('observer.observe(stripRef'),
+    '【横向 tab】宽度测量对象只能是中段 tab zone；测 .tm-tab-strip 自身会产生「越算越窄」的正反馈，导致两个 tab 也折叠')
+  assert.ok(tabs60.includes('allAtMin <= available') && tabs60.includes('metrics.max')
+    && tabs60.includes('--tab-current-width') && tabs60.includes('readTabMetrics')
+    && tokens60.includes('--tab-min-width: 88px') && tokens60.includes('--tab-max-width: 180px'),
+    '【横向 tab】必须 Chrome 式弹性压缩：min..max 之间按可用宽度均分，只有全压到 min 仍放不下才显示「⋯N」')
+  assert.ok(tabs60.includes("tab.type === 'kb'") && !tabs60.includes('tabs.map('),
+    '【横向 tab】系统页（首页/设置/学习记录/日志）不得出现在 tab 栏，只渲染 kb 类型')
+  assert.ok(!tabs60.includes('aria-label="打开知识库"') && !tabs60.includes('Plus')
+    && !tabs60.includes('nav.openLibrary') && !contract60.includes('tabAction:'),
+    '【横向 tab】不得有「+」新建/打开按钮及其逻辑；打开知识库统一走首页知识库总览')
+  assert.ok(tabs60.includes('role="tablist"') && tabs60.includes('role="tab"')
+    && tabs60.includes('data-tm-tab-bar') && tabs60.includes('ResizeObserver')
+    && tabs60.includes("WebkitAppRegion: 'no-drag'"),
+    '【横向 tab】tab 栏必须语义化、可溢出折叠，且所有交互元素标为 no-drag（drag 区会吞点击）')
+  assert.ok(tabs60.includes('Alt+') && tabs60.includes('Control+PageUp'),
+    '【横向 tab】tab 快捷键不得抢占 Ctrl+Tab（右栏）与 Ctrl+1..9（左侧导航）')
+  assert.ok(controls60.includes('.tm-tab--active::after') && controls60.includes('border-bottom: 0')
+    && controls60.includes('box-shadow: none') && controls60.includes('--tab-active-bg')
+    && controls60.includes("[data-tm-active-view='kb']") && controls60.includes('border-radius: var(--tab-radius-top)'),
+    '【横向 tab】活跃 tab 必须是 Π 形连体（上圆下方、底边盖住 border-b、底色跟工作区一致），不得退回浮起卡片')
+  assert.ok(controls60.includes('.tm-tab-label--fade') && controls60.includes('linear-gradient')
+    && contract60.includes('tabStrip:') && contract60.includes('tabLabelFade:'),
+    '【横向 tab】tab 视觉必须复用统一控件契约（渐隐截断等），不得另写一份样式')
+  assert.ok(title60.includes('data-tm-active-view') && title60.includes('[role="tab"]')
+    && title60.includes('data-tm-titlebar-unfocused'),
+    '【横向 tab】顶栏要暴露当前视图类型供 Π 形连体换底色；双击最大化必须排除 tab，失焦要降对比')
+  assert.ok(!title60.includes("'展开右侧面板'") && !title60.includes("'折叠右侧面板'")
+    && !title60.includes('ariaLabel="右侧面板分区"')
+    && title60.includes('data-tm-nav-rail-toggle') && title60.includes('data-tm-titlebar-widget')
+    && title60.includes('nav className=') && title60.includes('aria-label="应用菜单"'),
+    '【标题栏重构】右栏手动折叠 / 详情样式分段控件不得回灌；导航全局开关、汉堡菜单、学习计时 widget 必须在位')
+  assert.ok(gui60.includes('阶段 AH') && gui60.includes('多个知识库横向并排不折叠')
+    && gui60.includes('压到最小宽度仍放不下才出现'),
+    '【横向 tab】必须有 GUI 运行时证据：多 tab 横向并排、弹性压缩、最小宽度后才溢出')
+  assert.ok(tokens60.includes('顶栏底色必须比内容区深一档')
+    && controls60.includes('--tab-active-bg') && gui60.includes('Π 形对比度')
+    && gui60.includes('titlebarBg'),
+    '【横向 tab】Π 形可辨识的前提是顶栏比工作区深一档；必须有静态约定 + GUI 实测，禁止把顶栏改回接近白色')
+}
+
+// ===== 61. 标题栏控制区重构（2026-11-21）=====
+// 用户要求：删最左软件图标、保留汉堡、新增「全局导航栏显隐」唯一开关、
+// 学习计时移到 tab 前、右栏删除手动折叠与详情/样式分段控件（改按需展开 + 失焦隐藏）、
+// 样式设置迁入全局设置页。这一组锁住「唯一开关」与「不再有第二套显隐入口」。
+{
+  const readSrc61 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const store61 = await readSrc61('src/stores/layoutStore.ts')
+  const rail61 = await readSrc61('src/features/layout/NavRail/NavRail.tsx')
+  const title61 = await readSrc61('src/features/layout/CustomTitleBar/CustomTitleBar.tsx')
+  const settings61 = await readSrc61('src/features/settings/SettingsPage.tsx')
+  const shell61 = await readSrc61('src/features/right-panel/RightPanelShell.tsx')
+  const container61 = await readSrc61('src/features/right-panel/RightPanelContainer.tsx')
+  const docs61 = await readSrc61('src/features/right-panel/model/useDetailDocuments.ts')
+  const edgeActions61 = await readSrc61('src/features/graph/GraphPage/model/useEdgeActions.ts')
+  const graphCtx61 = await readSrc61('src/contexts/GraphContext.tsx')
+  const graphStore61 = await readSrc61('src/stores/graphStore.tsx')
+  const styleModel61 = await readSrc61('src/features/right-panel/model/useStyleSettingsModel.ts')
+  const gui61 = await readSrc61('scripts/verify-linked-documents-gui.mjs')
+  const containerGui61 = await readSrc61('scripts/verify-container-gui.mjs')
+
+  assert.ok(store61.includes('railVisible: boolean') && store61.includes('toggleRailVisible')
+    && !store61.includes('export type NavRailMode') && !store61.includes('railPeeking'),
+    '【标题栏】导航显隐只有 railVisible 一个全局状态，三态 / peek 不得回灌')
+  assert.ok(!rail61.includes('展开全局导航栏') && !rail61.includes('Control+B')
+    && !rail61.includes('railPeeking') && rail61.includes('railVisible'),
+    '【标题栏】NavRail 不得再自带边缘触发条 / 快捷键 / pin / 收起按钮等第二套显隐入口')
+  assert.ok(!title61.includes('icon.svg') && title61.includes('data-tm-nav-rail-toggle')
+    && title61.includes('aria-label="应用菜单"')
+    && title61.indexOf('data-tm-titlebar-widget=""') < title61.indexOf('data-tm-tab-zone=""')
+    && title61.includes('PluginWidgetSlot placement="titlebar"'),
+    '【标题栏】最左软件图标必须移除；汉堡保留，全局开关与学习计时在 tab 区之前')
+  assert.ok(!title61.includes('折叠右侧面板') && !title61.includes('展开右侧面板')
+    && !title61.includes('右侧面板分区') && !title61.includes('SegmentedControl'),
+    '【标题栏】右栏手动折叠按钮与详情/样式分段控件不得回灌')
+  assert.ok(container61.includes('data-tm-right-panel-focus-auto-hide')
+    && container61.includes("addEventListener('focusout'")
+    && container61.includes('collapseIfFocusLost')
+    && container61.includes('hadFocusRef'),
+    '【右栏】失焦自动隐藏必须以「焦点确实从右栏内部移出」为条件，避免误伤 editor / portal')
+  // focusout 的 relatedTarget 为 null 表示「没有明确新焦点」（编辑器 blur / 程序化失焦 /
+  // 切出窗口），此时折叠会卸载编辑器并丢掉 debounce 里未落盘的正文 —— GUI 阶段 D
+  // 曾因此从「编辑关联文档」起连锁失败 40+ 条。点画布空白收起由既有的
+  // applyRightPanelAutoVisibility(false) 负责，不靠这条路径补位。
+  assert.ok(container61.includes('event.relatedTarget === null')
+    && container61.includes('active === document.body')
+    && container61.includes('applyRightPanelAutoVisibility(false)'),
+    '【右栏】失焦隐藏必须排除「无明确新焦点」的 blur，否则会卸载编辑器丢掉未落盘正文')
+  assert.ok(docs61.includes('expandRightPanel()') && docs61.includes("setRightPanelTab('detail')"),
+    '【右栏】无文档节点新建文档必须按需展开右栏，不能依赖手动按钮')
+  assert.ok(settings61.includes('data-tm-settings-style') && settings61.includes('<StyleSection')
+    && !settings61.includes('RAIL_MODES'),
+    '【样式迁移】设置页必须承载 StyleSection，且不再出现导航三态控件')
+  assert.ok(shell61.includes('data-tm-settings-style-entry') && !shell61.includes('StyleSection'),
+    '【样式迁移】右栏样式分区只保留引导入口，不得再渲染第二份样式面板')
+  assert.ok(graphCtx61.includes('useOptionalGraphContext')
+    && styleModel61.includes('useOptionalGraphContext()')
+    && !styleModel61.includes('useGraphContext()'),
+    '【样式迁移】设置页不在 GraphContextProvider 内，样式 model 必须走 optional 上下文降级')
+  // GraphStoreProvider 只挂在知识库标签页内部（App.tsx），设置页是独立的 secondary 视图。
+  // 只降级 GraphContext 不够：model 里还有 4 处读画布选中态，直接 useGraphStore 会抛
+  // Missing GraphStoreProvider 并被二级视图 ErrorBoundary 整页拦下（GUI 阶段 AI 曾连锁失败）。
+  assert.ok(graphStore61.includes('useOptionalGraphStore')
+    && graphStore61.includes('getDetachedGraphStore')
+    && graphStore61.includes('useContext(GraphStoreContext)')
+    && styleModel61.includes('useOptionalGraphStore(')
+    && !styleModel61.includes('useGraphStore('),
+    '【样式迁移】设置页不在 GraphStoreProvider 内，样式 model 必须用可选 store 读选中态；改回 useGraphStore 会整页崩溃')
+  assert.ok(edgeActions61.includes('HOST_VIEW_IDS.settings')
+    && edgeActions61.includes("setStylePanelTab('edges')"),
+    '【样式迁移】画布右键「连线样式」必须跳到设置页的连线子分区')
+  assert.ok(gui61.includes('阶段 AI') && gui61.includes('data-tm-nav-rail-toggle')
+    && gui61.includes('12-titlebar-rail-hidden.png')
+    && gui61.includes('Missing GraphStoreProvider') && gui61.includes('二级视图页面加载失败'),
+    '【标题栏】必须有 GUI 运行时证据：全局开关在画布页生效、设置页无 ErrorBoundary 崩溃、截图')
+  assert.ok(!containerGui61.includes('button[aria-label="折叠右侧面板"]')
+    && containerGui61.includes("keyboard.press('Tab')"),
+    '【右栏】容器 GUI 的折叠夹具也必须走 Ctrl+Tab，不得再点已删除的手动按钮')
+}
+
+// ===== 62) 统一表情选择器：中文词库 / 统一字形 / 防 emoji-mart 回灌 =====
+{
+  const read62 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const panel62 = await read62('src/shared/ui/emoji/EmojiPickerPanel.tsx')
+  const glyph62 = await read62('src/shared/ui/emoji/EmojiGlyph.tsx')
+  const dataModule62 = await read62('src/shared/ui/emoji/emojiData.ts')
+  const data62 = JSON.parse(await read62('src/shared/ui/emoji/emojiData.zh.json'))
+  const meta62 = JSON.parse(await read62('src/shared/ui/emoji/emojiMeta.json'))
+  const card62 = await read62('src/features/graph/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx')
+  const docPicker62 = await read62('src/features/documents/components/DocumentMetaPicker.tsx')
+  const docNode62 = await read62('src/features/documents/components/DocumentNode.tsx')
+  const breadcrumb62 = await read62('src/features/right-panel/components/DetailTab/DocumentBreadcrumb.tsx')
+  const contextMenu62 = await read62('src/features/graph/GraphPage/components/GraphPageContextMenu.tsx')
+  const pkg62 = JSON.parse(await read62('package.json'))
+  const build62 = await read62('scripts/build-emoji-assets.mjs')
+  const prepare62 = await read62('scripts/prepare-assets.mjs')
+  const all62 = Object.values(data62.emojis).flat()
+
+  assert.ok(panel62.includes("from 'emoji-picker-react'")
+    && panel62.includes('EMOJI_DATA_ZH')
+    && panel62.includes('suggestedEmojis')
+    && panel62.includes('@floating-ui/react')
+    && panel62.includes('data-tm-emoji-picker'),
+    '【表情选择器】必须收敛为单一门面：成熟 picker 引擎 + 中文数据集 + floating-ui 定位')
+  assert.ok(panel62.includes('EmojiGlyph') && glyph62.includes('emojiGlyphUrl')
+    && dataModule62.includes('fluent-emoji-flat/')
+    && glyph62.includes('Extended_Pictographic'),
+    '【表情选择器】网格与展示都必须走统一 Fluent Emoji Flat 字形，非 emoji 文本保持原样')
+  assert.ok(!panel62.includes('@emoji-mart') && !panel62.includes('em-emoji-picker')
+    && !card62.includes('@emoji-mart') && !docPicker62.includes('@emoji-mart')
+    && !contextMenu62.includes('em-emoji-picker')
+    && contextMenu62.includes('[data-tm-emoji-picker]'),
+    '【表情选择器】emoji-mart Web Component / Shadow DOM 及其白名单不得回灌')
+
+  const grinning62 = all62.find((item) => item.u === '1f600')
+  const thumb62 = all62.find((item) => item.u === '1f44d')
+  assert.ok(grinning62?.n?.includes('笑脸') && grinning62?.n?.includes('xiaolian')
+    && grinning62?.n?.includes('xl'),
+    '【表情词库】中文名、全拼、首字母必须同时可搜（😀：笑脸 / xiaolian / xl）')
+  assert.ok(thumb62?.n?.includes('点赞') && thumb62?.n?.includes('dianzan'),
+    '【表情词库】国内语义别名必须可搜（👍：点赞 / dianzan），汉化不能丢英文能力')
+  assert.ok(all62.some((item) => item.n.includes('book')),
+    '【表情词库】必须保留英文关键词，避免相对旧版 emoji-mart 的搜索能力退化')
+  assert.ok(data62.categories?.smileys_people?.name === '笑脸与人物'
+    && Object.keys(data62.categories).length >= 9,
+    '【表情词库】分类必须是简体中文且覆盖标准分类')
+  assert.ok(meta62.popular.length >= 20 && Object.keys(meta62.assetMap).length > 3000,
+    '【表情选择器】国内高频置顶与统一字形映射必须齐备')
+
+  assert.ok(card62.includes('EmojiPickerPanel') && card62.includes('EmojiGlyph')
+    && docPicker62.includes('EmojiPickerPanel')
+    && docNode62.includes('EmojiGlyph') && breadcrumb62.includes('EmojiGlyph'),
+    '【表情选择器】四个触发入口与三处显示位必须共用同一门面与字形组件')
+  assert.ok(!pkg62.dependencies?.['@emoji-mart/react'] && !pkg62.dependencies?.['@emoji-mart/data']
+    && pkg62.scripts.predev.includes('prepare-assets')
+    && pkg62.scripts.prebuild.includes('prepare-assets')
+    && !pkg62.scripts.prebuild.includes('&&')
+    && prepare62.includes('build-emoji-assets.mjs')
+    && prepare62.includes('sync-excalidraw-assets.mjs')
+    && build62.includes('@lobehub/fluent-emoji-flat') && build62.includes('pinyin-pro'),
+    '【表情选择器】直接依赖必须移除；词库与本地字形必须由跨平台 prepare-assets 在 predev / prebuild 生成')
+}
+
+// ===== 63) 智能参考线：吸附闭环 / 屏幕像素阈值 / 候选收敛 / 可控性 =====
+{
+  const read63 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const guides63 = await read63('src/features/graph/GraphCanvas/useSmartGuides.ts')
+  const renderer63 = await read63('src/features/graph/GraphCanvas/SmartGuidesRenderer.tsx')
+  const uiStore63 = await read63('src/stores/graphUiStore.ts')
+  const settings63 = await read63('src/features/settings/SettingsPage.tsx')
+
+  assert.ok(guides63.includes('lastSnapRef') && guides63.includes("c.dragging === false")
+    && guides63.includes('snapped.x') && guides63.includes('snapped.y'),
+    '【智能参考线】drag end 必须用吸附结果覆盖 XYDrag 派发的原始位置，否则松手即回弹、落盘未吸附坐标')
+  assert.ok(guides63.includes("c.resizing === false") && !guides63.includes('!c.dragging'),
+    '【智能参考线】结束帧必须严格 === false，不能把自动测量的 dimensions change 误判成拖动结束')
+  assert.ok(guides63.includes('SNAP_ENTER_SCREEN_PX / zoom')
+    && guides63.includes('SNAP_RELEASE_SCREEN_PX / zoom')
+    && guides63.includes('getZoom'),
+    '【智能参考线】阈值必须是屏幕像素除以 zoom，且带「进入 / 释放」迟滞，不能固定画布单位')
+  assert.ok(guides63.includes('if (node.hidden) continue')
+    && guides63.includes('getVisibleNodes') && guides63.includes('NEARBY_SCREEN_PX'),
+    '【智能参考线】候选必须过滤 LOD 隐藏节点并收敛到可见 / 邻近范围，不得扫全图')
+  assert.ok(guides63.includes('computeAxisSnap') && guides63.includes("kind: 'center'")
+    && guides63.includes('dragRects.reduce') && !guides63.includes('Less chaotic snaps during move'),
+    '【智能参考线】对齐必须区分中心 / 同侧边语义并按优先级打分，多选按整体包围盒吸附，不得回灌旧版贴边混合打分')
+  assert.ok(guides63.includes('smartGuidesEnabled') && guides63.includes('altRef.current')
+    && uiStore63.includes('smartGuidesEnabled: true')
+    && settings63.includes('setSmartGuidesEnabled'),
+    '【智能参考线】必须有全局开关、Alt 临时忽略吸附与设置页入口')
+  assert.ok(renderer63.includes('guide.position * zoom')
+    && renderer63.includes('var(--color-accent)') && !renderer63.includes('transformOrigin'),
+    '【智能参考线】渲染层必须逐点换算屏幕坐标保持 1px 线宽，且颜色走设计 token')
+}
+
+// ===== 64) 选中文字工具条：点「复制」不得让右栏消失，剪贴板必须真的写入 =====
+// BlockNote 格式化工具条 portal 到 body，根节点是 role="toolbar" 而非 role="menu"。
+// 旧版右栏失焦白名单不认它，点复制时焦点从 contenteditable 移到 body 下的按钮，
+// 被误判为「焦点移出右栏」→ 右栏折叠、工具条卸载、异步剪贴板写入被打断。
+{
+  const read64 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const container64 = await read64('src/features/right-panel/RightPanelContainer.tsx')
+  const editor64 = await read64('src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx')
+  const toolbar64 = await read64('src/features/documents/SmartDocumentEditor/components/SmartDocumentFormattingToolbar.tsx')
+
+  assert.ok(container64.includes('RIGHT_PANEL_OVERLAY_SELECTOR')
+    && container64.includes('[role="toolbar"]')
+    && container64.includes('.bn-formatting-toolbar')
+    && container64.includes('closest(RIGHT_PANEL_OVERLAY_SELECTOR)')
+    && container64.includes('querySelector(RIGHT_PANEL_OVERLAY_SELECTOR)'),
+    '【选中文字复制】右栏失焦白名单必须纳入 BlockNote 浮层（格式化工具条是 role=toolbar），且两处判定共用同一常量，否则点复制会把右栏误折叠')
+  const fmtCtrl64 = editor64.slice(
+    editor64.indexOf('<FormattingToolbarController'),
+    editor64.indexOf('<SideMenuController'),
+  )
+  assert.ok(fmtCtrl64.includes('onMouseDownCapture')
+    && fmtCtrl64.includes('input, textarea, [contenteditable="true"]')
+    && fmtCtrl64.includes('event.preventDefault()'),
+    '【选中文字复制】格式化工具条必须在浮层根拦下 mousedown 默认行为保住编辑器选区，但要放过 popover 输入框，否则改链接/颜色无法键盘输入')
+  const copyBtn64 = toolbar64.slice(
+    toolbar64.indexOf('function CopySelectionButton'),
+    toolbar64.indexOf('function SelectionMathButton'),
+  )
+  assert.ok(toolbar64.includes('copyTextToClipboard')
+    && toolbar64.includes("document.execCommand('copy')")
+    && !copyBtn64.includes('editor.focus()'),
+    '【选中文字复制】Clipboard API 被拒时必须退回同步写入，且不得在 await 后对可能已卸载的编辑器调 focus()')
+  assert.ok(copyBtn64.includes('COPY_FEEDBACK_MS') && copyBtn64.includes('feedbackTimerRef')
+    && toolbar64.includes('window.clearTimeout(feedbackTimerRef.current)'),
+    '【选中文字复制】已复制/失败反馈必须自动复位并在卸载时清定时器，不能永久停在旧状态')
+}
+
+// ===== 65) 文档列表项 hover 快捷工具：添加子节点 / 编辑样式 / 删除 =====
+// 三个动作必须复用既有命令链路（内联新建、带确认的删除、统一的 meta 写入），
+// 且样式字段要有后端白名单校验，不能让任意 CSS 值写进 manifest。
+{
+  const read65 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const row65 = await read65('src/features/documents/components/DocumentNode.tsx')
+  const sidebar65 = await read65('src/features/documents/DocumentSidebar.tsx')
+  const model65 = await read65('src/features/documents/model/useDocumentSidebarModel.ts')
+  const style65 = await read65('src/features/documents/components/DocumentStylePanel.tsx')
+  const picker65 = await read65('src/features/documents/components/DocumentMetaPicker.tsx')
+  const types65 = await read65('src/core/storage/types.ts')
+  const backend65 = await read65('electron/file-service.js')
+  const detail65 = await read65('src/features/right-panel/model/useDetailDocuments.ts')
+  const linked65 = await read65('src/features/right-panel/components/DetailTab/LinkedDocumentList.tsx')
+
+  const NO_RESERVED_SLOT = (src: string) =>
+    src.includes('h-4 shrink-0 items-center gap-0.5')
+    && src.includes('hidden group-hover:!flex group-focus-within:!flex')
+    && /isActive\s*\?\s*'flex'/.test(src)
+    && !src.includes('opacity-0 group-hover:opacity-100')
+  assert.ok(row65.includes('data-tm-document-quick-actions') && NO_RESERVED_SLOT(row65)
+    && row65.includes('!sticky'),
+    '【文档列表快捷工具】当前选中项必须常驻显示工具；其余行默认 hidden 彻底脱离布局（不预留右侧宽度、标题用满整行），仅 hover / 键盘聚焦时才作为 flex 子项插入并占空间；h-4 锁高避免整列行高跳动；sticky 路径提示行不提供操作')
+  assert.ok(NO_RESERVED_SLOT(linked65),
+    '【文档列表快捷工具】关联文档列表必须与文档树同一套「选中常显 + hover 插入」契约，不能退回 opacity-0 常驻占位')
+  assert.ok(row65.includes('title="添加子文档"') && row65.includes('title="编辑样式"')
+    && row65.includes('title="删除"') && row65.includes('QUICK_ACTION_EVENTS')
+    && row65.includes('onQuickCreate={onQuickCreate}'),
+    '【文档列表快捷工具】三个动作齐全、事件必须与行的选中/双击/拖拽/右键隔离，并递归透传到子项')
+  assert.ok(row65.includes('node.fontSize') && row65.includes('node.fontWeight')
+    && row65.includes('node.fontStyle') && row65.includes('node.color'),
+    '【文档列表快捷工具】统一样式面板写入的字体 / 颜色字段必须真正作用到列表标题')
+  assert.ok(sidebar65.includes('onApplyPatch={handleApplyMetaPatch}')
+    && model65.includes('handleQuickCreate') && model65.includes('openStylePanel')
+    && model65.includes('handleQuickDelete') && model65.includes('handleApplyMetaPatch')
+    && model65.includes("mode: 'createTopoDocument'") && model65.includes("mode: 'style'"),
+    '【文档列表快捷工具】必须复用内联新建与带确认的删除，样式面板走统一 meta 写入链路')
+  assert.ok(style65.includes('FONT_SIZE_PRESETS') && style65.includes('加粗')
+    && style65.includes('斜体') && style65.includes('更换图标')
+    && style65.includes('标题颜色') && style65.includes('恢复默认样式'),
+    '【编辑样式面板】图标 / 颜色 / 字号 / 字重 / 斜体必须集中在同一面板，并提供恢复默认')
+  assert.ok(picker65.includes("picker.mode === 'style'")
+    && picker65.includes('data-tm-keep-right-panel')
+    && picker65.includes("[data-tm-emoji-picker]")
+    && picker65.includes('TM_UI.popover'),
+    '【编辑样式面板】portal 到 body 的浮层须复用 tm-popover 统一视觉、标记保留右栏，且二级表情选择器不能误关闭主面板')
+  assert.ok(style65.includes('TM_UI') && style65.includes('SegmentedControl')
+    && style65.includes('PANEL_LIST.rowActive') && style65.includes('data-tm-document-style-panel')
+    && style65.includes('<header') && style65.includes('<footer')
+    && style65.includes('DOCUMENT_COLOR_INPUT_FALLBACK')
+    && style65.includes('type="color"'),
+    '【编辑样式面板】必须走项目统一控件契约（TM_UI / SegmentedControl / 真实列表行预览 / 原生取色器），采用头部-预览-扁平分区-固定底栏结构，色值字面量下沉到数据层')
+  assert.ok(types65.includes('fontSize?: number') && types65.includes("fontWeight?: 'normal' | 'bold'")
+    && types65.includes('fontSize?: number | null')
+    && backend65.includes("hasOwnProperty.call(patch, 'fontSize')")
+    && backend65.includes("hasOwnProperty.call(patch, 'fontWeight')")
+    && backend65.includes("hasOwnProperty.call(patch, 'fontStyle')")
+    && backend65.includes('delete found.item.fontSize'),
+    '【编辑样式面板】新字段必须落在 manifest + patch 类型，并在主进程按白名单校验、非法值恢复默认')
+  assert.ok(detail65.includes('fontSizeChanged') && detail65.includes('fontWeightChanged')
+    && detail65.includes('fontStyleChanged'),
+    '【编辑样式面板】变更检测必须覆盖字体字段，否则只改字号时会被误判为无变化而不写盘')
+}
+
+// ===== 66) 全局浮层动效统一契约 =====
+// 旧状态：四套动效并存（tailwindcss-animate / floating-ui / Mantine / 手写 keyframes），
+// 且面板位置在 useEffect 里二次设置 —— 动画首帧跑在上一次坐标上，绘制后才瞬移，
+// 同一个窗口因此有时「从左侧飘出来」、有时原地淡入、有时干脆没有动画。
+{
+  const read66 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const motionCss66 = await read66('src/styles/motion.css')
+  const motionTs66 = await read66('src/shared/ui/motion.ts')
+  const main66 = await read66('src/main.tsx')
+  const modal66 = await read66('src/shared/ui/modal.ts')
+  const picker66 = await read66('src/features/documents/components/DocumentMetaPicker.tsx')
+  const emoji66 = await read66('src/shared/ui/emoji/EmojiPickerPanel.tsx')
+  const mantine66 = await read66('src/features/documents/SmartDocumentEditor/components/SmartBlockNoteMenu.tsx')
+  const editorCss66 = await read66('src/features/documents/SmartDocumentEditor/SmartDocumentEditor.css')
+  const rightPanel66 = await read66('src/features/right-panel/RightPanelContainer.tsx')
+
+  assert.ok(motionCss66.includes('.tm-popover-anchor')
+    && motionCss66.includes('.tm-popover-enter')
+    && motionCss66.includes('.tm-popover-exit')
+    && motionCss66.includes('.tm-fade-enter')
+    && motionCss66.includes('.tm-modal-panel-enter')
+    && motionCss66.includes('--tm-motion-duration')
+    && motionCss66.includes('prefers-reduced-motion')
+    && motionCss66.includes('.animate-in'),
+    '【浮层动效统一】motion.css 必须提供定位层 / 入场 / 退出 / 纯淡入 / 模态框 / 时长变量，并含全局 reduced-motion 兜底')
+  assert.ok(main66.includes("import './styles/motion.css'")
+    && motionTs66.includes('durationMs') && motionTs66.includes('easing')
+    && modal66.includes('TM_MOTION.modalOverlayEnter')
+    && modal66.includes('TM_MOTION.modalPanelEnter'),
+    '【浮层动效统一】契约须在入口引入，模态框必须引用同一契约，不能自己写 animate-in 组合')
+  assert.ok(mantine66.includes('TM_MOTION.durationMs')
+    && mantine66.includes('TM_MOTION.easing')
+    && mantine66.includes('exitDelay: 0'),
+    '【浮层动效统一】Mantine 子菜单 transitionProps 必须对齐统一时长 / 曲线，且保持 exitDelay 0 避免双重子菜单')
+  assert.ok(!editorCss66.includes('@keyframes tm-image-align-toolbar-in')
+    && !editorCss66.includes('@keyframes tm-image-preview-fade-in')
+    && !editorCss66.includes('animation: tm-image'),
+    '【浮层动效统一】编辑器不得再手写浮层 keyframes，一律走 motion.css')
+
+  assert.ok(picker66.includes('function clampPickerPosition(')
+    && picker66.includes('const position = clampPickerPosition(picker)')
+    && !picker66.includes('setPickerPosition')
+    && !/useEffect\([\s\S]{0,400}pickerPosition/.test(picker66),
+    '【浮层首帧定位】样式 / 颜色面板坐标必须在渲染期同步钳制；禁止回退到 useEffect/setState 二次设置，否则动画首帧会落在上一次坐标并被瞬移')
+  assert.ok(picker66.includes('className={TM_MOTION.anchor}')
+    && picker66.includes('TM_MOTION.enter')
+    && picker66.includes('data-tm-keep-right-panel'),
+    '【浮层首帧定位】定位层与动画层必须分离，且保留右栏失焦白名单标记')
+  assert.ok(rightPanel66.includes("'[data-tm-emoji-picker]'"),
+    '【浮层首帧定位】表情面板分层后改挂 tm-popover-anchor 外壳，data 标记必须同时在右栏失焦白名单内，否则点开图标设置会折叠右栏')
+  assert.ok(emoji66.includes('floatingStyles')
+    && emoji66.includes('isPositioned')
+    && emoji66.includes('visibility: isPositioned')
+    && emoji66.includes('className={TM_MOTION.anchor}')
+    && emoji66.includes('TM_MOTION.enter'),
+    '【浮层首帧定位】表情面板的 floating-ui transform 定位层不得承载动画；内层须等 isPositioned 后再播入场，避免从 (0,0) 左上角滑入')
+
+  const { readdir } = await import('node:fs/promises')
+  const srcDir66 = new URL('../src/', import.meta.url)
+  const all66 = (await readdir(srcDir66, { recursive: true }))
+    .map((f) => f.replace(/\\/g, '/'))
+    .filter((f) => /\.(tsx|ts|css)$/.test(f))
+  const legacy66 = []
+  for (const rel66 of all66) {
+    // 契约文件自身在注释 / reduced-motion 兜底里会提到这些旧类名，属于预期。
+    if (rel66 === 'styles/motion.css' || rel66 === 'shared/ui/motion.ts') continue
+    const text66 = await readFile(new URL(rel66, srcDir66), 'utf-8')
+    if (/animate-in\b|animate-out\b|slide-in-from-|zoom-in-\d+|fade-in /.test(text66)) {
+      legacy66.push(rel66)
+    }
+  }
+  assert.deepEqual(legacy66, [],
+    `【浮层动效统一】禁止再出现 tailwindcss-animate 组合类（方向/时长/origin 会重新散落）：${legacy66.join(', ')}`)
+
+  const popoverFiles66 = [
+    'src/features/documents/components/DocumentMetaPicker.tsx',
+    'src/shared/ui/emoji/EmojiPickerPanel.tsx',
+    'src/features/documents/components/DocumentContextMenu.tsx',
+    'src/features/graph/GraphPage/components/GraphPageContextMenu.tsx',
+    'src/features/graph/GraphCanvas/nodes/KnowledgeCard/QuickNodeToolbar.tsx',
+    'src/features/right-panel/RightPanelContainer.tsx',
+    'src/features/right-panel/components/DetailTab/LinkedDocumentList.tsx',
+    'src/features/documents/components/DocumentNode.tsx',
+    'src/plugins/builtin/learning-statistics/LearningTrackerWidget.tsx',
+    'src/features/documents/SmartDocumentEditor/components/EditorStylePopover.tsx',
+    'src/features/documents/SmartDocumentEditor/components/DocumentLinkPicker.tsx',
+    'src/features/documents/SmartDocumentEditor/components/ImageAlignToolbar.tsx',
+    'src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx',
+    'src/features/graph/GraphCanvas/components/EdgeRelationPicker.tsx',
+    'src/features/graph/GraphCanvas/edges/QuickEdgeStylePopover.tsx',
+    'src/features/documents/components/Layout/AttachmentsTab.tsx',
+  ]
+  const missing66 = []
+  for (const file66 of popoverFiles66) {
+    const text66 = await read66(file66)
+    if (!/tm-popover-enter|tm-fade-enter|TM_MOTION\.enter|TM_MOTION\.fadeEnter/.test(text66)) {
+      missing66.push(file66)
+    }
+  }
+  assert.deepEqual(missing66, [],
+    `【浮层动效统一】所有浮层都必须显式套用统一入场契约：${missing66.join(', ')}`)
+}
+
+// ===== 67) 全局浮层「一进一出」淡入淡出契约 =====
+// 旧状态：只有入场动画，关闭时 React 直接 removeChild，弹窗 / 浮窗「啪」地消失；
+// 且一批浮层（标题栏菜单、链接菜单、Toast、画布提示条、全屏编辑器等）连入场也没有。
+{
+  const read67 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const motionCss67 = await read67('src/styles/motion.css')
+  const motionTs67 = await read67('src/shared/ui/motion.ts')
+  const presence67 = await read67('src/shared/ui/overlayPresence.ts')
+  const main67 = await read67('src/main.tsx')
+
+  const enterBlock67 = motionCss67.slice(
+    motionCss67.indexOf('@keyframes tm-popover-enter'),
+    motionCss67.indexOf('@keyframes tm-popover-exit'),
+  )
+  const exitBlock67 = motionCss67.slice(
+    motionCss67.indexOf('@keyframes tm-popover-exit'),
+    motionCss67.indexOf('@keyframes tm-fade-enter'),
+  )
+  assert.ok(exitBlock67.includes('opacity: 1') && exitBlock67.includes('opacity: 0')
+    && !exitBlock67.includes('transform'),
+    '【浮层渐隐渐出】退出关键帧只能改 opacity：floating-ui transform / -translate-x-1/2 定位的浮层会被带 transform 的动画瞬移到左上角')
+  assert.ok(enterBlock67.includes('opacity: 0') && !enterBlock67.includes('scale('),
+    '【浮层渐隐渐出】入场以淡入为主、位移不超过 3px，禁止缩放弹跳')
+  assert.ok(motionCss67.includes('--tm-motion-duration: 160ms')
+    && motionCss67.includes('--tm-motion-exit-duration: 130ms')
+    && motionCss67.includes('[data-tm-exiting]')
+    && /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.tm-popover-exit/.test(motionCss67),
+    '【浮层渐隐渐出】入场 / 退场时长、幽灵节点样式与 reduced-motion 兜底必须齐全')
+  assert.ok(motionTs67.includes('exitDurationMs: 130')
+    && motionTs67.includes('overlayAttribute')
+    && motionTs67.includes('exitingAttribute')
+    && motionTs67.includes('enterClassNames'),
+    '【浮层渐隐渐出】TS 契约必须暴露退出时长与三个生命周期标记')
+
+  assert.ok(presence67.includes('new MutationObserver(')
+    && presence67.includes('insertBefore(')
+    && presence67.includes("setAttribute('inert'")
+    && presence67.includes('prefers-reduced-motion')
+    && presence67.includes('TM_MOTION.exit')
+    && presence67.includes('classList.remove(...TM_MOTION.enterClassNames)')
+    && presence67.includes('TM_MOTION.exitDurationMs + 80')
+    && presence67.includes('event.target !== node')
+    && presence67.includes('isOverlayRoot'),
+    '【浮层渐隐渐出】退出代理必须插回原位、标 inert、剥入场类、纯淡出并有超时兜底，避免幽灵节点永久残留')
+  assert.ok(main67.includes('installOverlayExitTransition()'),
+    '【浮层渐隐渐出】退出代理必须在入口早于 React 渲染安装')
+
+  // 全部自绘弹窗 / 浮窗：显式入场契约 = 自动获得全局渐出（同一批类名被代理识别）。
+  const overlayFiles67 = [
+    'src/shared/ui/ConfirmModal/ConfirmModal.tsx',
+    'src/shared/ui/PromptModal/PromptModal.tsx',
+    'src/features/kb/components/TrashDialog.tsx',
+    'src/features/kb/components/ImportKBDialog.tsx',
+    'src/features/kb/components/CreateKBDialog.tsx',
+    'src/features/kb/components/KBSettingsDialog/KBSettingsDialog.tsx',
+    'src/features/documents/components/DocumentMoveToNodeDialog.tsx',
+    'src/features/graph/GraphPage/components/NodeMoveToRoomDialog.tsx',
+    'src/features/graph/components/LinkDocumentDialog.tsx',
+    'src/features/documents/components/DocumentMetaPicker.tsx',
+    'src/shared/ui/emoji/EmojiPickerPanel.tsx',
+    'src/features/documents/components/DocumentContextMenu.tsx',
+    'src/features/graph/GraphPage/components/GraphPageContextMenu.tsx',
+    'src/features/graph/GraphCanvas/nodes/KnowledgeCard/QuickNodeToolbar.tsx',
+    'src/features/right-panel/RightPanelContainer.tsx',
+    'src/features/right-panel/components/DetailTab/LinkedDocumentList.tsx',
+    'src/features/documents/components/DocumentNode.tsx',
+    'src/plugins/builtin/learning-statistics/LearningTrackerWidget.tsx',
+    'src/features/documents/SmartDocumentEditor/components/EditorStylePopover.tsx',
+    'src/features/documents/SmartDocumentEditor/components/DocumentLinkPicker.tsx',
+    'src/features/documents/SmartDocumentEditor/components/ImageAlignToolbar.tsx',
+    'src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx',
+    'src/features/graph/GraphCanvas/components/EdgeRelationPicker.tsx',
+    'src/features/graph/GraphCanvas/edges/QuickEdgeStylePopover.tsx',
+    'src/features/documents/components/Layout/AttachmentsTab.tsx',
+    'src/shared/ui/Toaster/Toaster.tsx',
+    'src/features/layout/CustomTitleBar/CustomTitleBar.tsx',
+    'src/features/layout/TabBar/TabBar.tsx',
+    'src/features/graph/GraphCanvas/components/NodeSearchBox.tsx',
+    'src/features/graph/GraphCanvas/components/SelectionMirrorMenu.tsx',
+    'src/features/graph/GraphCanvas/GraphCanvas.tsx',
+    'src/features/graph/GraphCanvas/edges/QuickEdgeToolbar.tsx',
+    'src/features/graph/GraphCanvas/edges/EdgeToolbarAnchor.tsx',
+    'src/features/graph/GraphCanvas/containers/ContainerFullscreenEditorHost.tsx',
+    'src/features/right-panel/components/DetailTab/DocumentBreadcrumb.tsx',
+    'src/features/kb/HomePage.tsx',
+  ]
+  const missing67 = []
+  for (const file67 of overlayFiles67) {
+    const text67 = await read67(file67)
+    if (!/tm-popover-enter|tm-fade-enter|tm-popover-anchor|TM_MOTION\.enter|TM_MOTION\.fadeEnter|TM_MOTION\.anchor|modalOverlayEnterClassName/.test(text67)) {
+      missing67.push(file67)
+    }
+  }
+  assert.deepEqual(missing67, [],
+    `【浮层渐隐渐出】所有弹窗 / 浮窗都必须套用统一入场契约（退出代理据此自动接管）：${missing67.join(', ')}`)
+
+  // 淡出中的幽灵节点不能再被当成「浮层仍打开」，否则会吞掉下一次 Esc / 外部点击 / 右栏折叠。
+  const activeGuards67 = [
+    ['src/features/right-panel/RightPanelContainer.tsx', 'RIGHT_PANEL_OVERLAY_SELECTOR'],
+    ['src/features/right-panel/RightPanelContainer.tsx', ':not([data-tm-exiting])'],
+    ['src/features/documents/components/DocumentMetaPicker.tsx', '[data-tm-emoji-picker]:not([data-tm-exiting])'],
+    ['src/features/graph/GraphPage/components/GraphPageContextMenu.tsx', '[data-tm-emoji-picker]:not([data-tm-exiting])'],
+    ['src/shared/ui/emoji/EmojiPickerPanel.tsx', '[data-context-menu-item]:not([data-tm-exiting])'],
+  ]
+  for (const [file67, needle67] of activeGuards67) {
+    assert.ok((await read67(file67)).includes(needle67),
+      `【浮层渐隐渐出】${file67} 必须排除淡出中的幽灵节点（${needle67}）`)
+  }
+
+  // 行内 hover 工具不是浮层，必须显式退出代理，否则移开鼠标后按钮会残留 130ms。
+  for (const file67 of [
+    'src/features/documents/components/DocumentNode.tsx',
+    'src/features/right-panel/components/DetailTab/LinkedDocumentList.tsx',
+  ]) {
+    assert.ok((await read67(file67)).includes('data-tm-overlay="none"'),
+      `【浮层渐隐渐出】${file67} 的行内工具必须标记 data-tm-overlay="none"`)
+  }
+}
+
 console.log('Critical regression checks verified')

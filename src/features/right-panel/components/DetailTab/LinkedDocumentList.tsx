@@ -80,7 +80,11 @@ export const LinkedDocumentList = memo(function LinkedDocumentList({
                       </span>
                     </span>
                   </button>
-                  <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  {/* 与文档树列表一致：选中项常驻，其余行不进入布局、不预留右侧宽度，
+                      hover / 聚焦时才插入。 */}
+                  <div data-tm-overlay="none" className={`h-4 shrink-0 items-center gap-0.5 tm-fade-enter ${
+                    isActive ? 'flex' : 'hidden group-hover:!flex group-focus-within:!flex'
+                  }`}>
                     {link.status === 'trashed' && (
                       <PanelListAction title="从回收站恢复" onClick={() => onRestore(link)}>
                         <RotateCcw className="h-3.5 w-3.5" />

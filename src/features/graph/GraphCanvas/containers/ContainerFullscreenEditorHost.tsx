@@ -163,7 +163,7 @@ function FullscreenSession({ session, tabId }: { session: ActiveContainerSession
       ref={hostRef}
       data-tm-fullscreen-editor={session.nodeId}
       data-tm-container-session={session.tabId}
-      className="flex flex-col bg-[var(--color-surface)] outline-none"
+      className="tm-fade-enter flex flex-col bg-[var(--color-surface)] outline-none"
       style={{
         position: 'fixed',
         top: TITLEBAR_HEIGHT,

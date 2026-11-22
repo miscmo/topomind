@@ -13,6 +13,7 @@ import { useRightPanelStore } from '../../../../stores/rightPanelStore'
 import { DocumentWorkspace } from '../../../../features/documents/DocumentWorkspace'
 import { tabStore, useGraphSession } from '../../../../stores/tabs/tabStore'
 import { useStorage } from '../../../../core/storage'
+import type { TopoDocumentMetaPatch } from '../../../../core/storage'
 import { joinRefs, resolveRoomChildRef } from '../../../../domain/graph/path-utils'
 import { topoDocumentPath, topoDocumentIdFromPath } from '../../../../features/documents/types/documentTypes'
 import { useDetailDocuments } from '../../model/useDetailDocuments'
@@ -600,7 +601,7 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
           onDeleteDocument={(documentPath: string) => { void handleDeleteDocument(documentPath) }}
           onMoveDocument={(documentId: string, newParentId: string | null, newSortOrder: number) => { void handleMoveDocument(documentId, newParentId, newSortOrder) }}
           onMoveDocumentToCard={(documentId: string) => { setMoveToNode({ documentId }) }}
-          onUpdateDocumentMeta={(documentPath: string, patch: { icon?: string | null; color?: string | null }) => { void handleUpdateDocumentMeta(documentPath, patch) }}
+          onUpdateDocumentMeta={(documentPath: string, patch: TopoDocumentMetaPatch) => { void handleUpdateDocumentMeta(documentPath, patch) }}
           isDocumentBusy={isDocumentBusy}
           nodeId={selectedNodeId}
         /> : (

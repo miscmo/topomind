@@ -137,7 +137,7 @@ export const DocumentLinkPicker = memo(function DocumentLinkPicker({
   return createPortal(
     <div
       ref={rootRef}
-      className="tm-doc-link-picker fixed z-[10000] flex w-[320px] flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-xl"
+      className="tm-doc-link-picker tm-popover-enter fixed z-[10000] flex w-[320px] flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-xl"
       style={{ top: position.top, left: position.left }}
       role="dialog"
       aria-label="引用文档"

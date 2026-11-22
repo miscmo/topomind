@@ -96,7 +96,7 @@ export default function QuickEdgeStylePopover({ edgeStyle, onChange }: QuickEdge
   return (
     <div
       data-quick-edge-style-popover=""
-      className="nodrag nopan absolute left-1/2 top-full z-[11] mt-2 flex w-[216px] -translate-x-1/2 flex-col gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 shadow-[var(--shadow-popover)]"
+      className="nodrag nopan tm-fade-enter absolute left-1/2 top-full z-[11] mt-2 flex w-[216px] -translate-x-1/2 flex-col gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 shadow-[var(--shadow-popover)]"
       style={{ pointerEvents: 'all' }}
     >
       <div className="flex flex-col gap-1">

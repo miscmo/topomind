@@ -1,0 +1,425 @@
+/**
+ * TopoMind 统一控件层 —— 与 tokens.css 配套的唯一控件视觉真源。
+ *
+ * 为什么这层必须存在：
+ *   tokens.css 只管「值」（颜色 / 圆角 / 阴影 / 字号），但同一个「次要描边按钮」
+ *   在画布、知识库、右栏、插件里被手写了十几遍，圆角、hover、disabled、图标尺寸
+ *   各写各的。值统一了，组合方式没统一，观感依然粗糙。
+ *
+ * 契约（新增 / 修改 UI 控件时请遵守，门禁 scripts/verify-design-system.mts 会检查）：
+ *   1. 颜色 / 圆角 / 阴影 / 字号 / 层级一律引用 tokens.css 变量，禁止字面值；
+ *   2. 交互态（hover / active / disabled / focus）只在这里集中定义；
+ *   3. 组件里只保留布局类（宽高、flex、margin、nodrag/nowheel），视觉类用 .tm-*
+ *      或 shared/ui/controlStyles.ts 的 TM_UI 常量；
+ *   4. 本文件不改任何布局尺寸，因此画布几何、React Flow Panel 坐标、GUI 断言
+ *      依赖的 DOM 结构都不受影响。
+ *
+ * 注意：不要在这里给 button 全局加 !important 覆盖——项目里有精确 className
+ * 断言（app-layout / graph-panel / 吸顶层 / 图标尺寸），统一必须靠显式套用 .tm-*。
+ */
+
+.tm-surface {
+  border: 1px solid var(--color-border);
+  border-radius: var(--control-radius);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--control-shadow);
+}
+
+.tm-popover {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--titlebar-menu-bg);
+  color: var(--color-text-primary);
+  box-shadow: var(--control-popover-shadow);
+}
+
+.tm-menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--titlebar-menu-bg);
+  box-shadow: var(--control-popover-shadow);
+}
+
+.tm-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm);
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--control-font-strong);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition);
+}
+.tm-menu-item:hover:not(:disabled) { background: var(--color-hover-bg); }
+.tm-menu-item[data-active='true'] { background: var(--color-accent-soft); color: var(--color-accent); }
+.tm-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* 次要按钮：全项目最高频的控件，统一为 24px 高 / 7px 圆角 / 11px 字。 */
+.tm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  height: var(--control-height-sm);
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--control-radius);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--control-font);
+  line-height: var(--line-height-none);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition),
+    border-color var(--control-transition), box-shadow var(--control-transition);
+}
+.tm-btn:hover:not(:disabled) {
+  background: var(--color-hover-bg);
+  color: var(--color-text-primary);
+}
+.tm-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.tm-btn:focus-visible { border-color: var(--color-accent); box-shadow: var(--shadow-focus-ring); }
+
+.tm-btn--primary {
+  border-color: transparent;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-weight: 600;
+}
+.tm-btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-md);
+}
+
+.tm-btn--active {
+  border-color: transparent;
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  font-weight: 500;
+}
+.tm-btn--active:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  color: var(--color-text-inverse);
+}
+
+.tm-btn--ghost { border-color: transparent; background: transparent; }
+.tm-btn--ghost:hover:not(:disabled) { background: var(--color-hover-bg); }
+
+/* 对话框 / 表单主操作：比常规控件更高、字号更大。 */
+.tm-btn--lg {
+  height: var(--control-height-lg);
+  padding: 0 var(--space-lg);
+  font-size: var(--font-size-md);
+}
+
+/* 纯图标按钮：正方形、统一命中区、统一图标尺寸。 */
+.tm-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition);
+}
+.tm-icon-btn:hover:not(:disabled) { background: var(--color-hover-bg); color: var(--color-accent); }
+.tm-icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.tm-icon-btn--outlined { border-color: var(--color-border-light); background: var(--color-surface); }
+.tm-icon-btn--round { border-radius: var(--control-radius-pill); }
+/* 全局导航栏的大号图标按钮（36px），与画布上的 24px 图标按钮区分。 */
+.tm-icon-btn--lg { width: var(--control-height-xl); height: var(--control-height-xl); }
+
+/* 胶囊提示条（画布上的「返回上个视野」/ toast 类控件）。 */
+.tm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--control-radius-pill);
+  background: var(--color-surface);
+  box-shadow: var(--control-popover-shadow);
+}
+.tm-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  border: 0;
+  border-radius: var(--control-radius-pill);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--control-font);
+  cursor: pointer;
+  transition: background-color var(--control-transition);
+}
+.tm-pill-btn:hover:not(:disabled) { background: var(--color-hover-bg); }
+
+.tm-input,
+.tm-select {
+  height: var(--control-height-md);
+  min-width: 0;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--control-radius);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--control-font-strong);
+  outline: none;
+  transition: border-color var(--control-transition), box-shadow var(--control-transition),
+    background-color var(--control-transition);
+}
+.tm-input::placeholder { color: var(--color-text-muted); }
+.tm-input:focus,
+.tm-select:focus { border-color: var(--color-accent); box-shadow: var(--shadow-focus-ring); }
+.tm-select { cursor: pointer; }
+
+.tm-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--control-radius);
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--control-height-sm);
+  font-variant-numeric: tabular-nums;
+}
+.tm-badge--accent { background: var(--color-accent-soft); color: var(--color-accent); border-color: transparent; }
+.tm-badge--danger { background: var(--color-danger-soft); color: var(--color-danger); border-color: transparent; }
+.tm-badge--warning { background: var(--color-warning-soft); color: var(--color-warning); border-color: transparent; }
+
+.tm-divider { height: 1px; background: var(--color-border-light); }
+
+.tm-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition);
+}
+.tm-section-header:hover:not(:disabled) { background: var(--color-hover-bg); color: var(--color-text-primary); }
+
+.tm-label { font-size: var(--control-font); color: var(--color-text-secondary); }
+.tm-hint { font-size: var(--font-size-xs); color: var(--color-text-muted); }
+
+.tm-scroll { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
+.tm-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.tm-scroll::-webkit-scrollbar-thumb { border-radius: var(--control-radius-pill); background: var(--color-border); }
+
+/* 图标：统一线宽与尺寸，避免 h-3 / h-3.5 / h-4 / size=13 混用。 */
+.tm-icon {
+  width: var(--control-icon);
+  height: var(--control-icon);
+  flex-shrink: 0;
+  stroke-width: var(--control-icon-stroke);
+}
+.tm-icon--sm { width: var(--control-icon-sm); height: var(--control-icon-sm); }
+.tm-icon--lg { width: var(--control-icon-lg); height: var(--control-icon-lg); }
+
+/* ===== 横向知识库 tab（32px 顶栏内）=====
+   Chrome 式 Π 形连体 tab：非活跃项融入顶栏，活跃项上方圆角、下方直角，
+   底色与它正下方的工作区完全一致，底边盖掉顶栏 border-b，看起来像
+   「整个内容页从 tab 里向上延伸出来」。不做浮起卡片、不画下划线。
+   宽度由 TabBar.tsx 按可用空间注入 --tab-current-width（clamp min..max）。 */
+.tm-tab-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--tab-gap);
+  min-width: 0;
+  height: 100%;
+  /* 活跃 tab 的 ::after 要越过底边盖住顶栏 border-b，不能被裁掉。 */
+  overflow: visible;
+}
+
+/* 画布页的工作区是 canvas-bg，tab 跟随切换才能让 Π 形的两「腿」真正连上。 */
+[data-tm-active-view='kb'] { --tab-active-bg: var(--color-canvas-bg); }
+
+.tm-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  width: var(--tab-current-width, var(--tab-width));
+  min-width: var(--tab-min-width);
+  max-width: var(--tab-max-width);
+  height: var(--tab-height);
+  padding: 0 var(--space-sm);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--tab-radius-top) var(--tab-radius-top) 0 0;
+  background: transparent;
+  color: var(--titlebar-muted);
+  font-size: var(--control-font-strong);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition),
+    border-color var(--control-transition);
+}
+.tm-tab:hover:not(.tm-tab--active) { background: var(--titlebar-hover); color: var(--titlebar-text); }
+.tm-tab:focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+/* 相邻的非活跃 tab 之间一条极淡的竖线，密集时仍能分辨边界。
+   顶栏底色加深一档后必须更淡，否则会把 Π 形活跃项挤得不够突出。 */
+.tm-tab:not(.tm-tab--active) + .tm-tab:not(.tm-tab--active)::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 25%;
+  bottom: 25%;
+  width: 1px;
+  background: var(--color-border);
+  opacity: 0.45;
+}
+.tm-tab--active {
+  border-color: var(--color-border);
+  background: var(--tab-active-bg);
+  color: var(--color-text-primary);
+  font-weight: 500;
+  box-shadow: none;
+}
+/* 底边 1px 同色块盖掉顶栏 border-b：Π 形「两腿」与内容区连成一体。 */
+.tm-tab--active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--tab-active-bg);
+}
+/* 失焦只降文字/图标对比，绝不动底色与结构，否则连体感会忽明忽暗地跳。 */
+[data-tm-titlebar-unfocused='true'] .tm-tab--active { color: var(--color-text-secondary); }
+[data-tm-titlebar-unfocused='true'] .tm-tab--active .tm-tab-icon { color: var(--color-text-muted); }
+.tm-tab--active .tm-tab-close { color: var(--color-text-secondary); }
+
+.tm-tab-icon {
+  width: var(--control-icon-sm);
+  height: var(--control-icon-sm);
+  flex-shrink: 0;
+  stroke-width: var(--control-icon-stroke);
+  color: var(--titlebar-muted);
+  transition: color var(--control-transition);
+}
+.tm-tab--active .tm-tab-icon { color: var(--color-accent); }
+
+.tm-tab-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 长名字渐隐收尾而不是硬切，避免文字被生生截断 */
+.tm-tab-label--fade {
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(to right, black calc(100% - 16px), transparent 100%);
+}
+
+.tm-tab-trailing {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--control-icon);
+  height: var(--control-icon);
+  margin-left: auto;
+}
+.tm-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--control-radius-pill);
+  background: var(--color-accent);
+  transition: opacity var(--control-transition);
+}
+.tm-tab-close {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--control-transition), background-color var(--control-transition),
+    color var(--control-transition);
+}
+.tm-tab-close:hover:not(:disabled) { background: var(--color-danger-soft); color: var(--color-danger); }
+.tm-tab-close:disabled { cursor: not-allowed; }
+.tm-tab-close:focus-visible { opacity: 1; box-shadow: var(--shadow-focus-ring); }
+.tm-tab:hover .tm-tab-close,
+.tm-tab:focus-within .tm-tab-close,
+.tm-tab--active .tm-tab-close { opacity: 1; }
+.tm-tab:hover .tm-tab-dot,
+.tm-tab:focus-within .tm-tab-dot { opacity: 0; }
+
+/* 「⋯N」溢出按钮：只有所有 tab 压到最小宽度仍放不下时才出现。 */
+.tm-tab-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  flex: 0 0 auto;
+  min-width: var(--control-height-sm);
+  height: var(--tab-height);
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--titlebar-muted);
+  font-size: var(--control-font);
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition),
+    border-color var(--control-transition);
+}
+.tm-tab-action:hover:not(:disabled) { background: var(--titlebar-hover); color: var(--titlebar-text); }
+.tm-tab-action:focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+.tm-tab-action--count { border-color: var(--color-border-light); padding: 0 7px; }
+
+/* 合并菜单（标题栏汉堡）与溢出菜单的行内布局 */
+.tm-menu-group { display: flex; flex-direction: column; gap: 2px; }
+.tm-menu-group + .tm-menu-group {
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-border-light);
+}
+.tm-menu-group-title {
+  padding: 2px var(--space-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.06em;
+}
+.tm-tab-menu-row { display: flex; align-items: center; gap: var(--space-xs); width: 100%; min-width: 0; }
+.tm-tab-menu-label { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

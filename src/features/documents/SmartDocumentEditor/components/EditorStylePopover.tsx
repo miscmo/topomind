@@ -223,7 +223,7 @@ export const EditorStylePopover = memo(function EditorStylePopover({
       data-tm-editor-style-popover=""
       role="dialog"
       aria-label="编辑器样式设置"
-      className="tm-editor-style-popover fixed z-[10000] flex w-[320px] flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-xl"
+      className="tm-editor-style-popover tm-popover-enter fixed z-[10000] flex w-[320px] flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--titlebar-menu-bg)] shadow-[var(--shadow-popover)] backdrop-blur-xl"
       style={{ top: position.top, left: position.left, maxHeight: POPOVER_MAX_HEIGHT }}
     >
       <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border-light)] px-3 py-2">

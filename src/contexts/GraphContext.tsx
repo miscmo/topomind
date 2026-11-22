@@ -132,3 +132,12 @@ export function useGraphContext(): GraphContextValue {
   }
   return graph
 }
+
+/**
+ * 给「不在画布页面里、但仍要复用样式面板」的宿主视图用（如全局设置页）。
+ * 返回 null 时调用方只能使用全局默认样式能力，节点 / 连线级写入自动降级为空操作。
+ * 绝不改动 useGraphContext 的抛错语义：画布侧任何漏传 Provider 都是真 bug。
+ */
+export function useOptionalGraphContext(): GraphContextValue | null {
+  return useContext(GraphContext)
+}
