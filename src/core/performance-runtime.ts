@@ -7,6 +7,7 @@
  * 长任务上，而启动耗时是所有后续操作的基线。采样/节流由统一上报层负责。
  */
 import { PERFORMANCE_METRICS } from '@/shared/observability/performanceContract'
+import { startSuspensionObserver } from '@/shared/observability/performanceSuspension'
 import { getRecentPerformanceContext, recordPerformance } from './performance-log'
 
 const LONGTASK_MIN_MS = 50
@@ -20,15 +21,18 @@ export function reportAppStartup(durationMs: number): void {
 }
 
 export function startRuntimePerformanceObserver(): () => void {
-  if (typeof PerformanceObserver === 'undefined') return () => {}
+  // 挂起观察器与 longtask 观察器同生命周期。即使当前 Chromium 不支持 longtask，
+  // 仍要启动：统一上报层靠它识别「切后台 / 休眠」产生的假慢样本。
+  const stopSuspensionObserver = startSuspensionObserver()
+  if (typeof PerformanceObserver === 'undefined') return stopSuspensionObserver
 
   try {
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if (entry.duration < LONGTASK_MIN_MS) continue
-        // 长任务本身没有业务语义，附带最近一次有分量的操作 / 房间，
-        // 让监控页能按 contextKey 把阻塞归到具体链路，而不是只看到一堆匿名卡顿。
-        const recent = getRecentPerformanceContext()
+        // 长任务本身没有业务语义，用长任务自带的 startTime 反查该时刻之前
+        // 最可能引发阻塞的操作 / 房间，而不是 observer 回调触发时的「最近操作」。
+        const recent = getRecentPerformanceContext(entry.startTime)
         recordPerformance(PERFORMANCE_METRICS.longTask, entry.duration, {
           module: 'PerformanceObserver',
           contextKey: recent?.contextKey,
@@ -43,9 +47,12 @@ export function startRuntimePerformanceObserver(): () => void {
       }
     })
     observer.observe({ type: 'longtask', buffered: true })
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      stopSuspensionObserver()
+    }
   } catch {
     // 某些 Chromium 版本/上下文不支持 longtask，静默降级，不影响业务。
-    return () => {}
+    return stopSuspensionObserver
   }
 }

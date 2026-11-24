@@ -146,11 +146,11 @@ export function useKBSettingsDialogModel({ visible, kb, onClose, refreshKBList }
       }
 
       await refreshKBList()
-      logAction('HomePage:知识库设置已保存', 'KBSettings', { kbName: currentKb.name, newName, updatedCover: !!coverRef })
+      logAction('kb.settings_save', 'KBSettings', { kbName: currentKb.name, newName, updatedCover: !!coverRef })
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-      logAction('HomePage:保存知识库设置失败', 'KBSettings', { error: e instanceof Error ? e.message : String(e) })
+      logAction('kb.settings_save_failed', 'KBSettings', { error: e instanceof Error ? e.message : String(e) })
     } finally {
       setLoading(false)
     }
@@ -199,11 +199,11 @@ export function useKBSettingsDialogModel({ visible, kb, onClose, refreshKBList }
       }
 
       await refreshKBList()
-      logAction('HomePage:成功删除知识库', 'KBSettings', { kbName: currentKb.name })
+      logAction('kb.delete', 'KBSettings', { kbName: currentKb.name })
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-      logAction('HomePage:删除知识库失败', 'KBSettings', { error: e instanceof Error ? e.message : String(e) })
+      logAction('kb.delete_failed', 'KBSettings', { error: e instanceof Error ? e.message : String(e) })
     } finally {
       setLoading(false)
     }

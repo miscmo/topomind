@@ -23,6 +23,8 @@ import { useDetailLockStore } from '../../model/detailLockStore'
 import { useResolvedLinkedDocuments } from '../../model/useResolvedLinkedDocuments'
 import type { DetailSidebarTab } from '../../../../features/documents/types/workspaceTypes'
 import type { LinkedDocumentRef, ResolvedLinkedDocument } from '../../../../domain/graph/linkedDocuments'
+import { recordUser } from '../../../../core/observe'
+import { LOG_ACTIONS } from '../../../../shared/observability/logContract'
 import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
 import { toast } from '../../../../shared/ui/Toaster/toastStore'
 import { syncLinkedDocumentsToGraph, useLinkedDocumentStore } from '../../../graph/linkedDocumentStore'
@@ -374,6 +376,15 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
         })
         return
       }
+      // P2 T2.5：「打开文档」此前完全无日志。记录用户动作本身与反查到的
+      // 目标节点，label 在契约层会被替换为长度摘要（D3 不落明文标题）。
+      void recordUser(LOG_ACTIONS.userDocumentOpen, {
+        target: { type: 'document', id, label: resolution.nodeName },
+        view: 'detail-panel',
+        result: 'resolved',
+        params: { documentId: id, fromNodeId: selectedNodeId },
+        inputMode: 'docLink',
+      })
       // 切换文档前先把当前草稿落盘，否则新文档的 session 会继承旧 draft。
       await flushDocumentSave()
       const targetPath = topoDocumentPath(id)

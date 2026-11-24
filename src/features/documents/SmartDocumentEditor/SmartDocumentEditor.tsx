@@ -14,6 +14,7 @@ import { useSmartDocumentEditorModel } from './model/useSmartDocumentEditorModel
 import { useSmartDocumentAttachmentInsert, type SmartDocumentAttachmentEditor } from './useSmartDocumentAttachmentInsert'
 import { SmartDocumentFormattingToolbar } from './components/SmartDocumentFormattingToolbar'
 import { ImageAlignToolbar } from './components/ImageAlignToolbar'
+import { ExcalidrawBlockToolbar } from './components/ExcalidrawBlockToolbar'
 import { SmartDocumentSideMenu } from './components/SmartDocumentSideMenu'
 import { EditorTopToolbar } from './components/EditorTopToolbar'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
@@ -1096,6 +1097,26 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       subtext: '插入块级 LaTeX 数学公式',
     }
 
+    const excalidrawItem = {
+      title: '手绘流程图',
+      onItemClick: () => {
+        editor.insertBlocks(
+          [
+            {
+              type: 'excalidraw',
+              props: { scene: '' },
+            },
+          ],
+          editor.getTextCursorPosition().block,
+          'after',
+        )
+      },
+      aliases: ['excalidraw', 'flow', 'draw', '流程图', '白板', '手绘'],
+      group: '高级',
+      icon: <span>✎</span>,
+      subtext: '插入可双击全屏编辑的手绘流程图（Excalidraw）',
+    }
+
     const docLinkItem = {
       title: '引用文档',
       onItemClick: () => {
@@ -1117,6 +1138,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       // mermaid 插件的条目是英文分组与文案，一并归一。
       { ...insertMermaid(), group: '高级', subtext: '插入 Mermaid 图表' },
       mathItem,
+      excalidrawItem,
       docLinkItem,
     ] as unknown as DefaultReactSuggestionItem[])
   }, [editor])
@@ -1229,6 +1251,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
             }}
           />
           <ImageAlignToolbar />
+          <ExcalidrawBlockToolbar />
         </BlockNoteView>
         {hoveredCodeBlock && toolbarPosition ? (
           <div

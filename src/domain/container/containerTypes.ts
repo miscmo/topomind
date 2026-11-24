@@ -18,7 +18,12 @@ export interface ContainerTypeSpec<T = unknown> {
   /** 纯函数：缺省 / 脏值 → 合法内容；未知 version 抛错，由适配层显示「版本不受支持」 */
   normalize(raw: unknown, title: string): T
   serialize(value: T): string
-  /** 预览缓存失效键，未实现时调用方按内容字符串兜底 */
+  /**
+   * 内容版本 / 变化判定键：既用于预览缓存失效，也被全屏宿主用作写盘去重。
+   * 必须覆盖所有「落盘后会改变预览」的字段（例如画布背景色），但不能包含
+   * 视口瞬态（滚动 / 缩放 / 选中），否则每次镜头操作都会写盘并重导出预览。
+   * 未实现时调用方按内容字符串兜底。
+   */
   getSceneVersion?(value: T): number
 }
 

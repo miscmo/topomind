@@ -14,15 +14,15 @@ export function useHomeCreateKB({ refreshKBList }: UseHomeCreateKBOptions) {
   const [createError, setCreateError] = useState('')
 
   const openCreateSheet = () => {
-    logAction('点击新建知识库', 'HomePage', {})
-    logAction('HomePage:新建知识库弹窗:打开', 'HomePage', {})
+    logAction('kb.create', 'HomePage', {})
+    logAction('kb.create_dialog', 'HomePage', {})
     setShowCreateSheet(true)
     setCreateName('')
     setCreateError('')
   }
 
   const closeCreateSheet = () => {
-    logAction('HomePage:新建知识库弹窗:关闭', 'HomePage', { createName })
+    logAction('kb.create_dialog', 'HomePage', { createName })
     setShowCreateSheet(false)
   }
 
@@ -36,7 +36,7 @@ export function useHomeCreateKB({ refreshKBList }: UseHomeCreateKBOptions) {
     setCreateLoading(true)
     try {
       await storage.createKB(name)
-      logAction('知识库:创建', 'HomePage', { kbName: name })
+      logAction('kb.create', 'HomePage', { kbName: name })
       setShowCreateSheet(false)
       setCreateName('')
       await refreshKBList()

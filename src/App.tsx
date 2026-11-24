@@ -23,6 +23,7 @@ import { Toaster } from './shared/ui/Toaster/Toaster'
 import { installViewportScrollGuard } from './core/viewportScrollGuard'
 import { LinkDocumentDialog } from './features/graph/components/LinkDocumentDialog'
 import NavRail from './features/layout/NavRail/NavRail'
+import DebugHudHost from './features/debug/DebugHudHost'
 import { HOST_VIEW_IDS } from './features/layout/NavRail/navModel'
 
 const HomePage = lazy(() => import('./features/kb/HomePage'))
@@ -82,6 +83,8 @@ export default memo(function App() {
             <LinkDocumentDialog />
           </Suspense>
           <Toaster />
+          {/* P6 Debug HUD：应用内最顶层浮窗，挂在根层避免被视图容器裁剪；未开启时不加载 chunk。 */}
+          <DebugHudHost />
           {isSetup ? (
             <Suspense fallback={null}>
               <CustomTitleBar mode="setup" />

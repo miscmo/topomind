@@ -120,39 +120,29 @@ export interface LearningApi {
   getDailyRecords(input: { workspaceId?: string | null; dates: string[] }): Promise<Record<string, LearningDailyRecord | null>>
 }
 
-export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
+// 日志字段 / 等级 / 查询参数的唯一真源：src/shared/observability/logContract.ts。
+// 插件公共层只做 re-export，禁止再声明第二份结构（规范 §3.1）。
+export type {
+  LogLevel,
+  LogQueryInput,
+  LogEntry as LogEntrySnapshot,
+} from '@/shared/observability/logContract'
 
-export interface LogEntrySnapshot {
-  id?: string
-  timestamp?: string
-  level?: LogLevel
-  module?: string
-  file?: string
-  line?: number
-  func?: string
-  action?: string
-  message?: string
-  params?: Record<string, unknown> | null
-  traceId?: string | null
-  spanId?: string | null
-  parentId?: string | null
-  meta?: Record<string, unknown> | null
-}
-
-export interface LogQueryInput {
-  date?: string
-  keyword?: string
-  levels?: string[]
-  actions?: string[]
-  startTime?: string
-  endTime?: string
-}
+import type { LogEntry, LogLevel, LogQueryInput } from '@/shared/observability/logContract'
 
 export interface LogsApi {
-  getBuffer(): Promise<LogEntrySnapshot[]>
+  getBuffer(): Promise<LogEntry[]>
   getAvailableDates(): Promise<string[]>
-  query(input?: LogQueryInput): Promise<LogEntrySnapshot[]>
-  subscribe(listener: (entry: LogEntrySnapshot) => void): Disposable
+  query(input?: LogQueryInput): Promise<LogEntry[]>
+  subscribe(listener: (entry: LogEntry) => void): Disposable
+  /** 导出指定日期的 JSONL；宿主未实现时返回空串。 */
+  exportJsonl?(date?: string): Promise<string>
+  /** P3：一键诊断包（JSON 字符串，主进程已二次脱敏）；旧宿主可不实现。 */
+  exportBundle?(): Promise<string>
+  /** 主进程唯一等级阈值（v3 P0 补的运行时入口）；旧宿主可不实现。 */
+  getLevel?(): Promise<LogLevel>
+  setLevel?(level: LogLevel): Promise<LogLevel>
+  subscribeLevel?(listener: (level: LogLevel) => void): Disposable
 }
 
 export interface PerformanceMetricDefinition {

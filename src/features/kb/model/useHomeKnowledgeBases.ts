@@ -12,6 +12,29 @@ export interface KBItem {
   coverOffset?: number
 }
 
+/** 开库日志的轻量摘要，见 toKBLogInfo。 */
+export interface KBLogInfo {
+  kbName: string
+  nodeCount: number | null
+  hasCover: boolean
+  coverBytes: number
+}
+
+/**
+ * KBItem.coverUrl 是整张封面图的 base64 data URI（实测单张 6.5~8.3 MB）。
+ * 早期直接把 kb 对象写进 params，一次点击要经历两遍 8MB 序列化 + IPC + 写盘 +
+ * 广播，11-21 单日 494MB 日志几乎全部来自这里，且伴随主线程长任务。
+ * 日志只需要「哪个库 / 有没有封面 / 封面多大」这类可诊断元数据。
+ */
+export function toKBLogInfo(kb: KBItem): KBLogInfo {
+  return {
+    kbName: kb.name,
+    nodeCount: kb.nodeCount,
+    hasCover: Boolean(kb.coverUrl),
+    coverBytes: kb.coverUrl?.length ?? 0,
+  }
+}
+
 const HOME_KB_IO_CONCURRENCY = 6
 
 async function mapWithConcurrency<T, R>(
@@ -62,7 +85,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
     setLoading(true)
     try {
       const list = await storage.listKBs()
-      logAction('HomePage:知识库列表加载成功', 'HomePage', {
+      logAction('kb.list_load', 'HomePage', {
         workDir: currentWorkDir,
         kbCount: (list || []).length,
         list: list,
@@ -112,7 +135,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
             return await storage.countChildren(kb.name)
           } catch (err) {
             logger.catch('HomePage', 'loadKBList:countChildren', err)
-            logAction('HomePage:统计子节点异常', 'HomePage', {
+            logAction('kb.list_load_failed', 'HomePage', {
               kbName: kb.name,
               error: err instanceof Error ? err.message : String(err),
             })
@@ -124,12 +147,12 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
       const completed = initial.map((kb, i) => ({ ...kb, nodeCount: counts[i] }))
       latestKbsRef.current = completed
       setKbs(completed)
-      logAction('HomePage:子节点数量加载完成', 'HomePage', { totalNodes: counts.reduce((a, b) => a + b, 0) })
+      logAction('kb.node_count_load', 'HomePage', { totalNodes: counts.reduce((a, b) => a + b, 0) })
     } catch (err) {
       perfError = err
       const msg = err instanceof Error ? err.message : String(err)
       logger.catch('HomePage', 'loadKBList', err)
-      logAction('HomePage:加载知识库列表异常', 'HomePage', { error: msg })
+      logAction('kb.list_load_failed', 'HomePage', { error: msg })
       if (isCurrentRequest()) {
         setMessage(msg || '加载知识库列表失败')
         setMessageError(true)
@@ -148,7 +171,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
   const openKB = useCallback(async (kb: KBItem) => {
     const opened = tabStore.getState().openKnowledgeBase(kb)
     if (!opened) return
-    logAction('打开知识库成功', 'HomePage', { kbInfo: kb })
+    logAction('kb.open', 'HomePage', { kbInfo: toKBLogInfo(kb) })
   }, [])
 
   const refreshKBList = useCallback(async () => {
@@ -175,7 +198,7 @@ export function useHomeKnowledgeBases(options: UseHomeKnowledgeBasesOptions) {
         config.kbOrder = latestOrderRef.current
         await storage.writeConfig(config)
         confirmedOrderRef.current = [...latestOrderRef.current]
-        logAction('HomePage:知识库排序', 'HomePage', { newOrder: latestOrderRef.current })
+        logAction('kb.sort', 'HomePage', { newOrder: latestOrderRef.current })
       })
       .catch((err) => {
         logger.catch('HomePage', 'reorderKBs', err)

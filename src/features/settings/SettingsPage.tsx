@@ -5,10 +5,19 @@
  *
  * 2026-11-21：导航栏显隐收敛为标题栏单一全局按钮，这里不再提供第二套三态控件；
  * 右侧「样式」分区迁入本页（StyleSection 通过 useOptionalGraphContext 降级为全局默认样式）。
+ * 2026-11-23：外观分区新增「应用主题色」。UI 只负责选色，色阶派生 / 调和 / 注入
+ * 全部由 src/domain/theme/ 统一管理，本页不保存第二份色值定义。
  */
-import { memo } from 'react'
-import { Book, Crosshair, ExternalLink, FolderOpen, Layers3, Palette, SunMoon } from 'lucide-react'
+import { memo, useEffect, useState } from 'react'
+import { Book, Check, Crosshair, ExternalLink, FolderOpen, Layers3, Palette, SunMoon } from 'lucide-react'
 import { executeCommand } from '@/application/commands'
+import { ACCENT_PRESETS } from '@/domain/theme/accentPresets'
+import {
+  DEFAULT_ACCENT_COLOR,
+  harmonizeAccentColor,
+  isSameAccentColor,
+  normalizeAccentColor,
+} from '@/domain/theme/accentColor'
 import { useLayoutStore } from '@/stores/layoutStore'
 import { useThemeStore, LIGHT_THEME, DARK_THEME } from '@/stores/themeStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
@@ -65,9 +74,11 @@ export default memo(function SettingsPage() {
           </div>
         </div>
 
-        <div className={`${SECTION} mt-4`}>
+        <div className={`${SECTION} mt-4`} data-tm-settings-accent="">
           <h2 className={SECTION_TITLE}><SunMoon className="h-4 w-4 text-[var(--color-accent)]" />外观</h2>
-          <p className={SECTION_HINT}>单色制品牌色，深浅主题共用同一套设计变量。</p>
+          <p className={SECTION_HINT}>
+            主题色统一管理按钮、选中态、链接、焦点环、标题栏激活态与画布高亮；切换深浅主题时会自动派生配套色阶。
+          </p>
           <div className={ROW}>
             <div>
               <div className={LABEL}>主题</div>
@@ -77,6 +88,11 @@ export default memo(function SettingsPage() {
               <button type="button" onClick={() => setTheme(LIGHT_THEME)} aria-pressed={theme === LIGHT_THEME} className={SEG_BTN(theme === LIGHT_THEME)}>浅色</button>
               <button type="button" onClick={() => setTheme(DARK_THEME)} aria-pressed={theme === DARK_THEME} className={SEG_BTN(theme === DARK_THEME)}>深色</button>
             </div>
+          </div>
+          <div className="py-3">
+            <div className={LABEL}>应用主题色</div>
+            <div className={DESC}>选择预设或自定义颜色，修改后立即生效并自动保存；过亮或过艳的颜色会自动微调，保证文字始终清晰</div>
+            <AccentColorControl />
           </div>
         </div>
 
@@ -178,6 +194,103 @@ export default memo(function SettingsPage() {
     </div>
   )
 })
+
+/**
+ * 全局主题色选择器。
+ * 这里刻意不出现任何颜色字面量：预设色板来自 domain/theme/accentPresets.ts，
+ * 实际生效色由 domain/theme/accentColor.ts 调和派生，组件只传递用户选的那个 hex。
+ */
+function AccentColorControl() {
+  const accentColor = useThemeStore((state) => state.accentColor)
+  const setAccentColor = useThemeStore((state) => state.setAccentColor)
+  const resetAccentColor = useThemeStore((state) => state.resetAccentColor)
+  const [draft, setDraft] = useState(accentColor)
+
+  // 色板 / 取色器 / 命令面板都可能改 store，输入框要跟着同步。
+  useEffect(() => {
+    setDraft(accentColor)
+  }, [accentColor])
+
+  const harmonized = harmonizeAccentColor(accentColor)
+  const isDefault = accentColor === DEFAULT_ACCENT_COLOR
+
+  const commitDraft = () => {
+    const normalized = normalizeAccentColor(draft)
+    if (normalized) setAccentColor(normalized)
+    else setDraft(accentColor)
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {ACCENT_PRESETS.map((preset) => {
+          const active = isSameAccentColor(accentColor, preset.hex)
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              title={`${preset.name} ${preset.hex}`}
+              aria-label={`主题色：${preset.name}`}
+              aria-pressed={active}
+              data-tm-accent-preset={preset.id}
+              onClick={() => setAccentColor(preset.hex)}
+              className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--color-border-strong)] cursor-pointer transition-transform hover:scale-110 ${active ? 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-surface)]' : ''}`}
+              style={{ backgroundColor: preset.hex }}
+            >
+              {/* 色块是固定明度的品牌色阶，勾选标记恒用白色；不能用 --color-text-inverse，
+                  它在深色主题会翻成深色墨色，落在中明度色块上会看不见。 */}
+              {active && <Check className="h-3.5 w-3.5 text-white" />}
+            </button>
+          )
+        })}
+        <span className="ml-1 text-xs text-[var(--color-text-muted)]">预设</span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label
+          className="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-md border border-[var(--color-border-strong)]"
+          title="自定义主题色"
+        >
+          <input
+            type="color"
+            aria-label="自定义主题色"
+            data-tm-accent-custom=""
+            value={harmonized.hex}
+            onChange={(event) => setAccentColor(event.target.value)}
+            className="absolute -inset-2 h-[calc(100%+16px)] w-[calc(100%+16px)] cursor-pointer border-none bg-transparent p-0"
+          />
+        </label>
+        <input
+          type="text"
+          aria-label="主题色十六进制值"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commitDraft}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') commitDraft()
+          }}
+          placeholder="输入十六进制色值"
+          spellCheck={false}
+          className="h-8 w-[132px] rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+        />
+        <button type="button" onClick={resetAccentColor} disabled={isDefault} className={`${BTN} disabled:opacity-50`}>
+          恢复默认
+        </button>
+        {harmonized.adjusted && (
+          <span className="text-xs text-[var(--color-text-muted)]">已自动微调为 {harmonized.hex}</span>
+        )}
+      </div>
+
+      {/* 预览直接引用 --color-* 语义 token：用户看到的就是全软件实际换上的效果。 */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-bg-muted)] p-3">
+        <span className="text-xs text-[var(--color-text-muted)]">效果预览</span>
+        <span className="inline-flex h-7 items-center rounded-md bg-[var(--color-primary)] px-3 text-xs text-[var(--color-text-inverse)]">主按钮</span>
+        <span className="inline-flex h-7 items-center rounded-md border border-[var(--color-accent)] bg-[var(--color-accent-soft)] px-3 text-xs text-[var(--color-accent)]">选中项</span>
+        <span className="inline-flex h-7 items-center rounded-md px-3 text-xs text-[var(--color-accent)] underline">链接 / 焦点</span>
+      </div>
+    </div>
+  )
+}
 
 function FragmentRow({ shortcut, description }: { shortcut: string; description: string }) {
   return (

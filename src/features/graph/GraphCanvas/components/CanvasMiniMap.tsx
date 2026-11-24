@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, useDeferredVal
 import { Panel, Position, getSmoothStepPath, getStraightPath, useReactFlow, useViewport, type Edge, type Node } from '@xyflow/react'
 import { Eye, EyeOff, Minus, Plus } from 'lucide-react'
 import { logAction } from '../../../../core/log-backend'
+import { recordStep } from '../../../../core/traceBuffer'
 import { useGraphUiStore } from '../../../../stores/graphUiStore'
 import { STYLE_CONFIG_DEFAULTS } from '../../../../domain/style/styleDefaults'
 import { normalizeEdgeAnchor, resolveAnchorPoint } from '../../../../domain/graph/edgeAnchors'
@@ -678,9 +679,10 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
     const nextVisible = !showMiniMap
     setShowMiniMap(nextVisible)
 
-    logAction(nextVisible ? '视图:开启自动缩略图' : '视图:关闭自动缩略图', 'CanvasMiniMap', {
+    logAction('ui.view', 'CanvasMiniMap', {
       visible: nextVisible,
       mode: 'auto',
+      change: nextVisible ? 'show' : 'hide',
     })
   }, [setShowMiniMap, showMiniMap])
 
@@ -693,7 +695,8 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
       zoom: reactFlow.getZoom(),
       duration: 180,
     })
-    logAction('视图:缩略图节点定位', 'CanvasMiniMap', { nodeId: node.id })
+    // P7：镜头跳转是过程痕迹，不单独落盘；显隐切换才保留 1 条 ui.view。
+    recordStep({ name: 'ui.view.minimap_node_jump', outcome: 'jumped', params: { nodeId: node.id } })
   }, [reactFlow])
 
   const focusMiniMapPoint = useCallback((clientX: number, clientY: number, duration: number) => {
@@ -776,10 +779,10 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
         window.cancelAnimationFrame(dragFrameRef.current)
         flushPendingFocusPoint()
       }
-      logAction('视图:缩略图拖拽平移', 'CanvasMiniMap', {})
+      recordStep({ name: 'ui.view.minimap_drag', outcome: 'moved' })
     } else {
       focusMiniMapPoint(event.clientX, event.clientY, 120)
-      logAction('视图:缩略图点击定位', 'CanvasMiniMap', {})
+      recordStep({ name: 'ui.view.minimap_focus', outcome: 'focused' })
     }
 
     dragStateRef.current = null
@@ -798,10 +801,7 @@ export const CanvasMiniMap = memo(function CanvasMiniMap({
       height: nextHeight,
     })
 
-    logAction('视图:缩略图尺寸调整', 'CanvasMiniMap', {
-      width: nextWidth,
-      height: nextHeight,
-    })
+    recordStep({ name: 'ui.view.minimap_resize', outcome: 'resized', params: { width: nextWidth, height: nextHeight } })
   }, [miniMapSize.height, miniMapSize.width, setMiniMapSize])
 
   const miniMapControlButtonClassName = 'tm-icon-btn'

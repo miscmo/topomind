@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Book, Settings, GripVertical, FileText } from 'lucide-react'
 import { logAction } from '../../../core/log-backend'
-import { type KBItem } from '../model/useHomeKnowledgeBases'
+import { toKBLogInfo, type KBItem } from '../model/useHomeKnowledgeBases'
 
 interface KnowledgeBaseGridProps {
   kbs: KBItem[]
@@ -76,13 +76,13 @@ export function KnowledgeBaseGrid(props: KnowledgeBaseGridProps) {
             ${dragOverItem === kb.name ? 'border-primary ring-2 ring-primary/20' : ''}
           `}
           onClick={() => {
-            logAction('HomePage:点击知识库卡片', 'HomePage', { kbInfo: kb })
+            logAction('kb.open', 'HomePage', { kbInfo: toKBLogInfo(kb) })
             onOpenKB(kb)
           }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault()
-              logAction('HomePage:键盘打开知识库卡片', 'HomePage', { kbInfo: kb })
+              logAction('kb.open', 'HomePage', { kbInfo: toKBLogInfo(kb) })
               onOpenKB(kb)
               return
             }

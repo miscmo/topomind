@@ -29,11 +29,13 @@ export function buildSelectionSubtreeOperations({ storeApi }: SelectionSubtreeOp
       params: { rootCount: roots.length, trigger: 'selection-only' },
     })
     if (patch.changed) store.setNodes(patch.nodes)
-    logAction('节点:选中子树', 'graphOperations', {
+    // P7：node.select 的唯一落盘产生点，显式声明为状态事实（internal），
+    // 普通单击的选中态写回只在 traceBuffer 记内存步骤，不再各写一条。
+    logAction('node.select', 'graphOperations', {
       roots: [...roots],
       count: patch.subtreeIds.length,
       added: patch.addedIds.length,
-    })
+    }, { kind: 'state' })
     perfSpan.end({ added: patch.addedIds.length, changed: patch.changed })
     return true
   }

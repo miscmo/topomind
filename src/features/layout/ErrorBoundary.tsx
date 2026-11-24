@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Button } from '../../shared/ui/button'
-import { logWrite } from '../../core/log-backend'
+import { writeEntry } from '../../core/logger'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -34,18 +34,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // 写进应用日志（系统日志面板可见），避免错误只存在于开发者工具里
-    void logWrite({
+    // 统一入口：异常走结构化 error 字段，不再只拼进 message / params。
+    void writeEntry({
       level: 'ERROR',
-      module: 'ErrorBoundary',
-      action: this.props.label ? `渲染异常: ${this.props.label}` : '渲染异常',
-      params: {
-        message: error?.message ?? String(error),
-        stack: error?.stack ?? null,
-        componentStack: info?.componentStack ?? null,
-      },
+      module: 'app',
+      action: 'app.error',
+      message: `渲染异常${this.props.label ? `: ${this.props.label}` : ''}`,
+      error,
+      params: { componentStack: info?.componentStack ?? null, boundary: this.props.label ?? null },
     })
-    console.error('[ErrorBoundary]', this.props.label ?? '', error, info)
   }
 
   componentDidUpdate(prev: ErrorBoundaryProps) {

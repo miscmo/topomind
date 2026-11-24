@@ -118,6 +118,9 @@ export function extractPerformanceSamples(entries: LogLikeEntry[]): PerformanceS
     const params = asRecord(entry.params)
     const metric = params.metric
     if (typeof metric !== 'string' || !metric) return []
+    // 页面挂起/隐藏产生的伪样本在上报层已标记（且不写 durationMs）；
+    // 这里二次过滤，保证任何来源的日志都不会把假慢样本混进看板统计。
+    if (params.suspended === true || params.suspended === 'true') return []
     const durationMs = asNumber(params.durationMs)
     if (durationMs === null) return []
 

@@ -29,7 +29,7 @@ export function useRecentRooms(tabId: string) {
 
   const onActivate = useCallback(async (item: RoomHistoryRecord) => {
     if (!kbPath) return
-    logAction('房间历史:快捷导航', 'RoomHistory', {
+    logAction('room.navigate', 'RoomHistory', {
       targetPath: item.path,
       targetName: item.name,
       tabId,

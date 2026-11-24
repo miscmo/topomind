@@ -1,4 +1,5 @@
 import { logAction } from '../../core/log-backend.ts'
+import { auditInterval } from '../../core/observe.ts'
 
 export interface SaveCoordinatorOptions<T> {
   delayMs: number
@@ -40,10 +41,13 @@ export class SaveCoordinator<T> {
     })
 
     if (pending.timer) clearTimeout(pending.timer)
-    pending.timer = setTimeout(() => {
+    // P2：300ms debounce 属于高频定时任务，逐次落盘会淹没可读日志；
+    // auditInterval 只在跨过 60s 窗口时聚合写一条 timer.aggregate。
+    // 使用固定名称，避免把文档 key / 路径带进日志。
+    pending.timer = setTimeout(auditInterval('saveCoordinator.debounce', () => {
       pending.timer = null
       void this.runPending(key, { swallowErrors: true })
-    }, this.delayMs)
+    }), this.delayMs)
 
     return scheduled
   }
@@ -140,7 +144,7 @@ export class SaveCoordinator<T> {
       } catch (error) {
         this.onError?.(error, key)
         if (typeof window !== 'undefined') {
-          logAction('SaveCoordinator:保存失败', 'SaveCoordinator', {
+          logAction('document.save_failed', 'SaveCoordinator', {
             key,
             error: error instanceof Error ? error.message : String(error),
           })

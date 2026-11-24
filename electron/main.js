@@ -10,13 +10,14 @@
  *   - file-service.js   — 文件系统操作
  *   - log-service.js     — 日志服务
  */
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell, screen, protocol, net } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell, screen, protocol, net, crashReporter } from 'electron';
 import nodePath from 'path';
 import nodeFs from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { fileService, _fs_attachmentRefToPath, _fs_requireValidWorkDir } from './file-service.js';
 import { dialogService } from './dialog-service.js';
 import LogService from './log-service.js';
+import { mainLog, mainLifecycle } from './main-log.js';
 
 // 兼容生产运行以及 dev 模式。
 const APP_PATH = app.getAppPath();
@@ -45,6 +46,50 @@ const IS_DEV = !!process.env.VITE_DEV_SERVER_URL;
 const CLOSE_GUARD_REQUEST_TIMEOUT_MS = 5000;
 let closeGuardRequestSeq = 0;
 const pendingCloseGuardRequests = new Map();
+
+// ----- 日志服务：app 启动即初始化（D1 兜底目录，进入工作目录后切换） -----
+// TOPOMIND_LOG_FALLBACK=0 可一键回到「只在 enterWorkDir 初始化」的旧行为。
+if (process.env.TOPOMIND_LOG_FALLBACK !== '0') {
+  try {
+    var fallbackLogDir = nodePath.join(app.getPath('userData'), 'logs');
+    var crashDumpDir = nodePath.join(fallbackLogDir, 'crashes');
+    var appVersion = null;
+    try { appVersion = app.getVersion(); } catch { /* 版本不可读不影响日志 */ }
+    try {
+      // P3：crashReporter 必须在 app ready 之前 start，setPath 要在 start 之前；
+      // uploadToServer:false 保证 minidump 只留本地，绝不远程上报（v3 §1 非目标）。
+      nodeFs.mkdirSync(crashDumpDir, { recursive: true });
+      app.setPath('crashDumps', crashDumpDir);
+      crashReporter.start({
+        productName: 'TopoMind',
+        companyName: 'TopoMind',
+        uploadToServer: false,
+        compress: true,
+      });
+    } catch { /* minidump 不可用时 dumpRef 降级为 available:false，不阻断启动 */ }
+    LogService.init({
+      logDir: fallbackLogDir,
+      level: IS_DEV ? 'DEBUG' : 'INFO',
+      crashDumpDir: crashDumpDir,
+      appVersion: appVersion,
+    });
+  } catch {
+    // app.getPath 在极早期失败时退回进程工作目录，不让日志拖垮启动。
+    LogService.init({ logDir: nodePath.join(process.cwd(), 'logs'), level: IS_DEV ? 'DEBUG' : 'INFO' });
+  }
+}
+
+// ----- 主进程全局异常接管：记录后仍按原有退出策略处理，避免静默吞掉 ----- 
+process.on('uncaughtException', (error) => {
+  // P3：error 类已走同步落盘，这条崩溃日志在 throw 之前必定可读。
+  try { mainLog.error('app', '主进程未捕获异常', {}, error, 'app.crash'); } catch { /* 日志不可用时仍要崩溃 */ }
+  // 标记异常退出；下次启动据此生成 app.crash_recovered 恢复报告。
+  try { LogService.markSessionCrashed(error?.message ?? 'uncaughtException'); } catch { /* 状态写入失败不阻断崩溃路径 */ }
+  throw error;
+});
+process.on('unhandledRejection', (reason) => {
+  mainLog.error('app', '主进程未处理的 Promise 拒绝', {}, reason, 'app.error');
+});
 
 function buildLocalFileUrl(absPath) {
   return pathToFileURL(absPath).href.replace(/^file:\/\//i, 'local-file://');
@@ -490,34 +535,32 @@ function registerIPC() {
   });
   ipcMain.handle('fs:isValidWorkDir', function(e, dirPath) {
     var result = fileService.isValidWorkDir(dirPath);
-    LogService.write({
-      level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:isValidWorkDir',
-      message: result.valid ? '工作目录校验成功' : '工作目录校验失败', params: { dirPath, valid: result.valid, error: result.error || null },
-    });
+    if (result.valid) {
+      mainLog.info('workspace', '工作目录校验成功', { dirPath, valid: true }, 'workspace.select');
+    } else {
+      mainLog.error('workspace', '工作目录校验失败', { dirPath, valid: false }, result.error, 'workspace.open_failed');
+    }
     return result;
   });
   ipcMain.handle('fs:selectDirectory', function() {
     var result = dialogService.selectDirectory();
-    LogService.write({
-      level: 'INFO', module: 'Main', action: 'fs:selectDirectory',
-      message: '文件对话框已关闭', params: { valid: result.valid, path: result.nodePath || null, error: result.error || null },
-    });
+    mainLog.info('workspace', '文件对话框已关闭', {
+      valid: result.valid, path: result.nodePath || null, error: result.error || null,
+    }, 'workspace.select');
     return result;
   });
   ipcMain.handle('fs:createWorkDir', function(e, dirPath) {
     var result = fileService.createWorkDir(dirPath);
-    LogService.write({
-      level: result.valid ? 'INFO' : 'ERROR', module: 'Main', action: 'fs:createWorkDir',
-      message: result.valid ? '工作目录创建成功' : '工作目录创建失败', params: { dirPath, valid: result.valid, error: result.error || null },
-    });
+    if (result.valid) {
+      mainLog.info('workspace', '工作目录创建成功', { dirPath, valid: true });
+    } else {
+      mainLog.error('workspace', '工作目录创建失败', { dirPath, valid: false }, result.error, 'workspace.create_failed');
+    }
     return result;
   });
   ipcMain.handle('fs:importKB', function(e, rootDir, sourcePath) {
     var result = fileService.importKB(requireActiveWorkDir(rootDir), sourcePath);
-    LogService.write({
-      level: 'INFO', module: 'Main', action: 'fs:importKB',
-      message: '知识库导入成功', params: { sourcePath, importedPath: result },
-    });
+    mainLog.info('kb', '知识库导入成功', { sourcePath, importedPath: result }, 'kb.import');
     return result;
   });
 
@@ -582,13 +625,17 @@ function registerIPC() {
     try {
       normalizedWorkDir = _fs_requireValidWorkDir(workDir);
     } catch (err) {
-      LogService.write({
-        level: 'ERROR', module: 'Main', action: 'app:enterWorkDir',
-        message: '进入工作目录失败', params: { workDir, ok: false, error: err && err.message ? err.message : String(err) },
-      });
+      mainLog.error('workspace', '进入工作目录失败', { workDir, ok: false }, err, 'workspace.open_failed');
       return { ok: false, error: err && err.message ? err.message : '工作目录无效' };
     }
     var ok = LogService.enterWorkDir(normalizedWorkDir);
+    // D5：minidump 尽量跟随当前工作目录。Electron 在 crashReporter.start 之后
+    // 切换 crashDumps 不保证对所有后续 dump 生效，故诊断包会汇总两个目录。
+    try {
+      var workCrashDumps = nodePath.join(normalizedWorkDir, 'logs', 'crashes');
+      nodeFs.mkdirSync(workCrashDumps, { recursive: true });
+      app.setPath('crashDumps', workCrashDumps);
+    } catch { /* 目标不可写时保留启动兜底目录 */ }
     if (win && !win.isDestroyed()) {
       applyWorkspaceWindowConstraints();
 
@@ -638,10 +685,7 @@ function registerIPC() {
 
       buildMenu(false);
     }
-    LogService.write({
-      level: ok ? 'INFO' : 'ERROR', module: 'Main', action: 'app:enterWorkDir',
-      message: ok ? '进入工作目录' : '进入工作目录失败', params: { workDir: normalizedWorkDir, ok },
-    });
+    // enterWorkDir 内部已写 workspace.enter，这里不再重复记录。
     return { ok };
   });
   ipcMain.handle('app:switchWorkDir', async function() {
@@ -699,14 +743,18 @@ function registerIPC() {
     return getWindowControlsState();
   });
 
-  // ----- Log handlers -----
+  // ----- Log handlers -----（参数与日期校验统一在 log-service.js 内）
   ipcMain.handle('log:write', function(e, entry) { return LogService.write(entry); });
   ipcMain.handle('log:getBuffer', function() { return LogService.getBuffer(); });
-  ipcMain.handle('log:query', function(e, opts) { return LogService.query(opts); });
+  ipcMain.handle('log:query', function(e, opts) { return LogService.query(opts || {}); });
   ipcMain.handle('log:setLevel', function(e, level) { return LogService.setLevel(level); });
-  ipcMain.handle('log:clear', function() { return LogService.clear(); });
+  ipcMain.handle('log:getLevel', function() { return LogService.getLevel(); });
+  ipcMain.handle('log:clearBuffer', function() { return LogService.clearBuffer(); });
   ipcMain.handle('log:getAvailableDates', function() { return LogService.getAvailableDates(); });
   ipcMain.handle('log:getLogDir', function() { return LogService.getLogDir(); });
+  ipcMain.handle('log:export', function(e, date) { return LogService.exportJsonl(date); });
+  // P3：一键诊断包（主进程已完成二次脱敏与双目录汇总，返回 JSON 字符串）。
+  ipcMain.handle('log:exportBundle', function() { return LogService.exportDiagnosticBundle(); });
   ipcMain.handle('monitor:open', function() {
     if (win && !win.isDestroyed()) {
       win.webContents.send('app:menu-action', 'monitor.open');
@@ -728,10 +776,19 @@ async function requestSafeQuit(reason) {
   }
   _isSafeQuitInProgress = true;
   try {
+    mainLifecycle('quit.requested', { reason: reason || 'quit-app' }, 'app.quit');
     const guardResult = await confirmAndFlushBeforeExit(reason || 'quit-app');
+    mainLifecycle('close-guard.done', { ok: Boolean(guardResult.ok) });
     if (!guardResult.ok) {
       return guardResult;
     }
+    // 必须在 drain() 之前写完最后一条生命周期日志：drain 之后进程随即退出，
+    // 新日志来不及进写队列（P2 关闭链路埋点约束）。
+    mainLifecycle('quit.approved', { reason: reason || 'quit-app' }, 'app.quit');
+    // 退出前确认日志写队列已排空，避免「accepted:true 但进程已经没了」。
+    try { await LogService.drain(); } catch { /* 日志落盘失败不阻断退出 */ }
+    // P3：drain 之后才把 session.json 标记为 clean，否则异常退出会被误判。
+    try { LogService.markSessionClean(); } catch { /* 状态写入失败不阻断退出 */ }
     _isQuittingAfterFlush = true;
     app.quit();
     return { ok: true };
@@ -833,15 +890,22 @@ function createWindow() {
     // 用自定义特权协议加载，规避 file:// 下 ES module (crossorigin) 被 CORS 拦截导致的白屏。
     win.loadURL(`${RENDERER_SCHEME}://./index.html`);
   }
+  // 渲染进程 console 输出量大：只在开发构建接回日志，并按秒节流，避免自我放大。
+  let consoleLogWindowStart = 0;
+  let consoleLogCount = 0;
   win.webContents.on('console-message', ({ level, message, lineNumber, sourceId }) => {
-    console.log(`[Browser Console] ${level} ${message} (${sourceId}:${lineNumber})`);
+    if (!IS_DEV) return;
+    const now = Date.now();
+    if (now - consoleLogWindowStart > 1000) { consoleLogWindowStart = now; consoleLogCount = 0; }
+    if (consoleLogCount++ > 20) return;
+    mainLog.debug('app', `[Browser Console] ${message}`, { level, sourceId, lineNumber });
   });
   win.webContents.on('did-fail-load', function(e, errorCode, errorDescription, validatedURL, isMainFrame) {
-    console.error('[window:did-fail-load]', errorCode, errorDescription, validatedURL, isMainFrame);
+    mainLog.error('app', '页面加载失败', { errorCode, errorDescription, validatedURL, isMainFrame }, null, 'app.error');
   });
   win.webContents.on('did-finish-load', function() {
     const currentUrl = win && !win.isDestroyed() ? win.webContents.getURL() : '';
-    if (IS_DEV) console.log('[window:did-finish-load]', currentUrl);
+    mainLog.debug('app', '页面加载完成', { url: currentUrl });
   });
   win.webContents.setWindowOpenHandler(function(details) {
     var target = sanitizeExternalUrl(details.url);
@@ -864,10 +928,10 @@ function createWindow() {
     }
   });
   win.webContents.on('render-process-gone', function(e, details) {
-    console.error('[window:render-process-gone]', JSON.stringify(details));
+    mainLog.error('app', '渲染进程退出', { reason: details?.reason, exitCode: details?.exitCode }, null, 'app.crash');
   });
   win.on('unresponsive', function() {
-    console.error('[window:unresponsive]');
+    mainLog.error('app', '窗口无响应', {}, null, 'app.error');
   });
 
   win.on('resize', saveWindowStateDebounced);
@@ -1129,14 +1193,29 @@ app.whenReady().then(function() {
   // 渲染进程主协议：以 topomind:// 提供 dist/ 资源（同源、按标准 web origin 加载 ES module）。
   protocol.handle(RENDERER_SCHEME, (request) => handleRendererSchemeRequest(request));
 
+  mainLifecycle('app.ready');
   registerIPC();
   buildMenu(true);
+  mainLifecycle('ipc.registered');
   createWindow();
+  mainLifecycle('window.created');
   app.on('activate', function() { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
+// P3：GPU / utility 子进程异常退出也纳入崩溃监控（error 类同步落盘 + dumpRef）。
+app.on('child-process-gone', function(_event, details) {
+  mainLog.error('app', '子进程异常退出', {
+    type: details?.type ?? 'unknown',
+    reason: details?.reason ?? 'unknown',
+    exitCode: details?.exitCode ?? null,
+  }, null, 'app.crash');
+});
+
 // Quit when all windows are closed (except on macOS)
-app.on('window-all-closed', function() { if (process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', function() {
+  mainLifecycle('window.all-closed');
+  if (process.platform !== 'darwin') app.quit();
+});
 
 app.on('before-quit', async function(event) {
   if (_isQuittingAfterFlush) {
@@ -1144,5 +1223,6 @@ app.on('before-quit', async function(event) {
   }
 
   event.preventDefault();
+  mainLifecycle('quit.before-quit');
   await requestSafeQuit('quit-app');
 });

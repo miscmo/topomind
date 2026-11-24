@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react'
 import type { Store } from '../../core/storage'
 import { logger } from '../../core/logger'
 import { logAction } from '../../core/log-backend'
+import { recordStep } from '../../core/traceBuffer'
 import { logPerformanceMetric, PERFORMANCE_METRICS } from '../../core/performance-log'
 import { loadRoomGraph } from './roomLoader'
 import type { GraphSession } from '../../stores/tabs/tabStore'
@@ -78,12 +79,13 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
         const loaded = await graphPromise
         const readMs = Math.round(performance.now() - readStartedAt)
 
-        logAction('房间:加载', 'useGraph', { roomPath: dirPath, kbPath, requestSeq, graphShared })
+        // P7：读取完成只是中间步骤，唯一落盘事实在应用完成处（含节点数/耗时）。
+        recordStep({ name: 'room.load.read', outcome: 'read', params: { roomPath: dirPath, requestSeq, readMs } })
 
         if (requestSeq < loadRequestSeqRef.current) {
           // 被更新的请求取代 ≠ 失败。旧实现把它上报成 success:false 的性能样本，
           // 让房间加载的失败率虚高到 16.5%；这里只留普通日志用于排查时序。
-          logAction('房间:加载丢弃', 'useGraph', {
+          logAction('room.load_discard', 'useGraph', {
             roomPath: dirPath,
             kbPath,
             requestSeq,
@@ -116,7 +118,7 @@ export function useGraphRoomLoader(options: UseGraphRoomLoaderOptions) {
         store.setLoading(false)
         const applyMs = Math.round(performance.now() - applyStartedAt)
 
-        logAction('房间:加载完成', 'useGraph', {
+        logAction('room.load', 'useGraph', {
           roomPath: dirPath,
           kbPath,
           nodeCount: loaded.nodes.length,

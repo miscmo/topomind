@@ -102,7 +102,9 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
   //   `applyRightPanelAutoVisibility(false)` 负责，不需要这条路径补位；
   // - pinned / maximized 由 store 与下面的显式判断双重短路。
   useEffect(() => {
-    if (collapsed) {
+    // 所有 KB 标签页常驻挂载：非活跃标签页绝不能装全局失焦监听，更不能因为
+    // 别的标签页里的点击把状态写进「当前活跃知识库」的分桶。
+    if (!isActive || collapsed) {
       hadFocusRef.current = false
       return
     }
@@ -161,10 +163,12 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
       document.removeEventListener('focusout', onFocusOut, true)
       document.removeEventListener('pointerdown', onPointerDown, true)
     }
-  }, [collapsed, pinned, maximized])
+  }, [collapsed, pinned, maximized, isActive])
 
   // 窗口尺寸变化时，把已保存宽度重新夹回 [20%, 80%]，避免面板超出可用空间。
+  // 同样只对活跃标签页执行：其它标签页挂载时不能顺手改掉活跃知识库的宽度。
   useEffect(() => {
+    if (!isActive) return
     const handleWindowResize = () => {
       const { min, max } = getRightPanelBounds()
       const next = Math.max(min, Math.min(max, widthRef.current))
@@ -173,7 +177,7 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
     window.addEventListener('resize', handleWindowResize)
     handleWindowResize()
     return () => window.removeEventListener('resize', handleWindowResize)
-  }, [setWidth])
+  }, [setWidth, isActive])
 
   const handleResizeStart = useCallback((event: MouseEvent<HTMLDivElement>) => {
     dragStartWidthRef.current = width

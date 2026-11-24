@@ -113,7 +113,8 @@ function ContainerCard({ id, data, selected }: NodeProps<KnowledgeNode>) {
         })
       }}
       className="relative h-full w-full overflow-visible"
-      title="双击进入全屏编辑（节点仅显示预览）；拖拽边框可调整节点大小"
+      title={`${title} · 双击进入全屏编辑（节点仅显示预览）；拖拽边框可调整节点大小`}
+      aria-label={title}
     >
       <Handle type="target" position={Position.Left} className="w-0 h-0 border-none opacity-0" isConnectable={false} />
       <Handle type="source" position={Position.Right} className="w-0 h-0 border-none opacity-0" />
@@ -131,19 +132,15 @@ function ContainerCard({ id, data, selected }: NodeProps<KnowledgeNode>) {
       )}
 
       <div
-        className={`absolute inset-0 flex flex-col overflow-hidden rounded-lg border bg-[var(--color-surface)] ${
+        className={`absolute inset-0 overflow-hidden rounded-lg border bg-[var(--color-surface)] ${
           selected ? 'border-[var(--color-accent)]' : 'border-[var(--color-border)]'
         }`}
       >
-        <div className="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-2 text-[11px] font-semibold text-[var(--color-text-primary)]">
-          <span className="truncate">{title}</span>
-          {isEditingThis && (
-            <span className="shrink-0 rounded bg-[var(--color-hover-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-muted)]">
-              全屏编辑中
-            </span>
-          )}
-        </div>
-        <div className="relative min-h-0 flex-1">
+        {/* 【2026-11-23】容器节点默认不渲染 28px 标题栏，整块区域只放内容预览：
+            节点名由外层 title / aria-label 与节点树承载，全屏编辑态由
+            data-tm-container-active 暴露（GUI 回归与无障碍仍可识别），
+            不再吃掉流程图的可视高度。 */}
+        <div className="relative h-full w-full">
           {!renderer || !spec || !containerRef ? (
             <ContainerMessage text={`未知容器类型：${containerRef?.type ?? '未配置'}（原始数据已保留）`} />
           ) : loadError ? (

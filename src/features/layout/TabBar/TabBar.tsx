@@ -13,7 +13,9 @@ import {
 import { useTabStore, type Tab } from '../../../stores/tabs/tabStore'
 import { useShortcut } from '../../../hooks/useShortcut'
 import { flushTabs, getDirtyState } from '../../../core/close-guard'
-import { logAction } from '../../../core/log-backend'
+import { recordStep } from '../../../core/traceBuffer'
+import { auditInterval, recordUser } from '../../../core/observe'
+import { LOG_ACTIONS } from '../../../shared/observability/logContract'
 import { TM_UI, tmUI } from '../../../shared/ui/controlStyles'
 
 /**
@@ -96,7 +98,8 @@ export default memo(function TabBar() {
         prev.length === next.length && prev.every((id, index) => id === next[index]) ? prev : next)
     }
     sync()
-    const timer = window.setInterval(sync, 1000)
+    // P2：1s 轮询按分钟聚合，不逐 tick 写盘。
+    const timer = window.setInterval(auditInterval('TabBar.dirtySync', sync), 1000)
     return () => window.clearInterval(timer)
   }, [])
 
@@ -179,7 +182,14 @@ export default memo(function TabBar() {
       }
       const closedTab = useTabStore.getState().closeTab(tabId)
       if (!closedTab) return
-      logAction('Tab:关闭', 'TabBar', { tab: closedTab })
+      // P7：关闭/切换标签页的领域结果事件与语义事件原本并存，属同一事实两次上报。
+      // 领域侧降级为内存步骤，只保留 1 条语义化 user 记录。
+      recordStep({ name: 'ui.tab.close', outcome: 'closed', params: { tabId } })
+      void recordUser(LOG_ACTIONS.userTabClose, {
+        target: { type: 'tab', id: tabId, label: closedTab.label },
+        result: 'closed',
+        view: 'tabbar',
+      })
       setIsOpen(false)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -192,7 +202,16 @@ export default memo(function TabBar() {
   const handleTabClick = useCallback((tab: Tab) => {
     if (tab.id !== activeTabId) {
       activateTab(tab.id)
-      logAction('切换Tab', 'TabBar', { tabId: tab.id, tabLabel: tab.label })
+      // P7：切换 tab 的领域结果事件与语义事件原本并存，同一次点击写两条 user 日志。
+      // 领域侧降级为内存步骤，只保留 1 条语义化 user 记录。
+      recordStep({ name: 'ui.tab.switch', outcome: 'activated', params: { tabId: tab.id } })
+      void recordUser(LOG_ACTIONS.userTabSwitch, {
+        target: { type: 'tab', id: tab.id, label: tab.label },
+        result: 'activated',
+        view: 'tabbar',
+        from: activeTabId,
+        to: tab.id,
+      })
     }
     setIsOpen(false)
   }, [activateTab, activeTabId])

@@ -187,7 +187,7 @@ export function useDetailDocuments({
         // Fallback to reload again or log warning if it failed to appear
         logger.warn('DetailPanel', `Created document ${created.id} not found in the reloaded list.`)
       }
-      logAction(definition.createLogName, 'DetailPanel', { nodePath, documentId: created.id, documentPath: created.path })
+      logAction(definition.createLogName, 'DetailPanel', { nodePath, documentId: created.id, documentPath: created.path, documentType: type })
     } catch (e) {
       logger.catch('DetailPanel', `createTopoDocumentByType:${type}`, e)
     } finally {
@@ -219,7 +219,7 @@ export function useDetailDocuments({
       clearDetailDraft(previousDocumentKey)
       clearDetailContent(previousDocumentKey)
       await loadDocuments(nodePath)
-      logAction('文档:重命名', 'DetailPanel', { nodePath, documentPath, nextName })
+      logAction('document.rename', 'DetailPanel', { nodePath, documentPath, nextName })
     } catch (e) {
       logger.catch('DetailPanel', 'handleRenameDocument', e)
     } finally {
@@ -260,7 +260,7 @@ export function useDetailDocuments({
         setActiveDocumentPath(nextDocs.length > 0 ? topoDocumentPath(nextDocs[0].id) : '')
       }
       
-      logAction('文档:删除', 'DetailPanel', { nodeId: selectedNodeId, label, path: nodePath, documentPath })
+      logAction('document.delete', 'DetailPanel', { nodeId: selectedNodeId, label, path: nodePath, documentPath })
     } catch (e) {
       logger.catch('DetailPanel', 'handleDeleteDocument', e)
     } finally {
@@ -277,7 +277,7 @@ export function useDetailDocuments({
       }
       await storage.moveTopoDocument(nodePath, documentId, newParentId, newSortOrder)
       await loadDocuments(nodePath)
-      logAction('文档:移动', 'DetailPanel', { nodePath, documentId, newParentId, newSortOrder })
+      logAction('document.move', 'DetailPanel', { nodePath, documentId, newParentId, newSortOrder })
     } catch (e) {
       logger.catch('DetailPanel', 'handleMoveDocument', e)
     } finally {
@@ -317,7 +317,7 @@ export function useDetailDocuments({
             setActiveDocumentPath(topoDocumentPath(restored.id))
           }
           await loadDocuments(nodePath)
-          logAction('文档:跨节点移动-撤销', 'DetailPanel', { nodePath, documentId, targetCardPath })
+          logAction('document.move', 'DetailPanel', { nodePath, documentId, targetCardPath })
         } catch (e) {
           logger.catch('DetailPanel', 'undoMoveDocumentToCard', e)
           toast({ level: 'error', title: '撤销失败', message: (e as Error)?.message || String(e), duration: 6000 })
@@ -331,7 +331,7 @@ export function useDetailDocuments({
         duration: 6000,
         action: { label: '撤销', onClick: () => void undo() },
       })
-      logAction('文档:跨节点移动', 'DetailPanel', { nodePath, documentId, targetCardPath, movedCount: result.movedCount, attachmentCount: result.attachmentCount, attachmentCleaned: result.attachmentCleaned })
+      logAction('document.move', 'DetailPanel', { nodePath, documentId, targetCardPath, movedCount: result.movedCount, attachmentCount: result.attachmentCount, attachmentCleaned: result.attachmentCleaned })
     } catch (e) {
       logger.catch('DetailPanel', 'handleMoveDocumentToCard', e)
       toast({ level: 'error', title: '移动失败', message: (e as Error)?.message || String(e), duration: 6000 })
@@ -390,7 +390,7 @@ export function useDetailDocuments({
           setTopoDocuments(nextDocuments)
         }
         setDocumentListForNodePath(targetNodePath, nextDocuments)
-        logAction('文档:修改样式', 'DetailPanel', { nodePath: targetNodePath, documentPath, patch })
+        logAction('document.style_update', 'DetailPanel', { nodePath: targetNodePath, documentPath, patch })
       } catch (e) {
         // 排查提示：若主进程未重启（旧 IPC 处理器缺失），此处会捕获
         // "No handler registered for 'fs:updateTopoDocumentMeta'" 之类的错误。
@@ -429,7 +429,7 @@ export function useDetailDocuments({
         anchor.remove()
         window.setTimeout(() => URL.revokeObjectURL(url), 0)
       }
-      logAction('多类型文档:导出', 'DetailPanel', { nodePath, documentId, fileName: payload.fileName, type: payload.type })
+      logAction('document.export', 'DetailPanel', { nodePath, documentId, fileName: payload.fileName, type: payload.type })
     } catch (e) {
       logger.catch('DetailPanel', 'handleExportTopoDocument', e)
     } finally {

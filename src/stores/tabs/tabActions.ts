@@ -1,4 +1,5 @@
 import type { StoreApi } from 'zustand'
+import { useRightPanelStore } from '../rightPanelStore'
 import { enterRoom, goBack, navigateToHistoryIndex, restoreRoomState } from './tabNavigation'
 import {
   appendKBTab,
@@ -26,6 +27,8 @@ import type {
   TabSelectors,
   TabState,
 } from './tabTypes'
+import { recordUser } from '../../core/observe.ts'
+import { LOG_ACTIONS } from '../../shared/observability/logContract.ts'
 
 type SetState = StoreApi<TabState>['setState']
 type GetState = StoreApi<TabState>['getState']
@@ -58,7 +61,15 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
       return true
     },
     openHomeTab: () => {
-      return get().activateTab('home')
+      const ok = get().activateTab('home')
+      // P2 T2.5：视图切换是「软件行为透明化」的核心动作，收在 store 层
+      // 才能同时覆盖标题栏、命令、快捷键、程序化调用四条入口。
+      void recordUser(LOG_ACTIONS.userViewOpen, {
+        target: { type: 'view', id: 'home' },
+        view: 'home',
+        result: ok ? 'success' : 'no-op',
+      })
+      return ok
     },
     openKnowledgeBase: (kb) => {
       const tabId = `kb:${kb.name}`
@@ -88,6 +99,7 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
     },
     openSecondaryViewTab: ({ viewId, label, tabId }) => {
       const nextTabId = tabId ?? `secondary-view:${viewId}`
+      const reuse = Boolean(findSecondaryViewTab(get().tabs, { id: nextTabId, viewId }))
 
       set((state) => {
         const existing = findSecondaryViewTab(state.tabs, {
@@ -111,18 +123,32 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
           activeTabId: nextTabId,
         }
       })
+      void recordUser(LOG_ACTIONS.userViewOpen, {
+        target: { type: 'view', id: viewId, label },
+        view: viewId,
+        result: reuse ? 'reused' : 'created',
+        params: { tabId: nextTabId },
+      })
     },
     openMonitorTab: () => {
       set((state) => ({
         tabs: ensureMonitorTab(state.tabs),
         activeTabId: 'monitor',
       }))
+      void recordUser(LOG_ACTIONS.userViewOpen, {
+        target: { type: 'view', id: 'monitor' },
+        view: 'monitor',
+      })
     },
     openStatisticsTab: () => {
       set((state) => ({
         tabs: ensureStatisticsTab(state.tabs),
         activeTabId: 'statistics',
       }))
+      void recordUser(LOG_ACTIONS.userViewOpen, {
+        target: { type: 'view', id: 'statistics' },
+        view: 'statistics',
+      })
     },
     closeTab: (tabId) => {
       const tabInfo = getClosableTabInfo(findTabById(get().tabs, tabId))
@@ -137,6 +163,10 @@ export function createTabLifecycleActions(set: SetState, get: GetState): TabLife
       
       const tabExists = findTabById(tabs, oldTabId)
       if (!tabExists || tabExists.type !== 'kb') return
+
+      // 右栏状态按 kbPath 分桶：改名必须在 tabStore 的订阅切到新路径之前迁移，
+      // 否则订阅会用「新库没有记录」把该库已记住的展开/固定/宽度重置成默认值。
+      useRightPanelStore.getState().renameKbState(oldKbPath, newKbPath)
 
       const replacePath = (path: string) => path === oldKbPath ? newKbPath : (path.startsWith(`${oldKbPath}/`) ? `${newKbPath}${path.slice(oldKbPath.length)}` : path)
 

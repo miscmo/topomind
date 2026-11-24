@@ -19,5 +19,6 @@ export const SMART_DOCUMENT_TEXT_ACTIONS: SmartDocumentBlockMenuAction[] = [
 export const SMART_DOCUMENT_MEDIA_ACTIONS: SmartDocumentBlockMenuAction[] = [
   { key: 'table', icon: '▦', label: '表格', type: 'table' },
   { key: 'mermaid', icon: '⫸', label: '流程图 (Mermaid)', type: 'mermaid' },
+  { key: 'excalidraw', icon: '✎', label: '手绘流程图 (Excalidraw)', type: 'excalidraw' },
   { key: 'math', icon: '∑', label: '数学公式 (KaTeX)', type: 'math' },
 ]

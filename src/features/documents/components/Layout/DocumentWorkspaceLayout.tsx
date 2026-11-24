@@ -4,6 +4,7 @@ import type { DetailSidebarTab, DocumentSaveStatus, DocumentWorkspaceLayoutProps
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../../../hooks/useResizePanel'
 import { logAction } from '../../../../core/log-backend'
+import { recordStep } from '../../../../core/traceBuffer'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useDetailLockStore } from '../../../right-panel/model/detailLockStore'
 import { useGraphStore, useSelectedNodeId } from '../../../../stores/graphStore'
@@ -444,11 +445,13 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
       await onSave()
       setLastSavedAt(Date.now())
       setSaveStatus('saved')
-      logAction('Document:保存成功', 'DocumentWorkspaceLayout', { documentType, path: currentDetailDocumentPath })
+      // P7：实际写盘成功由 session 层写 1 条 document.save；UI 层只记内存步骤，
+      // 失败路径仍保留 _failed（那是独立事实，不是重复上报）。
+      recordStep({ name: 'document.save.ui_ack', outcome: 'saved', params: { documentType } })
     } catch (err) {
       setSaveStatus('error')
       setSaveError(err instanceof Error ? err.message : String(err))
-      logAction('Document:保存失败', 'DocumentWorkspaceLayout', { error: err instanceof Error ? err.message : String(err), documentType })
+      logAction('document.save_failed', 'DocumentWorkspaceLayout', { error: err instanceof Error ? err.message : String(err), documentType })
     }
   }, [isDirty, isSaving, onSave, documentType, currentDetailDocumentPath])
 

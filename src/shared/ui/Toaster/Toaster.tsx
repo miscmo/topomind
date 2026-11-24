@@ -3,8 +3,9 @@ import { useToastStore, type ToastItem } from './toastStore'
 
 const LEVEL_STYLES: Record<ToastItem['level'], { bar: string; label: string }> = {
   info: { bar: 'bg-[var(--color-accent)]', label: 'text-[var(--color-text-secondary)]' },
-  warn: { bar: 'bg-[var(--color-warning,#e0a800)]', label: 'text-[var(--color-warning,#e0a800)]' },
-  error: { bar: 'bg-[var(--color-danger,#e5484d)]', label: 'text-[var(--color-danger,#e5484d)]' },
+  // 不写 fallback：tokens.css 必然存在，写死一份 hex 只会形成与真源不一致的第二份定义。
+  warn: { bar: 'bg-[var(--color-warning)]', label: 'text-[var(--color-warning)]' },
+  error: { bar: 'bg-[var(--color-danger)]', label: 'text-[var(--color-danger)]' },
 }
 
 const LEVEL_LABEL: Record<ToastItem['level'], string> = {

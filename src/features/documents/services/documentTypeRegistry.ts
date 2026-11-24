@@ -4,13 +4,15 @@ import {
   isTopoDocumentType,
   type TopoDocumentType,
 } from '../../../core/topoDocumentTypes'
+import type { LogActionId } from '../../../shared/observability/logContract.ts'
 
 export interface DocumentTypeDefinition {
   type: TopoDocumentType
   label: string
   icon: string
   defaultTitle: string
-  createLogName: string
+  /** P2 T2.4：必须是事件目录登记的规范 id，禁止再传中文自由文本。 */
+  createLogName: LogActionId
   /** panel = 右栏文档；container-only = 只作为节点容器载荷，不进右栏菜单与文档树 */
   surface: 'panel' | 'container-only'
 }
@@ -21,7 +23,7 @@ export const TOPO_DOCUMENT_TYPE_DEFINITIONS: Record<TopoDocumentType, DocumentTy
     label: '智能文档',
     icon: '📄',
     defaultTitle: '智能文档',
-    createLogName: '多类型文档:创建智能文档',
+    createLogName: 'document.create',
     surface: 'panel',
   },
   mindmap: {
@@ -29,7 +31,7 @@ export const TOPO_DOCUMENT_TYPE_DEFINITIONS: Record<TopoDocumentType, DocumentTy
     label: '思维导图',
     icon: '🧠',
     defaultTitle: '思维导图',
-    createLogName: '多类型文档:创建思维导图',
+    createLogName: 'document.create',
     surface: 'panel',
   },
   excalidraw: {
@@ -37,7 +39,7 @@ export const TOPO_DOCUMENT_TYPE_DEFINITIONS: Record<TopoDocumentType, DocumentTy
     label: 'Excalidraw 白板',
     icon: '✎',
     defaultTitle: '未命名白板',
-    createLogName: '容器:创建 Excalidraw 载荷',
+    createLogName: 'container.create',
     surface: 'container-only',
   },
   cardspec: {
@@ -45,7 +47,7 @@ export const TOPO_DOCUMENT_TYPE_DEFINITIONS: Record<TopoDocumentType, DocumentTy
     label: '知识卡片',
     icon: '▣',
     defaultTitle: '未命名卡片',
-    createLogName: '容器:创建知识卡片载荷',
+    createLogName: 'container.create',
     surface: 'container-only',
   },
 }
@@ -56,7 +58,7 @@ const RETIRED_DOCUMENT_DEFINITION: DocumentTypeDefinition = {
   label: '旧版文档',
   icon: '📄',
   defaultTitle: '旧版文档',
-  createLogName: '多类型文档:旧版文档',
+  createLogName: 'document.create',
   surface: 'container-only',
 }
 

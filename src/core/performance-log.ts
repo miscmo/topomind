@@ -17,13 +17,25 @@ import {
   thresholdForScale,
   type PerformanceLogParams,
   type PerformanceMetricId,
-} from '@/shared/observability/performanceContract'
-import { logWrite } from './log-backend'
+} from '../shared/observability/performanceContract.ts'
+import { writeEntry } from './logger.ts'
 import {
   consumeStart,
   pruneStaleStarts,
   type PendingPerformanceStart,
-} from '@/shared/observability/performanceStarts'
+} from '../shared/observability/performanceStarts.ts'
+import {
+  countExpiredOperations,
+  MAX_RECENT_OPERATIONS,
+  resolveRecentContext,
+  type RecentOperation,
+} from '../shared/observability/performanceContext.ts'
+import {
+  buildSuspendedSampleParams,
+  getHiddenIntervals,
+  isInvalidDuration,
+  isSuspensionSample,
+} from '../shared/observability/performanceSuspension.ts'
 
 export { PERFORMANCE_ACTION, PERFORMANCE_METRICS }
 export type { PerformanceLogParams, PerformanceMetricId }
@@ -43,17 +55,28 @@ const performanceMetricStarts = new Map<string, PendingPerformanceStart>()
 const lastReportAt = new Map<string, number>()
 
 /**
- * 自动观测指标（long_task）的归因上下文。只记「有分量」的操作，
- * 避免 detail_save 这类高频短样本把最近上下文刷成无关指标。
+ * 自动观测指标（long_task）的归因上下文。
+ *
+ * 旧实现只留「最近一条 ≥50ms 的操作」单值：长任务迟到、或中间夹了高频短样本，
+ * 都会把真正的触发者覆盖掉，实测 3463 条 long_task 里 2215 条 contextKey 为空。
+ * 改成保留最近若干条操作，用长任务自带的 startTime 反查时间窗口，并在窗口内
+ * 挑耗时最大的一条——既不漏掉短操作，也不会让 1ms 的 meta_build / lod_recompute
+ * 抢占归因。记录放在采样之前，被采样丢弃的样本同样保留归因能力。
  */
-const RECENT_CONTEXT_MIN_MS = 50
-const RECENT_CONTEXT_TTL_MS = 2000
-let recentOperation: { metric: string; contextKey: string; at: number } | null = null
+const recentOperations: RecentOperation[] = []
 
-/** 返回最近 2 秒内最可能引发长任务的操作；供 PerformanceObserver 写进 contextKey。 */
-export function getRecentPerformanceContext(): { metric: string; contextKey: string } | null {
-  if (!recentOperation || performance.now() - recentOperation.at > RECENT_CONTEXT_TTL_MS) return null
-  return { metric: recentOperation.metric, contextKey: recentOperation.contextKey }
+/** 按长任务 startTime 反查归因；不传 at 时退化为「现在」，兼容旧调用点。 */
+export function getRecentPerformanceContext(at = performance.now()): { metric: string; contextKey: string } | null {
+  recentOperations.splice(0, countExpiredOperations(recentOperations, at))
+  const best = resolveRecentContext(at, recentOperations)
+  return best ? { metric: best.metric, contextKey: best.contextKey } : null
+}
+
+function rememberOperation(metric: string, contextKey: string, at: number, durationMs: number): void {
+  recentOperations.push({ metric, contextKey, at, durationMs })
+  if (recentOperations.length > MAX_RECENT_OPERATIONS) {
+    recentOperations.splice(0, recentOperations.length - MAX_RECENT_OPERATIONS)
+  }
 }
 
 function getMetricStartKey(metric: PerformanceMetricId, contextKey = 'default'): string {
@@ -94,6 +117,22 @@ export interface PerformanceReportOptions {
 }
 
 /**
+ * 批量 IO 指标：耗时就是墙钟耗时，切到后台也不会让「用户等了多久」失真，
+ * 且导入大知识库 / 导出整库确实可能超过 5 分钟。这些指标只校验数值有效性，
+ * 不套用交互类的可信上限与隐藏窗口，否则会丢掉真实的长任务数据。
+ */
+const BULK_IO_METRICS: ReadonlySet<string> = new Set([
+  PERFORMANCE_METRICS.kbImport,
+  PERFORMANCE_METRICS.documentExport,
+  PERFORMANCE_METRICS.attachmentUpload,
+])
+
+function isUntrustedSample(metric: PerformanceMetricId, durationMs: number, now: number): boolean {
+  if (BULK_IO_METRICS.has(metric)) return isInvalidDuration(durationMs)
+  return isSuspensionSample(durationMs, now, getHiddenIntervals())
+}
+
+/**
  * 采样与节流：按注册表里的 sampleRate / minIntervalMs 控制高频指标噪音。
  * 失败样本永远上报，避免「越慢越看不见」；超过（按 operation 细分的）阈值的
  * 慢样本也必须绕过节流，否则连续慢操作会被合并掉，恰好丢掉最需要排查的数据。
@@ -126,15 +165,33 @@ async function writePerformanceSample(
   const now = performance.now()
   const spec = resolvePerformanceMetricSpec(metric)
   const operation = typeof options.params?.operation === 'string' ? options.params.operation : ''
-  if (metric !== PERFORMANCE_METRICS.longTask
-    && Number.isFinite(durationMs)
-    && durationMs >= RECENT_CONTEXT_MIN_MS) {
+
+  // 挂起 / 休眠期间 performance.now() 仍按单调时钟累加，恢复后一次性上报会产出
+  // 10 分钟~17 分钟的假慢样本。判定必须放在统一入口：span / measure / mark-take
+  // 三条计时路径都收敛到这里，且要早于归因记录与采样，避免污染上下文与阈值统计。
+  if (isUntrustedSample(metric, durationMs, now)) {
+    return writeEntry({
+      level: 'INFO',
+      module: options.module ?? 'Performance',
+      action: PERFORMANCE_ACTION,
+      message: `${metric} 样本已丢弃（页面挂起/隐藏，计时不可信）`,
+      params: buildSuspendedSampleParams(
+        metric,
+        durationMs,
+        PERFORMANCE_SESSION_ID,
+        options.module ?? 'App',
+      ),
+    })
+  }
+
+  if (metric !== PERFORMANCE_METRICS.longTask && Number.isFinite(durationMs)) {
     const roomPath = typeof options.params?.roomPath === 'string' ? options.params.roomPath : ''
-    recentOperation = {
+    rememberOperation(
       metric,
-      contextKey: options.contextKey || roomPath || operation || metric,
-      at: now,
-    }
+      options.contextKey || roomPath || operation || metric,
+      now,
+      Math.max(0, durationMs),
+    )
   }
   const nodeCount = typeof options.params?.nodeCount === 'number' ? options.params.nodeCount : 0
   const baseThreshold = canvasOperationThreshold(operation) ?? spec?.thresholdMs ?? Number.POSITIVE_INFINITY
@@ -160,7 +217,7 @@ async function writePerformanceSample(
   if (options.traceId) params.traceId = options.traceId
   if (options.contextKey) params.contextKey = options.contextKey
 
-  return logWrite({
+  return writeEntry({
     level: success ? 'INFO' : 'WARN',
     module: options.module ?? 'Performance',
     action: PERFORMANCE_ACTION,

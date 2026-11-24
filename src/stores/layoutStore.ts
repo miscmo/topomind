@@ -9,6 +9,7 @@
  * 唯一控制入口是顶部标题栏的按钮，任何视图下都生效。
  */
 import { create } from 'zustand'
+import { attachStateObservation } from '../core/observabilityStoreMiddleware.ts'
 
 const STORAGE_KEY = 'topomind_navigation_v2'
 /** 旧版偏好的 key，仅用于一次性迁移，迁移后不再写入。 */
@@ -75,3 +76,6 @@ export const useLayoutStore = create<LayoutStore>((set, get) => ({
     persist(INITIAL_PERSISTED)
   },
 }))
+
+// P7 M3：导航布局持久化状态变更自动补一条内存步骤（不落盘）。
+attachStateObservation(useLayoutStore, { name: 'layout' })

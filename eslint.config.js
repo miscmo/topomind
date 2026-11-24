@@ -68,6 +68,10 @@ export default tseslint.config(
       // 复用 gesture 对象等既有交互写法会被判为「不可修改 hook 参数」，
       // 逐处重构风险高于收益，沿用上面的降级策略。
       'react-hooks/immutability': 'warn',
+      // 日志规范 §3.5：业务代码一律走统一日志入口，裸 console 只作为历史债。
+      // 先 warn 不阻塞构建（本项目 lint 为 report-only），由 verify-logging.mts
+      // 冻结当前数量，防止新增；存量逐步迁移到 logger / mainLog。
+      'no-console': 'warn',
     },
   },
 
@@ -85,6 +89,9 @@ export default tseslint.config(
       globals: { ...globals.node, ...globals.commonjs },
       sourceType: 'commonjs',
     },
+    rules: {
+      'no-console': 'warn',
+    },
   },
 
   // 依赖树对齐到 lock 后，新版 @eslint/js recommended 新增的两条 error 规则
@@ -96,5 +103,17 @@ export default tseslint.config(
       'no-control-regex': 'warn',
       'no-useless-assignment': 'warn',
     },
+  },
+
+  // no-console 的三处白名单：日志通道自身的最后兜底与开发期镜像。
+  // 这些位置若再写日志会自我放大（写失败 → console → 又一条日志），
+  // 只能保留 console；其余文件一律走 logger.ts / main-log.js。
+  {
+    files: [
+      'src/core/logger.ts',
+      'src/core/log-backend.ts',
+      'electron/log-service.js',
+    ],
+    rules: { 'no-console': 'off' },
   },
 )

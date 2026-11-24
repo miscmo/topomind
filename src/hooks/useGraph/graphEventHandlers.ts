@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { Connection, Edge, EdgeChange, FinalConnectionState, Node, NodeChange } from '@xyflow/react'
 import { tabStore } from '../../stores/tabs/tabStore'
 import { logAction } from '../../core/log-backend'
+import { recordUser } from '../../core/observe'
+import { LOG_ACTIONS } from '../../shared/observability/logContract'
 import { markPerformanceMetricStart, PERFORMANCE_METRICS } from '../../core/performance-log'
 import type { EdgeStylePatch, KnowledgeNodeData } from '../../types'
 import { generateId } from './graphBuilder'
@@ -238,7 +240,14 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
 
   const onNodeClick = useCallback(
     (event: React.MouseEvent, node: Node<KnowledgeNodeData>) => {
-      logAction('节点:点击', 'useGraph', { nodeId: node.id, label: node.data.label })
+      // P7：一次点击只写 1 条 user 记录（链根）。选中态写回由 store 层记内存步骤，
+      // 不再在事件层补一条同义的 node.select —— 这里曾是「一次点击 4 条」的主因。
+      void recordUser(LOG_ACTIONS.userNodeClick, {
+        target: { type: 'node', id: node.id, label: node.data.label },
+        result: 'selected',
+        view: 'graph',
+        inputMode: 'pointer',
+      })
       if (!event.shiftKey) {
         markPerformanceMetricStart(PERFORMANCE_METRICS.nodeSelect, node.id)
       }
@@ -313,7 +322,7 @@ export function useGraphEventHandlers(deps: GraphEventHandlerDeps) {
         kbPath: graphSession.kbPath || '',
         name: childName,
       })
-      logAction('房间:钻入', 'useGraph', { roomPath: absoluteChildPath, roomName: childName, fromRoom: dirPath })
+      logAction('room.navigate', 'useGraph', { roomPath: absoluteChildPath, roomName: childName, fromRoom: dirPath })
     } finally {
       if (navigationResetTimerRef.current !== null) {
         window.clearTimeout(navigationResetTimerRef.current)

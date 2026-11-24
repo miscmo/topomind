@@ -16,6 +16,7 @@ import {
   type ExcalidrawDocumentContent,
 } from '../../../documents/ExcalidrawDocument/excalidrawDocumentTypes'
 import { ensureExcalidrawAssets } from './excalidrawAssets'
+import { useExcalidrawColorMode } from '../../../documents/ExcalidrawDocument/excalidrawTheme'
 
 interface ExcalidrawApiLike {
   getSceneElements?: () => readonly unknown[]
@@ -28,6 +29,7 @@ export const ExcalidrawContainerEditor = memo(function ExcalidrawContainerEditor
 }: ContainerEditorProps) {
   const apiRef = useRef<ExcalidrawApiLike | null>(null)
   const [versionError, setVersionError] = useState(false)
+  const colorMode = useExcalidrawColorMode()
 
   useEffect(() => { ensureExcalidrawAssets() }, [])
 
@@ -70,6 +72,7 @@ export const ExcalidrawContainerEditor = memo(function ExcalidrawContainerEditor
           viewBackgroundColor: typeof appState.viewBackgroundColor === 'string'
             ? appState.viewBackgroundColor : '#ffffff',
           gridSize: typeof appState.gridSize === 'number' ? appState.gridSize : null,
+          // 落盘 theme 是场景自身属性，刻意不跟随软件主题：否则切主题会把节点标脏。
           theme: 'light',
           scrollX: typeof appState.scrollX === 'number' ? appState.scrollX : 0,
           scrollY: typeof appState.scrollY === 'number' ? appState.scrollY : 0,
@@ -115,7 +118,7 @@ export const ExcalidrawContainerEditor = memo(function ExcalidrawContainerEditor
         // 全屏层是独立的 body 直属层，焦点未必落在 Excalidraw 内部容器；
         // 交给它自己监听 document，工具快捷键（r/o/v…）才不会在刚打开时失灵。
         handleKeyboardGlobally
-        theme="light"
+        theme={colorMode}
         langCode="zh-CN"
         UIOptions={{ tools: { image: false } }}
       />

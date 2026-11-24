@@ -6,6 +6,7 @@ import type {
   LearningStatsMetaSnapshot,
   LoggingApi,
   LogEntrySnapshot,
+  LogLevel,
   LogQueryInput,
   LogsApi,
   PerformanceApi,
@@ -39,6 +40,13 @@ export interface PluginHostServices {
   getLogBuffer(): Promise<LogEntrySnapshot[]>
   getLogAvailableDates(): Promise<string[]>
   queryLogs(input?: LogQueryInput): Promise<LogEntrySnapshot[]>
+  exportJsonl?(date?: string | null): Promise<string>
+  /** P3：一键诊断包（二次脱敏后的 JSON 字符串），旧宿主可不实现。 */
+  exportBundle?(): Promise<string>
+  /** v3 P0：主进程唯一等级阈值的运行时入口，旧宿主可不实现。 */
+  getLogLevel?(): Promise<LogLevel>
+  setLogLevel?(level: LogLevel): Promise<LogLevel>
+  subscribeLogLevel?(listener: (level: LogLevel) => void): Disposable
   subscribeLogs(listener: (entry: LogEntrySnapshot) => void): Disposable
   getPerformanceMetricDefinitions(): PerformanceMetricDefinition[]
   queryPerformanceSamples(input?: { date?: string | null }): Promise<PerformanceSample[]>
@@ -91,6 +99,15 @@ const defaultHostServices: PluginHostServices = {
   },
   async queryLogs() {
     return []
+  },
+  async getLogLevel() {
+    return 'INFO' as LogLevel
+  },
+  async setLogLevel(level: LogLevel) {
+    return level
+  },
+  subscribeLogLevel() {
+    return { dispose() {} }
   },
   subscribeLogs() {
     return { dispose() {} }
@@ -244,6 +261,26 @@ export function createPluginContext(input: {
     query(definition) {
       assertPermission(hostServices, input.manifest, 'logs.read', 'logs.query')
       return hostServices.queryLogs(definition)
+    },
+    async exportJsonl(date) {
+      assertPermission(hostServices, input.manifest, 'logs.read', 'logs.export')
+      return hostServices.exportJsonl ? hostServices.exportJsonl(date) : ''
+    },
+    async exportBundle() {
+      assertPermission(hostServices, input.manifest, 'logs.read', 'logs.exportBundle')
+      return hostServices.exportBundle ? hostServices.exportBundle() : ''
+    },
+    async getLevel() {
+      assertPermission(hostServices, input.manifest, 'logs.read', 'logs.getLevel')
+      return hostServices.getLogLevel ? hostServices.getLogLevel() : 'INFO'
+    },
+    async setLevel(level) {
+      assertPermission(hostServices, input.manifest, 'log.write', 'logs.setLevel')
+      return hostServices.setLogLevel ? hostServices.setLogLevel(level) : level
+    },
+    subscribeLevel(listener) {
+      assertPermission(hostServices, input.manifest, 'logs.subscribe', 'logs.subscribeLevel')
+      return hostServices.subscribeLogLevel ? hostServices.subscribeLogLevel(listener) : { dispose() {} }
     },
     subscribe(listener) {
       assertPermission(hostServices, input.manifest, 'logs.subscribe', 'logs.subscribe')

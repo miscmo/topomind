@@ -8,22 +8,33 @@
  *          Do NOT add a second hex copy in TS — see src/types/constants.ts.
  *
  * ===== Color policy: MONOCHROME BRAND (单色制) =====
- * The brand has exactly ONE hue family: GitHub blue (#0969da in light).
- * `--color-primary` (brand / CTA) and `--color-accent` (interaction / selected)
- * therefore resolve to the SAME color in the light theme. They stay as two
- * separate tokens only to keep semantic intent readable in code — do not
- * assume they differ visually. See also the per-theme blocks below.
+ * The brand has exactly ONE hue family at a time. `--color-primary` (brand / CTA)
+ * and `--color-accent` (interaction / selected) resolve to the SAME color in the
+ * light theme; they stay as two tokens only to keep semantic intent readable.
+ *
+ * ===== 主题色统一管理（2026-11-23）=====
+ * 下列 8 个 token 构成「主题色族」，三套主题块里都不再各自写死一份，而是统一引用
+ * --tm-brand-* 变量（fallback 只是 JS 未就绪时的静态默认外观）：
+ *   primary / primary-hover / accent / accent-hover / soft / selected /
+ *   highlight / titlebar-active
+ * 运行时由 src/domain/theme/ 从用户选的一个基色派生整套色阶，再注入 --tm-brand-*；
+ * 换主题色时选中态、焦点环（引用 soft）、标题栏激活态、hover 高亮会一起变，
+ * 不会残留旧的品牌蓝。派生算法按 WCAG 对比度校亮度，保证按钮反色文字始终可读。
+ * 组件侧继续只引用 --color-* 语义 token，禁止直接引用 --tm-brand-*。
+ * 危险 / 成功 / 警告 / 搜索高亮 / 边类型色属于语义色，不随主题色变化。
  */
 :root {
   /* ===== Colors ===== */
   /* Light defaults: must stay identical to html[data-theme='github-light']
      (the only light theme at runtime), otherwise these values would be dead
-     code that never renders. */
-  --color-primary: #0969da;
-  --color-primary-hover: #0550ae;
-  --color-accent: #0969da;
-  --color-accent-hover: #0550ae;
-  --color-accent-soft: rgba(9, 105, 218, 0.1);
+     code that never renders. 主题色族统一读 --tm-brand-*；下面的字面值只是
+     JS 未就绪时的静态 fallback，必须与 buildAccentTokens(DEFAULT,'light') 逐字一致
+     （由 verify-critical-regressions.mts 锁死），否则恢复默认色时会有色阶跳变。 */
+  --color-primary: var(--tm-brand-primary, #0969da);
+  --color-primary-hover: var(--tm-brand-primary-hover, #0753ab);
+  --color-accent: var(--tm-brand-accent, #0969da);
+  --color-accent-hover: var(--tm-brand-accent-hover, #0753ab);
+  --color-accent-soft: var(--tm-brand-soft, rgba(9, 105, 218, 0.1));
   --color-page-bg: #f4f6f9;
   --color-panel-bg: #ffffff;
   --color-surface: #ffffff;
@@ -44,7 +55,7 @@
   --color-border-strong: #cbd5e1;
   --color-hover-bg: #eef2f7;
   --color-active-bg: #ffffff;
-  --color-selected-bg: #eff6ff;
+  --color-selected-bg: var(--tm-brand-selected, rgba(9, 105, 218, 0.08));
   --color-danger: #e74c3c;
   --color-danger-hover: #c0392b;
   --color-danger-soft: #fff2f0;
@@ -54,7 +65,7 @@
   --color-success: #2ecc71;
   --color-success-soft: #ecfdf3;
   --color-search-match: #f1c40f;
-  --color-hover-highlight: #f39c12;
+  --color-hover-highlight: var(--tm-brand-highlight, #0969da);
   --color-edge-evolution: #5cb85c;
   --color-edge-depend: #e8913a;
   --color-edge-minor: #cccccc;
@@ -68,11 +79,16 @@
   --titlebar-muted: #6f7c8f;
   --titlebar-muted-unfocused: #8a94a3;
   --titlebar-hover: rgba(31, 41, 55, 0.07);
-  --titlebar-active: rgba(26, 58, 92, 0.1);
+  --titlebar-active: var(--tm-brand-titlebar-active, rgba(9, 105, 218, 0.12));
   --titlebar-command-bg: rgba(255, 255, 255, 0.78);
   --titlebar-command-bg-hover: #ffffff;
   --titlebar-command-border: rgba(195, 204, 217, 0.85);
   --titlebar-menu-bg: rgba(255, 255, 255, 0.98);
+  /* P8 Debug HUD 透明态：半透明但仍可读（文字描边见 --debug-hud-translucent-text-shadow） */
+  --debug-hud-translucent-bg: rgba(255, 255, 255, 0.52);
+  --debug-hud-translucent-border: rgba(224, 228, 234, 0.6);
+  --debug-hud-translucent-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  --debug-hud-translucent-text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
 
   /* ===== Domain Colors (cycle through for KB nodes) ===== */
   --domain-color-0: #3498db;
@@ -194,18 +210,22 @@
   --z-picker: 1300;
   --z-titlebar-menu: 3001;
   --z-widget: 4000;
+  /* P6 Debug HUD：浮在软件最顶层（含标题栏菜单 3001），但仍低于全局模态 10000，
+     避免把致命错误弹窗盖住。它不是 OS 级置顶窗口，随主窗口最小化而隐藏。 */
+  --z-debug-hud: 9000;
   --z-global: 10000;
 }
 
 html[data-theme='dark'], html.dark {
-  /* Dark theme: primary/accent are lightness variants of the SAME brand blue
-     (#9bd2ff reads better as text/CTA fill on dark, #4aa8ff as interaction
-     fill). This is intentional under monochrome brand — they are not two hues. */
-  --color-primary: #9bd2ff;
-  --color-primary-hover: #c6e4ff;
-  --color-accent: #4aa8ff;
-  --color-accent-hover: #72bbff;
-  --color-accent-soft: rgba(74, 168, 255, 0.14);
+  /* Dark theme: primary/accent are lightness variants of the SAME hue (primary
+     更亮一档用于文字 / 浅底填充，accent 用于交互填充)，不是两个色相。
+     这两档亮度现在由 src/domain/theme/accentColor.ts 统一派生；下面的字面值
+     是 buildAccentTokens(DEFAULT,'dark') 的静态 fallback，两边必须逐字一致。 */
+  --color-primary: var(--tm-brand-primary, #9ecbff);
+  --color-primary-hover: var(--tm-brand-primary-hover, #c7e1ff);
+  --color-accent: var(--tm-brand-accent, #4d9eff);
+  --color-accent-hover: var(--tm-brand-accent-hover, #75b5ff);
+  --color-accent-soft: var(--tm-brand-soft, rgba(77, 158, 255, 0.14));
   --color-page-bg: #0f141b;
   --color-panel-bg: #151b24;
   --color-surface: #151b24;
@@ -226,7 +246,7 @@ html[data-theme='dark'], html.dark {
   --color-border-strong: #3a495f;
   --color-hover-bg: #202a37;
   --color-active-bg: #1b2330;
-  --color-selected-bg: rgba(74, 168, 255, 0.16);
+  --color-selected-bg: var(--tm-brand-selected, rgba(77, 158, 255, 0.16));
   --color-danger: #ff7b72;
   --color-danger-hover: #ffa198;
   --color-danger-soft: rgba(255, 123, 114, 0.13);
@@ -236,7 +256,7 @@ html[data-theme='dark'], html.dark {
   --color-success: #5ee08c;
   --color-success-soft: rgba(94, 224, 140, 0.13);
   --color-search-match: #ffd166;
-  --color-hover-highlight: #ffb454;
+  --color-hover-highlight: var(--tm-brand-highlight, #4d9eff);
   --color-edge-evolution: #72d572;
   --color-edge-depend: #f0a45d;
   --color-edge-minor: #5f6f86;
@@ -250,11 +270,15 @@ html[data-theme='dark'], html.dark {
   --titlebar-muted: #91a0b4;
   --titlebar-muted-unfocused: #6f7f93;
   --titlebar-hover: rgba(255, 255, 255, 0.1);
-  --titlebar-active: rgba(74, 168, 255, 0.16);
+  --titlebar-active: var(--tm-brand-titlebar-active, rgba(77, 158, 255, 0.16));
   --titlebar-command-bg: rgba(22, 30, 43, 0.86);
   --titlebar-command-bg-hover: #1b2534;
   --titlebar-command-border: rgba(64, 78, 101, 0.95);
   --titlebar-menu-bg: rgba(24, 32, 44, 0.98);
+  --debug-hud-translucent-bg: rgba(20, 27, 38, 0.56);
+  --debug-hud-translucent-border: rgba(42, 53, 69, 0.65);
+  --debug-hud-translucent-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --debug-hud-translucent-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.32);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.36);
@@ -270,11 +294,11 @@ html[data-theme='dark'], html.dark {
    "interactive/selected" uses accent, "brand/CTA" uses primary — same pixel
    color, different intent. */
 html[data-theme='github-light'] {
-  --color-primary: #0969da;
-  --color-primary-hover: #0550ae;
-  --color-accent: #0969da;
-  --color-accent-hover: #0550ae;
-  --color-accent-soft: rgba(9, 105, 218, 0.1);
+  --color-primary: var(--tm-brand-primary, #0969da);
+  --color-primary-hover: var(--tm-brand-primary-hover, #0753ab);
+  --color-accent: var(--tm-brand-accent, #0969da);
+  --color-accent-hover: var(--tm-brand-accent-hover, #0753ab);
+  --color-accent-soft: var(--tm-brand-soft, rgba(9, 105, 218, 0.1));
   --color-page-bg: #ffffff;
   --color-panel-bg: #f6f8fa;
   --color-surface: #ffffff;
@@ -295,7 +319,7 @@ html[data-theme='github-light'] {
   --color-border-strong: #afb8c1;
   --color-hover-bg: #f3f4f6;
   --color-active-bg: #eaeef2;
-  --color-selected-bg: rgba(9, 105, 218, 0.08);
+  --color-selected-bg: var(--tm-brand-selected, rgba(9, 105, 218, 0.08));
   --color-danger: #cf222e;
   --color-danger-hover: #a40e26;
   --color-danger-soft: rgba(207, 34, 46, 0.1);
@@ -305,7 +329,7 @@ html[data-theme='github-light'] {
   --color-success: #1a7f37;
   --color-success-soft: rgba(26, 127, 55, 0.1);
   --color-search-match: #bf8700;
-  --color-hover-highlight: #0969da;
+  --color-hover-highlight: var(--tm-brand-highlight, #0969da);
   --titlebar-bg: #eaeef2;
   --titlebar-bg-top: #ffffff;
   --titlebar-bg-unfocused: #e4e8ed;
@@ -315,10 +339,14 @@ html[data-theme='github-light'] {
   --titlebar-muted: #57606a;
   --titlebar-muted-unfocused: #afb8c1;
   --titlebar-hover: rgba(36, 41, 47, 0.08);
-  --titlebar-active: rgba(9, 105, 218, 0.12);
+  --titlebar-active: var(--tm-brand-titlebar-active, rgba(9, 105, 218, 0.12));
   --titlebar-command-bg: rgba(255, 255, 255, 0.86);
   --titlebar-command-bg-hover: #ffffff;
   --titlebar-command-border: rgba(208, 215, 222, 0.95);
   --titlebar-menu-bg: rgba(255, 255, 255, 0.98);
+  --debug-hud-translucent-bg: rgba(255, 255, 255, 0.52);
+  --debug-hud-translucent-border: rgba(208, 215, 222, 0.6);
+  --debug-hud-translucent-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  --debug-hud-translucent-text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
 }
 

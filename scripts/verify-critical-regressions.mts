@@ -7,6 +7,21 @@ import { quoteEnterPayload, shouldHandleQuoteEnter } from '../src/features/docum
 import { containsMarkdownFence, normalizeFenceIndentation } from '../src/features/documents/SmartDocumentEditor/fenceNormalize.ts'
 import { isValidHexColor, resolveDocumentIcon } from '../src/features/documents/components/documentMeta.ts'
 import {
+  ACCENT_POLICIES,
+  ACCENT_TOKEN_NAMES,
+  DEFAULT_ACCENT_COLOR,
+  buildAccentTokens,
+  harmonizeAccentColor,
+  normalizeAccentColor,
+  resolveAccentPolicy,
+} from '../src/domain/theme/accentColor.ts'
+import { ACCENT_PRESETS } from '../src/domain/theme/accentPresets.ts'
+import {
+  THEME_CONFIG_VERSION,
+  parseThemeConfig,
+  serializeThemeConfig,
+} from '../src/domain/theme/themeConfig.ts'
+import {
   getDocumentSidebarScrollStorageKey,
   getExpandedDocumentNodesStorageKey,
   loadDocumentSidebarScrollTop,
@@ -275,6 +290,35 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     ...normalized, scene: { ...normalized.scene, elements: [{ id: 'a', type: 'rectangle', version: 3 }] },
   })
   assert.notEqual(versionA, versionB, '【P2】scene version 变化必须让预览缓存失效')
+  // 2026-11-23：内容版本同时被「全屏宿主写盘去重」和「SVG 预览缓存键」复用。
+  // 只统计元素时，改画布背景既不会落盘、也不会重新导出 SVG，退出后设置全丢。
+  const versionBg = doc.excalidrawSceneVersion({
+    ...normalized,
+    scene: {
+      ...normalized.scene,
+      appState: { ...normalized.scene.appState, viewBackgroundColor: '#ff0000' },
+    },
+  })
+  assert.notEqual(versionA, versionBg,
+    '【画布背景】只改 viewBackgroundColor 也必须改变内容版本（写盘去重 + 预览缓存共用）')
+  const versionGrid = doc.excalidrawSceneVersion({
+    ...normalized,
+    scene: { ...normalized.scene, appState: { ...normalized.scene.appState, gridSize: 20 } },
+  })
+  assert.notEqual(versionA, versionGrid,
+    '【画布背景】网格开关同属可持久化外观，必须让预览缓存失效')
+  const versionViewport = doc.excalidrawSceneVersion({
+    ...normalized,
+    scene: {
+      ...normalized.scene,
+      appState: {
+        ...normalized.scene.appState,
+        scrollX: 9999, scrollY: -3, zoom: 2, selectedElementIds: { a: true },
+      },
+    },
+  })
+  assert.equal(versionA, versionViewport,
+    '【画布背景】平移 / 缩放 / 选中态是视口瞬态，不得触发写盘与预览重导出')
 
   // 【P5】CardSpec 纯函数真跑：schema / 去重 / 脏值 / src 安全 / 未知类型保留 / hash 失效。
   const card = await bundle('../src/features/documents/CardSpecDocument/cardSpecTypes.ts')
@@ -401,6 +445,14 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   '【P4-v1.4】节点必须退化为只读预览：零编辑器实例、零 saver、零缩放编辑门槛')
   assert.ok(cardSrc.includes('isCanvasReadOnly') === false,
     '【P4】容器内容编辑不得绑画布只读闸门（大房间 LOD hidden>0 会永远只读）')
+  // ---- 2026-11-23：容器节点默认不展示标题栏，整块区域只放内容预览 ----
+  assert.ok(!cardSrc.includes('h-7 shrink-0')
+    && !cardSrc.includes('全屏编辑中')
+    && cardSrc.includes('className="relative h-full w-full"')
+    && cardSrc.includes('${title} · 双击进入全屏编辑')
+    && cardSrc.includes('aria-label={title}')
+    && cardSrc.includes('data-tm-container-active={isEditingThis'),
+  '【容器外观】默认不渲染占位 header：节点只展示预览，节点名走 title / aria-label，编辑态仍由 data 属性暴露')
   assert.ok(hostSrc.includes('createPortal(')
     && hostSrc.includes('document.body')
     && hostSrc.includes("position: 'fixed'")
@@ -427,6 +479,107 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && canvasSrc.includes('deactivateActiveContainer')
     && !canvasSrc.includes('!isAtMaxZoom(zoomLevel)'),
   '【P4-v1.4】外层保留 active-surface 防御与切房间收口，但不得再按缩放强制失活')
+
+  // ---- 2026-11-24：智能文档「手绘流程图」块。场景内联在块 props.scene，
+  // 与画布容器是两条独立链路；这里只锁结构，运行时交互由 verify-excalidraw-block-gui 覆盖。
+  const [
+    blockSchemaSrc, blockConstantsSrc, blockInsertMenuSrc, smartEditorSrcForBlock,
+    blockSupportSrc, blockFullscreenSrc, blockStylesSrc,
+  ] = await Promise.all([
+    readFile(new URL('../src/features/documents/SmartDocumentEditor/smartDocumentSchema.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/SmartDocumentEditor/constants.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/SmartDocumentEditor/components/SmartDocumentBlockMenu.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/SmartDocumentEditor/excalidrawBlockSupport.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/SmartDocumentEditor/ExcalidrawBlockFullscreenEditor.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.css', import.meta.url), 'utf-8'),
+  ])
+  assert.ok(blockSchemaSrc.includes('excalidraw: ExcalidrawBlock()')
+    && blockConstantsSrc.includes("type: 'excalidraw'")
+    && blockInsertMenuSrc.includes("action.type !== 'excalidraw'")
+    && smartEditorSrcForBlock.includes('excalidrawItem')
+    && smartEditorSrcForBlock.includes("type: 'excalidraw'"),
+  '【文档流程图块】块规格、块菜单动作、content:none 插入例外、斜杠菜单入口必须四处齐备')
+  assert.ok(blockSupportSrc.includes('createReactBlockSpec')
+    && blockSupportSrc.includes("scene: { default: '' }")
+    && blockSupportSrc.includes("content: 'none'")
+    && blockSupportSrc.includes('createPortal(')
+    && blockSupportSrc.includes('document.body')
+    && blockSupportSrc.includes('lazy(() =>')
+    && blockSupportSrc.includes('beginMathEditing()')
+    && blockSupportSrc.includes('updateBlock(')
+    && blockSupportSrc.includes('onDoubleClick'),
+  '【文档流程图块】场景内联 props.scene；全屏编辑期间不 updateBlock（setNodeMarkup 会重建节点视图卸载 portal），退出时一次性写回；编辑器必须 lazy')
+  // 两个新文件的头部注释都写了「刻意不复用 data-tm-container-* 契约」这句说明，
+  // 直接 includes 会把注释当成真实 DOM 契约误报（C14 同款坑），先剥注释再查代码。
+  const stripBlockComments = (src: string) => src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+  const blockSupportCode = stripBlockComments(blockSupportSrc)
+  const blockFullscreenCode = stripBlockComments(blockFullscreenSrc)
+  assert.ok(!blockSupportCode.includes('data-tm-container-')
+    && !blockFullscreenCode.includes('data-tm-container-')
+    && blockFullscreenCode.includes('data-shortcut-scope="excalidraw"')
+    && blockFullscreenCode.includes('ensureExcalidrawAssets()')
+    && blockFullscreenCode.includes('handleKeyboardGlobally')
+    && blockStylesSrc.includes('.tm-excalidraw-block-preview'),
+  '【文档流程图块】不得复用画布容器的 DOM 契约；快捷键隔离、自托管资源与预览样式必须齐备')
+
+  // ---- 2026-11-24：流程图块「拖边框调尺寸 / 去说明文字 / hover tooltip / 点击后对齐浮层」----
+  // 尺寸与对齐都必须存进块 props（重开文档不丢）；拖动期间只改本地 CSS，松手一次提交。
+  const exdrawAlignToolbarSrc = await readFile(new URL(
+    '../src/features/documents/SmartDocumentEditor/components/ExcalidrawBlockToolbar.tsx', import.meta.url,
+  ), 'utf-8')
+  assert.ok(!blockSupportSrc.includes('tm-excalidraw-block-hint')
+    && !blockStylesSrc.includes('.tm-excalidraw-block-hint')
+    && blockSupportSrc.includes('data-tm-excalidraw-block-tooltip="双击进入编辑"')
+    && blockSupportSrc.includes('displayWidth: { default: 0 }')
+    && blockSupportSrc.includes('displayHeight: { default: DEFAULT_PREVIEW_HEIGHT }')
+    && blockSupportSrc.includes("textAlignment: { default: 'left'")
+    && blockSupportSrc.includes('data-tm-excalidraw-block-resize=')
+    && blockSupportSrc.includes('setPointerCapture(')
+    && blockSupportSrc.includes('releasePointerCapture(')
+    && blockStylesSrc.includes('[data-tm-excalidraw-block-align="right"]')
+    && blockStylesSrc.includes('body.tm-excalidraw-block-is-resizing'),
+  '【文档流程图块】必须移除预览下方说明文字、提供 hover tooltip、把尺寸/对齐落进块 props，并支持拖动边框一次提交')
+  assert.ok(exdrawAlignToolbarSrc.includes('createPortal(')
+    && exdrawAlignToolbarSrc.includes('editor.getBlock(id)')
+    && exdrawAlignToolbarSrc.includes('editor.updateBlock(block, { props: { textAlignment: value } })')
+    && ["value: 'left'", "value: 'center'", "value: 'right'"].every((s) => exdrawAlignToolbarSrc.includes(s))
+    && exdrawAlignToolbarSrc.includes("document.querySelector('[data-tm-excalidraw-block-editor]')")
+    && smartEditorSrcForBlock.includes('<ExcalidrawBlockToolbar />')
+    && blockStylesSrc.includes('.tm-excalidraw-block-toolbar')
+    && blockStylesSrc.includes('z-index: 4000'),
+  '【文档流程图块】点击后上方浮层须含三对齐按钮、全屏编辑期间隐藏，并挂进编辑器')
+
+  // ---- 2026-11-24：Excalidraw 跟随软件明暗主题（纯 UI 层，绝不写进文档数据）----
+  const excalidrawThemeSrc = await readFile(
+    new URL('../src/features/documents/ExcalidrawDocument/excalidrawTheme.ts', import.meta.url), 'utf-8',
+  )
+  const containerEditorCode = stripBlockComments(editorSrc)
+  const containerPreviewCode = stripBlockComments(previewSrc)
+  // 模块头注释里写了「来自 @excalidraw/excalidraw 源码」，同样要先剥注释再查依赖。
+  const excalidrawThemeCode = stripBlockComments(excalidrawThemeSrc)
+  assert.ok(excalidrawThemeCode.includes('useThemeStore')
+    && excalidrawThemeCode.includes('toExcalidrawColorMode')
+    && excalidrawThemeCode.includes("'invert(93%) hue-rotate(180deg)'")
+    && !excalidrawThemeCode.includes('@excalidraw/excalidraw'),
+  '【Excalidraw 主题】唯一映射必须订阅软件主题、与 Excalidraw THEME_FILTER 一致，且不依赖编辑器包')
+  assert.ok(blockFullscreenCode.includes('theme={colorMode}')
+    && containerEditorCode.includes('theme={colorMode}')
+    && !blockFullscreenCode.includes('theme="light"')
+    && !containerEditorCode.includes('theme="light"')
+    && blockFullscreenCode.includes('useExcalidrawColorMode()')
+    && containerEditorCode.includes('useExcalidrawColorMode()'),
+  '【Excalidraw 主题】两处编辑器的 theme prop 必须跟随软件主题，禁止硬编码 light')
+  assert.ok(blockSupportCode.includes('excalidrawPreviewFilter(colorMode)')
+    && containerPreviewCode.includes('excalidrawPreviewFilter(colorMode)')
+    && !blockSupportCode.includes('exportWithDarkMode')
+    && !containerPreviewCode.includes('exportWithDarkMode'),
+  '【Excalidraw 主题】两处只读预览用容器 CSS filter 反转，禁止 exportWithDarkMode 造成双重反转')
+  assert.ok(blockFullscreenCode.includes("theme: 'light'")
+    && containerEditorCode.includes("theme: 'light'"),
+  '【Excalidraw 主题】落盘 appState.theme 保持场景值，软件主题不得写进文档数据')
   // 回归锁：显示 100% 的 raw zoom 是 ZOOM_REFERENCE=0.65，拿裸 transform[2] 跟 1 比
   // 会让预览 LOD 判定错位；编辑入口则已彻底与缩放解耦。
   assert.ok(cardSrc.includes('toDisplayPercent(zoom)')
@@ -452,6 +605,12 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && previewSrc.includes('syncSvgSize')
     && previewSrc.includes("removeAttribute('width')"),
   '【P4-v1.5】SVG 预览必须去掉固定尺寸、按内容区实测尺寸等比适配并随 resize 实时同步')
+  assert.ok(hostSrc.includes('getSceneVersion')
+    && previewSrc.includes('excalidrawSceneVersion(normalized)'),
+  '【画布背景】写盘去重与 SVG 预览缓存必须共用同一内容版本，只改背景不得被跳过')
+  assert.ok(previewSrc.includes('backgroundColor={normalizedBackground}')
+    && previewSrc.includes('style={backgroundColor ? { backgroundColor } : undefined}'),
+  '【画布背景】空白白板 / LOD 占位分支也必须渲染用户设置的画布背景色')
   assert.ok(modelSrc.includes('data-tm-container-surface="active"'),
     '【P4】全局捕获阶段的 Ctrl+F 必须自行让位给活跃容器')
   assert.ok(assetsSrc.includes('document.baseURI') && assetsSrc.includes('EXCALIDRAW_ASSET_PATH'),
@@ -10036,6 +10195,8 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
 {
   const files49 = {
     store: '../src/stores/rightPanelStore.ts',
+    tabStore: '../src/stores/tabs/tabStore.ts',
+    tabActions: '../src/stores/tabs/tabActions.ts',
     events: '../src/hooks/useGraph/graphEventHandlers.ts',
     canvas: '../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts',
     layout: '../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx',
@@ -10082,6 +10243,19 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && src49.card.includes('setDetailViewForNode(id, \'own\')')
     && src49.card.includes('title="包含详情 · 点击在右栏查看本节点文档"'),
   '【右栏】本节点文档图标必须可点击，且点击后切回本节点文档视图')
+  // 【2026-11-23】展开/折叠记忆必须每个知识库独立维护，且无选中文档时不渲染空白右栏。
+  assert.ok(src49.store.includes('statesByKb') && src49.store.includes('activeKbPath')
+    && src49.store.includes('setActiveKbPath') && src49.store.includes('renameKbState'),
+  '【右栏】展开态必须按 kbPath 分桶，并提供作用域切换与改名迁移')
+  assert.ok(src49.tabStore.includes('setActiveKbPath('),
+    '【右栏】活跃知识库作用域必须由 tabStore 订阅同步，不能依赖 React effect 时序')
+  assert.ok(src49.tabActions.includes('renameKbState(oldKbPath, newKbPath)'),
+    '【右栏】知识库改名必须迁移对应的展开态分桶')
+  assert.ok(src49.container.includes('!isActive')
+    && src49.store.includes('rightPanelCollapsed: true'),
+  '【右栏】未访问过的知识库默认折叠，且非活跃标签页不写当前分桶')
+  assert.ok(!src49.container.includes('hasDetailTarget'),
+    '【右栏】不得用「无选中节点一律隐藏」兜底：空状态里的 pin / 解锁入口与显式展开必须可达')
 
   const { build: build49 } = await import('esbuild')
   const { fileURLToPath: toPath49 } = await import('node:url')
@@ -10096,6 +10270,14 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
       getState: () => {
         rightPanelCollapsed: boolean
         rightPanelPinned: boolean
+        rightPanelWidth: number
+        rightPanelTab: string
+        activeKbPath: string
+        statesByKb: Record<string, unknown>
+        setActiveKbPath: (kbPath: string) => void
+        renameKbState: (oldKbPath: string, newKbPath: string) => void
+        setRightPanelWidth: (width: number) => void
+        setRightPanelTab: (tab: 'detail' | 'style') => void
         resetRightPanel: () => void
         applyRightPanelAutoVisibility: (hasDocument: boolean) => void
         toggleRightPanelPinned: () => void
@@ -10106,7 +10288,8 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   }
   const panel49 = storeModule49.useRightPanelStore
   panel49.getState().resetRightPanel()
-  assert.equal(panel49.getState().rightPanelCollapsed, false)
+  assert.equal(panel49.getState().rightPanelCollapsed, true,
+    '【右栏】默认折叠：没有选中文档时不该自己冒出空白面板')
   assert.equal(panel49.getState().rightPanelPinned, false)
 
   panel49.getState().applyRightPanelAutoVisibility(false)
@@ -10131,10 +10314,45 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   panel49.getState().applyRightPanelAutoVisibility(false)
   assert.equal(panel49.getState().rightPanelCollapsed, true,
     '【右栏】取消 pin 后自动折叠必须恢复')
-  panel49.getState().applyRightPanelAutoVisibility(true)
-  panel49.getState().resetRightPanel()
-  assert.equal(panel49.getState().rightPanelCollapsed, false)
+
+  // 【2026-11-23 切库串扰回归】A 展开 → B 默认折叠 → B 折叠不影响 A → 改名不丢状态。
+  const state49 = panel49.getState()
+  state49.resetRightPanel()
+  state49.setActiveKbPath('kb-A')
+  state49.applyRightPanelAutoVisibility(true)
+  assert.equal(panel49.getState().rightPanelCollapsed, false,
+    '【右栏】知识库 A 打开文档后展开')
+  state49.setActiveKbPath('kb-B')
+  assert.equal(panel49.getState().rightPanelCollapsed, true,
+    '【右栏】切到未访问过的知识库 B 必须默认折叠，不得继承 A 的展开态')
+  state49.applyRightPanelAutoVisibility(false)
+  state49.setRightPanelWidth(720)
+  state49.setRightPanelTab('style')
+  state49.setActiveKbPath('kb-A')
+  assert.equal(panel49.getState().rightPanelCollapsed, false,
+    '【右栏】B 里的折叠不能影响 A，切回 A 仍保持展开')
+  assert.equal(panel49.getState().rightPanelWidth, 600,
+    '【右栏】宽度偏好也按知识库独立，B 的拖拽不能改掉 A 的宽度')
+  assert.equal(panel49.getState().rightPanelTab, 'detail',
+    '【右栏】面板分区也按知识库独立')
+  state49.setActiveKbPath('kb-B')
+  assert.equal(panel49.getState().rightPanelCollapsed, true,
+    '【右栏】B 自己的折叠态同样要被记住')
+  assert.equal(panel49.getState().rightPanelWidth, 720)
+  state49.renameKbState('kb-A', 'kb-A-renamed')
+  state49.setActiveKbPath('kb-A-renamed')
+  assert.equal(panel49.getState().rightPanelCollapsed, false,
+    '【右栏】知识库改名后仍保留原来的展开态')
+  state49.setActiveKbPath('kb-A')
+  assert.equal(panel49.getState().rightPanelCollapsed, true,
+    '【右栏】旧知识库路径不应残留可复用的状态')
+
+  state49.applyRightPanelAutoVisibility(true)
+  state49.resetRightPanel()
+  assert.equal(panel49.getState().rightPanelCollapsed, true)
   assert.equal(panel49.getState().rightPanelPinned, false)
+  assert.equal(Object.keys(panel49.getState().statesByKb).length, 0,
+    '【右栏】重置会话必须清空所有知识库的分桶')
 }
 
 // --- 第 50 组：块编辑菜单缩进/对齐平铺为一级按钮（2026-11-16） ---
@@ -10560,6 +10778,17 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   assert.ok(css58.includes("html[data-tm-nav-rail-open='true']")
     && rail58.includes('root.dataset.tmNavRailOpen'),
   '【导航层】导航展开时节点树与状态抽屉必须让位，避免被 48px rail 遮住')
+  // 2026-11-23 补：左下角缩略图 / 缩放控件组原本仍停在 React Flow 默认 15px 边距，
+  // 被 48px 的 z-40 导航栏浮层盖住。让位必须是纯 CSS 的条件规则，导航栏隐藏时自动还原。
+  assert.ok(css58.includes("html[data-tm-nav-rail-open='true'] #app-layout .react-flow__panel.bottom.left")
+    && css58.includes('margin-left: calc(15px + var(--nav-rail-width)) !important'),
+  '【导航层】导航展开时左下角缩略图 / 缩放控件组必须让位 48px rail，且只改 margin-left')
+  assert.equal((css58.match(/#app-layout \.react-flow__panel\.bottom\.left/g) ?? []).length, 1,
+    '【导航层】左下角缩略图只允许一条条件让位规则，导航栏隐藏时必须回到默认 15px 边距')
+  const miniMap58 = await readSrc58('src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx')
+  assert.ok(!miniMap58.includes('layoutStore') && !miniMap58.includes('railVisible')
+    && miniMap58.includes('getBoundingClientRect()'),
+  '【导航层】缩略图让位必须纯 CSS；组件不得订阅导航状态，点击定位按实测矩形换算')
   assert.ok(!css58.includes("html[data-tm-immersive='true']") && !css58.includes('data-tm-immersive'),
     '【导航层】专注模式已移除，不得再写入沉浸态 CSS')
   assert.ok(store58.includes('railVisible') && store58.includes('toggleRailVisible')
@@ -11251,6 +11480,459 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   }
   assert.equal(assetPath.cardAssetCategory('a.mp3'), 'audio', '【P5】音频扩展名必须命中规则')
   assert.equal(assetPath.cardAssetCategory('a.exe'), null, '【P5】未知扩展名必须拒绝导入')
+}
+
+// ===== 第 60 组：2026-11-23 真实日志排查（埋点口径 / 日志体积 / 长任务归因） =====
+{
+  const read60 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const files60 = {
+    edgeOps: '../src/hooks/useGraph/edgeOperations.ts',
+    perfLog: '../src/core/performance-log.ts',
+    runtime: '../src/core/performance-runtime.ts',
+    suspension: '../src/shared/observability/performanceSuspension.ts',
+    context: '../src/shared/observability/performanceContext.ts',
+    metrics: '../src/shared/observability/performanceMetrics.ts',
+    logContract: '../src/shared/observability/logContract.ts',
+    kbModel: '../src/features/kb/model/useHomeKnowledgeBases.ts',
+    kbGrid: '../src/features/kb/components/KnowledgeBaseGrid.tsx',
+  } as const
+  const entries60 = Object.entries(files60) as Array<[keyof typeof files60, string]>
+  const sources60 = Object.fromEntries(
+    await Promise.all(entries60.map(async ([key, relative]) => [key, await read60(relative)] as const)),
+  ) as Record<keyof typeof files60, string>
+  const has60 = (key: keyof typeof files60, needle: string) => sources60[key].includes(needle)
+
+  // 1) edge_create：span 只能覆盖到「边写入图状态」，不得包住 SaveCoordinator 的
+  //    300ms debounce（实测 312 条样本 100% 判慢、P50 318ms，与节点规模无关）。
+  const create60 = sources60.edgeOps.slice(
+    sources60.edgeOps.indexOf('const addEdge'),
+    sources60.edgeOps.indexOf('const deleteEdge'),
+  )
+  const perfEnd60 = create60.indexOf('perfSpan.end(')
+  const saveLater60 = create60.indexOf('await saveLater(')
+  assert.ok(perfEnd60 > 0 && saveLater60 > 0 && perfEnd60 < saveLater60,
+    '【P0】edge_create 的 span 必须在 await saveLater 之前结束，固定 debounce 不得算进交互耗时')
+  assert.ok(create60.indexOf('store.setEdges(') < perfEnd60,
+    '【P0】span 必须在边写入图状态之后才结束')
+  const delete60 = sources60.edgeOps.slice(sources60.edgeOps.indexOf('const deleteEdge'))
+  assert.ok(delete60.indexOf('perfSpan.end()') < delete60.indexOf('await saveLater('),
+    '【P0】deleteEdge 的正确顺序不得被回退')
+
+  // 2) 挂起 / 休眠过滤：三条计时路径都收敛到统一上报层，判定必须早于采样与归因。
+  for (const needle of ['isSuspensionSample(', 'getHiddenIntervals(', 'buildSuspendedSampleParams(']) {
+    assert.ok(has60('perfLog', needle), `【P0】上报层未接入挂起过滤 ${needle}`)
+  }
+  assert.ok(sources60.perfLog.indexOf('isSuspensionSample(') < sources60.perfLog.indexOf('if (!shouldReport('),
+    '【P0】挂起判定必须早于采样，否则假慢样本仍会进入阈值统计')
+  assert.ok(has60('metrics', 'params.suspended'),
+    '【P0】统计反解必须二次过滤 suspended 样本')
+  // 批量 IO（导入大知识库等）墙钟耗时可达数十分钟，且后台运行是正常场景，
+  // 必须豁免交互类的可信上限与隐藏窗口，否则会丢掉真实的长任务数据。
+  assert.ok(has60('perfLog', 'BULK_IO_METRICS') && has60('perfLog', 'isInvalidDuration(')
+    && has60('perfLog', 'PERFORMANCE_METRICS.kbImport')
+    && has60('perfLog', 'PERFORMANCE_METRICS.documentExport')
+    && has60('perfLog', 'PERFORMANCE_METRICS.attachmentUpload'),
+  '【P0】批量 IO 指标必须豁免挂起过滤')
+  assert.ok(has60('runtime', 'startSuspensionObserver(')
+    && has60('runtime', 'getRecentPerformanceContext(entry.startTime)'),
+  '【P0】运行时必须启动挂起观察器并用长任务 startTime 反查归因')
+
+  // 3) 长任务归因：单值 + ≥50ms 门槛的实现必须被列表 + 时间窗口判定取代。
+  for (const needle of ['resolveRecentContext(', 'countExpiredOperations(', 'rememberOperation(']) {
+    assert.ok(has60('perfLog', needle), `【P0】上报层未接入列表化归因 ${needle}`)
+  }
+  assert.ok(!has60('perfLog', 'RECENT_CONTEXT_MIN_MS') && !has60('perfLog', 'let recentOperation:'),
+    '【P0】旧的单值 + 50ms 门槛归因实现必须移除')
+
+  // 4) 日志体积：kbInfo 不得再携带封面 base64，契约层要有框架级兜底。
+  assert.ok(has60('kbModel', 'export function toKBLogInfo') && has60('kbModel', 'coverBytes'),
+    '【P0】开库日志必须改用轻量摘要')
+  assert.ok(!has60('kbModel', '{ kbInfo: kb }') && !has60('kbGrid', '{ kbInfo: kb }'),
+    '【P0】不得再把含 8MB 封面的 KBItem 直接写进日志 params')
+  assert.equal((sources60.kbGrid.match(/toKBLogInfo\(kb\)/g) ?? []).length, 2,
+    '【P0】点击与键盘打开两条入口都必须走摘要')
+  assert.ok(has60('logContract', "value.startsWith('data:')") && has60('logContract', '[data-uri:'),
+    '【P0】日志契约层必须兜底拦截 data: URI，防止其它路径回灌')
+
+  // 5) esbuild 真跑：三个纯函数模块逐个验证边界行为。
+  const { build: build60 } = await import('esbuild')
+  const { fileURLToPath: toPath60 } = await import('node:url')
+  const loadBundled60 = async (relative: string) => {
+    const result = await build60({
+      entryPoints: [toPath60(new URL(relative, import.meta.url))],
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    })
+    return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+  }
+
+  const susp60 = await loadBundled60(files60.suspension)
+  assert.equal(susp60.MAX_TRUSTED_SAMPLE_MS, 300000)
+  assert.equal(susp60.isSuspensionSample(250, 100_000, []), false,
+    '【P0】正常样本不得被挂起过滤误杀')
+  assert.equal(susp60.isSuspensionSample(602842, 700_000, []), true,
+    '【P0】10 分钟级 app_startup 伪样本必须丢弃')
+  assert.equal(susp60.isSuspensionSample(1_014_915, 1_200_000, []), true,
+    '【P0】17 分钟级 node_select 伪样本必须丢弃')
+  assert.equal(susp60.isSuspensionSample(Number.NaN, 1000, []), true,
+    '【P0】非有限耗时必须丢弃')
+  assert.equal(susp60.isSuspensionSample(-1, 1000, []), true,
+    '【P0】负耗时必须丢弃')
+  assert.equal(susp60.isInvalidDuration(Number.NaN), true,
+    '【P0】批量 IO 的非有限耗时仍必须拦截')
+  assert.equal(susp60.isInvalidDuration(900_000), false,
+    '【P0】15 分钟的真实导入耗时必须保留，不得被交互上限误杀')
+  assert.equal(susp60.hiddenOverlapMs(100, 300, [{ start: 200, end: 250 }]), 50,
+    '【P0】隐藏区间重叠时长必须精确')
+  assert.equal(susp60.isSuspensionSample(200, 300, [{ start: 200, end: 250 }]), true,
+    '【P0】样本窗口与隐藏区间重叠必须判为挂起')
+  assert.equal(susp60.isSuspensionSample(200, 300, [{ start: 0, end: 50 }]), false,
+    '【P0】无关的旧隐藏区间不得误杀正常样本')
+  assert.equal(susp60.isSuspensionSample(200, 300, [{ start: 250, end: null }]), true,
+    '【P0】当前仍处于隐藏态必须判为挂起')
+  const dropped60 = susp60.buildSuspendedSampleParams('node_select', 602842, 'sess', 'DetailPanel')
+  assert.equal(dropped60.suspended, true)
+  assert.equal(dropped60.rawDurationMs, 602842)
+  assert.equal('durationMs' in dropped60, false,
+    '【P0】丢弃记录不得写 durationMs，否则统计侧仍会当真实样本')
+
+  const ctx60 = await loadBundled60(files60.context)
+  const ops60 = [
+    { metric: 'graph_meta_build', contextKey: 'roomA', at: 1000, durationMs: 1 },
+    { metric: 'drag', contextKey: 'roomA', at: 1500, durationMs: 400 },
+  ]
+  assert.equal(ctx60.resolveRecentContext(1200, ops60)?.metric, 'drag',
+    '【P0】长任务发生在操作执行期间（样本尚未上报）也必须能归到该操作')
+  assert.equal(ctx60.resolveRecentContext(1600, ops60)?.metric, 'drag',
+    '【P0】长任务紧随操作结束时应归到分量最大的操作，而非 1ms 噪音指标')
+  assert.equal(ctx60.resolveRecentContext(1200, [ops60[0]])?.metric, 'graph_meta_build',
+    '【P0】窗口内只有短操作时归因也不能落空')
+  assert.equal(ctx60.resolveRecentContext(100, ops60), null,
+    '【P0】远早于任何操作的长任务不得强行归因')
+  assert.equal(ctx60.countExpiredOperations(ops60, 1600), 0,
+    '【P0】窗口内的归因项不得被过早清理')
+  assert.equal(ctx60.countExpiredOperations(ops60, 10000), 2,
+    '【P0】过期归因项必须可清理，避免数组无限增长')
+
+  const contract60 = await loadBundled60(files60.logContract)
+  const huge60 = `data:image/png;base64,${'A'.repeat(8 * 1024 * 1024)}`
+  const redacted60 = contract60.redactParams({ kbInfo: { name: 'kbA', coverUrl: huge60 } }) as {
+    truncated?: boolean
+    kbInfo: { coverUrl: string }
+  }
+  assert.equal(redacted60.truncated, undefined,
+    '【P0】data URI 摘要后不得再触发整体 params 截断')
+  assert.ok(JSON.stringify(redacted60).length < 500,
+    '【P0】单条日志不得因封面图膨胀到 MB 级')
+  assert.ok(redacted60.kbInfo.coverUrl.includes('length:'),
+    '【P0】摘要必须保留长度信息以便诊断')
+
+  // 6) 集成真跑：mock 掉 logger，验证统一上报层三条分支确实按预期落日志，
+  //    而不只是「代码里出现了某个函数名」。
+  const sink60: Array<{ action?: string; params?: Record<string, unknown> }> = []
+  ;(globalThis as Record<string, unknown>).__perfLogSink = sink60
+  const perfBundle60 = await build60({
+    entryPoints: [toPath60(new URL(files60.perfLog, import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+    plugins: [{
+      name: 'mock-logger',
+      setup(build) {
+        build.onResolve({ filter: /^\.\/logger\.ts$/ }, () => ({ path: 'mock-logger', namespace: 'perf-mock' }))
+        build.onLoad({ filter: /.*/, namespace: 'perf-mock' }, () => ({
+          contents: 'const sink = (globalThis.__perfLogSink ??= []);'
+            + 'export function writeEntry(entry) { sink.push(entry); return Promise.resolve(true) }',
+          loader: 'js',
+        }))
+      },
+    }],
+  })
+  const perfMod60 = await import(
+    `data:text/javascript;base64,${Buffer.from(perfBundle60.outputFiles[0].text).toString('base64')}`
+  )
+  perfMod60.recordPerformance('node_select', 250, { module: 'DetailPanel', params: { nodeId: 'n1' } })
+  perfMod60.recordPerformance('node_select', 602842, { module: 'DetailPanel' })
+  perfMod60.recordPerformance('kb_import', 900000, { module: 'HomePage' })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(sink60.length, 3, '【P0】三条样本都必须走统一写入口')
+  assert.equal(sink60[0].params?.durationMs, 250,
+    '【P0】正常交互样本必须照常上报真实耗时')
+  assert.equal(sink60[1].params?.suspended, true,
+    '【P0】挂起样本必须标记 suspended')
+  assert.equal('durationMs' in (sink60[1].params ?? {}), false,
+    '【P0】挂起样本不得写 durationMs')
+  assert.equal(sink60[2].params?.durationMs, 900000,
+    '【P0】15 分钟真实导入耗时必须保留')
+  assert.equal(sink60[2].params?.suspended, undefined,
+    '【P0】批量 IO 不得被标记为挂起')
+  delete (globalThis as Record<string, unknown>).__perfLogSink
+
+  // 7) 统计反解真跑：挂起日志无论有没有残留 durationMs，都不得进入看板样本。
+  const metrics60 = await loadBundled60(files60.metrics)
+  const samples60 = metrics60.extractPerformanceSamples([
+    { id: 'ok', timestamp: new Date(0).toISOString(), action: '性能:记录',
+      params: { metric: 'node_select', durationMs: 250, success: true } },
+    { id: 'suspended-with-duration', timestamp: new Date(1).toISOString(), action: '性能:记录',
+      params: { metric: 'node_select', durationMs: 602842, suspended: true, success: true } },
+    { id: 'suspended-no-duration', timestamp: new Date(2).toISOString(), action: '性能:记录',
+      params: { metric: 'node_select', suspended: true, success: true } },
+  ])
+  assert.equal(samples60.length, 1,
+    '【P0】suspended 样本必须在反解层被彻底过滤')
+  assert.equal(samples60[0].durationMs, 250,
+    '【P0】正常样本的耗时不得被挂起过滤连带影响')
+}
+
+// ===== 68) 应用全局主题色：单一真源 / 派生色阶 / 明暗一致 / 持久化 =====
+// 旧状态：primary / hover / soft / selected / highlight / titlebar-active 在 tokens.css
+// 的三套主题块里各写死一份字面值，彼此不是派生关系，只改 --color-accent 必然「花」。
+// 新状态：一个用户色 → domain/theme 调和派生 --tm-brand-* → 语义 token 统一引用。
+{
+  const read68 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const { readdir } = await import('node:fs/promises')
+  const { fileURLToPath } = await import('node:url')
+  const { join } = await import('node:path')
+  const tokens68 = await read68('src/styles/tokens.css')
+  const store68 = await read68('src/stores/themeStore.ts')
+  const apply68 = await read68('src/domain/theme/applyAccentColor.ts')
+  const settings68 = await read68('src/features/settings/SettingsPage.tsx')
+  const main68 = await read68('src/main.tsx')
+
+  // 1) 八个语义 token 在 :root / dark / github-light 三套主题块里都必须绑定到同名
+  //    运行时变量；组件侧只允许引用 --color-*，禁止直接抓 --tm-brand-*。
+  const bindings68: ReadonlyArray<readonly [string, string]> = [
+    ['--color-primary', '--tm-brand-primary'],
+    ['--color-primary-hover', '--tm-brand-primary-hover'],
+    ['--color-accent', '--tm-brand-accent'],
+    ['--color-accent-hover', '--tm-brand-accent-hover'],
+    ['--color-accent-soft', '--tm-brand-soft'],
+    ['--color-selected-bg', '--tm-brand-selected'],
+    ['--color-hover-highlight', '--tm-brand-highlight'],
+    ['--titlebar-active', '--tm-brand-titlebar-active'],
+  ]
+  assert.equal(ACCENT_TOKEN_NAMES.length, bindings68.length,
+    '【主题色】派生色阶契约必须是 8 个变量，增删要同时改 tokens.css 与注入层')
+  for (const [semantic68, runtime68] of bindings68) {
+    assert.ok((ACCENT_TOKEN_NAMES as readonly string[]).includes(runtime68),
+      `【主题色】${runtime68} 必须登记在 ACCENT_TOKEN_NAMES，否则切换主题色时不会被注入 / 清理`)
+    assert.equal(
+      (tokens68.match(new RegExp(`${semantic68}:\\s*var\\(${runtime68},`, 'g')) ?? []).length, 3,
+      `【主题色】${semantic68} 必须在三套主题块统一引用 ${runtime68}，不得再写死自己的一份色值`)
+  }
+  const srcRoot68 = fileURLToPath(new URL('../src/', import.meta.url))
+  const srcFiles68 = await readdir(srcRoot68, { recursive: true })
+  const directRefs68: string[] = []
+  await Promise.all(srcFiles68
+    .filter((f) => /\.(ts|tsx|js|jsx|css)$/.test(f))
+    .map(async (f) => {
+      const rel68 = f.replace(/\\/g, '/')
+      if (rel68 === 'styles/tokens.css') return
+      const text68 = await readFile(join(srcRoot68, f), 'utf-8')
+      if (text68.includes('var(--tm-brand-')) directRefs68.push(rel68)
+    }))
+  assert.deepEqual(directRefs68, [],
+    '【主题色】组件 / 样式只能引用 --color-* 语义 token；直接引用运行时变量会绕过统一管理层')
+
+  // 2) 静态 fallback 必须与「默认品牌色的派生结果」逐字一致：否则用户从自定义色
+  //    点「恢复默认」时，注入被清空、界面会突然跳到另一档亮度 / 色相。
+  const derivedLight68 = buildAccentTokens(DEFAULT_ACCENT_COLOR, 'light')
+  const derivedDark68 = buildAccentTokens(DEFAULT_ACCENT_COLOR, 'dark')
+  const rootBlock68 = tokens68.slice(tokens68.indexOf(':root {'), tokens68.indexOf("html[data-theme='dark']"))
+  const darkBlock68 = tokens68.slice(tokens68.indexOf("html[data-theme='dark']"), tokens68.indexOf('/* ===== GitHub Light Theme'))
+  const lightBlock68 = tokens68.slice(tokens68.indexOf("html[data-theme='github-light'] {"))
+  for (const [label68, block68, derived68] of [
+    [':root', rootBlock68, derivedLight68],
+    ['dark', darkBlock68, derivedDark68],
+    ['github-light', lightBlock68, derivedLight68],
+  ] as const) {
+    assert.ok(block68.length > 100, `【主题色】找不到 ${label68} 主题块`)
+    for (const name68 of ACCENT_TOKEN_NAMES) {
+      const match68 = block68.match(new RegExp(`${name68},\\s*(.+?)\\);`))
+      assert.ok(match68, `【主题色】${label68} 缺少 ${name68} 的 fallback`)
+      assert.equal(match68?.[1], derived68[name68],
+        `【主题色】${label68} 的 ${name68} fallback 必须等于默认色的派生值，恢复默认时才不会跳色`)
+    }
+  }
+
+  // 3) 预设色板必须是调和算法的不动点：色板上看到的颜色 === 全软件实际生效的颜色。
+  assert.equal(ACCENT_PRESETS[0].hex, DEFAULT_ACCENT_COLOR,
+    '【主题色】第一项预设必须是默认品牌色（设置页用它作为恢复默认的落点）')
+  assert.equal(normalizeAccentColor(DEFAULT_ACCENT_COLOR), DEFAULT_ACCENT_COLOR)
+  for (const preset68 of ACCENT_PRESETS) {
+    const h68 = harmonizeAccentColor(preset68.hex)
+    assert.equal(h68.hex, preset68.hex, `【主题色】预设 ${preset68.id} 被无谓微调，取色器会来回跳`)
+    assert.equal(h68.adjusted, false, `【主题色】预设 ${preset68.id} 不应触发自动微调提示`)
+  }
+
+  // 4) 任意颜色（含荧光色 / 纯白 / 纯黑 / 灰）都必须派生出完整色阶，并保持可读性：
+  //    light 下主题色配白字、dark 下配深色字，两种约束都不能低于 WCAG 4.5:1。
+  const luminance68 = (hex68: string) => {
+    const digits68 = hex68.slice(1)
+    const chan68 = (v: number) => {
+      const c68 = v / 255
+      return c68 <= 0.04045 ? c68 / 12.92 : ((c68 + 0.055) / 1.055) ** 2.4
+    }
+    return 0.2126 * chan68(parseInt(digits68.slice(0, 2), 16))
+      + 0.7152 * chan68(parseInt(digits68.slice(2, 4), 16))
+      + 0.0722 * chan68(parseInt(digits68.slice(4, 6), 16))
+  }
+  const contrast68 = (a68: string, b68: string) => {
+    const la68 = luminance68(a68)
+    const lb68 = luminance68(b68)
+    return (Math.max(la68, lb68) + 0.05) / (Math.min(la68, lb68) + 0.05)
+  }
+  for (const input68 of [...ACCENT_PRESETS.map((p) => p.hex), '#ffff00', '#ff0000', '#ffffff', '#000000', '#00ff00', '#808080']) {
+    for (const theme68 of ['light', 'dark'] as const) {
+      const scale68 = buildAccentTokens(input68, theme68)
+      for (const name68 of ACCENT_TOKEN_NAMES) {
+        assert.ok(/^(#[0-9a-f]{6}|rgba\(\d+, \d+, \d+, [\d.]+\))$/.test(scale68[name68] ?? ''),
+          `【主题色】${input68} / ${theme68} 派生出的 ${name68} 不合法`)
+      }
+      if (theme68 === 'light') {
+        assert.equal(scale68['--tm-brand-primary'], scale68['--tm-brand-accent'],
+          `【主题色】${input68} 在浅色主题必须保持单色制（primary === accent）`)
+        assert.ok(contrast68(scale68['--tm-brand-primary'], '#ffffff') >= 4.5,
+          `【主题色】${input68} 作按钮底时白字不可读`)
+      } else {
+        assert.ok(contrast68(scale68['--tm-brand-accent'], '#0f141b') >= 4.5,
+          `【主题色】${input68} 在深色背景下不可读`)
+      }
+    }
+  }
+  // 无彩色输入（白 / 黑 / 灰）保留中性，绝不凭空染上一个色相。
+  for (const neutral68 of ['#ffffff', '#000000', '#808080', '#f5f5f5']) {
+    const hex68 = harmonizeAccentColor(neutral68).hex
+    const r68 = parseInt(hex68.slice(1, 3), 16)
+    const g68 = parseInt(hex68.slice(3, 5), 16)
+    const b68 = parseInt(hex68.slice(5, 7), 16)
+    assert.ok(r68 === g68 && g68 === b68, `【主题色】${neutral68} 被错误染色为 ${hex68}`)
+  }
+
+  // 5) 输入规范化：CSS 允许的 3 / 4 / 6 / 8 位 hex 都归一成不带 alpha 的 6 位小写值。
+  assert.equal(normalizeAccentColor('#ABC'), '#aabbcc')
+  assert.equal(normalizeAccentColor('#abcd'), '#aabbcc')
+  assert.equal(normalizeAccentColor('#0969DA80'), '#0969da')
+  for (const bad68 of ['', '  ', 'not-a-color', '#12', '#ggg', '#12345', 123, null, undefined]) {
+    assert.equal(normalizeAccentColor(bad68), null, `【主题色】非法输入 ${String(bad68)} 必须被拒绝`)
+  }
+
+  // 6) 全链路接线：启动应用 / 切换明暗重新派生 / 修改即持久化 / 默认色清空注入 /
+  //    设置页提供真实控件且自身不含色值字面量。
+  assert.ok(main68.includes('useThemeStore.getState().initializeTheme()'),
+    '【主题色】必须在首帧前从存档恢复主题色，否则每次启动都会闪回品牌蓝')
+  assert.ok(store68.includes('applyAccentColor(accentColor, accentThemeOf(theme))'),
+    '【主题色】初始化必须同时注入派生色阶')
+  assert.ok(store68.includes('applyAccentColor(get().accentColor, accentThemeOf(theme))'),
+    '【主题色】切换浅色 / 深色必须用同一基色重新派生，否则亮度层级会错位')
+  assert.ok(store68.includes('persistAccentColor(color)') && store68.includes('window.localStorage'),
+    '【主题色】主题色必须持久化，不能只在当前会话生效')
+  assert.ok(apply68.includes('color === DEFAULT_ACCENT_COLOR') && apply68.includes('clearAccentTokens()'),
+    '【主题色】选回默认色必须清空运行时注入，让静态 fallback 生效')
+  assert.ok(settings68.includes('ACCENT_PRESETS') && settings68.includes('state.accentColor')
+    && settings68.includes('data-tm-accent-preset=') && settings68.includes('data-tm-accent-custom'),
+    '【主题色】全局设置页必须提供预设色板 + 自定义取色器，且从统一管理层取数据')
+  assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(settings68),
+    '【主题色】设置页不得出现色值字面量，色板只能来自 domain/theme')
+
+  // 7) 策略数据化：默认策略必须与「不传策略」逐字一致（这次改造零行为变化），
+  //    且覆盖入口真的能改变派生结果 —— 这是未来主题皮肤的唯一扩展点。
+  assert.equal(ACCENT_POLICIES.light.scale.darkTiers, null,
+    '【主题色】浅色策略不应带深色亮度层级')
+  assert.ok(ACCENT_POLICIES.dark.scale.darkTiers,
+    '【主题色】深色策略必须提供亮度层级，否则深底上文字不可读')
+  assert.equal(ACCENT_POLICIES.light.harmonize.minContrast, 4.5,
+    '【主题色】默认可读性下限不得被悄悄改动')
+  for (const policyInput68 of [...ACCENT_PRESETS.map((p) => p.hex), '#ffff00', '#ffffff', '#808080']) {
+    for (const policyTheme68 of ['light', 'dark'] as const) {
+      assert.deepEqual(
+        buildAccentTokens(policyInput68, policyTheme68, ACCENT_POLICIES[policyTheme68]),
+        buildAccentTokens(policyInput68, policyTheme68),
+        `【主题色】${policyInput68}/${policyTheme68} 显式传默认策略不得改变派生结果`)
+    }
+  }
+  const scaleBase68 = buildAccentTokens(DEFAULT_ACCENT_COLOR, 'light')
+  const scaleOverride68 = resolveAccentPolicy('light', { scale: { softAlpha: 0.42 } })
+  const scaleOverridden68 = buildAccentTokens(DEFAULT_ACCENT_COLOR, 'light', scaleOverride68)
+  assert.notEqual(scaleOverridden68['--tm-brand-soft'], scaleBase68['--tm-brand-soft'],
+    '【主题色】策略覆盖必须能改派生色阶')
+  assert.equal(scaleOverridden68['--tm-brand-selected'], scaleBase68['--tm-brand-selected'],
+    '【主题色】局部覆盖不得影响未覆盖的档位')
+  assert.equal(scaleOverride68.scale.selectedAlpha, ACCENT_POLICIES.light.scale.selectedAlpha,
+    '【主题色】resolveAccentPolicy 必须保留未覆盖字段')
+  const tierOverride68 = resolveAccentPolicy('dark', { scale: { darkTiers: { saturationBoost: 0 } } })
+  assert.notEqual(
+    buildAccentTokens(DEFAULT_ACCENT_COLOR, 'dark', tierOverride68)['--tm-brand-accent'],
+    buildAccentTokens(DEFAULT_ACCENT_COLOR, 'dark')['--tm-brand-accent'],
+    '【主题色】深色嵌套策略也必须可局部覆盖')
+  const harmonizeOverride68 = resolveAccentPolicy('light', { harmonize: { maxSaturation: 0.3 } })
+  assert.notEqual(
+    harmonizeAccentColor('#ffff00', harmonizeOverride68.harmonize).hex,
+    harmonizeAccentColor('#ffff00').hex,
+    '【主题色】调和策略必须可覆盖，皮肤作者才能放宽 / 关闭自动调和')
+  assert.notEqual(
+    buildAccentTokens('#ffff00', 'light', harmonizeOverride68)['--tm-brand-primary'],
+    buildAccentTokens('#ffff00', 'light')['--tm-brand-primary'],
+    '【主题色】调和策略覆盖必须传导到派生色阶')
+
+  // 8) 版本化外观配置入口：v0 裸 hex 与 v1 JSON 都能读，坏数据一律回落默认。
+  assert.equal(THEME_CONFIG_VERSION, 1, '【主题配置】版本号变更必须同时补迁移分支')
+  const cfgFallback68 = DEFAULT_ACCENT_COLOR
+  assert.equal(parseThemeConfig(null, cfgFallback68).accentColor, cfgFallback68,
+    '【主题配置】空存档必须回落默认')
+  assert.equal(parseThemeConfig('', cfgFallback68).accentColor, cfgFallback68)
+  assert.equal(parseThemeConfig('#ABC', cfgFallback68).accentColor, '#aabbcc',
+    '【主题配置】v0 裸 hex 必须能升级到 v1')
+  assert.equal(parseThemeConfig('#0969DA80', cfgFallback68).accentColor, DEFAULT_ACCENT_COLOR,
+    '【主题配置】v0 带 alpha 的 hex 必须丢弃 alpha')
+  assert.equal(parseThemeConfig('#743fc0', cfgFallback68).version, THEME_CONFIG_VERSION)
+  const cfgV168 = serializeThemeConfig({ version: 1, accentColor: '#743fc0' })
+  assert.equal(parseThemeConfig(cfgV168, cfgFallback68).accentColor, '#743fc0',
+    '【主题配置】v1 JSON 与 serializeThemeConfig 必须 round-trip')
+  for (const cfgBad68 of [
+    'not-a-color',
+    JSON.stringify({ version: 1, accentColor: 'oops' }),
+    JSON.stringify({ version: 99, accentColor: '#743fc0' }),
+    JSON.stringify({ accentColor: '#743fc0' }),
+    '{"version":1,',
+    JSON.stringify([1, 2, 3]),
+    '{"version":1,"accentColor":null}',
+    123,
+    {},
+    undefined,
+  ]) {
+    assert.equal(parseThemeConfig(cfgBad68, cfgFallback68).accentColor, cfgFallback68,
+      `【主题配置】无法识别的存档 ${String(cfgBad68)} 必须回落默认`)
+  }
+  assert.ok(store68.includes('parseThemeConfig(raw, DEFAULT_ACCENT_COLOR)'),
+    '【主题配置】store 读入口必须走版本化解析，不能自己再写一份兼容逻辑')
+  assert.ok(store68.includes('window.localStorage.setItem(ACCENT_STORAGE_KEY, color)'),
+    '【主题配置】v0 写盘格式保持不变，保证这次改造零行为变化')
+}
+
+// ===== 69) 标题栏学习时长等宽：变长时间字符串不得推动 tab 区（2026-11-24）=====
+// 旧状态：时长直接渲染在 button 里，"0s" / "59m 59s" / "23h 59m 59s" 宽度不同，
+// 导致紧随其后的 data-tm-tab-zone 左边界随秒数跳动，整排知识库 tab 左右漂移。
+{
+  const widget69 = await readFile(new URL('../src/plugins/builtin/learning-statistics/LearningTrackerWidget.tsx', import.meta.url), 'utf-8')
+  const title69 = await readFile(new URL('../src/features/layout/CustomTitleBar/CustomTitleBar.tsx', import.meta.url), 'utf-8')
+  const gui69 = await readFile(new URL('../scripts/verify-titlebar-duration-gui.mjs', import.meta.url), 'utf-8')
+  const pkg69 = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf-8'))
+
+  assert.ok(widget69.includes('const MAX_TODAY_SECONDS = 24 * 60 * 60 - 1')
+    && widget69.includes('const DURATION_WIDTH_SAMPLE = formatDuration(MAX_TODAY_SECONDS)'),
+    '【标题栏时长等宽】固定宽度必须由「当日最长合法字符串」推导，不能拍脑袋写死')
+  assert.ok(widget69.includes('data-tm-learning-duration=""')
+    && widget69.includes('tabular-nums') && widget69.includes('whitespace-nowrap')
+    && widget69.includes('aria-hidden="true" className="invisible"')
+    && /absolute inset-y-0 left-0/.test(widget69),
+    '【标题栏时长等宽】隐形占位 + 脱离文档流的左对齐真实文本 + 等宽数字契约缺一不可')
+  const durationClass69 = widget69.match(/data-tm-learning-duration=""[\s\S]{0,200}?className="([^"]+)"/)?.[1] ?? ''
+  assert.ok(!/\[\d+(px|ch)\]/.test(durationClass69),
+    '【标题栏时长等宽】禁止用魔法 px / ch 宽度：换字体、字号或字距后会再次溢出或留白')
+  assert.ok(title69.indexOf('data-tm-titlebar-widget=""') < title69.indexOf('data-tm-tab-zone=""'),
+    '【标题栏时长等宽】学习计时 widget 必须在 tab 区之前，它的宽度才会直接决定 tab 位置')
+  assert.ok(gui69.includes("'0s'") && gui69.includes("'23h 59m 59s'")
+    && gui69.includes('zoneX') && gui69.includes('viewportRows')
+    && pkg69.scripts?.['verify:titlebar:duration:gui'],
+    '【标题栏时长等宽】必须有真实 GUI 回归覆盖全部时长形态与窗口宽度变化，并挂 npm 入口')
 }
 
 console.log('Critical regression checks verified')

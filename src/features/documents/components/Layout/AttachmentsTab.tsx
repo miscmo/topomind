@@ -174,7 +174,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
       setError('')
       await storage.deleteAttachment(attachmentCardPath, item.name)
       await loadAttachments()
-      logAction('附件管理:删除', 'AttachmentsTab', { attachmentCardPath, name: item.name })
+      logAction('attachment.delete', 'AttachmentsTab', { attachmentCardPath, name: item.name })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       logger.catch('AttachmentsTab', 'handleDelete', e)
@@ -204,7 +204,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
           importedCount++
         }
         await loadAttachments()
-        logAction('附件管理:上传', 'AttachmentsTab', { attachmentCardPath, count: importedCount })
+        logAction('attachment.upload', 'AttachmentsTab', { attachmentCardPath, count: importedCount })
         perfSpan.end({ count: importedCount })
         perfSpan = null
       }
@@ -254,7 +254,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
     e.stopPropagation()
     try {
       await storage.openAttachment(attachmentCardPath, item.name)
-      logAction('附件管理:系统打开', 'AttachmentsTab', { attachmentCardPath, name: item.name })
+      logAction('attachment.open', 'AttachmentsTab', { attachmentCardPath, name: item.name })
     } catch (err) {
       logger.catch('AttachmentsTab', 'handleOpen', err)
     }
@@ -264,7 +264,7 @@ export const AttachmentsTab = memo(function AttachmentsTab({ attachmentCardPath,
     e.stopPropagation()
     try {
       await storage.showAttachmentInFolder(attachmentCardPath, item.name)
-      logAction('附件管理:资源管理器打开', 'AttachmentsTab', { attachmentCardPath, name: item.name })
+      logAction('attachment.open', 'AttachmentsTab', { attachmentCardPath, name: item.name })
     } catch (err) {
       logger.catch('AttachmentsTab', 'handleShowInFolder', err)
     }

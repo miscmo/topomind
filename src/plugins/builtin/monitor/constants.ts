@@ -6,3 +6,11 @@ export const LEVEL_COLORS: Record<string, string> = {
   ERROR: '#e74c3c',
 }
 export const LEVEL_ORDER: Record<string, number> = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 }
+
+/** v3 一级分类色：只引用语义 token，不写死色值。 */
+export const CATEGORY_COLORS: Record<string, string> = {
+  user: 'var(--color-primary)',
+  internal: 'var(--color-text-secondary)',
+  performance: 'var(--color-accent)',
+  error: 'var(--color-danger)',
+}

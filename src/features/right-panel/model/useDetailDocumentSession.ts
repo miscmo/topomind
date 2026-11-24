@@ -94,7 +94,7 @@ export function useDetailDocumentSession({
         savedContentLength = getDocumentContentLength(contentSnapshot)
       }
 
-      logAction('内容:保存', 'DetailPanel', { nodePath, documentPath: activeDocumentPath, label })
+      logAction('document.save', 'DetailPanel', { nodePath, documentPath: activeDocumentPath, label })
       void logPerformanceMetric(PERFORMANCE_METRICS.detailSave, performance.now() - saveStartedAt, {
         success: true,
         nodeId: selectedNodeId,

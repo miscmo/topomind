@@ -392,7 +392,7 @@ export function useGraphCanvasModel({
     if (document.querySelector('[data-tm-container-surface="active"]')) return
     event.preventDefault()
     setIsSearchOpen(true)
-    logAction('快捷键:搜索节点', 'GraphCanvas', { source: 'shortcut' })
+    logAction('ui.shortcut', 'GraphCanvas', { source: 'shortcut' })
   }, { scope: 'global', preventDefault: true })
 
   useShortcut(['Escape'], (_event) => {
@@ -421,7 +421,7 @@ export function useGraphCanvasModel({
     if (tab && 'graphSession' in tab && (tab as unknown as { graphSession?: { roomPath?: string } }).graphSession?.roomPath) {
       void graph.flushCurrentRoomSave?.()
     }
-    logAction('快捷键:撤销', 'GraphCanvas', { source: 'undo' })
+    logAction('ui.shortcut', 'GraphCanvas', { source: 'undo' })
   }, { scope: 'canvas', preventDefault: true })
 
   useShortcut(['Control+y', 'Meta+y', 'Control+Shift+Z', 'Meta+Shift+Z'], (event) => {
@@ -433,7 +433,7 @@ export function useGraphCanvasModel({
     if (tab && 'graphSession' in tab && (tab as unknown as { graphSession?: { roomPath?: string } }).graphSession?.roomPath) {
       void graph.flushCurrentRoomSave?.()
     }
-    logAction('快捷键:重做', 'GraphCanvas', { source: 'redo' })
+    logAction('ui.shortcut', 'GraphCanvas', { source: 'redo' })
   }, { scope: 'canvas', preventDefault: true })
 
   useShortcut(['Enter', 'NumpadEnter', 'Tab'], (event) => {
@@ -458,7 +458,7 @@ export function useGraphCanvasModel({
 
     event.preventDefault()
     void (async () => {
-      logAction('节点:快捷键创建', 'GraphCanvas', {
+      logAction('node.create', 'GraphCanvas', {
         source: isTab ? 'tab-create-right-sibling' : 'enter-below-selected-node',
         selectedNodeId: selectedNode.id,
         position,

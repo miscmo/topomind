@@ -3,6 +3,7 @@ import { withMultiColumn } from '@blocknote/xl-multi-column'
 import { MermaidBlock } from 'blocknote-mermaid'
 import { InlineMath, MathBlock } from './mathSupport'
 import { DocumentLink } from './docLinkSupport'
+import { ExcalidrawBlock } from './excalidrawBlockSupport'
 import { customCodeBlockOptions } from './components/CustomCodeBlock'
 
 // 用 xl-multi-column 包裹 schema，加入 column / columnList 块，
@@ -14,6 +15,8 @@ export const smartDocumentSchema = withMultiColumn(
       codeBlock: createCodeBlockSpec(customCodeBlockOptions),
       mermaid: MermaidBlock(),
       math: MathBlock(),
+      // 手绘流程图：场景 JSON 直接存在块 props 里，双击进全屏 Excalidraw 编辑。
+      excalidraw: ExcalidrawBlock(),
     },
     inlineContentSpecs: {
       inlineMath: InlineMath,

@@ -84,7 +84,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
   const closeContextMenu = useCallback(() => {
     setContextMenu((current) => {
       if (!current.visible) return current
-      logAction('右键菜单:关闭', 'GraphPage', {})
+      logAction('ui.context_menu', 'GraphPage', {})
       return { ...current, visible: false }
     })
   }, [])
@@ -92,7 +92,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
   const openNodeMenu = useCallback((nodeId: string, event: MouseEvent | React.MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
-    logAction('右键菜单:显示', 'GraphPage', { type: 'node', nodeId, x: event.clientX, y: event.clientY })
+    logAction('ui.context_menu', 'GraphPage', { type: 'node', nodeId, x: event.clientX, y: event.clientY })
     const selectedIds = readSelectionSnapshot()
     setContextMenu({
       visible: true,
@@ -110,7 +110,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
   const openEdgeMenu = useCallback((edgeId: string, event: MouseEvent | React.MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
-    logAction('右键菜单:显示', 'GraphPage', { type: 'edge', edgeId, x: event.clientX, y: event.clientY })
+    logAction('ui.context_menu', 'GraphPage', { type: 'edge', edgeId, x: event.clientX, y: event.clientY })
     const selectedIds = readSelectionSnapshot()
     setContextMenu({
       visible: true,
@@ -126,7 +126,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
   }, [readSelectionSnapshot])
 
   const openPaneMenu = useCallback((x: number, y: number) => {
-    logAction('右键菜单:显示', 'GraphPage', { type: 'pane', x, y })
+    logAction('ui.context_menu', 'GraphPage', { type: 'pane', x, y })
     const selectedIds = readSelectionSnapshot()
     setContextMenu({
       visible: true,
@@ -155,7 +155,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
     // 用 xyflow 传来的集合兜底，避免出现「有选中但菜单说 0 个」。
     const selectedIds = snapshot.length > 0 ? snapshot : selectedNodes.map(normalizeRef).filter(Boolean)
     const singleId = selectedIds.length === 1 ? selectedIds[0] : ''
-    logAction('右键菜单:显示', 'GraphPage', { type: 'selection', x, y, count: selectedIds.length })
+    logAction('ui.context_menu', 'GraphPage', { type: 'selection', x, y, count: selectedIds.length })
     setContextMenu({
       visible: true,
       x,

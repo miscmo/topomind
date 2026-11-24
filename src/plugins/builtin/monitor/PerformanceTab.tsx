@@ -4,8 +4,11 @@
  */
 import { useCallback, useMemo, useState } from 'react'
 import { Activity } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 
 import { EmptyState } from '@/shared/ui/EmptyState'
+import { useMonitorStore } from '@/plugins/public/monitorStore'
+import { useMonitorHost } from './hostContext'
 import {
   bucketPerformanceSamples,
   computeCalibrationSummary,
@@ -36,6 +39,21 @@ export default function PerformanceTab() {
     activeMetric, setActiveMetric,
   } = usePerformanceSamples()
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null)
+  const setEntries = useMonitorStore((s) => s.setEntries)
+  const focusTrace = useMonitorStore((s) => s.focusTrace)
+  const { logs, log } = useMonitorHost()
+
+  /** v3 P4：慢样本 → 触发它的用户事件。按 traceId 查全量日志后跳到事件流回放。 */
+  const handleTraceLookup = useCallback(async () => {
+    if (!selectedTraceId) return
+    log.info('performance trace lookup', { traceLength: selectedTraceId.length })
+    const results = await logs.query({
+      date: selectedDate || undefined,
+      traceId: selectedTraceId,
+    })
+    setEntries(results)
+    focusTrace(selectedTraceId)
+  }, [focusTrace, log, logs, selectedDate, selectedTraceId, setEntries])
 
   const stats = useMemo(
     () => computeMetricStatistics(filteredSamples, definitions),
@@ -103,6 +121,29 @@ export default function PerformanceTab() {
         metricCount={definitions.length}
         onExport={handleExportSamples}
       />
+
+      {selectedTraceId && (
+        <div className="flex items-center gap-2 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-muted)] px-4 py-2 shrink-0" style={{ fontSize: 'var(--font-size-sm)' }}>
+          <ExternalLink className="h-3.5 w-3.5 text-[var(--color-accent)]" />
+          <span className="text-[var(--color-text-muted)]">已选性能链路</span>
+          <span className="font-mono text-[var(--color-text-secondary)]">{selectedTraceId}</span>
+          <button
+            className="tm-perf-lookup ml-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-hover-bg)]"
+            style={{ fontSize: 'var(--font-size-xs)' }}
+            onClick={() => void handleTraceLookup()}
+          >
+            反查触发它的用户事件
+          </button>
+          <button
+            className="tm-perf-clear rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-text-muted)] cursor-pointer hover:bg-[var(--color-hover-bg)]"
+            style={{ fontSize: 'var(--font-size-xs)' }}
+            onClick={() => setSelectedTraceId(null)}
+          >
+            清除
+          </button>
+          <span className="ml-auto text-[var(--color-text-muted)]">反查会按 traceId 拉取该链路全部四类日志并在事件流中回放</span>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
         {samples.length === 0 ? (

@@ -99,7 +99,7 @@ export default function HomePage() {
           </div>
           
           {message && (
-            <div className={`mb-6 rounded-lg px-4 py-3 text-sm ${messageError ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
+            <div className={`mb-6 rounded-lg px-4 py-3 text-sm ${messageError ? 'bg-destructive/10 text-destructive' : 'bg-[var(--color-success-soft)] text-[var(--color-success)]'}`}>
               {message}
             </div>
           )}

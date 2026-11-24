@@ -44,7 +44,7 @@ export function useTrashDialogModel(visible: boolean, refreshKBList: () => Promi
       const restoredName = await storage.restoreGlobalTrashItem(item.category!, item.trashName)
       await refreshKBList()
       await loadItems()
-      logAction('回收站:恢复项目', 'useTrashDialogModel', { trashName: item.trashName, restoredName, category: item.category })
+      logAction('kb.trash_restore', 'useTrashDialogModel', { trashName: item.trashName, restoredName, category: item.category })
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       setError(message)
@@ -67,7 +67,7 @@ export function useTrashDialogModel(visible: boolean, refreshKBList: () => Promi
     try {
       await storage.clearAllTrashItems()
       setItems([])
-      logAction('回收站:清空全部', 'useTrashDialogModel', { count: items.length })
+      logAction('kb.trash_clear', 'useTrashDialogModel', { count: items.length })
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       setError(message)

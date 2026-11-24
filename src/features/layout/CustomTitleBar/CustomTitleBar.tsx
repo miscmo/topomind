@@ -8,6 +8,7 @@ import { useShortcut } from '../../../hooks/useShortcut'
 import { Menu, PanelLeft, PanelLeftClose } from 'lucide-react'
 import { TM_UI, tmUI } from '../../../shared/ui/controlStyles'
 import TabBar from '../TabBar/TabBar'
+import { useDebugHudStore } from '../../debug/debugStore'
 import type { WindowControlsState } from '../../../types/electron-api'
 
 type TitleBarMode = 'setup' | 'workspace'
@@ -54,6 +55,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null)
   const [windowState, setWindowState] = useState<WindowControlsState>({ isMaximized: false, isFocused: true })
   const theme = useThemeStore((s) => s.theme)
+  const debugEnabled = useDebugHudStore((s) => s.enabled)
   const railVisible = useLayoutStore((s) => s.railVisible)
   const toggleRailVisible = useLayoutStore((s) => s.toggleRailVisible)
   // 仅用于 Π 形连体换底色，不参与任何画布布局计算。
@@ -128,6 +130,10 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     })
   }, [])
 
+  // P6：Debug HUD 的全局开关。走命令而不是直接改 store，与菜单入口共用
+  // observeOperation 的 user.command 埋点，开启动作本身也会出现在日志流里。
+  useShortcut(['Ctrl+Shift+D'], () => { runCommand('debug.toggle') }, { scope: 'global' })
+
   const menuItems = useMemo<Record<MenuKey, MenuItem[]>>(() => ({
     file: [
       { label: '切换工作目录', action: () => runCommand('workspace.switch') },
@@ -150,9 +156,15 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
     help: [
       { label: '快捷键', action: () => runCommand('nav.openSettings') },
       { label: '开发者工具', shortcut: 'F12', action: () => runCommand('window.toggleDevTools') },
+      {
+        label: 'Debug 模式',
+        shortcut: 'Ctrl+Shift+D',
+        checked: debugEnabled,
+        action: () => runCommand('debug.toggle'),
+      },
       { label: '关于 TopoMind', action: () => runCommand('nav.openSettings') },
     ],
-  }), [runCommand, theme])
+  }), [runCommand, theme, debugEnabled])
 
   const renderMenuItem = (item: MenuItem) => (
     <button

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { attachStateObservation } from '../core/observabilityStoreMiddleware.ts'
 import type { AppView } from '../types'
 
 interface WorkspaceStore {
@@ -24,3 +25,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   resetWorkspace: () => set({ ...WORKSPACE_INITIAL_STATE, skipAutoLoad: true }),
   setSkipAutoLoad: (skipAutoLoad) => set({ skipAutoLoad }),
 }))
+
+// P7 M3：持久化状态变更自动补一条内存步骤（不落盘），出事时随 trace dump。
+attachStateObservation(useWorkspaceStore, { name: 'workspace' })

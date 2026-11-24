@@ -10,6 +10,7 @@
 import { useCallback } from 'react'
 import { useConfirmStore } from '../../../../shared/ui/ConfirmModal/confirmStore'
 import { logAction } from '../../../../core/log-backend'
+import { recordStep } from '../../../../core/traceBuffer'
 import type { KnowledgeNode } from '../../../../types'
 import type { GraphContextValue } from '../../../../contexts/GraphContext'
 import { useEdgeActions } from './useEdgeActions'
@@ -49,7 +50,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   }, [storeApi])
 
   const handleNewChild = useCallback(async (position?: { x: number; y: number }) => {
-    logAction('节点:创建', 'useNodeActions', { 
+    logAction('node.create', 'useNodeActions', { 
       nodeName: '新节点',
       source: 'pane-context-menu',
       position 
@@ -72,7 +73,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     const roomPath = session.roomPath || session.kbPath
     if (!roomPath) return
     const name = config.name
-    logAction('容器:创建', 'useNodeActions', { name, roomPath, position, variant })
+    logAction('container.create', 'useNodeActions', { name, roomPath, position, variant })
     const cardId = await graph.createChildNode(name, undefined, position)
     if (!cardId) return
     const nodePath = resolveRoomChildRef(roomPath, cardId)
@@ -99,7 +100,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
       await graph.flushCurrentRoomSave()
       await graph.refreshCurrentRoom()
     } catch (e) {
-      logAction('容器:创建失败', 'useNodeActions', {
+      logAction('container.create_failed', 'useNodeActions', {
         nodeId: cardId, variant, error: (e as Error)?.message || String(e),
       })
     }
@@ -119,7 +120,9 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     if (!node) return false
     const confirmed = await confirm({ title: '删除节点', message: `将删除节点「${node.data.label}」。若该节点已有文档或子房间，其目录会移入全局回收站。` })
     if (!confirmed) return false
-    logAction('节点:删除', 'useNodeActions', { nodeId, label: node.data.label, source: 'context-menu' })
+    // P7：右键确认只是入口，真正的事实由执行层 IO 成功后写 1 条。
+    // 这里降级为内存步骤，避免同一次删除写 2 条 node.delete。
+    recordStep({ name: 'node.delete.confirm', outcome: 'confirmed', params: { nodeId, source: 'context-menu' } })
     await graph.deleteChildNode(nodeId)
     return true
   }, [confirm, findNodeById, graph])
@@ -129,7 +132,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     if (!node) return
     const cardRef = typeof node.data.cardRef === 'string' ? node.data.cardRef : node.id
     const absoluteChildPath = resolveRoomChildRef(typeof node.data.parent === 'string' ? node.data.parent : '', cardRef)
-    logAction('节点:进入', 'useNodeActions', { nodeId, label: node.data.label, source: 'context-menu' })
+    logAction('node.enter', 'useNodeActions', { nodeId, label: node.data.label, source: 'context-menu' })
     await graph.navigateToChildRoom(absoluteChildPath, node.data.label)
     onAction?.()
   }, [findNodeById, graph, onAction])

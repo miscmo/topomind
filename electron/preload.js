@@ -31,14 +31,18 @@ const ALLOWED_CHANNELS = new Set([
   'app:window:toggleDevTools',
   'app:window:close',
   // log
-  'log:write', 'log:getBuffer', 'log:query', 'log:setLevel', 'log:clear',
-  'log:getAvailableDates', 'log:getLogDir',
+  'log:write', 'log:getBuffer', 'log:query', 'log:setLevel', 'log:getLevel',
+  'log:clearBuffer', 'log:getAvailableDates', 'log:getLogDir', 'log:export',
+  // P3：一键诊断包（主进程二次脱敏 + 双目录汇总后返回 JSON 字符串）
+  'log:exportBundle',
 ]);
 
 const ALLOWED_SEND_CHANNELS = new Set([
   'app:close-guard:response',
   'log:subscribe',
   'log:unsubscribe',
+  // P3：原始输入黑匣子的内存镜像，主进程只进内存缓冲、绝不落盘
+  'log:breadcrumbs',
 ]);
 
 const ALLOWED_RECEIVE_CHANNELS = new Set([
@@ -47,9 +51,125 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   'app:reset-session',
   'app:window-state-change',
   'log:entry',
+  'log:level',
 ]);
 
 // preload loaded — intentionally silent (no console output in production)
+
+// ---------------------------------------------------------------------------
+// P2 IPC 单点审计（observability-v3-plan.md §4）
+//
+// 所有渲染侧 invoke 都经过这里，一次覆盖 82 个业务通道，不需要 fs-backend
+// 或业务代码再埋点。三条硬约束：
+//  1. `log:*` 通道显式排除，否则 log:write -> IPC -> 审计 -> log:write 无限递归；
+//  2. 审计日志直接走 ipcRenderer，不经过暴露给渲染进程的 invoke 包装函数；
+//  3. 正常调用只按分钟聚合成一条 ipc.audit，失败/慢调用才即时记明细，
+//     避免 1s 轮询之类的高频通道把日志刷成洪水。
+// ---------------------------------------------------------------------------
+var AUDIT_LOG_PREFIX = 'log:';
+var AUDIT_WINDOW_MS = 60000;
+var AUDIT_SLOW_MS = 500;
+var AUDIT_MAX_CHANNELS = 30;
+
+var auditSession = 'ipc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+var auditSeq = 0;
+var rendererTraceId = null;
+var auditWindowStart = Date.now();
+var auditTotals = { calls: 0, failures: 0 };
+var auditByChannel = new Map();
+
+function nextAuditTraceId() {
+  auditSeq += 1;
+  return auditSession + ':' + auditSeq;
+}
+
+function auditEntry(action, level, params, durationMs, outcome, traceId) {
+  // P5：traceId === null 表示「显式独立」。60s 聚合汇总横跨几十次用户操作，
+  // 强行挂到最近一次点击的链路上会伪造因果，因此不写 traceId 字段。
+  var resolvedTrace = traceId === null ? null : (traceId || rendererTraceId || nextAuditTraceId());
+  var entry = {
+    v: 3,
+    level: level,
+    category: 'internal',
+    module: 'app',
+    action: action,
+    label: action === 'ipc.invoke' ? 'IPC 调用明细' : 'IPC 调用汇总',
+    message: action === 'ipc.invoke' ? 'IPC 调用明细' : 'IPC 调用汇总',
+    source: 'preload',
+    outcome: outcome,
+    result: outcome,
+    durationMs: durationMs,
+    params: params,
+  };
+  if (resolvedTrace) entry.traceId = resolvedTrace;
+  return entry;
+}
+
+/** 审计写入失败绝不影响业务调用，也不允许再触发一次审计。 */
+function auditWrite(entry) {
+  try {
+    var pending = ipcRenderer.invoke('log:write', entry);
+    if (pending && typeof pending.catch === 'function') pending.catch(function () {});
+  } catch {
+    // 审计通道自身不可用时静默降级。
+  }
+}
+
+function auditFlush(now) {
+  var elapsed = now - auditWindowStart;
+  auditWindowStart = now;
+  if (auditTotals.calls === 0) return;
+  var rows = Array.from(auditByChannel.values()).sort(function (a, b) { return b.calls - a.calls; });
+  var channels = rows.slice(0, AUDIT_MAX_CHANNELS).map(function (stat) {
+    return {
+      channel: stat.channel,
+      calls: stat.calls,
+      avgMs: Math.round(stat.totalMs / stat.calls),
+      maxMs: stat.maxMs,
+      failures: stat.failures,
+    };
+  });
+  var params = {
+    windowMs: elapsed,
+    totalCalls: auditTotals.calls,
+    failures: auditTotals.failures,
+    distinctChannels: rows.length,
+    channels: channels,
+  };
+  if (rows.length > AUDIT_MAX_CHANNELS) params.otherChannels = rows.length - AUDIT_MAX_CHANNELS;
+  auditWrite(auditEntry(
+    'ipc.audit', 'INFO', params, elapsed,
+    auditTotals.failures > 0 ? 'partial' : 'success',
+    null,
+  ));
+  auditByChannel.clear();
+  auditTotals.calls = 0;
+  auditTotals.failures = 0;
+}
+
+function auditRecord(channel, durationMs, failed, traceId) {
+  var now = Date.now();
+  var stat = auditByChannel.get(channel);
+  if (!stat) {
+    stat = { channel: channel, calls: 0, totalMs: 0, maxMs: 0, failures: 0 };
+    auditByChannel.set(channel, stat);
+  }
+  stat.calls += 1;
+  stat.totalMs += durationMs;
+  if (durationMs > stat.maxMs) stat.maxMs = durationMs;
+  if (failed) stat.failures += 1;
+  auditTotals.calls += 1;
+  if (failed) auditTotals.failures += 1;
+
+  if (failed || durationMs >= AUDIT_SLOW_MS) {
+    auditWrite(auditEntry(
+      'ipc.invoke', failed ? 'WARN' : 'INFO',
+      { channel: channel, reason: failed ? 'rejected' : 'slow', thresholdMs: AUDIT_SLOW_MS },
+      durationMs, failed ? 'failure' : 'slow', traceId,
+    ));
+  }
+  if (now - auditWindowStart >= AUDIT_WINDOW_MS) auditFlush(now);
+}
 
 const listenerMap = new Map();
 
@@ -64,12 +184,33 @@ function getChannelListenerMap(channel) {
 
 contextBridge.exposeInMainWorld('electronAPI', {
   isElectron: true,
+  /**
+   * 渲染侧当前操作的 traceId 镜像。只改 preload 闭包变量，不发起 IPC，
+   * 因此不会触发本文件的审计逻辑（P2 因果链跨进程透传）。
+   */
+  setTraceContext: function(traceId) {
+    rendererTraceId = typeof traceId === 'string' && traceId ? traceId : null;
+  },
   invoke: function(channel) {
     if (!ALLOWED_CHANNELS.has(channel)) {
       return Promise.reject(new Error('IPC 通道不在白名单中: ' + channel));
     }
     var args = Array.prototype.slice.call(arguments, 1);
-    return ipcRenderer.invoke.apply(ipcRenderer, [channel].concat(args));
+    var audited = !channel.startsWith(AUDIT_LOG_PREFIX);
+    var startedAt = audited ? Date.now() : 0;
+    var traceId = audited ? (rendererTraceId || nextAuditTraceId()) : null;
+    var promise = ipcRenderer.invoke.apply(ipcRenderer, [channel].concat(args));
+    if (!audited) return promise;
+    return promise.then(
+      function(value) {
+        auditRecord(channel, Date.now() - startedAt, false, traceId);
+        return value;
+      },
+      function(err) {
+        auditRecord(channel, Date.now() - startedAt, true, traceId);
+        throw err;
+      }
+    );
   },
   send: function(channel) {
     if (!ALLOWED_SEND_CHANNELS.has(channel)) {

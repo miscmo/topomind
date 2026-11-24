@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStorage } from '../../../core/storage'
 import { usePlatform } from '../../../hooks/usePlatform'
 import { logAction } from '../../../core/log-backend'
+import { recordStep } from '../../../core/traceBuffer'
 import { PERFORMANCE_METRICS, measurePerformance } from '../../../core/performance-log'
 
 interface UseHomeImportKBOptions {
@@ -18,30 +19,31 @@ export function useHomeImportKB({ refreshKBList }: UseHomeImportKBOptions) {
   const [selectingImportDir, setSelectingImportDir] = useState(false)
 
   const openImportSheet = () => {
-    logAction('点击导入知识库', 'HomePage', {})
-    logAction('HomePage:导入知识库弹窗:打开', 'HomePage', {})
+    // P7：打开弹窗是过程痕迹，落盘事实只在导入成功/失败时写 1 条。
+    recordStep({ name: 'kb.import.open_dialog', outcome: 'opened' })
+    logAction('kb.import_dialog', 'HomePage', {})
     setShowImportSheet(true)
     setImportDir('')
     setImportError('')
   }
 
   const closeImportSheet = () => {
-    logAction('HomePage:导入知识库弹窗:关闭', 'HomePage', { importDir })
+    logAction('kb.import_dialog', 'HomePage', { importDir })
     setShowImportSheet(false)
   }
 
   const handleSelectImportDir = async () => {
     if (importLoading || selectingImportDir) return
-    logAction('HomePage:点击选择导入文件夹', 'HomePage', {})
+    recordStep({ name: 'kb.import.select_dir', outcome: 'start' })
     setSelectingImportDir(true)
     try {
       const res = await platform.selectDirectory()
       if (res?.valid) {
         setImportDir(res.nodePath || '')
         setImportError('')
-        logAction('HomePage:选择导入文件夹完成', 'HomePage', { selectedPath: res.nodePath })
+        recordStep({ name: 'kb.import.select_dir', outcome: 'selected', params: { selectedPath: res.nodePath } })
       } else {
-        logAction('HomePage:选择导入文件夹取消', 'HomePage', {})
+        recordStep({ name: 'kb.import.select_dir', outcome: 'cancelled' })
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -63,7 +65,8 @@ export function useHomeImportKB({ refreshKBList }: UseHomeImportKBOptions) {
         module: 'HomePage',
         params: { sourcePath: importDir },
       })
-      logAction('知识库:导入', 'HomePage', { sourcePath: importDir })
+      // P7：kb.import 的唯一落盘产生点 —— 导入成功这一事实（用户意图 + 结果）。
+      logAction('kb.import', 'HomePage', { sourcePath: importDir }, { kind: 'intent' })
       setShowImportSheet(false)
       setImportDir('')
       await refreshKBList()

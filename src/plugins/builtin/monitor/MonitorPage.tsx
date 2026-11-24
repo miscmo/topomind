@@ -3,10 +3,14 @@ import type { LoggingApi, LogsApi, PerformanceApi, PluginsApi } from '../../publ
 import PerformanceTab from './PerformanceTab'
 import { MonitorHostContext } from './hostContext'
 import { Sidebar } from './components/Sidebar'
+import { ControlBar } from './components/ControlBar'
 import { FilterBar } from './components/FilterBar'
 import { LogList } from './components/LogList'
 import { DetailPanel } from './components/DetailPanel'
 import { PluginDiagnosticsPanel } from './components/PluginDiagnosticsPanel'
+import { TimelineView } from './components/TimelineView'
+import { SpanView } from './components/SpanView'
+import { ErrorView } from './components/ErrorView'
 import { useMonitorStore } from '@/plugins/public/monitorStore'
 import { initializeMonitorPage, subscribeMonitorDiagnostics, subscribeMonitorLogs } from './runtime'
 
@@ -77,7 +81,19 @@ export default function MonitorPage({
       <div className="flex w-full h-full bg-[var(--color-bg-app)] font-sans text-[13px] text-[var(--color-text-primary)]">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {activeTab === 'log' ? (
+          {/* v3 P4 统一控制条：等级 / session / 详细 / 显示采样 / 实时 / 回放，所有视图共用 */}
+          <ControlBar />
+          {activeTab === 'timeline' ? (
+            <TimelineView />
+          ) : activeTab === 'spans' ? (
+            <SpanView />
+          ) : activeTab === 'errors' ? (
+            <ErrorView />
+          ) : activeTab === 'performance' ? (
+            <PerformanceTab />
+          ) : activeTab === 'plugins' ? (
+            <PluginDiagnosticsPanel />
+          ) : (
             <>
               <FilterBar />
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -85,10 +101,6 @@ export default function MonitorPage({
                 <DetailPanel />
               </div>
             </>
-          ) : activeTab === 'plugins' ? (
-            <PluginDiagnosticsPanel />
-          ) : (
-            <PerformanceTab />
           )}
         </div>
       </div>

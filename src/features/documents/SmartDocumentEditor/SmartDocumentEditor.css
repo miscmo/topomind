@@ -1957,3 +1957,180 @@ html[data-theme='dark'], .dark {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 手绘流程图块（Excalidraw）：尺寸由块 props 的 inline style 驱动，边框可拖动
+   调整；下方不再放说明文字，hover 时用浮层 tooltip 提示「双击进入编辑」。
+   预览根节点是 absolute inset-0，这里的 button 必须提供定位上下文。 */
+.smart-document-content .tm-excalidraw-block {
+  position: relative;
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 10px 0;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 28%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  overflow: hidden;
+}
+.smart-document-content .tm-excalidraw-block:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+/* 三个对齐按钮改的是 textAlignment；块宽度小于容器时通过左右 margin 生效。 */
+.smart-document-content .tm-excalidraw-block[data-tm-excalidraw-block-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+.smart-document-content .tm-excalidraw-block[data-tm-excalidraw-block-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+.smart-document-content .tm-excalidraw-block[data-tm-excalidraw-block-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+.smart-document-content .tm-excalidraw-block-preview {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: var(--color-surface);
+  text-align: left;
+  cursor: zoom-in;
+}
+/* hover tooltip：纯展示层，绝不能拦下双击 / 拖动的指针事件。 */
+.smart-document-content .tm-excalidraw-block::after {
+  content: attr(data-tm-excalidraw-block-tooltip);
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.smart-document-content .tm-excalidraw-block:hover::after {
+  opacity: 1;
+}
+/* 拖动边框：右边缘调宽、下边缘调高、右下角同时调。常驻淡淡的提示线，
+   hover / 聚焦时完全显现；touch-action:none 保证触屏拖动不会变成页面滚动。 */
+.smart-document-content .tm-excalidraw-block-resize {
+  position: absolute;
+  z-index: 3;
+  opacity: 0.35;
+  touch-action: none;
+  transition: opacity 120ms ease;
+}
+.smart-document-content .tm-excalidraw-block:hover .tm-excalidraw-block-resize,
+.smart-document-content .tm-excalidraw-block:focus-within .tm-excalidraw-block-resize {
+  opacity: 1;
+}
+.smart-document-content .tm-excalidraw-block-resize--right {
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 100%;
+  border-right: 3px solid var(--color-accent);
+  cursor: ew-resize;
+}
+.smart-document-content .tm-excalidraw-block-resize--bottom {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 7px;
+  border-bottom: 3px solid var(--color-accent);
+  cursor: ns-resize;
+}
+.smart-document-content .tm-excalidraw-block-resize--corner {
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+.smart-document-content .tm-excalidraw-block-resize--corner::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 9px;
+  height: 9px;
+  border-right: 3px solid var(--color-accent);
+  border-bottom: 3px solid var(--color-accent);
+  border-bottom-right-radius: 3px;
+}
+/* 拖动期间全局锁光标 / 禁选中，避免跨块选到正文。 */
+body.tm-excalidraw-block-is-resizing {
+  cursor: nwse-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* ==========================================================================
+   流程图块对齐浮层（点击块后在块上方弹出，portal 到 body）
+   --------------------------------------------------------------------------
+   与媒体块对齐浮层同款设计令牌，但独立实现：媒体浮层只认 image/file/video，
+   且依赖 NodeSelection；流程图块是 content:none 的自定义块，用 DOM 事件委托 +
+   editor.getBlock() 定位，避免 updateBlock 重建节点视图后浮层丢失。
+   ========================================================================== */
+.tm-excalidraw-block-toolbar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  z-index: 4000;
+}
+.tm-excalidraw-block-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.tm-excalidraw-block-toolbar__btn:hover {
+  background: var(--color-hover-bg);
+  color: var(--color-text-primary);
+}
+.tm-excalidraw-block-toolbar__btn[aria-pressed="true"] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.tm-excalidraw-block-toolbar__btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* 全屏层 portal 到 body，字号类不能加 .smart-document-content 前缀。 */
+.tm-excalidraw-block-text {
+  font-size: var(--font-size-base);
+}
+.tm-excalidraw-block-close {
+  font-size: var(--font-size-sm);
+}
+.tm-excalidraw-block-loading {
+  font-size: var(--font-size-md);
+}

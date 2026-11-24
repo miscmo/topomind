@@ -64,7 +64,7 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
       type: action.type,
       props: action.props ?? {},
     }
-    if (forInsert && action.type !== 'image' && action.type !== 'file' && action.type !== 'mermaid' && action.type !== 'math') {
+    if (forInsert && action.type !== 'image' && action.type !== 'file' && action.type !== 'mermaid' && action.type !== 'math' && action.type !== 'excalidraw') {
       nextBlock.content = ''
     }
     return nextBlock

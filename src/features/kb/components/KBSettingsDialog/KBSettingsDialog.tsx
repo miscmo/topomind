@@ -53,7 +53,7 @@ export function KBSettingsDialog(props: KBSettingsDialogProps) {
           <button type="button" aria-label="关闭知识库设置弹窗" className="w-7 h-7 rounded-md border-none bg-[var(--color-hover-bg)] text-[var(--color-text-muted)] cursor-pointer text-[14px] transition-all duration-75 hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onClose} disabled={loading}>×</button>
         </div>
         <div className="p-[20px_24px]">
-          {error && <div id="kb-settings-error" className="text-[#e74c3c] text-[13px] mb-3" role="alert">{error}</div>}
+          {error && <div id="kb-settings-error" className="text-[var(--color-danger)] text-[13px] mb-3" role="alert">{error}</div>}
 
           <div className="mb-4 [&>label]:block [&>label]:text-[var(--color-text-secondary)] [&>label]:text-[13px] [&>label]:mb-1.5 [&>label]:font-medium [&>input]:w-full [&>input]:p-[10px_14px] [&>input]:border [&>input]:border-[var(--color-border)] [&>input]:rounded-lg [&>input]:bg-[var(--color-surface)] [&>input]:text-[var(--color-text-primary)] [&>input]:text-[13px] [&>input]:transition-all [&>input]:duration-75 [&>input]:box-border focus:[&>input]:outline-none focus:[&>input]:border-[var(--color-accent)] focus:[&>input]:shadow-[var(--shadow-focus-ring)] [&>input::placeholder]:text-[var(--color-text-muted)]">
             <label htmlFor="kb-settings-name">知识库名称</label>

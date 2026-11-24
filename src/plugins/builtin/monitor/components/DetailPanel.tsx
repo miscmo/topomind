@@ -28,6 +28,13 @@ export function DetailPanel() {
     )
   }
 
+  // v2 error 是结构化对象；v1 读时兼容后可能是字符串。统一格式化成可复制文本。
+  const errorText = typeof selectedEntry.error === 'string'
+    ? selectedEntry.error
+    : selectedEntry.error
+      ? `${selectedEntry.error.name}: ${selectedEntry.error.message}${selectedEntry.error.stack ? `\n${selectedEntry.error.stack}` : ''}`
+      : ''
+
   const handleCopy = () => {
     log.info('copy monitor log entry', { entryId: selectedEntry.id, entryLevel: selectedEntry.level })
     void navigator.clipboard.writeText(JSON.stringify(selectedEntry, null, 2)).then(() => {
@@ -87,23 +94,15 @@ export function DetailPanel() {
           <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.5px] pt-[1px] shrink-0">动作</span>
           <span className="text-[12px] text-[var(--color-text-primary)] break-all">{selectedEntry.action || '—'}</span>
         </div>
-        {selectedEntry.func && (
-          <div className="flex items-start gap-3">
-            <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.5px] pt-[1px] shrink-0">函数</span>
-            <span className="text-[12px] text-[var(--color-text-primary)] break-all" style={{ fontFamily: 'monospace' }}>
-              {selectedEntry.file}:{selectedEntry.line} {selectedEntry.func}
-            </span>
-          </div>
-        )}
         <div className="flex items-start gap-3">
           <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.5px] pt-[1px] shrink-0">消息</span>
           <span className="text-[12px] text-[var(--color-text-primary)] break-all">{selectedEntry.message || '—'}</span>
         </div>
-        {selectedEntry.error && (
+        {errorText && (
           <div className="flex items-start gap-3 mt-1" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
             <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.5px] pt-[1px] shrink-0">异常</span>
             <pre className="mt-1 p-2 bg-[var(--color-danger-soft)] rounded-md font-mono text-[11px] text-[var(--color-danger)] leading-[1.6] overflow-x-auto whitespace-pre w-full border border-[var(--color-danger-soft)]">
-              {selectedEntry.error}
+              {errorText}
             </pre>
           </div>
         )}
@@ -117,16 +116,35 @@ export function DetailPanel() {
             </pre>
           </div>
         )}
-        {(selectedEntry.traceId || selectedEntry.spanId || selectedEntry.parentId) && (
-          <div className="flex items-start gap-3">
-            <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.5px] pt-[1px] shrink-0">链路</span>
-            <span className="text-[12px] text-[var(--color-text-primary)] break-all" style={{ fontFamily: 'monospace', fontSize: 11 }}>
-              {selectedEntry.traceId && `trace=${selectedEntry.traceId}`}
-              {selectedEntry.spanId && ` span=${selectedEntry.spanId}`}
-              {selectedEntry.parentId && ` parent=${selectedEntry.parentId}`}
-            </span>
-          </div>
-        )}
+        {/* v3 关联键：一次操作靠 session/trace/span/seq 串起来，缺失字段读时兼容后仍可显示 */}
+        <div className="flex items-start gap-3" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+          <span className="w-[50px] min-w-[50px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.5px] pt-[1px] shrink-0" style={{ fontSize: 'var(--font-size-sm)' }}>关联</span>
+
+          <pre className="mt-1 p-2 bg-[var(--color-bg-muted)] rounded-md font-mono leading-[1.6] overflow-x-auto whitespace-pre-wrap w-full border border-[var(--color-border-subtle)]" style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+            {[
+              `category=${selectedEntry.category || 'internal'}  label=${selectedEntry.label || '—'}`,
+              `session=${selectedEntry.sessionId || '—'}  seq=${selectedEntry.seq ?? '—'}  workspace=${selectedEntry.workspaceId || '—'}`,
+              `trace=${selectedEntry.traceId || '—'}`,
+              `span=${selectedEntry.spanId || '—'}  parent=${selectedEntry.parentId || '—'}`,
+              ...(selectedEntry.target ? [`target=${JSON.stringify(selectedEntry.target)}`] : []),
+              ...(selectedEntry.result ? [`result=${selectedEntry.result}`] : []),
+              ...(typeof selectedEntry.durationMs === 'number' ? [`durationMs=${selectedEntry.durationMs}`] : []),
+              ...(selectedEntry.source || selectedEntry.outcome ? [`source=${selectedEntry.source || '—'}  outcome=${selectedEntry.outcome || '—'}`] : []),
+              ...(selectedEntry.kind ? [`kind=${selectedEntry.kind}`] : []),
+              ...(typeof selectedEntry.stepCount === 'number'
+                ? [`stepCount=${selectedEntry.stepCount}（P7 过程步骤留内存，仅异常 / 诊断包 dump）`] : []),
+              ...(selectedEntry.steps?.length
+                ? [`steps=${selectedEntry.steps.length} 条：${selectedEntry.steps.slice(0, 8).map((step) => `${step.name}${step.outcome ? `/${step.outcome}` : ''}`).join(' → ')}${selectedEntry.steps.length > 8 ? ' …' : ''}`]
+                : []),
+              ...(typeof selectedEntry.repeatCount === 'number'
+                ? [`repeatCount=${selectedEntry.repeatCount}（同一事实被去重合并的次数）`] : []),
+              ...(selectedEntry.fingerprint ? [`fingerprint=${selectedEntry.fingerprint}`] : []),
+              ...(selectedEntry.breadcrumbs?.length ? [`breadcrumbs=${selectedEntry.breadcrumbs.length} 条（D2 仅随 error 同步落盘）`] : []),
+              ...(selectedEntry.dumpRef ? [`dumpRef=${selectedEntry.dumpRef.available ? `${selectedEntry.dumpRef.dir}/${selectedEntry.dumpRef.file ?? '—'}` : 'unavailable'}`] : []),
+              ...(selectedEntry.env ? [`env=${selectedEntry.env.platform}/${selectedEntry.env.arch} electron=${selectedEntry.env.electron ?? '—'} app=${selectedEntry.env.appVersion ?? '—'}`] : []),
+            ].join('\n')}
+          </pre>
+        </div>
         {selectedEntry.meta && (
           <div className="flex items-start gap-3" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
             <span className="w-[50px] min-w-[50px] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.5px] pt-[1px] shrink-0">元数据</span>

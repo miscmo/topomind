@@ -7,6 +7,7 @@ import {
   type LearningSession,
 } from '../../../shared/utils/learningAnalytics'
 import { resolveLearningSessionContext } from './learningTrackerContextStore'
+import { auditInterval } from '../../../core/observe'
 
 // 学习统计的分析算法已收敛到 shared/utils，供本引擎与学习统计插件共用。
 // 这里转出类型，保持既有引用方（以及本文件内部）不变。
@@ -271,10 +272,11 @@ export const useLearningTrackerStore = create<LearningTrackerState>((set, get) =
         })
 
         clearTimers()
-        tickInterval = setInterval(() => get().tick(), 1000)
-        saveInterval = setInterval(() => {
+        // P2：1s 计时与 60s 落盘都只按分钟聚合，避免高频 tick 产生日志洪水。
+        tickInterval = setInterval(auditInterval('learningTracker.tick', () => get().tick()), 1000)
+        saveInterval = setInterval(auditInterval('learningTracker.flush', () => {
           void get().flush()
-        }, 60000)
+        }), 60000)
 
       } catch (err) {
         console.error("Failed to init learning tracker", err)

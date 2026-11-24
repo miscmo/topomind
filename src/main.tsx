@@ -13,6 +13,9 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { bootstrapCommandRegistry } from './application/commands'
+import { installBlackbox } from './core/blackbox'
+import { installInteractionBoundary } from './core/interactionBoundary'
+import { writeEntry } from './core/logger'
 import { PlatformProvider } from './core/platform-context'
 import { reportAppStartup, startRuntimePerformanceObserver } from './core/performance-runtime'
 import { StorageProvider } from './core/storage'
@@ -42,43 +45,62 @@ installOverlayExitTransition()
 // 运行时观测在首帧前启动：buffered 长任务包含启动/模块求值阶段的阻塞。
 startRuntimePerformanceObserver()
 
-// Suppress harmless ResizeObserver loop warning.
-// It is emitted by the browser when a ResizeObserver callback resizes an observed
-// element within the same frame (e.g. dragging the right-panel resizer resizes the
-// BlockNote editor container, whose internal ResizeObserver re-fires). It has no
-// functional impact, so we keep it out of the console to avoid noise.
-const suppressResizeObserverError = () => {
-  const RO_LOOP = 'ResizeObserver loop'
-  const isRoLoop = (...args: unknown[]): boolean =>
-    args.some(
-      (a) =>
-        (typeof a === 'string' && a.includes(RO_LOOP)) ||
-        (a instanceof Error && typeof a.message === 'string' && a.message.includes(RO_LOOP)),
-    )
+const RO_LOOP = 'ResizeObserver loop'
 
-  const originalError = console.error
-  console.error = (...args: unknown[]) => {
-    if (isRoLoop(...args)) return
-    originalError.apply(console, args)
-  }
-  const originalWarn = console.warn
-  console.warn = (...args: unknown[]) => {
-    if (isRoLoop(...args)) return
-    originalWarn.apply(console, args)
-  }
+const isResizeObserverNoise = (...args: unknown[]): boolean =>
+  args.some(
+    (arg) =>
+      (typeof arg === 'string' && arg.includes(RO_LOOP)) ||
+      (arg instanceof Error && typeof arg.message === 'string' && arg.message.includes(RO_LOOP)),
+  )
 
-  const onError = (e: ErrorEvent) => {
-    if (e?.message && e.message.includes(RO_LOOP)) {
-      // preventDefault cancels the browser's native console print for this error;
-      // stopImmediatePropagation prevents other listeners reacting to it.
-      e.preventDefault()
-      e.stopImmediatePropagation()
-    }
-  }
-  // capture phase so we run before any other listener
-  window.addEventListener('error', onError as EventListener, true)
+// 只抑制 ResizeObserver 噪音（浏览器在同一帧内触发的良性告警），
+// 覆写收窄到这一句判断，其余 console 输出原样放行。
+const originalConsoleError = console.error
+// eslint-disable-next-line no-console -- 唯一例外：ResizeObserver 噪音抑制
+console.error = (...args: unknown[]) => {
+  if (isResizeObserverNoise(...args)) return
+  originalConsoleError.apply(console, args)
 }
-suppressResizeObserverError()
+const originalConsoleWarn = console.warn
+// eslint-disable-next-line no-console -- 唯一例外：ResizeObserver 噪音抑制
+console.warn = (...args: unknown[]) => {
+  if (isResizeObserverNoise(...args)) return
+  originalConsoleWarn.apply(console, args)
+}
+
+// 渲染进程全局异常接管（规范 §3.5），走统一日志入口。
+// capture 阶段先跑：ResizeObserver 噪音只抑制、不上报；其余异常全部入库。
+window.addEventListener('error', (event: ErrorEvent) => {
+  if (isResizeObserverNoise(event.message, event.error)) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    return
+  }
+  void writeEntry({
+    level: 'ERROR',
+    module: 'app',
+    action: 'app.error',
+    message: `渲染进程未捕获异常: ${event.message ?? ''}`,
+    error: event.error ?? event.message,
+    params: { source: event.filename, line: event.lineno, column: event.colno },
+  })
+}, true)
+
+window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+  void writeEntry({
+    level: 'ERROR',
+    module: 'app',
+    action: 'app.error',
+    message: '渲染进程未处理的 Promise 拒绝',
+    error: event.reason,
+  })
+})
+
+// P7.2：交互边界必须早于任何 React 渲染 / 事件处理，让真实输入先生成 traceId。
+installInteractionBoundary()
+// v3 D2：原始输入只进内存黑匣子，崩溃/异常时由主进程同步 dump（不单独落盘）。
+installBlackbox()
 
 root.render(
   <StrictMode>

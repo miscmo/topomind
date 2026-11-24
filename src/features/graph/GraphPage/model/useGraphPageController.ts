@@ -7,6 +7,7 @@ import { useGraph } from '../../../../hooks/useGraph'
 import { useGraphSession } from '../../../../stores/tabs/tabStore'
 import { registerTabSaver } from '../../../../core/close-guard'
 import { logAction } from '../../../../core/log-backend'
+import { recordStep } from '../../../../core/traceBuffer'
 import { useRoomHistoryTracker } from '../../../../hooks/useRoomHistory'
 
 export interface UseGraphPageControllerOptions {
@@ -22,7 +23,7 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
   useRoomHistoryTracker(tabId)
 
   useEffect(() => {
-    logAction('页面:进入图谱', 'GraphPage', {
+    logAction('graph.page_enter', 'GraphPage', {
       currentRoomPath: effectiveRoomPath || '',
       currentKBPath: effectiveKbPath || '',
       tabId,
@@ -36,8 +37,6 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
     const loadPath = effectiveRoomPath || effectiveKbPath || ''
     if (!loadPath) return
 
-    const capturedRoomPath = effectiveRoomPath || ''
-    const capturedKBPath = effectiveKbPath || ''
     const capturedTabId = tabId
 
     queueMicrotask(() => {
@@ -45,12 +44,8 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
         graph.isCreatingRef.current = false
         return
       }
-      logAction('房间:加载触发', 'GraphPage', {
-        loadPath,
-        currentRoomPath: capturedRoomPath,
-        currentKBPath: capturedKBPath,
-        tabId: capturedTabId,
-      })
+      // P7：发起加载是入口步骤，room.load 的唯一落盘产生点在 useGraphRoomLoader 的应用完成处。
+      recordStep({ name: 'room.load.request', outcome: 'requested', params: { loadPath, tabId: capturedTabId } })
       loadRoomRef.current(loadPath)
     })
   }, [effectiveRoomPath, effectiveKbPath, tabId, graph.isCreatingRef])

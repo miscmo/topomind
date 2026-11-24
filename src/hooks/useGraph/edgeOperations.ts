@@ -151,7 +151,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     // 与宽容的 readEdgeRelationId 不同，创建期只认 'related' / 'subordinate'。
     const creation = assertEdgeRelationForCreate(relationId, getRelations())
     if (!creation.ok) {
-      logAction('连线:强校验拒绝', 'graphOperations', {
+      logAction('edge.validation_reject', 'graphOperations', {
         edgeId, source: connection.source, target: connection.target, reason: creation.reason,
       })
       return false
@@ -180,7 +180,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
         weight: 'minor',
       }))
       if (!check.ok) {
-        logAction('连线:从属校验拒绝', 'graphOperations', {
+        logAction('edge.validation_reject', 'graphOperations', {
           edgeId, source: connection.source, target: connection.target, reason: check.reason,
         })
         return false
@@ -239,12 +239,15 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     ))
     if (alreadyExists) return false
     store.setEdges([...store.edges, newEdge])
+    // 交互耗时只到「边已写入图状态」为止。saveLater 走 SaveCoordinator 的 300ms
+    // debounce，把它算进 span 会让每条新建连线恒定判慢；落盘耗时由各自链路观测。
+    // 与 deleteEdge 的 end → saveLater 顺序保持一致。
+    perfSpan.end({ edgeId, relation })
 
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession?.roomPath || graphSession?.kbPath || ''
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('连线:创建', 'graphOperations', { edgeId, source: connection.source, target: connection.target })
-    perfSpan.end({ edgeId, relation })
+    logAction('edge.create', 'graphOperations', { edgeId, source: connection.source, target: connection.target })
     return true
   }
 
@@ -260,7 +263,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     store.setEdges(store.edges.filter((e) => e.id !== edgeId))
     perfSpan.end()
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('连线:删除', 'graphOperations', { edgeId })
+    logAction('edge.delete', 'graphOperations', { edgeId })
     return true
   }
 
@@ -285,7 +288,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
         weight: weight ?? targetEdge.data?.weight,
       }))
       if (!check.ok) {
-        logAction('连线:关系切换被从属校验拒绝', 'graphOperations', {
+        logAction('edge.validation_reject', 'graphOperations', {
           edgeId, relation: nextRelation, reason: check.reason,
         })
         return false
@@ -318,7 +321,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     if (!changed) return false
     store.setEdges(nextEdges)
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('连线:更新关系', 'graphOperations', { edgeId, relation: nextRelation, weight })
+    logAction('edge.update', 'graphOperations', { edgeId, relation: nextRelation, weight })
     return true
   }
 
@@ -347,7 +350,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     if (!changed) return false
     store.setEdges(nextEdges)
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('连线:更新关系名', 'graphOperations', { edgeId, relationLabel: nextLabel ?? null })
+    logAction('edge.update', 'graphOperations', { edgeId, relationLabel: nextLabel ?? null })
     return true
   }
 
@@ -432,7 +435,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     if (!changed) return
     store.setEdges(nextEdges)
     if (currentRoomPath && shouldPersist) await saveLater(currentRoomPath)
-    if (shouldPersist) logAction('连线:更新样式', 'graphOperations', { edgeId, ...style })
+    if (shouldPersist) logAction('edge.update', 'graphOperations', { edgeId, ...style })
   }
 
   /**
@@ -481,7 +484,7 @@ export function buildEdgeOperations(deps: EdgeOperationsDeps) {
     store.setEdges(nextEdges)
     perfSpan.end()
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('连线:更新锚点', 'graphOperations', { edgeId, ...patch })
+    logAction('edge.update', 'graphOperations', { edgeId, ...patch })
   }
 
   const setSelectedEdgeInGraph = (edgeId: string | null) => {

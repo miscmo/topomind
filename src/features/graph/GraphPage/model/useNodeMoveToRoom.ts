@@ -97,7 +97,7 @@ export function useNodeMoveToRoom({ graph }: { graph: GraphContextValue }) {
       // 前进时会按这个方向再搬一次。
       useNodeMoveHistoryStore.getState().commitUndo({ ...entry, moved: result.moved })
       toast({ level: 'info', title: '已撤销移动', message: `已将 ${result.moved.length} 个节点移回原房间，可点「前进」重做` })
-      logAction('节点:跨房间移动-撤销', 'useNodeMoveToRoom', {
+      logAction('node.move', 'useNodeMoveToRoom', {
         sourceRoomPath: entry.targetRoomPath, targetRoomPath: entry.sourceRoomPath, moved: result.moved,
       })
     } catch (e) {
@@ -128,7 +128,7 @@ export function useNodeMoveToRoom({ graph }: { graph: GraphContextValue }) {
         ...entry, moved: result.moved, positions: result.positions,
       })
       toast({ level: 'info', title: '已重做移动', message: `已将 ${result.moved.length} 个节点重新移入「${entry.targetLabel}」` })
-      logAction('节点:跨房间移动-前进', 'useNodeMoveToRoom', {
+      logAction('node.move', 'useNodeMoveToRoom', {
         sourceRoomPath: entry.sourceRoomPath, targetRoomPath: entry.targetRoomPath, moved: result.moved,
       })
     } catch (e) {
@@ -165,7 +165,7 @@ export function useNodeMoveToRoom({ graph }: { graph: GraphContextValue }) {
         // 与画布状态面板的常驻按钮共用同一个历史栈，toast 消失后仍可撤销。
         action: { label: '撤销', onClick: () => void undoMove() },
       })
-      logAction('节点:跨房间移动', 'useNodeMoveToRoom', {
+      logAction('node.move', 'useNodeMoveToRoom', {
         sourceRoomPath,
         targetRoomPath,
         nodeIds,

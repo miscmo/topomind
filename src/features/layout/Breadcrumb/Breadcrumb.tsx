@@ -73,12 +73,12 @@ function useRoomPathNavigate(tabId: string) {
   const graph = useGraphContext()
   return useCallback(async (item: RoomPathItem) => {
     if (item.kind === 'root') {
-      logAction('房间:返回根级', 'Breadcrumb', { source: 'status-path', tabId })
+      logAction('room.navigate', 'Breadcrumb', { source: 'status-path', tabId })
       await graph.navigateToRoot()
       return
     }
     if (item.historyIndex == null) return
-    logAction('房间:导航', 'Breadcrumb', {
+    logAction('room.navigate', 'Breadcrumb', {
       historyIndex: item.historyIndex,
       roomName: item.label,
       roomPath: item.path,

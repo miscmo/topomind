@@ -77,18 +77,18 @@ export default memo(function SetupPage() {
     try {
       const picked = await platform.selectDirectory()
       if (!picked?.valid) {
-        logAction('工作目录选择对话框关闭', 'SetupPage', {
+        logAction('workspace.select', 'SetupPage', {
           result: 'cancelled',
           reason: picked?.error || '用户取消',
         })
         return
       }
-      logAction('已选择工作目录', 'SetupPage', { selectedPath: picked.nodePath })
+      logAction('workspace.select', 'SetupPage', { selectedPath: picked.nodePath })
       await openWorkspace(picked.nodePath!)
     } catch (e) {
       setIsError(true)
       setMessage((e as { message?: string })?.message || '打开工作目录失败')
-      logAction('打开工作目录异常', 'SetupPage', { error: (e as Error)?.message || String(e) })
+      logAction('workspace.open_failed', 'SetupPage', { error: (e as Error)?.message || String(e) })
     }
   }
 
@@ -97,7 +97,7 @@ export default memo(function SetupPage() {
     try {
       const picked = await platform.selectDirectory()
       if (!picked?.valid) {
-        logAction('SetupPage:文件对话框关闭', 'SetupPage', {
+        logAction('workspace.select', 'SetupPage', {
           result: 'cancelled',
           reason: picked?.error || '用户取消',
         })
@@ -105,12 +105,12 @@ export default memo(function SetupPage() {
         setMessage(picked?.error || '请选择一个空目录作为新的工作目录')
         return
       }
-      logAction('SetupPage:选择工作目录', 'SetupPage', { selectedPath: picked.nodePath })
+      logAction('workspace.select', 'SetupPage', { selectedPath: picked.nodePath })
       const res = await storage.createWorkDir(picked.nodePath!)
       if (!res?.valid) {
         setIsError(true)
         setMessage(res?.error || '创建工作目录失败')
-        logAction('SetupPage:创建工作目录失败', 'SetupPage', {
+        logAction('workspace.create_failed', 'SetupPage', {
           nodePath: picked.nodePath,
           error: res?.error || '创建工作目录失败',
         })
@@ -120,7 +120,7 @@ export default memo(function SetupPage() {
     } catch (e) {
       setIsError(true)
       setMessage((e as { message?: string })?.message || '创建工作目录失败')
-      logAction('SetupPage:创建工作目录异常', 'SetupPage', { error: (e as Error)?.message || String(e) })
+      logAction('workspace.create_failed', 'SetupPage', { error: (e as Error)?.message || String(e) })
     }
   }
 

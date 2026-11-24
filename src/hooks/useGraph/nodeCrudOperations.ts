@@ -94,7 +94,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
         position,
         size: defaultNodeSize,
       })
-      logAction('节点:创建', 'graphOperations', {
+      logAction('node.create', 'graphOperations', {
         nodeName: name,
         nodeId: cardId,
         parentPath: targetPath,
@@ -119,7 +119,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       perfSpan.fail(e)
       isCreatingRef.current = false
       logger.catch('graphOperations', 'createChildNode', e)
-      logAction('节点:创建失败', 'graphOperations', {
+      logAction('node.create_failed', 'graphOperations', {
         reason: 'exception',
         nodeName: name,
         parentPath: targetPath,
@@ -150,7 +150,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     const cardId = generateId('card-')
     const store = storeApi.getState()
     if (store.nodesMap.has(cardId)) {
-      logAction('节点:创建失败', 'graphOperations', { reason: 'duplicate-id', nodeId: cardId })
+      logAction('node.create_failed', 'graphOperations', { reason: 'duplicate-id', nodeId: cardId })
       return null
     }
     const perfSpan = startPerformanceSpan(PERFORMANCE_METRICS.nodeCreate, {
@@ -176,7 +176,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       })
       // 唯一一次同步写入：未变更节点保持原引用，reconcileMap 只补一条。
       store.setNodes([...store.nodes, newNode])
-      logAction('节点:创建', 'graphOperations', {
+      logAction('node.create', 'graphOperations', {
         nodeName: name,
         nodeId: cardId,
         parentPath: roomPath,
@@ -196,7 +196,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     } catch (e) {
       perfSpan.fail(e)
       logger.catch('graphOperations', 'createChildNode', e)
-      logAction('节点:创建失败', 'graphOperations', {
+      logAction('node.create_failed', 'graphOperations', {
         reason: 'exception',
         nodeName: name,
         parentPath: roomPath,
@@ -214,7 +214,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     const currentRoomPath = dirPath || graphSession.kbPath
     const targetPath = parentId ? resolveRoomChildRef(currentRoomPath, parentId) : currentRoomPath
     if (!targetPath) {
-      logAction('节点:创建失败', 'graphOperations', {
+      logAction('node.create_failed', 'graphOperations', {
         reason: dirPath ? 'targetPath-empty' : 'not-inside-room',
         nodeName: name,
         parentId: parentId || null,
@@ -268,7 +268,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     try {
       // 失败时内存与 UI 保持原样，语义与旧链一致；这里只等一次局部 rename IO。
       await storage.deleteCard(cardPath, nodeLabel)
-      logAction('节点:删除', 'graphOperations', {
+      logAction('node.delete', 'graphOperations', {
         nodeId, label: nodeLabel, path: cardPath, strategy: 'optimistic',
       })
 
@@ -306,7 +306,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
       await renameCardNode(storage, cardPath, newName)
       const store = storeApi.getState()
       const oldName = store.nodesMap.get(nodeId)?.data.label ?? nodeId
-      logAction('节点:重命名', 'graphOperations', { nodeId, oldName, newName, path: cardPath })
+      logAction('node.rename', 'graphOperations', { nodeId, oldName, newName, path: cardPath })
       
       store.updateNode(nodeId, (node) => ({ ...node, data: { ...node.data, label: newName } }))
 
@@ -340,7 +340,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     perfSpan.end()
 
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('节点:更新样式(批量)', 'graphOperations', { nodeIds, style: patch })
+    logAction('node.style_update', 'graphOperations', { nodeIds, style: patch })
   }
 
   const clearNodesStyle = async (nodeIds: string[]): Promise<void> => {
@@ -359,7 +359,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     perfSpan.end()
 
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('节点:清除自有样式(批量)', 'graphOperations', { nodeIds })
+    logAction('node.style_update', 'graphOperations', { nodeIds })
   }
 
   const updateNodeSizingMode = async (
@@ -388,7 +388,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('节点:更新尺寸模式', 'graphOperations', { nodeId, ...patch })
+    logAction('node.style_update', 'graphOperations', { nodeId, ...patch })
   }
 
   const updateNodeEmojis = async (nodeId: string, emojis: string[] | undefined): Promise<void> => {
@@ -407,7 +407,7 @@ export function buildNodeCrudOperations(deps: NodeCrudOperationsDeps) {
     const graphSession = getActiveGraphSession()
     const currentRoomPath = graphSession.roomPath || graphSession.kbPath || ''
     if (currentRoomPath) await saveLater(currentRoomPath)
-    logAction('节点:更新表情', 'graphOperations', { nodeId, emojis })
+    logAction('node.style_update', 'graphOperations', { nodeId, emojis })
   }
 
   return {

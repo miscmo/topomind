@@ -28,7 +28,7 @@ export function useEdgeActions(options: UseEdgeActionsOptions) {
     // 必须在这里单独挡住（右键菜单只读时不打开，这里是第二道保险）。
     if (isActiveCanvasReadOnly()) return
     const edge = findEdgeById(edgeId)
-    logAction('连线:删除', 'useNodeActions', { edgeId, edgeSource: edge?.source, edgeTarget: edge?.target, trigger: 'context-menu' })
+    logAction('edge.delete', 'useNodeActions', { edgeId, edgeSource: edge?.source, edgeTarget: edge?.target, trigger: 'context-menu' })
     deleteElements({ edges: [{ id: edgeId }] })
     onAction?.()
   }, [findEdgeById, deleteElements, onAction])
@@ -38,7 +38,7 @@ export function useEdgeActions(options: UseEdgeActionsOptions) {
   const handleEdgeStyle = useCallback((edgeId: string) => {
     const edge = findEdgeById(edgeId)
     if (!edge) return
-    logAction('连线:样式(设置页)', 'useEdgeActions', { edgeId, edgeSource: edge.source, edgeTarget: edge.target, trigger: 'context-menu' })
+    logAction('edge.update', 'useEdgeActions', { edgeId, edgeSource: edge.source, edgeTarget: edge.target, trigger: 'context-menu' })
     useRightPanelStore.getState().setStylePanelTab('edges')
     graph.selectEdge(edgeId)
     useTabStore.getState().openSecondaryViewTab({ viewId: HOST_VIEW_IDS.settings, label: '设置' })

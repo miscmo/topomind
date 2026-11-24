@@ -1,20 +1,46 @@
 import { bootstrapCommandRegistry } from '@/application/commands'
 import { FSB } from '@/core/fs-backend'
 import {
+  logExportBundle,
+  logExportJsonl,
   logGetAvailableDates,
   logGetBuffer,
-  logQuery,
+  logGetLevel,
+  logQueryPage,
+  logSetLevel,
   logSubscribe,
+  logSubscribeLevel,
   logUnsubscribe,
 } from '@/core/log-backend'
+import { writeEntry } from '@/core/logger'
 import { useLearningTrackerStore } from '@/features/learning-tracker/model/learningTrackerStore'
+import { LOG_LIMITS, logDayKey, type LogEntry, type LogQueryInput } from '@/shared/observability/logContract'
 import { PERFORMANCE_METRIC_DEFINITIONS, extractPerformanceSamples } from '@/shared/observability/performanceMetrics'
 import { PluginManager } from './host/pluginManager'
 import type { PluginDiagnostics as HostPluginDiagnostics, RuntimeBindingRecord } from './host/pluginTypes'
 import { getDefaultSecondaryViewTabId, getLegacySecondaryView } from './secondaryViews'
-import type { LearningDailyRecord, LearningSessionContextSnapshot, LearningSessionSnapshot, LearningStateSnapshot, LearningStatsMetaSnapshot, LogEntrySnapshot, PerformanceMetricDefinition, PerformanceSample, PluginDiagnosticsSnapshot, PluginRuntimeRecordSnapshot } from './public/api'
+import type { LearningDailyRecord, LearningSessionContextSnapshot, LearningSessionSnapshot, LearningStateSnapshot, LearningStatsMetaSnapshot, PerformanceMetricDefinition, PerformanceSample, PluginDiagnosticsSnapshot, PluginRuntimeRecordSnapshot } from './public/api'
+import { normalizeLogEntry } from './public/monitorStore'
 import { useTabStore } from '@/stores/tabs/tabStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+
+/**
+ * 分页拉全量：主进程单次最多返回 LOG_LIMITS.maxQueryLimit(500) 条。
+ * v3 P4：上限从 50 页(2.5 万)提到 200 页(10 万)，覆盖「当日 10 万条」验收场景；
+ * 主进程查询计划缓存让后续页只做内存 slice + 按偏移随机读，不再逐页全量解析。
+ */
+async function queryAllLogs(opts: LogQueryInput): Promise<LogEntry[]> {
+  const pageSize = LOG_LIMITS.maxQueryLimit
+  const collected: LogEntry[] = []
+  let offset = 0
+  for (let guard = 0; guard < 200; guard += 1) {
+    const page = await logQueryPage({ ...opts, limit: pageSize, offset })
+    collected.push(...page.entries)
+    offset += page.entries.length
+    if (page.entries.length === 0 || offset >= page.total) break
+  }
+  return collected
+}
 
 let pluginManagerSingleton: PluginManager | null = null
 
@@ -101,26 +127,6 @@ function cloneLearningDailyRecord(record: unknown): LearningDailyRecord | null {
   }
 }
 
-function cloneLogEntry(entry: unknown): LogEntrySnapshot {
-  const raw = (entry && typeof entry === 'object') ? entry as Partial<LogEntrySnapshot> : {}
-  return {
-    id: raw.id,
-    timestamp: raw.timestamp,
-    level: raw.level,
-    module: raw.module,
-    file: raw.file,
-    line: raw.line,
-    func: raw.func,
-    action: raw.action,
-    message: raw.message,
-    params: raw.params ?? null,
-    traceId: raw.traceId ?? null,
-    spanId: raw.spanId ?? null,
-    parentId: raw.parentId ?? null,
-    meta: raw.meta ?? null,
-  }
-}
-
 function cloneRuntimeRecord(record: RuntimeBindingRecord): PluginRuntimeRecordSnapshot {
   return {
     pluginId: record.pluginId,
@@ -145,18 +151,6 @@ function clonePluginDiagnostics(diagnostics: HostPluginDiagnostics): PluginDiagn
 
 function getPerformanceMetricDefinitions(): PerformanceMetricDefinition[] {
   return Object.values(PERFORMANCE_METRIC_DEFINITIONS).map((definition) => ({ ...definition }))
-}
-
-function toDateStr(iso: string): string {
-  try {
-    const date = new Date(iso)
-    const yyyy = date.getFullYear()
-    const mm = String(date.getMonth() + 1).padStart(2, '0')
-    const dd = String(date.getDate()).padStart(2, '0')
-    return `${yyyy}-${mm}-${dd}`
-  } catch {
-    return ''
-  }
 }
 
 export function getPluginManager(): PluginManager {
@@ -220,24 +214,48 @@ export function getPluginManager(): PluginManager {
           return Object.fromEntries(records)
         },
         async getLogBuffer() {
-          return (await logGetBuffer()).map(cloneLogEntry)
+          return (await logGetBuffer()).map(normalizeLogEntry)
         },
         async getLogAvailableDates() {
           return logGetAvailableDates()
         },
         async queryLogs(input) {
-          return (await logQuery({
-            dateStr: input?.date,
+          // v3 P4：完整下推查询条件。此前 categories / sessionId 被丢弃，
+          // 导致 UI 选了类别或会话仍扫描全部物理分片、拉回全量条目。
+          return (await queryAllLogs({
+            date: input?.date,
             keyword: input?.keyword,
             levels: input?.levels,
             actions: input?.actions,
+            categories: input?.categories,
+            sessionId: input?.sessionId,
+            traceId: input?.traceId,
             startTime: input?.startTime,
             endTime: input?.endTime,
-          })).map(cloneLogEntry)
+            limit: input?.limit,
+            offset: input?.offset,
+          })).map(normalizeLogEntry)
+        },
+        async exportJsonl(date) {
+          return logExportJsonl(date ?? undefined)
+        },
+        // P3：一键诊断包，主进程负责二次脱敏与双目录汇总。
+        async exportBundle() {
+          return logExportBundle()
+        },
+        // v3 P0：把主进程唯一等级阈值接到插件 API，监控页可直接查看/切换。
+        async getLogLevel() {
+          return logGetLevel()
+        },
+        async setLogLevel(level) {
+          return logSetLevel(level)
+        },
+        subscribeLogLevel(listener) {
+          return toDisposable(logSubscribeLevel(listener))
         },
         subscribeLogs(listener) {
           const handleEntry = (entry: unknown) => {
-            listener(cloneLogEntry(entry))
+            listener(normalizeLogEntry(entry as LogEntry))
           }
           logSubscribe(handleEntry)
           return toDisposable(() => {
@@ -248,16 +266,14 @@ export function getPluginManager(): PluginManager {
           return getPerformanceMetricDefinitions()
         },
         async queryPerformanceSamples(input) {
-          const entries = await logQuery({
-            dateStr: input?.date ?? undefined,
-          })
-          return extractPerformanceSamples(entries.map(cloneLogEntry)) as PerformanceSample[]
+          const entries = await queryAllLogs({ date: input?.date ?? undefined })
+          return extractPerformanceSamples(entries.map(normalizeLogEntry)) as PerformanceSample[]
         },
         subscribePerformanceSamples(listener, input) {
           const handleEntry = (entry: unknown) => {
-            const samples = extractPerformanceSamples([cloneLogEntry(entry)]) as PerformanceSample[]
+            const samples = extractPerformanceSamples([normalizeLogEntry(entry as LogEntry)]) as PerformanceSample[]
             for (const sample of samples) {
-              if (input?.date && toDateStr(sample.timestamp) !== input.date) {
+              if (input?.date && logDayKey(sample.timestamp) !== input.date) {
                 continue
               }
               listener(sample)
@@ -320,20 +336,27 @@ export function getPluginManager(): PluginManager {
         async executeCommand(commandId, args) {
           await commandRegistry.execute(commandId, args)
         },
+        // 插件 LoggingApi / notify 接回统一写入入口（Phase 0.4），不再只写 console。
+        log(level, pluginId, message, details) {
+          const context = details && typeof details === 'object' && !Array.isArray(details)
+            ? details as Record<string, unknown>
+            : { detail: details }
+          void writeEntry({
+            level: level === 'error' ? 'ERROR' : level === 'warn' ? 'WARN' : 'INFO',
+            module: 'plugin',
+            action: 'plugin.log',
+            message: `[plugin:${pluginId}] ${message}`,
+            params: { pluginId, ...context },
+          })
+        },
         notify(input) {
-          const prefix = `[plugin-notify] ${input.title}`
-
-          if (input.level === 'error') {
-            console.error(prefix, input.message)
-            return
-          }
-
-          if (input.level === 'warn') {
-            console.warn(prefix, input.message)
-            return
-          }
-
-          console.info(prefix, input.message)
+          void writeEntry({
+            level: input.level === 'error' ? 'ERROR' : input.level === 'warn' ? 'WARN' : 'INFO',
+            module: 'plugin',
+            action: 'plugin.log',
+            message: `[plugin-notify] ${input.title}`,
+            params: { message: input.message ?? '' },
+          })
         },
       },
     })
@@ -362,7 +385,10 @@ export function bootstrapPlugins(): PluginManager {
   const manager = getPluginManager()
   manager.discover()
   void manager.activateByReason({ type: 'app-ready' }).catch((error) => {
-    console.error('Failed to activate app-ready plugins', error)
+    void writeEntry({
+      level: 'ERROR', module: 'plugin', action: 'plugin.log',
+      message: '应用就绪插件激活失败', error,
+    })
   })
 
   return manager

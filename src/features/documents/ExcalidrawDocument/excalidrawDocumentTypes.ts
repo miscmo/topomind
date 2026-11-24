@@ -7,6 +7,11 @@
 export const EXCALIDRAW_DOCUMENT_SCHEMA = 'topomind.excalidraw-document'
 export const EXCALIDRAW_DOCUMENT_VERSION = 1
 export const EXCALIDRAW_CONTAINER_TYPE = 'excalidraw'
+/**
+ * 画布默认背景色。Excalidraw 用 canvas fillStyle 画背景，必须是具体色值，
+ * 不能用未解析的 var(--...)。集中放这里，UI 侧就不必散落字面色值。
+ */
+export const EXCALIDRAW_DEFAULT_BACKGROUND = '#ffffff'
 
 /** 只描述落盘需要的字段；元素其余字段原样保留（Excalidraw 自有演进）。 */
 export interface ExcalidrawSceneElement {
@@ -147,7 +152,19 @@ export function serializeExcalidrawDocumentContent(value: ExcalidrawDocumentCont
   return JSON.stringify(value)
 }
 
-/** 与 Excalidraw 官方 getSceneVersion 同语义的轻量版本：只用于预览缓存失效。 */
+/**
+ * 内容版本：元素版本 + 用户可持久化的画布外观（背景色 / 网格 / 主题）。
+ *
+ * 这个函数是两处「变化判定」的唯一依据，改字段前务必看清：
+ *   - ContainerFullscreenEditorHost.handleChange 拿它做写盘去重；
+ *   - ContainerSvgPreview 拿它做 SVG 导出缓存键（下沉到 svgPreviewQueue 的 LRU）。
+ * 凡是「落盘后会改变预览」的字段都必须进这个哈希。只改画布背景色时元素一个
+ * 都没动，若哈希不变：宿主直接 return 不写盘，预览又命中旧 SVG 缓存 —— 表现就是
+ * 退出编辑后背景没变、再次双击进去上次的设置也丢了。
+ *
+ * 刻意不含 scrollX / scrollY / zoom / 选中态：Excalidraw 平移、缩放、点选都会
+ * 触发 onChange，把这些视口瞬态纳入哈希会导致每次镜头操作都写盘并重导出预览。
+ */
 export function excalidrawSceneVersion(value: ExcalidrawDocumentContent): number {
   let hash = 0
   for (const element of value.scene?.elements ?? []) {
@@ -156,6 +173,18 @@ export function excalidrawSceneVersion(value: ExcalidrawDocumentContent): number
     for (let i = 0; i < element.id.length; i += 1) {
       hash = (hash * 31 + element.id.charCodeAt(i)) | 0
     }
+  }
+  const appState = value.scene?.appState ?? {}
+  // 字段间插入分隔符，避免相邻字段拼接相同造成哈希碰撞（'ab'+'c' vs 'a'+'bc'）。
+  for (const part of [
+    appState.viewBackgroundColor ?? '',
+    appState.gridSize === null || appState.gridSize === undefined ? '' : String(appState.gridSize),
+    appState.theme ?? '',
+  ]) {
+    for (let i = 0; i < part.length; i += 1) {
+      hash = (hash * 31 + part.charCodeAt(i)) | 0
+    }
+    hash = (hash * 31 + 7) | 0
   }
   return hash
 }

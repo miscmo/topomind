@@ -18,6 +18,8 @@ import {
   layoutRoomOverview,
   type RoomOverviewItem,
 } from '../../../../domain/graph/roomOverview'
+import { recordUser } from '../../../../core/observe'
+import { LOG_ACTIONS } from '../../../../shared/observability/logContract'
 import { RoomSummaryCard, type RoomSummaryNode } from './RoomSummaryCard'
 import { useRoomOverviewStore } from '../model/roomOverviewStore'
 
@@ -100,6 +102,13 @@ function RoomOverviewInner({ tabId }: RoomOverviewProps) {
       path: item.path,
       kbPath,
       name: item.name,
+    })
+    // P2 T2.5：双击卡片进入房间此前无日志。
+    void recordUser(LOG_ACTIONS.userRoomEnter, {
+      target: { type: 'room', id: item.path, label: item.name },
+      view: 'room-overview',
+      inputMode: 'double-click',
+      params: { roomPath: item.path },
     })
     close()
   }, [items, tabId, kbPath, close])

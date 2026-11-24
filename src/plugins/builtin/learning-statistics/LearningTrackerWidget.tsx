@@ -15,6 +15,22 @@ const formatDuration = (seconds: number) => {
   return `${s}s`
 }
 
+/**
+ * 顶栏时长必须等宽：它位于 tab 区左侧，字符串从 "0s" 到 "23h 59m 59s" 长度不同，
+ * 按钮宽度一变，整排知识库 tab 就会跟着左右跳。
+ *
+ * 策略：拿「当日可能出现的最长字符串」做隐形占位撑开盒子，真实文本绝对定位左对齐
+ * 叠在同一格里，保留原先「状态点 + 时长」紧挨的观感。不写死 px / ch —— 字体、字号、
+ * 字重、字距变化时占位会自动跟着算，也不会因为某台机器字体度量不同而溢出。数字再加
+ * tabular-nums，保证每一位数占同样宽。
+ *
+ * todayDuration 是当日累计秒数，跨天在 tick 里归零，合法上限 24h - 1s，所以两位
+ * 小时就是最长形态；即便异常数据超出这个范围，真实文本脱离文档流，也不会撑宽盒子、
+ * 更不会推动 tab 区。
+ */
+const MAX_TODAY_SECONDS = 24 * 60 * 60 - 1
+const DURATION_WIDTH_SAMPLE = formatDuration(MAX_TODAY_SECONDS)
+
 export const LearningTrackerWidget = memo(function LearningTrackerWidget({
   learning,
   workspace,
@@ -87,7 +103,13 @@ export const LearningTrackerWidget = memo(function LearningTrackerWidget({
         <span className="relative flex h-2 w-2">
           <span className={`relative inline-flex rounded-full h-2 w-2 ${isActive ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-text-muted)]'}`} />
         </span>
-        <span className="font-medium font-mono tracking-tight">{formatDuration(todayDuration)}</span>
+        <span
+          data-tm-learning-duration=""
+          className="relative inline-flex shrink-0 justify-start font-medium font-mono tracking-tight tabular-nums whitespace-nowrap"
+        >
+          <span aria-hidden="true" className="invisible">{DURATION_WIDTH_SAMPLE}</span>
+          <span className="absolute inset-y-0 left-0 flex items-center">{formatDuration(todayDuration)}</span>
+        </span>
       </button>
 
       {previewOpen && (

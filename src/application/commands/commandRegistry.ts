@@ -7,6 +7,9 @@ import { useLayoutStore } from '@/stores/layoutStore'
 import { useThemeStore, type ThemeMode } from '@/stores/themeStore'
 import { HOST_VIEW_IDS } from '@/features/layout/NavRail/navModel'
 import type { RightPanelTab } from '@/types/uiStoreTypes'
+import { observeOperation } from '@/core/observe.ts'
+import { LOG_ACTIONS } from '@/shared/observability/logContract.ts'
+import { useDebugHudStore } from '../../features/debug/debugStore'
 
 type CommandSource = 'host' | 'plugin'
 
@@ -124,6 +127,13 @@ function createDefaultHostCommands(): HostCommandDefinition[] {
       execute: () => invokeElectron('app:window:toggleDevTools'),
     },
     {
+      // P6：菜单勾选与 Ctrl+Shift+D 都走这里，开/关动作统一落 user.command 事件。
+      id: 'debug.toggle',
+      title: '切换 Debug 模式',
+      shortcut: 'Ctrl+Shift+D',
+      execute: () => { useDebugHudStore.getState().toggleEnabled() },
+    },
+    {
       id: 'theme.set',
       title: '切换主题',
       execute: (args) => {
@@ -175,20 +185,36 @@ export class CommandRegistry {
     this.pluginBridge = bridge
   }
 
+  /**
+   * P2 单点拦截：host 与 plugin 两条执行路径都收敛在这里，因此只需包一层
+   * 就能覆盖全部 16 个命令。整次执行建立一个 trace，执行期间产生的 IPC
+   * 审计日志会挂到同一 trace；结束后只写一条 user.command 事件。
+   */
   async execute(commandId: string, args?: unknown): Promise<void> {
     const hostCommand = this.hostCommandsById.get(commandId)
-    if (hostCommand) {
-      await hostCommand.execute(args)
-      return
-    }
+    const source: CommandSource = hostCommand ? 'host' : 'plugin'
+    return observeOperation(
+      LOG_ACTIONS.userCommand,
+      {
+        target: { type: 'command', id: commandId },
+        inputMode: 'command',
+        params: { commandId, source },
+      },
+      async () => {
+        if (hostCommand) {
+          await hostCommand.execute(args)
+          return
+        }
 
-    const pluginCommand = this.pluginBridge?.getStaticCommand(commandId)
-    if (pluginCommand && this.pluginBridge) {
-      await this.pluginBridge.execute(commandId, args)
-      return
-    }
+        const pluginCommand = this.pluginBridge?.getStaticCommand(commandId)
+        if (pluginCommand && this.pluginBridge) {
+          await this.pluginBridge.execute(commandId, args)
+          return
+        }
 
-    throw new Error(`Unknown command: ${commandId}`)
+        throw new Error(`Unknown command: ${commandId}`)
+      },
+    )
   }
 
   getCommand(commandId: string): RegisteredCommand | undefined {

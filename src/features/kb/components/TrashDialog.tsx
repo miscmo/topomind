@@ -16,13 +16,16 @@ function formatDeletedAt(value: number) {
 }
 
 function getItemIcon(item: FSBTrashItem) {
+  // 类型图标一律走设计 token：原先的 sky-500 是与品牌蓝不同源的另一支蓝，
+  // 换主题色后会成为界面上唯一不跟随的蓝色；其余三支 Tailwind 调色板色同样
+  // 绕过了深浅主题变量，一并收敛为语义色（仍保留类型间的明暗 / 冷暖区分）。
   if (item.category === 'kbs') {
-    if (item.meta?.kind === 'card') return <AppWindow className="h-4 w-4 text-indigo-500" />
+    if (item.meta?.kind === 'card') return <AppWindow className="h-4 w-4 text-[var(--color-text-secondary)]" />
     return <Book className="h-4 w-4 text-[var(--color-primary)]" />
   }
-  if (item.category === 'topo-documents') return <FileText className="h-4 w-4 text-sky-500" />
-  if (item.category === 'attachments') return <Paperclip className="h-4 w-4 text-amber-500" />
-  return <FileText className="h-4 w-4 text-gray-500" />
+  if (item.category === 'topo-documents') return <FileText className="h-4 w-4 text-[var(--color-accent)]" />
+  if (item.category === 'attachments') return <Paperclip className="h-4 w-4 text-[var(--color-warning)]" />
+  return <FileText className="h-4 w-4 text-[var(--color-text-muted)]" />
 }
 
 function getItemTypeName(item: FSBTrashItem) {
