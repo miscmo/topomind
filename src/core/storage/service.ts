@@ -221,6 +221,9 @@ export function createStore(backend: StorageBackend) {
     async importCardAsset(cardPath: string) {
       try { return await backend.importCardAsset(cardPath) } catch (e) { logger.catch('Store.importCardAsset', `导入卡片媒体资源失败: ${cardPath}`, e); throw e }
     },
+    async importImageAsset(cardPath: string) {
+      try { return await backend.importImageAsset(cardPath) } catch (e) { logger.catch('Store.importImageAsset', `导入图片容器资源失败: ${cardPath}`, e); throw e }
+    },
     async clearTrashTopoDocuments(cardPath: string) {
       try { await backend.clearTrashTopoDocuments(cardPath) } catch (e) { logger.catch('Store.clearTrashTopoDocuments', `清空多类型文档回收站失败: ${cardPath}`, e); throw e }
     },

@@ -61,6 +61,7 @@ for (const [key, id] of Object.entries(PERFORMANCE_METRICS)) {
 const RESERVED: Record<string, string> = {
   'store.call': 'P2 决定不单独包装 `fs-backend._call`：它最终也走 `preload.invoke`，两处都包会把同一次 IPC 记两遍',
   'ui.tab': 'P7 决定由语义事件 `user.tab_close` / `user.tab_switch` 独家承接 tab 交互：关闭与切换各只写 1 条 user 记录，领域侧的 `ui.tab` 降级为内存步骤，不再落盘',
+  'ui.view': '唯一的产生点是画布左下角缩略图（显隐 / 尺寸 / 点击定位）；2026-11-24 缩略图与左下角缩放控件整体下线后，视图交互改由中间只读提示条与 `user.*` 语义事件承接，不再单独落盘 `ui.view`。事件 id 保留仅为归一化历史日志',
 }
 
 function needlesFor(id: string, owner: string): string[] {

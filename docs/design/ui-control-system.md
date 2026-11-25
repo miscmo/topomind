@@ -9,7 +9,7 @@
 ## 1. 为什么要这份规范
 
 `tokens.css` 早已是颜色 / 圆角 / 阴影 / 字号的唯一真源，但实际观感仍然不统一：
-**值统一了，组合方式没统一**。同一个「次要描边按钮」在画布状态抽屉、缩略图按钮组、
+**值统一了，组合方式没统一**。同一个「次要描边按钮」在画布状态抽屉、画布浮层按钮组、
 知识库对话框、插件面板里被手写了十几遍，圆角（`md / lg / xl / 2xl / full`）、
 hover 色、disabled 透明度、图标尺寸（`h-3 / h-3.5 / size=13`）、层级
 （`z-[100] / 1200 / 3001 / 4000`）各写各的。项目里虽然早有 `shared/ui/button.tsx`
@@ -130,17 +130,19 @@ node scripts/verify-design-system.mjs --update   # 迁移一批后收紧基线�
 
 | 层 | 位置 | 管什么 |
 | --- | --- | --- |
-| 全局导航 | 左侧 NavRail | 首页 / 学习记录 / 日志与性能 / 设置 / 账户（去哪里） |
+| 全局导航 | 标题栏 + 左侧 NavRail | 首页（标题栏）；学习记录 / 日志与性能 / 设置（rail 底部）；账户与工作区（最下） |
+| 左栏页面 | NavRail 顶部（仅画布页） | AI Agent / 知识库列表 / 节点结构（左栏显示哪一页） |
 | 工作区切换 | 顶栏横向 tab | **只放 `type === 'kb'` 的已打开知识库**（在哪些文档间切换） |
 | 对象上下文 | 右侧 absolute 浮层 | 详情 / 样式 / 文档编辑器 |
 
 - 系统页仍然进入 `tabStore.tabs`（`App.tsx` 依赖 `activeTab.viewId` 决定视图显隐），
   **只在 TabBar 渲染层过滤掉**；不要改 store 或 App 的挂载逻辑。
 - 系统页激活时所有 tab 呈非活跃态，由左侧 NavRail 的图标承担激活指示；
-  点任一 tab 一步回到画布。
-- 顶栏三段：左＝logo + 汉堡应用菜单，中＝tab 区 + `--tab-drag-gutter: 88px`
-  恒定拖拽安全带 + 剩余可拖留白，右＝titlebar 插件 widget + 画布上下文控件
-  （仅 kb 时）+ 三个窗口按钮。**tab 区不再设百分比硬限宽**（旧的
+  首页则由标题栏按钮的高亮承担；点任一 tab 一步回到画布。
+- 顶栏三段：左＝导航栏显隐 + 首页 + 汉堡应用菜单，中＝tab 区 +
+  `--tab-drag-gutter: 88px` 恒定拖拽安全带 + 剩余可拖留白，右＝三个窗口按钮。
+  学习计时等 titlebar 插件 widget 已于 2026-11-25 移除，当日时长改由左侧导航
+  「学习记录」表盘承载。**tab 区不再设百分比硬限宽**（旧的
   `--tab-zone-max: 60%` 已删除：它会人为制造溢出）。
 - **Chrome 式弹性宽度（唯一正确算法，见 `TabBar.tsx`）**
   1. `ResizeObserver` 只能观察 `data-tm-tab-zone`（中段容器，`flex-1`、宽度稳定）。
@@ -155,7 +157,7 @@ node scripts/verify-design-system.mjs --update   # 迁移一批后收紧基线�
      尽量多显示几个，可见 tab 一律保持最小宽度，其余收进「⋯N」菜单。
      **激活 tab 永远保持在可见列表里**（空间不足时换入末尾）。
   5. 菜单复用 `.tm-menu` / `.tm-menu-item` 与 `activateTab` / `closeTab` / `flushTabs`。
-- **不要「+」按钮**：打开知识库统一走首页的知识库总览卡片；
+- **不要「+」按钮**：打开知识库统一走首页的知识库卡片；
   tab 栏只负责在已打开的知识库之间切换。
 - 所有 tab 交互元素继承根节点的 `WebkitAppRegion: 'no-drag'`；
   Electron 的 `app-region: drag` 会吞掉重叠区域的全部指针事件。
@@ -179,10 +181,10 @@ node scripts/verify-design-system.mjs --update   # 迁移一批后收紧基线�
 
 ## 8.1 标题栏控制区 / 右栏显隐 / 样式设置归属（2026-11-21 重构）
 
-**顶栏最左侧从左到右**：`导航栏显隐按钮` → `三条横线应用菜单` →
-`学习计时等 titlebar widget` → `tab zone`。原来的软件图标已删除。
-widget 是 `shrink-0` 独立兄弟，**不能放进 `data-tm-tab-zone`**，否则会挤占
-tab 弹性宽度预算、触发「越算越窄」的正反馈。
+**顶栏最左侧从左到右**：`导航栏显隐按钮` → `首页按钮` → `三条横线应用菜单` →
+`tab zone`。原来的软件图标与学习计时 titlebar widget 均已删除；首页从左侧 rail
+迁入后仍保留 `data-tm-nav-item="home"`，GUI 契约不随位置变化。
+顶栏不再挂任何插件 widget，`data-tm-tab-zone` 是控制区之后唯一的宽度测量基准。
 
 **导航栏显隐只有唯一开关**：`layoutStore.railVisible`（全局二态，持久化到
 `topomind_navigation_v2`，兼容旧 `v1` 的 `railMode:'hidden'`）。按钮在标题栏，
@@ -240,6 +242,8 @@ pin / 收起按钮、设置页的「自动 / 常驻 / 隐藏」三态、笔记�
 **门禁**：`verify-critical` 第 58 / 60 组已按新契约改写，**第 61 组**锁住
 「唯一开关 / 无第二套显隐入口 / 无手动右栏控件 / 失焦隐藏条件 / 新建文档展开 /
 样式迁移 / optional GraphContext / **optional GraphStore** / GUI 阶段 AI」；
+**第 69 组**锁住「标题栏不再有学习计时 widget、当日时长由 NavRail 单环表盘承载」，
+第 74 组把首页锚点从已删除的 widget 改到 `data-tm-tab-zone`；
 新加的 GraphStore 断言做过反向验证：把 model 改回 `useGraphStore(` → `exit 1`，
 删掉 GUI 的崩溃证据字符串 → `exit 1`，均原子恢复。GUI 阶段 AI 实测画布页开关生效、
 画布宽度恒定、系统页同态、**设置页无 ErrorBoundary 崩溃**（显式检查
@@ -283,3 +287,41 @@ pin / 收起按钮、设置页的「自动 / 常驻 / 隐藏」三态、笔记�
 - **门禁**：`verify-critical` 第 62 组锁住「单一门面 / 中文+拼音+英文词库 / 统一字形 /
   四入口收敛 / emoji-mart 不回灌 / predev-prebuild 生成链路」；`verify:design` 基线已收紧
   （`DocumentMetaPicker` 由 3 类违规收敛为 1 类，`KnowledgeCard` 移除一处魔法层级）。
+
+## 11. 单一 Left Dock（左侧多页面，2026-11-24）
+
+左侧现在是**一条 48px rail + 一个 280px 浮层面板**，不再为每类内容各造一条竖条。
+
+- **职责分组（2026-11-25 改造）**：`NavRail` 顶部是 `HOST_DOCK_TABS` 的
+  「左栏显示哪一页」（AI Agent → 知识库列表 → 节点结构，只在画布页出现）；
+  底部是「去哪里」的工具组（学习记录 → 日志与性能 → 设置，连成一组、组内无分隔线），
+  紧贴账户与工作区之上，账户组前保留一条细分隔线。首页搬到标题栏后不再由 rail 渲染，
+  但仍留在 `HOST_NAV_ITEMS`（`placement: 'titlebar'`）供 `Control+1..9` 与激活态推导使用。
+  两段共用同一条 rail、同一套 z-40 浮层，物理宽度不增加。左栏 tab 只在
+  `activeTab.type === 'kb'` 时渲染，且用独立的 `data-tm-left-dock-tab`，
+  **不带** `data-tm-nav-item`（不进 GUI 的 nav item id 白名单，也不占 `Control+1..9` 下标）。
+- **单页语义 / 唯一开关**：`nodeTreePanelStore` 只有 `activePanelId` + `collapsed` 两个状态，
+  **唯一写入口是 `setActivePanel`**（由 NavRail 竖 tab 调用）；点当前页 = 折叠、点别页 =
+  换页并展开，同一时刻只有一个面板。页面态只在会话内有效、不落盘，刷新回到节点结构。
+  与右栏「唯一开关 / 无手动按钮」的范式一致：面板内没有任何折叠按钮、把手或隐藏锚点，
+  折叠态直接 `return null`，不渲染任何 DOM。不补快捷键、标题栏按钮等任何第二入口。
+- **视觉语言**：把顶栏的 Π 形连体旋转 90° —— 激活 tab 底色用 `--color-surface`，
+  `.tm-left-dock-tab--connected::after` 向右伸出 10px 盖住 rail 的 `border-r` 并压进面板左缘；
+  整组只有**一条** 2px accent 指示条，按激活按钮实测位置 `translateY` 滑动。
+  单色制下不用渐变 / 彩虹图标 / 玻璃拟态；字号、圆角、阴影、层级全部走 token 与 `.tm-*` 类。
+- **外壳契约不可动**：`#app-layout` / `#graph-panel` 仍是绝对铺满，`NavRail` 仍是 App 层单例
+  z-40 浮层，`layoutStore.railVisible` 仍是唯一二态；面板根 div、
+  `data-tm-node-tree-*` 全套 GUI 稳定选择器、280px 宽度、`--tm-node-tree-offset` 让位与
+  `html[data-tm-nav-rail-open]` 的两条让位规则**一字未改** —— 画布几何与 React Flow Panel
+  坐标在任意展开/换页状态下都恒定。宽度刻意不做拖拽改宽，避免破坏这条像素契约。
+- **AI Agent**：目前只是 `AgentPlaceholder` 空状态入口，不引入 AI SDK、会话状态、假输入框
+  或网络调用；能力定下来后替换该组件即可，Dock 外壳零改动。
+- **知识库列表**：第三页是轻量清单（只调 `storage.listKBs()`，点条目走
+  `tabStore.openKnowledgeBase({ name })`）；封面 base64 / 节点计数 / 新建导入 / 拖动排序
+  仍只属于首页，避免 280px 左栏重复首页的重型加载链路。三页共用同一个
+  `isCanvasView` 渲染分支，显隐条件只有一处。
+- **门禁**：`verify-critical` 第 72 组锁住「单一 store / 页面态不持久化 / tab 复用单例 rail /
+  三页固定顺序 / GUI 选择器与让位变量保留 / 折叠态不渲染 / 占位页不伪装可用 /
+  连体走 controls.css」；第 74 组锁住「标题栏首页位置与 GUI 选择器 / 工具组底部连组 /
+  知识库列表页接线」；第 45 组锁住「唯一开关是竖 tab / collapsed 只由 setActivePanel 写入 /
+  面板内无第二套显隐控件 / 状态抽屉让位公式不变」，并用 esbuild 真跑「点 tab 折叠、再点展开」。

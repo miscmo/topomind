@@ -21,12 +21,19 @@ import { isActiveCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import { resolveRoomChildRef } from '../../../../domain/graph/path-utils'
 import { EXCALIDRAW_CONTAINER_TYPE } from '../../../documents/ExcalidrawDocument/excalidrawDocumentTypes'
 import { CARDSPEC_CONTAINER_TYPE } from '../../../documents/CardSpecDocument/cardSpecTypes'
+import {
+  IMAGE_CONTAINER_TYPE,
+  createEmptyImageDocumentContent,
+  isImageAssetSrc,
+} from '../../../documents/ImageDocument/imageDocumentTypes'
+import { useActiveContainerStore } from '../../GraphCanvas/containers/activeContainerStore'
 
 /** 容器创建参数：新增一种容器只加一个变体，创建链路不变。 */
-type ContainerVariant = 'excalidraw' | 'cardspec'
-const CONTAINER_VARIANTS: Record<ContainerVariant, { name: string; documentType: 'excalidraw' | 'cardspec'; containerType: string }> = {
+type ContainerVariant = 'excalidraw' | 'cardspec' | 'image'
+const CONTAINER_VARIANTS: Record<ContainerVariant, { name: string; documentType: 'excalidraw' | 'cardspec' | 'image'; containerType: string }> = {
   excalidraw: { name: '流程图容器', documentType: 'excalidraw', containerType: EXCALIDRAW_CONTAINER_TYPE },
   cardspec: { name: '知识卡片容器', documentType: 'cardspec', containerType: CARDSPEC_CONTAINER_TYPE },
+  image: { name: '图片容器', documentType: 'image', containerType: IMAGE_CONTAINER_TYPE },
 }
 
 export interface UseNodeActionsOptions {
@@ -60,10 +67,39 @@ export function useNodeActions(options: UseNodeActionsOptions) {
   }, [graph, onAction])
 
   /**
+   * 图片容器创建后的「立即选图」：只写载荷文档，不碰 _graph.json。
+   * 刻意 fire-and-forget —— 原生文件对话框可能停留很久，不能把右键菜单的关闭
+   * 和后续画布交互一起挂住。取消 / 失败都保留空态，双击全屏仍可再选。
+   */
+  const pickImageForContainer = useCallback(async (nodePath: string, documentId: string, title: string) => {
+    try {
+      const result = await storage.importImageAsset(nodePath)
+      if (!result) return
+      if (!isImageAssetSrc(result.src)) {
+        recordStep({ name: 'container.image.pick', outcome: 'invalid-src', params: { nodePath } })
+        return
+      }
+      await storage.writeTopoDocument(nodePath, documentId, {
+        ...createEmptyImageDocumentContent(title),
+        src: result.src,
+        alt: result.src.slice('assets/'.length),
+      })
+      // 节点是只读预览，必须靠 revision 信号重读磁盘，否则选完图仍停在空态。
+      useActiveContainerStore.getState().bumpRevision()
+    } catch (e) {
+      recordStep({
+        name: 'container.image.pick',
+        outcome: 'failed',
+        params: { nodePath, error: (e as Error)?.message || String(e) },
+      })
+    }
+  }, [storage])
+
+  /**
    * 创建容器节点的唯一路径：先建普通节点（乐观插入）→ 在其 _docs 下建载荷文档
    * → 只更新这一个节点的 kind/container 指针 → flush + 原地刷新。
    * 载荷创建失败时保留普通知识节点，绝不留下指向空文档的容器。
-   * variant 决定载荷类型（excalidraw 白板 / cardspec 知识卡片）。
+   * variant 决定载荷类型（excalidraw 白板 / cardspec 知识卡片 / image 图片）。
    */
   const createContainerChild = useCallback(async (position: { x: number; y: number } | undefined, variant: ContainerVariant) => {
     if (isActiveCanvasReadOnly()) return
@@ -99,13 +135,17 @@ export function useNodeActions(options: UseNodeActionsOptions) {
       }))
       await graph.flushCurrentRoomSave()
       await graph.refreshCurrentRoom()
+      if (variant === 'image') {
+        // 菜单 action 不等这个 Promise：对话框独立弹出，画布立即可继续操作。
+        void pickImageForContainer(nodePath, documentId, name)
+      }
     } catch (e) {
       logAction('container.create_failed', 'useNodeActions', {
         nodeId: cardId, variant, error: (e as Error)?.message || String(e),
       })
     }
     onAction?.()
-  }, [graph, onAction, storage, storeApi])
+  }, [graph, onAction, pickImageForContainer, storage, storeApi])
 
   const handleNewContainerChild = useCallback(async (position?: { x: number; y: number }) => {
     await createContainerChild(position, 'excalidraw')
@@ -113,6 +153,10 @@ export function useNodeActions(options: UseNodeActionsOptions) {
 
   const handleNewCardSpecContainerChild = useCallback(async (position?: { x: number; y: number }) => {
     await createContainerChild(position, 'cardspec')
+  }, [createContainerChild])
+
+  const handleNewImageContainerChild = useCallback(async (position?: { x: number; y: number }) => {
+    await createContainerChild(position, 'image')
   }, [createContainerChild])
 
   const confirmAndDeleteNode = useCallback(async (nodeId: string) => {
@@ -146,6 +190,7 @@ export function useNodeActions(options: UseNodeActionsOptions) {
     handleNewChild,
     handleNewContainerChild,
     handleNewCardSpecContainerChild,
+    handleNewImageContainerChild,
     handleEnterNode,
     handleDelete,
     handleEdgeDelete,

@@ -222,7 +222,7 @@ id / category / label(中文) / level / 字段 schema / 保留期 / 采样 / 说
 | T2.2 | `preload.invoke` 单点审计覆盖 82 个业务通道 | `electron/preload.js`：排除 `log:*` 防自放大、正常调用按 60s 窗口聚合为 `ipc.audit`、失败/慢调用即时 `ipc.invoke` 明细、`setTraceContext` 跨进程透传 traceId；`fs-backend._call` 不再重复包装 | ✅ 已完成 |
 | T2.3 | 命令 / 插件 / app / 关闭链路 / 定时器埋点 | `commandRegistry.execute`（16 个命令，host+plugin 两条路径收敛）、`pluginLifecycle.setState`、`main.js` 六处生命周期 + `quit.approved` 在 drain 之前写、TabBar 1s / learningTracker 1s+60s / saveCoordinator 300ms 三处按分钟聚合 | ✅ 已完成 |
 | T2.4 | 106 处中文 `logAction` 迁到规范 id，冻结线清零 | `scripts/migrate-legacy-actions.mts`（`npm run migrate:actions`，幂等、未映射即报错）；29 个文件 106 处替换；动态两处单独收口；`logAction` 单点补齐 v3 `target / result` | ✅ 已完成 |
-| T2.5 | 语义化用户事件补齐 + 门禁行为用例 | `tabActions`（视图/首页/监控/统计）、`DetailPanel`（打开文档）、`RoomOverview`（进入房间）、节点点击与 tab 关闭/切换补真实 target；`verify-logging.mts` 新增 **C10** | ✅ 已完成 |
+| T2.5 | 语义化用户事件补齐 + 门禁行为用例 | `tabActions`（视图/首页/监控/统计）、`DetailPanel`（打开文档）、房间导航（进入房间；原 `RoomOverview` 覆盖层下线后改由 `Breadcrumb` 面包屑产生）、节点点击与 tab 关闭/切换补真实 target；`verify-logging.mts` 新增 **C10** | ✅ 已完成 |
 
 **P2 验收实测（2026-11-23）**：
 - `verify:logging` **3583 checks** 全绿。C10 覆盖：中文裸字符串冻结线 = 0、preload 排除 `log:*` 防自放大、失败调用即时明细、跨时间窗聚合、traceId 透传、一次操作 1 trace + 根/子 span 层级、用户事件 `target/result/trace` 三件套、定时任务窗口内零落盘、失败类 action 自动归 `error` 且 `result=failure`。

@@ -3,11 +3,16 @@ import { useReactFlow } from '@xyflow/react'
 import { useNodeActions } from './useNodeActions'
 import { useNodeMoveToRoom } from './useNodeMoveToRoom'
 import { logAction } from '../../../../core/log-backend'
+import { recordStep } from '../../../../core/traceBuffer'
 import type { ContextMenuState } from '../../../../types/uiStoreTypes'
 import type { GraphContextValue } from '../../../../contexts/GraphContext'
 import { normalizeRef, resolveRoomChildRef } from '../../../../domain/graph/path-utils'
 import { tabStore } from '../../../../stores/tabs/tabStore'
 import { useGraphStoreApi } from '../../../../stores/graphStore'
+import { useRightPanelStore } from '../../../../stores/rightPanelStore'
+import { useDetailPanelStore } from '../../../right-panel/model/detailPanelStore'
+import { useDetailLockStore } from '../../../right-panel/model/detailLockStore'
+import { toast } from '../../../../shared/ui/Toaster/toastStore'
 import { useLinkedDocumentStore } from '../../linkedDocumentStore'
 
 interface UseGraphPageActionsOptions {
@@ -49,6 +54,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
     handleNewChild,
     handleNewContainerChild,
     handleNewCardSpecContainerChild,
+    handleNewImageContainerChild,
     handleEnterNode,
     handleDelete,
     handleEdgeDelete,
@@ -80,6 +86,32 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
       links: node.data.linkedDocuments ?? [],
     })
   }, [graphStoreApi, tabId])
+
+  /**
+   * 右键「打开节点文档」：等价于卡片上文档图标的 openOwnDocument，但不挑节点。
+   * 卡片图标只在 hasDetail 时渲染，无文档节点因此完全没有进右栏的入口；这里
+   * 一律展开右栏，由 DocumentEditorHost 的空状态提供「新建文档」按钮。
+   */
+  const openNodeDocument = useCallback((nodeId: string) => {
+    if (!graphStoreApi.getState().nodesMap.has(nodeId)) return
+    const kbPath = tabStore.getState().getGraphSession(tabId).kbPath
+    const locked = kbPath ? useDetailLockStore.getState().lockedByKb[kbPath] : null
+    if (locked?.nodeId && locked.nodeId !== nodeId) {
+      toast({ level: 'warn', title: '无法打开节点文档', message: '右栏已锁定到其它节点，请先解锁' })
+      return
+    }
+    // 右键目标可能只是多选集合里的一员：把选中态收敛到它，右栏才按该节点解析 _docs。
+    graph.selectNode(nodeId)
+    const rightPanel = useRightPanelStore.getState()
+    // 显式展开，不走 applyRightPanelAutoVisibility(true)：无文档节点没有「有文档」
+    // 这一事实，也不该让任何自动显隐逻辑在展开后把它收回。
+    rightPanel.expandRightPanel()
+    rightPanel.setRightPanelTab('detail')
+    // 上次可能停在「关联文档」视图，那里看不到本节点文档树、也不能新建文档。
+    useDetailPanelStore.getState().setDetailViewForNode(nodeId, 'own')
+    // 菜单的打开 / 关闭已各写一条 ui.context_menu；这里降级为内存步骤，避免重复事实。
+    recordStep({ name: 'node.document.open', outcome: 'requested', params: { nodeId, source: 'context-menu' } })
+  }, [graph, graphStoreApi, tabId])
 
   const closeContextMenu = useCallback(() => {
     setContextMenu((current) => {
@@ -184,6 +216,11 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
     void handleNewCardSpecContainerChild(flowPosition)
   }, [handleNewCardSpecContainerChild, screenToFlowPosition])
 
+  const handleContextMenuNewImageContainerChild = useCallback((position?: { x: number; y: number }) => {
+    const flowPosition = position ? screenToFlowPosition(position) : undefined
+    void handleNewImageContainerChild(flowPosition)
+  }, [handleNewImageContainerChild, screenToFlowPosition])
+
   const handleCanvasEdgeContextMenu = useCallback((edgeId: string, event: React.MouseEvent) => {
     openEdgeMenu(edgeId, event)
   }, [openEdgeMenu])
@@ -211,6 +248,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
       onNewChild: handleContextMenuNewChild,
       onNewContainerChild: handleContextMenuNewContainerChild,
       onNewCardSpecContainerChild: handleContextMenuNewCardSpecContainerChild,
+      onNewImageContainerChild: handleContextMenuNewImageContainerChild,
       onEnterNode: handleEnterNode,
       onSelectSubtree: (nodeId: string) => {
         // 右键指定了明确的根：即使画布当前选中了别的节点，也只选中这一棵子树。
@@ -229,6 +267,7 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
       onMoveToRoom: (nodeId: string) => openMoveToRoom(nodeId, contextMenu.selectedIds),
       onMoveSelectionToRoom: () => openMoveIdsToRoom(contextMenu.selectedIds),
       onClearSelection: () => graph.deselectNode(),
+      onOpenNodeDocument: openNodeDocument,
       onLinkDocument: openLinkDocument,
       onClose: closeContextMenu,
     },

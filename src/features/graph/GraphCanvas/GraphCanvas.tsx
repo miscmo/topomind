@@ -11,7 +11,6 @@ import './containers/registerContainers'
 import FloatingEdge from './edges/FloatingEdge'
 import { SmartGuidesRenderer } from './SmartGuidesRenderer'
 import { CardSnappedConnectionLine } from './components/CardSnappedConnectionLine'
-import { CanvasMiniMap } from './components/CanvasMiniMap'
 import { NodeSearchBox } from './components/NodeSearchBox'
 import { EdgeRelationPicker, EdgeRelationQuickEditor } from './components/EdgeRelationPicker'
 import LodControl from './components/LodControl'
@@ -32,6 +31,7 @@ import {
   semanticZoomVarsForZoom,
   isCompactZoom,
   wheelSensitivityForZoom,
+  formatZoomPercent,
 } from '../../../domain/graph/zoomScale'
 import { computeCanvasReadOnly } from '../../../domain/graph/canvasReadOnly'
 import { clearCanvasReadOnly, publishCanvasReadOnly } from '../../../stores/canvasReadOnlyStore'
@@ -61,7 +61,6 @@ export default memo(function GraphCanvas({
   onMoveRedo,
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const { state, graph, actions, visibleNodesRef } = useGraphCanvasModel({
     tabId,
     onNodeContextMenu,
@@ -86,7 +85,6 @@ export default memo(function GraphCanvas({
     isEdgeFormatPainterActive,
     isShiftPressed,
     isSearchOpen,
-    isNodeInteractionActive,
   } = state
 
   const {
@@ -130,30 +128,6 @@ export default memo(function GraphCanvas({
     element.style.setProperty('--tm-detail-hit', vars.detailHit)
   }, [zoomLevel])
 
-  useEffect(() => {
-    const element = containerRef.current
-    if (!element) return
-
-    const updateCanvasSize = () => {
-      setCanvasSize({
-        width: element.clientWidth,
-        height: element.clientHeight,
-      })
-    }
-
-    updateCanvasSize()
-
-    const observer = new ResizeObserver(() => {
-      updateCanvasSize()
-    })
-
-    observer.observe(element)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [])
-
   // 房间图型是「视图意图」：存全局 _config.json 的 roomProfiles（roomPath → id），
   // 不进 _graph.json 索引、不碰节点/边字段 7 处白名单；旧房间无配置即为 auto。
   const storage = useStorage()
@@ -174,7 +148,7 @@ export default memo(function GraphCanvas({
   }, [currentRoom, setRoomProfiles, storage])
 
   // 语义缩放：只派发 hidden 属性，节点/边数据本身不动（位置、选中、连线全部保住）。
-  // 缩略图与搜索仍用全量 nodes/edges，避免 LOD 把「整图概览」和「找不到节点」也一起藏掉。
+  // LOD 只消费全量 nodes/edges 生成渲染副本；搜索仍走全量 nodes，避免找不到被隐藏的节点。
   const lod = useSemanticLod({
     nodes,
     edges,
@@ -286,7 +260,7 @@ export default memo(function GraphCanvas({
     if (target.closest('[data-tm-container-surface="active"]')) return
     const pane = target.closest('.react-flow__pane')
     if (!pane) return
-    if (target.closest('.react-flow__panel, .react-flow__minimap, .nowheel')) return
+    if (target.closest('.react-flow__panel, .nowheel')) return
     event.stopPropagation()
     // 只缩放「操作量」，不改 zoom→显示比换算与 LOD 阈值公式：小图逐值不变。
     const delta = clampWheelDelta(native.deltaY) * wheelSensitivity
@@ -306,6 +280,8 @@ export default memo(function GraphCanvas({
     if (anim.raf === null) anim.raf = window.requestAnimationFrame(runWheelAnimation)
   }, [runWheelAnimation, wheelSensitivity])
 
+  // 左下角比例控件已下线：比例读数改为画布容器的纯语义属性（不产生任何可见 UI），
+  // 恢复 100% 统一走中间只读提示条；回归脚本从 data-tm-canvas-zoom-percent 取读数。
   return (
     <div
       ref={containerRef}
@@ -319,6 +295,7 @@ export default memo(function GraphCanvas({
       data-tm-canvas-readonly-hidden={hiddenNodeCount}
       data-tm-canvas-compact={compactZoom ? 'true' : 'false'}
       data-tm-canvas-wheel-sensitivity={wheelSensitivity.toFixed(3)}
+      data-tm-canvas-zoom-percent={formatZoomPercent(zoomLevel)}
       onMouseDown={actions.handleCanvasMouseDown}
       onContextMenu={actions.handleCanvasContextMenuFallback}
       onWheelCapture={handleWheelCapture}
@@ -469,13 +446,6 @@ export default memo(function GraphCanvas({
           onMoveRedo={onMoveRedo}
         />
         <ViewportReturnButton tabId={tabId} />
-        <CanvasMiniMap
-          nodes={nodes as Node[]}
-          edges={edges}
-          zoomLevel={zoomLevel}
-          canvasSize={canvasSize}
-          interactionActive={isNodeInteractionActive}
-        />
         {showGrid && (
           <Background id={tabId} variant={'dots' as BackgroundVariant} gap={20} size={1} color="var(--color-canvas-grid)" />
         )}

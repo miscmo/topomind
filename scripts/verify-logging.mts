@@ -611,7 +611,7 @@ for (const file of [
 for (const file of [
   'src/stores/tabs/tabActions.ts',
   'src/features/right-panel/components/DetailTab/DetailPanel.tsx',
-  'src/features/graph/GraphPage/components/RoomOverview.tsx',
+  'src/features/layout/Breadcrumb/Breadcrumb.tsx',
 ]) {
   expect('C10', (await read(file)).includes('recordUser('), `${file} 的语义化用户事件未补齐`)
 }

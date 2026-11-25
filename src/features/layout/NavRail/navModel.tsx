@@ -9,16 +9,19 @@ import {
   FileText,
   Home,
   Layers3,
+  Library,
   ListTree,
   PanelRightClose,
   ScrollText,
   Search,
   Settings,
   SlidersHorizontal,
+  Sparkles,
   Workflow,
   type LucideIcon,
 } from 'lucide-react'
 import type { Tab } from '@/stores/tabs/tabStore'
+import type { LeftDockPanelId } from '@/stores/nodeTreePanelStore'
 
 export type NavIconName =
   | 'home'
@@ -38,6 +41,8 @@ export interface NavItemDescriptor {
   icon: NavIconName
   group: NavGroup
   order: number
+  /** titlebar = 按钮住在标题栏（不进左侧 rail），但仍参与快捷键与激活态推导。 */
+  placement?: 'rail' | 'titlebar'
   /** 插件项通过命令打开，宿主项由 NavRail 自己分发 */
   openCommand?: string
   pluginId?: string
@@ -73,8 +78,9 @@ export function normalizeNavIcon(icon: unknown): NavIconName {
   }
 }
 
+/** 首页搬到标题栏后仍留在这一份清单里：Ctrl+1..9 与激活态推导共用同一真源。 */
 export const HOST_NAV_ITEMS: NavItemDescriptor[] = [
-  { id: 'home', title: '首页', icon: 'home', group: 'workspace', order: 10 },
+  { id: 'home', title: '首页', icon: 'home', group: 'workspace', order: 10, placement: 'titlebar' },
   { id: 'settings', title: '设置', icon: 'settings', group: 'tools', order: 80 },
   { id: 'profile', title: '账户与工作区', icon: 'profile', group: 'account', order: 100 },
 ]
@@ -102,3 +108,24 @@ export const GROUP_DIVIDER_ICONS: Record<NavGroup, LucideIcon> = {
 }
 
 export const FALLBACK_ICONS = { FileText, ListTree } as const
+
+/**
+ * 左侧 Dock 的竖向页面 tab（宿主固定项），顺序即导航栏从上往下的顺序。
+ *
+ * 刻意不进 HOST_NAV_ITEMS / 插件 navItems 链路：
+ *  - 它们管「去哪里」，这三项管「当前画布左栏显示哪一页」，职责不同；
+ *  - 不参与 Control+1..9 的下标排序，也不改变 GUI 阶段的 nav item id 白名单；
+ *  - 渲染时使用独立的 data-tm-left-dock-tab 属性，不带 data-tm-nav-item；
+ *  - 三页共用同一渲染分支，因此显隐条件天然一致（只随画布视图出现）。
+ */
+export interface DockTabDescriptor {
+  id: LeftDockPanelId
+  title: string
+  icon: LucideIcon
+}
+
+export const HOST_DOCK_TABS: readonly DockTabDescriptor[] = [
+  { id: 'agent', title: 'AI Agent', icon: Sparkles },
+  { id: 'kbList', title: '知识库列表', icon: Library },
+  { id: 'tree', title: '节点结构', icon: ListTree },
+]

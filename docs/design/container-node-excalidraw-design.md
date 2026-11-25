@@ -30,10 +30,12 @@
 
 | 开放项 | 确认结果 |
 | --- | --- |
-| 容器内插入图片 | **禁止**（`UIOptions.tools.image = false`，normalize 忽略 files），避免附件链路 / 跨房间搬运 / 去重 |
+| Excalidraw 容器内插入图片 | **禁止**（`UIOptions.tools.image = false`，normalize 忽略 files），避免附件链路 / 跨房间搬运 / 去重 |
 | 预览 SVG 落盘 sidecar | **v1 不落盘**；改为内存 LRU 缓存 + 只对可见节点生成 + 限制并发生成数（见 §6.3） |
 | 手绘配色与单色制并存 | **接受**，编辑态与预览态都保留手绘风（这是选型目的） |
 | 旧 `.tflow.json` 转换器 | **不做**，将来另立方案 |
+
+> 2026-11-24 补充：用户需要「创建后选本地图片展示成图片节点」，做法是**新增第三种容器载荷 `image`**（`.timg.json` + `_docs/assets/` 相对引用 + 图片专用选图 IPC），而不是放开 Excalidraw 的 image 工具。上表约束继续有效，两种容器互不影响。
 
 另新增两项实现期决策（见 §12）：容器编辑态与 `hidden > 0` 解耦；滚轮守卫改为在活跃容器表面 `stopPropagation()`。
 
@@ -372,8 +374,8 @@ export interface ContainerRendererRegistration {
   与 **SVG DOM 元素**。
 - **挂载方式**：用 `ref` + `replaceChildren(svgElement)` 挂真实 DOM，不要 `dangerouslySetInnerHTML`。
   理由：项目没有内联 SVG 字符串注入的管线，`mathPaste.ts` 的 DOMPurify 配置是 HTML 粘贴白名单，
-  不适用于 SVG 文档；用 DOM 挂载可完全绕开净化问题。可参照 `CanvasMiniMap.tsx` 的
-  「数据模型 → React SVG 元素」两段式范式。
+  不适用于 SVG 文档；用 DOM 挂载可完全绕开净化问题。采用「数据模型 → React SVG 元素」
+  两段式范式：先把节点/边派生为纯数据结构，再由 React 渲染 SVG 元素。
 - **性能护栏**（替代 v1.0 的纯内存 Map）：
   - 只对 `lod.visibleNodes` 中的容器节点生成；不可见节点显示静态占位框。
   - 全局并发生成数上限（建议 2–3），排队执行，避免多容器房间首帧卡死。

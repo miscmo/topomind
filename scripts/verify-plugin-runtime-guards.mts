@@ -858,7 +858,6 @@ async function loadModuleWithVite<T = Record<string, unknown>>(entryPath: string
     [
       'view:learning.statistics:bound',
       'command:learning.open:bound',
-      'widget:learning.titlebar.overview:bound',
     ],
   )
 
@@ -866,24 +865,18 @@ async function loadModuleWithVite<T = Record<string, unknown>>(entryPath: string
 
   const registry = manager.getRegistry()
   const viewRenderer = registry.getViewRenderer('learning.statistics')
-  const widgetRenderer = registry.getWidgetRenderer('learning.titlebar.overview')
 
   assert.equal(typeof viewRenderer, 'function')
-  assert.equal(typeof widgetRenderer, 'function')
+  // 标题栏计时 widget 已移除，插件激活后不应再绑定任何 widget renderer。
+  assert.equal(registry.getWidgetRenderer('learning.titlebar.overview'), undefined)
 
   const viewNode = viewRenderer?.({
     viewId: 'learning.statistics',
     pluginId: 'topomind.learning-statistics',
   }) as { props?: { onBackHome?: () => Promise<void>; learning?: unknown; workspace?: unknown } } | null
-  const widgetNode = widgetRenderer?.({
-    widgetId: 'learning.titlebar.overview',
-    pluginId: 'topomind.learning-statistics',
-  }) as { props?: { onOpenStatistics?: () => Promise<void>; learning?: unknown; workspace?: unknown } } | null
 
   assert.equal(typeof viewNode?.props?.learning, 'object')
   assert.equal(typeof viewNode?.props?.workspace, 'object')
-  assert.equal(typeof widgetNode?.props?.learning, 'object')
-  assert.equal(typeof widgetNode?.props?.workspace, 'object')
 
   const learningEntryModule = await loadModuleWithVite<{
     loadLearningStatisticsPageModule: () => Promise<{
@@ -927,10 +920,9 @@ async function loadModuleWithVite<T = Record<string, unknown>>(entryPath: string
   workspaceSubscription.dispose()
 
   await viewNode?.props?.onBackHome?.()
-  await widgetNode?.props?.onOpenStatistics?.()
 
   assert.deepEqual(executedCommands, ['home.open'])
-  assert.deepEqual(openViews, ['learning.statistics', 'learning.statistics'])
+  assert.deepEqual(openViews, ['learning.statistics'])
 }
 
 {

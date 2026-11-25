@@ -590,6 +590,17 @@ function _fs_importCardAsset(rootDir, cardPath, sourceAbsPath) {
   return CARD_ASSET_DIR + '/' + candidate;
 }
 
+/**
+ * 图片容器专用导入：只允许图片类别，避免把音频/视频复制进节点 assets 目录。
+ * 复用 _fs_importCardAsset 的类型/大小校验、重名加后缀与目录逃逸防护。
+ */
+function _fs_importImageAsset(rootDir, cardPath, sourceAbsPath) {
+  if (cardAssetCategory(nodePath.basename(String(sourceAbsPath || ''))) !== 'image') {
+    throw new Error('仅支持图片文件（png / jpg / jpeg / gif / webp / svg）');
+  }
+  return _fs_importCardAsset(rootDir, cardPath, sourceAbsPath);
+}
+
 
 const TOPO_DOCUMENT_DIR = '_docs';
 const TOPO_DOCUMENT_MANIFEST = 'tree.json';
@@ -598,6 +609,7 @@ const TOPO_DOCUMENT_EXTENSIONS = {
   mindmap: '.tmind.json',
   excalidraw: '.exdraw.json',
   cardspec: '.cardspec.json',
+  image: '.timg.json',
   // compat：X6 流程图退场后仍须保留扫描/归一化能力，避免旧 tree.json 条目被删。
   flowchart: '.tflow.json',
 };
@@ -606,6 +618,7 @@ const TOPO_DOCUMENT_SCHEMAS = {
   mindmap: 'topomind.mindmap-document',
   excalidraw: 'topomind.excalidraw-document',
   cardspec: 'topomind.card-spec',
+  image: 'topomind.image-document',
   flowchart: 'topomind.flowchart-document',
 };
 // 只放行可新建的类型。flowchart 仅作「只索引不渲染」的 compat 类型存在。
@@ -614,6 +627,7 @@ const TOPO_CREATABLE_DOCUMENT_TYPES = {
   mindmap: true,
   excalidraw: true,
   cardspec: true,
+  image: true,
 };
 
 function _fs_isPlainObject(value) {
@@ -925,6 +939,18 @@ function _fs_createTopoDocumentInitialContent(type, title, timestamp) {
       layout: 'stack',
       components: [],
       metadata: { createdAt: timestamp, updatedAt: timestamp, generatedBy: 'user' },
+    };
+  }
+  if (type === 'image') {
+    return {
+      schema: TOPO_DOCUMENT_SCHEMAS.image,
+      version: 1,
+      title: title,
+      // 空 src = 尚未选图：创建链路随后弹本地文件选择框并写回 assets/ 相对引用。
+      src: '',
+      alt: '',
+      fit: 'contain',
+      metadata: { createdAt: timestamp, updatedAt: timestamp, editor: 'image' },
     };
   }
   // compat：旧 flowchart 文档在文件缺失 / 回收站恢复时仍可生成兜底内容，
@@ -2180,6 +2206,11 @@ const fileService = {
     /** CardSpec 媒体资源：导入外部文件进节点 _docs/assets/，返回相对引用（assets/<name>）。 */
     importCardAsset: function(rootDir, cardPath, sourceAbsPath) {
       return _fs_importCardAsset(rootDir, cardPath, sourceAbsPath);
+    },
+
+    /** 图片容器：只放行图片扩展名，其余与 importCardAsset 共用同一套校验。 */
+    importImageAsset: function(rootDir, cardPath, sourceAbsPath) {
+      return _fs_importImageAsset(rootDir, cardPath, sourceAbsPath);
     },
 
     clearTrashTopoDocuments: function(rootDir, cardPath) {

@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Workflow, LayoutTemplate, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree, X } from 'lucide-react'
+import { Plus, Workflow, LayoutTemplate, Image as ImageIcon, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree, FileText, X } from 'lucide-react'
 
 interface MenuItem {
   label: string
@@ -32,6 +32,7 @@ interface GraphPageContextMenuProps {
   onNewChild: (position?: { x: number; y: number }) => void
   onNewContainerChild: (position?: { x: number; y: number }) => void
   onNewCardSpecContainerChild: (position?: { x: number; y: number }) => void
+  onNewImageContainerChild: (position?: { x: number; y: number }) => void
   onEnterNode: (nodeId: string) => void
   onSelectSubtree: (nodeId: string) => void
   onDelete: (nodeId: string) => void
@@ -46,6 +47,7 @@ interface GraphPageContextMenuProps {
   selectionMenu: boolean
   onMoveSelectionToRoom: () => void
   onClearSelection: () => void
+  onOpenNodeDocument: (nodeId: string) => void
   onLinkDocument: (nodeId: string) => void
   onClose: () => void
 }
@@ -59,6 +61,7 @@ export default memo(function GraphPageContextMenu({
   onNewChild,
   onNewContainerChild,
   onNewCardSpecContainerChild,
+  onNewImageContainerChild,
   onEnterNode,
   onSelectSubtree,
   onDelete,
@@ -71,6 +74,7 @@ export default memo(function GraphPageContextMenu({
   selectionMenu,
   onMoveSelectionToRoom,
   onClearSelection,
+  onOpenNodeDocument,
   onLinkDocument,
   onClose,
 }: GraphPageContextMenuProps) {
@@ -109,6 +113,14 @@ export default memo(function GraphPageContextMenu({
       icon: <LayoutTemplate className="w-4 h-4" />,
       action: async () => {
         await onNewCardSpecContainerChild({ x, y })
+        onClose()
+      },
+    },
+    {
+      label: '新建图片容器',
+      icon: <ImageIcon className="w-4 h-4" />,
+      action: async () => {
+        await onNewImageContainerChild({ x, y })
         onClose()
       },
     },
@@ -177,6 +189,16 @@ export default memo(function GraphPageContextMenu({
       shortcut: 'Enter',
       action: async () => {
         if (targetId) await onEnterNode(targetId)
+        onClose()
+      },
+    },
+    {
+      // 卡片上的文档图标只在 hasDetail 时渲染：无文档节点没有任何入口打开右栏。
+      // 这里对有 / 无文档的节点一视同仁，右栏空状态自带「新建文档」按钮。
+      label: '打开节点文档',
+      icon: <FileText className="w-4 h-4" />,
+      action: () => {
+        if (targetId) onOpenNodeDocument(targetId)
         onClose()
       },
     },

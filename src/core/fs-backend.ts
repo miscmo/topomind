@@ -203,6 +203,8 @@ export interface FSB {
   resolveCardAssetUrl: (rootDir: string, cardPath: string, relPath: string) => Promise<string | null>
   /** CardSpec 媒体资源：弹窗选文件并导入 _docs/assets/，取消返回 null */
   importCardAsset: (rootDir: string, cardPath: string) => Promise<{ src: string } | null>
+  /** 图片容器：只弹图片过滤器并校验扩展名，取消返回 null */
+  importImageAsset: (rootDir: string, cardPath: string) => Promise<{ src: string } | null>
   clearTrashTopoDocuments: (rootDir: string, cardPath: string) => Promise<void>
   moveTopoDocument: (rootDir: string, cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   moveTopoDocumentToCard: (rootDir: string, sourceCardPath: string, documentId: string, targetCardPath: string) => Promise<MoveTopoDocumentToCardResult>
@@ -284,6 +286,8 @@ const FSBImpl: FSB = {
     _call('fs:resolveCardAssetUrl', rootDir, cardPath, relPath) as Promise<string | null>,
   importCardAsset: (rootDir, cardPath) =>
     _call('fs:importCardAsset', rootDir, cardPath) as Promise<{ src: string } | null>,
+  importImageAsset: (rootDir, cardPath) =>
+    _call('fs:importImageAsset', rootDir, cardPath) as Promise<{ src: string } | null>,
   clearTrashTopoDocuments: (rootDir, cardPath) =>
     _call('fs:clearTrashTopoDocuments', rootDir, cardPath) as Promise<void>,
   moveTopoDocument: (rootDir, cardPath, documentId, newParentId, newSortOrder) =>

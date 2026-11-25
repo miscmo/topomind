@@ -7,6 +7,27 @@
  */
 import type { TopoDocumentType } from '../../core/topoDocumentTypes'
 
+export interface ContainerNodeSizeLimits {
+  minWidth: number
+  minHeight: number
+  maxWidth: number
+  maxHeight: number
+}
+
+/** 运行时才能拿到的内容信息（例如图片解码后的原始像素），不进载荷。 */
+export interface ContainerSizeContext {
+  intrinsicWidth?: number
+  intrinsicHeight?: number
+}
+
+/** 容器载荷建议的节点尺寸；ratio 用于拖动时锁定宽高比。 */
+export interface PreferredNodeSize {
+  width: number
+  height: number
+  /** 适配判定键：换图后 key 变化会重新适配；用户手动 resize 后 key 不变则不拉回。 */
+  key: string
+}
+
 export interface ContainerTypeSpec<T = unknown> {
   /** 与 ContainerRef.type 对应，注册表主键 */
   id: string
@@ -25,6 +46,12 @@ export interface ContainerTypeSpec<T = unknown> {
    * 未实现时调用方按内容字符串兜底。
    */
   getSceneVersion?(value: T): number
+  /**
+   * 可选：载荷建议的节点尺寸（纯函数）。目前只有图片容器用——按图片原始宽高比
+   * 等比缩放，让节点矩形与图片严丝合缝、四周零空隙。返回的 width/height 供节点
+   * 自适应一次，ratio 供 NodeResizer 锁定宽高比；其他容器返回 null 保持既有行为。
+   */
+  getPreferredNodeSize?(value: T, limits: ContainerNodeSizeLimits, context?: ContainerSizeContext): PreferredNodeSize | null
 }
 
 const CONTAINER_TYPE_REGISTRY = new Map<string, ContainerTypeSpec>()

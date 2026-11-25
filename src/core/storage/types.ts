@@ -173,6 +173,8 @@ export interface TopoDocumentStorageBackend {
   resolveCardAssetUrl: (cardPath: string, relPath: string) => Promise<string | null>
   /** CardSpec 媒体资源：弹窗选择并导入 _docs/assets/，取消返回 null */
   importCardAsset: (cardPath: string) => Promise<{ src: string } | null>
+  /** 图片容器：图片专用选图弹窗，取消返回 null */
+  importImageAsset: (cardPath: string) => Promise<{ src: string } | null>
   clearTrashTopoDocuments: (cardPath: string) => Promise<void>
   moveTopoDocument: (cardPath: string, documentId: string, newParentId: string | null, newSortOrder: number) => Promise<TopoDocumentManifestItem>
   moveTopoDocumentToCard: (cardPath: string, documentId: string, targetCardPath: string) => Promise<MoveTopoDocumentToCardResult>

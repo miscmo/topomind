@@ -6,15 +6,8 @@ import type { EdgeStylePatch, KnowledgeNodeStyle } from '../types'
 import { normalizeEdgeRelationDefinitions, type EdgeRelationDefinition } from '../domain/graph/edgeRelations'
 import { normalizeRoomProfiles, type GraphProfileId } from '../domain/graph/graphProfiles'
 
-interface MiniMapSize {
-  width: number
-  height: number
-}
-
 interface GraphUiStore {
   showGrid: boolean
-  showMiniMap: boolean
-  miniMapSize: MiniMapSize
   selectedEdgeId: string | null
   connectingSourceId: string | null
   connectingTargetId: string | null
@@ -41,8 +34,6 @@ interface GraphUiStore {
   smartGuidesEnabled: boolean
   /** 房间图型（roomPath → id），由 _config.json hydrate，不进 localStorage */
   roomProfiles: Record<string, GraphProfileId>
-  setShowMiniMap: (showMiniMap: boolean) => void
-  setMiniMapSize: (miniMapSize: MiniMapSize) => void
   setSelectedEdgeId: (edgeId: string | null) => void
   setConnectingSourceId: (nodeId: string | null) => void
   setConnectingTargetId: (nodeId: string | null) => void
@@ -67,13 +58,8 @@ interface GraphUiStore {
   resetGraphUi: () => void
 }
 
-export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'showMiniMap' | 'miniMapSize' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'edgeFormatPainterStyle' | 'isViewportZooming' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize' | 'edgeRelations' | 'showEdgeRelationLabels' | 'smartGuidesEnabled' | 'roomProfiles'> = {
+export const GRAPH_UI_INITIAL_STATE: Pick<GraphUiStore, 'showGrid' | 'selectedEdgeId' | 'connectingSourceId' | 'connectingTargetId' | 'formatPainterStyle' | 'edgeFormatPainterStyle' | 'isViewportZooming' | 'defaultEdgeStyle' | 'defaultNodeStyle' | 'defaultNodeSize' | 'defaultEditorStyle' | 'nodeSizeLimits' | 'nodeBadgeSize' | 'edgeRelations' | 'showEdgeRelationLabels' | 'smartGuidesEnabled' | 'roomProfiles'> = {
   showGrid: true,
-  showMiniMap: true,
-  miniMapSize: {
-    width: 220,
-    height: 140,
-  },
   selectedEdgeId: null,
   connectingSourceId: null,
   connectingTargetId: null,
@@ -91,8 +77,6 @@ export const useGraphUiStore = create<GraphUiStore>()(
   persist(
     (set) => ({
       ...GRAPH_UI_INITIAL_STATE,
-      setShowMiniMap: (showMiniMap) => set({ showMiniMap }),
-      setMiniMapSize: (miniMapSize) => set({ miniMapSize }),
       setSelectedEdgeId: (selectedEdgeId) => set({ selectedEdgeId }),
       setConnectingSourceId: (connectingSourceId) => set({ connectingSourceId }),
       setConnectingTargetId: (connectingTargetId) => set({ connectingTargetId }),
@@ -129,9 +113,8 @@ export const useGraphUiStore = create<GraphUiStore>()(
     {
       name: 'topomind-graph-ui-storage',
       storage: createJSONStorage(() => localStorage),
+      // 缩略图显隐 / 尺寸偏好已随组件下线；这里只持久化仍存在的用户设置。
       partialize: (state) => ({
-        showMiniMap: state.showMiniMap,
-        miniMapSize: state.miniMapSize,
         smartGuidesEnabled: state.smartGuidesEnabled,
       }),
     }

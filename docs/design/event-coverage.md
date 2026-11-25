@@ -16,8 +16,8 @@
 | 指标 | 数值 |
 | ---- | ---- |
 | 事件总数 | 97 |
-| 已接入（静态引用） | 95 |
-| 保留未启用（有书面理由） | 2 |
+| 已接入（静态引用） | 94 |
+| 保留未启用（有书面理由） | 3 |
 | 仅登记待核对（缺口） | 0 |
 | 多产生点事件（需核对） | 47 |
 
@@ -93,7 +93,7 @@
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | `kb.list_load` | 知识库列表加载 | state | per-state-change | 1 | 已接入 | 1 | 1 处：`src/features/kb/model/useHomeKnowledgeBases.ts` |
 | `kb.node_count_load` | 子节点数量加载 | state | per-state-change | 1 | 已接入 | 1 | 1 处：`src/features/kb/model/useHomeKnowledgeBases.ts` |
-| `kb.open` | 打开知识库 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 2 处：`src/features/kb/components/KnowledgeBaseGrid.tsx`、`src/features/kb/model/useHomeKnowledgeBases.ts` |
+| `kb.open` | 打开知识库 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 3 处：`src/features/graph/GraphPage/components/KnowledgeBaseListPanel.tsx`、`src/features/kb/components/KnowledgeBaseGrid.tsx`、`src/features/kb/model/useHomeKnowledgeBases.ts` |
 | `kb.create` | 创建知识库 | intent | per-interaction | 1 | 已接入 | 2（多入口需核对） | 1 处：`src/features/kb/model/useHomeCreateKB.ts` |
 | `kb.create_dialog` | 新建知识库弹窗 | process | per-event | 1 | 已接入 | 2 | 1 处：`src/features/kb/model/useHomeCreateKB.ts` |
 | `kb.import` | 导入知识库 | intent | per-interaction | 1 | 已接入 | 2（多入口需核对） | 2 处：`src/features/kb/model/useHomeImportKB.ts`、`electron/main.js` |
@@ -110,15 +110,15 @@
 | `node.enter` | 进入节点 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/graph/GraphPage/model/useNodeActions.ts` |
 | `node.move` | 跨房间移动节点 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 1 处：`src/features/graph/GraphPage/model/useNodeMoveToRoom.ts` |
 | `node.style_update` | 更新节点样式 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 1 处：`src/hooks/useGraph/nodeCrudOperations.ts` |
-| `container.create` | 创建容器 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 2 处：`src/features/documents/services/documentTypeRegistry.ts`、`src/features/graph/GraphPage/model/useNodeActions.ts` |
+| `container.create` | 创建容器 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 2 处：`src/features/documents/services/documentTypeRegistry.ts`、`src/features/graph/GraphPage/model/useNodeActions.ts` |
 | `edge.create` | 创建连线 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/hooks/useGraph/edgeOperations.ts` |
 | `edge.delete` | 删除连线 | intent | per-interaction | 1 | 已接入 | 2（多入口需核对） | 2 处：`src/features/graph/GraphPage/model/useEdgeActions.ts`、`src/hooks/useGraph/edgeOperations.ts` |
 | `edge.update` | 更新连线 | intent | per-interaction | 1 | 已接入 | 5（多入口需核对） | 2 处：`src/features/graph/GraphPage/model/useEdgeActions.ts`、`src/hooks/useGraph/edgeOperations.ts` |
-| `room.navigate` | 房间导航 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 3 处：`src/features/layout/Breadcrumb/Breadcrumb.tsx`、`src/features/layout/RoomHistory/RoomHistory.tsx`、`src/hooks/useGraph/graphEventHandlers.ts` |
+| `room.navigate` | 房间导航 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 3 处：`src/features/layout/Breadcrumb/Breadcrumb.tsx`、`src/features/layout/RoomHistory/RoomHistory.tsx`、`src/hooks/useGraph/graphEventHandlers.ts` |
 | `graph.page_enter` | 进入图谱页 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/graph/GraphPage/model/useGraphPageController.ts` |
 | `ui.context_menu` | 右键菜单 | intent | per-interaction | 1 | 已接入 | 5（多入口需核对） | 1 处：`src/features/graph/GraphPage/model/useGraphPageActions.ts` |
 | `ui.shortcut` | 快捷键 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 1 处：`src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts` |
-| `ui.view` | 视图操作 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx` |
+| `ui.view` | 视图操作 | intent | per-interaction | 1 | 保留未启用 | 0 | 唯一的产生点是画布左下角缩略图（显隐 / 尺寸 / 点击定位）；2026-11-24 缩略图与左下角缩放控件整体下线后，视图交互改由中间只读提示条与 `user.*` 语义事件承接，不再单独落盘 `ui.view`。事件 id 保留仅为归一化历史日志 |
 | `ui.tab` | 标签页切换 | intent | per-interaction | 1 | 保留未启用 | 0 | P7 决定由语义事件 `user.tab_close` / `user.tab_switch` 独家承接 tab 交互：关闭与切换各只写 1 条 user 记录，领域侧的 `ui.tab` 降级为内存步骤，不再落盘 |
 | `document.create` | 创建文档 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 1 处：`src/features/documents/services/documentTypeRegistry.ts` |
 | `document.save` | 保存文档 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/right-panel/model/useDetailDocumentSession.ts` |
@@ -136,11 +136,11 @@
 | `user.tab_close` | 关闭标签页 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/layout/TabBar/TabBar.tsx` |
 | `user.tab_switch` | 切换标签页 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/layout/TabBar/TabBar.tsx` |
 | `user.view_open` | 打开视图 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 1 处：`src/stores/tabs/tabActions.ts` |
-| `user.room_enter` | 进入房间 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/graph/GraphPage/components/RoomOverview.tsx` |
+| `user.room_enter` | 进入房间 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/layout/Breadcrumb/Breadcrumb.tsx` |
 
 ## 结论
 
-- 「关键用户动作覆盖率」在本表中**按静态引用逐项核对**：97 个事件中 95 个有产生点、2 个书面保留、0 个待核对。
+- 「关键用户动作覆盖率」在本表中**按静态引用逐项核对**：97 个事件中 94 个有产生点、3 个书面保留、0 个待核对。
 - 当前没有「仅登记待核对」项；目录中的每个事件要么有产生点，要么有明文的保留理由。
 - 运行时是否真的每条事件都会产生，仍需 P2 的拦截行为用例（C10）与人工按上表逐项走查共同证明；本表不冒充运行时覆盖率。
 - 新增事件只需登记到 `LOG_ACTIONS` / `PERFORMANCE_METRIC_SPECS`，重新运行 `npm run gen:events && npm run gen:coverage` 即可同步类型、分类产物与本表。

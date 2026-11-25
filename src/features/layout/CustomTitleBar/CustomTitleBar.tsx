@@ -2,10 +2,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { executeCommand } from '../../../application/commands'
 import { useThemeStore, DARK_THEME, LIGHT_THEME } from '../../../stores/themeStore'
 import { useLayoutStore } from '../../../stores/layoutStore'
-import { PluginWidgetSlot } from '../../../plugins'
 import { useTabStore } from '../../../stores/tabs/tabStore'
 import { useShortcut } from '../../../hooks/useShortcut'
-import { Menu, PanelLeft, PanelLeftClose } from 'lucide-react'
+import { Home, Menu, PanelLeft, PanelLeftClose } from 'lucide-react'
 import { TM_UI, tmUI } from '../../../shared/ui/controlStyles'
 import TabBar from '../TabBar/TabBar'
 import { useDebugHudStore } from '../../debug/debugStore'
@@ -29,13 +28,14 @@ interface MenuItem {
 }
 
 /**
- * 单条 32px 顶栏：左＝全局控制 + 学习计时 + 知识库 tab，右＝窗口控制。
+ * 单条 32px 顶栏：左＝全局控制 + 知识库 tab，右＝窗口控制。
  *
  * 2026-11-21 重构：
  * - 最左侧软件图标移除；改为「导航栏显隐」按钮（唯一全局入口）+ 保留三条横线菜单；
- * - 学习计时 widget 放在控制按钮之后、tab 栏之前，不再挤在右段；
  * - 右栏折叠按钮与「详情/样式」分段控件移除：右栏改为按需展开 + 失焦隐藏，
  *   样式设置迁入全局设置页。
+ * 2026-11-25：首页按钮从左侧 rail 迁入，紧跟「导航栏显隐」按钮之后；
+ * 标题栏学习计时 widget 移除，当日时长改由左侧导航「学习记录」表盘承载。
  *
  * 右栏相关 aria-label 已不再是 GUI 契约，但 `应用菜单` / `data-tm-active-view` /
  * `data-tm-tab-zone` 仍是，必须保留。
@@ -218,6 +218,24 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
               : <PanelLeft className={TM_UI.icon} aria-hidden="true" />}
           </button>
         )}
+        {/* 首页从左侧 rail 迁入标题栏，紧跟导航栏开关之后。
+            data-tm-nav-item 保留：GUI 契约仍按这个 id 找「回首页」的入口。 */}
+        {mode === 'workspace' && (
+          <button
+            type="button"
+            aria-label="首页"
+            title="返回首页"
+            aria-current={activeTabType === 'home' ? 'page' : undefined}
+            data-tm-titlebar-home=""
+            data-tm-nav-item="home"
+            data-tm-nav-active={activeTabType === 'home' ? 'true' : 'false'}
+            className={tmUI(TM_UI.iconButton, 'h-6 w-6', activeTabType === 'home' && 'text-[var(--color-accent)]')}
+            onClick={() => useTabStore.getState().openHomeTab()}
+            style={{ WebkitAppRegion: 'no-drag' }}
+          >
+            <Home className={TM_UI.icon} aria-hidden="true" />
+          </button>
+        )}
         {mode === 'workspace' && (
           <nav className="flex items-stretch h-[24px] min-w-0 relative z-[3002]" aria-label="应用菜单" style={{ WebkitAppRegion: 'no-drag' }}>
             <button
@@ -255,13 +273,6 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
           </nav>
         )}
       </div>
-
-      {/* 学习计时等状态类 widget：控制按钮之后、tab 栏之前，独立占位不挤压 tab zone。 */}
-      {mode === 'workspace' && (
-        <div data-tm-titlebar-widget="" className="shrink-0 flex items-center h-full mr-2" style={{ WebkitAppRegion: 'no-drag' }}>
-          <PluginWidgetSlot placement="titlebar" />
-        </div>
-      )}
 
       <div className="flex-1 min-w-0 flex items-center justify-start h-full mx-2.5 relative" style={{ WebkitAppRegion: 'drag' }}>
         {mode === 'workspace' && (

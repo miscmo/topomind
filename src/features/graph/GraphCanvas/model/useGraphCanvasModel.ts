@@ -80,7 +80,6 @@ export function useGraphCanvasModel({
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isInputFocused, setIsInputFocused] = useState(false)
   const [isCanvasPointerActive, setIsCanvasPointerActive] = useState(false)
-  const [isNodeInteractionActive, setIsNodeInteractionActive] = useState(false)
   const pendingConnectionPointRef = useRef<{ x: number; y: number } | null>(null)
   const connectionFrameRef = useRef<number | null>(null)
   const connectingTargetIdRef = useRef<string | null>(connectingTargetId)
@@ -214,16 +213,6 @@ export function useGraphCanvasModel({
 
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     const nextChanges = onNodesChangeIntercept(changes)
-    const hasActiveNodeInteraction = changes.some((change) => (
-      (change.type === 'position' && change.dragging === true)
-      || (change.type === 'dimensions' && change.resizing === true)
-    ))
-    const hasFinishedNodeInteraction = changes.some((change) => (
-      (change.type === 'position' && change.dragging === false)
-      || (change.type === 'dimensions' && change.resizing === false)
-    ))
-    if (hasActiveNodeInteraction) setIsNodeInteractionActive(true)
-    if (hasFinishedNodeInteraction) setIsNodeInteractionActive(false)
     graph.onNodesChange(nextChanges)
   }, [graph, onNodesChangeIntercept])
 
@@ -709,7 +698,6 @@ export function useGraphCanvasModel({
       isMouseOverCanvas,
       isSearchOpen,
       isInputFocused,
-      isNodeInteractionActive,
     },
     visibleNodesRef,
     graph,

@@ -139,7 +139,7 @@
 | `store`       | 存储层与文件系统适配                | `Store.*` / `FSB`                                             |
 | `plugin`      | 插件运行时与 LoggingApi         | `[plugin:*]`                                                  |
 | `performance` | 性能样本                      | `Performance`                                                 |
-| `ui`          | 纯 UI 交互（Tab、面包屑、右键菜单、缩略图） | `TabBar` / `Breadcrumb` / `CanvasMiniMap`                     |
+| `ui`          | 纯 UI 交互（Tab、面包屑、右键菜单、视图控件） | `TabBar` / `Breadcrumb` / `ViewportReturnButton`              |
 
 【必须】action 采用 `<domain>.<verb>` 全小写英文 key，注册表提供中文 `label`；业务代码只用 `LOG_ACTIONS.xxx`。结构仿 `performanceContract.ts:30-72`：
 

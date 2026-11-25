@@ -16,6 +16,11 @@ export interface ContainerPreviewProps {
   title: string
   /** 只在 LOD 可见集合内才生成 SVG；不可见时显示静态占位，不排队、不导出。 */
   visible: boolean
+  /**
+   * 可选：图片类预览在图片成功解码后上报原始像素，供节点按宽高比自适应。
+   * 只在 src / 尺寸变化时回调，其他容器类型忽略此参数。
+   */
+  onIntrinsicSize?: (width: number, height: number) => void
 }
 
 export interface ContainerEditorProps {

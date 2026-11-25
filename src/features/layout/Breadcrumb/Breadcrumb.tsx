@@ -1,12 +1,14 @@
 /**
- * 房间路径：抽屉标题栏只放「首段 … 当前段」的压缩路径（控件宽度恒定），
- * 完整链路放进「位置」功能区，纵向可滚动、逐段可点击导航。
+ * 画布左上角房间路径面包屑：横向、逐段可点击，不用展开任何面板就能跳房间。
  *
- * 路径再深也不会把抽屉撑长：标题一行省略，完整路径区自带 max-height + 滚动。
+ * - 唯一路径来源仍是「知识库根 → 历史栈 → 当前房间」，与标题 tooltip 共用一份数据。
+ * - 路径再长也不撑高面板：整条面包屑在固定宽度里横向滚动，每一段始终能直接点。
+ * - 导航同时补一条语义化 user.room_enter 事件，进入房间的意图不被埋点遗漏。
  */
 import { memo, useCallback, useMemo } from 'react'
-import { CornerDownRight, Home } from 'lucide-react'
 import { logAction } from '../../../core/log-backend'
+import { recordUser } from '../../../core/observe'
+import { LOG_ACTIONS } from '../../../shared/observability/logContract'
 import { useGraphContext } from '../../../contexts/GraphContext'
 import { useTabStore } from '../../../stores/tabs/tabStore'
 
@@ -56,7 +58,7 @@ export function useRoomPathItems(tabId: string): RoomPathItem[] {
   }, [tab])
 }
 
-/** 标题栏用的压缩表示：首段 + 省略号 + 当前段；完整串只进 tooltip。 */
+/** 完整路径串：只进 tooltip / 断言属性，不参与面包屑布局。 */
 export function compactRoomPath(items: RoomPathItem[]) {
   const full = items.map(item => item.label).join(' / ')
   const current = items.length > 1 ? items[items.length - 1].label : ''
@@ -72,60 +74,65 @@ export function compactRoomPath(items: RoomPathItem[]) {
 function useRoomPathNavigate(tabId: string) {
   const graph = useGraphContext()
   return useCallback(async (item: RoomPathItem) => {
-    if (item.kind === 'root') {
-      logAction('room.navigate', 'Breadcrumb', { source: 'status-path', tabId })
-      await graph.navigateToRoot()
-      return
-    }
-    if (item.historyIndex == null) return
-    logAction('room.navigate', 'Breadcrumb', {
+    if (item.kind !== 'root' && item.historyIndex == null) return
+    void logAction('room.navigate', 'Breadcrumb', {
       historyIndex: item.historyIndex,
       roomName: item.label,
       roomPath: item.path,
-      source: 'status-path',
+      source: item.kind === 'root' ? 'breadcrumb-root' : 'breadcrumb-history',
       tabId,
     })
-    await graph.navigateToRoom(item.historyIndex)
+    void recordUser(LOG_ACTIONS.userRoomEnter, {
+      target: { type: 'room', id: item.path, label: item.label },
+      view: 'canvas',
+      inputMode: 'click',
+      params: { roomPath: item.path, source: 'breadcrumb', tabId },
+    })
+    if (item.kind === 'root') {
+      await graph.navigateToRoot()
+      return
+    }
+    await graph.navigateToRoom(item.historyIndex!)
   }, [tabId, graph])
 }
 
-/** 完整路径列表：纵向、逐段可点、超长内部滚动，不改变抽屉尺寸。 */
-export default memo(function RoomPathList({ tabId }: { tabId: string }) {
+/** 横向面包屑：除当前段外每一段都可点击直达，长路径在容器内横向滚动。 */
+export default memo(function RoomPathBreadcrumb({ tabId }: { tabId: string }) {
   const items = useRoomPathItems(tabId)
   const navigate = useRoomPathNavigate(tabId)
 
   if (items.length === 0) {
-    return <div className="px-1 py-1 text-[11px] text-[var(--color-text-secondary)]">当前没有房间路径</div>
+    return <div className="tm-hint min-w-0 flex-1 truncate">当前没有房间路径</div>
   }
 
   return (
     <div
       data-tm-room-path-list=""
       data-tm-room-path-count={items.length}
-      className="flex max-h-40 flex-col gap-0.5 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--color-border)]"
+      className="nodrag nowheel tm-scroll flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:h-1"
     >
       {items.map((item, index) => {
         const isLast = index === items.length - 1
         return (
-          <button
-            key={item.id}
-            type="button"
-            data-tm-room-path-item={item.path}
-            disabled={isLast}
-            title={item.label}
-            onClick={() => { void navigate(item) }}
-            className={`nodrag nowheel flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] ${
-              isLast
-                ? 'cursor-default font-semibold text-[var(--color-primary)]'
-                : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]'
-            }`}
-          >
-            {index === 0
-              ? <Home className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
-              : <CornerDownRight className="h-3 w-3 shrink-0 opacity-50" aria-hidden="true" />}
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            {isLast && <span className="shrink-0 text-[10px] font-normal opacity-70">当前</span>}
-          </button>
+          <span key={item.id} className="inline-flex min-w-0 shrink-0 items-center gap-1">
+            {index > 0 && <span className="tm-hint shrink-0 opacity-60">›</span>}
+            <button
+              type="button"
+              data-tm-room-path-item={item.path}
+              disabled={isLast}
+              title={item.label}
+              aria-current={isLast ? 'page' : undefined}
+              onClick={() => { void navigate(item) }}
+              className={`nodrag nowheel tm-hint max-w-[112px] truncate rounded px-0.5 ${
+                isLast
+                  ? 'cursor-default font-semibold text-[var(--color-primary)]'
+                  : 'font-medium text-[var(--color-accent)] hover:underline'
+              }`}
+            >
+              {item.label}
+            </button>
+            {isLast && <span className="tm-hint shrink-0 opacity-70">当前</span>}
+          </span>
         )
       })}
     </div>

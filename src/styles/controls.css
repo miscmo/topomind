@@ -423,3 +423,90 @@
 }
 .tm-tab-menu-row { display: flex; align-items: center; gap: var(--space-xs); width: 100%; min-width: 0; }
 .tm-tab-menu-label { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* ===== 左侧 Dock 竖向 tab（48px 全局导航内）=====
+   把顶栏的 Π 形连体旋转 90°：激活项底色与左栏面板一致，向右伸出一块同色
+   矩形盖住导航层 border-r，看起来像「面板是从 tab 里长出来的」。
+   整组只有一条 accent 指示条，靠 transform 在页签间滑动，不新增配色。 */
+.tm-left-dock-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--tab-gap);
+}
+.tm-left-dock-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  border-radius: var(--control-radius-pill);
+  background: var(--color-accent);
+  transition: transform var(--control-transition), height var(--control-transition);
+  pointer-events: none;
+}
+.tm-left-dock-tab-wrapper { position: relative; }
+.tm-left-dock-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height-xl);
+  height: var(--control-height-xl);
+  padding: 0;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition);
+}
+.tm-left-dock-tab:hover:not(.tm-left-dock-tab--active) {
+  background: var(--color-hover-bg);
+  color: var(--color-text-primary);
+}
+.tm-left-dock-tab:focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+.tm-left-dock-tab--active { background: var(--color-surface); color: var(--color-accent); }
+/* 只在面板展开时连体；折叠后不能留一块悬空的白片盖在画布上。
+   按钮在 48px rail 内居中，伸出 10px 才能越过 rail 的 1px border-r、
+   再压进面板左缘几像素，真正把两块白色接成一体。 */
+.tm-left-dock-tab--connected::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -10px;
+  width: 10px;
+  background: var(--color-surface);
+  pointer-events: none;
+}
+.tm-left-dock-tooltip {
+  position: absolute;
+  left: calc(var(--control-height-xl) + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: var(--z-dropdown);
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--control-transition);
+}
+.tm-left-dock-tab-wrapper:hover > .tm-left-dock-tooltip { opacity: 1; }
+
+/* 学习记录表盘的「学习中」轴心点：只在不足 1 小时、中心无数字时呼吸。
+   用 opacity 而非颜色，换主题色 / 明暗主题时无需另配一档色值。 */
+@keyframes tm-learning-dial-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+.tm-learning-dial-pulse { animation: tm-learning-dial-pulse 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .tm-learning-dial-pulse { animation: none; opacity: 1; }
+}

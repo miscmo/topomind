@@ -190,7 +190,7 @@ textarea:focus-visible,
 /* 【左侧节点树让位 2026-11-13】左栏是 absolute 浮层，展开时会盖住画布左上角的
    状态抽屉。用户要求状态抽屉「挤压到面板右侧」：这里只改 top-left Panel 的
    margin-left，由面板写到 :root 的 --tm-node-tree-offset 驱动（纯 CSS）。
-   画布容器宽度、React Flow viewport、其它 Panel、缩略图视口框一律不变；
+   画布容器宽度、React Flow viewport、其它 Panel 一律不变；
    #app-layout 仍不得变成 flex 两栏。12px 对应 LodControl 的 !m-3。 */
 #app-layout .react-flow__panel.top.left {
   margin-left: calc(12px + var(--tm-node-tree-offset, 0px)) !important;
@@ -198,8 +198,8 @@ textarea:focus-visible,
 
 /* ===== 全局导航层（2026-11-21）=====
    导航栏是 App 层 absolute 浮层，永远不参与 #app-layout 的 flex 计算。
-   下面几条只做「让位」，画布容器尺寸、React Flow viewport、
-   缩略图视口框（canvasSize / zoom / viewBox）在任意状态下都恒定。 */
+   下面几条只做「让位」，画布容器尺寸与 React Flow viewport 在任意状态下都恒定。
+   bottom-left 面板（原缩略图 / 缩放控件组）已整体移除，无需再让位。 */
 /* 1) 非画布视图（首页 / 设置 / 插件页）导航栏常驻时，内容区整体右移一个 rail 宽度；
       画布标签页没有 data-tm-app-view，完全不受影响。 */
 html[data-tm-nav-rail-docked='true'] [data-tm-app-view] {
@@ -213,15 +213,4 @@ html[data-tm-nav-rail-open='true'] #app-layout [data-tm-node-tree-panel] {
 }
 html[data-tm-nav-rail-open='true'] #app-layout .react-flow__panel.top.left {
   margin-left: calc(12px + var(--tm-node-tree-offset, 0px) + var(--nav-rail-width)) !important;
-}
-/* 3) 左下角缩略图 / 缩放控件组（CanvasMiniMap 的 bottom-left Panel）也要让位：
-      导航栏展开时是 z-40 覆盖式浮层，会盖住 React Flow 默认 15px 边距里的
-      缩放工具条、一键 100% 与缩略图开关。这里只改 margin-left：Panel 数量、
-      画布几何、缩略图 SVG 尺寸与 viewBox 都不变；缩略图点击 / 拖拽用
-      getBoundingClientRect 换算事件坐标，位置右移会自动跟随。
-      CanvasMiniMap 没有 LodControl 的 !m-3，所以基础边距是 15px 而非 12px。
-      节点树展开态沿用 2026-11-13「其它 Panel 一律不变」契约，
-      bottom-left 不叠加 --tm-node-tree-offset，只有导航栏会触发让位。 */
-html[data-tm-nav-rail-open='true'] #app-layout .react-flow__panel.bottom.left {
-  margin-left: calc(15px + var(--nav-rail-width)) !important;
 }

@@ -40,7 +40,6 @@
     "src/features/documents/unifiedTree/UnifiedTreeView.tsx",
     "src/features/graph/GraphCanvas/GraphCanvas.tsx",
     "src/features/graph/GraphCanvas/SmartGuidesRenderer.tsx",
-    "src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx",
     "src/features/graph/GraphCanvas/components/CanvasReadOnlyBanner.tsx",
     "src/features/graph/GraphCanvas/components/CanvasStatusSection.tsx",
     "src/features/graph/GraphCanvas/components/CanvasZoomSlider.tsx",
@@ -50,7 +49,6 @@
     "src/features/graph/GraphCanvas/components/NodeSearchBox.tsx",
     "src/features/graph/GraphCanvas/components/SelectionMirrorMenu.tsx",
     "src/features/graph/GraphCanvas/components/ViewportReturnButton.tsx",
-    "src/features/graph/GraphCanvas/components/ZoomResetButton.tsx",
     "src/features/graph/GraphCanvas/containers/ContainerFullscreenEditorHost.tsx",
     "src/features/graph/GraphCanvas/containers/ContainerSvgPreview.tsx",
     "src/features/graph/GraphCanvas/containers/ExcalidrawContainerEditor.tsx",
@@ -69,8 +67,6 @@
     "src/features/graph/GraphPage/components/GraphPageContextMenu.tsx",
     "src/features/graph/GraphPage/components/NodeMoveToRoomDialog.tsx",
     "src/features/graph/GraphPage/components/NodeTreePanel.tsx",
-    "src/features/graph/GraphPage/components/RoomOverview.tsx",
-    "src/features/graph/GraphPage/components/RoomSummaryCard.tsx",
     "src/features/graph/components/LinkDocumentDialog.tsx",
     "src/features/kb/HomePage.tsx",
     "src/features/kb/components/CreateKBDialog.tsx",
@@ -86,7 +82,6 @@
     "src/features/layout/NavRail/navModel.tsx",
     "src/features/layout/RoomHistory/RoomHistory.tsx",
     "src/features/layout/TabBar/TabBar.tsx",
-    "src/features/layout/Toolbar/Toolbar.tsx",
     "src/features/learning-tracker/LearningTrackerProvider.tsx",
     "src/features/right-panel/RightPanelContainer.tsx",
     "src/features/right-panel/RightPanelShell.tsx",
@@ -109,10 +104,8 @@
     "src/plugins/builtin/learning-statistics/DayHalfHourBlocks.tsx",
     "src/plugins/builtin/learning-statistics/LearningDetailPanel.tsx",
     "src/plugins/builtin/learning-statistics/LearningOverviewPanel.tsx",
-    "src/plugins/builtin/learning-statistics/LearningQuickPreview.tsx",
     "src/plugins/builtin/learning-statistics/LearningStatisticsPage.tsx",
     "src/plugins/builtin/learning-statistics/LearningStatisticsParts.tsx",
-    "src/plugins/builtin/learning-statistics/LearningTrackerWidget.tsx",
     "src/plugins/builtin/monitor/MonitorPage.tsx",
     "src/plugins/builtin/monitor/PerformanceTab.tsx",
     "src/plugins/builtin/monitor/components/DetailPanel.tsx",
@@ -132,7 +125,6 @@
     "src/plugins/builtin/monitor/utils/formatters.tsx",
     "src/plugins/host/PluginViewHost.tsx",
     "src/plugins/host/PluginWidgetSlot.tsx",
-    "src/plugins/official/learningStatistics.tsx",
     "src/plugins/official/monitor.tsx",
     "src/shared/observability/logFormatting.tsx",
     "src/shared/ui/ConfirmModal/ConfirmModal.tsx",
@@ -291,12 +283,6 @@
     "src/features/graph/GraphPage/components/NodeTreePanel.tsx": {
       "fontSize": 12
     },
-    "src/features/graph/GraphPage/components/RoomOverview.tsx": {
-      "fontSize": 7
-    },
-    "src/features/graph/GraphPage/components/RoomSummaryCard.tsx": {
-      "fontSize": 4
-    },
     "src/features/graph/components/LinkDocumentDialog.tsx": {
       "zIndex": 1,
       "fontSize": 11
@@ -335,9 +321,6 @@
       "fontSize": 2
     },
     "src/features/layout/RoomHistory/RoomHistory.tsx": {
-      "fontSize": 2
-    },
-    "src/features/layout/Toolbar/Toolbar.tsx": {
       "fontSize": 2
     },
     "src/features/right-panel/RightPanelContainer.tsx": {
@@ -402,18 +385,11 @@
     "src/plugins/builtin/learning-statistics/LearningOverviewPanel.tsx": {
       "fontSize": 13
     },
-    "src/plugins/builtin/learning-statistics/LearningQuickPreview.tsx": {
-      "fontSize": 8
-    },
     "src/plugins/builtin/learning-statistics/LearningStatisticsPage.tsx": {
       "fontSize": 13
     },
     "src/plugins/builtin/learning-statistics/LearningStatisticsParts.tsx": {
       "fontSize": 7
-    },
-    "src/plugins/builtin/learning-statistics/LearningTrackerWidget.tsx": {
-      "zIndex": 2,
-      "fontSize": 1
     },
     "src/plugins/builtin/monitor/MonitorPage.tsx": {
       "fontSize": 1

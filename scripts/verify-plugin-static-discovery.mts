@@ -17,11 +17,10 @@ assert.equal(registry.listStaticRecords('topomind.devtools-sample').length, 2)
 assert.equal(registry.getManifest('topomind.learning-statistics')?.id, 'topomind.learning-statistics')
 assert.equal(registry.getStaticView('learning.statistics')?.pluginId, 'topomind.learning-statistics')
 assert.equal(registry.getStaticCommand('learning.open')?.pluginId, 'topomind.learning-statistics')
-assert.equal(
-  registry.getStaticWidget('learning.titlebar.overview')?.pluginId,
-  'topomind.learning-statistics',
-)
-assert.equal(registry.listStaticRecords('topomind.learning-statistics').length, 3)
+// 标题栏计时 widget 已下线：当日时长改由宿主 NavRail 的学习记录表盘承载，
+// 学习统计插件只贡献 view + command + navItem，不再贡献任何 widget。
+assert.equal(registry.getStaticWidget('learning.titlebar.overview'), undefined)
+assert.equal(registry.listStaticRecords('topomind.learning-statistics').length, 2)
 
 assert.equal(registry.getManifest('topomind.monitor')?.id, 'topomind.monitor')
 assert.equal(registry.getStaticView('monitor.logs')?.pluginId, 'topomind.monitor')

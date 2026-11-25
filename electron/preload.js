@@ -14,7 +14,7 @@ const ALLOWED_CHANNELS = new Set([
   'fs:listTopoDocuments', 'fs:createTopoDocument', 'fs:readTopoDocument', 'fs:writeTopoDocument', 'fs:renameTopoDocument', 'fs:updateTopoDocumentMeta', 'fs:deleteTopoDocument', 'fs:listTrashTopoDocuments', 'fs:restoreTrashTopoDocument', 'fs:clearTrashTopoDocuments', 'fs:repairTopoDocuments', 'fs:exportTopoDocument', 'fs:openTopoDocumentFolder', 'fs:moveTopoDocument', 'fs:moveTopoDocumentToCard', 'fs:moveTopoNodesToRoom', 'fs:listDocumentCandidates', 'fs:resolveDocumentById', 'fs:updateNodeLinkedDocuments', 'fs:listDocumentBacklinks', 'fs:listDocumentRelations',
   'fs:listRoomNodeTargets',
   // CardSpec 容器媒体资源（主进程校验路径后返回 URL / 导入 _docs/assets/）
-  'fs:resolveCardAssetUrl', 'fs:importCardAsset',
+  'fs:resolveCardAssetUrl', 'fs:importCardAsset', 'fs:importImageAsset',
   'fs:listUnifiedTreeLevel', 'fs:searchUnifiedDocuments', 'fs:resolveUnifiedDocumentPath',
   'fs:writeAttachmentBase64', 'fs:downloadAttachment', 'fs:readAttachmentDataUrl', 'fs:listAttachments', 'fs:importAttachment', 'fs:deleteAttachment', 'fs:listTrashAttachments', 'fs:restoreTrashAttachment', 'fs:clearTrashAttachments', 'fs:openAttachment', 'fs:showAttachmentInFolder', 'fs:getAttachmentAbsoluteUrl',
   'fs:readAppConfig', 'fs:writeAppConfig', 'fs:readLearningStatsData', 'fs:readAllLearningStatsData', 'fs:writeLearningStatsData', 'fs:readLearningStatsSummary',

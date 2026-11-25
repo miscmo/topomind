@@ -205,21 +205,27 @@ async function setRightPanelCollapsed(page, want) {
  * 左侧节点树是 absolute 浮层，默认展开会遮住画布左侧节点的真实点击。
  * 除阶段 AB（专门验证面板）外一律折叠；偏好写 localStorage，reload 后仍生效，
  * 但脚本仍在每次重载后显式校正一次，避免复用到旧 profile 的展开态。
+ *
+ * 左栏只有一个开关：NavRail 的竖 tab（点当前激活页 = 折叠，折叠后再点 = 展开）。
+ * 折叠态面板完全不渲染，所以「没有 [data-tm-node-tree-panel]」就是折叠态。
  */
 async function setNodeTreeCollapsed(page, want) {
-  await page.evaluate((wantCollapsed) => {
-    const panel = document.querySelector('[data-tm-node-tree-panel]')
-    if (!panel) return
-    const isCollapsed = panel.getAttribute('data-tm-node-tree-collapsed') === 'true'
-    if (isCollapsed === wantCollapsed) return
-    document.querySelector('[data-tm-node-tree-toggle]')?.click()
-  }, want)
-  // waitFor 的回调在浏览器上下文执行，不能闭包引用 Node 侧的 want；显式传参轮询。
+  // 竖 tab 挂在全局导航栏里，被隐藏时先恢复（产品里已有的开关，不是左栏新入口）。
+  await page.evaluate(() => {
+    const rail = document.querySelector('[data-tm-nav-rail-root]')
+    if (rail?.getAttribute('data-tm-nav-rail-visible') === 'false') {
+      document.querySelector('button[aria-label="展开全局导航栏"]')?.click()
+    }
+  })
   const end = Date.now() + 6000
   while (Date.now() < end) {
     const ok = await page.evaluate((wantCollapsed) => {
-      const panel = document.querySelector('[data-tm-node-tree-panel]')
-      return !!panel && (panel.getAttribute('data-tm-node-tree-collapsed') === 'true') === wantCollapsed
+      // 应用还没渲染完时，不能把「没有面板」误判成折叠态。
+      if (!document.querySelector('[data-tm-nav-rail-root]')) return false
+      const isCollapsed = !document.querySelector('[data-tm-node-tree-panel]')
+      if (isCollapsed === wantCollapsed) return true
+      document.querySelector('[data-tm-left-dock-active="true"]')?.click()
+      return false
     }, want)
     if (ok) return true
     await sleep(200)
@@ -244,6 +250,26 @@ async function wheelOnPane(page, deltaY, x = 500, y = 750) {
       deltaY, bubbles: true, cancelable: true, clientX: x, clientY: y,
     }))
   }, { deltaY, x, y })
+}
+
+// 左下角比例尺 / 步进缩放 / 复位按钮与缩略图已于 2026-11-24 下线。
+// 精确设置比例改用只读提示条下方的缩放滑动条；滑块与提示条同进同出，
+// 100% 时提示条不显示，需要先滚轮缩小一格让它出现。
+async function setZoomPercent(page, percent) {
+  const hasSlider = await page.evaluate(() =>
+    !!document.querySelector('[data-tm-canvas-zoom-slider-input]'))
+  if (!hasSlider && percent < 100) {
+    await wheelOnPane(page, 220)
+    await waitFor(page, () => !!document.querySelector('[data-tm-canvas-zoom-slider-input]'), 6000)
+  }
+  await page.evaluate((p) => {
+    const input = document.querySelector('[data-tm-canvas-zoom-slider-input]')
+    if (!input) return
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, String(p))
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+  }, percent)
 }
 
 const clickByDialogText = (page, text) => page.evaluate((text) => {
@@ -466,67 +492,27 @@ async function main() {
       return !!s && s.left >= 48 && s.left < 80
     }, 6000)
     const layoutFoldedAB = await canvasRectAB()
-    // 自动避让在 rAF 里按状态抽屉实测底边定位，等两帧让位置稳定再开始拖动。
-    await page.evaluate(() => new Promise((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(resolve))
-    }))
-
-    // 折叠态触发按钮可上下拖动：真实鼠标按下/移动/松开，验证位置变化、偏好落盘、
-    // 且拖动后的合成 click 不会把面板误展开；随后拖回原位，避免遮挡后续阶段。
-    const handleBeforeDragAB = await page.evaluate(() => {
-      const el = document.querySelector('[data-tm-node-tree-collapsed="true"]')
-      if (!el) return null
-      const r = el.getBoundingClientRect()
+    // 折叠态面板完全不渲染；唯一开关是全局导航栏里激活的竖 tab。
+    const foldedEntryAB = await page.evaluate(() => {
+      const tab = document.querySelector('[data-tm-left-dock-active="true"]')
       return {
-        x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2),
-        top: Math.round(r.top),
+        panelExists: !!document.querySelector('[data-tm-node-tree-panel]'),
+        tabVisible: !!tab && tab.getBoundingClientRect().width > 0,
       }
     })
-    let handleDragAB = null
-    if (handleBeforeDragAB) {
-      const dragByAB = 100
-      await page.evaluate((top) => { window.__tmNodeTreeDragBefore = top }, handleBeforeDragAB.top)
-      await page.mouse.move(handleBeforeDragAB.x, handleBeforeDragAB.y)
-      await page.mouse.down()
-      await page.mouse.move(handleBeforeDragAB.x, handleBeforeDragAB.y + dragByAB, { steps: 8 })
-      await page.mouse.up()
-      // 等按钮真的移动到位（不是只看 localStorage 是否被写入）。
-      await waitFor(page, () => {
-        const el = document.querySelector('[data-tm-node-tree-collapsed="true"]')
-        return !!el && Math.round(el.getBoundingClientRect().top) >= window.__tmNodeTreeDragBefore + 80
-      }, 4000)
-      const afterDownAB = await page.evaluate(() => {
-        const el = document.querySelector('[data-tm-node-tree-collapsed="true"]')
-        if (!el) return null
-        const r = el.getBoundingClientRect()
-        return {
-          x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2),
-          top: Math.round(r.top),
-          collapsed: el.getAttribute('data-tm-node-tree-collapsed'),
-          saved: window.localStorage.getItem('topomind_node_tree_handle_y_v1'),
-        }
-      })
-      handleDragAB = { before: handleBeforeDragAB, after: afterDownAB }
-      if (afterDownAB) {
-        await page.mouse.move(afterDownAB.x, afterDownAB.y)
-        await page.mouse.down()
-        await page.mouse.move(afterDownAB.x, afterDownAB.y - dragByAB, { steps: 8 })
-        await page.mouse.up()
-        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)))
-      }
-    }
-    check('【阶段 AB】节点结构触发按钮可上下拖动、记住位置且不误触发展开',
-      !!handleDragAB?.after
-      && handleDragAB.after.top - handleDragAB.before.top >= 80
-      && handleDragAB.after.collapsed === 'true'
-      && Number(handleDragAB.after.saved) >= 12,
-      JSON.stringify(handleDragAB))
+    check('【阶段 AB】折叠态不渲染面板，唯一开关是全局导航栏 tab',
+      !foldedEntryAB.panelExists && foldedEntryAB.tabVisible,
+      JSON.stringify(foldedEntryAB))
 
+    // 走真实用户路径：点同一个 tab 从折叠态重新展开。
     await setNodeTreeCollapsed(page, false)
     await waitFor(page, () => {
       const s = document.querySelector('.react-flow__panel.top.left')?.getBoundingClientRect()
       return !!s && s.left >= 280
     }, 6000)
+    check('【阶段 AB】竖 tab 能从折叠态重新展开节点树',
+      await waitFor(page, () => document.querySelector('[data-tm-node-tree-panel]')
+        ?.getAttribute('data-tm-node-tree-collapsed') === 'false', 6000))
     const layoutReopenAB = await canvasRectAB()
     const rectOpenAB = layoutOpenAB.rect
     const rectFoldedAB = layoutFoldedAB.rect
@@ -1833,9 +1819,10 @@ async function main() {
 
     // 缩小视图现在是只读态：后续图型 / 滑条阶段必须在 100% 下开始，
     // 否则 profile 会停在 52% 只读档并连锁污染缩放滑动条的显隐判定。
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    // 恢复入口已统一为中间只读提示条的「恢复 100%」。
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000)
     // 右栏浮层会盖住画布右侧，后续「真实点击节点」的用例先在折叠态跑；
     // 画布宽度恒定不变，折叠只影响遮挡，不影响任何布局断言。
     await setRightPanelCollapsed(page, true)
@@ -1939,93 +1926,12 @@ async function main() {
       && Object.values(configAfter.roomProfiles).includes('tree'),
       JSON.stringify({ labels: configAfter.showEdgeRelationLabels, relations: configAfter.edgeRelations?.length }))
 
-    // ===== 阶段 M：知识库总览（P3-B） =====
-    // 只读房间树 / 卡片统计 / 双击懒加载进入 / Esc 与关闭按钮 / 全程不写盘。
-    const graphBeforeM = sha(GRAPH_FILE)
-    const configBeforeM = sha(configPathL)
-    const childrenBeforeM = JSON.stringify(readGraph().children)
-    const edgesBeforeM = JSON.stringify(readGraph().edges)
-    const expectedRootNodes = Object.keys(readGraph().children).length
-    await page.evaluate(() => document.querySelector('[data-tm-room-overview-open]')?.click())
-    check('镜头控件能打开知识库总览', await waitFor(page, () =>
-      !!document.querySelector('[data-tm-room-overview]')
-      && document.querySelector('[data-tm-room-overview]')?.getAttribute('data-tm-room-overview-loading') === 'false', 15000))
-    // ReactFlow 自定义节点在 loading=false 之后还要异步测量一遍才挂载，必须等具体卡片出现。
-    check('总览卡片完成异步渲染', await waitFor(page, () =>
-      document.querySelectorAll('[data-tm-room-summary-card]').length === Number(
-        document.querySelector('[data-tm-room-overview]')?.getAttribute('data-tm-room-overview-count') || -1), 15000))
-    const overviewState = await page.evaluate(() => {
-      const root = document.querySelector('[data-tm-room-overview]')
-      const kb = root?.getAttribute('data-tm-room-overview-kb') || ''
-      const cards = [...document.querySelectorAll('[data-tm-room-summary-card]')]
-      return {
-        count: Number(root?.getAttribute('data-tm-room-overview-count') || 0),
-        kb,
-        cardPaths: cards.map((c) => c.getAttribute('data-tm-room-summary-card')),
-        rootNodeCount: Number(cards.find((c) => c.getAttribute('data-tm-room-summary-card') === kb)
-          ?.getAttribute('data-tm-room-summary-node-count') || -1),
-        depth: cards.map((c) => c.getAttribute('data-tm-room-summary-depth')),
-        edges: document.querySelectorAll('[data-tm-room-overview] .react-flow__edge[data-id^="room-link:"]').length,
-        nodeIds: [...document.querySelectorAll('[data-tm-room-overview] .react-flow__node')].map((n) => n.getAttribute('data-id')),
-      }
-    })
-    check('总览画布与底层房间画布彼此隔离（没有复用节点 store）',
-      overviewState.nodeIds.length === overviewState.count
-      && !overviewState.nodeIds.includes('node-a')
-      && overviewState.nodeIds.every((id) => id.startsWith(overviewState.kb)),
-      JSON.stringify(overviewState.nodeIds))
-    check('总览列出根房间与含文档的子房间', overviewState.count >= 3
-      && overviewState.kb.length > 0 && overviewState.cardPaths.includes(overviewState.kb),
-      JSON.stringify({ count: overviewState.count, kb: overviewState.kb, paths: overviewState.cardPaths, nodes: overviewState.nodeIds }))
-    check('根房间卡片统计来自真实 _graph.json', overviewState.rootNodeCount === expectedRootNodes,
-      `${overviewState.rootNodeCount} vs ${expectedRootNodes}`)
-    check('父子层级连线数与房间树一致', overviewState.edges === overviewState.cardPaths.length - 1,
-      `${overviewState.edges} edges / ${overviewState.cardPaths.length} cards`)
-    check('子房间卡片带层级深度', overviewState.depth.includes('1'), JSON.stringify(overviewState.depth))
-    check('总览只读：根图与全局配置均未被改写',
-      sha(GRAPH_FILE) === graphBeforeM && sha(configPathL) === configBeforeM)
+    // 阶段 M（知识库总览覆盖层）已随功能整体移除；房间跳转走标题面包屑 / 最近打开。
 
-    await page.evaluate(() => document.querySelector('[data-tm-room-overview-refresh]')?.click())
-    check('刷新后房间数保持不变', await waitFor(page, () =>
-      document.querySelector('[data-tm-room-overview]')?.getAttribute('data-tm-room-overview-loading') === 'false'
-      && Number(document.querySelector('[data-tm-room-overview]')?.getAttribute('data-tm-room-overview-count') || 0) >= 3, 15000))
-
-    // 双击卡片必须走 enterRoomInTab（房间内容此刻才加载），并自动收起总览。
-    const rootCardSelector = `[data-tm-room-overview] .react-flow__node[data-id="${overviewState.kb}"]`
-    const rootCard = await page.$(rootCardSelector)
-    check('总览渲染出可双击的根房间卡片', !!rootCard)
-    if (rootCard) {
-      await page.evaluate((selector) => {
-        document.querySelector(selector)?.dispatchEvent(new MouseEvent('dblclick', {
-          bubbles: true, cancelable: true, view: window,
-        }))
-      }, rootCardSelector)
-    }
-    check('双击房间卡片进入房间并收起总览', !!rootCard && await waitFor(page, () =>
-      !document.querySelector('[data-tm-room-overview]') && !!document.querySelector('[data-tm-lod-control]'), 12000))
-
-    await page.evaluate(() => document.querySelector('[data-tm-room-overview-open]')?.click())
-    const escOpened = await waitFor(page, () => !!document.querySelector('[data-tm-room-overview]'), 10000)
-    await page.keyboard.press('Escape')
-    check('Esc 可退出总览', escOpened && await waitFor(page, () =>
-      !document.querySelector('[data-tm-room-overview]'), 10000))
-
-    await page.evaluate(() => document.querySelector('[data-tm-room-overview-open]')?.click())
-    const closeOpened = await waitFor(page, () => !!document.querySelector('[data-tm-room-overview]'), 10000)
-    await page.evaluate(() => document.querySelector('[data-tm-room-overview-close]')?.click())
-    check('返回按钮可退出总览', closeOpened && await waitFor(page, () =>
-      !document.querySelector('[data-tm-room-overview]'), 10000))
-    // 进入房间会触发既有 viewport 落盘，不能拿整文件 sha 判「总览写盘」；
-    // 只比较节点/边数据与全局配置。
-    check('进出总览后节点/边数据与全局配置均未被改写',
-      JSON.stringify(readGraph().children) === childrenBeforeM
-      && JSON.stringify(readGraph().edges) === edgesBeforeM
-      && sha(configPathL) === configBeforeM,
-      JSON.stringify({ graphShaChanged: sha(GRAPH_FILE) !== graphBeforeM, configChanged: sha(configPathL) !== configBeforeM }))
-
-    // ===== 阶段 N：缩放比例尺（旧 130% = 新 100% / 100% 上限 / 左下角一键重置 / 滚轮缓动 / 渐隐渐出） =====
+    // ===== 阶段 N：比例规则（100% 上限 / 5% 下限 / 中间提示条恢复 / 滚轮缓动 / 渐隐渐出） =====
+    // 左下角比例尺、步进按钮、复位按钮与缩略图已下线；比例读数取画布容器语义属性。
     const zoomPercent = () => page.evaluate(() =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') || '')
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') || '')
     // 语义缩放读数：CSS 变量来自最外层画布容器，视觉壳 transform 与锚点壳分离。
     const semanticZoomRead = () => page.evaluate(() => {
       const scope = document.querySelector('[data-shortcut-scope="canvas"]')
@@ -2069,28 +1975,25 @@ async function main() {
       const rect = pane.getBoundingClientRect()
       return { zoom, flowX: (rect.width / 2 - x) / zoom, flowY: (rect.height / 2 - y) / zoom }
     })
-    const zoomControlRead = () => page.evaluate(() => {
-      const control = document.querySelector('[data-tm-zoom-control]')
-      const resetView = document.querySelector('[data-tm-zoom-reset-view]')
-      const zoomIn = document.querySelector('[data-tm-zoom-in]')
-      const zoomOut = document.querySelector('[data-tm-zoom-out]')
+    // 左下角控件下线后的单一读数：画布容器比例 + 中间只读提示条 / 恢复按钮 / 滑块。
+    const canvasZoomRead = () => page.evaluate(() => {
+      const canvas = document.querySelector('[data-tm-canvas-zoom-percent]')
+      const banner = document.querySelector('[data-tm-canvas-readonly-banner]')
+      const restore = document.querySelector('[data-tm-canvas-readonly-restore]')
+      const slider = document.querySelector('[data-tm-canvas-zoom-slider]')
+      const percent = canvas?.getAttribute('data-tm-canvas-zoom-percent') ?? ''
       return {
-        max: control?.getAttribute('data-tm-zoom-max-percent') ?? '',
-        min: control?.getAttribute('data-tm-zoom-min-percent') ?? '',
-        atMax: control?.getAttribute('data-tm-zoom-at-max') ?? '',
-        zoomInDisabled: !!zoomIn?.disabled,
-        zoomOutDisabled: !!zoomOut?.disabled,
-        resetViewExists: !!resetView,
-        resetViewPercent: resetView?.getAttribute('data-tm-zoom-percent') ?? '',
-        resetViewAtReference: resetView?.getAttribute('data-tm-zoom-at-reference') ?? '',
-        resetViewInBottomLeft: !!resetView?.closest('.react-flow__panel.bottom.left'),
-        resetViewLabel: resetView?.getAttribute('aria-label') ?? '',
-        resetViewText: resetView?.textContent?.trim() ?? '',
+        percent,
+        atMax: percent === '100%' ? 'true' : 'false',
+        banner: !!banner,
+        restore: !!restore,
+        slider: !!slider,
       }
     })
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
-    check('点击 100% 可复位到常规阅读比例', await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000),
+    // 100% 时提示条不显示，恢复按钮自然缺席；这里只确认常规比例读数。
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
+    check('画布默认处于 100% 常规阅读比例', await waitFor(page, () =>
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000),
       await zoomPercent())
     // 清空选中态：LOD 会强制显示选中节点，否则 30% 端点的折叠计数读数会漂移。
     await page.mouse.click(500, 800)
@@ -2109,29 +2012,17 @@ async function main() {
       const el = document.querySelector('[data-tm-lod-control]')
       return `${el?.getAttribute('data-tm-lod-pressure')}/${el?.getAttribute('data-tm-lod-pressure-glyph')}`
     }))
-    // 【2026-11-10】100% 已是放大上限：按钮在端点禁用，滚轮往上推也不能越过它。
-    const atReferenceControl = await zoomControlRead()
-    check('左下角常驻「一键重置视角到 100%」按钮，且挂在 bottom-left 面板内',
-      atReferenceControl.resetViewExists && atReferenceControl.resetViewInBottomLeft
-      && atReferenceControl.resetViewLabel === '一键重置视角到 100%'
-      && atReferenceControl.resetViewText === '100%',
+    // 【2026-11-10】100% 已是放大上限：滚轮往上推也不能越过它。
+    const atReferenceControl = await canvasZoomRead()
+    check('100% 常规比例下只读提示条 / 恢复按钮 / 缩放滑块全部隐藏',
+      atReferenceControl.percent === '100%' && atReferenceControl.atMax === 'true'
+      && !atReferenceControl.banner && !atReferenceControl.restore && !atReferenceControl.slider,
       JSON.stringify(atReferenceControl))
-    check('比例尺上下限读作 100% / 5%，100% 时放大按钮禁用',
-      atReferenceControl.max === '100%' && atReferenceControl.min === '5%'
-      && atReferenceControl.atMax === 'true' && atReferenceControl.zoomInDisabled
-      && !atReferenceControl.zoomOutDisabled && atReferenceControl.resetViewPercent === '100%'
-      && atReferenceControl.resetViewAtReference === 'true',
-      JSON.stringify(atReferenceControl))
-    // 连点放大按钮（已禁用）+ 滚轮上推（deltaY 负 = 放大），验证 UI 与 d3-zoom 双重钳制。
-    for (let i = 0; i < 6; i += 1) {
-      await page.evaluate(() => document.querySelector('[data-tm-zoom-in]')?.click())
-      await sleep(80)
-    }
     await page.mouse.move(500, 750)
     await wheelOnPane(page, -220)
     await sleep(400)
-    check('连点放大 + 滚轮上推都被锁在 100% 上限（再放大没有意义）', await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000),
+    check('滚轮上推被锁在 100% 上限（再放大没有意义）', await waitFor(page, () =>
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000),
       await zoomPercent())
     check('100% 上限处语义缩放恒等（不虚胖、不补偿、细节完整）', await page.evaluate(() => {
       const scope = document.querySelector('[data-shortcut-scope="canvas"]')
@@ -2140,17 +2031,14 @@ async function main() {
       const alpha = Number(getComputedStyle(scope).getPropertyValue('--tm-detail-alpha') || '0')
       return Math.abs(comp - 1) < 0.02 && alpha === 1
     }), JSON.stringify(await semanticZoomRead()))
-    // 【2026-11-11 两段镜头】先缩小 8 格到 20% 渐隐终点（每格 -10%，节点少于
-    // 密度参考值所以灵敏度为 1），在这里做全部 LOD / 只读 / 字形断言。
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    // 【2026-11-11 两段镜头】用中间缩放滑块直接落到 20% 渐隐终点（步进按钮已下线），
+    // 在这里做全部 LOD / 只读 / 字形断言。
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
-    for (let i = 0; i < 8; i += 1) {
-      await page.evaluate(() => document.querySelector('[data-tm-zoom-out]')?.click())
-      await sleep(300)
-    }
-    check('连续缩小到 20% 渐隐终点（100%~20% 每格 -10%）', await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '20%', 8000),
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000)
+    await setZoomPercent(page, 20)
+    check('缩放滑块落到 20% 渐隐终点', await waitFor(page, () =>
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '20%', 8000),
       await zoomPercent())
     read30 = await semanticZoomRead()
 
@@ -2295,11 +2183,10 @@ async function main() {
       !!read100 && Math.abs(read100.comp - 1) < 0.02 && Math.abs(read100.layerScale - 1) < 0.02
       && read100.alpha === 1 && read100.hit === 'auto',
       JSON.stringify(read100))
-    const atFloorControl = await zoomControlRead()
-    check('20% 渐隐终点：仍可继续缩小进入紧凑区、左下角实时读作 20% 且未误判为已复位',
-      !atFloorControl.zoomOutDisabled && !atFloorControl.zoomInDisabled
-      && atFloorControl.atMax === 'false' && atFloorControl.resetViewPercent === '20%'
-      && atFloorControl.resetViewAtReference === 'false',
+    const atFloorControl = await canvasZoomRead()
+    check('20% 渐隐终点：提示条 / 恢复按钮 / 滑块同源出现，比例读作 20%',
+      atFloorControl.percent === '20%' && atFloorControl.atMax === 'false'
+      && atFloorControl.banner && atFloorControl.restore && atFloorControl.slider,
       JSON.stringify(atFloorControl))
     check('20% 时视觉壳按 glyphScale/0.2 补偿，屏幕节点尺寸不再缩小',
       !!read30 && Math.abs(read30.comp - 1.3 / 0.2) < 0.15
@@ -2317,21 +2204,21 @@ async function main() {
       JSON.stringify({ at30: [read30?.alpha, read30?.hit], at100: [read100?.alpha, read100?.hit] }))
 
     // 【2026-11-11 紧凑行程】20%→5% 只让图谱更紧凑：可见集合冻结、字形补偿冻结、
-    // 节点与间距同比例缩小；越接近 5% 每格幅度越小（等比衰减 + 保底步长）。
+    // 节点与间距同比例缩小。步进按钮已下线，改用滑块逐档逼近 5% 并验证下界钳制。
     const compactSteps = []
-    for (let i = 0; i < 12; i += 1) {
-      await page.evaluate(() => document.querySelector('[data-tm-zoom-out]')?.click())
-      await sleep(300)
+    for (const target of [18, 15, 12, 10, 8, 6, 5, 5]) {
+      await setZoomPercent(page, target)
+      await sleep(120)
       compactSteps.push(Number((await zoomPercent()).replace('%', '')))
     }
     check('继续缩小被锁在 5% 下限（最小比例可以到 5%）', await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '5%', 8000),
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '5%', 8000),
       JSON.stringify({ percent: await zoomPercent(), steps: compactSteps }))
     const read5 = await semanticZoomRead()
     const compactState = await page.evaluate(() => {
       const control = document.querySelector('[data-tm-lod-control]')
       const scope = document.querySelector('[data-shortcut-scope="canvas"]')
-      const zoomOut = document.querySelector('[data-tm-zoom-out]')
+
       return {
         visibleCount: Number(control?.getAttribute('data-tm-lod-visible-count') ?? '0'),
         visibleDepthLevels: Number(control?.getAttribute('data-tm-lod-visible-depth-levels') ?? '0'),
@@ -2339,7 +2226,7 @@ async function main() {
         compactHint: !!document.querySelector('[data-tm-lod-compact-hint]'),
         canvasCompact: scope?.getAttribute('data-tm-canvas-compact') ?? '',
         readOnly: scope?.getAttribute('data-tm-canvas-readonly') ?? '',
-        zoomOutDisabled: !!zoomOut?.disabled,
+
       }
     })
     check('5% 紧凑镜头：可见集合与 20% 端点完全一致（不再隐藏或放出节点）',
@@ -2358,32 +2245,31 @@ async function main() {
       && Math.abs(read5.comp * read5.viewportScale - read30.comp * read30.viewportScale)
         < read30.comp * read30.viewportScale * 0.08,
       JSON.stringify({ at20: read30, at5: read5 }))
-    check('5% 紧凑镜头：越接近下限每格幅度越小、端点禁用、面板与容器同源提示',
-      compactState.zoomOutDisabled && compactState.compact === 'true'
-      && compactState.canvasCompact === 'true' && compactState.compactHint
-      && compactSteps[0] - compactSteps[1] > compactSteps[6] - compactSteps[7],
+    check('5% 紧凑镜头：面板与容器同源提示，滑块停在 5% 下端点',
+      compactState.compact === 'true' && compactState.canvasCompact === 'true'
+      && compactState.compactHint && compactSteps.at(-1) === 5,
       JSON.stringify({ compactSteps, compactState }))
-    // 从 5% 紧凑远景用「左下角一键重置」回到 100%：必须真的改比例，且保持平移中心不变。
+    // 从 5% 紧凑远景用中间只读提示条的「恢复 100%」回到常规比例：
+    // 必须真的改比例，且保持平移中心不变。
     const centerBeforeReset = await viewportCenterFlow()
-    // 用真实鼠标点击：.react-flow__panel 默认 pointer-events:none，必须验证按钮真能命中。
-    const resetViewRect = await page.evaluate(() => {
-      const el = document.querySelector('[data-tm-zoom-reset-view]')
+    const restoreRect = await page.evaluate(() => {
+      const el = document.querySelector('[data-tm-canvas-readonly-restore]')
       if (!el) return null
       const r = el.getBoundingClientRect()
       return { x: r.x + r.width / 2, y: r.y + r.height / 2, width: r.width, height: r.height }
     })
-    const resetViewHittable = resetViewRect
+    const restoreHittable = restoreRect
       ? await page.evaluate(({ x, y }) => {
         const el = document.elementFromPoint(x, y)
-        return !!el?.closest('[data-tm-zoom-reset-view]')
-      }, resetViewRect)
+        return !!el?.closest('[data-tm-canvas-readonly-restore]')
+      }, restoreRect)
       : false
-    check('左下角按钮真实可见且可命中（非 pointer-events:none）',
-      !!resetViewRect && resetViewRect.width > 10 && resetViewRect.height > 10 && resetViewHittable,
-      JSON.stringify({ resetViewRect, resetViewHittable }))
-    if (resetViewRect) await page.mouse.click(resetViewRect.x, resetViewRect.y)
-    check('5% 紧凑远景可一键重置视角到 100%（左下角按钮，真实鼠标点击）', await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000),
+    check('中间提示条的恢复按钮真实可见且可命中（非 pointer-events:none）',
+      !!restoreRect && restoreRect.width > 10 && restoreRect.height > 10 && restoreHittable,
+      JSON.stringify({ restoreRect, restoreHittable }))
+    if (restoreRect) await page.mouse.click(restoreRect.x, restoreRect.y)
+    check('5% 紧凑远景可一键恢复到 100%（中间提示条，真实鼠标点击）', await waitFor(page, () =>
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000),
       await zoomPercent())
     await sleep(300)
     const centerAfterReset = await viewportCenterFlow()
@@ -2393,22 +2279,12 @@ async function main() {
       && Math.abs(centerBeforeReset.flowY - centerAfterReset.flowY) < 2
       && Math.abs(centerAfterReset.zoom - 0.65) < 0.02,
       JSON.stringify({ centerBeforeReset, centerAfterReset }))
-    check('重置后左下角按钮回到「已在 100%」状态，放大按钮再次禁用', await waitFor(page, () => {
-      const c = document.querySelector('[data-tm-zoom-control]')
-      const r = document.querySelector('[data-tm-zoom-reset-view]')
-      const i = document.querySelector('[data-tm-zoom-in]')
-      return c?.getAttribute('data-tm-zoom-at-max') === 'true'
-        && r?.getAttribute('data-tm-zoom-at-reference') === 'true'
-        && r?.getAttribute('data-tm-zoom-percent') === '100%'
-        && !!i?.disabled
-    }, 8000), JSON.stringify(await zoomControlRead()))
     const editable100 = await readOnlyRead()
-    const atMaxControl = await zoomControlRead()
-    check('恢复 100% 后只读解除（提示条消失，画布重新可编辑）',
+    check('恢复 100% 后只读解除（提示条 / 滑块 / 恢复按钮一起消失，画布重新可编辑）',
       editable100.scope === 'false' && editable100.control === 'false'
       && !editable100.banner && !editable100.panelRow && !editable100.restore
-      && atMaxControl.atMax === 'true',
-      JSON.stringify({ editable100, atMax: atMaxControl.atMax }))
+      && (await zoomPercent()) === '100%',
+      JSON.stringify({ editable100, percent: await zoomPercent() }))
     const beforeWheel = Number((await zoomPercent()).replace('%', ''))
     await page.mouse.move(500, 750)
     await wheelOnPane(page, 220)
@@ -2431,9 +2307,9 @@ async function main() {
     check('缩放中节点带渐隐 / 渐显关键帧动画（不是硬切）',
       [...wheelAnimNames].some((name) => name.includes('tm-lod-enter') || name.includes('tm-lod-exit')),
       JSON.stringify([...wheelAnimNames]))
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     check('滚轮缩放后仍可一键回到 100%', await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000))
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000))
 
     // ===== 阶段 O：从属连线原样式 + 关联关系名强显示 + 一次性「返回上个视野」 =====
     // 阶段 J 已把 showEdgeRelationLabels 关成 false、把 related 改名成「关联关系测试」，
@@ -2536,9 +2412,9 @@ async function main() {
       || document.querySelector('[data-tm-viewport-back]')?.getAttribute('data-tm-viewport-back-available') === 'false', 4000))
 
     // ===== 阶段 P：多选区域水平镜像（上方菜单 / 只读 / 幂等） =====
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000)
     await page.mouse.click(500, 800)
     await sleep(250)
     // 阶段 O 的搜索 / 滚轮可能把视口留在远处：onlyRenderVisibleElements 会把夹具
@@ -2569,8 +2445,8 @@ async function main() {
         tier: control?.getAttribute('data-tm-lod-tier'),
         active: control?.getAttribute('data-tm-lod-active'),
         visibleCount: control?.getAttribute('data-tm-lod-visible-count'),
-        zoom: document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent'),
-        zoomOutDisabled: document.querySelector('[data-tm-zoom-out]')?.disabled,
+        zoom: document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent'),
+
         nodeIds: [...document.querySelectorAll('.react-flow__node')].map((n) => n.getAttribute('data-id')),
         edgeCount: document.querySelectorAll('.react-flow__edge').length,
         transform: document.querySelector('.react-flow__viewport')?.style.transform,
@@ -2649,7 +2525,7 @@ async function main() {
       !!afterMirror && restoredMirror, JSON.stringify(await mirrorRects()))
 
     // 缩小进入只读：菜单必须收起（位置失真时禁止任何编辑）；恢复 100% 再回来。
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-out]')?.click())
+    await wheelOnPane(page, 220)
     const mirrorReadonly = await waitFor(page, () =>
       document.querySelector('[data-shortcut-scope="canvas"]')?.getAttribute('data-tm-canvas-readonly') === 'true', 8000)
     const menuWhileReadOnly = await page.evaluate(() =>
@@ -2657,9 +2533,9 @@ async function main() {
     check('缩小进入只读时多选菜单收起（位置失真时禁止翻转）',
       mirrorReadonly && !menuWhileReadOnly,
       JSON.stringify({ mirrorReadonly, menuWhileReadOnly, percent: await zoomPercent() }))
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000)
     check('恢复 100% 后菜单重新出现（选中态保留）', await waitFor(page, () =>
       document.querySelector('[data-tm-selection-mirror-menu]')?.getAttribute('data-tm-selection-mirror-count') === '2', 6000))
     await page.mouse.click(500, 800)
@@ -2669,9 +2545,9 @@ async function main() {
     // ===== pin 夹具（画布全宽后移到视口复位的位置） =====
     // 连续缩放的 pan 漂移会把节点推出 onlyRenderVisibleElements 视口；总览 / 多选
     // 之后视口已复位、8 个夹具节点都在 DOM，这里才能做「真实点击选中」断言。
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000)
     await waitFor(page, () => !!document.querySelector('.react-flow__node[data-id="lod-root"]'), 6000)
     let rootSelected = false
     try {
@@ -2799,9 +2675,9 @@ async function main() {
     const selectionIds = () => page.evaluate(() =>
       (document.querySelector('[data-tm-selection-menu]')?.getAttribute('data-tm-selection-ids') || '')
         .split('|').filter(Boolean).sort().join('|'))
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000)
     await waitFor(page, () =>
       document.querySelector('[data-shortcut-scope="canvas"]')?.getAttribute('data-tm-canvas-readonly') === 'false', 8000)
     await page.mouse.click(500, 800)
@@ -2856,15 +2732,15 @@ async function main() {
 
     // ===== 阶段 S：只读提示条下方的缩放滑动条（显隐同源 / 拖动即时改比例） =====
     const zoomReadout = () => page.evaluate(() =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') || '')
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-reset]')?.click())
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') || '')
+    await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     await waitFor(page, () =>
-      document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '100%', 8000)
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000)
     check('缩放滑动条：100% 时与只读提示条一起隐藏', await waitFor(page, () =>
       !document.querySelector('[data-tm-canvas-readonly-banner]')
       && !document.querySelector('[data-tm-canvas-zoom-slider]'), 6000))
 
-    await page.evaluate(() => document.querySelector('[data-tm-zoom-out]')?.click())
+    await wheelOnPane(page, 220)
     const sliderAttached = await waitFor(page, () => {
       const banner = document.querySelector('[data-tm-canvas-readonly-banner]')
       const slider = document.querySelector('[data-tm-canvas-zoom-slider]')
@@ -2891,14 +2767,14 @@ async function main() {
     })
     const atSixty = await waitFor(page, () =>
       document.querySelector('[data-tm-canvas-zoom-slider]')?.getAttribute('data-tm-canvas-zoom-slider-value') === '60'
-      && document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '60%', 8000)
+      && document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '60%', 8000)
     check('缩放滑动条：拖到 60% 即时改变画布比例', atSixty, await zoomReadout())
 
     await page.evaluate(() => document.querySelector('[data-tm-canvas-zoom-slider-input]')?.focus())
     await page.keyboard.press('Home')
     const atFive = await waitFor(page, () =>
       document.querySelector('[data-tm-canvas-zoom-slider]')?.getAttribute('data-tm-canvas-zoom-slider-value') === '5'
-      && document.querySelector('[data-tm-zoom-reset]')?.getAttribute('data-tm-zoom-percent') === '5%', 8000)
+      && document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '5%', 8000)
     check('缩放滑动条：键盘拖到 5% 下端点', atFive, await zoomReadout())
 
     await page.keyboard.press('End')
@@ -2925,15 +2801,13 @@ async function main() {
       const panels = [...document.querySelectorAll('.react-flow__panel')]
         .map((el) => ({ key: String(el.className), rect: rectOf(el) }))
         .sort((a, b) => a.key.localeCompare(b.key))
-      const svg = document.querySelector('svg[aria-label="画布缩略图"]')
-      const vp = svg ? [...svg.querySelectorAll('rect')]
-        .find((r) => r.getAttribute('fill') === 'var(--color-accent-soft)') : null
+
       return {
         app: rectOf(app),
         graph: rectOf(graph),
         canvas: [canvas?.clientWidth ?? 0, canvas?.clientHeight ?? 0],
         panels,
-        viewport: vp ? [vp.getAttribute('x'), vp.getAttribute('y'), vp.getAttribute('width'), vp.getAttribute('height')] : null,
+        viewport: null,
         right: rectOf(right),
         rightVisible: !!right && getComputedStyle(right).display !== 'none',
         rightPosition: right ? getComputedStyle(right).position : '',
@@ -2941,7 +2815,7 @@ async function main() {
         overlay: right?.getAttribute('data-tm-right-panel-overlay') || '',
       }
     })
-    // 画布几何 = 画布容器 / React Flow 容器 / 全部 Panel / 缩略图视口框，逐像素比对。
+    // 画布几何 = 画布容器 / React Flow 容器 / 全部 Panel，逐像素比对。
     const canvasGeometry = (s) => JSON.stringify({
       app: s.app, graph: s.graph, canvas: s.canvas, panels: s.panels, viewport: s.viewport,
     })
@@ -2974,7 +2848,7 @@ async function main() {
       return !!right && getComputedStyle(right).display === 'none'
     }, 8000)
     const collapsedLayout = await layoutSnapshot()
-    check('【阶段 V】折叠右栏后画布尺寸、全部 Panel 定位与缩略图视口均不变',
+    check('【阶段 V】折叠右栏后画布尺寸与全部 Panel 定位均不变',
       collapsedOk && canvasGeometry(baseLayout) === canvasGeometry(collapsedLayout),
       JSON.stringify({
         base: { graph: baseLayout.graph, panels: baseLayout.panels.length, viewport: baseLayout.viewport },
@@ -2994,13 +2868,11 @@ async function main() {
         after: { graph: expandedLayout.graph, panels: expandedLayout.panels.length, viewport: expandedLayout.viewport },
       }))
 
-    const viewportStable = baseLayout.viewport
-      ? JSON.stringify(baseLayout.viewport) === JSON.stringify(collapsedLayout.viewport)
-        && JSON.stringify(baseLayout.viewport) === JSON.stringify(expandedLayout.viewport)
-      : baseLayout.canvas[0] > 0 && baseLayout.canvas[0] === collapsedLayout.canvas[0]
-        && baseLayout.canvas[0] === expandedLayout.canvas[0]
-    check('【阶段 V】缩略图视口框读数稳定（未显示时以画布尺寸代理）', viewportStable,
-      JSON.stringify({ visible: !!baseLayout.viewport, viewport: baseLayout.viewport, canvas: baseLayout.canvas }))
+    const viewportStable = baseLayout.canvas[0] > 0
+      && baseLayout.canvas[0] === collapsedLayout.canvas[0]
+      && baseLayout.canvas[0] === expandedLayout.canvas[0]
+    check('【阶段 V】画布尺寸读数稳定', viewportStable,
+      JSON.stringify({ canvas: baseLayout.canvas, collapsed: collapsedLayout.canvas, expanded: expandedLayout.canvas }))
 
     check('【阶段 V】折叠/展开确实只切换右栏显隐，右栏本身尺寸不变',
       baseLayout.rightVisible && !collapsedLayout.rightVisible && expandedLayout.rightVisible
@@ -3960,24 +3832,27 @@ async function main() {
     JSON.stringify(immersiveAF))
     console.log(`[nav-rail preview] ${shotDirAF}`)
 
-    // ===== 阶段 AI：标题栏控制区重构（2026-11-21）=====
+    // ===== 阶段 AI：标题栏控制区重构（2026-11-21）+ 学习时长迁入导航（2026-11-25）=====
     const chromeAI = await page.evaluate(() => {
       const title = document.querySelector('[data-tm-titlebar-unfocused]')
-      const widget = document.querySelector('[data-tm-titlebar-widget]')
       const zone = document.querySelector('[data-tm-tab-zone]')
       return {
         hasLogo: !!title?.querySelector('img[alt="Logo"]'),
         hasToggle: !!document.querySelector('[data-tm-nav-rail-toggle]'),
         hasHamburger: !!document.querySelector('nav[aria-label="应用菜单"] button[aria-label="应用菜单"]'),
-        widgetBeforeZone: !!widget && !!zone && !!(widget.compareDocumentPosition(zone) & Node.DOCUMENT_POSITION_FOLLOWING),
+        noTitlebarWidget: !document.querySelector('[data-tm-titlebar-widget]')
+          && !document.querySelector('[data-tm-learning-duration]'),
+        hasTabZone: !!zone,
+        learningDial: !!document.querySelector('[data-tm-nav-item="learning.statistics"] [data-tm-learning-dial]'),
         noManualRightPanel: !document.querySelector('button[aria-label="折叠右侧面板"]')
           && !document.querySelector('button[aria-label="展开右侧面板"]')
           && !document.querySelector('[aria-label="右侧面板分区"]'),
         focusAutoHide: !!document.querySelector('[data-tm-right-panel-focus-auto-hide]'),
       }
     })
-    check('【阶段 AI】标题栏无软件图标、保留汉堡与全局导航开关，学习计时在 tab 前，右栏手动控件已移除',
-      !chromeAI.hasLogo && chromeAI.hasToggle && chromeAI.hasHamburger && chromeAI.widgetBeforeZone
+    check('【阶段 AI】标题栏无软件图标、保留汉堡与全局导航开关，学习计时已迁入导航表盘，右栏手动控件已移除',
+      !chromeAI.hasLogo && chromeAI.hasToggle && chromeAI.hasHamburger && chromeAI.noTitlebarWidget
+      && chromeAI.hasTabZone && chromeAI.learningDial
       && chromeAI.noManualRightPanel && chromeAI.focusAutoHide,
       JSON.stringify(chromeAI))
 
@@ -4040,23 +3915,23 @@ async function main() {
     await sleep(400)
     const controlsAG = await page.evaluate(() => {
       const toggle = document.querySelector('[data-tm-canvas-status-toggle]')
-      const zoom = document.querySelector('[data-tm-zoom-out]')
+      const pin = document.querySelector('[data-tm-lod-pin-toggle]')
       const select = document.querySelector('[data-tm-graph-profile-select]')
       const radius = (el) => el ? getComputedStyle(el).borderRadius : null
       const graph = document.querySelector('#graph-panel')?.getBoundingClientRect()
       return {
         toggleHasTm: toggle?.className.includes('tm-icon-btn') ?? false,
-        zoomHasTm: zoom?.className.includes('tm-icon-btn') ?? false,
+        pinHasTm: pin?.className.includes('tm-btn') ?? false,
         selectHasTm: select?.className.includes('tm-select') ?? false,
-        zoomRadius: radius(zoom),
+        toggleRadius: radius(toggle),
         selectRadius: radius(select),
-        iconWidth: (() => { const i = zoom?.querySelector('svg'); return i ? Math.round(i.getBoundingClientRect().width) : null })(),
+        iconWidth: (() => { const i = pin?.querySelector('svg'); return i ? Math.round(i.getBoundingClientRect().width) : null })(),
         graphWidth: graph ? Math.round(graph.width) : null,
       }
     })
     check('【阶段 AG】画布控件已套用统一 .tm-* 类，圆角/图标尺寸一致且画布宽度不变',
-      controlsAG.toggleHasTm && controlsAG.zoomHasTm && controlsAG.selectHasTm
-      && !!controlsAG.zoomRadius && controlsAG.zoomRadius === controlsAG.selectRadius
+      controlsAG.toggleHasTm && controlsAG.pinHasTm && controlsAG.selectHasTm
+      && !!controlsAG.toggleRadius && controlsAG.toggleRadius === controlsAG.selectRadius
       && controlsAG.iconWidth === 12 && controlsAG.graphWidth === beforeAF?.app?.[0],
     JSON.stringify(controlsAG))
     await page.screenshot({ path: path.join(shotDirAF, '05-controls-unified.png') })

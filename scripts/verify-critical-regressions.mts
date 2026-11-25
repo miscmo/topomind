@@ -166,8 +166,8 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   // 【P1】X6 flowchart 退场 + Excalidraw 容器载荷接入。
   // 旧的 flowchartCellSync / normalizeFlowchartDocumentContent 断言随编辑器目录一并删除，
   // 改为守住「旧数据零丢失 + 容器载荷零暴露」这两条新的回归红线。
-  assert.deepEqual([...TOPO_DOCUMENT_TYPES], ['smart', 'mindmap', 'excalidraw', 'cardspec'],
-    '【P1】落盘类型全集必须包含 excalidraw 与 cardspec、移除 flowchart')
+  assert.deepEqual([...TOPO_DOCUMENT_TYPES], ['smart', 'mindmap', 'excalidraw', 'cardspec', 'image'],
+    '【P1】落盘类型全集必须包含 excalidraw / cardspec / image，移除 flowchart')
   assert.deepEqual([...TOPO_PANEL_DOCUMENT_TYPES], ['smart', 'mindmap'],
     '【P1】右栏 surface 只能有智能文档与思维导图')
 
@@ -225,10 +225,11 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
 
   assert.ok(docIdSource.includes("excalidraw: '.exdraw.json'")
     && docIdSource.includes("cardspec: '.cardspec.json'")
+    && docIdSource.includes("image: '.timg.json'")
     && docIdSource.includes("flowchart: '.tflow.json'")
-    && docIdSource.includes('(tdoc|tmind|exdraw|cardspec|tflow)')
+    && docIdSource.includes('(tdoc|tmind|exdraw|cardspec|timg|tflow)')
     && docIdSource.includes('.json$/i.test(entry.name)'),
-  '【P1】全库扫描正则必须认 .exdraw.json / .cardspec.json 且继续认 .tflow.json，否则旧条目会丢')
+  '【P1】全库扫描正则必须认 .exdraw.json / .cardspec.json / .timg.json 且继续认 .tflow.json，否则旧条目会丢')
 
   assert.ok(hostSource.includes('getPanelDocumentTypes()')
     && hostSource.includes('!adapter')
@@ -1235,8 +1236,7 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   const canvasModelSource = fsSync.readFileSync(new URL('../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts', import.meta.url), 'utf-8')
   assert.ok(canvasModelSource.includes('if (!connectingSourceId) return null'), '非连线状态不应构建全量吸附空间索引')
 
-  const miniMapSource = fsSync.readFileSync(new URL('../src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx', import.meta.url), 'utf-8')
-  assert.ok(miniMapSource.includes('if (!isMiniMapVisible)'), '缩略图不可见时必须跳过完整预览模型派生')
+  // 缩略图组件已整体下线：不再有预览模型派生，也无需可见性短路守卫。
 }
 
 {
@@ -1534,7 +1534,7 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     'src/hooks/useGraph/graphBuilder.ts',
     'src/hooks/useGraph/edgeOperations.ts',
     'src/features/graph/GraphCanvas/edges/floatingUtils.ts',
-    'src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx',
+
   ]
   const fsSync = await import('node:fs')
   for (const file of anchorWhitelistFiles) {
@@ -4298,21 +4298,16 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
 
   // 5) 接线：只在程序化跳转埋点、按钮挂在画布内、策略齐全、不落盘。
   const modelSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts', import.meta.url), 'utf-8')
-  const minimapSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx', import.meta.url), 'utf-8')
+
   const cardModelSource = await readFile(new URL('../src/features/graph/GraphCanvas/nodes/KnowledgeCard/model/useKnowledgeCardModel.ts', import.meta.url), 'utf-8')
   const canvasSource = await readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8')
   const vpButtonSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/ViewportReturnButton.tsx', import.meta.url), 'utf-8')
   const vpStoreSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/viewportReturnStore.ts', import.meta.url), 'utf-8')
   assert.ok(modelSource.includes('rememberViewportJump(reactFlow, String(node.data?.label ?? node.id))'),
     '【P0】搜索选中节点跳转必须埋点')
-  assert.ok(minimapSource.includes('rememberViewportJump('), '缩略图点节点必须埋点')
+
   assert.ok(cardModelSource.includes('rememberViewportJump('), '查看已存在节点跳转必须埋点')
-  const focusBody = minimapSource.slice(
-    minimapSource.indexOf('const focusMiniMapPoint'),
-    minimapSource.indexOf('const flushPendingFocusPoint'),
-  )
-  assert.ok(focusBody.length > 0 && !focusBody.includes('rememberViewportJump('),
-    '【P0】手动拖动缩略图定位不得污染返回历史')
+
   assert.ok(canvasSource.includes('<ViewportReturnButton tabId={tabId} />'), '按钮必须挂在画布内')
   assert.ok(vpButtonSource.includes('data-tm-viewport-back') && vpButtonSource.includes('setViewport(from'),
     '按钮必须可断言且能平滑返回')
@@ -5158,12 +5153,13 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   const modelSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts', import.meta.url), 'utf-8')
   const hookSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/useSemanticLod.ts', import.meta.url), 'utf-8')
   const controlSource = await readFile(new URL('../src/features/graph/GraphCanvas/components/LodControl.tsx', import.meta.url), 'utf-8')
-  const toolbarSource = await readFile(new URL('../src/features/layout/Toolbar/Toolbar.tsx', import.meta.url), 'utf-8')
+
   const prefsSource = await readFile(new URL('../src/features/graph/GraphCanvas/model/lodPreferences.ts', import.meta.url), 'utf-8')
   const lodSource = await readFile(new URL('../src/domain/graph/lod.ts', import.meta.url), 'utf-8')
   const cssSource = await readFile(new URL('../src/styles/base.css', import.meta.url), 'utf-8')
   assert.ok(canvasSource.includes('nodes={lod.visibleNodes as Node[]}') && canvasSource.includes('edges={lod.visibleEdges as Edge[]}'), '【P0】ReactFlow 必须消费 LOD 过滤副本')
-  assert.ok(canvasSource.includes('nodes={nodes as Node[]}') && canvasSource.includes('edges={edges}'), '【P0】缩略图与搜索必须继续用全量节点/边')
+  assert.ok(canvasSource.includes('nodes={nodes as Node[]}') && !canvasSource.includes('<CanvasMiniMap'),
+    '【P0】搜索必须继续用全量节点，缩略图组件已整体下线')
   assert.ok(canvasSource.includes('maxZoom={MAX_RAW_ZOOM}') && canvasSource.includes('minZoom={MIN_RAW_ZOOM}'), '【P0】画布缩放边界必须来自唯一规则源')
   assert.ok(canvasSource.includes('defaultViewport={renderViewport}'), '【P0】落盘旧默认必须经重定基后才交给 ReactFlow')
   assert.ok(canvasSource.includes('onWheelCapture={handleWheelCapture}') && canvasSource.includes('clampWheelDelta(native.deltaY)'), '【P0】滚轮必须阻尼，否则一格跳过多个 LOD 台阶')
@@ -5178,18 +5174,21 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   assert.ok(modelSource.includes('getGraphSession(tabId)?.roomPath'), '【P0】房间路径必须走官方会话查询，否则 pin 偏好写不进去')
   assert.ok(modelSource.includes('quantizeLodZoom(nextZoom)') && modelSource.includes('setLodZoom(nextLodZoom)'), '【P0】必须把连续 zoom 量化后再喂给 LOD，不能每帧重算')
   assert.ok(modelSource.includes('rebaseViewport(storedViewport)'), '【P0】重定基必须在模型层完成')
-  assert.ok(toolbarSource.includes('formatZoomPercent(zoomLevel)')
-    && toolbarSource.includes("from '../../../domain/graph/zoomScale'")
-    && !toolbarSource.includes('Math.round(zoomLevel * 100)'), '【P0】百分比显示必须走唯一换算，不得再直乘 100')
-  assert.ok(controlSource.includes('data-tm-zoom-control') && controlSource.includes('data-tm-zoom-reset') && controlSource.includes('ZOOM_REFERENCE'), '镜头控件必须提供比例尺读数与 100% 复位')
+  assert.ok(canvasSource.includes('data-tm-canvas-zoom-percent={formatZoomPercent(zoomLevel)}')
+    && canvasSource.includes('formatZoomPercent,')
+    && !canvasSource.includes('Math.round(zoomLevel * 100)'),
+    '【P0】比例读数必须走唯一换算，且只是画布容器的语义属性、不产生可见 UI')
+  assert.ok(!controlSource.includes('data-tm-zoom-control')
+    && !controlSource.includes('data-tm-canvas-status-zoom')
+    && controlSource.includes('data-tm-lod-wheel-sensitivity='),
+    '【抽屉精简】比例调节与标题比例读数已从状态抽屉移除，缩放统一由中间提示条的恢复按钮 / 滑块承接')
   assert.ok(controlSource.includes('data-tm-lod-control') && controlSource.includes('data-tm-lod-tier=')
     && controlSource.includes('data-tm-lod-mode={option.value}') && controlSource.includes('data-tm-lod-pin-toggle'), '控件必须暴露可断言的档位/模式/pin 标识')
   assert.ok(controlSource.includes('data-tm-lod-depth-panel')
-    && controlSource.includes('data-tm-lod-depth-histogram')
+    && !controlSource.includes('data-tm-lod-depth-histogram')
     && controlSource.includes('data-tm-lod-selected-depth')
-    && controlSource.includes('visibility.depthLevels')
     && controlSource.includes('visibility.treeMaxDepth'),
-  '【P0】左上角控件必须显示每级深度的可见数与当前选中节点的深度')
+    '【P0】左上角控件只展示选中节点深度，层级直方图等诊断明细已移除')
   assert.ok(lodSource.includes('treeMaxDepth') && lodSource.includes('depthLevels')
     && lodSource.includes('selectedNode') && lodSource.includes('buildHierarchy('),
   '【P0】深度诊断必须由同一份 hierarchy 派生，不得另写一套推断')
@@ -5232,7 +5231,10 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && prefsSource.includes('normalizePreservedDepth(value.preservedDepth)')
     && canvasSource.includes('onPreservedDepthChange={lod.setPreservedDepth}'),
     '【自定义永久层数】偏好变更必须进 signature 立即重算、持久化并接到控件回调')
-  assert.ok(controlSource.includes('ZOOM_TRANSITION_MS'), '【P0】按钮 / 复位过渡时长必须来自唯一规则源')
+  const bannerSource12 = await readFile(new URL('../src/features/graph/GraphCanvas/components/CanvasReadOnlyBanner.tsx', import.meta.url), 'utf-8')
+  assert.ok(bannerSource12.includes('ZOOM_TRANSITION_MS') && bannerSource12.includes('ZOOM_REFERENCE')
+    && bannerSource12.includes('data-tm-canvas-readonly-restore'),
+    '【P0】唯一比例恢复入口的过渡时长 / 目标比例必须来自同一规则源')
   assert.ok(prefsSource.includes('topomind_semantic_lod_preferences_v1') && prefsSource.includes('prunePinned'), '偏好必须持久化且可剪枝')
   assert.equal(lodSource.includes('writeConfig') || lodSource.includes('window.api'), false, '【P0】LOD 纯函数层不得写盘 / 不得碰 IPC')
 
@@ -5990,147 +5992,13 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     '【P0】关系浮层按图型推荐但仍保留两个必选项')
 }
 
-// --- 知识库总览（P3-B）：只读房间树 / 上限与防环 / 层级布局 / 懒加载接线 ---
-// 铁律：esbuild 打包真跑纯函数（假 storage 天然没有写方法）+ 源码接线断言。
-// 总览绝不写盘、绝不读文档正文；进入房间仍走既有 enterRoomInTab → loadRoomGraph。
-{
-  const { build } = await import('esbuild')
-  const { fileURLToPath } = await import('node:url')
-  const loadBundled = async (relative: string) => {
-    const bundled = await build({
-      entryPoints: [fileURLToPath(new URL(relative, import.meta.url))],
-      bundle: true,
-      platform: 'node',
-      format: 'esm',
-      write: false,
-      logLevel: 'silent',
-      banner: { js: 'globalThis.window = globalThis.window || {};' },
-    })
-    return await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`) as Record<string, any>
-  }
-  const ro = await loadBundled('../src/domain/graph/roomOverview.ts')
+// 知识库总览（P3-B）已整体移除：入口按钮、覆盖层、摘要卡片、只读房间树纯函数与 store 全部下线。
+// 房间跳转统一走标题栏面包屑 / 最近打开，画布上不再有第二张总览图。
 
-  // 1) 路径防护：房间路径只能是 kbs 根下的相对路径。
-  assert.equal(ro.isSafeRoomPath(''), false, '【P0】空房间路径必须拒绝')
-  assert.equal(ro.isSafeRoomPath('../evil'), false, '【P0】.. 越界路径必须拒绝')
-  assert.equal(ro.isSafeRoomPath('kb/a/../evil'), false, '【P0】中段 .. 越界路径必须拒绝')
-  assert.equal(ro.isSafeRoomPath('C:/Windows'), false, '【P0】盘符绝对路径必须拒绝')
-  assert.equal(ro.isSafeRoomPath('kb/a'), true, '合法的房间相对路径必须通过')
-  assert.deepEqual(await ro.collectRoomOverviews(
-    { readLayout: async () => ({ nodes: {}, edges: [] }), readRoomNodeSummaries: async () => ({}) },
-    { path: '../outside', name: '越界' },
-  ), { items: [], truncated: false, readCount: 0 }, '【P0】越界根节点一律不读盘')
-
-  // 2) 假 storage：三层房间树 + 未物化节点 + 越界引用 + 自引用环 + 读取失败。
-  const metas: Record<string, any> = {
-    kb: {
-      nodes: {
-        a: { card: { ref: 'a', name: '房间 A' } },
-        b: { card: { ref: 'b', name: '房间 B' } },
-        ghost: { card: { ref: 'ghost', name: '未物化' } },
-        bad: { card: { ref: '../evil', name: '越界' } },
-      },
-      edges: [{}, {}, {}],
-    },
-    'kb/a': {
-      nodes: {
-        x: { card: { ref: 'x', name: '房间 A-X' } },
-        self: { card: { ref: 'kb/a', name: '自引用' } },
-      },
-      edges: [{}],
-    },
-    'kb/b': { nodes: {}, edges: [] },
-  }
-  const summaryMap: Record<string, any> = {
-    'kb/a': { childCount: 2, hasDetail: false },
-    'kb/b': { childCount: 0, hasDetail: true },
-    'kb/ghost': { childCount: 0, hasDetail: false },
-    'kb/a/x': { childCount: 1, hasDetail: false },
-  }
-  const layoutCalls: string[] = []
-  const summaryCalls: string[][] = []
-  const fakeStorage = {
-    readLayout: async (path: string) => {
-      layoutCalls.push(path)
-      if (path === 'kb/a/x') throw new Error('模拟读取失败')
-      return metas[path] ?? null
-    },
-    readRoomNodeSummaries: async (paths: string[]) => {
-      summaryCalls.push(paths)
-      return Object.fromEntries(paths.map((path) => [path, summaryMap[path]]))
-    },
-  }
-  const result = await ro.collectRoomOverviews(fakeStorage, { path: 'kb', name: '测试库' })
-  assert.deepEqual(result.items.map((i: any) => i.path), ['kb', 'kb/a', 'kb/b', 'kb/a/x'],
-    '【P0】只展开确实有内容（子节点或文档）的子房间，且自引用不成环')
-  assert.equal(result.items.some((i: any) => i.path.includes('ghost') || i.path.includes('evil')), false,
-    '【P0】未物化的 P0 轻量节点与越界路径不能变成房间卡片')
-  assert.equal(result.readCount, 4, '【P0】每个房间只读一次 readLayout，不得逐节点读小文件')
-  assert.equal(layoutCalls.length, 4, '【P0】假 storage 的读盘次数必须与房间数一致')
-  assert.equal(summaryCalls.length <= 4, true, '【P0】子房间摘要必须批量读取，不能逐房间往返')
-  assert.equal(result.truncated, false, '小房间树不应触发上限')
-  const rootItem = result.items.find((i: any) => i.path === 'kb')
-  assert.equal(rootItem.nodeCount, 4, '【P0】根房间节点数必须来自真实 meta')
-  assert.equal(rootItem.edgeCount, 3, '【P0】根房间边数必须来自真实 meta')
-  assert.equal(rootItem.childRoomCount, 2, '【P0】子房间数只统计有内容的房间')
-  assert.equal(rootItem.status, 'ready', '正常房间状态必须是 ready')
-  assert.equal(result.items.find((i: any) => i.path === 'kb/a/x').status, 'unavailable',
-    '【P0】单个房间读取失败必须降级为 unavailable，不能让整个总览崩掉')
-  assert.equal(result.items.find((i: any) => i.path === 'kb/a/x').depth, 2, '层级深度必须正确')
-
-  // 3) 上限保护：房间数与深度都必须封顶，避免大知识库打爆 IPC。
-  const capped = await ro.collectRoomOverviews(fakeStorage, { path: 'kb', name: '测试库' }, { maxRooms: 2 })
-  assert.equal(capped.items.length, 2, '【P0】maxRooms 必须真的截断')
-  assert.equal(capped.truncated, true, '截断时必须标记，UI 才能提示')
-  const shallow = await ro.collectRoomOverviews(fakeStorage, { path: 'kb', name: '测试库' }, { maxDepth: 1 })
-  assert.equal(shallow.items.length, 3, '【P0】maxDepth 必须真的截断深层房间')
-  assert.equal(shallow.items.every((i: any) => i.depth <= 1), true)
-
-  // 4) 布局：稳定网格 + 父子层级边（不是聚合边）。
-  const layout = ro.layoutRoomOverview(result.items)
-  assert.equal(layout.cards.length, 4, '每张房间摘要都必须有卡片')
-  assert.equal(new Set(layout.cards.map((c: any) => c.id)).size, 4, '卡片 id 必须唯一（用房间路径）')
-  assert.deepEqual(layout.links.map((l: any) => `${l.source}->${l.target}`).sort(), [
-    'kb->kb/a', 'kb->kb/b', 'kb/a->kb/a/x',
-  ], '【P0】层级边只能连真实存在的父房间')
-  assert.deepEqual(ro.layoutRoomOverview(result.items), layout, '布局必须稳定，刷新后位置不跳')
-  assert.ok(layout.cards.find((c: any) => c.id === 'kb/a').position.y > layout.cards.find((c: any) => c.id === 'kb').position.y,
-    '【P0】子房间卡片必须落在父房间下方')
-  const orphan = { ...result.items[1], parentPath: 'not-in-result' }
-  assert.equal(ro.layoutRoomOverview([orphan]).links.length, 0, '父房间不在结果里时不得凭空造边')
-
-  // 5) 接线保障：总览只读、双击懒加载、入口与挂载齐全。
-  const overviewSource = await readFile(new URL('../src/features/graph/GraphPage/components/RoomOverview.tsx', import.meta.url), 'utf-8')
-  const cardSource = await readFile(new URL('../src/features/graph/GraphPage/components/RoomSummaryCard.tsx', import.meta.url), 'utf-8')
-  const pageSource = await readFile(new URL('../src/features/graph/GraphPage/GraphPage.tsx', import.meta.url), 'utf-8')
-  const controlSource2 = await readFile(new URL('../src/features/graph/GraphCanvas/components/LodControl.tsx', import.meta.url), 'utf-8')
-  const pureSource = await readFile(new URL('../src/domain/graph/roomOverview.ts', import.meta.url), 'utf-8')
-  assert.equal(pureSource.includes('writeConfig') || pureSource.includes('window.api') || pureSource.includes('writeLayout'), false,
-    '【P0】总览纯函数层不得写盘 / 不得碰 IPC')
-  assert.equal(overviewSource.includes('writeConfig') || overviewSource.includes('saveGraph') || overviewSource.includes('readTopoDocument'), false,
-    '【P0】总览 UI 不得写盘、不得读文档正文')
-  assert.ok(overviewSource.includes('collectRoomOverviews(storage, { path: kbPath, name: rootName })'),
-    '【P0】总览必须消费唯一纯函数层，且以 kbPath 为根')
-  assert.ok(overviewSource.includes('enterRoomInTab(tabId, {'), '【P0】双击必须走既有进入房间链路（懒加载）')
-  assert.ok(overviewSource.includes('onNodeDoubleClick={handleEnter}'), '进入房间必须绑在双击上，避免误触')
-  assert.ok(overviewSource.includes('<ReactFlowProvider>') && overviewSource.includes('</ReactFlowProvider>'),
-    '【P0】总览必须包独立 ReactFlowProvider，否则会复用 App 级 store 画出底层房间节点')
-  assert.ok(overviewSource.includes('useGraphSession(tabId)')
-    && !overviewSource.includes('useTabStore((state) => state.getGraphSession(tabId))'),
-    '【P0】getGraphSession 每次派生新对象，必须走 useShallow 版 hook，否则 React 19 snapshot 不稳定会让总览整个挂掉')
-  assert.ok(overviewSource.includes('data-tm-room-overview=') && overviewSource.includes('data-tm-room-overview-count={items.length}'),
-    '总览必须暴露可断言的挂载与房间计数')
-  assert.ok(cardSource.includes('data-tm-room-summary-card={item.path}'), '卡片必须暴露房间路径')
-  assert.ok(cardSource.includes('type="target"') && cardSource.includes('type="source"'),
-    '【P0】卡片必须提供隐藏 Handle，否则 ReactFlow 无法计算父子层级边端点')
-  assert.ok(pageSource.includes('{isActive && <RoomOverview tabId={tabId} />}'), '【P0】总览必须挂在 graph-panel 内且仅活跃标签渲染')
-  assert.ok(controlSource2.includes('data-tm-room-overview-open=') && controlSource2.includes('useRoomOverviewStore.getState().open()'),
-    '【P0】镜头控件必须能打开总览')
-}
-
-// --- 第 17 组：放大上限收敛到 100% + 左下角一键重置视角（2026-11-10）---
+// --- 第 17 组：放大上限收敛到 100% + 唯一比例恢复入口（2026-11-10 / 2026-11-24）---
 // 【用户决策】「再放大没有意义了，节点已经全部展示」→ 上限 100%；
-// 「左下角可以增加一键重置视角到 100% 的按钮」→ 常驻、只改比例、不动平移。
+// 2026-11-24 左下角比例尺 / 步进 / 复位按钮与缩略图整体下线，恢复 100% 只保留
+// 中间只读提示条的按钮：仍只改比例、不动平移，缩放滑块承接精确比例设置。
 // 纯函数用 esbuild 打包真跑；UI 接线用源码守卫（DOM 行为由 GUI 端到端覆盖）。
 {
   const { build } = await import('esbuild')
@@ -6200,54 +6068,48 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   assert.equal(isAtMinZoom(0.5 * ZOOM_REFERENCE), false)
   assert.equal(isAtMaxZoom(1.3), true, '越界 zoom 也钳到上限')
 
-  // 5) 源码接线守卫：画布边界、按钮禁用、左下角重置按钮、只改比例不改平移。
+  // 5) 源码接线守卫：画布边界、唯一比例恢复入口、左下角控件整体下线。
   const canvasSource17 = await readFile(new URL('../src/features/graph/GraphCanvas/GraphCanvas.tsx', import.meta.url), 'utf-8')
   const controlSource17 = await readFile(new URL('../src/features/graph/GraphCanvas/components/LodControl.tsx', import.meta.url), 'utf-8')
-  const resetSource17 = await readFile(new URL('../src/features/graph/GraphCanvas/components/ZoomResetButton.tsx', import.meta.url), 'utf-8')
-  const miniMapSource17 = await readFile(new URL('../src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx', import.meta.url), 'utf-8')
+  const bannerSource17 = await readFile(new URL('../src/features/graph/GraphCanvas/components/CanvasReadOnlyBanner.tsx', import.meta.url), 'utf-8')
   const scaleSource17 = await readFile(new URL('../src/domain/graph/zoomScale.ts', import.meta.url), 'utf-8')
+  const cssSource17 = await readFile(new URL('../src/styles/base.css', import.meta.url), 'utf-8')
   assert.ok(canvasSource17.includes('maxZoom={MAX_RAW_ZOOM}') && canvasSource17.includes('minZoom={MIN_RAW_ZOOM}'),
     '【100% 上限】ReactFlow 的缩放边界必须来自唯一规则源')
-  assert.ok(controlSource17.includes('data-tm-zoom-max-percent={formatZoomPercent(MAX_RAW_ZOOM)}')
-    && controlSource17.includes('data-tm-zoom-min-percent={formatZoomPercent(MIN_RAW_ZOOM)}'),
-    '【100% 上限】控件必须暴露上下限供 GUI 直读')
-  assert.ok(controlSource17.includes('const atMaxZoom = isAtMaxZoom(zoomLevel)')
-    && controlSource17.includes('const atMinZoom = isAtMinZoom(zoomLevel)')
-    // 精确匹配：data-disabled={atMaxZoom} 也含子串 disabled={atMaxZoom}，必须带前置空白。
-    && /\sdisabled=\{atMaxZoom\}/.test(controlSource17)
-    && /\sdisabled=\{atMinZoom\}/.test(controlSource17),
-    '【100% 上限】到端点的方向按钮必须禁用，且判定必须来自唯一规则源')
-  assert.ok(controlSource17.includes('reactFlow.zoomTo(ZOOM_REFERENCE, { duration: ZOOM_TRANSITION_MS })'),
-    '【100% 上限】左上角 100% 复位必须消费唯一常量与过渡时长')
-  assert.ok(resetSource17.includes('data-tm-zoom-reset-view=')
-    && resetSource17.includes('data-tm-zoom-at-reference={atReference')
-    && resetSource17.includes('aria-label="一键重置视角到 100%"'),
-    '【左下角重置】按钮必须暴露可断言的挂载与状态属性')
-  assert.ok(resetSource17.includes('reactFlow.zoomTo(ZOOM_REFERENCE, { duration: ZOOM_TRANSITION_MS })'),
-    '【左下角重置】必须与左上角复位完全同源，只改比例')
-  assert.ok(!resetSource17.includes('fitView(') && !resetSource17.includes('setViewport(')
-    && !resetSource17.includes('setCenter('),
-    '【左下角重置】不得 fitView / 改 pan，否则会重算比例并牵动落盘视野')
-  assert.ok(resetSource17.includes('ZOOM_REFERENCE') && resetSource17.includes('ZOOM_TRANSITION_MS')
-    && resetSource17.includes('formatZoomPercent(zoomLevel)')
-    && resetSource17.includes('const atReference = isAtMaxZoom(zoomLevel)'),
-    '【左下角重置】目标比例 / 过渡时长 / 当前读数 / 端点判定必须全部来自规则源')
-  assert.ok(miniMapSource17.includes("import ZoomResetButton from './ZoomResetButton'")
-    && miniMapSource17.includes('<ZoomResetButton zoomLevel={zoomLevel} />')
-    && miniMapSource17.includes('position="bottom-left"'),
-    '【左下角重置】必须常驻挂在 bottom-left 面板的按钮组里')
+  assert.ok(!canvasSource17.includes('<CanvasMiniMap') && !canvasSource17.includes('<CanvasZoomControls')
+    && !canvasSource17.includes('<ZoomResetButton') && !canvasSource17.includes('<Toolbar')
+    && !canvasSource17.includes('canvasSize=') && !canvasSource17.includes('ResizeObserver'),
+    '【左下角下线】缩略图 / 比例尺 / 步进 / 复位按钮及 canvasSize 派生不得再挂载')
+  assert.ok(canvasSource17.includes('data-tm-canvas-zoom-percent={formatZoomPercent(zoomLevel)}'),
+    '【左下角下线】比例读数退化为画布容器的纯语义属性，不产生任何可见 UI')
+  assert.ok(!controlSource17.includes('data-tm-zoom-control')
+    && !controlSource17.includes('reactFlow.zoomTo('),
+    '【抽屉精简】状态抽屉不承载比例调节与复位')
+  assert.ok(bannerSource17.includes('reactFlow.zoomTo(ZOOM_REFERENCE, { duration: ZOOM_TRANSITION_MS })')
+    && bannerSource17.includes('data-tm-canvas-readonly-restore')
+    && !bannerSource17.includes('fitView(') && !bannerSource17.includes('setViewport(')
+    && !bannerSource17.includes('setCenter('),
+    '【唯一恢复入口】中间提示条只改比例、不改 pan / fitView，规则源唯一')
+  assert.ok(!cssSource17.includes('#app-layout .react-flow__panel.bottom.left'),
+    '【左下角下线】bottom-left 让位规则随面板一起移除')
   assert.ok(scaleSource17.includes('export const MAX_DISPLAY_PERCENT = 100')
     && !scaleSource17.includes('GLYPH_MAX_SCALE') && !scaleSource17.includes('GLYPH_SCALE_EXPONENT')
     && !scaleSource17.includes('Math.pow(safe')
     && scaleSource17.includes('if (safe >= GLYPH_FAR_START_RATIO) return GLYPH_MIN_SCALE'),
     '【100% 上限】规则源不得残留 200%、近景放大常量或 pow 放大分支')
 
-  // 6) GUI 端到端断言守卫：改了上限 / 撤了左下角按钮，必须能被静态回归先拦下。
+  // 6) GUI 端到端断言守卫：上限 / 唯一恢复入口 / 左下角控件下线都必须能先被静态回归拦下。
   const zoomGuiSource = await readFile(new URL('./verify-linked-documents-gui.mjs', import.meta.url), 'utf-8')
-  assert.ok(zoomGuiSource.includes("atReferenceControl.max === '100%'")
-    && zoomGuiSource.includes("atReferenceControl.min === '5%'")
+  assert.ok(zoomGuiSource.includes("sliderRange?.min === '5'") && zoomGuiSource.includes("sliderRange.max === '100'")
     && zoomGuiSource.includes("=== '200%'") === false,
-    '【100% 上限】GUI 必须断言上限读作 100% / 下限 5%，且不得再等 200%')
+    '【100% 上限】GUI 必须断言滑块上下限 100% / 5%，且不得再等 200%')
+  assert.ok(zoomGuiSource.includes('data-tm-canvas-zoom-percent')
+    && !zoomGuiSource.includes('data-tm-zoom-')
+    && !zoomGuiSource.includes('bottom.left')
+    && !zoomGuiSource.includes('画布缩略图'),
+    '【左下角下线】GUI 只读画布语义属性，不得再引用已删除的缩放控件 / 缩略图')
+  assert.ok(zoomGuiSource.includes('setZoomPercent(page, 20)') && zoomGuiSource.includes('setZoomPercent(page, target)'),
+    '【比例驱动】GUI 用中间滑块精确设置比例，不再点步进按钮')
   assert.ok(zoomGuiSource.includes('data-tm-lod-visible-depth-levels')
     && zoomGuiSource.includes('至少保留两层深度'),
     '【默认两层】GUI 必须实测最远镜头至少两层深度')
@@ -6255,13 +6117,13 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && zoomGuiSource.includes('"preservedDepth":2')
     && zoomGuiSource.includes("page.select('[data-tm-lod-preserved-depth-select]', '1')"),
     '【自定义永久层数】GUI 必须实测面板随时变更层数、立即生效并持久化')
-  assert.ok(zoomGuiSource.includes('atReferenceControl.resetViewInBottomLeft')
-    && zoomGuiSource.includes('resetViewHittable')
-    && zoomGuiSource.includes('page.mouse.click(resetViewRect.x, resetViewRect.y)'),
-    '【左下角重置】GUI 必须用真实鼠标点击验证按钮可命中且能回到 100%')
+  assert.ok(zoomGuiSource.includes('data-tm-canvas-readonly-restore')
+    && zoomGuiSource.includes('restoreHittable')
+    && zoomGuiSource.includes('page.mouse.click(restoreRect.x, restoreRect.y)'),
+    '【唯一恢复入口】GUI 必须用真实鼠标点击中间提示条的恢复按钮')
   assert.ok(zoomGuiSource.includes('viewportCenterFlow')
     && zoomGuiSource.includes('一键重置只改比例、不平移视野'),
-    '【左下角重置】GUI 必须断言重置只改比例、不平移视野')
+    '【唯一恢复入口】GUI 必须断言恢复只改比例、不平移视野')
   const scaleWhitelistFiles = [
     'src/types/graph.ts', 'src/domain/graph/model.ts', 'src/domain/graph/graphMapper.ts',
     'src/domain/graph/normalizeGraphMeta.ts', 'src/core/storage/file.ts',
@@ -6614,20 +6476,20 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && canvasSource19.includes('data-tm-canvas-compact='),
     '【恢复固定步进】滚轮仍走唯一规则源（当前配置为恒 1），并暴露紧凑诊断')
   const controlSource19 = await readSrc19('src/features/graph/GraphCanvas/components/LodControl.tsx')
-  assert.ok(controlSource19.includes('stepGraphZoom(reactFlow.getZoom()')
+  assert.ok(!controlSource19.includes('stepGraphZoom(reactFlow.getZoom()')
     && controlSource19.includes('zoomStepSensitivityForGraph(')
     && controlSource19.includes('data-tm-lod-compact=')
     && controlSource19.includes('data-tm-lod-wheel-sensitivity=')
     && controlSource19.includes('data-tm-lod-compact-hint')
     && controlSource19.includes('data-tm-lod-compact-glyph-held="true"'),
-    '【两段镜头】按钮步进、密度读数与紧凑提示必须接在左侧状态面板')
+    '【两段镜头】步进灵敏度读数与紧凑提示仍挂在状态面板，步进按钮已随左下角控件下线')
   const lodSource19 = await readSrc19('src/domain/graph/lod.ts')
   assert.ok(lodSource19.includes('LOD_FLOOR_RATIO = COMPACT_START_RATIO')
     && lodSource19.includes('Math.max(LOD_FLOOR_RATIO, ratio)')
     && lodSource19.includes('ratio >= LOD_FLOOR_RATIO && ratio < LOD_FULL_RATIO'),
     '【紧凑区】渐隐终点必须同源，可见集合冻结且跳过碰撞抽稀')
   const guiSource19 = await readSrc19('scripts/verify-linked-documents-gui.mjs')
-  assert.ok(guiSource19.includes("atReferenceControl.min === '5%'")
+  assert.ok(guiSource19.includes("sliderRange?.min === '5'")
     && guiSource19.includes("=== '20%'")
     && guiSource19.includes('5% 紧凑镜头：可见集合与 20% 端点完全一致')
     && guiSource19.includes('5% 紧凑镜头：文字保持可读字号')
@@ -6808,10 +6670,10 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     '【多选镜像 / 文字保持】GUI 必须端到端实测')
 }
 
-// --- 第 21 组：画布状态抽屉融合（2026-11-11）---
-// 房间路径 / 最近打开 / 镜头状态原本三层 UI 都压在画布同一角。现在统一成一个
-// 抽屉式面板：整体 + 每个功能区独立折叠；长路径用固定宽度 + 首尾压缩 +
-// 「位置」区纵向滚动解决，绝不把控件越撑越长。GUI 实测量关键交互。
+// --- 第 21 组：画布状态抽屉精简（2026-11-24）---
+// 房间路径回到标题栏常驻的可点击面包屑：不用展开抽屉就能逐段跳转。
+// 「位置」区、标题图比例、视图区比例调节、知识库总览、诊断明细全部移除，
+// 抽屉只剩「视图」「最近打开」两块 + 一行选中节点深度。
 {
   const readSrc21 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
   const pageSrc21 = await readSrc21('src/features/graph/GraphPage/GraphPage.tsx')
@@ -6824,36 +6686,49 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   const guiSrc21 = await readSrc21('scripts/verify-linked-documents-gui.mjs')
 
   assert.ok(!pageSrc21.includes('<Breadcrumb') && !pageSrc21.includes('<RoomHistory')
-    && !pageSrc21.includes('absolute top-3 left-3'),
-    '【状态抽屉】旧面包屑 / 历史的绝对定位层必须移除，否则仍与 top-left Panel 重叠')
-  assert.ok(/<LodControl\s+tabId=\{tabId\}/.test(canvasSrc21),
+    && !pageSrc21.includes('<RoomOverview') && !pageSrc21.includes('absolute top-3 left-3'),
+    '【状态抽屉】旧面包屑 / 历史 / 总览的绝对定位层必须移除，避免与 top-left Panel 重叠')
+  assert.ok(canvasSrc21.includes('<LodControl') && canvasSrc21.includes('tabId={tabId}'),
     '【状态抽屉】抽屉必须按 tabId 取房间路径与最近打开')
   assert.ok(controlSrc21.includes('data-tm-canvas-status-drawer')
     && controlSrc21.includes('data-tm-canvas-status-title')
     && controlSrc21.includes('data-tm-room-path-full')
+    && controlSrc21.includes('<RoomPathBreadcrumb tabId={tabId} />')
     && controlSrc21.includes('setCanvasStatusDrawerOpen('),
-    '【状态抽屉】标题栏必须是房间路径面包屑，且整体可折叠')
-  for (const id of ['path', 'view', 'recent', 'details']) {
-    assert.ok(controlSrc21.includes(`<CanvasStatusSection\n              id="${id}"`),
-      `【状态抽屉】缺少独立功能区：${id}`)
+    '【状态抽屉】标题栏必须是常驻可点击房间路径面包屑，且整体可折叠')
+  assert.ok(!controlSrc21.includes('data-tm-canvas-status-zoom')
+    && !controlSrc21.includes('data-tm-zoom-control')
+    && !controlSrc21.includes('data-tm-room-overview-open'),
+    '【状态抽屉】标题不显示图比例，比例 UI 已全线下线，知识库总览入口已移除')
+  assert.ok(!controlSrc21.includes('data-tm-lod-depth-histogram')
+    && !controlSrc21.includes('id="details"')
+    && controlSrc21.includes('data-tm-lod-depth-panel')
+    && controlSrc21.includes('data-tm-lod-selected-depth'),
+    '【状态抽屉】层级诊断明细全部移除，只保留选中节点深度')
+  for (const id of ['view', 'recent']) {
+    assert.ok(controlSrc21.includes('id="' + id + '"'), '【状态抽屉】缺少独立功能区：' + id)
   }
+  assert.ok(!controlSrc21.includes('id="path"'), '【状态抽屉】「位置」区已移除，路径全在标题面包屑')
   assert.ok(controlSrc21.includes('useRoomPathItems(tabId)') && controlSrc21.includes('useRecentRooms(tabId)')
     && controlSrc21.includes('toggleCanvasStatusSection(id)'),
     '【状态抽屉】路径 / 历史 / 分区折叠必须接到统一偏好源')
-  assert.ok(controlSrc21.includes('data-tm-lod-depth-panel') && controlSrc21.includes('data-tm-graph-profile-select')
-    && controlSrc21.includes('data-tm-lod-preserved-depth-select') && controlSrc21.includes('data-tm-room-overview-open='),
-    '【状态抽屉】融合不得丢掉镜头 / 诊断 / 总览控件')
+  assert.ok(controlSrc21.includes('data-tm-graph-profile-select')
+    && controlSrc21.includes('data-tm-lod-preserved-depth-select')
+    && controlSrc21.includes('data-tm-lod-pin-toggle'),
+    '【状态抽屉】精简不得丢掉图型 / 永久层数 / 置顶控件')
   assert.ok(sectionSrc21.includes('data-tm-status-section={id}')
-    && sectionSrc21.includes('data-tm-status-section-open={open ? \'true\' : \'false\'}')
     && sectionSrc21.includes('max-h-0 opacity-0 pointer-events-none'),
-    '【状态抽屉】分区折叠只改高度 / 透明度，DOM 常驻（GUI 仍要读诊断文本）')
+    '【状态抽屉】分区折叠只改高度 / 透明度，DOM 常驻')
   assert.ok(prefsSrc21.includes('topomind_canvas_status_v1') && prefsSrc21.includes('useSyncExternalStore')
     && prefsSrc21.includes('LEGACY_RECENT_KEY')
-    && ['path', 'view', 'recent', 'details'].every((id) => prefsSrc21.includes(`${id}:`)),
-    '【状态抽屉】四个分区开关必须独立持久化并兼容旧「最近打开」折叠键')
-  assert.ok(pathSrc21.includes('compactRoomPath') && pathSrc21.includes('hasMiddle')
-    && pathSrc21.includes('max-h-40') && pathSrc21.includes('data-tm-room-path-list=""'),
-    '【长路径】标题只留首段 + 省略 + 当前段，完整链路放进限高滚动区')
+    && ['view', 'recent'].every((id) => prefsSrc21.includes(id + ':'))
+    && !prefsSrc21.includes("'path' |") && !prefsSrc21.includes("'details'"),
+    '【状态抽屉】只保留两个分区开关，独立持久化并兼容旧「最近打开」折叠键')
+  assert.ok(pathSrc21.includes('compactRoomPath')
+    && pathSrc21.includes('data-tm-room-path-list=""')
+    && pathSrc21.includes('data-tm-room-path-item={item.path}')
+    && !pathSrc21.includes('max-h-40'),
+    '【长路径】面包屑横向可滚动、逐段可点，不再有纵向「位置」列表')
   assert.ok(!recentSrc21.includes('usePersistedCollapsed') && recentSrc21.includes('useRecentRooms')
     && recentSrc21.includes('max-h-44'),
     '【状态抽屉】历史列表不再自带折叠壳，改由抽屉统一管')
@@ -6990,15 +6865,14 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
 {
   const readSrc23 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
   const root23 = 'src/plugins/builtin/learning-statistics/'
-  const [page23, overview23, detail23, parts23, preview23] = await Promise.all([
+  const [page23, overview23, detail23, parts23] = await Promise.all([
     readSrc23(root23 + 'LearningStatisticsPage.tsx'),
     readSrc23(root23 + 'LearningOverviewPanel.tsx'),
     readSrc23(root23 + 'LearningDetailPanel.tsx'),
     readSrc23(root23 + 'LearningStatisticsParts.tsx'),
-    readSrc23(root23 + 'LearningQuickPreview.tsx'),
   ])
   const views23 = [page23, overview23, detail23].join('\n')
-  const all23 = [views23, parts23, preview23].join('\n')
+  const all23 = [views23, parts23].join('\n')
   const count23 = (source: string, needle: string) => source.split(needle).length - 1
 
   // SSR 断言（verify-plugin-runtime-guards）依赖首屏含「学习统计」；loading 态也必须可见。
@@ -7045,9 +6919,9 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
 
   // 单色制：热力色阶改用 accent 的 color-mix，删除硬编码橙红（含暗色缺失的 hex）。
   assert.ok(parts23.includes('export function heatColorStyle') && parts23.includes('color-mix(in srgb, var(--color-accent)')
-    && parts23.includes('export function heatCellStyle') && preview23.includes('heatCellStyle(')
+    && parts23.includes('export function heatCellStyle')
     && !all23.includes('#fdd9c9') && !all23.includes('#c63d34'),
-    '【学习统计精简】热力色阶统一到 accent 单色，页面与速览共用')
+    '【学习统计精简】热力色阶统一到 accent 单色，只在共用原语里定义')
 }
 
 // --- 第 24 组：当天学习记录半小时方块图（2026-11-11）---
@@ -7166,7 +7040,6 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   const parts25 = await readSrc25('src/plugins/builtin/learning-statistics/LearningStatisticsParts.tsx')
   const overview25 = await readSrc25('src/plugins/builtin/learning-statistics/LearningOverviewPanel.tsx')
   const blocks25 = await readSrc25('src/plugins/builtin/learning-statistics/DayHalfHourBlocks.tsx')
-  const preview25 = await readSrc25('src/plugins/builtin/learning-statistics/LearningQuickPreview.tsx')
 
   assert.ok(parts25.includes('export const HEAT_CELL_SIZE = 13')
     && parts25.includes('export function HeatCell')
@@ -7193,8 +7066,6 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   assert.ok(blocks25.includes('[0, 0.3, 0.55, 0.8, 1.2]')
     && blocks25.includes('点击方块查看该时段'),
     '【热力图统一】图例与每日记录一致（少 → 多 5 档 + 操作提示）')
-  assert.ok(preview25.includes('HEAT_CELL_SIZE') && preview25.includes('heatCellStyle('),
-    '【热力图统一】标题栏速览也用同一尺寸与色阶')
   assert.ok(!blocks25.includes('每格 30 分钟 · 上排') && !overview25.includes('heatColorStyle('),
     '【热力图统一】删除拉伸长条说明条与面板内重复色阶调用')
 }
@@ -7609,7 +7480,7 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   const pageSrc29 = await readSrc29('src/features/graph/GraphPage/GraphPage.tsx')
   const panelSrc29 = await readSrc29('src/features/right-panel/RightPanelContainer.tsx')
   const canvasSrc29 = await readSrc29('src/features/graph/GraphCanvas/GraphCanvas.tsx')
-  const miniMapSrc29 = await readSrc29('src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx')
+
   const guiSrc29 = await readSrc29('scripts/verify-linked-documents-gui.mjs')
 
   assert.ok(pageSrc29.includes('id="app-layout" className="relative w-full h-full"'),
@@ -7625,14 +7496,12 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     '【右栏浮层】常态贴右、最大化铺满，两者都必须 absolute 且不占布局宽度')
   assert.ok(!panelSrc29.includes('z-[100]'),
     '【右栏浮层】层级不得高于 fixed 右键菜单 z-50，避免菜单被面板盖住')
-  assert.ok(!canvasSrc29.includes('rightPanel') && !miniMapSrc29.includes('rightPanel'),
-    '【右栏浮层】画布 / 缩略图不得订阅右栏状态，布局只由画布容器自身尺寸决定')
-  assert.ok(canvasSrc29.includes('element.clientWidth') && canvasSrc29.includes('ResizeObserver'),
-    '【右栏浮层】canvasSize 仍由画布容器自身的 ResizeObserver 驱动')
-  assert.ok(miniMapSrc29.includes('width: canvasSize.width / Math.max(viewport.zoom, 0.0001)'),
-    '【右栏浮层】缩略图视口框只由 canvasSize + viewport 派生，画布宽度恒定则视口框恒定')
-  assert.ok(guiSrc29.includes('阶段 V') && guiSrc29.includes('data-tm-right-panel-overlay'),
-    '【右栏浮层】GUI 必须实测折叠/展开往返的画布布局不变量')
+  assert.ok(!canvasSrc29.includes('rightPanel') && !canvasSrc29.includes('canvasSize')
+    && !canvasSrc29.includes('ResizeObserver'),
+    '【右栏浮层】画布不订阅右栏状态；canvasSize / ResizeObserver 只服务已删除的缩略图')
+  assert.ok(guiSrc29.includes('阶段 V') && guiSrc29.includes('data-tm-right-panel-overlay')
+    && !guiSrc29.includes('画布缩略图'),
+    '【右栏浮层】GUI 必须实测折叠/展开往返的画布布局不变量，且不再依赖缩略图')
 }
 
 // ===== 第 30 组：全局弹窗未打开时不得发起统一树查询（2026-11-12） =====
@@ -8105,13 +7974,13 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   // 2) 浮层布局：不参与 flex 两栏、画布对面板状态无感知
   assert.ok(panel35.includes('absolute inset-y-0 left-0 z-30')
     && panel35.includes('data-tm-node-tree-collapsed="false"')
-    && panel35.includes('data-tm-node-tree-toggle=""'),
-  '【P0】左侧节点树必须是可折叠的 absolute 浮层')
+    && panel35.includes('if (!isActive || collapsed) return null'),
+  '【P0】左侧节点树必须是可折叠的 absolute 浮层（折叠态不渲染任何 DOM）')
   assert.ok(page35.includes('<NodeTreePanel tabId={tabId} isActive={isActive} />')
     && page35.includes('id="app-layout" className="relative w-full h-full"'),
   '【P0】节点树挂在 #app-layout 内，且 #app-layout 不得变成 flex 两栏')
   assert.ok(store35.includes('useNodeTreePanelStore') && !panel35.includes('rightPanel'),
-  '【P0】画布 / 缩略图不得订阅节点树面板状态，面板也不得读右栏状态')
+  '【P0】画布不得订阅节点树面板状态，面板也不得读右栏状态')
   assert.ok(hook35.includes('useGraphStore((state) => state.nodes)')
     && hook35.includes('useGraphStore((state) => state.edges)'),
   '【P0】树必须与根节点新增/修改（store nodes/edges）同步')
@@ -8306,24 +8175,21 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
 // --- 第 36 组：节点树默认折叠 / 展开态记忆 / 子树懒加载 / 不透明背景 / 状态抽屉让位 / 语义图标 ---
 {
   const read36 = async (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
-  const [panel36, store36, tree36, hook36, css36, page36, overview36, card36] = await Promise.all([
+  const [panel36, store36, tree36, hook36, css36, page36] = await Promise.all([
     read36('../src/features/graph/GraphPage/components/NodeTreePanel.tsx'),
     read36('../src/stores/nodeTreePanelStore.ts'),
     read36('../src/domain/graph/nodeTree.ts'),
     read36('../src/features/graph/GraphPage/model/useNodeTree.ts'),
     read36('../src/styles/base.css'),
     read36('../src/features/graph/GraphPage/GraphPage.tsx'),
-    read36('../src/features/graph/GraphPage/components/RoomOverview.tsx'),
-    read36('../src/features/graph/GraphPage/components/RoomSummaryCard.tsx'),
   ])
   const has36 = (text: string, needle: string) => text.includes(needle)
 
   // 1) 背景：--color-background-primary 在 tokens.css 里从未定义，用到就是透明。
   assert.ok(!has36(panel36, '--color-background-primary')
     && has36(panel36, 'bg-[var(--color-surface)]')
-    && !has36(overview36, '--color-background-primary')
-    && !has36(card36, '--color-background-primary'),
-  '【P0】面板背景必须用已定义的 --color-surface，禁回灌未定义的 background-primary')
+    && !has36(page36, '<RoomOverview'),
+  '【P0】面板背景必须用已定义的 --color-surface，且总览覆盖层已从图谱页移除')
 
   // 2) 默认折叠 + 按房间记忆：状态在 store / localStorage，不在组件本地 state。
   assert.ok(has36(store36, "const EXPANDED_KEY = 'topomind_node_tree_expanded_v2'")
@@ -9580,13 +9446,15 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     '【P0】降采样不得改动慢判定阈值')
 }
 
-// --- 第 45 组：节点结构折叠触发按钮可上下拖动（2026-11-15） ---
+// --- 第 45 组：左栏唯一开关 / 状态抽屉让位不变（2026-11-25 收敛） ---
 {
   const read45 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
   const files45 = {
     panel: '../src/features/graph/GraphPage/components/NodeTreePanel.tsx',
     store: '../src/stores/nodeTreePanelStore.ts',
+    rail: '../src/features/layout/NavRail/NavRail.tsx',
     css: '../src/styles/base.css',
+    gui: './verify-linked-documents-gui.mjs',
   } as const
   const entries45 = Object.entries(files45) as Array<[keyof typeof files45, string]>
   const sources45 = Object.fromEntries(
@@ -9594,30 +9462,28 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   ) as Record<keyof typeof files45, string>
   const has45 = (key: keyof typeof files45, needle: string) => sources45[key].includes(needle)
 
-  // 1) 静态接线：固定 top-3 已被可拖动定位取代，选择器 / 展开语义不变。
-  assert.ok(!has45('panel', 'absolute left-0 top-3 z-30'),
-    '【P0】折叠按钮不得再固定在与状态抽屉重叠的 top-3')
-  for (const needle of [
-    'onPointerDown={handlePointerDown}', 'onPointerMove={handlePointerMove}',
-    'setPointerCapture(event.pointerId)', 'HANDLE_DRAG_THRESHOLD',
-    'suppressClickRef', 'data-tm-canvas-status-drawer',
-    'if (dragRef.current) return', 'cursor-ns-resize',
-    'touchAction: \'none\'', 'clamp(',
-  ]) {
-    assert.ok(has45('panel', needle), `【P0】折叠按钮缺少可拖动接线 ${needle}`)
-  }
-  for (const needle of ['data-tm-node-tree-panel=""', 'data-tm-node-tree-collapsed="true"', 'data-tm-node-tree-toggle=""']) {
-    assert.ok(has45('panel', needle), `【P0】拖动改造不得破坏 GUI 选择器 ${needle}`)
-  }
+  // 1) 面板纯展示：折叠态直接 return null，不保留任何折叠态 DOM。
+  assert.ok(has45('panel', 'if (!isActive || collapsed) return null')
+    && !has45('panel', 'data-tm-node-tree-collapsed="true"'),
+  '【P0】左栏折叠态必须完全不渲染，不保留任何折叠态 DOM')
+
+  // 2) 唯一开关：只有 NavRail 竖 tab 调 setActivePanel，collapsed 只由它写入。
+  assert.ok(has45('rail', 'data-tm-left-dock-tab={tab.id}')
+    && has45('rail', 'onClick={() => setActivePanel(tab.id)}'),
+  '【P0】左栏开合的唯一入口必须是全局导航栏竖 tab')
+  assert.ok(has45('store', 'setActivePanel: (id) => set((state) => {')
+    && (sources45.store.match(/writeCollapsed\(/g) ?? []).length === 2,
+  '【P0】collapsed 只允许由 setActivePanel 一处写入，不得再有并列开关')
+  assert.ok(has45('gui', '[data-tm-left-dock-active="true"]'),
+    '【P0】GUI 夹具也只能走同一个 tab 开关')
+
+  // 3) 画布契约不变：让位变量与状态抽屉的 CSS 公式一字不改。
   assert.ok(has45('panel', "'--tm-node-tree-offset'") && has45('panel', 'NODE_TREE_PANEL_WIDTH'),
     '【P0】展开态的横向让位机制必须保持原样')
   assert.ok(has45('css', 'margin-left: calc(12px + var(--tm-node-tree-offset, 0px)) !important'),
     '【P0】折叠态不允许靠改状态抽屉横坐标来避让（GUI 要求 left < 20）')
-  for (const needle of ['HANDLE_Y_KEY', 'readHandleY', 'writeHandleY', 'handleY: number | null', 'setHandleY']) {
-    assert.ok(has45('store', needle), `【P0】位置偏好缺少持久化 ${needle}`)
-  }
 
-  // 2) esbuild 真跑 store：钳制与持久化状态真的生效，不是只有字符串。
+  // 4) esbuild 真跑 store：点 tab 折叠 / 再点展开，不是只有字符串。
   const { build: build45 } = await import('esbuild')
   const { fileURLToPath: toPath45 } = await import('node:url')
   const result45 = await build45({
@@ -9625,19 +9491,13 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
   })
   const store45 = await import(`data:text/javascript;base64,${Buffer.from(result45.outputFiles[0].text).toString('base64')}`)
-  assert.equal(store45.MIN_HANDLE_Y, 12)
-  assert.equal(store45.clampNodeTreeHandleY(-5), 12, '【P0】位置不得越过顶部边界')
-  assert.equal(store45.clampNodeTreeHandleY(120.6), 121, '【P0】位置必须取整')
-  assert.equal(store45.clampNodeTreeHandleY(99999), 5000, '【P0】超大位置必须钳制')
-  assert.equal(store45.clampNodeTreeHandleY(Number.NaN), 12, '【P0】非法位置必须回落到默认')
-  assert.equal(store45.useNodeTreePanelStore.getState().handleY, null,
-    '【P0】未自定义时必须走自动避让，而不是写死一个坐标')
-  store45.useNodeTreePanelStore.getState().setHandleY(240)
-  assert.equal(store45.useNodeTreePanelStore.getState().handleY, 240,
-    '【P0】拖动结束必须把位置写进 store')
-  store45.useNodeTreePanelStore.getState().setHandleY(-100)
-  assert.equal(store45.useNodeTreePanelStore.getState().handleY, 12,
-    '【P0】写入非法位置也必须钳制')
+  const state45 = store45.useNodeTreePanelStore
+  assert.equal(state45.getState().collapsed, false, '【P0】默认仍展开节点结构页')
+  state45.getState().setActivePanel('tree')
+  assert.equal(state45.getState().collapsed, true, '【P0】点当前页必须先折叠')
+  state45.getState().setActivePanel('tree')
+  assert.equal(state45.getState().collapsed, false, '【P0】折叠态再点竖 tab 必须重新展开')
+  assert.equal(state45.getState().activePanelId, 'tree', '【P0】重新展开仍停在节点结构页')
 }
 
 // --- 第 46 组：多选链路埋点 + 选中态热路径优化（2026-11-15） ---
@@ -10778,17 +10638,11 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   assert.ok(css58.includes("html[data-tm-nav-rail-open='true']")
     && rail58.includes('root.dataset.tmNavRailOpen'),
   '【导航层】导航展开时节点树与状态抽屉必须让位，避免被 48px rail 遮住')
-  // 2026-11-23 补：左下角缩略图 / 缩放控件组原本仍停在 React Flow 默认 15px 边距，
-  // 被 48px 的 z-40 导航栏浮层盖住。让位必须是纯 CSS 的条件规则，导航栏隐藏时自动还原。
-  assert.ok(css58.includes("html[data-tm-nav-rail-open='true'] #app-layout .react-flow__panel.bottom.left")
-    && css58.includes('margin-left: calc(15px + var(--nav-rail-width)) !important'),
-  '【导航层】导航展开时左下角缩略图 / 缩放控件组必须让位 48px rail，且只改 margin-left')
-  assert.equal((css58.match(/#app-layout \.react-flow__panel\.bottom\.left/g) ?? []).length, 1,
-    '【导航层】左下角缩略图只允许一条条件让位规则，导航栏隐藏时必须回到默认 15px 边距')
-  const miniMap58 = await readSrc58('src/features/graph/GraphCanvas/components/CanvasMiniMap.tsx')
-  assert.ok(!miniMap58.includes('layoutStore') && !miniMap58.includes('railVisible')
-    && miniMap58.includes('getBoundingClientRect()'),
-  '【导航层】缩略图让位必须纯 CSS；组件不得订阅导航状态，点击定位按实测矩形换算')
+  // 左下角缩略图 / 缩放控件组已整体下线，bottom-left Panel 不复存在：
+  // 对应的条件让位规则与组件内坐标换算也必须一并删除，不留孤儿 CSS。
+  assert.ok(!css58.includes('#app-layout .react-flow__panel.bottom.left')
+    && !css58.includes('margin-left: calc(15px + var(--nav-rail-width)) !important'),
+    '【导航层】bottom-left 让位规则必须随面板一起移除')
   assert.ok(!css58.includes("html[data-tm-immersive='true']") && !css58.includes('data-tm-immersive'),
     '【导航层】专注模式已移除，不得再写入沉浸态 CSS')
   assert.ok(store58.includes('railVisible') && store58.includes('toggleRailVisible')
@@ -10885,7 +10739,7 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     '【横向 tab】系统页（首页/设置/学习记录/日志）不得出现在 tab 栏，只渲染 kb 类型')
   assert.ok(!tabs60.includes('aria-label="打开知识库"') && !tabs60.includes('Plus')
     && !tabs60.includes('nav.openLibrary') && !contract60.includes('tabAction:'),
-    '【横向 tab】不得有「+」新建/打开按钮及其逻辑；打开知识库统一走首页知识库总览')
+    '【横向 tab】不得有「+」新建/打开按钮及其逻辑；打开知识库统一走首页知识库卡片')
   assert.ok(tabs60.includes('role="tablist"') && tabs60.includes('role="tab"')
     && tabs60.includes('data-tm-tab-bar') && tabs60.includes('ResizeObserver')
     && tabs60.includes("WebkitAppRegion: 'no-drag'"),
@@ -10904,9 +10758,10 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     '【横向 tab】顶栏要暴露当前视图类型供 Π 形连体换底色；双击最大化必须排除 tab，失焦要降对比')
   assert.ok(!title60.includes("'展开右侧面板'") && !title60.includes("'折叠右侧面板'")
     && !title60.includes('ariaLabel="右侧面板分区"')
-    && title60.includes('data-tm-nav-rail-toggle') && title60.includes('data-tm-titlebar-widget')
+    && title60.includes('data-tm-nav-rail-toggle') && !title60.includes('data-tm-titlebar-widget')
+    && !title60.includes('PluginWidgetSlot')
     && title60.includes('nav className=') && title60.includes('aria-label="应用菜单"'),
-    '【标题栏重构】右栏手动折叠 / 详情样式分段控件不得回灌；导航全局开关、汉堡菜单、学习计时 widget 必须在位')
+    '【标题栏重构】右栏手动折叠 / 详情样式分段控件不得回灌；导航全局开关、汉堡菜单必须在位，标题栏不再挂学习计时 widget')
   assert.ok(gui60.includes('阶段 AH') && gui60.includes('多个知识库横向并排不折叠')
     && gui60.includes('压到最小宽度仍放不下才出现'),
     '【横向 tab】必须有 GUI 运行时证据：多 tab 横向并排、弹性压缩、最小宽度后才溢出')
@@ -10943,10 +10798,9 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && !rail61.includes('railPeeking') && rail61.includes('railVisible'),
     '【标题栏】NavRail 不得再自带边缘触发条 / 快捷键 / pin / 收起按钮等第二套显隐入口')
   assert.ok(!title61.includes('icon.svg') && title61.includes('data-tm-nav-rail-toggle')
-    && title61.includes('aria-label="应用菜单"')
-    && title61.indexOf('data-tm-titlebar-widget=""') < title61.indexOf('data-tm-tab-zone=""')
-    && title61.includes('PluginWidgetSlot placement="titlebar"'),
-    '【标题栏】最左软件图标必须移除；汉堡保留，全局开关与学习计时在 tab 区之前')
+    && title61.includes('aria-label="应用菜单"') && title61.includes('data-tm-tab-zone')
+    && !title61.includes('data-tm-titlebar-widget') && !title61.includes('PluginWidgetSlot'),
+    '【标题栏】最左软件图标必须移除；汉堡与全局开关保留，标题栏不再承载学习计时 widget')
   assert.ok(!title61.includes('折叠右侧面板') && !title61.includes('展开右侧面板')
     && !title61.includes('右侧面板分区') && !title61.includes('SegmentedControl'),
     '【标题栏】右栏手动折叠按钮与详情/样式分段控件不得回灌')
@@ -11277,7 +11131,6 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     'src/features/right-panel/RightPanelContainer.tsx',
     'src/features/right-panel/components/DetailTab/LinkedDocumentList.tsx',
     'src/features/documents/components/DocumentNode.tsx',
-    'src/plugins/builtin/learning-statistics/LearningTrackerWidget.tsx',
     'src/features/documents/SmartDocumentEditor/components/EditorStylePopover.tsx',
     'src/features/documents/SmartDocumentEditor/components/DocumentLinkPicker.tsx',
     'src/features/documents/SmartDocumentEditor/components/ImageAlignToolbar.tsx',
@@ -11363,7 +11216,6 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     'src/features/right-panel/RightPanelContainer.tsx',
     'src/features/right-panel/components/DetailTab/LinkedDocumentList.tsx',
     'src/features/documents/components/DocumentNode.tsx',
-    'src/plugins/builtin/learning-statistics/LearningTrackerWidget.tsx',
     'src/features/documents/SmartDocumentEditor/components/EditorStylePopover.tsx',
     'src/features/documents/SmartDocumentEditor/components/DocumentLinkPicker.tsx',
     'src/features/documents/SmartDocumentEditor/components/ImageAlignToolbar.tsx',
@@ -11907,32 +11759,446 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     '【主题配置】v0 写盘格式保持不变，保证这次改造零行为变化')
 }
 
-// ===== 69) 标题栏学习时长等宽：变长时间字符串不得推动 tab 区（2026-11-24）=====
-// 旧状态：时长直接渲染在 button 里，"0s" / "59m 59s" / "23h 59m 59s" 宽度不同，
-// 导致紧随其后的 data-tm-tab-zone 左边界随秒数跳动，整排知识库 tab 左右漂移。
+// ===== 69) 学习时长迁出标题栏 → 导航「学习记录」表盘（2026-11-25）=====
+// 旧契约：标题栏等宽计时文本 + 独立 GUI 回归。现在当日时长由 NavRail 的单环表盘承载
+//（中心整小时 + 当前小时的进度环），标题栏不再有任何计时 widget。
+// 这一组同时锁住「旧 widget 不得回灌」与「新表盘的数据 / 取色 / 尺寸契约」。
 {
-  const widget69 = await readFile(new URL('../src/plugins/builtin/learning-statistics/LearningTrackerWidget.tsx', import.meta.url), 'utf-8')
-  const title69 = await readFile(new URL('../src/features/layout/CustomTitleBar/CustomTitleBar.tsx', import.meta.url), 'utf-8')
-  const gui69 = await readFile(new URL('../scripts/verify-titlebar-duration-gui.mjs', import.meta.url), 'utf-8')
-  const pkg69 = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf-8'))
+  const readSrc69 = async (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const [dial69, rail69, title69, manifest69, index69, pkg69] = await Promise.all([
+    readSrc69('src/features/layout/NavRail/LearningDialIcon.tsx'),
+    readSrc69('src/features/layout/NavRail/NavRail.tsx'),
+    readSrc69('src/features/layout/CustomTitleBar/CustomTitleBar.tsx'),
+    readSrc69('src/plugins/builtin/learning-statistics/manifest.json'),
+    readSrc69('src/plugins/builtin/learning-statistics/index.ts'),
+    readSrc69('package.json'),
+  ])
 
-  assert.ok(widget69.includes('const MAX_TODAY_SECONDS = 24 * 60 * 60 - 1')
-    && widget69.includes('const DURATION_WIDTH_SAMPLE = formatDuration(MAX_TODAY_SECONDS)'),
-    '【标题栏时长等宽】固定宽度必须由「当日最长合法字符串」推导，不能拍脑袋写死')
-  assert.ok(widget69.includes('data-tm-learning-duration=""')
-    && widget69.includes('tabular-nums') && widget69.includes('whitespace-nowrap')
-    && widget69.includes('aria-hidden="true" className="invisible"')
-    && /absolute inset-y-0 left-0/.test(widget69),
-    '【标题栏时长等宽】隐形占位 + 脱离文档流的左对齐真实文本 + 等宽数字契约缺一不可')
-  const durationClass69 = widget69.match(/data-tm-learning-duration=""[\s\S]{0,200}?className="([^"]+)"/)?.[1] ?? ''
-  assert.ok(!/\[\d+(px|ch)\]/.test(durationClass69),
-    '【标题栏时长等宽】禁止用魔法 px / ch 宽度：换字体、字号或字距后会再次溢出或留白')
-  assert.ok(title69.indexOf('data-tm-titlebar-widget=""') < title69.indexOf('data-tm-tab-zone=""'),
-    '【标题栏时长等宽】学习计时 widget 必须在 tab 区之前，它的宽度才会直接决定 tab 位置')
-  assert.ok(gui69.includes("'0s'") && gui69.includes("'23h 59m 59s'")
-    && gui69.includes('zoneX') && gui69.includes('viewportRows')
-    && pkg69.scripts?.['verify:titlebar:duration:gui'],
-    '【标题栏时长等宽】必须有真实 GUI 回归覆盖全部时长形态与窗口宽度变化，并挂 npm 入口')
+  assert.ok(!title69.includes('data-tm-titlebar-widget') && !title69.includes('PluginWidgetSlot')
+    && !index69.includes('registerWidget') && !manifest69.includes('"widgets"')
+    && !manifest69.includes('widget.register')
+    && !pkg69.includes('verify:titlebar:duration:gui')
+    && !pkg69.includes('verify-titlebar-duration-gui'),
+    '【学习时长迁移】标题栏 widget / 插件 widgets 贡献 / 旧 GUI 入口必须整体移除，不得留半套')
+  assert.ok(manifest69.includes('"navItems"') && manifest69.includes('"order": 25')
+    && rail69.includes('LearningDialIcon') && rail69.includes('LearningDialTooltip')
+    && rail69.includes('data-tm-nav-item={item.id}'),
+    '【学习时长迁移】学习记录导航项保留，表盘图标与精确时长 tooltip 必须挂在同一按钮上')
+  assert.ok(dial69.includes('useLearningTrackerStore') && dial69.includes('Math.floor(state.todayDuration / 60)')
+    && dial69.includes('DIAL_CIRCUMFERENCE') && dial69.includes('TICK_ANGLES')
+    && dial69.includes('goalReached'),
+    '【表盘】时长只取宿主 store、秒量化到分钟；12 刻度 / 整点进位 / 日目标态都在场')
+  assert.ok(dial69.includes('color-mix(in srgb, var(--color-accent) 14%, transparent)')
+    && dial69.includes('var(--color-accent-soft)') && dial69.includes('var(--color-primary)')
+    && !dial69.includes('var(--tm-brand-') && !dial69.includes('#'),
+    '【表盘】颜色只能由 --color-* 语义 token / color-mix 派生，禁止硬编码色值或绕过主题色管理层')
+  assert.ok(dial69.includes('h-6 w-6') && dial69.includes('data-tm-learning-dial=""')
+    && dial69.includes('data-tm-learning-dial-progress=""')
+    && dial69.includes('data-tm-learning-dial-goal=""')
+    && !dial69.includes('data-tm-learning-duration'),
+    '【表盘】24px 自绘图标是唯一时长呈现，旧等宽文本契约不得回灌')
+}
+
+// ===== 70) 图片容器：本地选图 → 铺满节点预览（2026-11-24）=====
+// 用户要求「新增图容器，创建后可以直接通过选择本地图片文件后展示成图片节点」。
+// 落点：新增第三种容器载荷 image（.timg.json），图片二进制进节点 _docs/assets/，
+// 载荷只存 assets/ 相对引用；创建后立刻弹图片专用选图框，节点预览 fill 铺满零空隙。
+// 这一组锁住「不放开 Excalidraw 容器插图片」这条既有设计约束，避免绕回去重做附件链路。
+{
+  const read70 = (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const [
+    preload70, main70, fs70, docId70, fsb70, store70, types70, fileAdapter70,
+    topoTypes70, docRegistry70, imageTypes70, imageSpec70, containerRegistry70,
+    preview70, editor70, nodeActions70, pageActions70, menu70, excalidrawEditor70, gui70,
+  ] = await Promise.all([
+    read70('electron/preload.js'),
+    read70('electron/main.js'),
+    read70('electron/file-service.js'),
+    read70('electron/services/document-id-service.js'),
+    read70('src/core/fs-backend.ts'),
+    read70('src/core/storage/service.ts'),
+    read70('src/core/storage/types.ts'),
+    read70('src/core/storage/file.ts'),
+    read70('src/core/topoDocumentTypes.ts'),
+    read70('src/features/documents/services/documentTypeRegistry.ts'),
+    read70('src/features/documents/ImageDocument/imageDocumentTypes.ts'),
+    read70('src/features/graph/GraphCanvas/containers/imageContainerType.ts'),
+    read70('src/features/graph/GraphCanvas/containers/registerContainers.tsx'),
+    read70('src/features/graph/GraphCanvas/containers/image/ImageContainerPreview.tsx'),
+    read70('src/features/graph/GraphCanvas/containers/image/ImageContainerEditor.tsx'),
+    read70('src/features/graph/GraphPage/model/useNodeActions.ts'),
+    read70('src/features/graph/GraphPage/model/useGraphPageActions.ts'),
+    read70('src/features/graph/GraphPage/components/GraphPageContextMenu.tsx'),
+    read70('src/features/graph/GraphCanvas/containers/ExcalidrawContainerEditor.tsx'),
+    read70('scripts/verify-image-container-gui.mjs'),
+  ])
+  const pkg70 = JSON.parse(await read70('package.json'))
+
+  // 1) 图片专用 IPC：白名单 / handler / backend / storage 四层齐全，且只放行图片扩展名。
+  const channel70 = 'fs:importImageAsset'
+  assert.ok(preload70.includes(`'${channel70}'`), '【图片容器】选图通道必须在 preload 白名单里')
+  assert.ok(main70.includes(`ipcMain.handle('${channel70}'`) && main70.includes("title: '选择图片'")
+    && main70.includes("extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']"),
+  '【图片容器】主进程必须弹图片专用对话框，不能复用含音视频的通用过滤器')
+  assert.ok(main70.includes('fileService.importImageAsset('), '【图片容器】主进程必须走图片专用导入校验')
+  assert.ok(main70.includes('buildLocalFileUrl(absolute)')
+    && !main70.includes('return absolute ? pathToFileURL(absolute).href : null'),
+  '【图片容器】资源 URL 必须走 local-file: 自定义协议：CSP img-src 不放行 file://，否则 <img> 静默加载失败')
+  assert.ok(main70.includes("parts[docsIndex + 1] === 'assets'")
+    && main70.includes('docsIndex + 2 === parts.length - 1'),
+  '【图片容器】local-file 白名单必须按最小范围放行 _docs/assets/<file>，不得放开整棵 _docs')
+  assert.ok(fs70.includes('function _fs_importImageAsset(') && fs70.includes("cardAssetCategory(")
+    && fs70.includes("!== 'image'") && fs70.includes('importImageAsset: function('),
+  '【图片容器】file-service 必须复用拷贝链路并拒绝非图片扩展名')
+  assert.ok(fsb70.includes(`'${channel70}'`) && fsb70.includes('importImageAsset:'),
+    '【图片容器】fs-backend 必须声明并发出选图通道')
+  assert.ok(fileAdapter70.includes('FSB.importImageAsset(requireRootDir()'),
+    '【图片容器】file backend 必须注入 rootDir')
+  assert.ok(store70.includes('backend.importImageAsset(') && types70.includes('importImageAsset:'),
+    '【图片容器】storage 契约与 service 必须透传选图')
+
+  // 2) 落盘类型：扩展名 / schema / 可新建 / 初始空载荷 / 全库扫描正则同步。
+  assert.ok(topoTypes70.includes("'image']") && topoTypes70.includes("['smart', 'mindmap'] as const")
+    && docRegistry70.includes("type: 'image'") && docRegistry70.includes("surface: 'container-only'"),
+  '【图片容器】image 必须进落盘全集但绝不能进右栏新建菜单 / 文档树')
+  assert.ok(fs70.includes("image: '.timg.json'") && fs70.includes("image: 'topomind.image-document'")
+    && fs70.includes('image: true') && fs70.includes("if (type === 'image')")
+    && fs70.includes('TOPO_DOCUMENT_SCHEMAS.image'),
+  '【图片容器】主进程扩展名 / schema / creatable / 初始空载荷必须齐备')
+  assert.ok(docId70.includes("image: '.timg.json'") && docId70.includes('cardspec|timg|tflow'),
+    '【图片容器】全库文档扫描必须认 .timg.json，否则 tree.json 条目会被静默删除')
+
+  // 3) 领域纯函数真跑：脏 src 一律回落空态，未知 version 抛错不回写。
+  const { build: build70 } = await import('esbuild')
+  const { fileURLToPath: fileURLToPath70 } = await import('node:url')
+  const result70 = await build70({
+    entryPoints: [fileURLToPath70(new URL('../src/features/documents/ImageDocument/imageDocumentTypes.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const image70 = await import(`data:text/javascript;base64,${Buffer.from(result70.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const empty70 = image70.createEmptyImageDocumentContent('图片容器')
+  assert.equal(empty70.src, '', '【图片容器】空载荷必须是「尚未选图」而不是某个假路径')
+  assert.equal(empty70.schema, 'topomind.image-document', '【图片容器】空载荷 schema 必须与主进程一致')
+  assert.equal(image70.normalizeImageDocumentContent({ version: 1, src: 'assets/photo.PNG', fit: 'cover' }, 'x').src,
+    'assets/photo.PNG', '【图片容器】合法 assets/ 图片引用必须保留且扩展名大小写不敏感')
+  for (const bad70 of ['../evil.png', '/abs/a.png', 'assets/a.exe', 'https://x/a.png', 'data:image/png;base64,AA', 'assets/sub/a.png']) {
+    assert.equal(image70.normalizeImageDocumentContent({ version: 1, src: bad70 }, 'x').src, '',
+      `【图片容器】非法路径 ${bad70} 必须回落空态，绝不能进 <img src>`)
+  }
+  assert.throws(() => image70.normalizeImageDocumentContent({ version: 99 }, 'x'),
+    /版本不受支持/, '【图片容器】未知版本必须抛错，由适配层显示占位')
+  assert.notEqual(image70.imageContentVersion({ ...empty70, src: 'assets/a.png' }), image70.imageContentVersion(empty70),
+    '【图片容器】换图必须让写盘去重键变化，否则新图不会落盘')
+
+  // 4) 装配与渲染：spec + 只读预览 + lazy 全屏编辑器。
+  assert.ok(imageTypes70.includes('isValidCardAssetSrc') && imageTypes70.includes('CARD_IMAGE_EXTENSIONS'),
+    '【图片容器】路径规则必须复用 CardSpec 唯一真源，禁止第二份白名单')
+  assert.ok(imageSpec70.includes('registerContainerType(IMAGE_CONTAINER_SPEC)')
+    && imageSpec70.includes("documentType: 'image'") && imageSpec70.includes('getSceneVersion:'),
+  '【图片容器】领域 spec 必须注册到容器表并提供内容版本')
+  assert.ok(containerRegistry70.includes('IMAGE_CONTAINER_TYPE')
+    && containerRegistry70.includes('ImageContainerPreview') && containerRegistry70.includes('ImageEditor')
+    && containerRegistry70.includes("lazy(() => import('./image/ImageContainerEditor')")
+    && containerRegistry70.includes("'./imageContainerType'"),
+  '【图片容器】必须同时注册 spec / 预览 / lazy 编辑器，主 chunk 不含编辑器实现')
+  assert.ok(preview70.includes('useCardAssetUrl') && preview70.includes('visible')
+    && preview70.includes("objectFit: 'fill'") && preview70.includes('h-full w-full')
+    && preview70.includes('data-tm-image-preview') && preview70.includes('空白图片容器'),
+  '【图片容器】节点预览必须受 LOD 闸门、fill 铺满零空隙、空态可识别')
+  assert.ok(editor70.includes('storage.importImageAsset(') && editor70.includes('data-tm-image-choose')
+    && editor70.includes('onChange(') && editor70.includes('max-h-full max-w-full')
+    && !editor70.includes('writeTopoDocument'),
+  '【图片容器】全屏编辑器只负责选图 + onChange，落盘必须由宿主收口')
+
+  // 5) 创建链路：菜单 → 变体 → fire-and-forget 选图 → 写载荷 → bumpRevision。
+  assert.ok(menu70.includes('新建图片容器') && menu70.includes('onNewImageContainerChild')
+    && pageActions70.includes('handleContextMenuNewImageContainerChild')
+    && nodeActions70.includes("image: { name: '图片容器'")
+    && nodeActions70.includes('void pickImageForContainer(')
+    && nodeActions70.includes('bumpRevision()')
+    && nodeActions70.includes('isImageAssetSrc('),
+  '【图片容器】创建入口必须复用容器变体链路，选图不阻塞菜单关闭，写盘后必须通知节点重读')
+  assert.ok(excalidrawEditor70.includes('tools: { image: false }'),
+    '【图片容器】不得顺手放开 Excalidraw 容器内插图片（既有设计约束：附件链路未打通）')
+  assert.ok(gui70.includes('新建图片容器') && gui70.includes('data-tm-image-preview')
+    && gui70.includes('.timg.json') && pkg70.scripts?.['verify:image:container:gui'],
+  '【图片容器】必须有真实 GUI 回归与 npm 入口')
+}
+
+// ===== 71) 容器节点尺寸：放宽上限 + 图片比例自适应（2026-11-24）=====
+// 用户要求「容器节点可调整的空间再大些；图片节点大小自适应图片，四周不要
+// 空隙，节点 size 和图片始终保持一致」。落点：容器节点 max 放宽到 1600×1200，
+// 普通知识节点不动；图片节点按解码后的原始宽高比纠正尺寸并锁定 resize 比例。
+{
+  const read71 = (p: string) => readFile(new URL('../' + p, import.meta.url), 'utf-8')
+  const [
+    card71, knowledge71, specTypes71, imageSpec71, preview71, rendererTypes71, gui71, pkg71raw,
+  ] = await Promise.all([
+    read71('src/features/graph/GraphCanvas/nodes/ContainerCard/ContainerCard.tsx'),
+    read71('src/features/graph/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx'),
+    read71('src/domain/container/containerTypes.ts'),
+    read71('src/features/graph/GraphCanvas/containers/imageContainerType.ts'),
+    read71('src/features/graph/GraphCanvas/containers/image/ImageContainerPreview.tsx'),
+    read71('src/features/graph/GraphCanvas/containers/containerRenderers.tsx'),
+    read71('scripts/verify-image-container-gui.mjs'),
+    read71('package.json'),
+  ])
+  const pkg71 = JSON.parse(pkg71raw)
+
+  // 1) 容器节点放宽到 1600×1200，普通知识节点仍走全局配置（640×480）。
+  assert.ok(card71.includes('const CONTAINER_MAX_WIDTH = 1600')
+    && card71.includes('const CONTAINER_MAX_HEIGHT = 1200')
+    && card71.includes('Math.max(nodeSizeLimits.maxWidth, CONTAINER_MAX_WIDTH)')
+    && card71.includes('Math.max(nodeSizeLimits.maxHeight, CONTAINER_MAX_HEIGHT)'),
+  '【容器尺寸】容器节点上限必须放宽到 1600×1200，且不得压回用户已调大的全局配置')
+  assert.ok(card71.includes('maxWidth={containerLimits.maxWidth}')
+    && card71.includes('maxHeight={containerLimits.maxHeight}')
+    && card71.includes('minWidth={containerLimits.minWidth}'),
+  '【容器尺寸】NodeResizer 必须实际使用放宽后的 limits，不能仍绑 nodeSizeLimits')
+  assert.ok(knowledge71.includes('maxWidth={nodeSizeLimits.maxWidth}'),
+    '【容器尺寸】普通知识节点必须保持全局尺寸配置，不能被容器放宽顺带改掉')
+
+  // 2) 通用机制：能力挂在领域 spec 上，ContainerCard 不硬编码 image 分支。
+  assert.ok(specTypes71.includes('getPreferredNodeSize?(')
+    && specTypes71.includes('ContainerSizeContext') && specTypes71.includes('PreferredNodeSize')
+    && specTypes71.includes('ContainerNodeSizeLimits'),
+  '【容器尺寸】首选尺寸必须是领域 spec 的可选钩子，新增容器不改节点组件')
+  assert.ok(card71.includes('spec.getPreferredNodeSize?.(')
+    && !card71.includes('IMAGE_CONTAINER_TYPE')
+    && !card71.includes('fitImageNodeSize('),
+  '【容器尺寸】ContainerCard 只能查表调钩子，绝不能直接 import 图片容器实现')
+  assert.ok(card71.includes('keepAspectRatio={Boolean(preferred)}'),
+    '【容器尺寸】有首选尺寸的容器必须锁 resize 宽高比，否则拖动后图片与节点之间会出现空隙')
+  assert.ok(rendererTypes71.includes('onIntrinsicSize?:')
+    && card71.includes('onIntrinsicSize={handleIntrinsicSize}'),
+  '【容器尺寸】预览必须能把解码后的原始像素上报给节点')
+
+  // 3) 尺寸写回必须覆盖落盘/读回两条链路，漏写会在刷新后打回 360×240。
+  assert.ok(card71.includes('width: preferred.width') && card71.includes('height: preferred.height')
+    && card71.includes('measured:') && card71.includes('collapsedWidth: preferred.width')
+    && card71.includes('expandedWidth: preferred.width')
+    && card71.includes('graph.flushCurrentRoomSave()'),
+  '【容器尺寸】自适应必须同时写 width/height/measured 与 collapsed/expanded 记账并落盘')
+  assert.ok(card71.includes('lastFittedKeyRef.current === preferred.key')
+    && card71.includes('canvasReadOnly'),
+  '【容器尺寸】同一张图只适配一次且只读画布不写，用户手动 resize 后不得被强行拉回')
+  assert.ok(card71.includes('ratioMatches') && card71.includes('userResized')
+    && card71.includes('node.data.collapsedWidth') && card71.includes('node.data.expandedWidth'),
+  '【容器尺寸】重开房间后必须靠比例 + collapsed/expanded 记账识别用户尺寸，禁止把手动调过的节点拉回 480')
+  assert.ok(gui71.includes('重开房间后节点尺寸保持用户调整值'),
+  '【容器尺寸】GUI 必须实测重开房间后尺寸不被自适应覆盖')
+  assert.ok(preview71.includes("objectFit: 'fill'") && preview71.includes('onLoad={handleLoad}')
+    && preview71.includes('onIntrinsicSize?.(') && preview71.includes('naturalWidth'),
+  '【容器尺寸】预览必须 fill 铺满零空隙，并在图片真实解码后上报原始尺寸')
+  assert.ok(imageSpec71.includes('getPreferredNodeSize:') && imageSpec71.includes('fitImageNodeSize('),
+    '【容器尺寸】图片容器 spec 必须实现尺寸钩子')
+
+  // 4) 尺寸纯函数真跑：等比缩放进 480 长边、极端比例不破比例、脏输入不写坏数据。
+  const { build: build71 } = await import('esbuild')
+  const { fileURLToPath: fileURLToPath71 } = await import('node:url')
+  const result71 = await build71({
+    entryPoints: [fileURLToPath71(new URL('../src/features/documents/ImageDocument/imageDocumentTypes.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const image71 = await import(`data:text/javascript;base64,${Buffer.from(result71.outputFiles[0].text).toString('base64')}`) as Record<string, any>
+  const limits71 = { minWidth: 120, minHeight: 52, maxWidth: 1600, maxHeight: 1200 }
+  assert.equal(image71.IMAGE_NODE_FIT_LONG_EDGE, 480, '【容器尺寸】默认长边必须是 480px')
+  const ratioOf = (s: { width: number; height: number }) => s.width / s.height
+  for (const [w71, h71] of [[12, 8], [4000, 3000], [800, 600], [300, 1000]] as const) {
+    const size71 = image71.fitImageNodeSize(w71, h71, limits71)
+    assert.ok(size71 && Math.abs(ratioOf(size71) - w71 / h71) < 0.01,
+      `【容器尺寸】${w71}×${h71} 的节点尺寸必须严格保持图片宽高比`)
+    assert.ok(size71.width <= limits71.maxWidth && size71.height <= limits71.maxHeight,
+      `【容器尺寸】${w71}×${h71} 不得超出容器上限`)
+  }
+  assert.deepEqual(image71.fitImageNodeSize(12, 8, limits71), { width: 480, height: 320 },
+    '【容器尺寸】小图等比放大到长边 480，保证新建节点一屏可见')
+  assert.deepEqual(image71.fitImageNodeSize(4000, 3000, limits71), { width: 480, height: 360 },
+    '【容器尺寸】4000×3000 大图必须等比缩小进默认视窗，而不是按原始像素撑爆画布')
+  const extreme71 = image71.fitImageNodeSize(20000, 100, limits71)
+  assert.ok(extreme71 && extreme71.width <= 1600 && Math.abs(ratioOf(extreme71) - 200) < 1,
+    '【容器尺寸】极端宽高比也必须守住上限且不被 min 约束拉变形')
+  for (const bad71 of [[0, 8], [12, 0], [-1, 8], [NaN, 8], [12, Infinity]] as const) {
+    assert.equal(image71.fitImageNodeSize(bad71[0], bad71[1], limits71), null,
+      `【容器尺寸】非法尺寸 (${bad71[0]},${bad71[1]}) 必须返回 null，绝不能写进 _graph.json`)
+  }
+
+  // 5) GUI 必须实测尺寸、零空隙与上限，不能只做静态断言。
+  assert.ok(gui71.includes("objectFit === 'fill'") && gui71.includes('FIT_WIDTH')
+    && gui71.includes('IMAGE_NODE_MAX_WIDTH'),
+  '【容器尺寸】GUI 回归必须覆盖 fill 零空隙、节点尺寸自适应与放宽后的上限')
+  assert.ok(pkg71.scripts?.['verify:image:container:gui'],
+    '【容器尺寸】图片容器 GUI 命令必须挂 npm 入口')
+}
+
+// --- 第 72 组：单一 Left Dock（多页面左栏 / 竖 tab / 不破坏节点树 GUI 契约） ---
+{
+  const [store72, rail72, model72, panel72, agent72, css72] = await Promise.all([
+    readFile(new URL('../src/stores/nodeTreePanelStore.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/layout/NavRail/NavRail.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/layout/NavRail/navModel.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphPage/components/NodeTreePanel.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphPage/components/AgentPlaceholder.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/styles/controls.css', import.meta.url), 'utf-8'),
+  ])
+
+  // 1) 单一真源：一个 activePanelId + 一个 collapsed，都只由竖 tab 驱动。
+  //    页面态不落盘（刷新回到节点结构），否则 GUI 阶段 AB 会跑在占位页上；
+  //    点当前页折叠、点别页换页，永远只显示一个页面。
+  assert.ok(store72.includes("export type LeftDockPanelId = 'tree' | 'agent' | 'kbList'")
+    && store72.includes('activePanelId: LEFT_DOCK_DEFAULT_PANEL')
+    && store72.includes('setActivePanel: (id) => set((state) => {')
+    && store72.includes('state.activePanelId === id && !state.collapsed')
+    && !store72.includes('writeActivePanel'),
+  '【Left Dock】页面态必须由单一 store 管理且不持久化，避免刷新后 GUI 跑在占位页')
+  assert.ok(store72.includes('export const NODE_TREE_PANEL_WIDTH = 280')
+    && (store72.match(/writeCollapsed\(/g) ?? []).length === 2,
+  '【Left Dock】280px 宽度契约保留，collapsed 只能由 setActivePanel 一处写入')
+
+  // 2) 竖 tab 在既有 48px rail 内分组，不新增第三条竖条、不混入全局导航白名单。
+  const tabPos72 = (id: string) => model72.indexOf(`{ id: '${id}'`)
+  assert.ok(model72.includes('export const HOST_DOCK_TABS')
+    && model72.includes("{ id: 'tree'") && model72.includes("{ id: 'agent'")
+    && model72.includes("{ id: 'kbList'")
+    && tabPos72('agent') >= 0 && tabPos72('agent') < tabPos72('kbList')
+    && tabPos72('kbList') < tabPos72('tree'),
+  '【Left Dock】宿主 tab 固定三页，顶部顺序 AI Agent → 知识库列表 → 节点结构')
+  assert.ok(rail72.includes('absolute inset-y-0 left-0 z-40') && !rail72.includes('flex-1')
+    && rail72.includes('data-tm-left-dock-tab={tab.id}')
+    && rail72.includes('{isCanvasView && (')
+    && !rail72.includes('data-tm-nav-item={tab.id}'),
+  '【Left Dock】tab 必须复用 App 层单例 rail、只在画布页出现，且不进 nav item 白名单')
+  assert.ok(rail72.includes('TM_UI.leftDockIndicator') && rail72.includes('getBoundingClientRect()')
+    && rail72.includes('connected={!dockCollapsed}'),
+  '【Left Dock】必须只有一条滑动指示条，且仅在面板展开时做连体')
+
+  // 3) 面板外壳不破坏：根 div / GUI 稳定选择器 / 让位变量全部保留；折叠态不渲染。
+  assert.ok(panel72.includes('absolute inset-y-0 left-0 z-30')
+    && panel72.includes('data-tm-node-tree-panel=""')
+    && panel72.includes('data-tm-node-tree-collapsed="false"')
+    && panel72.includes('data-tm-node-tree-expand-all=""')
+    && panel72.includes('data-tm-node-tree-width={NODE_TREE_PANEL_WIDTH}')
+    && panel72.includes("'--tm-node-tree-offset'")
+    && panel72.includes('data-tm-left-dock-panel={activePanelId}')
+    && panel72.includes('<AgentPlaceholder />')
+    && panel72.includes('<KnowledgeBaseListPanel tabId={tabId} />'),
+  '【Left Dock】多页面不能破坏节点树的 GUI 稳定选择器与让位变量')
+  assert.ok(panel72.includes('if (!isActive || collapsed) return null')
+    && !panel72.includes('data-tm-node-tree-collapsed="true"'),
+  '【Left Dock】折叠态不渲染面板，唯一开关是竖 tab')
+  assert.ok(panel72.includes("activePanelId === 'tree' ? ("),
+  '【Left Dock】同一时刻只渲染一个页面')
+  assert.ok(!panel72.includes('rightPanel'),
+  '【Left Dock】左栏不得耦合右栏状态')
+
+  // 4) 占位页只留入口，不伪装成可用功能；连体视觉走统一控件类。
+  assert.ok(agent72.includes('EmptyState') && agent72.includes('TM_UI.badgeAccent')
+    && !agent72.includes('<input') && !agent72.includes('fetch('),
+  '【Left Dock】AI Agent 只是入口占位，不得引入假的会话控件或网络调用')
+  // 与 verify-design-system 同口径：先剥离注释，注释里解释禁令的文字不算违规。
+  const cssClean72 = css72.replace(/\/\*[\s\S]*?\*\//g, '')
+  assert.ok(cssClean72.includes('.tm-left-dock-tab--connected::after')
+    && cssClean72.includes('.tm-left-dock-indicator')
+    && !cssClean72.includes('!important'),
+  '【Left Dock】连体与指示条必须走 controls.css 的统一控件类')
+
+  // 5) 状态机真跑（不依赖 Electron）：点当前页折叠、点别页换页并展开，永远单页。
+  const { build: build72 } = await import('esbuild')
+  const { fileURLToPath: toPath72 } = await import('node:url')
+  const result72 = await build72({
+    entryPoints: [toPath72(new URL('../src/stores/nodeTreePanelStore.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const dockState72 = await import(`data:text/javascript;base64,${Buffer.from(result72.outputFiles[0].text).toString('base64')}`)
+  const dockStore72 = dockState72.useNodeTreePanelStore
+  assert.equal(dockStore72.getState().activePanelId, 'tree',
+    '【Left Dock】默认必须回到节点结构页，刷新后 GUI 阶段 AB 才有稳定目标')
+  dockStore72.getState().setActivePanel('agent')
+  assert.equal(dockStore72.getState().activePanelId, 'agent')
+  assert.equal(dockStore72.getState().collapsed, false,
+    '【Left Dock】点其它页必须直接换页并展开，不能叠出第二个面板')
+  dockStore72.getState().setActivePanel('agent')
+  assert.equal(dockStore72.getState().activePanelId, 'agent')
+  assert.equal(dockStore72.getState().collapsed, true,
+    '【Left Dock】再点当前激活页必须折叠')
+  dockStore72.getState().setActivePanel('tree')
+  assert.equal(dockStore72.getState().activePanelId, 'tree')
+  assert.equal(dockStore72.getState().collapsed, false,
+    '【Left Dock】折叠态点其它页必须一步换页并展开')
+}
+
+// --- 第 73 组：节点右键「打开节点文档」（无文档节点也能进右栏）---
+// 卡片上的文档图标只在 hasDetail 时渲染，此前无文档节点没有任何入口打开右栏，
+// 自然也摸不到右栏空状态里的「新建文档」。守住「菜单项 → handler → 右栏」整条链路。
+{
+  const [menu73, actions73, card73, host73] = await Promise.all([
+    readFile(new URL('../src/features/graph/GraphPage/components/GraphPageContextMenu.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphPage/model/useGraphPageActions.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphCanvas/nodes/KnowledgeCard/KnowledgeCard.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/documents/DocumentEditorHost.tsx', import.meta.url), 'utf-8'),
+  ])
+  assert.ok(menu73.includes("label: '打开节点文档'") && menu73.includes('onOpenNodeDocument(targetId)'),
+    '【打开节点文档】节点右键菜单必须有不依赖 hasDetail 的常驻入口')
+  assert.ok(actions73.includes('onOpenNodeDocument: openNodeDocument')
+    && actions73.includes('const openNodeDocument = useCallback(')
+    && actions73.includes('graph.selectNode(nodeId)')
+    && actions73.includes('rightPanel.expandRightPanel()')
+    && actions73.includes("rightPanel.setRightPanelTab('detail')")
+    && actions73.includes("setDetailViewForNode(nodeId, 'own')"),
+  '【打开节点文档】handler 必须选中右键节点、展开右栏并切回本节点文档视图')
+  assert.ok(card73.includes('{hasDetail && (') && host73.includes('当前节点还没有文档'),
+    '【打开节点文档】原因链：卡片图标挑 hasDetail，右栏空状态才提供新建文档入口')
+}
+
+// --- 第 74 组：标题栏首页 / 底部工具组 / 知识库列表页（2026-11-25 布局改造）---
+// 首页从 rail 迁到标题栏；三个系统页按钮连成一组沉到账户之上；左栏新增知识库列表页。
+// Dock 三页共用同一个 isCanvasView 渲染分支，显隐条件不允许出现第二套写法。
+{
+  const [title74, rail74, model74, store74, panel74, kbPanel74, learning74, monitor74] = await Promise.all([
+    readFile(new URL('../src/features/layout/CustomTitleBar/CustomTitleBar.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/layout/NavRail/NavRail.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/layout/NavRail/navModel.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/stores/nodeTreePanelStore.ts', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphPage/components/NodeTreePanel.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/features/graph/GraphPage/components/KnowledgeBaseListPanel.tsx', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/plugins/builtin/learning-statistics/manifest.json', import.meta.url), 'utf-8'),
+    readFile(new URL('../src/plugins/builtin/monitor/manifest.json', import.meta.url), 'utf-8'),
+  ])
+
+  // 1) 首页按钮紧跟标题栏的导航栏开关（两者之间不得夹别的按钮），且保留 GUI 稳定选择器。
+  const toggleEnd74 = title74.indexOf('</button>', title74.indexOf('data-tm-nav-rail-toggle=""'))
+  const homeAt74 = title74.indexOf('data-tm-titlebar-home=""')
+  // 折叠按钮闭合到首页按钮属性之间只允许出现首页自己的开标签，不许夹第二个按钮。
+  const between74 = title74.slice(toggleEnd74 + '</button>'.length, homeAt74)
+  assert.ok(title74.includes('data-tm-titlebar-home=""')
+    && title74.includes('data-tm-nav-item="home"')
+    && title74.includes('useTabStore.getState().openHomeTab()')
+    && toggleEnd74 >= 0 && toggleEnd74 < homeAt74
+    && (between74.match(/<button/g) ?? []).length === 1
+    && !between74.includes('</button>')
+    && homeAt74 < title74.indexOf('data-tm-tab-zone=""')
+    && !title74.includes('data-tm-titlebar-widget'),
+  '【布局】首页按钮必须紧跟标题栏导航栏开关，且保留 data-tm-nav-item="home"')
+
+  // 2) 首页不再由 rail 渲染（但仍留在快捷键清单），工具组沉到底部且组内无分隔线。
+  assert.ok(model74.includes("placement: 'titlebar'") && rail74.includes("item.placement !== 'titlebar'")
+    && rail74.includes("renderGroup('tools', false)") && rail74.includes("renderGroup('account')")
+    && rail74.includes('showDivider && group !==')
+    && rail74.includes('{isCanvasView && ('),
+  '【布局】首页只在标题栏；工具组连成一组贴账户上方，账户组前保留唯一分隔线')
+  assert.ok(learning74.includes('"group": "tools"') && learning74.includes('"order": 25')
+    && monitor74.includes('"group": "tools"') && monitor74.includes('"order": 30')
+    && model74.includes('order: 80') && rail74.includes('.sort((a, b) => a.order - b.order'),
+  '【布局】学习记录 / 日志与性能 / 设置同组且保持 25 → 30 → 80 的原顺序')
+
+  // 3) 三页 Dock 共用同一显隐条件；知识库列表页真的读清单并能开库。
+  assert.ok(store74.includes("'tree' | 'agent' | 'kbList'")
+    && rail74.includes('HOST_DOCK_TABS.map((tab) =>')
+    && panel74.includes('<KnowledgeBaseListPanel tabId={tabId} />')
+    && kbPanel74.includes('storage.listKBs()')
+    && kbPanel74.includes('openKnowledgeBase({ name })')
+    && kbPanel74.includes('data-tm-kb-list-panel=""'),
+  '【布局】知识库列表是第三页左栏面板，读工作区清单并可打开知识库')
 }
 
 console.log('Critical regression checks verified')

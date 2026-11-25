@@ -2,7 +2,6 @@ import { createElement } from 'react'
 
 import type { TopoMindPluginModule } from '../../public'
 import { LearningStatisticsPageEntry } from './LearningStatisticsPageEntry.ts'
-import { LearningTrackerWidgetEntry } from './LearningTrackerWidgetEntry.ts'
 
 const plugin: TopoMindPluginModule = {
   activate(ctx) {
@@ -26,19 +25,6 @@ const plugin: TopoMindPluginModule = {
         execute: async () => {
           await ctx.views.open('learning.statistics')
         },
-      }),
-    )
-
-    ctx.subscriptions.push(
-      ctx.ui.registerWidget({
-        widgetId: 'learning.titlebar.overview',
-        placement: 'titlebar',
-        render: () =>
-          createElement(LearningTrackerWidgetEntry, {
-            learning: ctx.learning,
-            workspace: ctx.workspace,
-            onOpenStatistics: () => ctx.views.open('learning.statistics'),
-          }),
       }),
     )
   },

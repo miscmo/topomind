@@ -420,6 +420,10 @@ export function createFileStorageBackend(getRootDir: () => string | null): Stora
       return FSB.importCardAsset(requireRootDir(), cardPath)
     },
 
+    importImageAsset: async (cardPath: string): Promise<{ src: string } | null> => {
+      return FSB.importImageAsset(requireRootDir(), cardPath)
+    },
+
     restoreTrashTopoDocument: async (cardPath: string, trashName: string) => {
       return FSB.restoreTrashTopoDocument(requireRootDir(), cardPath, trashName)
     },

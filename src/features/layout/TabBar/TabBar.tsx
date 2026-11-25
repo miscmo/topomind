@@ -22,7 +22,7 @@ import { TM_UI, tmUI } from '../../../shared/ui/controlStyles'
  * 横向知识库 tab 栏（Chrome 式弹性宽度 + Π 形连体视觉）。
  *
  * 职责边界：这里只切换「工作区内已打开的知识库」（type === 'kb'）。
- * 首页 / 设置 / 账户 / 学习记录 / 日志与性能属于全局导航，由左侧 NavRail 负责，
+ * 首页在标题栏（紧跟导航栏开关），设置 / 账户 / 学习记录 / 日志与性能由左侧 NavRail 负责，
  * 它们仍留在 tabStore 里（App.tsx 依赖 activeTab.viewId 决定视图显隐），只是不在此渲染。
  *
  * 布局边界：整条 tab 栏活在 32px 标题栏内部，是标题栏中段的 flex 子项，

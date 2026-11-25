@@ -50,6 +50,14 @@ export const TOPO_DOCUMENT_TYPE_DEFINITIONS: Record<TopoDocumentType, DocumentTy
     createLogName: 'container.create',
     surface: 'container-only',
   },
+  image: {
+    type: 'image',
+    label: '图片容器',
+    icon: '🖼',
+    defaultTitle: '图片容器',
+    createLogName: 'container.create',
+    surface: 'container-only',
+  },
 }
 
 /** 旧档 / 旧链接里可能出现的已退场类型，运行时给一个安全兜底，避免 undefined 崩溃。 */

@@ -208,7 +208,14 @@ function isAllowedLocalFilePath(workDir, targetPath) {
   const relativePath = nodePath.relative(realWorkDir, realTargetPath);
   const parts = relativePath.split(nodePath.sep).filter(Boolean);
   const attachIndex = parts.indexOf('_attach');
-  return attachIndex >= 0 && attachIndex < parts.length - 1;
+  if (attachIndex >= 0 && attachIndex < parts.length - 1) return true;
+  // 容器媒体资源（CardSpec 组件、图片容器）：<card>/_docs/assets/<file>。
+  // 只放行 _docs 的直接 assets 子目录里的单个文件，绝不通读 tree.json / 文档正文，
+  // 也不允许 assets/ 下的子目录，保持 local-file 协议的最小暴露面。
+  const docsIndex = parts.indexOf('_docs');
+  return docsIndex >= 0
+    && parts[docsIndex + 1] === 'assets'
+    && docsIndex + 2 === parts.length - 1;
 }
 
 function isTrustedAppUrl(rawUrl) {
@@ -421,7 +428,10 @@ function registerIPC() {
   // 渲染层只拿 file:// URL，永不直接接触绝对路径。
   ipcMain.handle('fs:resolveCardAssetUrl', function(e, rootDir, cardPath, relPath) {
     var absolute = fileService.resolveCardAsset(requireActiveWorkDir(rootDir), cardPath, relPath);
-    return absolute ? pathToFileURL(absolute).href : null;
+    // CSP 的 img-src 只放行 local-file:（vite.config.js DEV/PROD_CSP）。
+    // 直接返回 file:// 会被拦成 <img complete=true 但 naturalWidth=0>，
+    // 图片容器与 CardSpec 媒体组件共用这条链路，必须走已注册的自定义协议。
+    return absolute ? buildLocalFileUrl(absolute) : null;
   });
   ipcMain.handle('fs:importCardAsset', async function(e, rootDir, cardPath) {
     var workDir = requireActiveWorkDir(rootDir);
@@ -436,6 +446,21 @@ function registerIPC() {
     });
     if (result.canceled || !result.filePaths || result.filePaths.length === 0) return null;
     var src = fileService.importCardAsset(workDir, cardPath, result.filePaths[0]);
+    return { src: src };
+  });
+  // 图片容器：只弹图片过滤器，主进程 importImageAsset 再校验一次扩展名，
+  // 避免把音频/视频复制进节点 _docs/assets/。取消返回 null，容器保留空态。
+  ipcMain.handle('fs:importImageAsset', async function(e, rootDir, cardPath) {
+    var workDir = requireActiveWorkDir(rootDir);
+    var result = await dialog.showOpenDialog({
+      title: '选择图片',
+      properties: ['openFile'],
+      filters: [
+        { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] },
+      ],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) return null;
+    var src = fileService.importImageAsset(workDir, cardPath, result.filePaths[0]);
     return { src: src };
   });
   ipcMain.handle('fs:clearTrashTopoDocuments', function(e, rootDir, cardPath) {

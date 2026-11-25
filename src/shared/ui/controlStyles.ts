@@ -59,6 +59,13 @@ export const TM_UI = {
   menuGroupTitle: 'tm-menu-group-title',
   tabMenuRow: 'tm-tab-menu-row',
   tabMenuLabel: 'tm-tab-menu-label',
+  leftDockGroup: 'tm-left-dock-group',
+  leftDockIndicator: 'tm-left-dock-indicator',
+  leftDockTabWrapper: 'tm-left-dock-tab-wrapper',
+  leftDockTab: 'tm-left-dock-tab',
+  leftDockTabActive: 'tm-left-dock-tab tm-left-dock-tab--active',
+  leftDockTabConnected: 'tm-left-dock-tab--connected',
+  leftDockTooltip: 'tm-left-dock-tooltip',
 } as const
 
 export type TmUiToken = keyof typeof TM_UI
