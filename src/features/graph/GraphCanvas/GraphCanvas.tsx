@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { Background, ReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes } from '@xyflow/react'
 import SelectionMirrorMenu from './components/SelectionMirrorMenu'
 import { useGraphStore } from '../../../stores/graphStore'
@@ -18,10 +18,8 @@ import CanvasReadOnlyBanner from './components/CanvasReadOnlyBanner'
 import ViewportReturnButton from './components/ViewportReturnButton'
 import { useGraphCanvasModel, type UseGraphCanvasModelProps } from './model/useGraphCanvasModel'
 import { useSemanticLod } from './model/useSemanticLod'
-import { setLodMode } from './model/lodPreferences'
-import { useStorage } from '../../../core/storage'
 import { useGraphUiStore } from '../../../stores/graphUiStore'
-import { normalizeGraphProfileId, type GraphProfileId } from '../../../domain/graph/graphProfiles'
+import { normalizeGraphProfileId } from '../../../domain/graph/graphProfiles'
 import {
   MAX_RAW_ZOOM,
   MIN_RAW_ZOOM,
@@ -130,22 +128,10 @@ export default memo(function GraphCanvas({
 
   // 房间图型是「视图意图」：存全局 _config.json 的 roomProfiles（roomPath → id），
   // 不进 _graph.json 索引、不碰节点/边字段 7 处白名单；旧房间无配置即为 auto。
-  const storage = useStorage()
+  // 写盘入口已迁到左栏「画布设置」页，画布这里只消费当前房间的图型。
   const roomProfiles = useGraphUiStore((s) => s.roomProfiles)
-  const setRoomProfiles = useGraphUiStore((s) => s.setRoomProfiles)
-  const [profileSaveError, setProfileSaveError] = useState('')
   const currentRoom = roomPath || tabId
   const configuredProfileId = normalizeGraphProfileId(roomProfiles[currentRoom])
-  const handleProfileChange = useCallback((next: GraphProfileId) => {
-    const normalized = normalizeGraphProfileId(next)
-    // read-modify-write：从最新 store 取，避免快速切换时覆盖别的房间。
-    const map = { ...useGraphUiStore.getState().roomProfiles, [currentRoom]: normalized }
-    setRoomProfiles(map)
-    setProfileSaveError('')
-    void storage.writeConfig({ roomProfiles: map }).catch((error) => {
-      setProfileSaveError(error instanceof Error ? error.message : String(error))
-    })
-  }, [currentRoom, setRoomProfiles, storage])
 
   // 语义缩放：只派发 hidden 属性，节点/边数据本身不动（位置、选中、连线全部保住）。
   // LOD 只消费全量 nodes/edges 生成渲染副本；搜索仍走全量 nodes，避免找不到被隐藏的节点。
@@ -160,9 +146,6 @@ export default memo(function GraphCanvas({
   })
   // 参考线候选只认真正渲染出来的节点：渲染期同步 ref，拖动发生时已是最新集合。
   visibleNodesRef.current = lod.visibleNodes as Node[]
-  // 选中态以 nodes 派生为准（与 React Flow 的 .selected 同源），store 字段只作首选。
-  const pinTarget = selectedNodeId ?? lod.visibility.selectedNodeIds[0] ?? null
-
   // 【画布只读 2026-11-11】判定唯一源是 domain 纯函数：显示比没到 100% 或还有隐藏节点
   // 就整张画布禁写。UI（props / 提示）与写操作闸门（useGraph 读 store）共用这一份状态，
   // 由 layout effect 在浏览器绘制前发布，避免「画面已缩小、闸门还没合上」的一帧空窗。
@@ -428,20 +411,10 @@ export default memo(function GraphCanvas({
           visibility={lod.visibility}
           readOnlyState={readOnlyState}
           zoomLevel={zoomLevel}
-          mode={lod.mode}
           effectiveMode={lod.effectiveMode}
           policySource={lod.policySource}
           profileId={lod.profileId}
           effectiveProfileId={lod.effectiveProfileId}
-          profileSaveError={profileSaveError}
-          pinnedCount={lod.pinnedCount}
-          selectedNodeId={pinTarget}
-          isSelectedPinned={!!pinTarget && lod.pinnedIds.includes(pinTarget)}
-          onModeChange={setLodMode}
-          onPreservedDepthChange={lod.setPreservedDepth}
-          onProfileChange={handleProfileChange}
-          onTogglePin={lod.togglePin}
-          onClearPin={lod.clearPin}
           onMoveUndo={onMoveUndo}
           onMoveRedo={onMoveRedo}
         />

@@ -25,11 +25,19 @@ import {
   toggleExpandedKeys,
 } from '../domain/graph/nodeTree'
 
-export const NODE_TREE_PANEL_WIDTH = 280
-
 /** 左侧 Dock 的页面标识；新增页面只需在这里加一个字面量并补一条 tab 描述。 */
-export type LeftDockPanelId = 'tree' | 'agent' | 'kbList'
+export type LeftDockPanelId = 'tree' | 'agent' | 'kbList' | 'canvasSettings'
 export const LEFT_DOCK_DEFAULT_PANEL: LeftDockPanelId = 'tree'
+
+/** 节点结构 / 知识库列表 / AI Agent 三页沿用 280px；画布设置页要承载样式面板，单独加宽。
+ *  改宽度只影响浮层自身与 top-left 状态抽屉的 CSS 让位量，画布几何依旧恒定。 */
+export const NODE_TREE_PANEL_WIDTH = 280
+export const CANVAS_SETTINGS_PANEL_WIDTH = 360
+
+/** 当前页面对应的浮层宽度：让位变量与面板 style 共用这一个函数，避免两处各写一份。 */
+export function leftDockPanelWidth(id: LeftDockPanelId): number {
+  return id === 'canvasSettings' ? CANVAS_SETTINGS_PANEL_WIDTH : NODE_TREE_PANEL_WIDTH
+}
 
 const COLLAPSED_KEY = 'topomind_node_tree_panel_v1'
 const EXPANDED_KEY = 'topomind_node_tree_expanded_v2'

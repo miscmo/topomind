@@ -70,8 +70,9 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
             画布对右栏状态完全无感知，宽度与 viewport 恒定不变。 */}
         <div id="app-layout" className="relative w-full h-full">
           <div id="graph-panel" className="absolute inset-0 isolate overflow-clip bg-[var(--color-canvas-bg)]">
-            {/* 房间路径面包屑 / 最近打开 / 镜头状态都在 GraphCanvas 的画布状态抽屉里，
-                这里不再叠一层绝对定位组件，避免与 top-left Panel 互相遮挡。 */}
+            {/* 房间路径面包屑 / 最近打开 / 镜头诊断都在 GraphCanvas 的画布状态抽屉里，
+                视图配置项已迁入左栏「画布设置」页；这里不叠一层绝对定位组件，
+                避免与 top-left Panel 互相遮挡。 */}
 
             {isActive ? (
               <GraphCanvas tabId={tabId} {...canvasProps} />

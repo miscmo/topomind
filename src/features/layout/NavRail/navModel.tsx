@@ -116,7 +116,7 @@ export const FALLBACK_ICONS = { FileText, ListTree } as const
  *  - 它们管「去哪里」，这三项管「当前画布左栏显示哪一页」，职责不同；
  *  - 不参与 Control+1..9 的下标排序，也不改变 GUI 阶段的 nav item id 白名单；
  *  - 渲染时使用独立的 data-tm-left-dock-tab 属性，不带 data-tm-nav-item；
- *  - 三页共用同一渲染分支，因此显隐条件天然一致（只随画布视图出现）。
+ *  - 四页共用同一渲染分支，因此显隐条件天然一致（只随画布视图出现）。
  */
 export interface DockTabDescriptor {
   id: LeftDockPanelId
@@ -124,8 +124,10 @@ export interface DockTabDescriptor {
   icon: LucideIcon
 }
 
+/** 画布设置紧跟「节点结构」之后：前 3 页顺序不变，新页只追加在末尾。 */
 export const HOST_DOCK_TABS: readonly DockTabDescriptor[] = [
   { id: 'agent', title: 'AI Agent', icon: Sparkles },
   { id: 'kbList', title: '知识库列表', icon: Library },
   { id: 'tree', title: '节点结构', icon: ListTree },
+  { id: 'canvasSettings', title: '画布设置', icon: SlidersHorizontal },
 ]

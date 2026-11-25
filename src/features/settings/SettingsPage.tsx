@@ -3,13 +3,16 @@
  * 把原先散落在 localStorage / 各 store 的布局与样式偏好收口到一个可见入口。
  * 所有控件都是真实可用的，不再有 disabled 占位。
  *
- * 2026-11-21：导航栏显隐收敛为标题栏单一全局按钮，这里不再提供第二套三态控件；
- * 右侧「样式」分区迁入本页（StyleSection 通过 useOptionalGraphContext 降级为全局默认样式）。
+ * 2026-11-21：导航栏显隐收敛为标题栏单一全局按钮，这里不再提供第二套三态控件。
+ * 2026-11-25：原「样式」分区又随画布编辑一起迁出到左栏画布设置页（见第 10 行），
+ * 本页不再渲染 StyleSection；样式 model 的 optional 降级能力仍保留给其它二级视图。
  * 2026-11-23：外观分区新增「应用主题色」。UI 只负责选色，色阶派生 / 调和 / 注入
  * 全部由 src/domain/theme/ 统一管理，本页不保存第二份色值定义。
+ * 2026-11-25：画布编辑、节点与连线样式两块迁入画布页左栏「画布设置」页；
+ * 本页只保留一条可发现性引导，不再渲染第二份控件（避免两处入口各自演化）。
  */
 import { memo, useEffect, useState } from 'react'
-import { Book, Check, Crosshair, ExternalLink, FolderOpen, Layers3, Palette, SunMoon } from 'lucide-react'
+import { Book, Check, ExternalLink, FolderOpen, Layers3, SlidersHorizontal, SunMoon } from 'lucide-react'
 import { executeCommand } from '@/application/commands'
 import { ACCENT_PRESETS } from '@/domain/theme/accentPresets'
 import {
@@ -21,11 +24,9 @@ import {
 import { useLayoutStore } from '@/stores/layoutStore'
 import { useThemeStore, LIGHT_THEME, DARK_THEME } from '@/stores/themeStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
-import { useGraphUiStore } from '@/stores/graphUiStore'
 import { useTabStore } from '@/stores/tabs/tabStore'
 import { HOST_VIEW_IDS } from '@/features/layout/NavRail/navModel'
 import { TM_UI, tmUI } from '@/shared/ui/controlStyles'
-import StyleSection from '@/features/right-panel/components/StyleTab/StyleSection'
 
 const SECTION = 'rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5'
 const SECTION_TITLE = 'mb-1 flex items-center gap-2 text-[14px] font-medium text-[var(--color-text-primary)]'
@@ -43,8 +44,6 @@ export default memo(function SettingsPage() {
   const resetNavigation = useLayoutStore((state) => state.resetNavigation)
   const theme = useThemeStore((state) => state.theme)
   const setTheme = useThemeStore((state) => state.setTheme)
-  const smartGuidesEnabled = useGraphUiStore((state) => state.smartGuidesEnabled !== false)
-  const setSmartGuidesEnabled = useGraphUiStore((state) => state.setSmartGuidesEnabled)
   const currentWorkDir = useWorkspaceStore((state) => state.currentWorkDir)
 
   return (
@@ -52,7 +51,7 @@ export default memo(function SettingsPage() {
       <div className="mx-auto w-full max-w-[720px]">
         <div className="mb-6">
           <h1 className="text-[22px] font-semibold tracking-tight text-[var(--color-text-primary)]">设置</h1>
-          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">导航、外观、样式与工作区偏好 · 修改后立即生效并自动保存</p>
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">导航、外观与工作区偏好 · 修改后立即生效并自动保存</p>
         </div>
 
         <div className={SECTION}>
@@ -96,43 +95,19 @@ export default memo(function SettingsPage() {
           </div>
         </div>
 
-        <div className={`${SECTION} mt-4`}>
-          <h2 className={SECTION_TITLE}><Crosshair className="h-4 w-4 text-[var(--color-accent)]" />画布编辑</h2>
+        {/* 画布相关配置已集中到画布页左栏：这里只留可发现性说明，不渲染第二份控件。 */}
+        <div className={`${SECTION} mt-4`} data-tm-settings-canvas-entry="">
+          <h2 className={SECTION_TITLE}><SlidersHorizontal className="h-4 w-4 text-[var(--color-accent)]" />画布设置</h2>
           <p className={SECTION_HINT}>
-            拖动节点时的对齐参考线与吸附。只在中心对齐或同侧边缘对齐时出现，不会跟视口外的节点对齐。
+            画布视图、智能参考线与节点 / 连线样式已统一迁入画布页左栏的「画布设置」页，
+            可在画布就地调整，修改后立即生效。
           </p>
           <div className={ROW}>
             <div>
-              <div className={LABEL}>智能参考线与对齐吸附</div>
-              <div className={DESC}>开启时松手保持对齐位置；按住 Alt 拖动可临时忽略吸附，自由摆放</div>
+              <div className={LABEL}>入口位置</div>
+              <div className={DESC}>打开任意知识库 → 左侧竖排页面按钮 → 节点结构下方的「画布设置」</div>
             </div>
-            <div className="flex shrink-0 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setSmartGuidesEnabled(true)}
-                aria-pressed={smartGuidesEnabled}
-                className={SEG_BTN(smartGuidesEnabled)}
-              >开启</button>
-              <button
-                type="button"
-                onClick={() => setSmartGuidesEnabled(false)}
-                aria-pressed={!smartGuidesEnabled}
-                className={SEG_BTN(!smartGuidesEnabled)}
-              >关闭</button>
-            </div>
-          </div>
-        </div>
-
-        {/* 样式设置从右侧「样式」分区迁入：全局默认样式与连线关系都写 _config.json。
-            节点 / 连线级即时编辑仍走画布右键入口，设置页用 optional GraphContext 降级。 */}
-        <div className={`${SECTION} mt-4`} data-tm-settings-style="">
-          <h2 className={SECTION_TITLE}><Palette className="h-4 w-4 text-[var(--color-accent)]" />节点与连线样式</h2>
-          <p className={SECTION_HINT}>
-            全局默认样式、尺寸约束与连线关系定义保存在工作区配置中，对所有知识库生效；
-            单个节点 / 连线的即时样式仍从画布右键菜单进入。
-          </p>
-          <div className="mt-4 h-[560px] overflow-hidden rounded-lg border border-[var(--color-border-light)]">
-            <StyleSection active={false} showReadOnlyHint={false} />
+            <span className={tmUI(TM_UI.hint, 'shrink-0')}>画布页左栏</span>
           </div>
         </div>
 

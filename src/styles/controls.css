@@ -501,7 +501,9 @@
 .tm-left-dock-tab-wrapper:hover > .tm-left-dock-tooltip { opacity: 1; }
 
 /* 学习记录表盘的「学习中」轴心点：只在不足 1 小时、中心无数字时呼吸。
-   用 opacity 而非颜色，换主题色 / 明暗主题时无需另配一档色值。 */
+   整盘（含轴心点）的状态色由表盘根元素的 currentColor 统一给出：学习中主题色、
+   否则与其它导航图标同为 --color-text-secondary 灰。这里只动 opacity 不动颜色，
+   换主题色 / 明暗主题时无需另配一档色值。 */
 @keyframes tm-learning-dial-pulse {
   0%, 100% { opacity: 0.45; }
   50% { opacity: 1; }

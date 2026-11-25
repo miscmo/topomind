@@ -17,7 +17,9 @@
  * 页面切换、展开、折叠全部由 App 层 NavRail 的竖 tab 驱动
  * （`nodeTreePanelStore.setActivePanel` 是唯一写入 collapsed 的入口）。
  * 折叠态直接不渲染任何 DOM。
- * 同一时刻只渲染一个页面：AI Agent 占位页 / 知识库列表 / 节点结构，三者共用同一开合状态。
+ * 同一时刻只渲染一个页面：AI Agent 占位页 / 知识库列表 / 节点结构 / 画布设置，
+ * 四者共用同一开合状态；画布设置页单独用 360px（其余三页 280px），
+ * 让位变量按当前页实际宽度写入，画布宽度 / React Flow viewport 恒定。
  */
 import {
   memo,
@@ -44,17 +46,25 @@ import {
   Library,
   ListTree,
   Search,
+  SlidersHorizontal,
   Sparkles,
   X,
 } from 'lucide-react'
 import { TM_UI } from '@/shared/ui/controlStyles'
+import type { LucideIcon } from 'lucide-react'
 import AgentPlaceholder from './AgentPlaceholder'
 import KnowledgeBaseListPanel from './KnowledgeBaseListPanel'
+import CanvasSettingsPanel from './CanvasSettingsPanel'
 import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useGraphStore, useGraphStoreApi } from '../../../../stores/graphStore'
 import { CANVAS_OPERATIONS, PERFORMANCE_METRICS } from '../../../../shared/observability/performanceContract'
 import { startCanvasSpan } from '../../../../hooks/useGraph/canvasPerformanceContext'
-import { NODE_TREE_PANEL_WIDTH, useNodeTreePanelStore } from '../../../../stores/nodeTreePanelStore'
+import {
+  NODE_TREE_PANEL_WIDTH,
+  leftDockPanelWidth,
+  useNodeTreePanelStore,
+  type LeftDockPanelId,
+} from '../../../../stores/nodeTreePanelStore'
 import { useGraphSession } from '../../../../stores/tabs/tabStore'
 import { isCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
 import {
@@ -66,6 +76,14 @@ import {
   type NodeTreeSearchHit,
 } from '../../../../domain/graph/nodeTree'
 import { useNodeTree } from '../model/useNodeTree'
+
+/** 四页共用同一条标题栏：图标 / 标题 / 副标题只在这里维护一份。 */
+const PANEL_HEADER: Record<LeftDockPanelId, { title: string; icon: LucideIcon }> = {
+  tree: { title: '节点结构', icon: ListTree },
+  agent: { title: 'AI Agent', icon: Sparkles },
+  kbList: { title: '知识库列表', icon: Library },
+  canvasSettings: { title: '画布设置', icon: SlidersHorizontal },
+}
 
 interface NodeTreePanelProps {
   tabId: string
@@ -102,6 +120,9 @@ function originIcon(node: NodeTreeNode): ReactNode {
 
 export default memo(function NodeTreePanel({ tabId, isActive }: NodeTreePanelProps) {
   const collapsed = useNodeTreePanelStore((state) => state.collapsed)
+  const activePanelId = useNodeTreePanelStore((state) => state.activePanelId)
+  // 画布设置页比节点树宽 80px：让位量按当前页实际宽度算，状态抽屉不会被压住。
+  const panelWidth = leftDockPanelWidth(activePanelId)
 
   // 只有激活标签页写这个变量；非激活页连清理都不做，避免多标签互相覆盖。
   // CSS 侧只改 top-left Panel 的 margin-left，画布尺寸 / viewport 一概不变。
@@ -110,10 +131,10 @@ export default memo(function NodeTreePanel({ tabId, isActive }: NodeTreePanelPro
     const root = document.documentElement
     root.style.setProperty(
       '--tm-node-tree-offset',
-      collapsed ? '0px' : `${NODE_TREE_PANEL_WIDTH}px`,
+      collapsed ? '0px' : `${panelWidth}px`,
     )
     return () => { root.style.removeProperty('--tm-node-tree-offset') }
-  }, [collapsed, isActive])
+  }, [collapsed, isActive, panelWidth])
 
   // 折叠态直接不渲染：左栏没有任何第二套显隐入口，开合只由 NavRail 竖 tab 负责。
   if (!isActive || collapsed) return null
@@ -122,6 +143,9 @@ export default memo(function NodeTreePanel({ tabId, isActive }: NodeTreePanelPro
 
 function NodeTreePanelBody({ tabId }: { tabId: string }) {
   const activePanelId = useNodeTreePanelStore((state) => state.activePanelId)
+  const panelWidth = leftDockPanelWidth(activePanelId)
+  const header = PANEL_HEADER[activePanelId]
+  const HeaderIcon = header.icon
   const session = useGraphSession(tabId)
   const roomPath = session?.roomPath ?? ''
   const rootKey = useMemo(() => makeRoomRootKey(roomPath), [roomPath])
@@ -278,22 +302,17 @@ function NodeTreePanelBody({ tabId }: { tabId: string }) {
       data-tm-node-tree-root-key={rootKey}
       data-tm-node-tree-expanded-count={expandedKeys.size}
       data-tm-node-tree-width={NODE_TREE_PANEL_WIDTH}
+      data-tm-left-dock-width={panelWidth}
       data-tm-left-dock-panel={activePanelId}
       data-tm-left-dock-active-panel={activePanelId}
-      style={{ width: NODE_TREE_PANEL_WIDTH }}
+      style={{ width: panelWidth }}
       className="absolute inset-y-0 left-0 z-30 flex flex-col border-r border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-[var(--shadow-popover)]"
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--color-border-light)] px-3">
-        {activePanelId === 'agent'
-          ? <Sparkles className="h-4 w-4 text-[var(--color-accent)]" />
-          : activePanelId === 'kbList'
-            ? <Library className="h-4 w-4 text-[var(--color-accent)]" />
-            : <ListTree className="h-4 w-4 text-[var(--color-accent)]" />}
-        <span className="text-[13px] font-medium text-[var(--color-text-primary)]">
-          {activePanelId === 'agent' ? 'AI Agent' : activePanelId === 'kbList' ? '知识库列表' : '节点结构'}
-        </span>
+        <HeaderIcon className="h-4 w-4 text-[var(--color-accent)]" />
+        <span className="text-[13px] font-medium text-[var(--color-text-primary)]">{header.title}</span>
         <span className="text-[11px] text-[var(--color-text-muted)]">
-          {activePanelId === 'agent' ? '入口已预留' : activePanelId === 'kbList' ? '当前工作区' : `${total} 个节点`}
+          {activePanelId === 'canvasSettings' ? '当前画布' : activePanelId === 'agent' ? '入口已预留' : activePanelId === 'kbList' ? '当前工作区' : `${total} 个节点`}
         </span>
         {activePanelId === 'tree' && (
           <div className="ml-auto flex items-center gap-1">
@@ -367,8 +386,10 @@ function NodeTreePanelBody({ tabId }: { tabId: string }) {
         </>
       ) : activePanelId === 'agent' ? (
         <AgentPlaceholder />
-      ) : (
+      ) : activePanelId === 'kbList' ? (
         <KnowledgeBaseListPanel tabId={tabId} />
+      ) : (
+        <CanvasSettingsPanel tabId={tabId} />
       )}
     </div>
   )

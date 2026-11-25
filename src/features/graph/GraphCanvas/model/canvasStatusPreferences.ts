@@ -2,8 +2,10 @@
  * 画布状态抽屉的**视图偏好**：整体展开 / 折叠 + 每个功能区独立展开 / 折叠。
  *
  * 【2026-11-24】房间路径已回到标题栏的可点击面包屑、层级诊断已收敛成一行，
- * 抽屉只保留「视图」与「最近打开」两个可折叠区。旧快照里多余的 path / details
+ * 抽屉当时只保留「视图」与「最近打开」两个可折叠区。旧快照里多余的 path / details
  * 键在 normalize 时自然忽略，不需要版本迁移。
+ * 【2026-11-25】「视图」配置项整体迁入左栏「画布设置」页，抽屉只剩「最近打开」
+ * 一个功能区；旧快照里的 view 折叠键同样被 normalize 忽略，不需要版本迁移。
  *
  * 纯视图态：不落图数据、不进 7 处字段白名单，和 lodPreferences 一样只用
  * localStorage 持久化；commit 先写快照再通知，避免 useSyncExternalStore 读到旧值。
@@ -14,18 +16,18 @@ import { useSyncExternalStore } from 'react'
 const STORAGE_KEY = 'topomind_canvas_status_v1'
 const LEGACY_RECENT_KEY = 'topomind_room_history_collapsed'
 
-export type StatusSectionId = 'view' | 'recent'
+export type StatusSectionId = 'recent'
 
 export interface CanvasStatusPreferences {
   drawerOpen: boolean
   sections: Record<StatusSectionId, boolean>
 }
 
-/** 默认只展开「视图」：路径常驻标题、深度常驻底部，历史按需展开。 */
+/** 默认折叠「最近打开」：抽屉展开时先看标题路径与常驻工具条，历史按需展开。 */
 function defaults(): CanvasStatusPreferences {
   return {
     drawerOpen: true,
-    sections: { view: true, recent: false },
+    sections: { recent: false },
   }
 }
 
@@ -36,7 +38,7 @@ function normalize(raw: unknown): CanvasStatusPreferences {
   if (typeof value.drawerOpen === 'boolean') base.drawerOpen = value.drawerOpen
   const sections = value.sections
   if (sections && typeof sections === 'object' && !Array.isArray(sections)) {
-    for (const id of ['view', 'recent'] as StatusSectionId[]) {
+    for (const id of ['recent'] as StatusSectionId[]) {
       const open = (sections as Record<string, unknown>)[id]
       if (typeof open === 'boolean') base.sections[id] = open
     }

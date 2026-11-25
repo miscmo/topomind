@@ -233,6 +233,39 @@ async function setNodeTreeCollapsed(page, want) {
   return false
 }
 
+/**
+ * 【2026-11-25】图型 / 永久层数 / LOD 模式 / 置顶等视图控件已迁入左栏「画布设置」页。
+ * 左栏是 absolute 浮层，长时间展开会盖住画布左侧节点，因此只在读写控件的那一小段
+ * 打开，用完立刻切回节点结构页并收起：activePanelId 不漂移，画布几何与其它阶段不变。
+ */
+async function openCanvasSettings(page) {
+  await page.evaluate(() => {
+    const rail = document.querySelector('[data-tm-nav-rail-root]')
+    if (rail?.getAttribute('data-tm-nav-rail-visible') === 'false') {
+      document.querySelector('button[aria-label="展开全局导航栏"]')?.click()
+    }
+  })
+  await waitFor(page, () => !!document.querySelector('[data-tm-left-dock-tab="canvasSettings"]'))
+  await page.evaluate(() => {
+    if (!document.querySelector('[data-tm-left-dock-panel="canvasSettings"]')) {
+      document.querySelector('[data-tm-left-dock-tab="canvasSettings"]')?.click()
+    }
+  })
+  await waitFor(page, () => !!document.querySelector('[data-tm-canvas-view-settings]'))
+}
+
+async function closeCanvasSettings(page) {
+  // 先换页到节点结构（换页会自动展开），再按唯一开关收起。
+  await page.evaluate(() => document.querySelector('[data-tm-left-dock-tab="tree"]')?.click())
+  await waitFor(page, () => !!document.querySelector('[data-tm-left-dock-panel="tree"]'))
+  await setNodeTreeCollapsed(page, true)
+}
+
+async function withCanvasSettings(page, fn) {
+  await openCanvasSettings(page)
+  try { return await fn() } finally { await closeCanvasSettings(page) }
+}
+
 // CDP 的 Input.dispatchMouseEvent 偶发超时（历史上多次在滚轮步骤抖动，非断言失败）。
 // 优先用真实滚轮；超时就退回同参数的合成 WheelEvent —— 依然走画布捕获阶段的
 // 阻尼钳制 / rAF 逐帧派发 / d3-zoom 全链路，断言语义不变，避免整轮 GUI 白跑。
@@ -1797,13 +1830,13 @@ async function main() {
       && collapseSteps.flatMap((s) => s.badges).every((b) => b.opacity >= 0.55 && b.pointerEvents === 'none'),
       JSON.stringify(collapseSteps.flatMap((s) => s.badges).map((b) => [b.opacity, b.pointerEvents])))
 
-    await page.evaluate(() => document.querySelector('[data-tm-lod-mode="off"]')?.click())
+    await withCanvasSettings(page, () => page.evaluate(() => document.querySelector('[data-tm-lod-mode="off"]')?.click()))
     await sleep(250)
     check('关闭 LOD 后全部节点回来', await page.evaluate(() =>
       !!document.querySelector('.react-flow__node[data-id="node-a"]')
       && document.querySelector('[data-tm-lod-control]')?.getAttribute('data-tm-lod-active') === 'false'))
 
-    await page.evaluate(() => document.querySelector('[data-tm-lod-mode="auto"]')?.click())
+    await withCanvasSettings(page, () => page.evaluate(() => document.querySelector('[data-tm-lod-mode="auto"]')?.click()))
     await sleep(250)
     check('切回自动档重新按连续阈值收起边缘节点', await page.evaluate(() => {
       const el = document.querySelector('[data-tm-lod-control]')
@@ -1811,11 +1844,11 @@ async function main() {
         && Number(el?.getAttribute('data-tm-lod-visible-count') ?? '99') < 8
     }))
 
-    await page.evaluate(() => document.querySelector('[data-tm-lod-mode="force"]')?.click())
+    await withCanvasSettings(page, () => page.evaluate(() => document.querySelector('[data-tm-lod-mode="force"]')?.click()))
     await sleep(250)
     check('强制模式状态为 forced', await page.evaluate(() =>
       document.querySelector('[data-tm-lod-control]')?.getAttribute('data-tm-lod-reason') === 'forced'))
-    await page.evaluate(() => document.querySelector('[data-tm-lod-mode="auto"]')?.click())
+    await withCanvasSettings(page, () => page.evaluate(() => document.querySelector('[data-tm-lod-mode="auto"]')?.click()))
 
     // 缩小视图现在是只读态：后续图型 / 滑条阶段必须在 100% 下开始，
     // 否则 profile 会停在 52% 只读档并连锁污染缩放滑动条的显隐判定。
@@ -1831,8 +1864,9 @@ async function main() {
     // 图型存全局 _config.json 的 roomProfiles；验证写盘 / 刷新恢复 / LOD 定制 /
     // 用户手动模式压过图型，以及新字段不挤掉既有配置。
     const configPathL = path.join(WORKDIR, '_config.json')
-    const profileState = () => page.evaluate(() => {
+    const profileState = () => withCanvasSettings(page, () => page.evaluate(() => {
       const panel = document.querySelector('[data-tm-lod-control]')
+      const view = document.querySelector('[data-tm-canvas-view-settings]')
       return {
         value: document.querySelector('[data-tm-graph-profile-select]')?.value || '',
         options: [...document.querySelectorAll('[data-tm-graph-profile-select] option')].map((o) => o.value),
@@ -1842,10 +1876,10 @@ async function main() {
         active: panel?.getAttribute('data-tm-lod-active') || '',
         policySource: panel?.getAttribute('data-tm-lod-policy-source') || '',
         effectiveMode: panel?.getAttribute('data-tm-lod-effective-mode') || '',
-        text: (panel?.textContent || '').replace(/\s+/g, ' '),
+        text: (view?.textContent || '').replace(/\s+/g, ' '),
         nodeA: !!document.querySelector('.react-flow__node[data-id="node-a"]'),
       }
-    })
+    }))
     const initialProfile = await profileState()
     check('画布控件提供 4 种图型且旧房间默认自动识别',
       initialProfile.value === 'auto' && initialProfile.id === 'auto'
@@ -1855,7 +1889,7 @@ async function main() {
       initialProfile.effective === 'network' && initialProfile.text.includes('自动识别'),
       JSON.stringify({ effective: initialProfile.effective, text: initialProfile.text.slice(0, 80) }))
 
-    await page.select('[data-tm-graph-profile-select]', 'flow')
+    await withCanvasSettings(page, () => page.select('[data-tm-graph-profile-select]', 'flow'))
     await sleep(350)
     const flowState = await profileState()
     // 「显示全部节点」以 LOD 可见集合为准：视口外的节点本来就不该被
@@ -1868,20 +1902,20 @@ async function main() {
       JSON.stringify({ value: flowState.value, reason: flowState.reason, active: flowState.active,
         policySource: flowState.policySource, visibleCount: flowVisibleCount }))
 
-    await page.evaluate(() => document.querySelector('[data-tm-lod-mode="force"]')?.click())
+    await withCanvasSettings(page, () => page.evaluate(() => document.querySelector('[data-tm-lod-mode="force"]')?.click()))
     await sleep(250)
     const forcedState = await profileState()
     check('用户「强制」压过流程图的关闭策略',
       forcedState.reason === 'forced' && forcedState.policySource === 'user'
       && forcedState.effectiveMode === 'force',
       JSON.stringify({ reason: forcedState.reason, source: forcedState.policySource }))
-    await page.evaluate(() => document.querySelector('[data-tm-lod-mode="auto"]')?.click())
+    await withCanvasSettings(page, () => page.evaluate(() => document.querySelector('[data-tm-lod-mode="auto"]')?.click()))
     await sleep(250)
     const backState = await profileState()
     check('切回自动后图型重新接管', backState.reason === 'off' && backState.policySource === 'profile',
       JSON.stringify({ reason: backState.reason, source: backState.policySource }))
 
-    await page.select('[data-tm-graph-profile-select]', 'tree')
+    await withCanvasSettings(page, () => page.select('[data-tm-graph-profile-select]', 'tree'))
     await sleep(350)
     let treeWritten = false
     for (let attempt = 0; attempt < 20 && !treeWritten; attempt += 1) {
@@ -1908,9 +1942,11 @@ async function main() {
         e.children.length === 0 && (e.textContent || '').includes(name))
       if (els.length) els[0].parentElement?.click()
     }, KB_NAME)
-    check('重载后画布与镜头控件恢复', await waitFor(page, () =>
-      !!document.querySelector('[data-tm-lod-control]')
-      && !!document.querySelector('[data-tm-graph-profile-select]'), 15000))
+    const reloadedControl = await waitFor(page, () =>
+      !!document.querySelector('[data-tm-lod-control]'), 15000)
+    const reloadedViewControl = await withCanvasSettings(page, () => page.evaluate(() =>
+      !!document.querySelector('[data-tm-graph-profile-select]')))
+    check('重载后画布与镜头控件恢复', reloadedControl && reloadedViewControl)
     // reload 重置了右栏折叠态（Zustand 内存态），重新折叠以继续真实点击画布。
     await setRightPanelCollapsed(page, true)
     await setNodeTreeCollapsed(page, true)
@@ -2043,7 +2079,7 @@ async function main() {
     read30 = await semanticZoomRead()
 
     // 【画布只读，2026-11-11】缩小 + 有隐藏节点时整张画布禁写，恢复 100% 才解锁。
-    const readOnlyRead = () => page.evaluate(() => {
+    const readOnlyRead = () => withCanvasSettings(page, () => page.evaluate(() => {
       const scope = document.querySelector('[data-shortcut-scope="canvas"]')
       const control = document.querySelector('[data-tm-lod-control]')
       return {
@@ -2055,7 +2091,7 @@ async function main() {
         banner: !!document.querySelector('[data-tm-canvas-readonly-banner]'),
         restore: !!document.querySelector('[data-tm-canvas-readonly-restore]'),
       }
-    })
+    }))
     const readOnly30 = await readOnlyRead()
     check('20% 缩小 + 有隐藏节点时画布进入只读（状态面板 / 容器 / 提示条同源）',
       readOnly30.scope === 'true' && readOnly30.control === 'true'
@@ -2134,7 +2170,7 @@ async function main() {
 
     // 【自定义永久显示层数，2026-11-11】面板随时改：1 层 → 3 层 → 2 层，
     // 20% 渐隐端点必须立即跟着变，并把偏好写进 localStorage（不用刷新 / 换房间）。
-    const depthPanelRead = () => page.evaluate(() => {
+    const depthPanelRead = () => withCanvasSettings(page, () => page.evaluate(() => {
       const el = document.querySelector('[data-tm-lod-control]')
       const select = document.querySelector('[data-tm-lod-preserved-depth-select]')
       return {
@@ -2147,18 +2183,18 @@ async function main() {
         })),
         stored: localStorage.getItem('topomind_semantic_lod_preferences_v1') || '',
       }
-    })
+    }))
     const initialDepth = await depthPanelRead()
     check('左侧状态面板默认「永久显示 2 层」，下拉值与生效值一致',
       initialDepth.preserved === 2 && initialDepth.selectValue === '2',
       JSON.stringify(initialDepth))
-    await page.select('[data-tm-lod-preserved-depth-select]', '1')
+    await withCanvasSettings(page, () => page.select('[data-tm-lod-preserved-depth-select]', '1'))
     const oneLevel = await waitFor(page, () =>
       document.querySelector('[data-tm-lod-control]')?.getAttribute('data-tm-lod-preserved-depth') === '1'
       && document.querySelector('[data-tm-lod-control]')?.getAttribute('data-tm-lod-visible-count') === '1', 8000)
     check('改成 1 层后立即只剩树根（随时变更、无需刷新）', oneLevel,
       JSON.stringify(await depthPanelRead()))
-    await page.select('[data-tm-lod-preserved-depth-select]', '3')
+    await withCanvasSettings(page, () => page.select('[data-tm-lod-preserved-depth-select]', '3'))
     const threeLevels = await waitFor(page, () => {
       const el = document.querySelector('[data-tm-lod-control]')
       const l3 = document.querySelector('[data-tm-depth-level="3"]')
@@ -2168,7 +2204,7 @@ async function main() {
     }, 8000)
     check('改成 3 层后 depth 3 也永久显示（层数优先于碰撞抽稀）', threeLevels,
       JSON.stringify(await depthPanelRead()))
-    await page.select('[data-tm-lod-preserved-depth-select]', '2')
+    await withCanvasSettings(page, () => page.select('[data-tm-lod-preserved-depth-select]', '2'))
     const backToTwo = await waitFor(page, () => {
       const el = document.querySelector('[data-tm-lod-control]')
       const raw = localStorage.getItem('topomind_semantic_lod_preferences_v1') || ''
@@ -2215,7 +2251,7 @@ async function main() {
       document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '5%', 8000),
       JSON.stringify({ percent: await zoomPercent(), steps: compactSteps }))
     const read5 = await semanticZoomRead()
-    const compactState = await page.evaluate(() => {
+    const compactState = await withCanvasSettings(page, () => page.evaluate(() => {
       const control = document.querySelector('[data-tm-lod-control]')
       const scope = document.querySelector('[data-shortcut-scope="canvas"]')
 
@@ -2228,7 +2264,7 @@ async function main() {
         readOnly: scope?.getAttribute('data-tm-canvas-readonly') ?? '',
 
       }
-    })
+    }))
     check('5% 紧凑镜头：可见集合与 20% 端点完全一致（不再隐藏或放出节点）',
       compactState.visibleCount === collapse30.visibleCount
       && compactState.visibleDepthLevels === collapse30.visibleDepthLevels
@@ -2556,8 +2592,8 @@ async function main() {
         !!document.querySelector('.react-flow__node.selected[data-id="lod-root"]'), 4000)
     } catch { rootSelected = false }
     check('树根节点仍可真实点击选中', rootSelected)
-    check('选中节点后置顶按钮可用', await page.evaluate(() =>
-      !document.querySelector('[data-tm-lod-pin-toggle]')?.disabled))
+    check('选中节点后置顶按钮可用', await withCanvasSettings(page, () => page.evaluate(() =>
+      !document.querySelector('[data-tm-lod-pin-toggle]')?.disabled)))
     const selectedDepthOk = await waitFor(page, () => {
       const el = document.querySelector('[data-tm-lod-depth-panel]')
       return el?.getAttribute('data-tm-lod-selected-depth') === '1'
@@ -2573,19 +2609,19 @@ async function main() {
       }
     })
     check('选中节点后左上角显示它的深度与节点类型', selectedDepthOk, JSON.stringify(selectedDepthState))
-    await page.evaluate(() => document.querySelector('[data-tm-lod-pin-toggle]')?.click())
+    await withCanvasSettings(page, () => page.evaluate(() => document.querySelector('[data-tm-lod-pin-toggle]')?.click()))
     await sleep(250)
-    const pinState = await page.evaluate(() => ({
+    const pinState = await withCanvasSettings(page, () => page.evaluate(() => ({
       stored: localStorage.getItem('topomind_semantic_lod_preferences_v1') || '',
       label: document.querySelector('[data-tm-lod-pin-toggle]')?.textContent?.trim() || '',
       count: document.querySelector('[data-tm-lod-pinned-count]')?.textContent?.trim() || '',
       hasClear: !!document.querySelector('[data-tm-lod-pin-clear]'),
-    }))
+    })))
     check('置顶选中节点写进本机偏好且控件回显',
       pinState.stored.includes('lod-root') && pinState.label.includes('取消置顶')
         && pinState.count === '1' && pinState.hasClear,
       JSON.stringify(pinState))
-    await page.evaluate(() => document.querySelector('[data-tm-lod-pin-clear]')?.click())
+    await withCanvasSettings(page, () => page.evaluate(() => document.querySelector('[data-tm-lod-pin-clear]')?.click()))
     await sleep(250)
     check('清除置顶后偏好不再含该节点', await page.evaluate(() =>
       !(localStorage.getItem('topomind_semantic_lod_preferences_v1') || '').includes('lod-root')))
@@ -3876,31 +3912,39 @@ async function main() {
       document.querySelector('[data-tm-nav-rail-root]')?.getAttribute('data-tm-nav-rail-visible') ?? null)
     check('【阶段 AI】再次点击全局开关恢复导航栏', railRestoredAI === 'true', JSON.stringify({ railRestoredAI }))
 
-    // 系统页同样受全局开关控制；样式设置已迁入设置页
+    // 系统页同样受全局开关控制；画布相关配置已迁入左栏「画布设置」页，
+    // 设置页只保留一条引导说明，样式面板本体回到画布页验证。
     await page.evaluate(() => document.querySelector('[data-tm-nav-item="settings"]')?.click())
     await sleep(650)
     const settingsAI = await page.evaluate(() => {
       const secondary = document.querySelector('[data-tm-app-view="secondary"]')
       const text = secondary?.textContent ?? ''
       return {
-        styleSection: !!document.querySelector('[data-tm-settings-style] [aria-label="样式面板分区"]'),
-        // 设置页不在 GraphStoreProvider 内，样式面板若直接 useGraphStore 会被
-        // 二级视图 ErrorBoundary 整页拦下；这里给出比 styleSection=false 更明确的证据。
+        guide: text.includes('画布设置'),
+        noStylePanel: !document.querySelector('[data-tm-settings-style]'),
         crashed: text.includes('二级视图页面加载失败') || text.includes('Missing GraphStoreProvider'),
         hasTitle: !!secondary?.querySelector('h1'),
         railVisible: document.querySelector('[data-tm-nav-rail-root]')?.getAttribute('data-tm-nav-rail-visible') ?? null,
         docked: document.documentElement.dataset.tmNavRailDocked ?? null,
       }
     })
-    check('【阶段 AI】设置页正常渲染，样式分区未触发 ErrorBoundary / GraphStore 崩溃',
+    check('【阶段 AI】设置页正常渲染，未触发 ErrorBoundary / GraphStore 崩溃',
       !settingsAI.crashed && settingsAI.hasTitle,
       JSON.stringify(settingsAI))
-    check('【阶段 AI】样式设置已迁入设置页，导航栏在系统页仍受同一开关控制',
-      settingsAI.styleSection && settingsAI.railVisible === 'true' && settingsAI.docked === 'true',
+    check('【阶段 AI】设置页只留画布设置引导，导航栏在系统页仍受同一开关控制',
+      settingsAI.guide && settingsAI.noStylePanel && settingsAI.railVisible === 'true' && settingsAI.docked === 'true',
       JSON.stringify(settingsAI))
     await page.screenshot({ path: path.join(shotDirAF, '13-titlebar-settings-style.png') })
     await page.evaluate(() => document.querySelector('[data-tm-tab-bar] [role="tab"]')?.click())
     await sleep(400)
+    // 样式面板本体现在住在左栏画布设置页：打开后必须真渲染且不崩溃。
+    const canvasStyleAI = await withCanvasSettings(page, () => page.evaluate(() => ({
+      styleSection: !!document.querySelector('[data-tm-canvas-settings-style] [aria-label="样式面板分区"]'),
+      crashed: (document.body.textContent ?? '').includes('二级视图页面加载失败'),
+    })))
+    check('【阶段 AI】节点与连线样式面板在左栏画布设置页正常渲染',
+      canvasStyleAI.styleSection && !canvasStyleAI.crashed,
+      JSON.stringify(canvasStyleAI))
 
 
     // ===== 阶段 AG：统一控件契约的运行时证据（2026-11-21）=====
@@ -3913,7 +3957,7 @@ async function main() {
       }
     })
     await sleep(400)
-    const controlsAG = await page.evaluate(() => {
+    const controlsAG = await withCanvasSettings(page, () => page.evaluate(() => {
       const toggle = document.querySelector('[data-tm-canvas-status-toggle]')
       const pin = document.querySelector('[data-tm-lod-pin-toggle]')
       const select = document.querySelector('[data-tm-graph-profile-select]')
@@ -3928,7 +3972,7 @@ async function main() {
         iconWidth: (() => { const i = pin?.querySelector('svg'); return i ? Math.round(i.getBoundingClientRect().width) : null })(),
         graphWidth: graph ? Math.round(graph.width) : null,
       }
-    })
+    }))
     check('【阶段 AG】画布控件已套用统一 .tm-* 类，圆角/图标尺寸一致且画布宽度不变',
       controlsAG.toggleHasTm && controlsAG.pinHasTm && controlsAG.selectHasTm
       && !!controlsAG.toggleRadius && controlsAG.toggleRadius === controlsAG.selectRadius
