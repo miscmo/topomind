@@ -512,3 +512,9 @@
 @media (prefers-reduced-motion: reduce) {
   .tm-learning-dial-pulse { animation: none; opacity: 1; }
 }
+
+/* AI 会话字号三档。只作用于会话面板，回答与输入框共用同一字号；标签 / 按钮
+   仍按各自控件字号渲染，不会被放大。数值一律引用 tokens.css 的语义字号。 */
+.tm-ai-font-sm { font-size: var(--font-size-base); }
+.tm-ai-font-md { font-size: var(--font-size-lg); }
+.tm-ai-font-lg { font-size: var(--font-size-xl); }

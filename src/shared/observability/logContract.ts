@@ -127,8 +127,9 @@ export const FACT_KIND_GROUPS: Record<LogFactKind, readonly string[]> = {
     'document.create', 'document.save', 'document.rename', 'document.delete', 'document.move',
     'document.style_update', 'document.export', 'attachment.upload', 'attachment.delete', 'attachment.open',
     'ui.context_menu', 'ui.shortcut', 'ui.view', 'ui.tab',
+    'ai.agent_save', 'ai.patch_preview', 'ai.patch_reject', 'ai.tool',
   ],
-  state: ['node.select', 'room.load', 'room.load_discard', 'kb.list_load', 'kb.node_count_load'],
+  state: ['node.select', 'room.load', 'room.load_discard', 'kb.list_load', 'kb.node_count_load', 'ai.agent_select', 'ai.patch_commit'],
   process: ['kb.create_dialog', 'kb.import_dialog', 'store.call'],
   periodic: ['ipc.invoke', 'ipc.audit', 'timer.aggregate', 'app.lifecycle', 'app.startup', 'app.quit', 'app.diagnostic_export', 'plugin.state', 'plugin.activate', 'plugin.deactivate', 'plugin.log'],
   failure: ['app.crash', 'app.error', 'app.crash_recovered'],
@@ -369,6 +370,19 @@ export const LOG_ACTIONS = {
   userTabSwitch: 'user.tab_switch',
   userViewOpen: 'user.view_open',
   userRoomEnter: 'user.room_enter',
+  // ---- AI Agent（P0）：只记录「发生了什么」，绝不记录 Key 或对话正文 ----
+  aiChat: 'ai.chat',
+  aiChatFailed: 'ai.chat_failed',
+  aiConfigSave: 'ai.config_save',
+  // S1：智能体配置 / 选择；只记录「发生了什么」，不记录 prompt 正文。
+  aiAgentSave: 'ai.agent_save',
+  aiAgentSelect: 'ai.agent_select',
+  // P1：AgentPatch 预览 / 提交 / 放弃；只记 taskId 与数量，不记节点内容与 prompt 正文。
+  aiPatchPreview: 'ai.patch_preview',
+  aiPatchCommit: 'ai.patch_commit',
+  aiPatchReject: 'ai.patch_reject',
+  // P2：一次任务结束聚合记 1 条工具调用摘要；逐次明细走内存，不逐条落盘（C10 / C15）。
+  aiTool: 'ai.tool',
 } as const
 
 export type LogActionId = (typeof LOG_ACTIONS)[keyof typeof LOG_ACTIONS]
@@ -471,6 +485,15 @@ export const LOG_ACTION_META: Record<LogActionId, ActionMeta> = {
   'user.tab_switch': { label: '切换标签页', module: 'ui', level: 'INFO' },
   'user.view_open': { label: '打开视图', module: 'ui', level: 'INFO' },
   'user.room_enter': { label: '进入房间', module: 'graph', level: 'INFO' },
+  'ai.chat': { label: 'AI 会话', module: 'app', level: 'INFO' },
+  'ai.chat_failed': { label: 'AI 会话失败', module: 'app', level: 'WARN' },
+  'ai.config_save': { label: 'AI 配置保存', module: 'app', level: 'INFO' },
+  'ai.agent_save': { label: 'AI 智能体配置保存', module: 'app', level: 'INFO' },
+  'ai.agent_select': { label: 'AI 智能体切换', module: 'app', level: 'INFO' },
+  'ai.patch_preview': { label: 'AI 变更预览', module: 'app', level: 'INFO' },
+  'ai.patch_commit': { label: 'AI 变更提交', module: 'app', level: 'INFO' },
+  'ai.patch_reject': { label: 'AI 变更放弃', module: 'app', level: 'INFO' },
+  'ai.tool': { label: 'AI 工具调用摘要', module: 'app', level: 'INFO' },
 }
 
 function cardinalityFor(kind: LogFactKind): FactCardinality {

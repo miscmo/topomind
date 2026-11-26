@@ -18,6 +18,10 @@ import { fileService, _fs_attachmentRefToPath, _fs_requireValidWorkDir } from '.
 import { dialogService } from './dialog-service.js';
 import LogService from './log-service.js';
 import { mainLog, mainLifecycle } from './main-log.js';
+import { createAiKeyStore } from './services/ai-key-store.js';
+import { createAiService } from './services/ai-service.js';
+import { createAiAgentStore } from './services/ai-agent-store.js';
+import { createAiIndexService } from './services/ai-index-service.js';
 
 // 兼容生产运行以及 dev 模式。
 const APP_PATH = app.getAppPath();
@@ -193,6 +197,16 @@ function requireActiveWorkDir(rootDir) {
     throw new Error('工作目录与当前会话不一致');
   }
   return activeRoot;
+}
+
+/**
+ * AI 配置与密钥都按「当前会话的工作目录」隔离。渲染层不传目录参数，
+ * 因此不存在跨工作区读写或会话切换后残留配置的窗口。
+ */
+function currentAiWorkDir() {
+  var active = LogService.getCurrentWorkDir();
+  if (!active) throw new Error('尚未进入工作目录');
+  return _fs_requireValidWorkDir(active);
 }
 
 function isAllowedLocalFilePath(workDir, targetPath) {
@@ -780,6 +794,60 @@ function registerIPC() {
   ipcMain.handle('log:export', function(e, date) { return LogService.exportJsonl(date); });
   // P3：一键诊断包（主进程已完成二次脱敏与双目录汇总，返回 JSON 字符串）。
   ipcMain.handle('log:exportBundle', function() { return LogService.exportDiagnosticBundle(); });
+
+  // ----- AI handlers（P0）-----
+  // 生产 CSP connect-src 'self' + renderer sandbox:true，模型请求只能在主进程发起；
+  // 增量 token 用 webContents.send 推回，不走高频 invoke。密钥只在本进程解密。
+  const aiKeyStore = createAiKeyStore({ getWorkDir: currentAiWorkDir });
+  const aiEmit = function(event, payload) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    if (event === 'error') {
+      // 只记 taskId 与错误码，不记密钥、不记对话正文。
+      mainLog.warn('app', 'AI 会话失败', { taskId: data.taskId, code: data.code }, undefined, 'ai.chat_failed');
+    }
+    if (win && !win.isDestroyed()) win.webContents.send(`ai:chat:${event}`, data);
+  };
+  const aiService = createAiService({ keyStore: aiKeyStore, emit: aiEmit });
+  const aiAgentStore = createAiAgentStore({ getWorkDir: currentAiWorkDir });
+  // P3 / D：简版 RAG 索引。只在 kb.ask 首次问答时惰性建索引，不在启动时扫描业务文件；
+  // 只写 .topomind/ai-index/，绝不改写业务文件；正文不入日志。
+  const aiIndexService = createAiIndexService({ getWorkDir: currentAiWorkDir });
+
+  ipcMain.handle('ai:config:get', function() { return aiKeyStore.getPublicConfig(); });
+  ipcMain.handle('ai:config:save', function(e, patch) {
+    const publicConfig = aiKeyStore.saveConfig(patch);
+    mainLog.info('app', 'AI 助手配置已保存', { model: publicConfig.model }, 'ai.config_save');
+    return publicConfig;
+  });
+  // S1：Agent 定义独立存 .topomind/ai/agents.json，不混进 config.json。
+  // 日志只记数量，绝不记系统提示词正文（§15.4）。
+  ipcMain.handle('ai:agents:get', function() { return aiAgentStore.getConfig(); });
+  ipcMain.handle('ai:agents:set', function(e, payload) {
+    const next = aiAgentStore.saveConfig(payload);
+    mainLog.info('app', 'AI 智能体配置已保存', { count: next.agents.length }, undefined, 'ai.agent_save');
+    return next;
+  });
+  ipcMain.handle('ai:chat:test', function() { return aiService.testConnection(); });
+  ipcMain.handle('ai:chat:start', function(e, payload) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    const taskId = typeof data.taskId === 'string' ? data.taskId.slice(0, 80) : '';
+    if (!taskId) return { ok: false, code: 'invalid_config', message: '缺少会话标识' };
+    // S2：agent 只含渲染后的最终 prompt 与已钳制的参数，不含密钥；日志只记 id。
+    const agent = data.agent && typeof data.agent === 'object' ? data.agent : null;
+    // P2：只记工具数量，不记 schema / 参数 / 对话正文（C10 / C15）。
+    const toolCount = Array.isArray(data.tools) ? data.tools.length : 0;
+    // S3：子调用登记父任务 id，cancel 时由 ai-service 级联 abort 全部后代。
+    const parentTaskId = typeof data.parentTaskId === 'string' ? data.parentTaskId.slice(0, 80) : '';
+    mainLog.info('app', 'AI 会话开始', { taskId, agentId: agent?.agentId ?? null, toolCount, hasParent: Boolean(parentTaskId) }, 'ai.chat');
+    // 立即返回，让流式长连接不阻塞 IPC invoke。
+    void aiService.startChat({ taskId, messages: data.messages, agent, tools: data.tools, parentTaskId });
+    return { ok: true, taskId };
+  });
+  ipcMain.on('ai:chat:cancel', function(e, taskId) { aiService.cancel(taskId); });
+  // P3 / D：本地倒排检索（invoke 通道，不新增流式通道）。返回片段带 docId / cardPath /
+  // charRange，由渲染层 buildContextEnvelope() 统一组装后才允许外发给模型。
+  ipcMain.handle('ai:index:query', function(e, payload) { return aiIndexService.query(payload); });
+
   ipcMain.handle('monitor:open', function() {
     if (win && !win.isDestroyed()) {
       win.webContents.send('app:menu-action', 'monitor.open');

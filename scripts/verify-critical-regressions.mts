@@ -7511,8 +7511,9 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   assert.ok(panelSrc29.includes("${collapsed ? 'hidden' : 'flex'}"),
     '【右栏浮层】折叠仍只隐藏同一组件树，保留文档保存 session / dirty close guard')
   assert.ok(panelSrc29.includes('absolute inset-y-0 right-0 z-30')
-    && panelSrc29.includes('absolute inset-0 z-30'),
-    '【右栏浮层】常态贴右、最大化铺满，两者都必须 absolute 且不占布局宽度')
+    && panelSrc29.includes('var(--tm-workspace-left-boundary')
+    && !panelSrc29.includes('absolute inset-0 z-30'),
+    '【右栏浮层】常态贴右、最大化从左侧边界 B 起铺满，两者都 absolute 且不占布局宽度')
   assert.ok(!panelSrc29.includes('z-[100]'),
     '【右栏浮层】层级不得高于 fixed 右键菜单 z-50，避免菜单被面板盖住')
   assert.ok(!canvasSrc29.includes('rightPanel') && !canvasSrc29.includes('canvasSize')
@@ -7995,7 +7996,7 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && panel35.includes('data-tm-node-tree-collapsed="false"')
     && panel35.includes('if (!isActive || collapsed) return null'),
   '【P0】左侧节点树必须是可折叠的 absolute 浮层（折叠态不渲染任何 DOM）')
-  assert.ok(page35.includes('<NodeTreePanel tabId={tabId} isActive={isActive} />')
+  assert.ok(page35.includes('<NodeTreePanel tabId={tabId} isActive={isActive} geometry={geometry} />')
     && page35.includes('id="app-layout" className="relative w-full h-full"'),
   '【P0】节点树挂在 #app-layout 内，且 #app-layout 不得变成 flex 两栏')
   assert.ok(store35.includes('useNodeTreePanelStore') && !panel35.includes('rightPanel'),
@@ -12087,9 +12088,9 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   assert.ok(store72.includes('export const NODE_TREE_PANEL_WIDTH = 280')
     && (store72.match(/writeCollapsed\(/g) ?? []).length === 2,
   '【Left Dock】280px 宽度契约保留，collapsed 只能由 setActivePanel 一处写入')
-  assert.ok(store72.includes('export const CANVAS_SETTINGS_PANEL_WIDTH = 360')
-    && store72.includes('leftDockPanelWidth(id'),
-    '【Left Dock】画布设置页独占 360px，其余三页 280px，宽度只由一个函数派生')
+  assert.ok(store72.includes('leftDockWidth') && store72.includes('resetLeftDockWidth')
+    && !store72.includes('CANVAS_SETTINGS_PANEL_WIDTH') && !store72.includes('leftDockPanelWidth'),
+  '【Left Dock】四页共用一个可拖宽度偏好，按页 280/360 派生已退役')
 
   // 2) 竖 tab 在既有 48px rail 内分组，不新增第三条竖条、不混入全局导航白名单。
   const tabPos72 = (id: string) => model72.indexOf(`{ id: '${id}'`)
@@ -12119,10 +12120,11 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && panel72.includes('<AgentPlaceholder />')
     && panel72.includes('<KnowledgeBaseListPanel tabId={tabId} />')
     && panel72.includes('<CanvasSettingsPanel tabId={tabId} />')
-    && panel72.includes('style={{ width: panelWidth }}')
-    && panel72.includes('leftDockPanelWidth(activePanelId)')
+    && panel72.includes("style={{ width: 'var(--tm-left-dock-width, 280px)' }}")
+    && panel72.includes('data-tm-left-dock-resize=""')
+    && panel72.includes('useResizePanel')
     && panel72.includes('data-tm-left-dock-width={panelWidth}'),
-  '【Left Dock】四页面共用外壳，宽度按当前页派生，节点树 GUI 稳定选择器与让位变量不变')
+  '【Left Dock】四页面共用外壳与可拖宽度，节点树 GUI 稳定选择器与让位变量不变')
   assert.ok(panel72.includes('if (!isActive || collapsed) return null')
     && !panel72.includes('data-tm-node-tree-collapsed="true"'),
   '【Left Dock】折叠态不渲染面板，唯一开关是竖 tab')
@@ -12131,10 +12133,12 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
   assert.ok(!panel72.includes('rightPanel'),
   '【Left Dock】左栏不得耦合右栏状态')
 
-  // 4) 占位页只留入口，不伪装成可用功能；连体视觉走统一控件类。
-  assert.ok(agent72.includes('EmptyState') && agent72.includes('TM_UI.badgeAccent')
-    && !agent72.includes('<input') && !agent72.includes('fetch('),
-  '【Left Dock】AI Agent 只是入口占位，不得引入假的会话控件或网络调用')
+  // 4) P0 起换成真实会话面板：入口页只做转发，实现放 host feature，
+  //    渲染层不得直连外部网络或直接碰 electronAPI（一律经 core/ai-backend）。
+  assert.ok(agent72.includes('@/features/ai-agent/AgentPanel')
+    && !agent72.includes('fetch(')
+    && !agent72.includes('window.electronAPI'),
+  '【Left Dock】AI Agent 由 host feature 提供，入口页只做转发且不得直连网络')
   // 与 verify-design-system 同口径：先剥离注释，注释里解释禁令的文字不算违规。
   const cssClean72 = css72.replace(/\/\*[\s\S]*?\*\//g, '')
   assert.ok(cssClean72.includes('.tm-left-dock-tab--connected::after')
@@ -12239,6 +12243,107 @@ import { migrateRetiredTheme, DARK_THEME, LIGHT_THEME, isDarkTheme } from '../sr
     && kbPanel74.includes('openKnowledgeBase({ name })')
     && kbPanel74.includes('data-tm-kb-list-panel=""'),
   '【布局】知识库列表是第三页左栏面板，画布设置是节点结构下方的第四页')
+}
+
+// --- 第 75 组：三边栏水平互斥（2026-11-25 布局改造） ---
+// 纯函数真跑 + 集成接线静态锁：右栏左边缘恒 ≥ B，最大化停在左栏/导航栏边，
+// 且 desired 不被任何布局事件回写。
+{
+  const { build } = await import('esbuild')
+  const { fileURLToPath } = await import('node:url')
+  const result = await build({
+    entryPoints: [fileURLToPath(new URL('../src/domain/layout/workspaceGeometry.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
+  })
+  const geometry75 = await import(
+    `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
+  ) as Record<string, any>
+
+  const base75 = {
+    viewportWidth: 1280,
+    railVisible: true,
+    leftOpen: true,
+    leftDesiredWidth: 280,
+    rightDesiredWidth: 600,
+    rightCollapsed: false,
+    maximized: false,
+  }
+  const normal75 = geometry75.computeGeometry(base75)
+  assert.equal(normal75.boundary, 328, '【边栏互斥】B = 48px 导航栏 + 280px 左栏')
+  assert.equal(normal75.available, 952, '【边栏互斥】C = W − B')
+  assert.equal(normal75.rightWidth, 600, '【边栏互斥】常态右栏用用户拖好的宽度')
+  assert.equal(normal75.rightLeft, 680, '【边栏互斥】右栏左边缘不得越过 B')
+  assert.equal(normal75.canvasVisible, 352, '【边栏互斥】右栏左侧仍要留出画布')
+
+  const max75 = geometry75.computeGeometry({ ...base75, maximized: true })
+  assert.equal(max75.rightWidth, 952, '【边栏互斥】最大化 width = C')
+  assert.equal(max75.rightLeft, 328, '【边栏互斥】最大化左边缘恰好停在左侧栏边')
+  assert.equal(max75.canvasVisible, 0, '【边栏互斥】最大化铺满 B 右侧可用区')
+
+  const leftClosed75 = geometry75.computeGeometry({ ...base75, leftOpen: false, maximized: true })
+  assert.equal(leftClosed75.boundary, 48, '【边栏互斥】左栏折叠后 B 只剩导航栏')
+  assert.equal(leftClosed75.rightLeft, 48, '【边栏互斥】左栏折叠时最大化停在导航栏边')
+
+  const noRail75 = geometry75.computeGeometry({ ...base75, railVisible: false, leftOpen: false, maximized: true })
+  assert.equal(noRail75.boundary, 0, '【边栏互斥】导航栏隐藏且左栏折叠时 B = 0')
+  assert.equal(noRail75.rightWidth, 1280, '【边栏互斥】此时最大化才是真正铺满工作区')
+
+  const wideLeft75 = geometry75.computeGeometry({ ...base75, leftDesiredWidth: 700 })
+  assert.equal(wideLeft75.leftWidth, 560, '【边栏互斥】左栏拖宽受统一上限约束')
+  assert.ok(wideLeft75.rightLeft >= wideLeft75.boundary, '【边栏互斥】左栏变宽后右栏仍不重叠')
+
+  // 窄窗口：保导航栏、压缩两侧、留一段可见画布。
+  const narrow75 = geometry75.computeGeometry({ ...base75, viewportWidth: 600 })
+  assert.ok(narrow75.smallViewport, '【边栏互斥】窄窗口必须启用保护')
+  assert.ok(narrow75.rightLeft >= narrow75.boundary, '【边栏互斥】窄窗口下右栏仍不重叠左侧栏')
+  assert.ok(narrow75.canvasVisible >= 160, '【边栏互斥】窄窗口仍保留可点击的画布')
+
+  // 全矩阵不变量：任何组合下右栏都不越过 B，且宽度不超过 C。
+  for (const viewportWidth of [400, 600, 800, 1024, 1280, 1920]) {
+    for (const railVisible of [true, false]) {
+      for (const leftOpen of [true, false]) {
+        for (const maximized of [true, false]) {
+          const g = geometry75.computeGeometry({
+            ...base75, viewportWidth, railVisible, leftOpen, maximized,
+            rightDesiredWidth: 1000,
+          })
+          assert.ok(g.rightLeft >= g.boundary, `【边栏互斥】右栏越过边界 W=${viewportWidth} rail=${railVisible} left=${leftOpen} max=${maximized}`)
+          assert.ok(g.rightWidth <= g.available, `【边栏互斥】右栏超过可用区 W=${viewportWidth} rail=${railVisible} left=${leftOpen} max=${maximized}`)
+          assert.ok(g.boundary <= viewportWidth && g.canvasVisible >= 0,
+            `【边栏互斥】边界与画布宽度必须合法 W=${viewportWidth} rail=${railVisible} left=${leftOpen} max=${maximized}`)
+        }
+      }
+    }
+  }
+
+  const read75 = (relative: string) => readFile(new URL(relative, import.meta.url), 'utf-8')
+  const [container75, page75, panel75, hook75, css75, store75] = await Promise.all([
+    read75('../src/features/right-panel/RightPanelContainer.tsx'),
+    read75('../src/features/graph/GraphPage/GraphPage.tsx'),
+    read75('../src/features/graph/GraphPage/components/NodeTreePanel.tsx'),
+    read75('../src/features/layout/useWorkspaceGeometry.ts'),
+    read75('../src/styles/base.css'),
+    read75('../src/stores/nodeTreePanelStore.ts'),
+  ])
+  assert.ok(!container75.includes('getRightPanelBounds') && !container75.includes('window.innerWidth')
+    && container75.includes('applyGeometryPatch') && container75.includes('--tm-workspace-left-boundary'),
+  '【边栏互斥】右栏不得再按 window.innerWidth 比例算边界，最大化必须落在 B')
+  assert.ok(container75.includes('var(--tm-right-panel-width') && container75.includes('var(--tm-workspace-left-boundary'),
+    '【边栏互斥】常态宽度与最大化左边缘都由几何 CSS 变量驱动')
+  assert.ok(page75.includes('useWorkspaceGeometry') && page75.includes('ref={layoutRef}'),
+    '【边栏互斥】几何由活跃知识库标签页的 #app-layout 实测并写入局部 CSS 变量')
+  assert.ok(hook75.includes('ResizeObserver') && hook75.includes('writeGeometryVars')
+    && hook75.includes('applyGeometryPatch'),
+  '【边栏互斥】拖拽期间只改 CSS 变量，mouseup 才提交偏好')
+  assert.ok(panel75.includes('--tm-left-dock-width') && panel75.includes('useResizePanel')
+    && !panel75.includes('leftDockPanelWidth(') && !panel75.includes('rightPanel'),
+  '【边栏互斥】左栏支持拖动且四页共用一个宽度，仍不耦合右栏状态')
+  assert.ok(store75.includes('leftDockWidth') && store75.includes('setLeftDockWidth')
+    && !store75.includes('CANVAS_SETTINGS_PANEL_WIDTH'),
+  '【边栏互斥】左栏宽度偏好只有一份，按页 360px 派生已退役')
+  assert.ok(css75.includes('margin-left: calc(12px + var(--tm-node-tree-offset, 0px)) !important')
+    && css75.includes('var(--tm-workspace-left-boundary'),
+  '【边栏互斥】状态抽屉让位保留原契约，并收敛到统一左边界 B')
 }
 
 console.log('Critical regression checks verified')

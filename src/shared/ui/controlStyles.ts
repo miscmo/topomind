@@ -66,6 +66,9 @@ export const TM_UI = {
   leftDockTabActive: 'tm-left-dock-tab tm-left-dock-tab--active',
   leftDockTabConnected: 'tm-left-dock-tab--connected',
   leftDockTooltip: 'tm-left-dock-tooltip',
+  aiFontSmall: 'tm-ai-font-sm',
+  aiFontMedium: 'tm-ai-font-md',
+  aiFontLarge: 'tm-ai-font-lg',
 } as const
 
 export type TmUiToken = keyof typeof TM_UI

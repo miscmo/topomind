@@ -4,6 +4,7 @@ import { toDisposable } from '@/plugins/public/disposables.ts'
 import type { Disposable } from '@/plugins/public/disposables'
 import { useTabStore } from '@/stores/tabs/tabStore'
 import { useLayoutStore } from '@/stores/layoutStore'
+import { useNodeTreePanelStore } from '@/stores/nodeTreePanelStore'
 import { useThemeStore, type ThemeMode } from '@/stores/themeStore'
 import { HOST_VIEW_IDS } from '@/features/layout/NavRail/navModel'
 import type { RightPanelTab } from '@/types/uiStoreTypes'
@@ -162,6 +163,22 @@ function createDefaultHostCommands(): HostCommandDefinition[] {
         state.setRightPanelTab(tab)
         state.expandRightPanel()
       },
+    },
+    {
+      // P0：Left Dock 的 'agent' 页由竖 tab 驱动，命令只保证「打开」语义，
+      // 重复调用不会把已经展开的面板又折叠回去。
+      id: 'agent.open',
+      title: '打开 AI Agent',
+      shortcut: 'Ctrl+Shift+A',
+      execute: () => {
+        const state = useNodeTreePanelStore.getState()
+        if (state.activePanelId !== 'agent' || state.collapsed) state.setActivePanel('agent')
+      },
+    },
+    {
+      id: 'agent.toggle',
+      title: '切换 AI Agent 面板',
+      execute: () => { useNodeTreePanelStore.getState().setActivePanel('agent') },
     },
   ]
 }

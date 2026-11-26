@@ -18,8 +18,9 @@
  * （`nodeTreePanelStore.setActivePanel` 是唯一写入 collapsed 的入口）。
  * 折叠态直接不渲染任何 DOM。
  * 同一时刻只渲染一个页面：AI Agent 占位页 / 知识库列表 / 节点结构 / 画布设置，
- * 四者共用同一开合状态；画布设置页单独用 360px（其余三页 280px），
- * 让位变量按当前页实际宽度写入，画布宽度 / React Flow viewport 恒定。
+ * 四者共用同一开合状态与**同一个可拖宽度**（默认 280px，双击复位）：切页时
+ * 左侧边界 B 不跳变，右栏不会因换页突然收窄。实际宽度与让位量统一由
+ * workspaceGeometry 派生，画布宽度 / React Flow viewport 恒定。
  */
 import {
   memo,
@@ -27,6 +28,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
   type ReactNode,
@@ -51,6 +53,9 @@ import {
   X,
 } from 'lucide-react'
 import { TM_UI } from '@/shared/ui/controlStyles'
+import { useResizePanel } from '@/hooks/useResizePanel'
+import { applyGeometryPatch, resolveWorkspaceContainer } from '@/features/layout/useWorkspaceGeometry'
+import type { WorkspaceGeometry } from '@/domain/layout/workspaceGeometry'
 import type { LucideIcon } from 'lucide-react'
 import AgentPlaceholder from './AgentPlaceholder'
 import KnowledgeBaseListPanel from './KnowledgeBaseListPanel'
@@ -61,7 +66,6 @@ import { CANVAS_OPERATIONS, PERFORMANCE_METRICS } from '../../../../shared/obser
 import { startCanvasSpan } from '../../../../hooks/useGraph/canvasPerformanceContext'
 import {
   NODE_TREE_PANEL_WIDTH,
-  leftDockPanelWidth,
   useNodeTreePanelStore,
   type LeftDockPanelId,
 } from '../../../../stores/nodeTreePanelStore'
@@ -88,6 +92,8 @@ const PANEL_HEADER: Record<LeftDockPanelId, { title: string; icon: LucideIcon }>
 interface NodeTreePanelProps {
   tabId: string
   isActive: boolean
+  /** 由 GraphPage 统一计算的三边栏几何；左栏只读结果，不订阅其它边栏状态。 */
+  geometry: WorkspaceGeometry
 }
 
 function countTreeNodes(node: NodeTreeNode): number {
@@ -118,32 +124,29 @@ function originIcon(node: NodeTreeNode): ReactNode {
   return <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-tertiary)]" />
 }
 
-export default memo(function NodeTreePanel({ tabId, isActive }: NodeTreePanelProps) {
+export default memo(function NodeTreePanel({ tabId, isActive, geometry }: NodeTreePanelProps) {
   const collapsed = useNodeTreePanelStore((state) => state.collapsed)
-  const activePanelId = useNodeTreePanelStore((state) => state.activePanelId)
-  // 画布设置页比节点树宽 80px：让位量按当前页实际宽度算，状态抽屉不会被压住。
-  const panelWidth = leftDockPanelWidth(activePanelId)
 
   // 只有激活标签页写这个变量；非激活页连清理都不做，避免多标签互相覆盖。
-  // CSS 侧只改 top-left Panel 的 margin-left，画布尺寸 / viewport 一概不变。
+  // 值统一取 B（导航栏 + 左栏），不再按页拼「左栏宽 + rail 宽」两段。
+  // #app-layout 上由 useWorkspaceGeometry 写的同名变量优先级更高，这里是兼容兜底。
   useEffect(() => {
     if (!isActive) return
     const root = document.documentElement
-    root.style.setProperty(
-      '--tm-node-tree-offset',
-      collapsed ? '0px' : `${panelWidth}px`,
-    )
+    root.style.setProperty('--tm-node-tree-offset', `${geometry.boundary}px`)
     return () => { root.style.removeProperty('--tm-node-tree-offset') }
-  }, [collapsed, isActive, panelWidth])
+  }, [isActive, geometry.boundary])
 
   // 折叠态直接不渲染：左栏没有任何第二套显隐入口，开合只由 NavRail 竖 tab 负责。
   if (!isActive || collapsed) return null
-  return <NodeTreePanelBody tabId={tabId} />
+  return <NodeTreePanelBody tabId={tabId} geometry={geometry} />
 })
 
-function NodeTreePanelBody({ tabId }: { tabId: string }) {
+function NodeTreePanelBody({ tabId, geometry }: { tabId: string; geometry: WorkspaceGeometry }) {
   const activePanelId = useNodeTreePanelStore((state) => state.activePanelId)
-  const panelWidth = leftDockPanelWidth(activePanelId)
+  const setLeftDockWidth = useNodeTreePanelStore((state) => state.setLeftDockWidth)
+  const resetLeftDockWidth = useNodeTreePanelStore((state) => state.resetLeftDockWidth)
+  const panelWidth = geometry.leftWidth
   const header = PANEL_HEADER[activePanelId]
   const HeaderIcon = header.icon
   const session = useGraphSession(tabId)
@@ -171,6 +174,42 @@ function NodeTreePanelBody({ tabId }: { tabId: string }) {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
+  const [resizeHint, setResizeHint] = useState<string | null>(null)
+  const dockRef = useRef<HTMLDivElement>(null)
+
+  // 【左栏拖宽 2026-11-25】四页共用一个宽度偏好；拖拽期间只重算并写 #app-layout
+  // 上的 CSS 变量，右栏会同步收缩到新的 B 之外，全程零 React 重渲染。
+  const { isResizing: isDockResizing, handleMouseDown: handleDockResizeMouseDown } = useResizePanel({
+    initialWidth: panelWidth,
+    direction: 'left',
+    minWidth: geometry.leftMin,
+    maxWidth: geometry.leftMax,
+    onWidthChange: (width) => {
+      applyGeometryPatch(resolveWorkspaceContainer(dockRef.current), { leftDesiredWidth: width })
+    },
+    onResizeChange: ({ rawWidth }) => {
+      // 到界不是「拖不动」：手柄变粗并说明卡在什么规则上。
+      if (rawWidth >= geometry.leftMax) setResizeHint('已到左栏可拖最大宽度')
+      else if (rawWidth <= geometry.leftMin) setResizeHint('已到左栏最小宽度')
+      else setResizeHint(null)
+    },
+    onResizeEnd: ({ width }) => {
+      setResizeHint(null)
+      setLeftDockWidth(width)
+    },
+  })
+
+  const handleDockResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    setResizeHint(null)
+    handleDockResizeMouseDown(event)
+  }, [handleDockResizeMouseDown])
+
+  const handleDockResizeDoubleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setResizeHint(null)
+    resetLeftDockWidth()
+  }, [resetLeftDockWidth])
 
   const readOnly = isCanvasReadOnly(tabId)
   const total = useMemo(() => countTreeNodes(fullTree), [fullTree])
@@ -294,6 +333,7 @@ function NodeTreePanelBody({ tabId }: { tabId: string }) {
 
   return (
     <div
+      ref={dockRef}
       data-tm-node-tree-panel=""
       data-tm-node-tree-collapsed="false"
       data-tm-node-tree-total={total}
@@ -305,7 +345,7 @@ function NodeTreePanelBody({ tabId }: { tabId: string }) {
       data-tm-left-dock-width={panelWidth}
       data-tm-left-dock-panel={activePanelId}
       data-tm-left-dock-active-panel={activePanelId}
-      style={{ width: panelWidth }}
+      style={{ width: 'var(--tm-left-dock-width, 280px)' }}
       className="absolute inset-y-0 left-0 z-30 flex flex-col border-r border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-[var(--shadow-popover)]"
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--color-border-light)] px-3">
@@ -391,6 +431,22 @@ function NodeTreePanelBody({ tabId }: { tabId: string }) {
       ) : (
         <CanvasSettingsPanel tabId={tabId} />
       )}
+
+      {/* 右边缘拖宽手柄：与右侧栏手柄形状一致、方向相反，双击复位到默认宽度。 */}
+      <div
+        data-tm-left-dock-resize=""
+        className="group absolute right-0 top-0 bottom-0 z-20 w-2 cursor-col-resize select-none bg-transparent"
+        onMouseDown={handleDockResizeStart}
+        onDoubleClick={handleDockResizeDoubleClick}
+        title="拖拽调整左栏宽度，双击恢复默认宽度"
+      >
+        <div className={`absolute top-0 bottom-0 right-0 w-px transition-all duration-200 group-hover:bg-[var(--color-accent)]/40 group-active:bg-[var(--color-accent)] group-active:w-[2px] ${isDockResizing ? 'bg-[var(--color-accent)] w-[2px]' : 'bg-transparent'} ${resizeHint ? '!bg-[var(--color-accent)] !w-[3px]' : ''}`} />
+        {resizeHint && isDockResizing && (
+          <div className={`pointer-events-none absolute right-3 top-3 z-20 whitespace-nowrap rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 shadow-[var(--shadow-md)] ${TM_UI.hint}`}>
+            {resizeHint}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

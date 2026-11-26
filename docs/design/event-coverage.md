@@ -15,11 +15,11 @@
 
 | 指标 | 数值 |
 | ---- | ---- |
-| 事件总数 | 97 |
-| 已接入（静态引用） | 94 |
+| 事件总数 | 106 |
+| 已接入（静态引用） | 103 |
 | 保留未启用（有书面理由） | 3 |
 | 仅登记待核对（缺口） | 0 |
-| 多产生点事件（需核对） | 47 |
+| 多产生点事件（需核对） | 50 |
 
 ## error
 
@@ -37,6 +37,8 @@
 | `container.create_failed` | 创建容器失败 | failure | per-event | 1 | 已接入 | 1 | 1 处：`src/features/graph/GraphPage/model/useNodeActions.ts` |
 | `edge.validation_reject` | 连线校验拒绝 | failure | per-event | 1 | 已接入 | 3 | 1 处：`src/hooks/useGraph/edgeOperations.ts` |
 | `document.save_failed` | 保存文档失败 | failure | per-event | 1 | 已接入 | 2 | 2 处：`src/domain/persistence/saveCoordinator.ts`、`src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx` |
+| `ai.chat_failed` | AI 会话失败 | failure | per-event | 1 | 已接入 | 1 | 1 处：`electron/main.js` |
+| `ai.patch_reject` | AI 变更放弃 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/ai-agent/components/PatchPreview.tsx` |
 
 ## internal
 
@@ -59,6 +61,13 @@
 | `app.lifecycle` | 应用生命周期 | periodic | per-event | 1 | 已接入 | 1 | 1 处：`electron/main-log.js` |
 | `app.quit` | 应用退出 | periodic | per-event | 1 | 已接入 | 3 | 2 处：`electron/main-log.js`、`electron/main.js` |
 | `timer.aggregate` | 定时任务汇总 | periodic | per-event | 1 | 已接入 | 1 | 1 处：`src/core/observe.ts` |
+| `ai.chat` | AI 会话 | periodic | per-event | 1 | 已接入 | 1 | 1 处：`electron/main.js` |
+| `ai.config_save` | AI 配置保存 | periodic | per-event | 1 | 已接入 | 1 | 1 处：`electron/main.js` |
+| `ai.agent_save` | AI 智能体配置保存 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`electron/main.js` |
+| `ai.agent_select` | AI 智能体切换 | state | per-state-change | 1 | 已接入 | 1 | 1 处：`src/features/ai-agent/model/agentDefinitionStore.ts` |
+| `ai.patch_preview` | AI 变更预览 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/ai-agent/components/PatchPreview.tsx` |
+| `ai.patch_commit` | AI 变更提交 | state | per-state-change | 1 | 已接入 | 1 | 1 处：`src/features/ai-agent/patch/commitAgentPatch.ts` |
+| `ai.tool` | AI 工具调用摘要 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/ai-agent/model/agentToolLoop.ts` |
 
 ## performance
 
@@ -103,16 +112,16 @@
 | `kb.delete` | 删除知识库 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/kb/components/KBSettingsDialog/model/useKBSettingsDialogModel.ts` |
 | `kb.trash_restore` | 回收站恢复 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/kb/components/TrashDialog/model/useTrashDialogModel.ts` |
 | `kb.trash_clear` | 回收站清空 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/kb/components/TrashDialog/model/useTrashDialogModel.ts` |
-| `node.create` | 创建节点 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 5 处：`src/core/log-backend.ts`、`src/core/logger.ts`、`src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts` … |
-| `node.delete` | 删除节点 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/hooks/useGraph/nodeCrudOperations.ts` |
-| `node.rename` | 重命名节点 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/hooks/useGraph/nodeCrudOperations.ts` |
+| `node.create` | 创建节点 | intent | per-interaction | 1 | 已接入 | 17（多入口需核对） | 13 处：`src/core/log-backend.ts`、`src/core/logger.ts`、`src/features/ai-agent/config/agentTemplates.ts` … |
+| `node.delete` | 删除节点 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 4 处：`src/features/ai-agent/config/toolCatalog.ts`、`src/features/ai-agent/patch/agentPatchTypes.ts`、`src/hooks/useGraph/nodeCrudOperations.ts` … |
+| `node.rename` | 重命名节点 | intent | per-interaction | 1 | 已接入 | 15（多入口需核对） | 8 处：`src/features/ai-agent/config/toolCatalog.ts`、`src/features/ai-agent/patch/agentPatchTypes.ts`、`src/features/ai-agent/patch/dryRunAgentPatch.ts` … |
 | `node.select` | 选中节点 | state | per-state-change | 1 | 已接入 | 2 | 2 处：`src/hooks/useGraph/selectionOperations.ts`、`src/hooks/useGraph/selectionSubtreeOperations.ts` |
 | `node.enter` | 进入节点 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/graph/GraphPage/model/useNodeActions.ts` |
 | `node.move` | 跨房间移动节点 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 1 处：`src/features/graph/GraphPage/model/useNodeMoveToRoom.ts` |
 | `node.style_update` | 更新节点样式 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 1 处：`src/hooks/useGraph/nodeCrudOperations.ts` |
 | `container.create` | 创建容器 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 2 处：`src/features/documents/services/documentTypeRegistry.ts`、`src/features/graph/GraphPage/model/useNodeActions.ts` |
-| `edge.create` | 创建连线 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/hooks/useGraph/edgeOperations.ts` |
-| `edge.delete` | 删除连线 | intent | per-interaction | 1 | 已接入 | 2（多入口需核对） | 2 处：`src/features/graph/GraphPage/model/useEdgeActions.ts`、`src/hooks/useGraph/edgeOperations.ts` |
+| `edge.create` | 创建连线 | intent | per-interaction | 1 | 已接入 | 7（多入口需核对） | 5 处：`src/features/ai-agent/patch/agentPatchTypes.ts`、`src/features/ai-agent/patch/dryRunAgentPatch.ts`、`src/features/ai-agent/patch/normalizeAgentPatch.ts` … |
+| `edge.delete` | 删除连线 | intent | per-interaction | 1 | 已接入 | 8（多入口需核对） | 5 处：`src/features/ai-agent/patch/agentPatchTypes.ts`、`src/features/ai-agent/patch/dryRunAgentPatch.ts`、`src/features/ai-agent/patch/normalizeAgentPatch.ts` … |
 | `edge.update` | 更新连线 | intent | per-interaction | 1 | 已接入 | 5（多入口需核对） | 2 处：`src/features/graph/GraphPage/model/useEdgeActions.ts`、`src/hooks/useGraph/edgeOperations.ts` |
 | `room.navigate` | 房间导航 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 3 处：`src/features/layout/Breadcrumb/Breadcrumb.tsx`、`src/features/layout/RoomHistory/RoomHistory.tsx`、`src/hooks/useGraph/graphEventHandlers.ts` |
 | `graph.page_enter` | 进入图谱页 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/graph/GraphPage/model/useGraphPageController.ts` |
@@ -140,7 +149,7 @@
 
 ## 结论
 
-- 「关键用户动作覆盖率」在本表中**按静态引用逐项核对**：97 个事件中 94 个有产生点、3 个书面保留、0 个待核对。
+- 「关键用户动作覆盖率」在本表中**按静态引用逐项核对**：106 个事件中 103 个有产生点、3 个书面保留、0 个待核对。
 - 当前没有「仅登记待核对」项；目录中的每个事件要么有产生点，要么有明文的保留理由。
 - 运行时是否真的每条事件都会产生，仍需 P2 的拦截行为用例（C10）与人工按上表逐项走查共同证明；本表不冒充运行时覆盖率。
 - 新增事件只需登记到 `LOG_ACTIONS` / `PERFORMANCE_METRIC_SPECS`，重新运行 `npm run gen:events && npm run gen:coverage` 即可同步类型、分类产物与本表。

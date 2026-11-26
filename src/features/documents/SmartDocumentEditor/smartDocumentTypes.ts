@@ -14,6 +14,10 @@ export interface SmartDocumentContent {
     updatedAt?: number
     editor?: 'blocknote'
     blocknoteVersion?: string
+    /** AI 文档工具写入的摘要 / 标签 / 来源；必须显式透传，否则下一次 autosave 会静默丢掉。 */
+    summary?: string
+    tags?: string[]
+    generatedBy?: 'ai' | 'user'
   }
 }
 
@@ -193,6 +197,17 @@ export function normalizeSmartDocumentContent(value: unknown, fallbackTitle: str
       updatedAt: typeof metadata.updatedAt === 'number' ? metadata.updatedAt : now,
       editor: 'blocknote',
       blocknoteVersion: '0.51.2',
+      // AI 写入的摘要 / 标签是业务数据，normalize 每次 value 变化都会重建对象，
+      // 漏透传就等于「AI 写完、用户下一次敲键后字段消失」。
+      ...(typeof metadata.summary === 'string'
+        ? { summary: metadata.summary.slice(0, 2000) }
+        : {}),
+      ...(Array.isArray(metadata.tags)
+        ? { tags: metadata.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 12) }
+        : {}),
+      ...(metadata.generatedBy === 'ai' || metadata.generatedBy === 'user'
+        ? { generatedBy: metadata.generatedBy }
+        : {}),
     },
   }
 }

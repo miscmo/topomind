@@ -96,7 +96,16 @@ export const CATEGORY_BY_ACTION = {
   "user.tab_close": "user",
   "user.tab_switch": "user",
   "user.view_open": "user",
-  "user.room_enter": "user"
+  "user.room_enter": "user",
+  "ai.chat": "internal",
+  "ai.chat_failed": "error",
+  "ai.config_save": "internal",
+  "ai.agent_save": "internal",
+  "ai.agent_select": "internal",
+  "ai.patch_preview": "internal",
+  "ai.patch_commit": "internal",
+  "ai.patch_reject": "error",
+  "ai.tool": "internal"
 };
 export const ACTION_LABELS = {
   "app.startup": "应用启动",
@@ -174,7 +183,16 @@ export const ACTION_LABELS = {
   "user.tab_close": "关闭标签页",
   "user.tab_switch": "切换标签页",
   "user.view_open": "打开视图",
-  "user.room_enter": "进入房间"
+  "user.room_enter": "进入房间",
+  "ai.chat": "AI 会话",
+  "ai.chat_failed": "AI 会话失败",
+  "ai.config_save": "AI 配置保存",
+  "ai.agent_save": "AI 智能体配置保存",
+  "ai.agent_select": "AI 智能体切换",
+  "ai.patch_preview": "AI 变更预览",
+  "ai.patch_commit": "AI 变更提交",
+  "ai.patch_reject": "AI 变更放弃",
+  "ai.tool": "AI 工具调用摘要"
 };
 export const PERFORMANCE_ACTION_ID = "性能:记录";
 export const DEFAULT_CATEGORY = "internal";

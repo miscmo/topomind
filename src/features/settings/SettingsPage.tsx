@@ -27,6 +27,8 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useTabStore } from '@/stores/tabs/tabStore'
 import { HOST_VIEW_IDS } from '@/features/layout/NavRail/navModel'
 import { TM_UI, tmUI } from '@/shared/ui/controlStyles'
+import AiSettingsSection from './AiSettingsSection'
+import AgentSettingsSection from './AgentSettingsSection'
 
 const SECTION = 'rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5'
 const SECTION_TITLE = 'mb-1 flex items-center gap-2 text-[14px] font-medium text-[var(--color-text-primary)]'
@@ -141,6 +143,10 @@ export default memo(function SettingsPage() {
             </button>
           </div>
         </div>
+
+        <AiSettingsSection />
+
+        <AgentSettingsSection />
 
         <div className={`${SECTION} mt-4`}>
           <h2 className={SECTION_TITLE}><Book className="h-4 w-4 text-[var(--color-accent)]" />快捷键</h2>

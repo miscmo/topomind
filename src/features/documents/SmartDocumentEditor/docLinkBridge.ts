@@ -20,8 +20,14 @@ export function setDocumentLinkOpenHandler(
   openHandler = fn
 }
 
-export function requestOpenDocumentLink(payload: DocumentLinkOpenPayload): void {
-  openHandler?.(payload)
+/**
+ * @returns 是否已有处理器接管。P3 的 [ref:i] 引用跳转会据此给出明确反馈：
+ *   右栏详情视图未挂载编辑器时返回 false，不做「点了没反应」的假跳转。
+ */
+export function requestOpenDocumentLink(payload: DocumentLinkOpenPayload): boolean {
+  if (!openHandler) return false
+  openHandler(payload)
+  return true
 }
 
 /** 触发点光标矩形（viewport 坐标），用于把选择器浮层贴在 `[[` 输入处。 */

@@ -79,6 +79,15 @@ export type EventId =
   | "user.tab_switch"
   | "user.view_open"
   | "user.room_enter"
+  | "ai.chat"
+  | "ai.chat_failed"
+  | "ai.config_save"
+  | "ai.agent_save"
+  | "ai.agent_select"
+  | "ai.patch_preview"
+  | "ai.patch_commit"
+  | "ai.patch_reject"
+  | "ai.tool"
   | "perf.room_load"
   | "perf.kb_list_load"
   | "perf.app_startup"
@@ -178,6 +187,15 @@ export const EVENT_IDS: readonly EventId[] = [
   "user.tab_switch",
   "user.view_open",
   "user.room_enter",
+  "ai.chat",
+  "ai.chat_failed",
+  "ai.config_save",
+  "ai.agent_save",
+  "ai.agent_select",
+  "ai.patch_preview",
+  "ai.patch_commit",
+  "ai.patch_reject",
+  "ai.tool",
   "perf.room_load",
   "perf.kb_list_load",
   "perf.app_startup",
@@ -279,6 +297,15 @@ export const EVENT_LABELS: Record<EventId, string> = {
   "user.tab_switch": "切换标签页",
   "user.view_open": "打开视图",
   "user.room_enter": "进入房间",
+  "ai.chat": "AI 会话",
+  "ai.chat_failed": "AI 会话失败",
+  "ai.config_save": "AI 配置保存",
+  "ai.agent_save": "AI 智能体配置保存",
+  "ai.agent_select": "AI 智能体切换",
+  "ai.patch_preview": "AI 变更预览",
+  "ai.patch_commit": "AI 变更提交",
+  "ai.patch_reject": "AI 变更放弃",
+  "ai.tool": "AI 工具调用摘要",
   "perf.room_load": "性能 · 房间加载",
   "perf.kb_list_load": "性能 · 知识库列表加载",
   "perf.app_startup": "性能 · 应用启动",
@@ -379,6 +406,15 @@ export const EVENT_CATEGORY_BY_ID: Record<EventId, string> = {
   "user.tab_switch": "user",
   "user.view_open": "user",
   "user.room_enter": "user",
+  "ai.chat": "internal",
+  "ai.chat_failed": "error",
+  "ai.config_save": "internal",
+  "ai.agent_save": "internal",
+  "ai.agent_select": "internal",
+  "ai.patch_preview": "internal",
+  "ai.patch_commit": "internal",
+  "ai.patch_reject": "error",
+  "ai.tool": "internal",
   "perf.room_load": "performance",
   "perf.kb_list_load": "performance",
   "perf.app_startup": "performance",
@@ -480,6 +516,15 @@ export const EVENT_RETENTION_DAYS_BY_ID: Record<EventId, number> = {
   "user.tab_switch": 30,
   "user.view_open": 30,
   "user.room_enter": 30,
+  "ai.chat": 14,
+  "ai.chat_failed": 90,
+  "ai.config_save": 14,
+  "ai.agent_save": 14,
+  "ai.agent_select": 14,
+  "ai.patch_preview": 14,
+  "ai.patch_commit": 14,
+  "ai.patch_reject": 90,
+  "ai.tool": 14,
   "perf.room_load": 14,
   "perf.kb_list_load": 14,
   "perf.app_startup": 14,

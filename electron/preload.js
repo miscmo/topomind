@@ -35,6 +35,12 @@ const ALLOWED_CHANNELS = new Set([
   'log:clearBuffer', 'log:getAvailableDates', 'log:getLogDir', 'log:export',
   // P3：一键诊断包（主进程二次脱敏 + 双目录汇总后返回 JSON 字符串）
   'log:exportBundle',
+  // AI（P0）：配置 / 密钥 / 测试连接 / 启动会话；密钥只在主进程解密
+  'ai:config:get', 'ai:config:save', 'ai:chat:test', 'ai:chat:start',
+  // AI（S1）：智能体定义读 / 写，独立 agents.json，不含任何连接配置
+  'ai:agents:get', 'ai:agents:set',
+  // AI（P3 / D）：本地简版 RAG 检索；只走主进程本地磁盘，不发起外部网络请求
+  'ai:index:query',
 ]);
 
 const ALLOWED_SEND_CHANNELS = new Set([
@@ -43,6 +49,8 @@ const ALLOWED_SEND_CHANNELS = new Set([
   'log:unsubscribe',
   // P3：原始输入黑匣子的内存镜像，主进程只进内存缓冲、绝不落盘
   'log:breadcrumbs',
+  // AI（P0）：取消当前流式会话（send 通道不触发 invoke 审计）
+  'ai:chat:cancel',
 ]);
 
 const ALLOWED_RECEIVE_CHANNELS = new Set([
@@ -52,6 +60,8 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   'app:window-state-change',
   'log:entry',
   'log:level',
+  // AI（P0）：主进程推送的流式 token / 结束 / 错误，不走高频 invoke
+  'ai:chat:chunk', 'ai:chat:done', 'ai:chat:error',
 ]);
 
 // preload loaded — intentionally silent (no console output in production)

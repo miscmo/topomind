@@ -133,6 +133,7 @@ export default memo(function CustomTitleBar({ mode }: CustomTitleBarProps) {
   // P6：Debug HUD 的全局开关。走命令而不是直接改 store，与菜单入口共用
   // observeOperation 的 user.command 埋点，开启动作本身也会出现在日志流里。
   useShortcut(['Ctrl+Shift+D'], () => { runCommand('debug.toggle') }, { scope: 'global' })
+  useShortcut(['Ctrl+Shift+A'], () => { runCommand('agent.open') }, { scope: 'global' })
 
   const menuItems = useMemo<Record<MenuKey, MenuItem[]>>(() => ({
     file: [

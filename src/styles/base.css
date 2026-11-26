@@ -205,12 +205,19 @@ textarea:focus-visible,
 html[data-tm-nav-rail-docked='true'] [data-tm-app-view] {
   left: var(--nav-rail-width) !important;
 }
-/* 2) 画布页导航栏展开时（常驻或 hover 唤出），左侧节点树与状态抽屉一起右移，
-      避免被 48px 的导航层盖住。与原有 --tm-node-tree-offset 叠加，
-      仍只改 left / margin-left，画布容器宽度与 React Flow Panel 数量恒定。 */
+/* 2) 画布页导航栏展开时，左侧栏起点与状态抽屉让位量都读**同一条左边界 B**。
+   【2026-11-25 三边栏互斥】--tm-workspace-left-boundary / --tm-node-tree-offset
+   都由 useWorkspaceGeometry 写在活跃标签页的 #app-layout 上（B = 导航栏 + 左栏），
+   不再把 rail 宽度额外叠加一次；左栏拖宽时 B 实时变化，右栏与状态抽屉同步跟随。
+   仍只改 left / margin-left，画布容器宽度与 React Flow Panel 数量恒定。 */
+/* 2a) 左栏起点恒等于导航栏宽度，直接读活跃标签页容器上的 --tm-rail-width，
+      不依赖 :root 的 dataset（dataset 在 useEffect 里写，会晚一帧）。 */
+#app-layout [data-tm-node-tree-panel] {
+  left: var(--tm-rail-width, 0px) !important;
+}
 html[data-tm-nav-rail-open='true'] #app-layout [data-tm-node-tree-panel] {
-  left: var(--nav-rail-width) !important;
+  left: var(--tm-rail-width, var(--nav-rail-width)) !important;
 }
 html[data-tm-nav-rail-open='true'] #app-layout .react-flow__panel.top.left {
-  margin-left: calc(12px + var(--tm-node-tree-offset, 0px) + var(--nav-rail-width)) !important;
+  margin-left: calc(12px + var(--tm-workspace-left-boundary, var(--tm-node-tree-offset, 0px))) !important;
 }

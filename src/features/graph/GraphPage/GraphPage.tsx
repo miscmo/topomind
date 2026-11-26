@@ -1,7 +1,7 @@
 /**
  * 图谱页面：铺满的 React Flow 图谱 + 贴在右边缘的详情/样式浮层
  */
-import { memo, useEffect } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { GraphContextProvider } from '../../../contexts/GraphContext'
 import { useSelectedNodeId, useGraphStoreApi } from '../../../stores/graphStore'
 import { registerGraphApi } from '../linkedDocumentStore'
@@ -17,6 +17,7 @@ import { useGraphPageActions } from './model/useGraphPageActions'
 import { useShortcut } from '../../../hooks/useShortcut'
 import { useTabStore } from '../../../stores/tabs/tabStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
+import { useWorkspaceGeometry } from '../../layout/useWorkspaceGeometry'
 
 interface GraphPageProps {
   tabId: string
@@ -28,6 +29,10 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
   const { canvasProps, contextMenuProps, moveDialogProps } = useGraphPageActions({ graph, tabId })
   const selectedNodeId = useSelectedNodeId()
   const graphStoreApi = useGraphStoreApi()
+  // 【三边栏水平互斥 2026-11-25】几何由本标签页自己的 #app-layout 实测；
+  // CSS 变量也只写这个容器，常驻挂载的其它知识库标签页互不影响。
+  const layoutRef = useRef<HTMLDivElement>(null)
+  const geometry = useWorkspaceGeometry({ containerRef: layoutRef, isActive })
 
   // 关联对话框挂在 App 根（全局唯一实例），保存后需要把结果广播回各标签页的画布内存。
   useEffect(() => registerGraphApi(graphStoreApi), [graphStoreApi])
@@ -68,7 +73,7 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
             体验上就是「控件被挤走」。
             画布绝对铺满、isolate 自成一层，右栏绝对贴右盖在它上面：
             画布对右栏状态完全无感知，宽度与 viewport 恒定不变。 */}
-        <div id="app-layout" className="relative w-full h-full">
+        <div id="app-layout" className="relative w-full h-full" ref={layoutRef}>
           <div id="graph-panel" className="absolute inset-0 isolate overflow-clip bg-[var(--color-canvas-bg)]">
             {/* 房间路径面包屑 / 最近打开 / 镜头诊断都在 GraphCanvas 的画布状态抽屉里，
                 视图配置项已迁入左栏「画布设置」页；这里不叠一层绝对定位组件，
@@ -80,10 +85,10 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
               <div className="h-full w-full bg-[var(--color-canvas-bg)]" aria-hidden="true" />
             )}
           </div>
-          <RightPanelContainer tabId={tabId} isActive={isActive} />
+          <RightPanelContainer tabId={tabId} isActive={isActive} geometry={geometry} />
           {/* 【左侧节点树 2026-11-13】同样是 absolute 浮层：
               不参与 flex 两栏，展开/折叠不改变 #graph-panel 宽度、Panel 定位或缩略图视口框。 */}
-          <NodeTreePanel tabId={tabId} isActive={isActive} />
+          <NodeTreePanel tabId={tabId} isActive={isActive} geometry={geometry} />
         </div>
         <GraphPageContextMenu {...contextMenuProps} />
         {moveDialogProps.moveState && (

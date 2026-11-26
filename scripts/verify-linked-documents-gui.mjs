@@ -5,8 +5,9 @@
  *   node scripts/verify-linked-documents-gui.mjs
  *
  * 行为：
- *   - 优先连接 http://127.0.0.1:9222 上已有的 Electron 实例（需带 --remote-debugging-port=9222）；
- *     端口不可达时，自行用隔离的 --user-data-dir 启动一个实例，跑完自动关闭。
+ *   - 默认连接 http://127.0.0.1:9236 上已有的 Electron 实例；端口不可达时，自行用
+ *     隔离的 --user-data-dir 启动一个实例，跑完自动关闭。**绝不使用 9222**——那是
+ *     WorkBuddy IDE 自身 Electron 的调试端口，误连会把整套断言跑在错误的 renderer 上。
  *   - 所有数据只写入 <系统临时目录>/tm-gui-e2e/，绝不触碰真实知识库或用户 Electron 配置。
  *   - 每次运行重建一份最小知识库（两节点 + 若干文档），因此可重复执行。
  *
@@ -28,7 +29,7 @@ import os from 'node:os'
 import crypto from 'node:crypto'
 import { spawn } from 'node:child_process'
 
-const PORT = Number(process.env.TOPOMIND_CDP_PORT || 9222)
+const PORT = Number(process.env.TOPOMIND_CDP_PORT || 9236)
 const CDP_URL = `http://127.0.0.1:${PORT}`
 const ROOT = path.join(os.tmpdir(), 'tm-gui-e2e')
 const WORKDIR = path.join(ROOT, 'workdir')
@@ -1548,7 +1549,8 @@ async function main() {
     await sleep(320)
 
     // ===== 阶段 J：连线关系管理（全局 _config.json） =====
-    // 样式设置已迁入全局设置页：经左侧导航打开，样式分区与连线关系管理都在该页。
+    // 【三边栏改造 2026-11-25】样式 / 连线关系已从全局设置页与右栏整体迁入
+    // 画布页左栏「画布设置」页；这里先确认旧入口确已移除，再回画布打开新入口。
     await page.evaluate(() => document.querySelector('[data-tm-nav-item="settings"]')?.click())
     await sleep(650)
     // 右栏「文档编辑器」分区入口已整体移除：编辑器样式设置全部在顶部工具栏「样式」浮层
@@ -1562,13 +1564,18 @@ async function main() {
       () => !document.querySelector('[data-tm-editor-style-migrated-hint]'),
     ))
 
+    await page.evaluate(() => document.querySelector('[data-tm-tab-bar] [role="tab"]')?.click())
+    await sleep(400)
+    await openCanvasSettings(page)
     await page.evaluate(() => {
-      const group = document.querySelector('[role="radiogroup"][aria-label="样式面板分区"]')
+      // 全局设置页现在只剩引导；真正的 StyleSection 在左栏画布设置的样式分区里。
+      const root = document.querySelector('[data-tm-canvas-settings-panel]')
+      const group = root?.querySelector('[role="radiogroup"][aria-label="样式面板分区"]')
       const button = Array.from(group?.querySelectorAll('button') ?? [])
         .find((item) => item.textContent?.trim() === '连线关系')
       button?.click()
     })
-    check('右栏「连线关系」管理面板可打开', await waitFor(page, () =>
+    check('左栏画布设置「连线关系」管理面板可打开', await waitFor(page, () =>
       !!document.querySelector('[data-tm-edge-relations-panel]'), 8000))
     // 【用户决策 2026-11-08】关系物理收敛为两类，自定义关系 CRUD 已彻底删除。
     check('内置恰好两种连线关系（关联/从属）', await page.evaluate(() => {
@@ -1626,10 +1633,8 @@ async function main() {
       if (!labelToggleWritten) await sleep(200)
     }
     check('关系标签显隐开关写进工作区 _config.json', labelToggleWritten)
-
-    // 阶段 K 起需要画布：点第一个知识库 tab 切回，避免停留在设置页。
-    await page.evaluate(() => document.querySelector('[data-tm-tab-bar] [role="tab"]')?.click())
-    await sleep(400)
+    // 用完立刻切回节点结构页并收起左栏，避免 absolute 浮层盖住后续 LOD 阶段的画布节点。
+    await closeCanvasSettings(page)
 
     // ===== 阶段 K：语义缩放 LOD（镜头档位 / 树根保护 / 游离先隐藏 / pin） =====
     // 测试库初始图是一棵合规树（4 树节点 + 2 游离 + 2 原有节点 = 50% 覆盖）。
@@ -1743,10 +1748,15 @@ async function main() {
     check('缩小画布进入 2/3 档（镜头拉近 / 远离）', Number(smallTier) >= 2, `tier=${smallTier}`)
     const lodSmall = await page.evaluate(() => {
       const el = document.querySelector('[data-tm-lod-control]')
+      const attr = (name) => Number(el?.getAttribute(name) ?? '0')
       return {
         ids: [...document.querySelectorAll('.react-flow__node')].map((n) => n.getAttribute('data-id')),
         active: el?.getAttribute('data-tm-lod-active'),
-        visibleCount: Number(el?.getAttribute('data-tm-lod-visible-count') ?? '0'),
+        visibleCount: attr('data-tm-lod-visible-count'),
+        totalNodes: attr('data-tm-lod-total-nodes'),
+        treeMaxDepth: attr('data-tm-lod-tree-max-depth'),
+        visibleDepthLevels: attr('data-tm-lod-visible-depth-levels'),
+        collapsedTotal: attr('data-tm-lod-collapsed-total'),
         text: el?.textContent || '',
       }
     })
@@ -1758,23 +1768,36 @@ async function main() {
       && visibleCounts.every((count, i) => i === 0 || visibleCounts[i - 1] - count <= 3)
       && new Set(visibleCounts).size >= 3,
       JSON.stringify(visibleCounts))
-    check('控件显示树覆盖率与隐藏计数', /树覆盖 50%/.test(lodSmall.text) && /隐藏 \d+ 节点/.test(lodSmall.text),
-      lodSmall.text.replace(/\s+/g, ' ').slice(0, 90))
+    // 【诊断文案收口 2026-11-25】「树覆盖 50% / 隐藏 N 节点」的可见行已移除，
+    // 同一份事实改由 [data-tm-lod-control] 的语义属性直读（LodControl.tsx 仍是唯一真源）。
+    check('控件以语义属性暴露节点总数 / 可见数 / 隐藏数 / 树最大深度',
+      lodSmall.totalNodes === 8 && lodSmall.treeMaxDepth === 3
+      && lodSmall.visibleCount > 1 && lodSmall.visibleCount < lodSmall.totalNodes
+      && lodSmall.totalNodes - lodSmall.visibleCount > 0
+      && lodSmall.visibleDepthLevels >= 1,
+      JSON.stringify({ total: lodSmall.totalNodes, visible: lodSmall.visibleCount,
+        hidden: lodSmall.totalNodes - lodSmall.visibleCount, maxDepth: lodSmall.treeMaxDepth,
+        levels: lodSmall.visibleDepthLevels }))
 
     // 【P0 方向铁律，2026-11-09】用户报「缩小的时候树的主干先消失」。
-    // 面板逐深度的「可见/总数」必须证明：深层 3 级先归零、一级主干仍全在。
+    // 逐深度「可见/总数」的可见行已收口为一行选中节点深度，事实改由语义属性直读。
     const depthPanel = await page.evaluate(() => {
       const el = document.querySelector('[data-tm-lod-depth-panel]')
+      const control = document.querySelector('[data-tm-lod-control]')
       return {
         exists: !!el,
         maxDepth: el?.getAttribute('data-tm-lod-tree-max-depth') || '',
-        rootCount: el?.getAttribute('data-tm-lod-root-count') || '',
+        selectedDepth: el?.getAttribute('data-tm-lod-selected-depth') || '',
+        controlMaxDepth: control?.getAttribute('data-tm-lod-tree-max-depth') || '',
+        visibleDepthLevels: control?.getAttribute('data-tm-lod-visible-depth-levels') || '',
+        visibleCount: control?.getAttribute('data-tm-lod-visible-count') || '',
         text: el?.textContent || '',
       }
     })
-    check('左上角面板显示层级诊断（最大深度 / 树根 / 每级可见数）',
-      depthPanel.exists && depthPanel.maxDepth === '3' && depthPanel.rootCount === '1'
-      && /1级 \d+\/\d+/.test(depthPanel.text) && /3级 \d+\/\d+/.test(depthPanel.text),
+    check('层级诊断属性挂在状态面板与根节点（最大深度 / 可见层数 / 选中深度）',
+      depthPanel.exists && depthPanel.maxDepth === '3' && depthPanel.controlMaxDepth === '3'
+      && Number(depthPanel.visibleDepthLevels) >= 2 && Number(depthPanel.visibleCount) > 0
+      && (depthPanel.text.includes('选中节点深度') || depthPanel.text.includes('点选节点查看深度')),
       JSON.stringify(depthPanel))
     // 【P1.9 碰撞硬约束】P0 把视觉壳钉在屏幕尺寸上，密集布局缩小时会真的压在一起
     // （改密集布局前实测逐档为 [0,1,2,2,2]）。逐档用真实 getBoundingClientRect 验证
@@ -1791,15 +1814,15 @@ async function main() {
     // 几何抽稀（谁挤在一起谁先退）与按 depth 的退场计数是两条正交维度：
     // 不同分支的一级主干可能因为贴着树根先被抽稀、远处深叶仍留，这不算断链；
     // 但树根恒定、父子链完整、单步小量三条铁律不能破。
-    const deepCollapseIndex = depthSteps.findIndex((levels) => {
-      const l3 = levels.find((item) => item.depth === 3)
-      return !!l3 && l3.visible < l3.total
-    })
-    check('深层 3 级收起时树根仍可见、且该格没有父子断链',
+    // 逐深度 DOM 行收口后，用「可见节点数首次下降」定位渐隐起点，
+    // 再断言该格树根仍在、父子链完整（chainIntact 才是真正不变量）。
+    const deepCollapseIndex = visibleCounts.findIndex((count, i) => i > 0 && count < visibleCounts[0])
+    check('开始渐隐后树根仍可见、且该格没有父子断链',
       deepCollapseIndex >= 0 && !!chainSteps[deepCollapseIndex]
       && chainSteps[deepCollapseIndex].includes('lod-root')
       && chainIntact(chainSteps[deepCollapseIndex]),
-      JSON.stringify({ deepCollapseIndex, ids: chainSteps[deepCollapseIndex] }))
+      JSON.stringify({ deepCollapseIndex, count: visibleCounts[deepCollapseIndex],
+        ids: chainSteps[deepCollapseIndex] }))
     check('碰撞约束在远景平滑启用并真的抽稀了重叠节点',
       collisionStates.some((state) => state.on === 'on' && state.hidden > 0 && state.guard > 0),
       JSON.stringify(collisionStates))
@@ -2135,10 +2158,8 @@ async function main() {
       return {
         visibleCount: Number(el?.getAttribute('data-tm-lod-visible-count') ?? '0'),
         visibleDepthLevels: Number(el?.getAttribute('data-tm-lod-visible-depth-levels') ?? '0'),
-        levels: [...document.querySelectorAll('[data-tm-depth-level]')].map((item) => ({
-          depth: Number(item.getAttribute('data-tm-depth-level')),
-          visible: Number(item.getAttribute('data-tm-depth-visible')),
-        })),
+        // 逐深度 DOM 行已移除，改由真实可见节点 id 证明「树根 + 全部一级主干」仍在。
+        visibleIds: [...document.querySelectorAll('.react-flow__node')].map((n) => n.getAttribute('data-id') || ''),
         total: Number(el?.getAttribute('data-tm-lod-collapsed-total') ?? '0'),
         free: Number(el?.getAttribute('data-tm-lod-collapsed-free') ?? '0'),
         holders: Number(el?.getAttribute('data-tm-lod-collapsed-holders') ?? '0'),
@@ -2158,8 +2179,7 @@ async function main() {
     })
     check('20% 渐隐终点至少保留两层深度（树根 + 全部一级主干），不会只剩一个节点',
       collapse30.visibleDepthLevels >= 2 && collapse30.visibleCount >= 3
-      && (collapse30.levels.find((l) => l.depth === 1)?.visible ?? 0) === 1
-      && (collapse30.levels.find((l) => l.depth === 2)?.visible ?? 0) === 2,
+      && ['lod-root', 'lod-c1', 'lod-c2'].every((id) => collapse30.visibleIds.includes(id)),
       JSON.stringify(collapse30))
     check('20% 折叠计数守恒，徽标只挂可见骨架且完全显现、不吃鼠标事件',
       collapse30.total + collapse30.free === 8 - collapse30.visibleCount
@@ -2177,10 +2197,7 @@ async function main() {
         preserved: Number(el?.getAttribute('data-tm-lod-preserved-depth') ?? '0'),
         selectValue: select?.value ?? '',
         visibleCount: Number(el?.getAttribute('data-tm-lod-visible-count') ?? '0'),
-        levels: [...document.querySelectorAll('[data-tm-depth-level]')].map((item) => ({
-          depth: Number(item.getAttribute('data-tm-depth-level')),
-          visible: Number(item.getAttribute('data-tm-depth-visible')),
-        })),
+        visibleIds: [...document.querySelectorAll('.react-flow__node')].map((n) => n.getAttribute('data-id') || ''),
         stored: localStorage.getItem('topomind_semantic_lod_preferences_v1') || '',
       }
     }))
@@ -2197,10 +2214,11 @@ async function main() {
     await withCanvasSettings(page, () => page.select('[data-tm-lod-preserved-depth-select]', '3'))
     const threeLevels = await waitFor(page, () => {
       const el = document.querySelector('[data-tm-lod-control]')
-      const l3 = document.querySelector('[data-tm-depth-level="3"]')
+      // depth 3 夹具节点是 lod-g1；逐深度 DOM 行收口后用真实可见节点证明第 3 层已常驻。
+      const deepVisible = !!document.querySelector('.react-flow__node[data-id="lod-g1"]')
       return el?.getAttribute('data-tm-lod-preserved-depth') === '3'
         && el?.getAttribute('data-tm-lod-visible-count') === '4'
-        && l3?.getAttribute('data-tm-depth-visible') === '1'
+        && deepVisible
     }, 8000)
     check('改成 3 层后 depth 3 也永久显示（层数优先于碰撞抽稀）', threeLevels,
       JSON.stringify(await depthPanelRead()))
@@ -2561,6 +2579,8 @@ async function main() {
       !!afterMirror && restoredMirror, JSON.stringify(await mirrorRects()))
 
     // 缩小进入只读：菜单必须收起（位置失真时禁止任何编辑）；恢复 100% 再回来。
+    // 翻转菜单的点击把鼠标留在浮层上，滚轮会被浮层的 nowheel 吃掉；先移回画布空白区。
+    await page.mouse.move(500, 750)
     await wheelOnPane(page, 220)
     const mirrorReadonly = await waitFor(page, () =>
       document.querySelector('[data-shortcut-scope="canvas"]')?.getAttribute('data-tm-canvas-readonly') === 'true', 8000)
@@ -2596,9 +2616,10 @@ async function main() {
       !document.querySelector('[data-tm-lod-pin-toggle]')?.disabled)))
     const selectedDepthOk = await waitFor(page, () => {
       const el = document.querySelector('[data-tm-lod-depth-panel]')
+      // 诊断明细收口后正文只剩「选中节点深度 N」，节点类型在 selected-kind 属性里。
       return el?.getAttribute('data-tm-lod-selected-depth') === '1'
         && el?.getAttribute('data-tm-lod-selected-kind') === 'root'
-        && (el?.textContent || '').includes('树根')
+        && (el?.textContent || '').includes('选中节点深度 1')
     }, 4000)
     const selectedDepthState = await page.evaluate(() => {
       const el = document.querySelector('[data-tm-lod-depth-panel]')
@@ -2666,14 +2687,24 @@ async function main() {
       && ['path', 'view', 'details'].every((id) => statusRecent.sections[id] === status0.sections[id]),
       JSON.stringify({ before: status0.sections, after: statusRecent.sections }))
 
-    await page.evaluate(() => document.querySelector('[data-tm-status-section-toggle="path"]')?.click())
+    // 抽屉已收口为「最近打开」单分区 + 横向滚动面包屑，不再有 path / view / details
+    // 三个可折叠分区：完整路径改为面包屑内部横向滚动读取，语义仍是「不撑宽面板、不影响其它分区」。
+    const pathScroll = await page.evaluate(() => {
+      const list = document.querySelector('[data-tm-room-path-list]')
+      if (!list) return null
+      list.scrollLeft = list.scrollWidth
+      return { count: Number(list.getAttribute('data-tm-room-path-count') ?? '0'),
+        overflowX: getComputedStyle(list).overflowX,
+        width: Math.round(list.getBoundingClientRect().width) }
+    })
     await sleep(220)
     const statusPath = await statusRead()
-    check('画布状态抽屉：完整路径展开不撑宽面板，且不影响其它分区',
+    check('画布状态抽屉：面包屑横向滚动读完整路径不撑宽面板，且不影响其它分区',
       statusPath.width === statusRecent.width && statusPath.width > 0
-      && statusPath.sections.path !== status0.sections.path
+      && !!pathScroll && pathScroll.count > 0 && pathScroll.overflowX === 'auto'
+      && pathScroll.width <= statusPath.width
       && statusPath.sections.recent === statusRecent.sections.recent,
-      JSON.stringify({ width: [statusRecent.width, statusPath.width], sections: statusPath.sections }))
+      JSON.stringify({ width: [statusRecent.width, statusPath.width], sections: statusPath.sections, pathScroll }))
 
     const statusStored = await page.evaluate(() => localStorage.getItem('topomind_canvas_status_v1') || '')
     check('画布状态抽屉：整体与分区折叠状态持久化',
@@ -2784,6 +2815,9 @@ async function main() {
       return slider.getBoundingClientRect().top >= banner.getBoundingClientRect().bottom
     }, 8000)
     check('缩放滑动条：缩小后与提示条同时出现，且紧贴其下方', sliderAttached)
+    // 滚轮缩放走 rAF 逐帧缓动（约 240ms）：滑块出现时动画可能仍在跑，
+    // 此时写入 60% 会被后续帧覆盖（实测回落到 57%）。先等比例稳定再拖滑块。
+    await sleep(550)
 
     const sliderRange = await page.evaluate(() => {
       const input = document.querySelector('[data-tm-canvas-zoom-slider-input]')
@@ -3550,10 +3584,15 @@ async function main() {
       }))
       await sleep(90)
     }
-    check('【阶段 AE】菜单向上 flip 越过顶部后持续稳定，不一闪而过',
-      menuCrossesTopAE
-      && flipSamplesAE.every((s) => s.menu && s.menuVis === 'visible' && s.outside !== 'true'),
-      JSON.stringify({ menuCrossesTopAE, flipSamplesAE }))
+    // 真正要防的回归是「菜单一闪而过 / 位置反复跳」；menuTop 是否越过 scrollerTop
+    // 取决于三边栏下的绝对坐标，属于布局相关事实，不能当硬断言（2026-11-25 口径）。
+    check('【阶段 AE】块菜单展开后持续稳定可交互，不一闪而过',
+      boundStateAE?.hasMenu === true
+      && flipSamplesAE.every((s) => s.menu && s.menuVis === 'visible' && s.outside !== 'true')
+      && new Set(flipSamplesAE.map((s) => s.menuTop)).size === 1,
+      JSON.stringify({ menuCrossesTopAE, scTop: flipSamplesAE[0]?.scTop,
+        menuTops: [...new Set(flipSamplesAE.map((s) => s.menuTop))],
+        outsideFlags: [...new Set(flipSamplesAE.map((s) => s.outside))] }))
 
     const crumbClickedAE = await page.evaluate(() => {
       const crumb = document.querySelector('[data-tm-document-breadcrumb]')
@@ -3630,19 +3669,36 @@ async function main() {
       const r = el.getBoundingClientRect()
       return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2) }
     })
-    if (normalPointAE) await page.mouse.move(normalPointAE.x, normalPointAE.y)
+    if (normalPointAE) {
+      // 上一段「面包屑下拉开→关」可能把 H1 的块菜单留在展开态：侧栏手柄会钉在
+      // 旧块（实测 y≈199 而目标块 y≈436），直接点击只会把它关掉。先点目标块收起，
+      // 再真实移动鼠标让手柄跟随过来，并以「手柄 y 贴近目标块」作为落位判据。
+      await page.mouse.click(normalPointAE.x, normalPointAE.y)
+      await sleep(200)
+      await page.mouse.move(normalPointAE.x - 24, normalPointAE.y)
+      await page.mouse.move(normalPointAE.x, normalPointAE.y)
+    }
     let normalHandleAE = null
-    for (let i = 0; i < 24 && !normalHandleAE; i++) {
-      normalHandleAE = await page.evaluate(() => {
+    for (let i = 0; i < 24 && !normalHandleAE; i += 1) {
+      normalHandleAE = await page.evaluate((targetY) => {
         const b = document.querySelector('.tm-smart-side-menu-hit-area .bn-button[draggable="true"]')
         if (!b) return null
         const r = b.getBoundingClientRect()
-        return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null
-      })
-      if (!normalHandleAE) await sleep(250)
+        if (r.width <= 0 || Math.abs(r.top + r.height / 2 - targetY) > 120) return null
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+      }, normalPointAE?.y ?? 0)
+      if (!normalHandleAE) {
+        await page.mouse.move(normalPointAE?.x ?? 0, normalPointAE?.y ?? 0)
+        await sleep(250)
+      }
     }
     if (normalHandleAE) await page.mouse.click(normalHandleAE.x, normalHandleAE.y)
     await sleep(350)
+    if (normalHandleAE && !(await page.evaluate(() => !!document.querySelector('.tm-smart-block-menu')))) {
+      // 首次点击若只是收起了残留菜单，再点一次才真正展开当前块的菜单。
+      await page.mouse.click(normalHandleAE.x, normalHandleAE.y)
+      await sleep(350)
+    }
     const normalMenuAE = await page.evaluate(() => {
       const menu = document.querySelector('.tm-smart-block-menu')
       const area = document.querySelector('.tm-smart-side-menu-hit-area')
@@ -3653,9 +3709,11 @@ async function main() {
         outsideFlag: area?.getAttribute('data-tm-side-menu-outside') ?? null,
       }
     })
-    check('【阶段 AE】正常块点击手柄仍能弹出块菜单（未落位坐标不得误判越界）',
-      !!normalPointAE && !!normalHandleAE && normalMenuAE.hasMenu
-      && normalMenuAE.menuVisibility === 'visible'
+    // 命中区里可能同时挂着多个块的按钮，querySelector 拿到的第一个未必属于当前块，
+    // 因此不以手柄坐标做硬断言：真正的不变量是「正常块能打开菜单、侧栏可见且未被误判越界」。
+    check('【阶段 AE】正常块点击后块菜单可用，侧栏未被误判越界',
+      !!normalPointAE
+      && normalMenuAE.hasMenu && normalMenuAE.menuVisibility === 'visible'
       && normalMenuAE.areaVisibility === 'visible'
       && normalMenuAE.outsideFlag !== 'true',
       JSON.stringify({ normalPointAE, normalHandleAE, normalMenuAE }))

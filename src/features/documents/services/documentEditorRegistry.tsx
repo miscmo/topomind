@@ -7,6 +7,8 @@ import type { BlockNoteBlock, SmartDocumentContent } from '../SmartDocumentEdito
 import { canDeriveAttachmentRefFromUrl, getAttachmentFileNameFromRef, getAttachmentRefFromBlockProps, normalizeAttachmentRef } from '../SmartDocumentEditor/attachmentPath'
 import { normalizeMindMapDocumentContent } from '../MindMapDocumentEditor/mindMapDocumentTypes'
 import { useStorage } from '../../../core/storage'
+import { useDocumentExternalRevision } from './documentExternalWriteBus'
+import { topoDocumentIdFromPath } from '../types/documentTypes'
 
 const SmartDocumentEditor = lazy(() => import('../SmartDocumentEditor/SmartDocumentEditor').then(m => ({ default: m.SmartDocumentEditor })))
 const MindMapDocumentEditor = lazy(() => import('../MindMapDocumentEditor/MindMapDocumentEditor').then(m => ({ default: m.MindMapDocumentEditor })))
@@ -199,6 +201,12 @@ function SmartDocumentAdapter({
     [title, value]
   )
   const documentInstanceKey = attachmentInsertTargetKey || title
+  // AI 文档写入是「编辑器外部写盘」：BlockNote 的 initialContent 只在 mount 时读一次，
+  // 必须把外部写入 revision 拼进 key 强制重挂载，否则编辑器仍持有旧的整篇 draft，
+  // 下一次 1500ms autosave 会把 AI 写进去的内容覆盖回来。
+  const externalDocId = topoDocumentIdFromPath(documentInstanceKey)
+  const externalRevision = useDocumentExternalRevision(externalDocId)
+  const editorInstanceKey = `${documentInstanceKey}#r${externalRevision}`
   const attachmentUrlCacheRef = React.useRef<Map<string, string>>(new Map())
   const knownAttachmentNamesRef = React.useRef<Set<string>>(new Set())
   const [attachmentRuntimeVersion, setAttachmentRuntimeVersion] = React.useState(0)
@@ -348,10 +356,10 @@ function SmartDocumentAdapter({
 
   return (
     <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-muted-foreground">加载编辑器...</div>}>
-      {/* 编辑器是崩过的高风险组件：单独隔离，切到别的文档时（documentInstanceKey 变化）自动恢复 */}
-      <ErrorBoundary label="智能文档编辑器" resetKeys={[documentInstanceKey]}>
+      {/* 编辑器是崩过的高风险组件：单独隔离；切文档或 AI 外部写入（key 带 revision）时自动恢复 */}
+      <ErrorBoundary label="智能文档编辑器" resetKeys={[editorInstanceKey]}>
         <SmartDocumentEditor
-          key={documentInstanceKey}
+          key={editorInstanceKey}
           value={runtimeValue}
           onChange={handleChange}
           onTocChange={onTocChange}

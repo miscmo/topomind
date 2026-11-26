@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStorage } from '../../../core/storage'
+import {
+  getDocumentExternalRevision,
+  getDocumentExternalWrite,
+  markDocumentDirty,
+  useDocumentExternalRevision,
+} from '../../../features/documents/services/documentExternalWriteBus'
 import { registerTabSaver } from '../../../core/close-guard'
 import { logger } from '../../../core/logger'
 import { logAction } from '../../../core/log-backend'
@@ -50,6 +56,10 @@ export function useDetailDocumentSession({
   const draftVersionRef = useRef(0)
   const savedDraftVersionRef = useRef(0)
   const selectionPerfRef = useRef<{ nodeId: string; startedAt: number; logged: boolean } | null>(null)
+  const externalRevision = useDocumentExternalRevision(activeTopoDocumentId)
+  const adoptedExternalRevisionRef = useRef<{ docId: string | null; revision: number }>({
+    docId: null, revision: -1,
+  })
 
   const handleSave = useCallback(async () => {
     if (!selectedNodeId || !nodePath || !currentDocumentKey) return
@@ -57,6 +67,11 @@ export function useDetailDocumentSession({
     const saveSeq = ++saveRequestSeqRef.current
     const saveVersion = draftVersionRef.current
     const contentSnapshot = draftContent
+    // AI 外部写入：本次保存启动时记下 revision，写盘前再比一次。若期间 AI 已写盘，
+    // 这份 draft 就是陈旧的整篇内容，绝对不能覆盖回去（1500ms autosave 的最大风险）。
+    const externalRevisionAtStart = activeTopoDocumentId
+      ? getDocumentExternalRevision(activeTopoDocumentId)
+      : 0
     const node = storeApi.getState().nodesMap.get(selectedNodeId)
     const label = node?.data.label
     const saveStartedAt = performance.now()
@@ -72,6 +87,11 @@ export function useDetailDocumentSession({
         }
 
         if (contentToWrite === null) contentToWrite = {}
+        if (activeTopoDocumentId
+          && getDocumentExternalRevision(activeTopoDocumentId) !== externalRevisionAtStart) {
+          // 放弃这次陈旧保存即可：外部写入的认领 effect 已把新内容设为干净基线。
+          return
+        }
         await storage.writeTopoDocument(nodePath, activeTopoDocumentId, contentToWrite)
 
         if (saveRequestSeqRef.current !== saveSeq || draftVersionRef.current !== saveVersion || currentDocumentKey !== saveKey) {
@@ -299,6 +319,36 @@ export function useDetailDocumentSession({
     setDraftContent(currentDocumentKey, value)
     setIsDocumentDirty(true)
   }, [currentDocumentKey, setDraftContent])
+
+  // AI 写入闸：把「当前文档是否正有未保存草稿」登记到外部写入总线。
+  // 脏草稿存在时 AgentPatch 的预览阶段就会阻断，绝不靠静默合并去赌。
+  useEffect(() => {
+    markDocumentDirty(activeTopoDocumentId, isDocumentDirty)
+    return () => markDocumentDirty(activeTopoDocumentId, false)
+  }, [activeTopoDocumentId, isDocumentDirty])
+
+  // AI 写盘成功后认领全新基线：draft / saved / detail cache 同步换成新内容，
+  // 编辑器宿主按同一 revision 重挂载，于是下一次 autosave 拿到的已是新正文。
+  useEffect(() => {
+    if (!activeTopoDocumentId) {
+      adoptedExternalRevisionRef.current = { docId: null, revision: -1 }
+      return
+    }
+    if (adoptedExternalRevisionRef.current.docId !== activeTopoDocumentId) {
+      // 首次见到这份文档只记基线；历史内容由正常的读盘链路负责加载。
+      adoptedExternalRevisionRef.current = { docId: activeTopoDocumentId, revision: externalRevision }
+      return
+    }
+    if (externalRevision <= adoptedExternalRevisionRef.current.revision) return
+    adoptedExternalRevisionRef.current.revision = externalRevision
+    const event = getDocumentExternalWrite(activeTopoDocumentId)
+    if (!event || !currentDocumentKey) return
+    setDetailContent(currentDocumentKey, event.content)
+    setDraftContent(currentDocumentKey, event.content)
+    setSavedContentState({ key: currentDocumentKey, content: event.content })
+    setIsDocumentDirty(false)
+    savedDraftVersionRef.current = draftVersionRef.current
+  }, [externalRevision, activeTopoDocumentId, currentDocumentKey, setDetailContent, setDraftContent])
 
   return {
     draftContent,

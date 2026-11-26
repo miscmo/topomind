@@ -1,17 +1,18 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
+import { applyGeometryPatch, resolveWorkspaceContainer } from '../layout/useWorkspaceGeometry'
+import type { WorkspaceGeometry } from '@/domain/layout/workspaceGeometry'
+import { TM_UI } from '@/shared/ui/controlStyles'
 import { useResizePanel } from '../../hooks/useResizePanel'
 import RightPanelShell from './RightPanelShell'
 
 interface RightPanelContainerProps {
   tabId: string
   isActive?: boolean
+  /** 由 GraphPage 统一计算的三边栏几何（唯一 clamp 真源）。 */
+  geometry: WorkspaceGeometry
 }
-
-const RIGHT_PANEL_MIN_RATIO = 0.2
-const RIGHT_PANEL_MAX_RATIO = 0.8
-const RIGHT_PANEL_WIDTH_FLOOR = 280
 
 /**
  * 「浮层交互」白名单：命中这些祖先的元素一律不算「焦点移出右栏」。
@@ -47,46 +48,54 @@ const RIGHT_PANEL_OVERLAY_SELECTOR = [
   .map((selector) => `${selector}:not([data-tm-exiting])`)
   .join(', ')
 
-/** 按「整个应用（窗口）宽度」的百分比计算可拖拽的 [min, max] 范围。 */
-function getRightPanelBounds() {
-  const appWidth = typeof window !== 'undefined' ? window.innerWidth : 1280
-  const min = Math.max(RIGHT_PANEL_WIDTH_FLOOR, Math.round(appWidth * RIGHT_PANEL_MIN_RATIO))
-  const max = Math.round(appWidth * RIGHT_PANEL_MAX_RATIO)
-  return { min, max }
-}
-
-export default memo(function RightPanelContainer({ tabId, isActive = true }: RightPanelContainerProps) {
+/**
+ * 拖拽区间与最大化宽度一律来自 geometry（B = 导航栏 + 左侧栏，C = W − B）：
+ * 常态 clamp(desired, rightMin, C)，最大化 width = C 且 left = B。
+ * 这里不再按整个窗口的比例另算一套边界。
+ */
+export default memo(function RightPanelContainer({ tabId, isActive = true, geometry }: RightPanelContainerProps) {
   const collapsed = useRightPanelStore((s) => s.rightPanelCollapsed)
   const maximized = useRightPanelStore((s) => s.rightPanelMaximized)
   const pinned = useRightPanelStore((s) => s.rightPanelPinned)
-  const width = useRightPanelStore((s) => s.rightPanelWidth)
   const activeTab = useRightPanelStore((s) => s.rightPanelTab)
   const setWidth = useRightPanelStore((s) => s.setRightPanelWidth)
   const setActiveTab = useRightPanelStore((s) => s.setRightPanelTab)
   const collapse = useRightPanelStore((s) => s.collapseRightPanel)
   const [willAutoCollapse, setWillAutoCollapse] = useState(false)
-  const { min: RIGHT_PANEL_MIN_WIDTH, max: RIGHT_PANEL_MAX_WIDTH } = getRightPanelBounds()
-  const dragStartWidthRef = useRef(width)
+  const [edgeHint, setEdgeHint] = useState<string | null>(null)
+  const dragStartWidthRef = useRef(geometry.rightWidth)
   const autoCollapseThreshold = Math.floor(dragStartWidthRef.current / 2)
-  const widthRef = useRef(width)
-  widthRef.current = width
   const containerRef = useRef<HTMLDivElement>(null)
   const hadFocusRef = useRef(false)
 
+  const boundaryName = geometry.leftWidth > 0
+    ? '左侧栏边界'
+    : geometry.railWidth > 0 ? '导航栏边界' : '工作区左边缘'
+
   const { isResizing, handleMouseDown: handleResizeMouseDown } = useResizePanel({
-    initialWidth: width,
-    onWidthChange: setWidth,
-    minWidth: RIGHT_PANEL_MIN_WIDTH,
-    maxWidth: RIGHT_PANEL_MAX_WIDTH,
+    initialWidth: geometry.rightWidth,
+    // 拖拽期间只改 #app-layout 上的 CSS 变量：右栏与它内部的编辑器不逐帧重渲染。
+    onWidthChange: (nextWidth) => {
+      applyGeometryPatch(resolveWorkspaceContainer(containerRef.current), {
+        rightDesiredWidth: nextWidth,
+      })
+    },
+    minWidth: geometry.rightMin,
+    maxWidth: geometry.rightMax,
     onResizeChange: ({ rawWidth }) => {
       setWillAutoCollapse(rawWidth <= autoCollapseThreshold)
+      if (rawWidth >= geometry.rightMax) setEdgeHint(`已到${boundaryName}`)
+      else if (rawWidth <= geometry.rightMin) setEdgeHint('已到右栏最小宽度')
+      else setEdgeHint(null)
     },
     onResizeEnd: ({ rawWidth, width: nextWidth }) => {
       setWillAutoCollapse(false)
+      setEdgeHint(null)
       if (rawWidth <= autoCollapseThreshold) {
         collapse()
         return
       }
+      // 只有用户主动拖拽才写 desired；左栏开合 / rail 显隐 / 窗口 resize 都不会回写。
       setWidth(nextWidth)
     },
   })
@@ -165,46 +174,47 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
     }
   }, [collapsed, pinned, maximized, isActive])
 
-  // 窗口尺寸变化时，把已保存宽度重新夹回 [20%, 80%]，避免面板超出可用空间。
-  // 同样只对活跃标签页执行：其它标签页挂载时不能顺手改掉活跃知识库的宽度。
-  useEffect(() => {
-    if (!isActive) return
-    const handleWindowResize = () => {
-      const { min, max } = getRightPanelBounds()
-      const next = Math.max(min, Math.min(max, widthRef.current))
-      if (next !== widthRef.current) setWidth(next)
-    }
-    window.addEventListener('resize', handleWindowResize)
-    handleWindowResize()
-    return () => window.removeEventListener('resize', handleWindowResize)
-  }, [setWidth, isActive])
+  // 窗口尺寸变化由 useWorkspaceGeometry 的 ResizeObserver 统一重算 effective；
+  // 用户偏好宽度保持不动，窗口放大后右栏会自动恢复原来的宽度。
 
   const handleResizeStart = useCallback((event: MouseEvent<HTMLDivElement>) => {
-    dragStartWidthRef.current = width
+    dragStartWidthRef.current = geometry.rightWidth
     setWillAutoCollapse(false)
+    setEdgeHint(null)
     handleResizeMouseDown(event)
-  }, [handleResizeMouseDown, width])
+  }, [geometry.rightWidth, handleResizeMouseDown])
 
   const handleResizeDoubleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
     setWillAutoCollapse(false)
+    setEdgeHint(null)
     collapse()
   }, [collapse])
 
-  // 【右栏浮层 2026-11-12】常态贴右、最大化铺满，两种形态都是 absolute，绝不参与
-  // app-layout 的 flex 计算：折叠/展开只切换显隐，画布宽度、React Flow Panel 定位和
-  // 缩略图视口框都不受影响。z-30 高于画布 isolate 层（0），低于 fixed 右键菜单 z-50
-  // 与全局弹窗 z-10000，避免浮层把菜单盖住。
+  // 【右栏浮层 2026-11-12 / 2026-11-25 互斥改造】常态贴右、最大化铺满 B 右侧可用区，
+  // 两种形态都是 absolute，绝不参与 app-layout 的 flex 计算：折叠/展开只切换显隐，
+  // 画布宽度、React Flow Panel 定位和缩略图视口框都不受影响。z-30 高于画布 isolate 层（0），
+  // 低于 fixed 右键菜单 z-50 与全局弹窗，避免浮层把菜单盖住；与左栏 / 导航栏零重叠靠
+  // --tm-workspace-left-boundary 保证，不靠 z-index 互相遮挡。
   return (
     <div
       ref={containerRef}
-      className={`${collapsed ? 'hidden' : 'flex'} h-full shrink-0 right-panel-container ${maximized ? 'absolute inset-0 z-30 bg-[var(--color-canvas-bg)] w-full' : 'absolute inset-y-0 right-0 z-30'}`}
+      className={`${collapsed ? 'hidden' : 'flex'} h-full shrink-0 right-panel-container absolute inset-y-0 right-0 z-30 ${maximized ? 'bg-[var(--color-canvas-bg)]' : ''}`}
+      style={maximized
+        ? { left: 'var(--tm-workspace-left-boundary, 0px)', width: 'auto' }
+        : { width: 'var(--tm-right-panel-width, 600px)' }}
       data-tm-right-panel-overlay="true"
       data-tm-right-panel-pinned={pinned ? 'true' : 'false'}
       data-tm-right-panel-focus-auto-hide="true"
+      data-tm-right-panel-left-boundary={geometry.boundary}
       aria-hidden={collapsed}
     >
+      {!maximized && edgeHint && isResizing && (
+        <div className={`pointer-events-none absolute left-3 top-3 z-20 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 font-medium text-[var(--color-text-secondary)] shadow-[var(--shadow-md)] tm-popover-enter ${TM_UI.hint}`}>
+          {edgeHint}
+        </div>
+      )}
       {!maximized && willAutoCollapse && isResizing && (
         <>
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 z-[22] w-[3px] bg-[var(--color-danger)] shadow-[-10px_0_20px_rgba(239,68,68,0.15)] transition-all" />
@@ -215,7 +225,8 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
       )}
       {!maximized && (
         <div
-          className="group w-2 -ml-1 h-full cursor-col-resize shrink-0 bg-transparent z-[20] relative select-none transition-colors"
+          data-tm-right-panel-resize=""
+          className="group absolute left-0 top-0 bottom-0 z-[20] w-2 -translate-x-1/2 cursor-col-resize bg-transparent select-none transition-colors"
           onMouseDown={handleResizeStart}
           onDoubleClick={handleResizeDoubleClick}
           title="拖拽调整宽度，拖到当前宽度一半或双击可折叠"
@@ -226,7 +237,7 @@ export default memo(function RightPanelContainer({ tabId, isActive = true }: Rig
       <RightPanelShell
         tabId={tabId}
         rightPanelTab={activeTab}
-        width={maximized ? '100%' : width}
+        width={maximized ? '100%' : 'var(--tm-right-panel-width, 600px)'}
         onTabChange={setActiveTab}
         onCollapse={collapse}
         isActive={isActive && !collapsed}
