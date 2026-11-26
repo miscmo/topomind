@@ -185,9 +185,90 @@
     background-color var(--control-transition);
 }
 .tm-input::placeholder { color: var(--color-text-muted); }
+/* 聚焦只换边框色：不再叠 2px 外扩光晕，避免与全局 outline 形成第二层方框。 */
 .tm-input:focus,
-.tm-select:focus { border-color: var(--color-accent); box-shadow: var(--shadow-focus-ring); }
+.tm-select:focus { border-color: var(--color-accent); }
 .tm-select { cursor: pointer; }
+
+/* ===== AI 会话输入框 =====
+   .tm-input 是单行契约：固定 28px 高 + 上下 0 padding。textarea 复用它会把
+   多行内容压进固定高度，只能靠内部滚动条浏览，且文字贴顶、上下间隙不对称。
+   输入框单独一份契约：外框由 .tm-composer 提供，textarea 本身无边框、
+   上下 padding 对称，实际高度由组件按 scrollHeight 设置；只有超过
+   max-height 才滚动（配合 .tm-scroll 的细滚动条）。 */
+.tm-composer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--control-radius);
+  background: var(--color-surface);
+  transition: border-color var(--control-transition), box-shadow var(--control-transition);
+}
+.tm-composer:focus-within { border-color: var(--color-accent); }
+.tm-composer-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(1.5em + var(--space-md) * 2);
+  max-height: 14em;
+  padding: var(--space-md);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--control-font-strong);
+  line-height: var(--line-height-normal);
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+}
+.tm-composer-input::placeholder { color: var(--color-text-muted); }
+.tm-composer-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-md);
+  border-top: 1px solid var(--color-border-light);
+}
+/* 快捷回复 / 输入历史面板，与输入框同属 composer 视觉体系。 */
+.tm-composer-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tm-composer-chips::-webkit-scrollbar { display: none; }
+.tm-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: var(--control-height-sm);
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--control-radius-pill);
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--control-font);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--control-transition), color var(--control-transition),
+    background-color var(--control-transition);
+}
+.tm-chip-btn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.tm-chip-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.tm-composer-history {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--control-radius);
+  background: var(--color-bg-muted);
+}
 
 .tm-badge {
   display: inline-flex;

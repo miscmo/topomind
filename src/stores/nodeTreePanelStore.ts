@@ -10,8 +10,9 @@
  *  - expandedByRoom：按房间记忆「哪些节点被展开」，默认只展开房间虚拟根，
  *    其余节点全部折叠；空数组表示连房间根也收起。
  *
- * 左栏只有一个开关：NavRail 的竖 tab。`setActivePanel` 是**唯一**写入 collapsed
- * 的入口（点当前页折叠、点别页换页并展开），面板本身没有任何显隐控件。
+ * 左栏只有一份开合状态：NavRail 的竖 tab（点当前页折叠、点别页换页并展开）与
+ * 四页新标题栏最右边的折叠按钮共用 `collapsed`，后者只写「折叠」这一个方向，
+ * 不引入第二套状态。面板本体不渲染任何其它显隐控件。
  *
  * 画布 React 代码不订阅本 store：展开时只通过 CSS 变量让 top-left 状态抽屉
  * 横向让位，画布宽度 / viewport / 其它 Panel 一律不变。
@@ -116,6 +117,8 @@ interface NodeTreePanelState {
   resetLeftDockWidth: () => void
   /** 点击竖向 tab：点当前页折叠，点其它页换页并展开 */
   setActivePanel: (id: LeftDockPanelId) => void
+  /** 四页标题栏共用的折叠入口：与「再点当前页 tab」写同一份 collapsed + localStorage */
+  collapseLeftDock: () => void
   /** roomPath -> 展开的 tree key 列表；缺省（无该房间记录）= 只展开房间根 */
   expandedByRoom: Record<string, string[]>
   toggleNode: (roomPath: string, rootKey: string, key: string) => void
@@ -161,6 +164,11 @@ export const useNodeTreePanelStore = create<NodeTreePanelState>((set, get) => {
       writeCollapsed(collapsed)
       return collapsed ? { collapsed: true } : { activePanelId: id, collapsed: false }
     }),
+    collapseLeftDock: () => {
+      if (get().collapsed) return
+      writeCollapsed(true)
+      set({ collapsed: true })
+    },
     toggleNode: (roomPath, rootKey, key) => {
       const keys = toggleExpandedKeys(keysFor(roomPath, rootKey), key)
       set({ expandedByRoom: commit(roomPath, keys) })

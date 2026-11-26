@@ -21,6 +21,10 @@
  * 四者共用同一开合状态与**同一个可拖宽度**（默认 280px，双击复位）：切页时
  * 左侧边界 B 不跳变，右栏不会因换页突然收窄。实际宽度与让位量统一由
  * workspaceGeometry 派生，画布宽度 / React Flow viewport 恒定。
+ *
+ * 【2026-11-26 顶部瘦身】外壳原先那条 h-10 标题行（图标 / 页名 / 「入口已预留」
+ * 等副标题）与四页自己的工具行重复，已整体删除：各页自己的第一行成为新标题栏，
+ * 折叠按钮统一挂在其最右边；节点结构页的「展开全部 / 收起全部」下移到搜索行。
  */
 import {
   memo,
@@ -45,18 +49,14 @@ import {
   FolderTree,
   GripVertical,
   Layers3,
-  Library,
-  ListTree,
   Search,
-  SlidersHorizontal,
-  Sparkles,
   X,
 } from 'lucide-react'
 import { TM_UI } from '@/shared/ui/controlStyles'
+import LeftDockCollapseButton from '@/features/layout/LeftDockCollapseButton'
 import { useResizePanel } from '@/hooks/useResizePanel'
 import { applyGeometryPatch, resolveWorkspaceContainer } from '@/features/layout/useWorkspaceGeometry'
 import type { WorkspaceGeometry } from '@/domain/layout/workspaceGeometry'
-import type { LucideIcon } from 'lucide-react'
 import AgentPlaceholder from './AgentPlaceholder'
 import KnowledgeBaseListPanel from './KnowledgeBaseListPanel'
 import CanvasSettingsPanel from './CanvasSettingsPanel'
@@ -67,7 +67,6 @@ import { startCanvasSpan } from '../../../../hooks/useGraph/canvasPerformanceCon
 import {
   NODE_TREE_PANEL_WIDTH,
   useNodeTreePanelStore,
-  type LeftDockPanelId,
 } from '../../../../stores/nodeTreePanelStore'
 import { useGraphSession } from '../../../../stores/tabs/tabStore'
 import { isCanvasReadOnly } from '../../../../stores/canvasReadOnlyStore'
@@ -80,14 +79,6 @@ import {
   type NodeTreeSearchHit,
 } from '../../../../domain/graph/nodeTree'
 import { useNodeTree } from '../model/useNodeTree'
-
-/** 四页共用同一条标题栏：图标 / 标题 / 副标题只在这里维护一份。 */
-const PANEL_HEADER: Record<LeftDockPanelId, { title: string; icon: LucideIcon }> = {
-  tree: { title: '节点结构', icon: ListTree },
-  agent: { title: 'AI Agent', icon: Sparkles },
-  kbList: { title: '知识库列表', icon: Library },
-  canvasSettings: { title: '画布设置', icon: SlidersHorizontal },
-}
 
 interface NodeTreePanelProps {
   tabId: string
@@ -147,8 +138,6 @@ function NodeTreePanelBody({ tabId, geometry }: { tabId: string; geometry: Works
   const setLeftDockWidth = useNodeTreePanelStore((state) => state.setLeftDockWidth)
   const resetLeftDockWidth = useNodeTreePanelStore((state) => state.resetLeftDockWidth)
   const panelWidth = geometry.leftWidth
-  const header = PANEL_HEADER[activePanelId]
-  const HeaderIcon = header.icon
   const session = useGraphSession(tabId)
   const roomPath = session?.roomPath ?? ''
   const rootKey = useMemo(() => makeRoomRootKey(roomPath), [roomPath])
@@ -348,39 +337,13 @@ function NodeTreePanelBody({ tabId, geometry }: { tabId: string; geometry: Works
       style={{ width: 'var(--tm-left-dock-width, 280px)' }}
       className="absolute inset-y-0 left-0 z-30 flex flex-col border-r border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-[var(--shadow-popover)]"
     >
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--color-border-light)] px-3">
-        <HeaderIcon className="h-4 w-4 text-[var(--color-accent)]" />
-        <span className="text-[13px] font-medium text-[var(--color-text-primary)]">{header.title}</span>
-        <span className="text-[11px] text-[var(--color-text-muted)]">
-          {activePanelId === 'canvasSettings' ? '当前画布' : activePanelId === 'agent' ? '入口已预留' : activePanelId === 'kbList' ? '当前工作区' : `${total} 个节点`}
-        </span>
-        {activePanelId === 'tree' && (
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              type="button"
-              data-tm-node-tree-expand-all=""
-              title="展开全部（只影响列表，不改画布）"
-              onClick={() => expandAll(roomPath, rootKey, allKeys)}
-              className={TM_UI.iconButton}
-            >
-              <ChevronsUpDown className="h-3.5 w-3.5 text-[var(--color-text-secondary)]" />
-            </button>
-            <button
-              type="button"
-              data-tm-node-tree-collapse-all=""
-              title="收起全部（只保留房间第一层）"
-              onClick={() => collapseAll(roomPath, rootKey)}
-              className={TM_UI.iconButton}
-            >
-              <ChevronsDownUp className="h-3.5 w-3.5 text-[var(--color-text-secondary)]" />
-            </button>
-          </div>
-        )}
-      </div>
-
       {activePanelId === 'tree' ? (
         <>
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--color-border-light)] px-3">
+      {/* 新标题栏：搜索 + 从旧标题行下移的展开/收起按钮 + 折叠入口，一行收口。 */}
+      <div
+        className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--color-border-light)] pl-3 pr-1.5"
+        data-tm-node-tree-toolbar=""
+      >
         <Search className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
         <input
           data-tm-node-tree-search=""
@@ -390,10 +353,29 @@ function NodeTreePanelBody({ tabId, geometry }: { tabId: string; geometry: Works
           className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
         />
         {query && (
-          <button type="button" title="清空搜索" onClick={() => setQuery('')} className="flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--color-hover-bg)]">
+          <button type="button" title="清空搜索" onClick={() => setQuery('')} className="flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-[var(--color-hover-bg)]">
             <X className="h-3 w-3 text-[var(--color-text-muted)]" />
           </button>
         )}
+        <button
+          type="button"
+          data-tm-node-tree-expand-all=""
+          title="展开全部（只影响列表，不改画布）"
+          onClick={() => expandAll(roomPath, rootKey, allKeys)}
+          className={TM_UI.iconButton}
+        >
+          <ChevronsUpDown className="h-3.5 w-3.5 text-[var(--color-text-secondary)]" />
+        </button>
+        <button
+          type="button"
+          data-tm-node-tree-collapse-all=""
+          title="收起全部（只保留房间第一层）"
+          onClick={() => collapseAll(roomPath, rootKey)}
+          className={TM_UI.iconButton}
+        >
+          <ChevronsDownUp className="h-3.5 w-3.5 text-[var(--color-text-secondary)]" />
+        </button>
+        <LeftDockCollapseButton />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto py-1">

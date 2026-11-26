@@ -15,6 +15,7 @@
 import { memo, useState, type ReactNode } from 'react'
 import { ChevronRight, Crosshair, Eye, Layers3, Palette, type LucideIcon } from 'lucide-react'
 import { useGraphUiStore } from '@/stores/graphUiStore'
+import LeftDockCollapseButton from '@/features/layout/LeftDockCollapseButton'
 import StyleSection from '@/features/right-panel/components/StyleTab/StyleSection'
 import CanvasViewSettings from './CanvasViewSettings'
 
@@ -28,32 +29,38 @@ interface SettingsSectionProps {
   open: boolean
   onToggle: () => void
   children: ReactNode
+  /** 只给首个分区用：删掉外壳冗余标题行后，左栏折叠按钮落在这一行的最右边。 */
+  trailing?: ReactNode
 }
 
-/** 统一分区壳：标题行即折叠开关，内容 DOM 常驻，收起后仍可被回归脚本读取。 */
-function SettingsSection({ id, title, icon: Icon, hint, open, onToggle, children }: SettingsSectionProps) {
+/** 统一分区壳：标题行即折叠开关，内容 DOM 常驻，收起后仍可被回归脚本读取。
+ *  trailing 与折叠开关是兄弟节点（不是 button 套 button），保证点击互不误触。 */
+function SettingsSection({ id, title, icon: Icon, hint, open, onToggle, children, trailing }: SettingsSectionProps) {
   return (
     <section
       data-tm-canvas-settings-section={id}
       data-tm-canvas-settings-section-open={open ? 'true' : 'false'}
       className="border-b border-[var(--color-border-light)] last:border-b-0"
     >
-      <button
-        type="button"
-        data-tm-canvas-settings-section-toggle={id}
-        aria-expanded={open}
-        title={open ? `折叠${title}` : `展开${title}`}
-        onClick={onToggle}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-left hover:bg-[var(--color-hover-bg)]"
-      >
-        <ChevronRight
-          className={`h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
-          aria-hidden="true"
-        />
-        <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" aria-hidden="true" />
-        <span className="font-medium text-[var(--color-text-primary)]" style={{ fontSize: 'var(--font-size-base)' }}>{title}</span>
-        <span className="tm-hint ml-auto truncate">{hint}</span>
-      </button>
+      <div className="flex items-center">
+        <button
+          type="button"
+          data-tm-canvas-settings-section-toggle={id}
+          aria-expanded={open}
+          title={open ? `折叠${title}` : `展开${title}`}
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-2 text-left hover:bg-[var(--color-hover-bg)]"
+        >
+          <ChevronRight
+            className={`h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+            aria-hidden="true"
+          />
+          <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" aria-hidden="true" />
+          <span className="shrink-0 font-medium text-[var(--color-text-primary)]" style={{ fontSize: 'var(--font-size-base)' }}>{title}</span>
+          <span className="tm-hint ml-auto truncate">{hint}</span>
+        </button>
+        {trailing && <div className="shrink-0 pr-1.5">{trailing}</div>}
+      </div>
       <div
         aria-hidden={!open}
         className={`overflow-hidden transition-[max-height,opacity] duration-200 ease-out ${
@@ -116,6 +123,7 @@ export default memo(function CanvasSettingsPanel({ tabId }: { tabId: string }) {
           hint="镜头 / 图型 / 置顶"
           open={openSections.view}
           onToggle={toggle('view')}
+          trailing={<LeftDockCollapseButton />}
         >
           <CanvasViewSettings tabId={tabId} />
         </SettingsSection>

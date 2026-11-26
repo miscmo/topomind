@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
-import { FileText, Link2, ListTree, Paperclip, Pin, PinOff } from 'lucide-react'
+import { FileText, Link2, ListTree, PanelRightClose, Paperclip, Pin, PinOff } from 'lucide-react'
 import type { DetailSidebarTab, DocumentSaveStatus, DocumentWorkspaceLayoutProps, TocItem } from '../../types/workspaceTypes'
 import { AttachmentsTab } from './AttachmentsTab'
 import { useResizePanel } from '../../../../hooks/useResizePanel'
@@ -395,6 +395,7 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
 
   const isMaximized = useRightPanelStore((s) => s.rightPanelMaximized)
   const toggleMaximized = useRightPanelStore((s) => s.toggleRightPanelMaximized)
+  const collapseRightPanel = useRightPanelStore((s) => s.collapseRightPanel)
   const isRightPanelPinned = useRightPanelStore((s) => s.rightPanelPinned)
   const toggleRightPanelPinned = useRightPanelStore((s) => s.toggleRightPanelPinned)
 
@@ -494,6 +495,18 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
       <div className="flex flex-1 overflow-hidden relative">
         {documentType === 'detail' && !effectiveFloating && (
           <div className="w-9 shrink-0 border-r border-[var(--color-border-light)] bg-[var(--color-surface)] flex flex-col items-center gap-1 py-2 z-10">
+            {/* 右栏折叠入口放在全屏按钮上方；pin 依旧紧贴全屏按钮下方（既有 GUI 顺序断言）。 */}
+            <button
+              type="button"
+              className={RAIL_BUTTON}
+              onClick={collapseRightPanel}
+              disabled={isRightPanelPinned}
+              title={isRightPanelPinned ? '已固定右侧面板，先取消固定再折叠' : '折叠右侧面板'}
+              aria-label="折叠右侧面板"
+              data-tm-right-panel-collapse=""
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </button>
             <button
               type="button"
               className={RAIL_BUTTON}

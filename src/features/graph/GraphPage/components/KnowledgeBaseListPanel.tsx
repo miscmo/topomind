@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { BookOpen, RefreshCw } from 'lucide-react'
 import { TM_UI } from '@/shared/ui/controlStyles'
+import LeftDockCollapseButton from '@/features/layout/LeftDockCollapseButton'
 import { logAction } from '../../../../core/log-backend'
 import { useStorage } from '../../../../core/storage'
 import { tabStore, useGraphSession } from '../../../../stores/tabs/tabStore'
@@ -58,9 +59,14 @@ export default function KnowledgeBaseListPanel({ tabId }: KnowledgeBaseListPanel
 
   return (
     <div data-tm-kb-list-panel="" className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--color-border-light)] px-3">
+      {/* 删掉外壳冗余标题行后，本行即左栏新标题栏：刷新 + 折叠入口靠最右。 */}
+      <div
+        className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--color-border-light)] pl-3 pr-1.5"
+        title="知识库列表 · 点击列表项切换到对应知识库"
+        data-tm-kb-list-toolbar=""
+      >
         <BookOpen className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
-        <span className="min-w-0 flex-1 text-xs text-[var(--color-text-muted)]">点击切换到对应知识库</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-muted)]">点击切换到对应知识库</span>
         <button
           type="button"
           data-tm-kb-list-refresh=""
@@ -71,6 +77,7 @@ export default function KnowledgeBaseListPanel({ tabId }: KnowledgeBaseListPanel
         >
           <RefreshCw className="h-3.5 w-3.5 text-[var(--color-text-secondary)]" />
         </button>
+        <LeftDockCollapseButton />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto py-1">

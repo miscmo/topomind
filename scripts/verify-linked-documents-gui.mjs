@@ -3938,13 +3938,15 @@ async function main() {
           && !document.querySelector('[data-tm-learning-duration]'),
         hasTabZone: !!zone,
         learningDial: !!document.querySelector('[data-tm-nav-item="learning.statistics"] [data-tm-learning-dial]'),
-        noManualRightPanel: !document.querySelector('button[aria-label="折叠右侧面板"]')
+        // 2026-11-26：右栏 rail 新增了显式折叠按钮（全屏按钮上方），因此这里只锁
+        // 「标题栏不得再承载右栏手动控件」，不再对整个 document 一刀切。
+        noManualRightPanel: !document.querySelector('[data-tm-titlebar-unfocused] button[aria-label="折叠右侧面板"]')
           && !document.querySelector('button[aria-label="展开右侧面板"]')
           && !document.querySelector('[aria-label="右侧面板分区"]'),
         focusAutoHide: !!document.querySelector('[data-tm-right-panel-focus-auto-hide]'),
       }
     })
-    check('【阶段 AI】标题栏无软件图标、保留汉堡与全局导航开关，学习计时已迁入导航表盘，右栏手动控件已移除',
+    check('【阶段 AI】标题栏无软件图标、保留汉堡与全局导航开关，学习计时已迁入导航表盘，标题栏无右栏手动控件（折叠入口已移到右栏 rail）',
       !chromeAI.hasLogo && chromeAI.hasToggle && chromeAI.hasHamburger && chromeAI.noTitlebarWidget
       && chromeAI.hasTabZone && chromeAI.learningDial
       && chromeAI.noManualRightPanel && chromeAI.focusAutoHide,

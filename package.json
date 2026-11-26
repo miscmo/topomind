@@ -38,6 +38,8 @@
     "verify:cardspec:gui": "node scripts/verify-cardspec-container-gui.mjs",
     "verify:ai:sessions": "node scripts/verify-ai-session-store.mjs",
     "verify:ai:sessions:gui": "node scripts/verify-ai-sessions-gui.mjs",
+    "verify:dock:layout:gui": "node scripts/verify-dock-layout-gui.mjs",
+    "verify:ai:composer:gui": "node scripts/verify-ai-composer-gui.mjs",
     "verify:ai:gui": "node scripts/verify-ai-agent-gui.mjs",
     "verify:ai:tools:gui": "node scripts/verify-ai-agent-tools-gui.mjs",
     "clean": "node -e \"const fs=require('fs');['dist','dist-electron'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",

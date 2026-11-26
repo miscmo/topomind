@@ -1368,3 +1368,76 @@ resetClientSession() → resetForWorkspace()（工作目录隔离）
 3. 流式生成中强杀进程，最多可能丢失最近 1.5s 内尚未 flush 的 token；正常结束 / 停止 / 关闭窗口都会立即写盘；
 4. 历史会话恢复时只回正文，不回工具轮次与委托卡片（按 §24.2 边界）。
 
+## 25. P4-C 输入区改造（多行自适应 / 快捷回复 / 输入历史）
+
+### 25.1 根因
+
+旧输入框把 `.tm-input`（单行控件契约：`height: 28px` + `padding: 0 8px`）直接套在 `<textarea rows={3}>` 上：固定高度压住 rows，三行内容只能靠原生滚动条浏览；上下 padding 为 0 又让文字贴顶、上下间隙不对称。**不是输入框写错了样式，是用错了控件契约**。
+
+### 25.2 方案
+
+`controls.css` 新增一组 composer 专用 `.tm-*`（唯一视觉真源，`controlStyles.ts` 同名常量，`verify:design` 一一对应校验）：
+
+- `.tm-composer`：外框 + `:focus-within` 焦点环，textarea 自身无边框；
+- `.tm-composer-input`：`box-sizing: border-box`、`min-height: calc(1.5em + 2 * --space-md)`、`max-height: 14em`、上下 padding 对称、`resize: none`、`overflow-y: auto`。字号跟随 `tm-ai-font-*`，`em` 因此随字号联动；
+- `.tm-composer-foot` / `.tm-composer-chips` / `.tm-chip-btn` / `.tm-composer-history`：底部工具条、横向滚动的胶囊、历史面板。
+
+高度由 `AgentComposer` 按 `scrollHeight` 写回内联 `style.height`（先回 `auto` 再量），CSS 的 `max-height` 负责钳制：**正常 1~8 行完全没有滚动条，只有超长输入才由 `.tm-scroll` 的 6px 细滚动条接管**。`value` 与 `fontClass` 变化都重算。
+
+### 25.3 交互
+
+- Enter 发送 / Shift+Enter 换行；`event.nativeEvent.isComposing` 拦截中文输入法选词时的误发送；
+- 快捷回复：内置 7 条常用语（`继续` / `开始落地` / …），点击**一键发送**且不清空当前草稿；`+` 把当前输入存为自定义项（可删除），自定义项存 localStorage；
+- 输入历史：记录**已发送**的文本，最新在前、去重、回填时还原换行并聚焦到末尾；点击「输入历史」展开，可一键清空；
+- `agentComposerStore` 对条数（30 / 12）、单条长度（300）、总字符（6000）三重钳制，读取时逐项校验非法存档，隐私模式 / 配额失败静默降级为本次会话有效。会话正文仍只走 `sessions.json`，本 store 不碰正文。
+
+### 25.4 兼容与边界
+
+保留 `data-tm-ai-composer`（4 处 GUI 冒烟用 `page.type` 定位）与发送按钮的「发送」文字（`verify-ai-agent-gui` 按按钮文本点击）。240 窄栏下 chips 行 `overflow-x: auto` 且隐藏滚动条、提示文字 truncate，面板不产生横向溢出。`npm run verify:ai:composer:gui`（独立 CDP 端口 9240）真机覆盖上下 padding 对称、多行高度增长且无内部滚动、超长才钳制、快捷回复发送、输入历史回填 / 清空 / 重载持久化与窄栏溢出。**本轮按用户要求只跑最小验证集，不重复跑全量门禁。**
+
+## 26. 对话排版与「点击输入框多一个方框」根因
+
+### 26.1 气泡排版
+
+用户气泡改为右对齐 + `max-w-[85%]`，AI 回复左对齐 + 占满阅读宽度；角色由位置与配色（accent-soft / surface）区分，**去掉气泡里的「你 / AI 助手」小标签**。消息行带 `data-tm-ai-message-row="user|assistant"`，供 GUI 冒烟精确检查对齐，避免再去猜 DOM 层级。AI 回复不做限宽：Markdown 表格 / 代码块需要完整宽度。
+
+### 26.2 全软件输入框的焦点方框（根因与修复）
+
+`base.css` 的「全局键盘焦点环」兜底把 `input / textarea / select:focus-visible` 一并纳入：
+
+```css
+outline: 2px solid var(--color-accent) !important;
+outline-offset: 2px !important;
+```
+
+原注释假设「`:focus-visible` 鼠标点击不会触发」——**这个假设对按钮成立，对文本输入控件不成立**。Chromium 里可编辑文本控件即使用鼠标点击也匹配 `:focus-visible`（规范要求文本输入始终展示焦点指示）。结果：每次点输入框，就在控件自身边框之外 2px 处再画一圈 2px 实线方框；`!important` 让组件里的 `outline-none` 完全压不住它。AI 聊天框的 textarea 嵌在 `.tm-composer` 卡片里，方框落在卡片内部，最扎眼。叠加上 `.tm-input:focus` 与 `.tm-composer:focus-within` 各自的外扩 `box-shadow` 光晕，观感就是「三层框」。
+
+修复口径（一次收敛，不改组件）：
+
+1. 全局 2px / offset 2px 的 `outline` 兜底**只留给按钮类控件**（button / role=button / a[href] / [tabindex]）；
+2. 文本输入控件：有 `.tm-*` 契约的（`.tm-input` / `.tm-select` / `.tm-composer-input`）`outline: none !important`，焦点由 controls.css 的 `border-color` 变化指示；其余裸输入框保留键盘可见性，但改成 `outline: 1px solid` + `outline-offset: 0`（紧贴控件，等同边框变色，不再是分离的第二层方框）；
+3. `.tm-input:focus` 与 `.tm-composer:focus-within` 去掉外扩 `box-shadow`，只换边框色。最终**所有输入框点击后只有边框变色**。
+
+契约脚本用正则锁住「全局 2px outline 规则的选择器列表不得再出现 input/textarea/select」，防止后人把文本控件加回去导致回归。
+
+## 27. P4-L：三边栏顶部瘦身与左右折叠入口（2026-11-26）
+
+### 27.1 四个左栏页的顶部冗余块
+
+Left Dock 外壳 `NodeTreePanel.tsx` 原先给四页共用一条 `h-10` 标题行（图标 / 页名 / 副标题：`AI Agent 入口已预留`、`知识库列表 当前工作区`、`节点结构 N 个节点`、`画布设置 当前画布`），与各页自己的工具行上下叠成两条，纯重复且白占 40px。本轮**整行删除**，`PANEL_HEADER` 与相关图标导入一并移除；各页自己的第一行晋升为「新标题栏」：
+
+| 页面 | 新标题栏内容 | 变更 |
+| --- | --- | --- |
+| AI Agent | `AI Agent` / 工具徽标 / 新建会话 / AI 设置 / 折叠 | 徽标改为可收缩截断，240 窄栏下三个图标按钮仍不溢出 |
+| 知识库列表 | 提示 / 刷新 / 折叠 | 原提示与刷新保留，右侧补折叠 |
+| 节点结构 | 搜索 / 展开全部 / 收起全部 / 折叠 | **展开全部 / 收起全部从被删标题行下移到本行**，GUI 稳定选择器不变 |
+| 画布设置 | 首个「视图」分区标题行 / 折叠 | 折叠入口作为分区开关的兄弟节点挂在最右，避免 button 套 button |
+
+### 27.2 左右折叠按钮
+
+- 左栏新增 `LeftDockCollapseButton`（`data-tm-left-dock-collapse`），四页各挂一个新标题栏最右边；同一时刻只渲染一个。store 增加 `collapseLeftDock()`，与 NavRail 竖 tab 写同一份 `collapsed` + 同一个 localStorage key，**不引入第二套开合状态**；折叠后展开仍走竖 tab。
+- 右栏在 `DocumentWorkspaceLayout` 的竖 rail **全屏按钮上方**新增折叠按钮（`data-tm-right-panel-collapse`），直接调 `collapseRightPanel()`；pin 仍紧贴全屏按钮下方（既有 GUI 顺序断言不变）。固定态下按钮置灰并提示先取消固定，与 store「pin = 始终展开」的语义保持一致。
+- 既有 `verify-linked-documents-gui.mjs` 里「整个 document 不得出现右栏手动折叠按钮」的断言已收窄为「**标题栏**不得再承载右栏手动控件」，避免与本轮需求冲突；静态契约新增两条锁（四页顶部瘦身、竖 rail 顺序）。
+
+`npm run verify:dock:layout:gui`（独立 CDP 端口 9242）真机覆盖四页第一行形态、功能按钮下移、折叠 / 再展开、240 窄栏无溢出、右栏 rail 顺序与点击生效。**本轮按用户要求只跑最小验证集，不重复跑全量门禁。**
+

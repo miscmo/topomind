@@ -1779,4 +1779,88 @@ check('P4-S 历史会话：四条 IPC 白名单 + 主进程 sessions.json + 恢�
   assert.ok(designDoc.includes('P4-S'))
 })
 
+const composerSource = stripComments(await readText('../src/features/ai-agent/components/AgentComposer.tsx'))
+const composerStoreSource = stripComments(await readText('../src/features/ai-agent/model/agentComposerStore.ts'))
+const controlsCssSource = stripComments(await readText('../src/styles/controls.css'))
+const controlStylesSource = stripComments(await readText('../src/shared/ui/controlStyles.ts'))
+const baseCssSource = stripComments(await readText('../src/styles/base.css'))
+
+check('P4-C 输入区：多行自适应 + 快捷回复 + 输入历史 + 统一控件契约', () => {
+  assert.ok(panelSource.includes('<AgentComposer'))
+  assert.ok(panelSource.includes('pushInput'))
+  assert.ok(composerSource.includes('data-tm-ai-composer'))
+  assert.ok(composerSource.includes('scrollHeight'))
+  assert.ok(composerSource.includes('isComposing'))
+  assert.ok(composerSource.includes('data-tm-ai-quick-reply'))
+  assert.ok(composerSource.includes('data-tm-ai-input-history'))
+  assert.ok(composerSource.includes('发送'))
+  assert.ok(composerStoreSource.includes('MAX_HISTORY'))
+  assert.ok(composerStoreSource.includes('DEFAULT_QUICK_REPLIES'))
+  assert.ok(composerStoreSource.includes("'topomind:ai-input-history'"))
+  assert.ok(controlsCssSource.includes('.tm-composer-input'))
+  assert.ok(controlsCssSource.includes('max-height: 14em'))
+  assert.ok(controlsCssSource.includes('.tm-composer:focus-within'))
+  assert.ok(controlStylesSource.includes("composerInput: 'tm-composer-input'"))
+  assert.ok(designDoc.includes('P4-C'))
+})
+
+check('P4-C 对话排版：用户右对齐 / AI 左对齐 / 去掉角色标签', () => {
+  assert.ok(panelSource.includes('data-tm-ai-message-row'))
+  assert.ok(panelSource.includes("'justify-end'") && panelSource.includes("'justify-start'"))
+  assert.ok(panelSource.includes("'max-w-[85%]'"))
+  assert.ok(!panelSource.includes("isUser ? '你' : 'AI 助手'"))
+  assert.ok(designDoc.includes('26.1 气泡排版'))
+})
+
+check('P4-C 焦点框：文本输入控件不再套全局 2px 外描边，输入框聚焦只换边框色', () => {
+  // 锁住全局兜底规则的选择器列表：一旦有人把 input/textarea/select 加回去，
+  // Chromium 下鼠标点击又会多出一个方框。
+  const globalRule = baseCssSource.match(/button:focus-visible,[\s\S]*?\{\s*outline: 2px solid[^}]*\}/)
+  assert.ok(globalRule, '未找到全局键盘焦点环规则')
+  assert.ok(!/input:focus-visible|textarea:focus-visible|select:focus-visible/.test(globalRule[0]),
+    '全局 2px outline 规则不得再包含文本输入控件')
+  assert.ok(baseCssSource.includes('input.tm-input:focus-visible'))
+  assert.ok(baseCssSource.includes('textarea.tm-composer-input:focus-visible'))
+  assert.ok(baseCssSource.includes('outline-offset: 0 !important'))
+  assert.ok(!controlsCssSource.includes('.tm-input:focus,\n.tm-select:focus { border-color: var(--color-accent); box-shadow:'))
+  assert.ok(!controlsCssSource.includes('.tm-composer:focus-within {\n  border-color: var(--color-accent);\n  box-shadow:'))
+  assert.ok(designDoc.includes('focus-visible'))
+})
+
+// --- P4-L 三边栏布局：四页顶部瘦身 + 左右折叠按钮（2026-11-26） ---
+const dockShellSource = stripComments(await readText('../src/features/graph/GraphPage/components/NodeTreePanel.tsx'))
+const kbListSource = stripComments(await readText('../src/features/graph/GraphPage/components/KnowledgeBaseListPanel.tsx'))
+const canvasSettingsSource = stripComments(await readText('../src/features/graph/GraphPage/components/CanvasSettingsPanel.tsx'))
+const dockStoreSource = stripComments(await readText('../src/stores/nodeTreePanelStore.ts'))
+const collapseButtonSource = stripComments(await readText('../src/features/layout/LeftDockCollapseButton.tsx'))
+const workspaceLayoutSource = stripComments(await readText('../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx'))
+
+check('P4-L 左栏：四页共用冗余标题行已删，展开/收起按钮下移到搜索行', () => {
+  assert.ok(!dockShellSource.includes('PANEL_HEADER'))
+  assert.ok(!dockShellSource.includes('入口已预留') && !dockShellSource.includes('当前工作区'))
+  assert.ok(!dockShellSource.includes('当前画布') && !dockShellSource.includes('个节点'))
+  assert.ok(!dockShellSource.includes('flex h-10 shrink-0 items-center gap-2 border-b'))
+  assert.ok(dockShellSource.includes('data-tm-node-tree-toolbar'))
+  assert.ok(dockShellSource.indexOf('data-tm-node-tree-toolbar')
+    < dockShellSource.indexOf('data-tm-node-tree-expand-all'), '展开全部必须落在下一层工具行')
+  assert.ok(dockShellSource.includes('data-tm-node-tree-collapse-all'))
+  assert.ok(dockShellSource.includes('<LeftDockCollapseButton />'))
+  assert.ok(panelSource.includes('<LeftDockCollapseButton />'))
+  assert.ok(kbListSource.includes('<LeftDockCollapseButton />'))
+  assert.ok(canvasSettingsSource.includes('trailing={<LeftDockCollapseButton />}'))
+  assert.ok(dockStoreSource.includes('collapseLeftDock'))
+  assert.ok(collapseButtonSource.includes('data-tm-left-dock-collapse'))
+  assert.ok(designDoc.includes('P4-L'))
+})
+
+check('P4-L 右栏：折叠按钮在全屏按钮上方，pin 仍紧贴全屏按钮下方', () => {
+  const collapseIdx = workspaceLayoutSource.indexOf('data-tm-right-panel-collapse')
+  const maximizeIdx = workspaceLayoutSource.indexOf('onClick={toggleMaximized}')
+  const pinIdx = workspaceLayoutSource.indexOf('onClick={toggleRightPanelPinned}')
+  assert.ok(collapseIdx > 0 && collapseIdx < maximizeIdx && maximizeIdx < pinIdx,
+    '竖 rail 顺序必须是：折叠 → 全屏 → 固定')
+  assert.ok(workspaceLayoutSource.includes('useRightPanelStore((s) => s.collapseRightPanel)'))
+  assert.ok(workspaceLayoutSource.includes('disabled={isRightPanelPinned}'))
+})
+
 console.log(`\nAI_AGENT_CONTRACTS_PASSED (${checks} checks)`)

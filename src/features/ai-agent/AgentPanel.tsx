@@ -9,8 +9,9 @@
  * 视觉值全部走 TM_UI / controls.css / 语义 token，避免新增设计系统违规。
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, History, Plus, Send, Settings2, Sparkles, Wrench, X } from 'lucide-react'
+import { AlertCircle, History, Plus, Settings2, Sparkles, Wrench, X } from 'lucide-react'
 import { EmptyState } from '@/shared/ui/EmptyState'
+import LeftDockCollapseButton from '@/features/layout/LeftDockCollapseButton'
 import { requestOpenDocumentLink } from '@/features/documents/SmartDocumentEditor/docLinkBridge'
 import { TM_UI, tmUI } from '@/shared/ui/controlStyles'
 import { executeCommand } from '@/application/commands'
@@ -20,6 +21,7 @@ import {
 } from '@/core/ai-backend'
 import type { AiChatAgentPayload, AiWireMessage } from '@/core/ai-types'
 import AiMarkdown from './AiMarkdown'
+import AgentComposer from './components/AgentComposer'
 import AgentSelector from './components/AgentSelector'
 import DelegationCard from './components/DelegationCard'
 import PatchPreview from './components/PatchPreview'
@@ -28,6 +30,7 @@ import type { ReasoningMode } from './config/agentTypes'
 import { buildPromptValues } from './config/promptValues'
 import { renderPrompt } from './config/renderPrompt'
 import { ensureAiEventBridge } from './model/aiEventBridge'
+import { useAgentComposerStore } from './model/agentComposerStore'
 import { getActiveAgent, useAgentDefinitionStore } from './model/agentDefinitionStore'
 import { useAgentPreferencesStore } from './model/agentPreferencesStore'
 import { useAgentSessionListStore } from './model/agentSessionListStore'
@@ -35,7 +38,7 @@ import { useAgentSessionStore } from './model/agentSessionStore'
 import { abortToolRun, applyPendingPatch, rejectPendingPatch, startToolRun } from './model/agentToolLoop'
 import { useAgentToolRuntime } from './model/useAgentToolRuntime'
 
-const BUBBLE_BASE = 'mb-3 rounded-lg border px-3 py-2'
+const BUBBLE_BASE = 'rounded-lg border px-3 py-2'
 
 // 流式事件只注册一条全局管道，不随组件挂载/卸载反复订阅（否则 token 会被重复追加）。
 ensureAiEventBridge()
@@ -73,8 +76,9 @@ export default function AgentPanel() {
     if (node) node.scrollTop = node.scrollHeight
   }, [messages, pendingPlan, toolRounds, delegations])
 
-  const send = useCallback(async () => {
-    const text = draft.trim()
+  /** 实际发送一条文本。输入框清空由 AgentComposer 负责，快捷回复可复用本函数。 */
+  const sendText = useCallback(async (raw: string) => {
+    const text = raw.trim()
     // 有未处理的变更预览时不再发起新任务，避免两份 pendingPatch 互相覆盖。
     if (!text || useAgentSessionStore.getState().status === 'streaming' || pendingPlan) return
     // P4-S：首次发送前确保会话列表已载入，否则本次对话不会被挂到历史会话下。
@@ -84,9 +88,10 @@ export default function AgentPanel() {
     const prefs = useAgentPreferencesStore.getState()
     const initialAgent = getActiveAgent()
     const effectiveMode: ReasoningMode = prefs.reasoningMode ?? initialAgent?.model.reasoning.mode ?? 'auto'
-    setDraft('')
     const history: AiWireMessage[] = store.messages.map((item) => ({ role: item.role, content: item.content }))
     store.addUserMessage(text, { agentId: initialAgent?.id, reasoningMode: effectiveMode })
+    // 输入历史只记「用户发出过什么」，与会话正文落盘互不耦合；无 Key 降级时也成立。
+    useAgentComposerStore.getState().pushInput(text)
     const baseTaskId = `ai-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
     try {
       // 每次发送都重读配置：用户可能刚在设置页填完 Key，而面板一直挂载着。
@@ -121,7 +126,7 @@ export default function AgentPanel() {
       abortToolRun()
       useAgentSessionStore.getState().fail('network', '无法连接 AI 网关，请稍后重试')
     }
-  }, [draft, pendingPlan, runtime])
+  }, [pendingPlan, runtime])
 
   const stop = useCallback(() => {
     const taskId = useAgentSessionStore.getState().taskId
@@ -170,19 +175,23 @@ export default function AgentPanel() {
 
   return (
     <div className={tmUI('flex min-h-0 flex-1 flex-col', chatFontClass)} data-tm-ai-agent-panel="">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border-light)] px-3 py-2">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-[var(--color-accent)]" strokeWidth={1.8} />
-          <span className="tm-label">AI Agent</span>
-          <span className={TM_UI.badgeAccent}><Wrench className="mr-1 inline h-3 w-3" />工具 · 需确认</span>
+      {/* 新标题栏要在 240px 窄栏里同时容纳三个图标按钮：左侧徽标允许收缩截断，
+          右侧操作组固定不缩，保证面板整体不出现横向溢出。 */}
+      <div className="flex shrink-0 items-center justify-between gap-1 border-b border-[var(--color-border-light)] px-2 py-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <Sparkles className="h-4 w-4 shrink-0 text-[var(--color-accent)]" strokeWidth={1.8} />
+          <span className="tm-label shrink-0">AI Agent</span>
+          <span className={tmUI(TM_UI.badgeAccent, 'min-w-0 !shrink truncate')}><Wrench className="mr-1 inline h-3 w-3" />工具 · 需确认</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5">
           <button type="button" title="新建会话" aria-label="新建会话" onClick={newSession} className={TM_UI.iconButton}>
             <Plus className="h-4 w-4" />
           </button>
           <button type="button" title="打开 AI 设置" aria-label="打开 AI 设置" onClick={openSettings} className={TM_UI.iconButton}>
             <Settings2 className="h-4 w-4" />
           </button>
+          {/* 删掉外壳冗余标题行后，本行就是左栏的新标题栏：折叠入口固定在最右边。 */}
+          <LeftDockCollapseButton />
         </div>
       </div>
 
@@ -226,27 +235,35 @@ export default function AgentPanel() {
           />
         ) : messages.map((message) => {
           const isUser = message.role === 'user'
+          // 成熟 Agent 的对话排版：用户气泡右对齐且限宽，AI 回复左对齐占满阅读宽度。
+          // 角色由位置与配色区分，不再在气泡里重复写「你 / AI 助手」。
           return (
             <div
               key={message.id}
-              className={tmUI(
-                BUBBLE_BASE,
-                isUser
-                  ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
-                  : 'border-[var(--color-border-light)] bg-[var(--color-surface)]',
-              )}
+              className={tmUI('mb-3 flex', isUser ? 'justify-end' : 'justify-start')}
+              data-tm-ai-message-row={isUser ? 'user' : 'assistant'}
             >
-              <div className="tm-hint mb-1">{isUser ? '你' : 'AI 助手'}</div>
-              {isUser ? (
-                <div className="whitespace-pre-wrap break-words">{message.content}</div>
-              ) : (
-                <AiMarkdown
-                  content={message.content}
-                  placeholder={message.streaming ? '正在生成…' : undefined}
-                  references={references}
-                  onOpenRef={openRef}
-                />
-              )}
+              <div
+                className={tmUI(
+                  BUBBLE_BASE,
+                  'min-w-0',
+                  isUser ? 'max-w-[85%]' : 'w-full',
+                  isUser
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
+                    : 'border-[var(--color-border-light)] bg-[var(--color-surface)]',
+                )}
+              >
+                {isUser ? (
+                  <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                ) : (
+                  <AiMarkdown
+                    content={message.content}
+                    placeholder={message.streaming ? '正在生成…' : undefined}
+                    references={references}
+                    onOpenRef={openRef}
+                  />
+                )}
+              </div>
             </div>
           )
         })}
@@ -304,40 +321,15 @@ export default function AgentPanel() {
         </div>
       )}
 
-      <div className="shrink-0 border-t border-[var(--color-border-light)] p-2">
-        <textarea
-          aria-label="向 AI 提问"
-          data-tm-ai-composer=""
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault()
-              void send()
-            }
-          }}
-          rows={3}
-          placeholder="输入问题…"
-          className={tmUI(TM_UI.input, 'w-full resize-none', chatFontClass)}
-        />
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="tm-hint">Enter 发送 · Shift + Enter 换行</span>
-          {isStreaming ? (
-            <button type="button" onClick={stop} className={TM_UI.button}>
-              停止
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void send()}
-              disabled={!draft.trim() || Boolean(pendingPlan) || isStreaming}
-              className={tmUI(TM_UI.buttonPrimary, 'disabled:opacity-50')}
-            >
-              <Send className="mr-1 inline h-3.5 w-3.5" />发送
-            </button>
-          )}
-        </div>
-      </div>
+      <AgentComposer
+        value={draft}
+        onChange={setDraft}
+        onSend={(text) => void sendText(text)}
+        onStop={stop}
+        streaming={isStreaming}
+        blocked={Boolean(pendingPlan)}
+        fontClass={chatFontClass}
+      />
     </div>
   )
 }
