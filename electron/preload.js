@@ -39,6 +39,8 @@ const ALLOWED_CHANNELS = new Set([
   'ai:config:get', 'ai:config:save', 'ai:chat:test', 'ai:chat:start',
   // AI（S1）：智能体定义读 / 写，独立 agents.json，不含任何连接配置
   'ai:agents:get', 'ai:agents:set',
+  // AI（P4-S）：历史会话列表 / 正文读 / 单个 upsert / 删除，独立 sessions.json
+  'ai:sessions:list', 'ai:sessions:get', 'ai:sessions:upsert', 'ai:sessions:delete',
   // AI（P3 / D）：本地简版 RAG 检索；只走主进程本地磁盘，不发起外部网络请求
   'ai:index:query',
 ]);

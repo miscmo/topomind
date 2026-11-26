@@ -12,6 +12,7 @@ const STEPS = [
   ['npm', ['run', 'typecheck']],
   ['npm', ['run', 'verify:critical']],
   ['npm', ['run', 'verify:contracts']],
+  ['npm', ['run', 'verify:ai:sessions']],
   ['npm', ['run', 'verify:plugins']],
   ['npm', ['run', 'verify:logging']],
   ['npm', ['run', 'verify:lint:baseline']],

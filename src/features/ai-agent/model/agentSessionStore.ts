@@ -1,8 +1,11 @@
 /**
  * AI Agent 会话状态（P0 起，P2 扩展工具轮次与 Patch 预览）。
  *
- * 设计取舍：会话不落盘、不进 localStorage（项目已有 base64 内容撑爆
- * localStorage 的历史教训）。工具调用明细只保留在内存，不逐条写日志（C10 / C15）。
+ * 设计取舍（P4-S 修订）：本 store 仍是「当前活动会话」的运行时状态，
+ * 不直接落盘、不进 localStorage（项目已有 base64 内容撑爆 localStorage 的
+ * 历史教训）。历史会话由 agentSessionListStore 经 IPC 写主进程 sessions.json；
+ * 正文只在磁盘，工具调用明细 / 变更预览 / 委托卡片 / 引用映射仍只保留在内存，
+ * 不逐条写日志（C10 / C15）。切换会话时由 hydrate() 换入新快照。
  *
  * P2 新增：
  *  - toolRounds：每轮工具调用的只读摘要，供 UI 展示「模型到底调了什么」；
@@ -10,7 +13,7 @@
  *  - continueAssistant：轮次切换时复用同一条助手气泡，避免每轮留一条空白气泡。
  */
 import { create } from 'zustand'
-import type { AiChatMessage, AiErrorCode, AiReference } from '@/core/ai-types'
+import type { AiChatMessage, AiErrorCode, AiReference, AiSessionMessage } from '@/core/ai-types'
 import type { AgentPatch, PatchPlan } from '../patch/agentPatchTypes'
 import type { AgentDelegateResult } from '../tools/toolTypes'
 
@@ -66,6 +69,8 @@ interface AgentSessionState {
   toggleOp: (opId: string) => void
   clearPendingPatch: () => void
   clearError: () => void
+  /** P4-S：换入指定历史会话的正文，同时清空所有只在内存里的运行时状态。 */
+  hydrate: (messages: readonly AiSessionMessage[]) => void
   clearSession: () => void
 }
 
@@ -186,6 +191,18 @@ export const useAgentSessionStore = create<AgentSessionState>((set) => ({
   clearPendingPatch: () => set({ pendingPatch: null, pendingPlan: null, selectedOpIds: [] }),
 
   clearError: () => set({ error: null }),
+
+  hydrate: (messages) => set({
+    messages: messages.map((item) => ({
+      id: item.id,
+      role: item.role,
+      content: item.content,
+      ...(item.agentId ? { agentId: item.agentId } : {}),
+      ...(item.reasoningMode ? { reasoningMode: item.reasoningMode } : {}),
+    })),
+    status: 'idle', taskId: null, lastSeq: 0, error: null,
+    ...EMPTY_TOOL_STATE, delegations: [],
+  }),
 
   // 取消流式请求由面板负责发 IPC；这里只重置状态，避免反向依赖 core/ai-backend。
   clearSession: () => set({

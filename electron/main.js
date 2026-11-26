@@ -21,6 +21,7 @@ import { mainLog, mainLifecycle } from './main-log.js';
 import { createAiKeyStore } from './services/ai-key-store.js';
 import { createAiService } from './services/ai-service.js';
 import { createAiAgentStore } from './services/ai-agent-store.js';
+import { createAiSessionStore } from './services/ai-session-store.js';
 import { createAiIndexService } from './services/ai-index-service.js';
 
 // 兼容生产运行以及 dev 模式。
@@ -809,6 +810,9 @@ function registerIPC() {
   };
   const aiService = createAiService({ keyStore: aiKeyStore, emit: aiEmit });
   const aiAgentStore = createAiAgentStore({ getWorkDir: currentAiWorkDir });
+  // P4-S：历史会话独立存 .topomind/ai/sessions.json；按当前工作目录隔离。
+  // handler 不写日志：会话正文不入日志，IPC 调用本身由 preload 单点审计覆盖。
+  const aiSessionStore = createAiSessionStore({ getWorkDir: currentAiWorkDir });
   // P3 / D：简版 RAG 索引。只在 kb.ask 首次问答时惰性建索引，不在启动时扫描业务文件；
   // 只写 .topomind/ai-index/，绝不改写业务文件；正文不入日志。
   const aiIndexService = createAiIndexService({ getWorkDir: currentAiWorkDir });
@@ -827,6 +831,10 @@ function registerIPC() {
     mainLog.info('app', 'AI 智能体配置已保存', { count: next.agents.length }, undefined, 'ai.agent_save');
     return next;
   });
+  ipcMain.handle('ai:sessions:list', function() { return aiSessionStore.list(); });
+  ipcMain.handle('ai:sessions:get', function(e, id) { return aiSessionStore.get(id); });
+  ipcMain.handle('ai:sessions:upsert', function(e, payload) { return aiSessionStore.upsert(payload); });
+  ipcMain.handle('ai:sessions:delete', function(e, id) { return aiSessionStore.remove(id); });
   ipcMain.handle('ai:chat:test', function() { return aiService.testConnection(); });
   ipcMain.handle('ai:chat:start', function(e, payload) {
     const data = payload && typeof payload === 'object' ? payload : {};

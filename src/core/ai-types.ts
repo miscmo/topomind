@@ -196,6 +196,46 @@ export interface AiReference {
   charRange: [number, number]
 }
 
+/**
+ * 历史会话（P4-S）：渲染层 ↔ 主进程 sessions.json 的 IPC 契约。
+ * 只含对话正文与列表元数据；工具明细 / 变更预览 / 引用映射不落盘。
+ */
+export interface AiSessionMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  agentId?: string
+  reasoningMode?: 'off' | 'on' | 'auto'
+}
+
+export interface AiSessionRecord {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messages: AiSessionMessage[]
+}
+
+/** 列表只回摘要，避免把全部历史正文常驻渲染层内存。 */
+export interface AiSessionSummary {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messageCount: number
+}
+
+export interface AiSessionListResult {
+  schema: string
+  version: number
+  sessions: AiSessionSummary[]
+}
+
+export interface AiSessionDeleteResult {
+  ok: boolean
+  removed: boolean
+}
+
 export const AI_ERROR_LABELS: Record<AiErrorCode, string> = {
   no_key: '尚未配置 API Key',
   invalid_config: '配置不合法',

@@ -15,6 +15,10 @@ import type {
   AiIndexQuery,
   AiIndexResult,
   AiPublicConfig,
+  AiSessionDeleteResult,
+  AiSessionListResult,
+  AiSessionRecord,
+  AiSessionSummary,
   AiStartResult,
   AiTestResult,
   AiToolDefinition,
@@ -61,6 +65,27 @@ export function getAiAgentConfig<T = unknown>(): Promise<T> {
 
 export function saveAiAgentConfig<T = unknown>(config: T): Promise<T> {
   return invoke<T>('ai:agents:set', config)
+}
+
+/**
+ * P4-S：历史会话持久化，落 <workDir>/.topomind/ai/sessions.json。
+ * 与 agents.json 同属主进程文件，渲染层不读盘、不碰 localStorage 正文；
+ * 会话正文不经过任何日志通道（§15.4 / C10 / C15）。
+ */
+export function listAiSessions(): Promise<AiSessionListResult> {
+  return invoke<AiSessionListResult>('ai:sessions:list')
+}
+
+export function getAiSession(id: string): Promise<AiSessionRecord | null> {
+  return invoke<AiSessionRecord | null>('ai:sessions:get', id)
+}
+
+export function upsertAiSession(record: AiSessionRecord): Promise<AiSessionSummary> {
+  return invoke<AiSessionSummary>('ai:sessions:upsert', record)
+}
+
+export function deleteAiSession(id: string): Promise<AiSessionDeleteResult> {
+  return invoke<AiSessionDeleteResult>('ai:sessions:delete', id)
 }
 
 /** P2：tools 为该 Agent 允许的工具子集快照，一轮会话内固定，不随配置变更。 */

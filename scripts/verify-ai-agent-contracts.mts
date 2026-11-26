@@ -1508,6 +1508,10 @@ const runtimeSource = stripComments(await readText('../src/features/ai-agent/mod
 const preloadSource = stripComments(await readText('../electron/preload.js'))
 const indexServiceSource = stripComments(await readText('../electron/services/ai-index-service.js'))
 const contextSource = stripComments(await readText('../src/features/ai-agent/model/contextBuilder.ts'))
+const sessionListSource = stripComments(await readText('../src/features/ai-agent/model/agentSessionListStore.ts'))
+const sessionUiSource = stripComments(await readText('../src/features/ai-agent/components/SessionHistory.tsx'))
+const sessionFileSource = stripComments(await readText('../electron/services/ai-session-store.js'))
+const sessionResetSource = stripComments(await readText('../src/core/session-reset.ts'))
 
 const nodeFs = await import('node:fs')
 const nodeOs = await import('node:os')
@@ -1748,5 +1752,31 @@ check('P3 IPC / 引用跳转链路：preload 三白名单 + 主进程 handler + 
   assert.ok(designDoc.includes('`kb.ask`'))
 })
 nodeFs.rmSync(ragDir, { recursive: true, force: true })
+
+check('P4-S 历史会话：四条 IPC 白名单 + 主进程 sessions.json + 恢复 / 新建 / 删除 UI', () => {
+  for (const channel of ['ai:sessions:list', 'ai:sessions:get', 'ai:sessions:upsert', 'ai:sessions:delete']) {
+    assert.ok(preloadSource.includes(`'${channel}'`), `preload 缺少 ${channel}`)
+    assert.ok(mainSource.includes(`'${channel}'`), `main 缺少 ${channel}`)
+  }
+  assert.ok(mainSource.includes('createAiSessionStore'))
+  assert.ok(sessionFileSource.includes("'sessions.json'"))
+  assert.ok(sessionFileSource.includes('writeJsonAtomic'))
+  assert.ok(sessionFileSource.includes('maxSessions: 60'))
+  assert.ok(backendSource.includes('listAiSessions') && backendSource.includes('upsertAiSession'))
+  assert.ok(sessionSource.includes('hydrate:'))
+  assert.ok(sessionListSource.includes('useAgentSessionStore.subscribe('))
+  assert.ok(sessionListSource.includes('SAVE_MAX_WAIT_MS'))
+  assert.ok(sessionListSource.includes('resetForWorkspace'))
+  assert.ok(sessionListSource.includes("'topomind:ai-active-session'"))
+  assert.ok(sessionResetSource.includes('resetForWorkspace'))
+  assert.ok(sessionUiSource.includes('data-tm-ai-session-list'))
+  assert.ok(sessionUiSource.includes('data-tm-ai-session-confirm'))
+  assert.ok(panelSource.includes('<SessionHistory'))
+  assert.ok(panelSource.includes('ensureLoaded'))
+  assert.ok(panelSource.includes('data-tm-ai-session-toggle'))
+  // 消息区独立标记：GUI 冒烟必须只查正文，避免历史列表标题造成假阳性。
+  assert.ok(panelSource.includes('data-tm-ai-messages'))
+  assert.ok(designDoc.includes('P4-S'))
+})
 
 console.log(`\nAI_AGENT_CONTRACTS_PASSED (${checks} checks)`)

@@ -1321,3 +1321,50 @@ P1 / P2 时文档类 op 在 dryRun 里恒定 blocked，根因是 1500ms autosave
 2. **P4 / E 不是「下一期自动推进」**：已冻结；须先重新设计方案并经用户确认，再单独起一轮。§22 保留为决策依据，§11.3 的 P4 行标 ⏸。
 3. **代码提交状态**：截至本轮，P0–P3 / S1–S3 的实现仍**全部未提交**（HEAD `3f21f0e`）。建议尽快单独提交一个基线以便按阶段回滚；本轮未擅自提交。
 4. 主需求文档 `ai-knowledge-card-master-plan.md` 已同步升 **v1.6**（状态行与 §6 收口说明）。
+
+---
+
+## 24. P4-S 历史会话列表与持久化（2026-11-26 晚，用户新增需求）
+
+> 范围说明：本节是用户在阶段 6 闭环后**单独提出的新需求**，不属于 §22.7 已冻结的 P4 / E 评估清单。用户指令优先，故单独立一轮实现；不重启任何已冻结议题。
+
+### 24.1 需求与决策
+
+| 需求 | 决策 |
+| --- | --- |
+| AI 对话支持新建 / 删除会话列表 | 左栏新增会话工具条 + 可折叠历史列表，删除走内联二次确认（不用原生 confirm） |
+| 持久化保存历史会话记录 | 落 `<workDir>/.topomind/ai/sessions.json`，走主进程 IPC，**不进 localStorage** |
+| 重新打开软件后还能再次打开 | 启动时按 `localStorage` 里仅存的 `activeSessionId` 自动恢复上次会话；列表点选可打开任意历史会话 |
+
+**为什么推翻 `agentSessionStore` 原「会话不落盘」注释**：原决策针对的是「把正文塞进 localStorage」这一实现路径，本项目已有 base64 内容撑爆 localStorage 的教训。本轮改为「主进程原子写独立 JSON + 白名单归一化 + 容量上限」，容量风险可控，因此保留「不进 localStorage 正文」这条底线，只把「不落盘」修订为「运行时状态不落盘，历史正文由主进程落盘」。
+
+### 24.2 落盘边界（与 C10 / C15 一致）
+
+`sessions.json` 只存 `id / title / createdAt / updatedAt / messages[]`。工具调用明细、Patch 预览、委托卡片、`[ref:i]` → docId 映射**依旧只在渲染层内存**，不落盘、不进日志；`streaming` 这类运行时标记写入前剔除。主进程 `normalizeAiSession` 是唯一校验闸：未知字段（含明文密钥、磁盘路径）、非法 role、非法 id 一律丢弃，消息 100 条 / 每条 12000 字符 / 会话 60 条 / 文件 6MB 四级钳制。
+
+### 24.3 链路
+
+```
+AgentPanel(会话工具条 / SessionHistory)
+  → agentSessionListStore（摘要 + activeSessionId + 编排）
+      ├─ subscribe(agentSessionStore.messages) → debounce 350ms / maxWait 1500ms
+      ├─ ai:sessions:list / get / upsert / delete → ai-backend → preload 白名单 → main.js
+      └─ hydrate(messages) → agentSessionStore（运行时唯一真源）
+resetClientSession() → resetForWorkspace()（工作目录隔离）
+```
+
+切换 / 新建 / 删除前先 `flushSave()` 并 `abortToolRun()` + `cancelAiChat()`，避免旧任务的迟到 `done` 回灌到新会话；`hydrate` 期间抑制自动保存，防止刚载入就把历史正文回写覆盖。IPC 不可用时降级为纯内存对话并给出提示，不阻断发送。
+
+### 24.4 文件与验证
+
+新增 `electron/services/ai-session-store.js`、`src/features/ai-agent/model/agentSessionListStore.ts`、`src/features/ai-agent/components/SessionHistory.tsx`、`scripts/verify-ai-session-store.mjs`；改动 `ai-types.ts` / `ai-backend.ts` / `preload.js` / `main.js` / `agentSessionStore.ts` / `AgentPanel.tsx` / `session-reset.ts` / 门禁入口。
+
+`npm run verify:ai:sessions` 覆盖新建、删除、**重开实例读回**、白名单、容量钳制、损坏自愈、跨工作目录隔离（11 checks）；`npm run verify:ai:sessions:gui`（独立 CDP 端口 9239）真机覆盖新建 / 切换 / 二次确认删除 → **杀掉并重启 Electron 进程**后列表与正文仍可打开；`verify:contracts` 增加四条 IPC 白名单与链路静态断言；`verify-all` 已纳入存储门禁。消息区带 `data-tm-ai-messages`，GUI 断言只查正文区，避免历史列表项的标题造成「正文已恢复」的假阳性。
+
+### 24.5 已知边界
+
+1. 会话按工作目录隔离（与 `agents.json` 同口径），切换工作目录看不到其它工作区的会话；
+2. 不提供重命名 / 搜索 / 导出，标题自动取第一条用户消息前 24 字；
+3. 流式生成中强杀进程，最多可能丢失最近 1.5s 内尚未 flush 的 token；正常结束 / 停止 / 关闭窗口都会立即写盘；
+4. 历史会话恢复时只回正文，不回工具轮次与委托卡片（按 §24.2 边界）。
+

@@ -36,6 +36,8 @@
     "verify:excalidraw:block:gui": "node scripts/verify-excalidraw-block-gui.mjs",
     "verify:image:container:gui": "node scripts/verify-image-container-gui.mjs",
     "verify:cardspec:gui": "node scripts/verify-cardspec-container-gui.mjs",
+    "verify:ai:sessions": "node scripts/verify-ai-session-store.mjs",
+    "verify:ai:sessions:gui": "node scripts/verify-ai-sessions-gui.mjs",
     "verify:ai:gui": "node scripts/verify-ai-agent-gui.mjs",
     "verify:ai:tools:gui": "node scripts/verify-ai-agent-tools-gui.mjs",
     "clean": "node -e \"const fs=require('fs');['dist','dist-electron'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",

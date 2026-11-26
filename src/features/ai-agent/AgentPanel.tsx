@@ -9,7 +9,7 @@
  * 视觉值全部走 TM_UI / controls.css / 语义 token，避免新增设计系统违规。
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, Plus, Send, Settings2, Sparkles, Wrench, X } from 'lucide-react'
+import { AlertCircle, History, Plus, Send, Settings2, Sparkles, Wrench, X } from 'lucide-react'
 import { EmptyState } from '@/shared/ui/EmptyState'
 import { requestOpenDocumentLink } from '@/features/documents/SmartDocumentEditor/docLinkBridge'
 import { TM_UI, tmUI } from '@/shared/ui/controlStyles'
@@ -23,12 +23,14 @@ import AiMarkdown from './AiMarkdown'
 import AgentSelector from './components/AgentSelector'
 import DelegationCard from './components/DelegationCard'
 import PatchPreview from './components/PatchPreview'
+import SessionHistory from './components/SessionHistory'
 import type { ReasoningMode } from './config/agentTypes'
 import { buildPromptValues } from './config/promptValues'
 import { renderPrompt } from './config/renderPrompt'
 import { ensureAiEventBridge } from './model/aiEventBridge'
 import { getActiveAgent, useAgentDefinitionStore } from './model/agentDefinitionStore'
 import { useAgentPreferencesStore } from './model/agentPreferencesStore'
+import { useAgentSessionListStore } from './model/agentSessionListStore'
 import { useAgentSessionStore } from './model/agentSessionStore'
 import { abortToolRun, applyPendingPatch, rejectPendingPatch, startToolRun } from './model/agentToolLoop'
 import { useAgentToolRuntime } from './model/useAgentToolRuntime'
@@ -41,6 +43,7 @@ ensureAiEventBridge()
 export default function AgentPanel() {
   const [draft, setDraft] = useState('')
   const [applying, setApplying] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const messages = useAgentSessionStore((state) => state.messages)
   const status = useAgentSessionStore((state) => state.status)
@@ -51,11 +54,19 @@ export default function AgentPanel() {
   const pendingPlan = useAgentSessionStore((state) => state.pendingPlan)
   const selectedOpIds = useAgentSessionStore((state) => state.selectedOpIds)
   const fontSize = useAgentPreferencesStore((state) => state.fontSize)
+  const summaries = useAgentSessionListStore((state) => state.summaries)
+  const activeSessionId = useAgentSessionListStore((state) => state.activeSessionId)
+  const activeTitle = summaries.find((item) => item.id === activeSessionId)?.title ?? '新会话'
   const { runtime, workspaceApi } = useAgentToolRuntime()
   const isStreaming = status === 'streaming'
   const chatFontClass = fontSize === 'small'
     ? TM_UI.aiFontSmall
     : fontSize === 'large' ? TM_UI.aiFontLarge : TM_UI.aiFontMedium
+
+  // P4-S：进入工作目录后恢复历史会话列表与上次打开的会话（幂等，多次挂载无副作用）。
+  useEffect(() => {
+    void useAgentSessionListStore.getState().ensureLoaded()
+  }, [])
 
   useEffect(() => {
     const node = scrollRef.current
@@ -64,9 +75,12 @@ export default function AgentPanel() {
 
   const send = useCallback(async () => {
     const text = draft.trim()
-    const store = useAgentSessionStore.getState()
     // 有未处理的变更预览时不再发起新任务，避免两份 pendingPatch 互相覆盖。
-    if (!text || store.status === 'streaming' || pendingPlan) return
+    if (!text || useAgentSessionStore.getState().status === 'streaming' || pendingPlan) return
+    // P4-S：首次发送前确保会话列表已载入，否则本次对话不会被挂到历史会话下。
+    await useAgentSessionListStore.getState().ensureLoaded()
+    const store = useAgentSessionStore.getState()
+    if (store.status === 'streaming' || store.pendingPlan) return
     const prefs = useAgentPreferencesStore.getState()
     const initialAgent = getActiveAgent()
     const effectiveMode: ReasoningMode = prefs.reasoningMode ?? initialAgent?.model.reasoning.mode ?? 'auto'
@@ -116,12 +130,12 @@ export default function AgentPanel() {
     if (taskId) useAgentSessionStore.getState().finish(taskId, true)
   }, [])
 
+  // P4-S：新建会话由 listStore 统一编排（flush 当前会话 → abort 在途任务 →
+  // 落一条新空会话）。面板只清输入框，绝不直接 clearSession，否则会把尚未
+  // 写盘的历史正文当成「空会话」回写覆盖。
   const newSession = useCallback(() => {
-    const taskId = useAgentSessionStore.getState().taskId
-    abortToolRun()
-    if (taskId) cancelAiChat(taskId)
-    useAgentSessionStore.getState().clearSession()
     setDraft('')
+    void useAgentSessionListStore.getState().newSession()
   }, [])
 
   const applyPatch = useCallback(async () => {
@@ -172,9 +186,37 @@ export default function AgentPanel() {
         </div>
       </div>
 
+      {/* P4-S：当前会话 + 历史入口。独立一条窄栏，不往已有 header 里挤第三个按钮。 */}
+      <div
+        className="flex shrink-0 items-center gap-1 border-b border-[var(--color-border-light)] px-2 py-1"
+        data-tm-ai-session-bar=""
+      >
+        <button
+          type="button"
+          title="历史会话"
+          aria-label="历史会话"
+          aria-pressed={showHistory}
+          onClick={() => setShowHistory((value) => !value)}
+          className={showHistory ? TM_UI.buttonActive : TM_UI.iconButton}
+          data-tm-ai-session-toggle=""
+        >
+          <History className="h-4 w-4" />
+        </button>
+        <span
+          className="tm-hint min-w-0 flex-1 truncate"
+          title={activeTitle}
+          data-tm-ai-session-current=""
+        >
+          {activeTitle}
+        </span>
+        <span className={TM_UI.badge} data-tm-ai-session-count="">{summaries.length}</span>
+      </div>
+
+      {showHistory && <SessionHistory />}
+
       <AgentSelector />
 
-      <div ref={scrollRef} className="tm-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div ref={scrollRef} className="tm-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3" data-tm-ai-messages="">
         {messages.length === 0 ? (
           <EmptyState
             size="md"
