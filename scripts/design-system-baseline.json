@@ -41,11 +41,8 @@
     "src/features/graph/GraphCanvas/GraphCanvas.tsx",
     "src/features/graph/GraphCanvas/SmartGuidesRenderer.tsx",
     "src/features/graph/GraphCanvas/components/CanvasReadOnlyBanner.tsx",
-    "src/features/graph/GraphCanvas/components/CanvasStatusSection.tsx",
-    "src/features/graph/GraphCanvas/components/CanvasZoomSlider.tsx",
     "src/features/graph/GraphCanvas/components/CardSnappedConnectionLine.tsx",
     "src/features/graph/GraphCanvas/components/EdgeRelationPicker.tsx",
-    "src/features/graph/GraphCanvas/components/LodControl.tsx",
     "src/features/graph/GraphCanvas/components/NodeSearchBox.tsx",
     "src/features/graph/GraphCanvas/components/SelectionMirrorMenu.tsx",
     "src/features/graph/GraphCanvas/components/ViewportReturnButton.tsx",
@@ -80,7 +77,6 @@
     "src/features/layout/NavRail/NavRail.tsx",
     "src/features/layout/NavRail/NavRailSlot.tsx",
     "src/features/layout/NavRail/navModel.tsx",
-    "src/features/layout/RoomHistory/RoomHistory.tsx",
     "src/features/layout/TabBar/TabBar.tsx",
     "src/features/learning-tracker/LearningTrackerProvider.tsx",
     "src/features/right-panel/RightPanelContainer.tsx",
@@ -215,18 +211,9 @@
     "src/features/graph/GraphCanvas/components/CanvasReadOnlyBanner.tsx": {
       "fontSize": 2
     },
-    "src/features/graph/GraphCanvas/components/CanvasStatusSection.tsx": {
-      "fontSize": 2
-    },
-    "src/features/graph/GraphCanvas/components/CanvasZoomSlider.tsx": {
-      "fontSize": 1
-    },
     "src/features/graph/GraphCanvas/components/EdgeRelationPicker.tsx": {
       "zIndex": 1,
       "fontSize": 8
-    },
-    "src/features/graph/GraphCanvas/components/LodControl.tsx": {
-      "fontSize": 16
     },
     "src/features/graph/GraphCanvas/components/NodeSearchBox.tsx": {
       "zIndex": 1,
@@ -318,9 +305,6 @@
       "fontSize": 3
     },
     "src/features/layout/NavRail/NavRail.tsx": {
-      "fontSize": 2
-    },
-    "src/features/layout/RoomHistory/RoomHistory.tsx": {
       "fontSize": 2
     },
     "src/features/right-panel/RightPanelContainer.tsx": {

@@ -211,6 +211,20 @@ const READ_HANDLERS: ReadHandlerMap = {
       roomPath: ctx.roomPath || snapshot.roomPath,
       selectedNodeIds: ctx.selectedNodeIds.slice(0, MAX_LIST_ITEMS),
       activeDocumentId: ctx.activeDocumentId,
+      // 选中目标快照：只含 id / 标题 / 短片段，模型据此按 id 定位，不靠内容猜。
+      // 旧 runtime（契约测试 mock）没有 selection 字段时保持原有输出形状。
+      ...(ctx.selection ? {
+        selection: {
+          documentId: ctx.selection.documentId,
+          documentTitle: ctx.selection.documentTitle,
+          documentNodeId: ctx.selection.documentNodeId,
+          nodeIds: ctx.selection.nodeIds.slice(0, MAX_LIST_ITEMS),
+          nodeLabels: ctx.selection.nodeLabels.slice(0, MAX_LIST_ITEMS),
+          blockIds: ctx.selection.blockIds.slice(0, MAX_LIST_ITEMS),
+          blockExcerpt: ctx.selection.blockExcerpt,
+          pinned: ctx.selection.pinned.slice(0, 8),
+        },
+      } : {}),
       viewport: ctx.viewport,
       nodeCount: snapshot.nodes.length,
       edgeCount: snapshot.edges.length,

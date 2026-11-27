@@ -5,10 +5,12 @@
  * 主进程只负责网络与协议解析，不执行工具、不持有会话状态；多轮上限在渲染层控制。
  *
  * 安全边界：
- *  - 每轮会话开始时固定一份 tools 快照（allowedIds），中途改配置不影响在途调用；
+ *  - 每轮会话开始时固定一份 tools 快照（allowedIds）与轮次上限快照，中途改配置不影响在途调用；
  *  - 写工具只产 AgentPatch op，经 normalize → dryRun → 人工勾选 → commitAgentPatch；
  *    本文件没有「自动应用」路径，auto 档不存在；
  *  - 工具明细只在内存 toolRounds，一次任务结束聚合记 1 条 ai.tool（C10 / C15）。
+ *  - 轮次上限（用户可调，默认 20）与工具结果累计字符预算都只触发「收尾请求」：
+ *    回灌最后一轮结果、不再下发 tools、让模型基于已有信息作答，绝不硬掐断任务。
  */
 
 import { startAiChat } from '@/core/ai-backend'
@@ -31,21 +33,35 @@ import { AGENT_PATCH_SCHEMA, AGENT_PATCH_VERSION, type AgentDocumentState, type 
 import { WIRED_TOOL_IDS, executeToolCall, exportToolSchemas } from '../tools/toolRegistry'
 import type { ToolRuntime } from '../tools/toolTypes'
 import { abortAllDelegations, resetDelegationBudget } from './agentDelegation'
+import { normalizeMaxToolRounds, useAgentPreferencesStore } from './agentPreferencesStore'
 import { useAgentSessionStore, type ToolCallRecord } from './agentSessionStore'
 
-/** 一次用户提问最多允许的连续工具轮次，防止模型无限自问自答。 */
-export const MAX_TOOL_ROUNDS = 3
+/**
+ * 工具结果累计回灌的软预算（字符）。轮次放开后防止几十轮 × 长结果把上下文撑爆，
+ * 触达时与轮次上限同样走「收尾请求」，只是提示文案不同。
+ */
+const MAX_TOOL_CONTEXT_CHARS = 120_000
 
 interface ActiveRun {
   baseTaskId: string
   round: number
   messages: AiWireMessage[]
   agent?: AiChatAgentPayload
+  /** P5：任务开始时快照的模型 id，多轮工具循环 / 收尾请求始终用同一份连接配置。 */
+  modelId: string
   tools: AiToolDefinition[]
   allowedIds: ReadonlySet<string>
   runtime: ToolRuntime
   callCount: number
   toolIds: Set<string>
+  /** 任务开始时快照的上限，避免在途改设置让已开始的循环忽长忽短。 */
+  maxToolRounds: number
+  /** 已回灌工具结果的累计字符数，作为上下文膨胀的第二道闸。 */
+  contextChars: number
+  /** 收尾请求中：不再接受任何 toolCalls，防止模型幻觉工具把循环再拉起来。 */
+  finalizing: boolean
+  /** 已对「只输出意图声明、却没有任何工具调用」做过一次自动续答。 */
+  recoveredPreamble: boolean
 }
 
 let activeRun: ActiveRun | null = null
@@ -81,10 +97,12 @@ export interface StartToolRunOptions {
   agent?: AiChatAgentPayload
   toolIds: readonly string[]
   runtime: ToolRuntime
+  /** P5：本轮生效模型 id；留空则由主进程回退全局默认。 */
+  modelId?: string
 }
 
 export async function startToolRun(options: StartToolRunOptions): Promise<AiStartResult> {
-  const { baseTaskId, messages, agent, toolIds, runtime } = options
+  const { baseTaskId, messages, agent, toolIds, runtime, modelId = '' } = options
   const tools = exportToolSchemas(toolIds)
   // 白名单用工具 id（点号形式）比对；下发 schema 用 function name（下划线形式）。
   const allowedIds = new Set(toolIds.filter((id) => WIRED_TOOL_IDS.includes(id)))
@@ -96,16 +114,21 @@ export async function startToolRun(options: StartToolRunOptions): Promise<AiStar
     round: 0,
     messages: [...messages],
     agent,
+    modelId,
     tools,
     allowedIds,
     runtime,
     callCount: 0,
     toolIds: new Set(),
+    maxToolRounds: normalizeMaxToolRounds(useAgentPreferencesStore.getState().maxToolRounds),
+    contextChars: 0,
+    finalizing: false,
+    recoveredPreamble: false,
   }
   const taskId = roundTaskId(baseTaskId, 0)
   useAgentSessionStore.getState().startAssistant(taskId)
   try {
-    const result = await startAiChat(taskId, messages, agent, tools)
+    const result = await startAiChat(taskId, messages, agent, tools, undefined, modelId)
     if (!result.ok) {
       finishRun()
       useAgentSessionStore.getState().fail(
@@ -132,6 +155,62 @@ export function abortToolRun(): void {
  * 由 aiEventBridge 的 done 订阅调用。
  * @returns true 表示本轮由编排器接管（bridge 不要立即 finish）；false 表示按 P0 语义结束。
  */
+/**
+ * 模型只吐一句「我先读取这篇文档…：」且没有任何 toolCalls 时，判定为空转声明。
+ * 条件刻意收紧：短句 + 以冒号收尾或明确的「我先…」意图，避免误伤正常短答案。
+ * 该函数同时被 AgentPanel 用来从历史消息里剔除这类无效回答，必须保持纯函数。
+ */
+export function looksLikeUnfinishedPreamble(text: string): boolean {
+  const value = text.trim()
+  if (!value || value.length > 160) return false
+  if (/[：:]\s*$/.test(value)) return true
+  return /^(我先|我先来|接下来|首先|让我|我会|需要|为了|下面)/.test(value)
+    && /(读取|查看|检查|分析|定位|获取|确认|梳理)/.test(value)
+}
+
+/**
+ * 空转兜底：本轮下发了工具却没收到任何 toolCalls，气泡里又只有一句计划声明时，
+ * 自动发起一次收尾请求让模型把话说完。收尾轮不下发 tools：既避开不兼容的网关，
+ * 也保证不会再拉起空转循环。每个任务最多兜底一次，绝不无限续轮。
+ * @returns true 表示编排器已接管本轮，bridge 不要立即 finish。
+ */
+function tryRecoverPreamble(run: ActiveRun): boolean {
+  if (run.tools.length === 0 || run.finalizing || run.recoveredPreamble) return false
+  const store = useAgentSessionStore.getState()
+  const last = store.messages[store.messages.length - 1]
+  if (!last || last.role !== 'assistant') return false
+  const text = typeof last.content === 'string' ? last.content : ''
+  if (!looksLikeUnfinishedPreamble(text)) return false
+
+  run.recoveredPreamble = true
+  run.finalizing = true
+  run.messages = [
+    ...run.messages,
+    { role: 'assistant', content: text },
+    {
+      role: 'user',
+      content: '请接着上面的话，直接基于本轮消息里已提供的选中目标与当前内容给出完整答复：给出具体的修改建议或修改后的文本。不要只重复计划、不要再写「我先…」，也不要解释刚才为什么中断。',
+    },
+  ]
+  run.round += 1
+  const nextTaskId = roundTaskId(run.baseTaskId, run.round)
+  // continueAssistant 复用同一条气泡，续答正文会直接接在那句声明后面。
+  store.continueAssistant(nextTaskId, run.round)
+  void (async () => {
+    try {
+      const result = await startAiChat(nextTaskId, run.messages, run.agent, undefined, undefined, run.modelId)
+      if (!result.ok) {
+        store.fail((result.code ?? 'bad_response') as AiErrorCode, result.message ?? '续答失败', nextTaskId)
+        finishRun()
+      }
+    } catch {
+      store.fail('network', '续答失败', nextTaskId)
+      finishRun()
+    }
+  })()
+  return true
+}
+
 export function handleAiDone(payload: AiDoneEvent): boolean {
   const run = activeRun
   if (!run || payload.taskId !== currentTaskId()) return false
@@ -139,8 +218,14 @@ export function handleAiDone(payload: AiDoneEvent): boolean {
     finishRun()
     return false
   }
+  // 收尾轮没下发 tools；即便模型仍幻觉出 toolCalls 也直接结束，不再进入编排。
+  if (run.finalizing) {
+    finishRun()
+    return false
+  }
   const calls = payload.toolCalls
   if (!calls || calls.length === 0) {
+    if (tryRecoverPreamble(run)) return true
     finishRun()
     return false
   }
@@ -169,6 +254,7 @@ async function runToolRound(run: ActiveRun, calls: AiToolCall[]): Promise<void> 
   if (activeRun !== run) return
 
   run.callCount += results.length
+  run.contextChars += results.reduce((total, item) => total + item.content.length, 0)
   for (const item of results) run.toolIds.add(item.toolId)
   const records: ToolCallRecord[] = results.map((item) => ({
     callId: item.callId,
@@ -237,12 +323,9 @@ async function runToolRound(run: ActiveRun, calls: AiToolCall[]): Promise<void> 
     return
   }
 
-  if (run.round + 1 >= MAX_TOOL_ROUNDS) {
-    store.getState().appendAssistantNote(`已达到工具调用轮次上限（${MAX_TOOL_ROUNDS} 轮），本次自动检索结束。`)
-    store.getState().finish(taskId, false)
-    finishRun()
-    return
-  }
+  const reachedRoundLimit = run.round + 1 >= run.maxToolRounds
+  const reachedContextBudget = run.contextChars >= MAX_TOOL_CONTEXT_CHARS
+  const atLimit = reachedRoundLimit || reachedContextBudget
 
   const assistantMessage: AiWireMessage = {
     role: 'assistant',
@@ -254,12 +337,33 @@ async function runToolRound(run: ActiveRun, calls: AiToolCall[]): Promise<void> 
     tool_call_id: item.callId,
     content: item.content,
   }))
-  run.messages = [...run.messages, assistantMessage, ...toolMessages]
+  const nextMessages: AiWireMessage[] = [...run.messages, assistantMessage, ...toolMessages]
+
+  if (atLimit) {
+    // 早期实现在这里直接 finish：最后一轮工具结果既没回灌，也没让模型作答，
+    // 用户只看到一句「已达上限」，复杂任务因此表现为「失败」。现在改为收尾请求。
+    const reason = reachedContextBudget
+      ? `工具结果累计已达上下文预算（约 ${Math.round(MAX_TOOL_CONTEXT_CHARS / 1000)}k 字符）`
+      : `已达到工具调用轮次上限（${run.maxToolRounds} 轮）`
+    nextMessages.push({
+      role: 'user',
+      content: `${reason}。请基于上方已取得的工具结果直接给出最终答复，说明哪些部分尚未完成、还需要什么信息；不要再请求调用工具。`,
+    })
+    // 说明与最终答复共用同一条气泡（appendDelta 会接在后面），
+    // 既不另起一条气泡，也不让原空占位残留「正在生成…」。
+    store.getState().appendAssistantText(
+      `${reason}。已让 AI 基于现有结果作答；如需继续，直接追问即可，也可在「AI 设置 → AI 助手」里调高轮次上限。\n\n`,
+    )
+    run.finalizing = true
+  }
+
+  run.messages = nextMessages
   run.round += 1
   const nextTaskId = roundTaskId(run.baseTaskId, run.round)
   store.getState().continueAssistant(nextTaskId, run.round)
   try {
-    const result = await startAiChat(nextTaskId, run.messages, run.agent, run.tools)
+    // 收尾轮不下发 tools：模型只能基于已有结果写正文，不可能再拉起工具循环。
+    const result = await startAiChat(nextTaskId, run.messages, run.agent, atLimit ? undefined : run.tools, undefined, run.modelId)
     if (!result.ok) {
       store.getState().fail(
         (result.code ?? 'bad_response') as AiErrorCode,

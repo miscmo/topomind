@@ -28,6 +28,8 @@ import type {
 } from '@/application/workspace/workspaceApi'
 import type { ToolReadPort, ToolRuntime, ToolWorkspaceContext } from '../tools/toolTypes'
 import { createDelegatePort } from './agentDelegation'
+import { buildSelectionSnapshot } from './aiSelectionSnapshot'
+import { ensureStableBlockIds, type BlockNoteBlock } from '@/features/documents/SmartDocumentEditor/smartDocumentTypes'
 
 const MAX_DOCUMENT_TEXT = 8000
 const MAX_BLOCKS = 200
@@ -40,7 +42,10 @@ function summarizeDocument(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== 'object') return { content: '', blockCount: 0, blocks: [] }
   const source = raw as Record<string, unknown>
   const blocksRaw = Array.isArray(source.blocks) ? source.blocks : []
-  const blocks = blocksRaw.slice(0, MAX_BLOCKS).map((block) => {
+  // 摘要里的 id 必须与 AI 写入时的 base.blocks、编辑器内存里的 id 完全一致；
+  // 旧档缺 id 时用同一套确定性补齐，保证模型拿到的 blockId 真的能定位到目标。
+  const blocksWithIds = ensureStableBlockIds(blocksRaw as BlockNoteBlock[])
+  const blocks = blocksWithIds.slice(0, MAX_BLOCKS).map((block) => {
     if (!block || typeof block !== 'object') return { type: 'unknown', text: '' }
     const item = block as Record<string, unknown>
     const text = typeof item.text === 'string'
@@ -136,12 +141,24 @@ export function useAgentToolRuntime(): AgentToolBinding {
       const paths = useDetailPanelStore.getState().activeDocumentPathsByNodeId
       const firstPath = selectedNodeIds.length > 0 ? paths?.[selectedNodeIds[0]] : undefined
       const session = tabStore.getState().getGraphSession(activeTabId)
+      const nodesMap = (storeApi.getState() as unknown as {
+        nodesMap?: Map<string, { data?: { label?: unknown } }>
+      }).nodesMap
+      const nodeLabels = selectedNodeIds.map((id) => {
+        const label = nodesMap?.get(id)?.data?.label
+        return typeof label === 'string' && label.trim() ? label.trim().slice(0, 60) : id
+      })
+      // 选中快照在此冻结一次：文档 / 块 / 引用来自 aiSelectionStore，
+      // 节点 id + 标题来自当前 tab 的 graphStore，AI 不用靠标题猜目标。
+      const selection = buildSelectionSnapshot({ nodeIds: selectedNodeIds, nodeLabels })
       return {
         activeTabId,
         roomPath: session?.roomPath ?? api.snapshot().roomPath,
         workDir: useWorkspaceStore.getState().currentWorkDir ?? '',
         selectedNodeIds,
-        activeDocumentId: topoDocumentIdFromPath(firstPath ?? null) || null,
+        // 优先用编辑器实际上报的当前文档；旧「按第一个选中节点推路径」只作兜底。
+        activeDocumentId: selection.documentId || topoDocumentIdFromPath(firstPath ?? null) || null,
+        selection,
         viewport: graph.viewport,
       }
     }

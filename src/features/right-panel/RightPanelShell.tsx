@@ -1,6 +1,8 @@
 import { memo } from 'react'
 import { Palette } from 'lucide-react'
 import DetailPanel from './components/DetailTab/DetailPanel'
+import { ReferencePreviewPanel } from './components/DetailTab/ReferencePreviewPanel'
+import { useReferencePreviewStore } from './model/referencePreviewStore'
 import { useNodeTreePanelStore } from '@/stores/nodeTreePanelStore'
 import { TM_UI, tmUI } from '@/shared/ui/controlStyles'
 import type { RightPanelTab } from '../../types/uiStoreTypes'
@@ -20,6 +22,8 @@ interface RightPanelShellProps {
  * 外壳 overflow-clip 而非 hidden —— 程序化滚动会带动编辑器正文整体上移、底部露白。
  */
 export default memo(function RightPanelShell({ tabId, rightPanelTab, width, isActive = true }: RightPanelShellProps) {
+  const hasReferencePreview = useReferencePreviewStore((state) => state.target !== null)
+  const showReferencePreview = hasReferencePreview && isActive && rightPanelTab === 'detail'
   const openStyleSettings = () => {
     // 样式面板已迁入左栏「画布设置」页：这里只把左栏切过去并展开，
     // 不再打开二级设置视图（那里只剩一条引导说明）。
@@ -32,8 +36,10 @@ export default memo(function RightPanelShell({ tabId, rightPanelTab, width, isAc
 
   return (
     <div className="h-full bg-[var(--titlebar-menu-bg)] shrink-0 overflow-clip border-l border-[var(--color-border)] shadow-[-4px_0_24px_rgba(0,0,0,0.06)] flex flex-col transform-gpu" style={{ width }}>
-      <div className={rightPanelTab === 'detail' ? 'flex flex-1 min-h-0 flex-col overflow-hidden' : 'hidden'} aria-hidden={rightPanelTab !== 'detail'}>
+      <div className={rightPanelTab === 'detail' ? 'relative flex flex-1 min-h-0 flex-col overflow-hidden' : 'hidden'} aria-hidden={rightPanelTab !== 'detail'}>
+        {/* 预览层是绝对覆盖：DetailPanel 保持挂载，关闭后草稿 / 滚动位置原样恢复。 */}
         <DetailPanel tabId={tabId} isActive={isActive && rightPanelTab === 'detail'} />
+        {showReferencePreview && <ReferencePreviewPanel />}
       </div>
       <div className={rightPanelTab === 'style' ? 'flex flex-1 min-h-0 flex-col overflow-hidden' : 'hidden'} aria-hidden={rightPanelTab !== 'style'}>
         <div data-tm-settings-style-entry="" className="m-auto flex max-w-[320px] flex-col items-center gap-3 px-6 text-center">

@@ -1,5 +1,5 @@
 /**
- * AI 会话的纯 UI 偏好（P0 字号 + S1 深度思考三态）。
+ * AI 会话的纯 UI 偏好（P0 字号 + S1 深度思考三态 + 工具轮次上限）。
  *
  * 与 themeStore 同口径：全局界面偏好、不绑工作区、只存枚举字符串到
  * localStorage（绝不放大段内容，项目已有 base64 撑爆 localStorage 的教训）。
@@ -8,6 +8,10 @@
  * 深度思考的优先级（docs/design §15.7）：**会话覆盖 > Agent 定义 > 全局默认**。
  * reasoningMode 为 null 表示「跟随当前 Agent 定义」，三态按钮会写入具体值；
  * 「恢复为该 Agent 默认」把值清回 null。非法存档值一律回落，不抛错。
+ *
+ * maxToolRounds：一次提问允许模型连续调用工具的轮数。早期 P2 写死 3 轮，
+ * 复杂检索任务常被截断；这里改为用户可调，默认 20 轮，并保留 1..50 的
+ * 硬夹取作为防止模型无限自问自答 / 上下文膨胀的安全阀。
  */
 import { create } from 'zustand'
 import {
@@ -27,9 +31,25 @@ export const AI_CHAT_FONT_SIZE_OPTIONS: ReadonlyArray<{ value: AiChatFontSize; l
   { value: 'large', label: '大', hint: '接近旧版' },
 ]
 
+/** 默认 20 轮：覆盖绝大多数多跳检索 / 分批处理任务；50 是防跑飞的硬上限。 */
+export const DEFAULT_MAX_TOOL_ROUNDS = 20
+export const MAX_TOOL_ROUNDS_LIMIT = 50
+/** 设置页按钮组档位；数值本身仍由 normalizeMaxToolRounds 统一校验。 */
+export const MAX_TOOL_ROUNDS_OPTIONS: readonly number[] = [5, 10, 20, 30, 50]
+
 const FONT_KEY = 'topomind:ai-chat-font-size'
 const REASONING_MODE_KEY = 'topomind:ai-reasoning-mode'
 const REASONING_PROTOCOL_KEY = 'topomind:ai-reasoning-protocol'
+const MAX_TOOL_ROUNDS_KEY = 'topomind:ai-max-tool-rounds'
+const SESSION_MODEL_ID_KEY = 'topomind:ai-session-model-id'
+
+/** 非数字 / 越界 / NaN 一律夹回合法区间，非法存档不抛错。 */
+export function normalizeMaxToolRounds(value: unknown): number {
+  const raw = typeof value === 'string' && value.trim() === '' ? null : value
+  const num = typeof raw === 'number' ? raw : Number(raw)
+  if (raw === null || raw === undefined || !Number.isFinite(num)) return DEFAULT_MAX_TOOL_ROUNDS
+  return Math.min(MAX_TOOL_ROUNDS_LIMIT, Math.max(1, Math.round(num)))
+}
 
 function normalizeFont(value: unknown): AiChatFontSize {
   return value === 'small' || value === 'medium' || value === 'large'
@@ -69,15 +89,22 @@ interface AgentPreferencesState {
   fontSize: AiChatFontSize
   reasoningMode: ReasoningMode | null
   reasoningProtocol: ReasoningProtocol
+  maxToolRounds: number
+  /** P5：对话界面临时选择的模型 id；null = 跟随 Agent 绑定 / 全局默认。只存短 id。 */
+  sessionModelId: string | null
   setFontSize: (size: AiChatFontSize) => void
   setReasoningMode: (mode: ReasoningMode | null) => void
   setReasoningProtocol: (protocol: ReasoningProtocol) => void
+  setMaxToolRounds: (rounds: number) => void
+  setSessionModelId: (id: string | null) => void
 }
 
 export const useAgentPreferencesStore = create<AgentPreferencesState>((set) => ({
   fontSize: normalizeFont(read(FONT_KEY)),
   reasoningMode: normalizeReasoningMode(read(REASONING_MODE_KEY)),
   reasoningProtocol: normalizeReasoningProtocol(read(REASONING_PROTOCOL_KEY)),
+  maxToolRounds: normalizeMaxToolRounds(read(MAX_TOOL_ROUNDS_KEY)),
+  sessionModelId: read(SESSION_MODEL_ID_KEY),
 
   setFontSize: (size) => {
     const next = normalizeFont(size)
@@ -95,5 +122,18 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>((set) => (
     const next = normalizeReasoningProtocol(protocol)
     write(REASONING_PROTOCOL_KEY, next)
     set({ reasoningProtocol: next })
+  },
+
+  setMaxToolRounds: (rounds) => {
+    const next = normalizeMaxToolRounds(rounds)
+    write(MAX_TOOL_ROUNDS_KEY, String(next))
+    set({ maxToolRounds: next })
+  },
+
+  setSessionModelId: (id) => {
+    // 只存 id 字符串；模型被删 / 换了工作区时由 resolveModelId 回落默认，不留死链。
+    const next = id && id.trim() ? id.trim().slice(0, 80) : null
+    write(SESSION_MODEL_ID_KEY, next)
+    set({ sessionModelId: next })
   },
 }))

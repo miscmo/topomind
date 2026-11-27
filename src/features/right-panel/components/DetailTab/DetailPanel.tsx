@@ -19,6 +19,7 @@ import { topoDocumentPath, topoDocumentIdFromPath } from '../../../../features/d
 import { useDetailDocuments } from '../../model/useDetailDocuments'
 import { useDetailDocumentSession } from '../../model/useDetailDocumentSession'
 import { useDetailPanelStore, type DetailView } from '../../model/detailPanelStore'
+import { useReferencePreviewStore } from '../../model/referencePreviewStore'
 import { useDetailLockStore } from '../../model/detailLockStore'
 import { useResolvedLinkedDocuments } from '../../model/useResolvedLinkedDocuments'
 import type { DetailSidebarTab } from '../../../../features/documents/types/workspaceTypes'
@@ -27,6 +28,11 @@ import { recordUser } from '../../../../core/observe'
 import { LOG_ACTIONS } from '../../../../shared/observability/logContract'
 import { SegmentedControl } from '../../../../shared/ui/SegmentedControl'
 import { toast } from '../../../../shared/ui/Toaster/toastStore'
+import {
+  clearReferenceOpenHandler,
+  setReferenceOpenHandler,
+  type ReferenceOpenPayload,
+} from '@/features/documents/SmartDocumentEditor/docLinkBridge'
 import { syncLinkedDocumentsToGraph, useLinkedDocumentStore } from '../../../graph/linkedDocumentStore'
 import { DocumentBreadcrumb } from './DocumentBreadcrumb'
 import { DocumentMoveToNodeDialog } from '../../../documents/components/DocumentMoveToNodeDialog'
@@ -359,13 +365,18 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
   }, [tabId, kbPath, setDetailViewForNode, graphStoreApi])
 
   /**
-   * 点击正文 docLink chip / 「被引用」列表项：按全库稳定 docId 打开目标文档。
+   * 点击正文 docLink chip / 「被引用」列表项：按全库稳定 docId 打开并定位到
+   * 目标文档，必要时切房间并选中目标节点。这是文档双链自己的「导航」语义。
    * 不信任 chip 上缓存的标题或位置，一律 resolveDocumentById 反查真实 cardPath；
    * 目标已删除 / 在回收站时给出明确提示，而不是把内容写到当前节点。
+   *
+   * 注意：AI 回答里的 [ref:i] **不走这里** —— 那只是临时预览，见下面的
+   * openReferencePreview。两者语义不同，不要图省事复用同一条链路。
+   * @returns 是否真的完成跳转，供调用方决定要不要给出降级提示。
    */
-  const openDocumentByDocId = useCallback(async (docId: string) => {
+  const openDocumentByDocId = useCallback(async (docId: string): Promise<boolean> => {
     const id = docId.trim()
-    if (!id || !selectedNodeId || !isActive) return
+    if (!id) return false
     try {
       const resolution = await storage.resolveDocumentById(id)
       if (resolution.status !== 'ok' || !resolution.cardPath) {
@@ -374,7 +385,7 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
           title: '无法打开引用',
           message: resolution.status === 'trashed' ? '引用的文档在回收站中' : '引用的文档已不存在',
         })
-        return
+        return false
       }
       // P2 T2.5：「打开文档」此前完全无日志。记录用户动作本身与反查到的
       // 目标节点，label 在契约层会被替换为长度摘要（D3 不落明文标题）。
@@ -382,38 +393,41 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
         target: { type: 'document', id, label: resolution.nodeName },
         view: 'detail-panel',
         result: 'resolved',
-        params: { documentId: id, fromNodeId: selectedNodeId },
+        params: { documentId: id, fromNodeId: selectedNodeId ?? '' },
         inputMode: 'docLink',
       })
-      // 切换文档前先把当前草稿落盘，否则新文档的 session 会继承旧 draft。
+      // 切换文档前先把当前草稿落盘；没有选中节点 / 编辑器未挂载时它是 no-op，
+      // 因此这条链路不需要「画布已选中节点」作为前置条件。
       await flushDocumentSave()
       const targetPath = topoDocumentPath(id)
       setDetailSidebarTabSafe('documents')
 
-      if (resolution.cardPath === nodePath) {
+      if (resolution.cardPath === nodePath && selectedNodeId) {
         // 同一节点：先切回「本节点文档」视图，再设置激活项；关联视图的 setter
         // 只会改 activeLinkedDocId，不能用来打开节点自身文档树里的文档。
         setDetailViewForNode(selectedNodeId, 'own')
         setViewOverride(null)
         setActiveDocumentPathSafe(targetPath)
-        return
+        return true
       }
 
       if (resolution.cardPath === '__ROOT__') {
         toast({ level: 'warn', title: '无法打开引用', message: '目标文档位于工作区根节点，请先切换到根节点' })
-        return
+        return false
       }
       if (lockedNodeId) {
         toast({ level: 'warn', title: '无法打开引用', message: '右栏已锁定到当前节点，请先解锁' })
-        return
+        return false
       }
 
       const parts = resolution.cardPath.split('/').filter(Boolean)
       const targetNodeId = parts.pop()
-      if (!targetNodeId) return
+      if (!targetNodeId) return false
       const roomPath = parts.join('/') || kbPath
       // 房间异步重载后再由主 effect 读到这个激活项；先写 store 才不会丢。
-      useDetailPanelStore.getState().setActiveDocumentPathForNode(targetNodeId, targetPath)
+      const panelStore = useDetailPanelStore.getState()
+      panelStore.setActiveDocumentPathForNode(targetNodeId, targetPath)
+      panelStore.setDetailSidebarTabForNode(targetNodeId, 'documents')
       setDetailViewForNode(targetNodeId, 'own')
       tabStore.getState().enterRoomInTab(tabId, { path: roomPath, kbPath, name: resolution.nodeName || targetNodeId })
       window.setTimeout(() => {
@@ -424,14 +438,80 @@ const DetailPanel = memo(function DetailPanel({ tabId, isActive = true }: Detail
           selected: node.id === targetNodeId,
         })))
       }, 350)
+      return true
     } catch (error) {
       toast({ level: 'error', title: '打开引用失败', message: (error as Error)?.message || String(error) })
+      return false
     }
   }, [
-    storage, flushDocumentSave, isActive, selectedNodeId, nodePath, kbPath, tabId,
+    storage, flushDocumentSave, selectedNodeId, nodePath, kbPath, tabId,
     lockedNodeId, graphStoreApi, setDetailSidebarTabSafe, setDetailViewForNode,
     setActiveDocumentPathSafe,
   ])
+
+  /**
+   * P5-r：AI 回答里的 [ref:i] 指向的文档只在右栏**临时、只读预览**。
+   *
+   * 与 openDocumentByDocId 的根本区别：这里完全不碰画布 —— 不 enterRoomInTab、
+   * 不 setNodes 选中目标节点、不写 detailPanelStore 的激活项、不 flush 当前草稿
+   * （DetailPanel 保持挂载，编辑器不会被卸载）。目标文档在别的房间 / 知识库
+   * 甚至在 __ROOT__ 都能直接读，不需要用户先「切换过去」。
+   * @returns 是否成功打开预览，供引用桥决定要不要给出降级提示。
+   */
+  const openReferencePreview = useCallback(async (payload: ReferenceOpenPayload): Promise<boolean> => {
+    const id = payload.docId.trim()
+    if (!id) return false
+    try {
+      const resolution = await storage.resolveDocumentById(id)
+      if (resolution.status !== 'ok' || !resolution.cardPath) {
+        toast({
+          level: 'warn',
+          title: '无法预览引用',
+          message: resolution.status === 'trashed' ? '引用的文档在回收站中' : '引用的文档已不存在',
+        })
+        return false
+      }
+      void recordUser(LOG_ACTIONS.userDocumentOpen, {
+        target: { type: 'document', id, label: resolution.nodeName },
+        view: 'reference-preview',
+        result: 'resolved',
+        params: { documentId: id, fromNodeId: selectedNodeId ?? '' },
+        inputMode: 'aiReference',
+      })
+      useReferencePreviewStore.getState().openPreview({
+        docId: id,
+        cardPath: resolution.cardPath,
+        title: resolution.title || payload.title,
+        type: resolution.type,
+        nodeName: resolution.nodeName,
+        sourceLabel: resolution.sourceLabel,
+        ref: payload.ref,
+        breadcrumb: payload.breadcrumb,
+        blockLabel: payload.blockLabel,
+        snippet: payload.snippet,
+      })
+      return true
+    } catch (error) {
+      toast({ level: 'error', title: '预览引用失败', message: (error as Error)?.message || String(error) })
+      return false
+    }
+  }, [storage, selectedNodeId])
+
+  /**
+   * P5-r：把「按 docId 临时预览」注册成常驻引用桥。右栏详情面板是 CSS hidden
+   * 常驻挂载的，不依赖 SmartDocumentEditor，因此 AI 回答里的 [ref:i] 即使画布
+   * 没有选中节点也能打开预览。ref 保证回调始终是最新闭包，effect 只在 isActive
+   * 变化时重注册；cleanup 只注销自己那一个，避免多 tab 之间互相清掉注册。
+   */
+  const openReferencePreviewRef = useRef(openReferencePreview)
+  openReferencePreviewRef.current = openReferencePreview
+
+  useEffect(() => {
+    if (!isActive) return
+    const handler = (payload: ReferenceOpenPayload) => openReferencePreviewRef.current(payload)
+    setReferenceOpenHandler(handler)
+    return () => clearReferenceOpenHandler(handler)
+  }, [isActive])
 
   const backlinksTabContent = useMemo(() => (
     <DocumentRelationPanel

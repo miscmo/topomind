@@ -19,7 +19,7 @@
  */
 import nodeFs from 'fs';
 import nodePath from 'path';
-import { collectDocsDirs, TOPO_DOCUMENT_MANIFEST } from './document-id-service.js';
+import { collectDocsDirs, formatDocumentSource, TOPO_DOCUMENT_MANIFEST } from './document-id-service.js';
 
 export const AI_INDEX_VERSION = 1;
 export const AI_INDEX_DIR = 'ai-index';
@@ -86,34 +86,96 @@ function safeFileName(value, extension) {
 }
 
 /** 从 BlockNote 块 / 脑图节点里递归抽纯文本，跳过 base64 与超长串。 */
-export function extractPlainText(content, type) {
-  const visit = (node, depth) => {
-    if (node == null || depth > 14) return '';
-    if (typeof node === 'string') {
-      const value = node.trim();
-      if (!value || value.startsWith('data:')) return '';
-      return value.replace(/[\u0000-\u001f]/g, ' ').slice(0, 4000);
-    }
-    if (typeof node !== 'object') return '';
-    if (Array.isArray(node)) {
-      return node.map((item) => visit(item, depth + 1)).filter(Boolean).join('\n');
-    }
-    const parts = [];
-    for (const [key, value] of Object.entries(node)) {
-      if (!TEXT_KEYS.has(key)) continue;
-      if (key === 'props' && isPlainObject(value)) {
-        for (const [propKey, propValue] of Object.entries(value)) {
-          if (TEXT_KEYS.has(propKey)) parts.push(visit(propValue, depth + 1));
-        }
-      } else {
-        parts.push(visit(value, depth + 1));
+function visitText(node, depth) {
+  if (node == null || depth > 14) return '';
+  if (typeof node === 'string') {
+    const value = node.trim();
+    if (!value || value.startsWith('data:')) return '';
+    return value.replace(/[\u0000-\u001f]/g, ' ').slice(0, 4000);
+  }
+  if (typeof node !== 'object') return '';
+  if (Array.isArray(node)) {
+    return node.map((item) => visitText(item, depth + 1)).filter(Boolean).join('\n');
+  }
+  const parts = [];
+  for (const [key, value] of Object.entries(node)) {
+    if (!TEXT_KEYS.has(key)) continue;
+    if (key === 'props' && isPlainObject(value)) {
+      for (const [propKey, propValue] of Object.entries(value)) {
+        if (TEXT_KEYS.has(propKey)) parts.push(visitText(propValue, depth + 1));
       }
+    } else {
+      parts.push(visitText(value, depth + 1));
     }
-    return parts.filter(Boolean).join('\n');
-  };
+  }
+  return parts.filter(Boolean).join('\n');
+}
+
+export function extractPlainText(content, type) {
   if (!isPlainObject(content)) return '';
-  const raw = type === 'mindmap' ? visit(content.root, 0) : visit(content.blocks, 0);
+  const raw = type === 'mindmap' ? visitText(content.root, 0) : visitText(content.blocks, 0);
   return raw.slice(0, MAX_TEXT_LENGTH).trim();
+}
+
+/** 块类型的中文可读名，供 [ref:i] 显示「命中了哪个块」。 */
+const BLOCK_TYPE_LABELS = {
+  paragraph: '段落',
+  heading: '标题',
+  bulletListItem: '列表项',
+  numberedListItem: '编号列表',
+  checkListItem: '待办',
+  quote: '引用',
+  codeBlock: '代码块',
+  table: '表格',
+  image: '图片',
+  file: '附件',
+};
+const MAX_BLOCK_LABEL_LENGTH = 24;
+
+function blockLabelOf(node, text, type) {
+  const firstLine = String(text).split('\n').find((line) => line.trim()) ?? '';
+  const excerpt = firstLine.replace(/\s+/g, ' ').trim().slice(0, MAX_BLOCK_LABEL_LENGTH);
+  if (type === 'mindmap') return excerpt ? `脑图「${excerpt}」` : '脑图';
+  const kind = isPlainObject(node) && typeof node.type === 'string' ? node.type : '';
+  const kindLabel = BLOCK_TYPE_LABELS[kind] || kind || '块';
+  return excerpt ? `${kindLabel}「${excerpt}」` : kindLabel;
+}
+
+/**
+ * 顶层块在 fullText（`${title}\n${text}`）里的字符区间与可读标签。
+ * 只用于展示，绝不写进倒排索引：节点改名 / 文档重排后不影响检索结果，
+ * 旧索引无需重建、AI_INDEX_VERSION 也不用 bump。
+ * @param prefixLength 标题行 + 换行符的长度，chunk.charRange 相对 fullText 计算。
+ */
+export function extractBlockSpans(content, type, prefixLength = 0) {
+  if (!isPlainObject(content)) return [];
+  const roots = type === 'mindmap'
+    ? [content.root]
+    : (Array.isArray(content.blocks) ? content.blocks : []);
+  const spans = [];
+  let cursor = Math.max(0, Number(prefixLength) || 0);
+  for (const node of roots) {
+    const piece = visitText(node, type === 'mindmap' ? 0 : 1);
+    if (!piece) continue;
+    if (cursor + piece.length > prefixLength + MAX_TEXT_LENGTH) break;
+    spans.push({ start: cursor, end: cursor + piece.length, label: blockLabelOf(node, piece, type) });
+    cursor += piece.length + 1;
+  }
+  return spans;
+}
+
+/** 取与命中片段重叠最多的块标签；只读失败 / 无重叠时返回空串，不影响检索。 */
+export function findBlockLabel(start, end, spans) {
+  let best = '';
+  let bestOverlap = 0;
+  for (const span of (Array.isArray(spans) ? spans : [])) {
+    const overlap = Math.min(end, span.end) - Math.max(start, span.start);
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap;
+      best = typeof span.label === 'string' ? span.label : '';
+    }
+  }
+  return best;
 }
 
 /** 约 400 字一切、重叠 80 字；尽量在句号 / 换行处断开，charRange 相对抽取全文。 */
@@ -206,8 +268,11 @@ function collectGraphInfo(fs, path, kbsDir) {
           const name = isPlainObject(children[other]) ? children[other].name : '';
           if (typeof name === 'string' && name) neighborNames.push(name.toLowerCase());
         }
+        const displayName = String(isPlainObject(child) && child.name ? child.name : key).trim() || key;
         info[cardPath] = {
-          name: String(isPlainObject(child) && child.name ? child.name : key).toLowerCase(),
+          name: displayName.toLowerCase(),
+          /** P5-r：引用展示用的原始节点名，与统一文档树 / 右栏来源同一口径。 */
+          displayName,
           neighborNames: [...new Set(neighborNames)].slice(0, 24),
         };
       }
@@ -221,8 +286,21 @@ function collectGraphInfo(fs, path, kbsDir) {
   return info;
 }
 
+/** P5-r：节点显示名。优先取图元信息里的原始名，缺失时回退到 cardPath 末段 id。 */
+function nodeDisplayName(cardPath, graph) {
+  if (!cardPath || cardPath === '__ROOT__') return '根节点';
+  const info = isPlainObject(graph) ? graph[cardPath] : null;
+  const name = isPlainObject(info) && typeof info.displayName === 'string' ? info.displayName.trim() : '';
+  return name || cardPath.split('/').filter(Boolean).pop() || cardPath;
+}
+
+/** P5-r：面包屑走主进程统一口径（末段换成节点名），与右栏「来源」/ 选择器同源。 */
+function readableBreadcrumb(cardPath, graph) {
+  return formatDocumentSource(cardPath, nodeDisplayName(cardPath, graph));
+}
+
 /** 枚举全部可索引源文件（不读正文，只取 stat / 标题 / 签名）。 */
-function scanSourceFiles(fs, path, workDir) {
+function scanSourceFiles(fs, path, workDir, graph) {
   const kbsDir = path.join(workDir, 'kbs');
   const docsDirs = fs.existsSync(kbsDir) ? collectDocsDirs(fs, path, kbsDir, 24) : [];
   const rootDocs = path.join(workDir, '_docs');
@@ -237,7 +315,7 @@ function scanSourceFiles(fs, path, workDir) {
     const cardPath = path.dirname(docsDir) === workDir
       ? '__ROOT__'
       : toPosix(path.relative(kbsDir, path.dirname(docsDir)));
-    const breadcrumb = cardPath === '__ROOT__' ? '工作区根节点' : cardPath.split('/').join(' / ');
+    const breadcrumb = readableBreadcrumb(cardPath, graph);
     for (const [docId, item] of Object.entries(manifest.documents)) {
       if (!isPlainObject(item) || !INDEXABLE_TYPES.has(item.type)) continue;
       const extension = INDEXABLE_EXTENSIONS[item.type];
@@ -336,7 +414,10 @@ export function createAiIndexService({ getWorkDir, fs = nodeFs, path = nodePath,
     let index = loadIndex();
     const created = !index;
     if (!index) index = { version: AI_INDEX_VERSION, sources: {}, postings: {}, graph: {} };
-    const files = scanSourceFiles(fs, path, workDir);
+    // P5-r：节点改名不会改变文档 stat 签名，图元信息必须每次查询重算，否则引用
+    // 会一直显示旧节点名。只更新内存，不因这个纯展示字段触发额外写盘。
+    const graphInfo = collectGraphInfo(fs, path, path.join(workDir, 'kbs'));
+    const files = scanSourceFiles(fs, path, workDir, graphInfo);
     const seen = new Set();
     let rebuilt = 0;
     let removed = 0;
@@ -354,8 +435,8 @@ export function createAiIndexService({ getWorkDir, fs = nodeFs, path = nodePath,
       delete index.sources[key];
       removed += 1;
     }
+    index.graph = graphInfo;
     if (created || rebuilt > 0 || removed > 0) {
-      index.graph = collectGraphInfo(fs, path, path.join(workDir, 'kbs'));
       index.postings = buildPostings(index.sources);
       index.version = AI_INDEX_VERSION;
       index.generatedAt = now();
@@ -439,20 +520,40 @@ export function createAiIndexService({ getWorkDir, fs = nodeFs, path = nodePath,
       .filter(([, score]) => score > 0)
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, queryState.topK);
+    // P5-r：块标签 / 节点名都是纯展示字段，按需读源文档，绝不写进倒排索引；
+    // 同一 sourceKey 一轮 query 只读一次，读失败降级为空标签，不影响检索。
+    const workDir = String(getWorkDir() || '').trim();
+    const blockSpanCache = new Map();
+    const blockLabelOf = (sourceKey, source, chunk) => {
+      if (!blockSpanCache.has(sourceKey)) {
+        const content = readJsonSafe(fs, path.resolve(workDir, sourceKey));
+        const spans = content
+          ? extractBlockSpans(content, source.type, String(source.title ?? '').length + 1)
+          : [];
+        blockSpanCache.set(sourceKey, spans);
+      }
+      return findBlockLabel(chunk.start, chunk.end, blockSpanCache.get(sourceKey));
+    };
     const hits = ranked.map(([key, score], position) => {
       const split = key.lastIndexOf('#');
       const sourceKey = key.slice(0, split);
       const chunkIndex = Number(key.slice(split + 1));
       const source = index.sources[sourceKey];
       const chunk = source.chunks[chunkIndex] ?? { start: 0, end: 0, text: '' };
+      const text = String(chunk.text).slice(0, MAX_FRAGMENT_LENGTH);
       return {
         ref: position + 1,
         docId: source.docId,
         cardPath: source.cardPath,
         title: source.title,
-        breadcrumb: source.breadcrumb,
+        breadcrumb: readableBreadcrumb(source.cardPath, index.graph),
+        /** 所属节点的可读名，供回答里的 [ref:i] 直接展示给用户。 */
+        nodeName: nodeDisplayName(source.cardPath, index.graph),
+        /** 命中片段落在哪个块（类型 + 首句），供引用来源清单展示。 */
+        blockLabel: blockLabelOf(sourceKey, source, chunk),
+        snippet: text.replace(/\s+/g, ' ').trim().slice(0, 80),
         charRange: [chunk.start, chunk.end],
-        text: String(chunk.text).slice(0, MAX_FRAGMENT_LENGTH),
+        text,
         score: Math.round(score * 1000) / 1000,
       };
     });

@@ -239,22 +239,11 @@ async function readEditorJson(page) {
   try { return JSON.parse(shown) } catch { return null }
 }
 
-/** 精确设置比例：100% 时滑块隐藏，先滚轮缩小一格让它出现。 */
+/** 精确设置比例：缩放滑动条已下线，改走画布根容器上无界面的 __tmZoomTo 语义桥。 */
 async function setZoomPercent(page, percent) {
-  const hasSlider = await page.evaluate(() => !!document.querySelector('[data-tm-canvas-zoom-slider-input]'))
-  if (!hasSlider && percent < 100) {
-    await page.mouse.move(500, 750)
-    await page.mouse.wheel({ deltaY: 220 })
-    await waitFor(page, () => !!document.querySelector('[data-tm-canvas-zoom-slider-input]'), 6000)
-    await sleep(550)
-  }
   await page.evaluate((p) => {
-    const input = document.querySelector('[data-tm-canvas-zoom-slider-input]')
-    if (!input) return
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
-    setter?.call(input, String(p))
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new Event('change', { bubbles: true }))
+    const canvas = document.querySelector('[data-tm-canvas-zoom-percent]')
+    canvas?.__tmZoomTo?.(p)
   }, percent)
 }
 

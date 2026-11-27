@@ -23,7 +23,7 @@
  * workspaceGeometry 派生，画布宽度 / React Flow viewport 恒定。
  *
  * 【2026-11-26 顶部瘦身】外壳原先那条 h-10 标题行（图标 / 页名 / 「入口已预留」
- * 等副标题）与四页自己的工具行重复，已整体删除：各页自己的第一行成为新标题栏，
+ * 等副标题）与三页自己的工具行重复，已整体删除：各页自己的第一行成为新标题栏，
  * 折叠按钮统一挂在其最右边；节点结构页的「展开全部 / 收起全部」下移到搜索行。
  */
 import {
@@ -58,7 +58,6 @@ import { useResizePanel } from '@/hooks/useResizePanel'
 import { applyGeometryPatch, resolveWorkspaceContainer } from '@/features/layout/useWorkspaceGeometry'
 import type { WorkspaceGeometry } from '@/domain/layout/workspaceGeometry'
 import AgentPlaceholder from './AgentPlaceholder'
-import KnowledgeBaseListPanel from './KnowledgeBaseListPanel'
 import CanvasSettingsPanel from './CanvasSettingsPanel'
 import { useGraphContext } from '../../../../contexts/GraphContext'
 import { useGraphStore, useGraphStoreApi } from '../../../../stores/graphStore'
@@ -166,7 +165,7 @@ function NodeTreePanelBody({ tabId, geometry }: { tabId: string; geometry: Works
   const [resizeHint, setResizeHint] = useState<string | null>(null)
   const dockRef = useRef<HTMLDivElement>(null)
 
-  // 【左栏拖宽 2026-11-25】四页共用一个宽度偏好；拖拽期间只重算并写 #app-layout
+  // 【左栏拖宽 2026-11-25】三页共用一个宽度偏好；拖拽期间只重算并写 #app-layout
   // 上的 CSS 变量，右栏会同步收缩到新的 B 之外，全程零 React 重渲染。
   const { isResizing: isDockResizing, handleMouseDown: handleDockResizeMouseDown } = useResizePanel({
     initialWidth: panelWidth,
@@ -408,8 +407,6 @@ function NodeTreePanelBody({ tabId, geometry }: { tabId: string; geometry: Works
         </>
       ) : activePanelId === 'agent' ? (
         <AgentPlaceholder />
-      ) : activePanelId === 'kbList' ? (
-        <KnowledgeBaseListPanel tabId={tabId} />
       ) : (
         <CanvasSettingsPanel tabId={tabId} />
       )}

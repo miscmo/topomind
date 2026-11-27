@@ -286,23 +286,13 @@ async function wheelOnPane(page, deltaY, x = 500, y = 750) {
   }, { deltaY, x, y })
 }
 
-// 左下角比例尺 / 步进缩放 / 复位按钮与缩略图已于 2026-11-24 下线。
-// 精确设置比例改用只读提示条下方的缩放滑动条；滑块与提示条同进同出，
-// 100% 时提示条不显示，需要先滚轮缩小一格让它出现。
+// 画布上方的缩放滑动条已于 2026-11-27 下线。GUI 的 LOD / 只读 / 紧凑镜头阶段
+// 仍需把镜头精确落在 5% / 20% / 40% 等档位，滚轮一格一格逼近做不到；
+// 改用画布根容器上无界面的语义桥 __tmZoomTo（产品侧不消费、不渲染任何控件）。
 async function setZoomPercent(page, percent) {
-  const hasSlider = await page.evaluate(() =>
-    !!document.querySelector('[data-tm-canvas-zoom-slider-input]'))
-  if (!hasSlider && percent < 100) {
-    await wheelOnPane(page, 220)
-    await waitFor(page, () => !!document.querySelector('[data-tm-canvas-zoom-slider-input]'), 6000)
-  }
   await page.evaluate((p) => {
-    const input = document.querySelector('[data-tm-canvas-zoom-slider-input]')
-    if (!input) return
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
-    setter?.call(input, String(p))
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new Event('change', { bubbles: true }))
+    const canvas = document.querySelector('[data-tm-canvas-zoom-percent]')
+    canvas?.__tmZoomTo?.(p)
   }, percent)
 }
 
@@ -1769,7 +1759,7 @@ async function main() {
       && new Set(visibleCounts).size >= 3,
       JSON.stringify(visibleCounts))
     // 【诊断文案收口 2026-11-25】「树覆盖 50% / 隐藏 N 节点」的可见行已移除，
-    // 同一份事实改由 [data-tm-lod-control] 的语义属性直读（LodControl.tsx 仍是唯一真源）。
+    // 同一份事实改由 [data-tm-lod-control] 的隐藏语义宿主直读（CanvasDiagnostics.tsx 是唯一真源）。
     check('控件以语义属性暴露节点总数 / 可见数 / 隐藏数 / 树最大深度',
       lodSmall.totalNodes === 8 && lodSmall.treeMaxDepth === 3
       && lodSmall.visibleCount > 1 && lodSmall.visibleCount < lodSmall.totalNodes
@@ -2034,19 +2024,19 @@ async function main() {
       const rect = pane.getBoundingClientRect()
       return { zoom, flowX: (rect.width / 2 - x) / zoom, flowY: (rect.height / 2 - y) / zoom }
     })
-    // 左下角控件下线后的单一读数：画布容器比例 + 中间只读提示条 / 恢复按钮 / 滑块。
+    // 单一读数：画布容器比例 + 中间只读提示条 / 恢复按钮；缩放滑动条已下线。
     const canvasZoomRead = () => page.evaluate(() => {
       const canvas = document.querySelector('[data-tm-canvas-zoom-percent]')
       const banner = document.querySelector('[data-tm-canvas-readonly-banner]')
       const restore = document.querySelector('[data-tm-canvas-readonly-restore]')
-      const slider = document.querySelector('[data-tm-canvas-zoom-slider]')
       const percent = canvas?.getAttribute('data-tm-canvas-zoom-percent') ?? ''
       return {
         percent,
         atMax: percent === '100%' ? 'true' : 'false',
         banner: !!banner,
         restore: !!restore,
-        slider: !!slider,
+        noZoomControls: !document.querySelector('[data-tm-canvas-zoom-slider]')
+          && document.querySelectorAll('#graph-panel input[type="range"]').length === 0,
       }
     })
     // 100% 时提示条不显示，恢复按钮自然缺席；这里只确认常规比例读数。
@@ -2073,9 +2063,9 @@ async function main() {
     }))
     // 【2026-11-10】100% 已是放大上限：滚轮往上推也不能越过它。
     const atReferenceControl = await canvasZoomRead()
-    check('100% 常规比例下只读提示条 / 恢复按钮 / 缩放滑块全部隐藏',
+    check('100% 常规比例下只读提示条隐藏，且画布上没有任何缩放控件',
       atReferenceControl.percent === '100%' && atReferenceControl.atMax === 'true'
-      && !atReferenceControl.banner && !atReferenceControl.restore && !atReferenceControl.slider,
+      && !atReferenceControl.banner && !atReferenceControl.restore && atReferenceControl.noZoomControls,
       JSON.stringify(atReferenceControl))
     await page.mouse.move(500, 750)
     await wheelOnPane(page, -220)
@@ -2090,13 +2080,13 @@ async function main() {
       const alpha = Number(getComputedStyle(scope).getPropertyValue('--tm-detail-alpha') || '0')
       return Math.abs(comp - 1) < 0.02 && alpha === 1
     }), JSON.stringify(await semanticZoomRead()))
-    // 【2026-11-11 两段镜头】用中间缩放滑块直接落到 20% 渐隐终点（步进按钮已下线），
+    // 【2026-11-11 两段镜头】用无界面语义桥直接落到 20% 渐隐终点（滑动条与步进按钮均已下线），
     // 在这里做全部 LOD / 只读 / 字形断言。
     await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     await waitFor(page, () =>
       document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000)
     await setZoomPercent(page, 20)
-    check('缩放滑块落到 20% 渐隐终点', await waitFor(page, () =>
+    check('语义桥落到 20% 渐隐终点', await waitFor(page, () =>
       document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '20%', 8000),
       await zoomPercent())
     read30 = await semanticZoomRead()
@@ -2649,77 +2639,41 @@ async function main() {
     // 恢复无选中态，避免影响后面的状态抽屉 / 选中子树 / 阶段 V。
     await page.mouse.click(500, 800)
 
-    // ===== 阶段 Q：画布状态抽屉（房间路径 / 最近打开 / 镜头状态融合） =====
-    // 不假设 localStorage 里的持久化初值：所有断言都读「点击前后」的相对变化。
-    const statusRead = () => page.evaluate(() => {
-      const drawer = document.querySelector('[data-tm-canvas-status-drawer]')
-      const sections = {}
-      document.querySelectorAll('[data-tm-status-section]').forEach((el) => {
-        sections[el.getAttribute('data-tm-status-section')] = el.getAttribute('data-tm-status-section-open')
-      })
+    // ===== 阶段 Q：画布顶部浮层重构（2026-11-27）=====
+    // 旧左上角状态抽屉（房间路径标题栏 / 最近打开 / 撤销前进 / 查看深度 / 分区折叠）
+    // 与只读提示条下方的缩放滑动条已整体下线；新房间面包屑只在二层或更深出现。
+    // 此刻仍在知识库根房间，因此画布顶部不应有任何可见房间浮层。
+    const rootOverlayQ = await page.evaluate(() => {
+      const depthPanel = document.querySelector('[data-tm-lod-depth-panel]')
       return {
-        open: drawer?.getAttribute('data-tm-canvas-status-open') || '',
-        width: Math.round(drawer?.getBoundingClientRect().width || 0),
-        sections,
-        pathFull: document.querySelector('[data-tm-canvas-status-title]')?.getAttribute('data-tm-room-path-full') || '',
-        oldBreadcrumb: !!document.querySelector('#breadcrumb'),
-        controlCount: document.querySelectorAll('[data-tm-lod-control]').length,
+        breadcrumb: !!document.querySelector('[data-tm-room-breadcrumb]'),
         pathList: !!document.querySelector('[data-tm-room-path-list]'),
-        diagnosticsDom: !!document.querySelector('[data-tm-lod-depth-panel]'),
+        oldDrawer: !!document.querySelector('[data-tm-canvas-status-drawer]'),
+        oldToggle: !!document.querySelector('[data-tm-canvas-status-toggle]'),
+        oldSections: document.querySelectorAll('[data-tm-status-section]').length,
+        oldBreadcrumb: !!document.querySelector('#breadcrumb'),
+        oldRecent: !!document.querySelector('[data-tm-recent-room]'),
+        oldMoveHistory: !!document.querySelector('[data-tm-move-history]'),
+        depthPanelHidden: !!depthPanel && (depthPanel.hasAttribute('hidden')
+          || getComputedStyle(depthPanel).display === 'none'),
+        oldSlider: !!document.querySelector('[data-tm-canvas-zoom-slider]'),
+        rangeInputs: document.querySelectorAll('#graph-panel input[type="range"]').length,
+        diagnosticsHost: !!document.querySelector('[data-tm-lod-control]'),
+        stored: localStorage.getItem('topomind_canvas_status_v1') || '',
+        topCenterPanels: document.querySelectorAll('.react-flow__panel.top.center').length,
       }
     })
-    let status0 = await statusRead()
-    if (status0.open !== 'true') {
-      await page.evaluate(() => document.querySelector('[data-tm-canvas-status-toggle]')?.click())
-      await sleep(250)
-      status0 = await statusRead()
-    }
-    check('画布状态抽屉：三块 UI 融合成单一面板、旧面包屑悬浮层已移除',
-      status0.controlCount === 1 && !status0.oldBreadcrumb && status0.open === 'true'
-      && status0.pathFull.length > 0 && status0.pathList,
-      JSON.stringify(status0))
-
-    await page.evaluate(() => document.querySelector('[data-tm-status-section-toggle="recent"]')?.click())
-    await sleep(220)
-    const statusRecent = await statusRead()
-    check('画布状态抽屉：功能区可独立展开折叠（最近打开）',
-      statusRecent.sections.recent !== status0.sections.recent
-      && ['path', 'view', 'details'].every((id) => statusRecent.sections[id] === status0.sections[id]),
-      JSON.stringify({ before: status0.sections, after: statusRecent.sections }))
-
-    // 抽屉已收口为「最近打开」单分区 + 横向滚动面包屑，不再有 path / view / details
-    // 三个可折叠分区：完整路径改为面包屑内部横向滚动读取，语义仍是「不撑宽面板、不影响其它分区」。
-    const pathScroll = await page.evaluate(() => {
-      const list = document.querySelector('[data-tm-room-path-list]')
-      if (!list) return null
-      list.scrollLeft = list.scrollWidth
-      return { count: Number(list.getAttribute('data-tm-room-path-count') ?? '0'),
-        overflowX: getComputedStyle(list).overflowX,
-        width: Math.round(list.getBoundingClientRect().width) }
-    })
-    await sleep(220)
-    const statusPath = await statusRead()
-    check('画布状态抽屉：面包屑横向滚动读完整路径不撑宽面板，且不影响其它分区',
-      statusPath.width === statusRecent.width && statusPath.width > 0
-      && !!pathScroll && pathScroll.count > 0 && pathScroll.overflowX === 'auto'
-      && pathScroll.width <= statusPath.width
-      && statusPath.sections.recent === statusRecent.sections.recent,
-      JSON.stringify({ width: [statusRecent.width, statusPath.width], sections: statusPath.sections, pathScroll }))
-
-    const statusStored = await page.evaluate(() => localStorage.getItem('topomind_canvas_status_v1') || '')
-    check('画布状态抽屉：整体与分区折叠状态持久化',
-      /"drawerOpen"/.test(statusStored) && /"sections"/.test(statusStored),
-      statusStored.slice(0, 140))
-
-    await page.evaluate(() => document.querySelector('[data-tm-canvas-status-toggle]')?.click())
-    await sleep(250)
-    const statusCollapsed = await statusRead()
-    check('画布状态抽屉：整体折叠成标题栏但诊断 DOM 常驻',
-      statusCollapsed.open === 'false' && statusCollapsed.controlCount === 1 && statusCollapsed.diagnosticsDom,
-      JSON.stringify(statusCollapsed))
-    await page.evaluate(() => document.querySelector('[data-tm-canvas-status-toggle]')?.click())
-    await sleep(250)
-    check('画布状态抽屉：再次点击恢复展开', (await statusRead()).open === 'true')
+    check('【阶段 Q】根房间不显示面包屑，旧状态抽屉 / 缩放滑动条全部下线',
+      !rootOverlayQ.breadcrumb && !rootOverlayQ.pathList
+      && !rootOverlayQ.oldDrawer && !rootOverlayQ.oldToggle && rootOverlayQ.oldSections === 0
+      && !rootOverlayQ.oldBreadcrumb && !rootOverlayQ.oldRecent && !rootOverlayQ.oldMoveHistory
+      && rootOverlayQ.depthPanelHidden && !rootOverlayQ.oldSlider
+      && rootOverlayQ.rangeInputs === 0 && rootOverlayQ.diagnosticsHost,
+      JSON.stringify(rootOverlayQ))
+    check('【阶段 Q】分区折叠偏好不再写入 localStorage', !rootOverlayQ.stored,
+      rootOverlayQ.stored.slice(0, 140))
+    check('【阶段 Q】画布顶部只保留唯一一个 top-center 浮层容器',
+      rootOverlayQ.topCenterPanels === 1, String(rootOverlayQ.topCenterPanels))
 
     // ===== 阶段 R：选中子树（单选根 / 整树 / 幂等 / 右键入口） =====
     // 阶段 P/Q 可能把视口留在远处：用搜索把树根带回视野，顺带完成「单选一个节点」。
@@ -2797,62 +2751,47 @@ async function main() {
           .split('|').filter(Boolean).sort().join('|') === 'lod-c1|lod-g1', 6000),
       JSON.stringify(await selectionIds()))
 
-    // ===== 阶段 S：只读提示条下方的缩放滑动条（显隐同源 / 拖动即时改比例） =====
+    // ===== 阶段 S：缩放滑动条下线 + 无界面语义桥精确设比例（2026-11-27）=====
     const zoomReadout = () => page.evaluate(() =>
       document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') || '')
     await page.evaluate(() => document.querySelector('[data-tm-canvas-readonly-restore]')?.click())
     await waitFor(page, () =>
       document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '100%', 8000)
-    check('缩放滑动条：100% 时与只读提示条一起隐藏', await waitFor(page, () =>
+    check('【阶段 S】100% 时只读提示条隐藏，画布上不存在任何缩放滑动条', await waitFor(page, () =>
       !document.querySelector('[data-tm-canvas-readonly-banner]')
-      && !document.querySelector('[data-tm-canvas-zoom-slider]'), 6000))
+      && !document.querySelector('[data-tm-canvas-zoom-slider]')
+      && document.querySelectorAll('#graph-panel input[type="range"]').length === 0, 6000))
 
     await wheelOnPane(page, 220)
-    const sliderAttached = await waitFor(page, () => {
-      const banner = document.querySelector('[data-tm-canvas-readonly-banner]')
-      const slider = document.querySelector('[data-tm-canvas-zoom-slider]')
-      if (!banner || !slider || banner.nextElementSibling !== slider) return false
-      return slider.getBoundingClientRect().top >= banner.getBoundingClientRect().bottom
-    }, 8000)
-    check('缩放滑动条：缩小后与提示条同时出现，且紧贴其下方', sliderAttached)
-    // 滚轮缩放走 rAF 逐帧缓动（约 240ms）：滑块出现时动画可能仍在跑，
-    // 此时写入 60% 会被后续帧覆盖（实测回落到 57%）。先等比例稳定再拖滑块。
+    // 滚轮缩放走 rAF 逐帧缓动（约 240ms），先等比例稳定再测语义桥。
     await sleep(550)
+    const afterWheelS = await page.evaluate(() => ({
+      banner: !!document.querySelector('[data-tm-canvas-readonly-banner]'),
+      restore: !!document.querySelector('[data-tm-canvas-readonly-restore]'),
+      slider: !!document.querySelector('[data-tm-canvas-zoom-slider]'),
+      ranges: document.querySelectorAll('#graph-panel input[type="range"]').length,
+      bridge: typeof document.querySelector('[data-tm-canvas-zoom-percent]')?.__tmZoomTo === 'function',
+    }))
+    check('【阶段 S】缩小后只出现只读提示条，缩放条不再回来；语义桥可用',
+      afterWheelS.banner && afterWheelS.restore && !afterWheelS.slider
+      && afterWheelS.ranges === 0 && afterWheelS.bridge, JSON.stringify(afterWheelS))
 
-    const sliderRange = await page.evaluate(() => {
-      const input = document.querySelector('[data-tm-canvas-zoom-slider-input]')
-      return input ? { min: input.min, max: input.max, step: input.step } : null
-    })
-    check('缩放滑动条：范围 5%~100%、步进 1%',
-      sliderRange?.min === '5' && sliderRange.max === '100' && sliderRange.step === '1',
-      JSON.stringify(sliderRange))
+    await setZoomPercent(page, 60)
+    check('【阶段 S】语义桥精确设到 60%（原滑动条的位置已让给房间面包屑）', await waitFor(page, () =>
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '60%', 8000),
+      await zoomReadout())
 
-    await page.evaluate(() => {
-      const input = document.querySelector('[data-tm-canvas-zoom-slider-input]')
-      if (!input) return
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
-      setter?.call(input, '60')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-    })
-    const atSixty = await waitFor(page, () =>
-      document.querySelector('[data-tm-canvas-zoom-slider]')?.getAttribute('data-tm-canvas-zoom-slider-value') === '60'
-      && document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '60%', 8000)
-    check('缩放滑动条：拖到 60% 即时改变画布比例', atSixty, await zoomReadout())
+    await setZoomPercent(page, 5)
+    check('【阶段 S】语义桥能落到 5% 下端点（越界钳制仍由规则源负责）', await waitFor(page, () =>
+      document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '5%', 8000),
+      await zoomReadout())
 
-    await page.evaluate(() => document.querySelector('[data-tm-canvas-zoom-slider-input]')?.focus())
-    await page.keyboard.press('Home')
-    const atFive = await waitFor(page, () =>
-      document.querySelector('[data-tm-canvas-zoom-slider]')?.getAttribute('data-tm-canvas-zoom-slider-value') === '5'
-      && document.querySelector('[data-tm-canvas-zoom-percent]')?.getAttribute('data-tm-canvas-zoom-percent') === '5%', 8000)
-    check('缩放滑动条：键盘拖到 5% 下端点', atFive, await zoomReadout())
-
-    await page.keyboard.press('End')
-    const restoredBySlider = await waitFor(page, () =>
+    await setZoomPercent(page, 100)
+    const restoredByBridge = await waitFor(page, () =>
       !document.querySelector('[data-tm-canvas-readonly-banner]')
       && !document.querySelector('[data-tm-canvas-zoom-slider]')
       && document.querySelector('[data-shortcut-scope="canvas"]')?.getAttribute('data-tm-canvas-readonly') === 'false', 8000)
-    check('缩放滑动条：回到 100% 时与提示条一起隐藏并解除只读', restoredBySlider, await zoomReadout())
+    check('【阶段 S】回到 100% 时提示条隐藏并解除只读', restoredByBridge, await zoomReadout())
 
     // 阶段 V 的基线必须是右栏展开态：先恢复，再由阶段 V 自己折叠/展开往返。
     await setRightPanelCollapsed(page, false)
@@ -3397,6 +3336,25 @@ async function main() {
     check('【阶段 AC】已进入房间 A 的子房间 B', enterClickedAC && roomSwitchedAC,
       JSON.stringify({ enterClickedAC, roomSwitchedAC }))
 
+    // 【2026-11-27】新房间面包屑：只在二层或更深房间出现，且不夹带旧抽屉任何功能。
+    const crumbAC = await page.evaluate(() => {
+      const el = document.querySelector('[data-tm-room-breadcrumb]')
+      if (!el) return null
+      return {
+        depth: Number(el.getAttribute('data-tm-room-depth') ?? '0'),
+        items: el.querySelectorAll('[data-tm-room-path-item]').length,
+        current: el.querySelector('[aria-current="page"]')?.textContent?.trim() ?? '',
+        full: el.getAttribute('data-tm-room-path-full') ?? '',
+        inTopCenter: !!el.closest('.react-flow__panel.top.center'),
+        hasOldFunctions: !!el.querySelector('[data-tm-recent-room], [data-tm-move-history], [data-tm-status-section], input[type="range"]'),
+      }
+    })
+    check('【阶段 AC】进入子房间后顶部出现简洁房间面包屑，且不含旧抽屉功能',
+      !!crumbAC && crumbAC.depth >= 2 && crumbAC.items === crumbAC.depth
+      && crumbAC.current.length > 0 && crumbAC.full.includes(' / ')
+      && crumbAC.inTopCenter && !crumbAC.hasOldFunctions,
+      JSON.stringify(crumbAC))
+
     await sleep(700)
     const lockedStateAC = await page.evaluate(() => {
       const right = document.querySelector('.right-panel-container')
@@ -3892,19 +3850,18 @@ async function main() {
     await sleep(600)
     const defaultAF = await page.evaluate(() => {
       const rail = document.querySelector('[data-tm-nav-rail-root]')
-      const drawer = document.querySelector('[data-tm-canvas-status-drawer]')
       const graph = document.querySelector('#graph-panel')?.getBoundingClientRect()
       return {
         edge: rail?.getAttribute('data-tm-nav-rail-edge') ?? null,
         railWidth: rail ? Math.round(rail.getBoundingClientRect().width) : null,
-        drawerLeft: drawer ? Math.round(drawer.getBoundingClientRect().left) : null,
+        noStatusDrawer: !document.querySelector('[data-tm-canvas-status-drawer]'),
         graphWidth: graph ? Math.round(graph.width) : null,
         open: document.documentElement.dataset.tmNavRailOpen ?? null,
       }
     })
-    check('【阶段 AF】画布页导航栏默认显示且为覆盖浮层，画布宽度恒定、状态抽屉让位',
+    check('【阶段 AF】画布页导航栏默认显示且为覆盖浮层，画布宽度恒定、旧状态抽屉已下线',
       defaultAF.edge === 'false' && defaultAF.railWidth !== null && defaultAF.railWidth >= 40
-      && defaultAF.drawerLeft !== null && defaultAF.drawerLeft >= 48
+      && defaultAF.noStatusDrawer
       && defaultAF.graphWidth === beforeAF?.app?.[0],
     JSON.stringify(defaultAF))
     await page.screenshot({ path: path.join(shotDirAF, '04-canvas-default.png') })
@@ -4010,15 +3967,8 @@ async function main() {
     // ===== 阶段 AG：统一控件契约的运行时证据（2026-11-21）=====
     // 静态门禁只能证明「源码写了 .tm-*」，这里实测 CSS 真的生效：
     // 同类控件圆角一致、图标尺寸一致，且画布几何仍未被改变。
-    await page.evaluate(() => {
-      const drawer = document.querySelector('[data-tm-canvas-status-drawer]')
-      if (drawer?.getAttribute('data-tm-canvas-status-open') !== 'true') {
-        document.querySelector('[data-tm-canvas-status-toggle]')?.click()
-      }
-    })
-    await sleep(400)
     const controlsAG = await withCanvasSettings(page, () => page.evaluate(() => {
-      const toggle = document.querySelector('[data-tm-canvas-status-toggle]')
+      const toggle = document.querySelector('[data-tm-left-dock-collapse]')
       const pin = document.querySelector('[data-tm-lod-pin-toggle]')
       const select = document.querySelector('[data-tm-graph-profile-select]')
       const radius = (el) => el ? getComputedStyle(el).borderRadius : null
@@ -4043,12 +3993,6 @@ async function main() {
     // ===== 阶段 AH：横向知识库 tab 栏（2026-11-21）=====
     // 静态门禁只能证明源码结构，这里实测：顶栏仍是 32px 且画布几何/起点不变、
     // tab 一步直达、系统页不占 tab、拖拽安全带恒在、视觉契约真的生效。
-    await page.evaluate(() => {
-      const drawer = document.querySelector('[data-tm-canvas-status-drawer]')
-      if (drawer?.getAttribute('data-tm-canvas-status-open') === 'true') {
-        document.querySelector('[data-tm-canvas-status-toggle]')?.click()
-      }
-    })
     await page.mouse.move(700, 500)
     await sleep(450)
 
@@ -4101,7 +4045,7 @@ async function main() {
         noDrag: barEl?.style.webkitAppRegion ?? null,
         zone: !!document.querySelector('[data-tm-tab-zone]'),
         activeView: titleEl?.getAttribute('data-tm-active-view') ?? null,
-        hasPlus: !!document.querySelector('[data-tm-tab-bar] [aria-label="打开知识库"]'),
+        hasPlus: !!document.querySelector('[data-tm-tab-bar] [data-tm-tab-add]'),
         tabWidthVar: stripEl ? getComputedStyle(stripEl).getPropertyValue('--tab-current-width').trim() : null,
       }
     })
@@ -4118,8 +4062,8 @@ async function main() {
       !!styleAH.titlebarBg && styleAH.titlebarBg !== styleAH.bg
       && !!styleAH.bg && styleAH.bg === styleAH.graphBg,
       JSON.stringify({ titlebarBg: styleAH.titlebarBg, bg: styleAH.bg, graphBg: styleAH.graphBg }))
-    check('【阶段 AH】tab 栏不再有「+」按钮，宽度由弹性 token 注入',
-      !styleAH.hasPlus && /px$/.test(styleAH.tabWidthVar ?? ''),
+    check('【阶段 AH】tab 栏尾部常驻「+」按钮，宽度由弹性 token 注入',
+      styleAH.hasPlus && /px$/.test(styleAH.tabWidthVar ?? ''),
       JSON.stringify({ hasPlus: styleAH.hasPlus, tabWidthVar: styleAH.tabWidthVar }))
 
     await page.evaluate(() => (() => { const r = document.querySelector('[data-tm-nav-rail-root]'); if (r?.getAttribute('data-tm-nav-rail-visible') === 'false') document.querySelector('button[aria-label="展开全局导航栏"]')?.click() })())
@@ -4182,7 +4126,7 @@ async function main() {
       && overflowAH.gutter !== null && overflowAH.gutter >= 80
       && overflowAH.graphWidth === beforeAF?.app?.[0],
       JSON.stringify(overflowAH))
-    check('【阶段 AH】窄宽度下单个 tab 仍横向展示、不折叠、不出现「+」',
+    check('【阶段 AH】窄宽度下单个 tab 仍横向展示、不折叠，「+」仍常驻',
       overflowAH.visibleTabs === 1 && !overflowAH.overflow
       && !!overflowAH.tabWidth && overflowAH.tabWidth >= 88 && overflowAH.tabWidth <= 180,
       JSON.stringify(overflowAH))
@@ -4246,7 +4190,7 @@ async function main() {
         visible: tabs.length,
         overflowAttr: bar?.getAttribute('data-tm-tab-overflow') ?? null,
         hasOverflowButton: !!document.querySelector('[aria-label^="更多已打开的知识库"]'),
-        hasPlus: !!document.querySelector('[data-tm-tab-bar] [aria-label="打开知识库"]'),
+        hasPlus: !!document.querySelector('[data-tm-tab-bar] [data-tm-tab-add]'),
         widths: tabs.map((el) => Math.round(el.getBoundingClientRect().width)),
         zoneWidth: zone ? Math.round(zone.getBoundingClientRect().width) : null,
         gutter: gutter ? Math.round(gutter.getBoundingClientRect().width) : null,
@@ -4256,11 +4200,58 @@ async function main() {
     })
     check('【阶段 AH】多个知识库横向并排不折叠，全部常驻可见且右侧保留拖拽留白',
       Number(multiAH.count) >= 3 && multiAH.visible === Number(multiAH.count)
-      && multiAH.overflowAttr === 'false' && !multiAH.hasOverflowButton && !multiAH.hasPlus
+      && multiAH.overflowAttr === 'false' && !multiAH.hasOverflowButton && multiAH.hasPlus
       && multiAH.widths.length >= 3 && multiAH.widths.every((w) => w >= 88 && w <= 180)
       && multiAH.rightSpace !== null && multiAH.gutter !== null && multiAH.rightSpace >= multiAH.gutter,
       JSON.stringify(multiAH))
     await page.screenshot({ path: path.join(shotDirAF, '09-tabs-multi.png') })
+
+    // ===== 阶段 AH-v3：标题栏「+」→ 知识库列表浮窗（2026-11-27）=====
+    // 标题栏是 app-region: drag 区，浮层靠一层 no-drag 透明遮罩接管外部点击；
+    // 这里必须实测：+ 能弹出浮窗、列表项真的能被命中（没被遮罩挡住）、点条目能进库。
+    await page.evaluate(() => document.querySelector('[data-tm-tab-bar] [data-tm-tab-add]')?.click())
+    await sleep(450)
+    const pickerAH = await page.evaluate(() => {
+      const pop = document.querySelector('[data-tm-kb-picker]')
+      if (!pop) return null
+      const rect = pop.getBoundingClientRect()
+      const items = [...pop.querySelectorAll('[data-tm-kb-picker-item]')]
+      const first = items[0]
+      let reachable = false
+      if (first) {
+        const r = first.getBoundingClientRect()
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+        reachable = !!hit && (first === hit || first.contains(hit))
+      }
+      return {
+        role: pop.getAttribute('role'),
+        top: Math.round(rect.top),
+        names: items.map((el) => el.getAttribute('data-tm-kb-picker-item')),
+        reachable,
+      }
+    })
+    check('【阶段 AH】点击「+」弹出知识库列表浮窗，列表项可命中且不被 drag 遮罩挡住',
+      !!pickerAH && pickerAH.role === 'dialog' && pickerAH.top >= 32
+      && pickerAH.names.length >= 3 && pickerAH.reachable,
+      JSON.stringify(pickerAH))
+    await page.screenshot({ path: path.join(shotDirAF, '09-tabs-kb-picker.png') })
+
+    const pickedAH = await page.evaluate(() => {
+      const item = document.querySelector('[data-tm-kb-picker-item="第三知识库"]')
+      if (!item) return null
+      item.click()
+      return item.getAttribute('data-tm-kb-picker-item')
+    })
+    await sleep(700)
+    const afterPickAH = await page.evaluate(() => ({
+      popoverClosed: !document.querySelector('[data-tm-kb-picker]'),
+      activeLabel: document.querySelector('[data-tm-tab-bar] [role="tab"][aria-selected="true"]')?.getAttribute('aria-label') ?? null,
+      tabCount: document.querySelectorAll('[data-tm-tab-bar] [role="tab"]').length,
+    }))
+    check('【阶段 AH】点击列表项进入对应知识库：浮窗关闭且对应 tab 被激活',
+      pickedAH === '第三知识库' && afterPickAH.popoverClosed
+      && afterPickAH.activeLabel === '第三知识库' && afterPickAH.tabCount >= 3,
+      JSON.stringify({ pickedAH, afterPickAH }))
 
     // 中等宽度：三个 tab 应「压缩但一个都不折叠」。
     await page.evaluate(() => {

@@ -10,9 +10,12 @@
  * 全部由 src/domain/theme/ 统一管理，本页不保存第二份色值定义。
  * 2026-11-25：画布编辑、节点与连线样式两块迁入画布页左栏「画布设置」页；
  * 本页只保留一条可发现性引导，不再渲染第二份控件（避免两处入口各自演化）。
+ * 2026-11-26：AI 助手 / AI 智能体两块整体迁入画布页的覆盖式「AI 设置」窗口
+ * （AI Agent 左栏标题栏齿轮按钮），这样能边改配置边试对话；本页只留一条入口引导。
  */
 import { memo, useEffect, useState } from 'react'
-import { Book, Check, ExternalLink, FolderOpen, Layers3, SlidersHorizontal, SunMoon } from 'lucide-react'
+import { Book, Check, ExternalLink, FolderOpen, Layers3, SlidersHorizontal, Sparkles, SunMoon } from 'lucide-react'
+import { openAgentSettingsWindow } from '@/features/ai-agent/model/agentSettingsWindowStore'
 import { executeCommand } from '@/application/commands'
 import { ACCENT_PRESETS } from '@/domain/theme/accentPresets'
 import {
@@ -27,8 +30,6 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useTabStore } from '@/stores/tabs/tabStore'
 import { HOST_VIEW_IDS } from '@/features/layout/NavRail/navModel'
 import { TM_UI, tmUI } from '@/shared/ui/controlStyles'
-import AiSettingsSection from './AiSettingsSection'
-import AgentSettingsSection from './AgentSettingsSection'
 
 const SECTION = 'rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5'
 const SECTION_TITLE = 'mb-1 flex items-center gap-2 text-[14px] font-medium text-[var(--color-text-primary)]'
@@ -47,6 +48,7 @@ export default memo(function SettingsPage() {
   const theme = useThemeStore((state) => state.theme)
   const setTheme = useThemeStore((state) => state.setTheme)
   const currentWorkDir = useWorkspaceStore((state) => state.currentWorkDir)
+  const hasKbTab = useTabStore((state) => state.tabs.some((tab) => tab.type === 'kb'))
 
   return (
     <div className="h-full overflow-y-auto bg-[var(--color-bg-app)] px-8 py-10">
@@ -144,9 +146,34 @@ export default memo(function SettingsPage() {
           </div>
         </div>
 
-        <AiSettingsSection />
-
-        <AgentSettingsSection />
+        {/* AI 相关配置已整体迁出全局设置页：入口在画布页左栏 AI Agent 页顶部齿轮按钮。
+            与「画布设置」同口径，这里只提供可发现性 + 一键跳回，不渲染第二份控件。 */}
+        <div className={`${SECTION} mt-4`} data-tm-settings-ai-entry="">
+          <h2 className={SECTION_TITLE}><Sparkles className="h-4 w-4 text-[var(--color-accent)]" />AI 设置</h2>
+          <p className={SECTION_HINT}>
+            模型服务与 API Key、对话字号、智能体模板与提示词已统一迁入画布页的覆盖式「AI 设置」窗口，
+            可贴着对话面板边调整边测试，修改后立即生效并自动保存。
+          </p>
+          <div className={ROW}>
+            <div>
+              <div className={LABEL}>入口位置</div>
+              <div className={DESC}>
+                {hasKbTab
+                  ? '打开任意知识库 → 左栏「AI Agent」页 → 顶部标题栏第二个齿轮按钮'
+                  : '请先打开一个知识库，再从左栏「AI Agent」页顶部的齿轮按钮进入'}
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={!hasKbTab}
+              data-tm-settings-ai-open=""
+              onClick={() => openAgentSettingsWindow('assistant')}
+              className={`${BTN} disabled:opacity-50`}
+            >
+              打开 AI 设置
+            </button>
+          </div>
+        </div>
 
         <div className={`${SECTION} mt-4`}>
           <h2 className={SECTION_TITLE}><Book className="h-4 w-4 text-[var(--color-accent)]" />快捷键</h2>

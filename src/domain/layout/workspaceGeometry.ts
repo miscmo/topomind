@@ -25,7 +25,7 @@ export const RIGHT_WIDTH_FLOOR = 280
 export const RIGHT_ABSOLUTE_MIN = 220
 /** 右栏下限的比例部分（沿用旧的 20% 规则）。 */
 export const RIGHT_MIN_RATIO = 0.2
-/** 左栏拖动下限 / 上限 / 默认值（四页完全共用一个宽度，切页不跳变）。 */
+/** 左栏拖动下限 / 上限 / 默认值（三页完全共用一个宽度，切页不跳变）。 */
 export const LEFT_WIDTH_FLOOR = 240
 export const LEFT_WIDTH_CEILING = 560
 export const LEFT_DEFAULT_WIDTH = 280

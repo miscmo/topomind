@@ -124,9 +124,30 @@
   --tab-min-width: 88px;
   --tab-max-width: 180px;
   --tab-gap: 4px;
+  /* tab 栏尾部常驻「+」按钮宽度：宽度算法必须先把它从可用宽度里扣掉，
+     否则 tab 会挤进 --tab-drag-gutter 的窗口拖拽安全带。 */
+  --tab-add-width: 26px;
   --tab-drag-gutter: 88px;
   --tab-overflow-width: 40px;
   --tab-radius-top: 8px;
+  /* 左栏 AI 会话 tab：比顶栏知识库 tab 更窄，240px 窄栏里也能露出下一个 tab 的边缘，
+     提示「还能横向滚动」；完整标题由 title / 历史浮窗给出。 */
+  --ai-tab-max-width: 100px;
+  --ai-tab-min-width: 68px;
+  /* 左栏「提问记录」轨道：平时是消息区左缘的一小段紧凑细刻度（垂直居中、无贯穿竖线），
+     悬停才向右侧浮出详情卡。几何统一收口在这里：gutter 同时是消息正文让出的左内边距，
+     卡片宽度按 240px 最窄左栏反推（2 + 14 + 4 + 216 = 236），保证窄栏下不横向溢出。
+     track-max-height 是刻度段的上限：提问很多时段内滚动，绝不铺满整个消息区。 */
+  --ai-question-rail-inset: 2px;
+  --ai-question-rail-width: 14px;
+  --ai-question-rail-gutter: 20px;
+  --ai-question-tick-height: 14px;
+  --ai-question-track-max-height: 168px;
+  --ai-question-card-width: 216px;
+  /* AI 设置窗口：贴应用右边界、从左栏右缘起铺满剩余画布区；内容与顶栏尺寸
+     收口在这里，组件只消费变量，不自带魔法数字。 */
+  --ai-settings-header-height: 44px;
+  --ai-settings-content-max: 920px;
   /* Π 形连体：活跃 tab 的底色必须与它下方的工作区一致，才像「页面从 tab 里长出来」。
      默认取内容区 surface；画布页由 controls.css 按 data-tm-active-view 换成 canvas-bg。
      前提：顶栏底色必须比内容区深一档（见 github-light 的 --titlebar-bg），
@@ -184,6 +205,9 @@
   --z-toast: 60;
   /* 全局导航层：0 < 画布浮层 30 < 导航 40 < 右键菜单 50 < 弹窗 10000 */
   --z-nav-rail: 40;
+  /* AI 设置窗口：必须高于右栏文档面板 / 左栏浮层（30），低于 fixed 右键菜单（50）
+     与全局模态；与 NavRail 零重叠靠 --tm-workspace-left-boundary 保证。 */
+  --z-ai-settings-window: 45;
 
   /* ===== 控件级语义 token（统一设计契约，见 styles/controls.css）=====
      这些是别名而非新色值：深浅主题自动跟随，禁止在组件里另写一份字面值。

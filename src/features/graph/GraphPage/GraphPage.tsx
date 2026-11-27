@@ -18,6 +18,7 @@ import { useShortcut } from '../../../hooks/useShortcut'
 import { useTabStore } from '../../../stores/tabs/tabStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useWorkspaceGeometry } from '../../layout/useWorkspaceGeometry'
+import AgentSettingsWindow from '@/features/ai-agent/components/AgentSettingsWindow'
 
 interface GraphPageProps {
   tabId: string
@@ -75,9 +76,10 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
             画布对右栏状态完全无感知，宽度与 viewport 恒定不变。 */}
         <div id="app-layout" className="relative w-full h-full" ref={layoutRef}>
           <div id="graph-panel" className="absolute inset-0 isolate overflow-clip bg-[var(--color-canvas-bg)]">
-            {/* 房间路径面包屑 / 最近打开 / 镜头诊断都在 GraphCanvas 的画布状态抽屉里，
-                视图配置项已迁入左栏「画布设置」页；这里不叠一层绝对定位组件，
-                避免与 top-left Panel 互相遮挡。 */}
+            {/* 【2026-11-27】画布顶部只有 GraphCanvas 自己那一个 top-center 浮层：
+                房间路径面包屑（仅二层及以上房间）、只读提示条与选中菜单共用同一容器。
+                旧状态抽屉（最近打开 / 撤销前进 / 查看深度）与缩放滑动条已整体下线；
+                视图配置项在左栏「画布设置」页。这里不叠第二层绝对定位组件。 */}
 
             {isActive ? (
               <GraphCanvas tabId={tabId} {...canvasProps} />
@@ -89,6 +91,10 @@ export default memo(function GraphPage({ tabId, isActive = true }: GraphPageProp
           {/* 【左侧节点树 2026-11-13】同样是 absolute 浮层：
               不参与 flex 两栏，展开/折叠不改变 #graph-panel 宽度、Panel 定位或缩略图视口框。 */}
           <NodeTreePanel tabId={tabId} isActive={isActive} geometry={geometry} />
+          {/* AI 设置窗口：只挂在活跃知识库标签页内，读本容器的 --tm-workspace-left-boundary
+              贴住左栏对话页右缘；层级高于右栏文档面板，展开文档时也会被整片盖住。
+              常驻挂载的非活跃标签页不渲染，避免出现多份同 id 的浮层 DOM。 */}
+          {isActive && <AgentSettingsWindow />}
         </div>
         <GraphPageContextMenu {...contextMenuProps} />
         {moveDialogProps.moveState && (

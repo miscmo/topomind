@@ -1998,6 +1998,46 @@ html[data-theme='dark'], .dark {
   text-align: left;
   cursor: zoom-in;
 }
+/* 引用模式：块内常驻显示所属流程图文档名 + 右栏打开入口。
+   只占左上角一小条，且与 hover tooltip（顶部居中）错开。 */
+.smart-document-content .tm-excalidraw-block-doc-bar {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 4;
+  display: flex;
+  max-width: calc(100% - 24px);
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popover);
+}
+.tm-excalidraw-block-doc-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 16px;
+}
+.tm-excalidraw-block-doc-open {
+  flex: none;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  line-height: 16px;
+  cursor: pointer;
+}
+.tm-excalidraw-block-doc-open:hover {
+  background: var(--color-hover-bg);
+}
 /* hover tooltip：纯展示层，绝不能拦下双击 / 拖动的指针事件。 */
 .smart-document-content .tm-excalidraw-block::after {
   content: attr(data-tm-excalidraw-block-tooltip);

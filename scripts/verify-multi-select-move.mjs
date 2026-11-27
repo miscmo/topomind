@@ -534,7 +534,7 @@ try {
   assert.ok(moveModel.includes('buildMoveState'), '移动集合必须只由显式 nodeIds 构造')
   assert.ok(!moveModel.includes('openMoveSelectionToRoom'), '不得残留回读 store 的旧入口')
 
-  // ---- 本次新增：常驻撤销 / 前进入口 ----
+  // ---- 撤销 / 前进历史（常驻按钮已下线，历史仍供 toast 使用）----
   const toastStore = read('src/shared/ui/Toaster/toastStore.ts')
   assert.ok(/pushToast: \(\{[^}]*\baction\b/.test(toastStore),
     'toast 必须把 action 原样带进条目，否则「撤销」按钮永远不会渲染')
@@ -553,23 +553,22 @@ try {
   assert.ok(moveModel.includes("action: { label: '撤销', onClick: () => void undoMove() }"),
     'toast 的撤销必须与常驻按钮共用同一个历史入口')
   assert.ok(moveModel.includes('onMoveUndo: undoMove') && moveModel.includes('onMoveRedo: redoMove'),
-    '协调器必须把撤销 / 前进回调暴露给画布面板')
+    '撤销 / 前进回调仍由移动模型统一暴露（只供 toast 与运行时使用）')
 
-  assert.ok(actions.includes('onMoveUndo,') && actions.includes('onMoveRedo,'),
-    '画布 props 必须带上下两个回调')
-  assert.ok(canvas.includes('onMoveUndo={onMoveUndo}') && canvas.includes('onMoveRedo={onMoveRedo}'),
-    'GraphCanvas 必须把回调转交给左侧画布状态面板')
-  const lodControl = read('src/features/graph/GraphCanvas/components/LodControl.tsx')
-  assert.ok(lodControl.includes('data-tm-move-undo=""') && lodControl.includes('data-tm-move-redo=""'),
-    '左侧画布状态面板必须有常驻的撤销 / 前进按钮')
-  assert.ok(lodControl.includes('data-tm-move-history-undo-count={undoStack.length}'),
-    '按钮必须显示可撤销的步数')
-  assert.ok(lodControl.includes('data-tm-canvas-status-body=""'),
-    '新增工具条不能挤掉原有抽屉主体（GUI 回归依赖它）')
-  assert.ok(lodControl.includes('readOnlyState.readOnly'), '撤销 / 前进必须遵守画布只读闸门')
-  // 工具条必须在抽屉主体之前：折叠抽屉后按钮仍然可见可点。
-  assert.ok(lodControl.indexOf('data-tm-move-history=""') < lodControl.indexOf('data-tm-canvas-status-body=""'),
-    '撤销 / 前进工具条必须常驻在折叠区之外')
+  // 【2026-11-27】左上画布状态面板整体下线：常驻撤销 / 前进按钮随之移除，
+  // 回调不再穿过页面协调器与 GraphCanvas props；历史仍由 toast 的「撤销」承接。
+  assert.ok(!actions.includes('onMoveUndo') && !actions.includes('onMoveRedo'),
+    '页面协调器不得再把撤销 / 前进回调透传给画布')
+  assert.ok(!canvas.includes('onMoveUndo') && !canvas.includes('onMoveRedo')
+    && !canvas.includes('LodControl'),
+    'GraphCanvas 不得再挂旧状态面板及其撤销 / 前进 props')
+  assert.ok(!fs.existsSync(path.join(projectRoot, 'src/features/graph/GraphCanvas/components/LodControl.tsx')),
+    '旧画布状态面板 LodControl.tsx 必须已删除')
+  const crumbMove = read('src/features/graph/GraphCanvas/components/RoomBreadcrumb.tsx')
+  assert.ok(!crumbMove.includes('data-tm-move-undo') && !crumbMove.includes('data-tm-move-redo')
+    && !crumbMove.includes('data-tm-move-history') && !crumbMove.includes('undoStack')
+    && crumbMove.includes('if (items.length < 2) return null'),
+    '新房间面包屑不得夹带撤销 / 前进工具条或移动历史')
 
   // ---- 本次修复：撤销 / 前进不切房间，画布与面包屑保持一致 ----
   assert.ok(!/graph\.loadRoom\(/.test(moveModel),

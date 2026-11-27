@@ -37,6 +37,7 @@ import type {
 } from '../tools/toolTypes'
 import { useAgentDefinitionStore } from './agentDefinitionStore'
 import { useAgentSessionStore } from './agentSessionStore'
+import { useAiModelStore } from './aiModelStore'
 
 export const MAX_PARALLEL_DELEGATIONS = 3
 export const MAX_DELEGATIONS_PER_TASK = 4
@@ -140,6 +141,8 @@ function resolveSubAgent(subAgentId: string): {
   model: AiChatAgentPayload['model']
   reasoning: AiChatAgentPayload['reasoning']
   toolIds: string[]
+  /** P5：子 Agent 绑定的模型优先，否则跟随会话 / 全局默认。 */
+  modelId: string
 } | { code: string; error: string } {
   const config = useAgentDefinitionStore.getState().config
   if (!config) return { code: 'delegate_config_unavailable', error: '智能体配置尚未加载' }
@@ -162,6 +165,7 @@ function resolveSubAgent(subAgentId: string): {
       effort: agent.model.reasoning.effort,
     },
     toolIds: agent.toolIds,
+    modelId: useAiModelStore.getState().resolveActive(agent.modelId ?? null)?.id ?? '',
   }
 }
 
@@ -212,6 +216,7 @@ export async function runAgentDelegation(
     const chatAgent: AiChatAgentPayload = {
       agentId: resolved.id,
       systemPrompt,
+      modelId: resolved.modelId || undefined,
       model: resolved.model,
       reasoning: resolved.reasoning,
     }
@@ -245,7 +250,7 @@ export async function runAgentDelegation(
         activeSubTasks.add(taskId)
         let chunkText = ''
         const pending = beginTask(taskId, (delta) => { chunkText += delta })
-        const start = await startAiChat(taskId, messages, chatAgent, tools, parentTaskId)
+        const start = await startAiChat(taskId, messages, chatAgent, tools, parentTaskId, resolved.modelId)
         if (!start.ok) {
           pending.cancel()
           return failure(request, { agentName: resolved.name, systemPrompt, toolIds },

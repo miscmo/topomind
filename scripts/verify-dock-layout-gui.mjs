@@ -145,7 +145,7 @@ async function openDockTab(page, id) {
 
 /**
  * 读取左栏「新标题栏」的形态。
- * 四页 DOM 深度不同：节点结构页的工具行是外壳直接子元素，另外三页先包一层
+ * 三页 DOM 深度不同：节点结构页的工具行是外壳直接子元素，另外两页先包一层
  * flex 内容容器（画布设置页还多一层滚动区 + section）。按高度向下找到第一条
  * ≤48px 的行，避免把整个内容容器误当成标题行。
  */
@@ -194,7 +194,7 @@ async function main() {
   try {
     check('进入工作空间并渲染节点', await enterWorkspace(page))
 
-    for (const id of ['agent', 'kbList', 'tree', 'canvasSettings']) {
+    for (const id of ['agent', 'tree', 'canvasSettings']) {
       const opened = await openDockTab(page, id)
       const m = opened ? await firstRowMetrics(page) : null
       check(`打开左栏「${id}」页`, opened, JSON.stringify(m?.rowText))
@@ -220,9 +220,9 @@ async function main() {
     const reopened = await openDockTab(page, 'agent')
     check('再点 NavRail 竖 tab 可重新展开左栏', reopened)
 
-    // 240 窄栏：四页第一行都不能把面板撑出横向滚动。
+    // 240 窄栏：三页第一行都不能把面板撑出横向滚动。
     check('240 窄栏重载成功', await enterWorkspace(page, 240))
-    for (const id of ['agent', 'kbList', 'tree', 'canvasSettings']) {
+    for (const id of ['agent', 'tree', 'canvasSettings']) {
       const opened = await openDockTab(page, id)
       const m = opened ? await firstRowMetrics(page) : null
       check(`240 窄栏「${id}」页无横向溢出且折叠按钮仍可见`,

@@ -206,6 +206,16 @@ async function main() {
         && document.querySelector('[data-tm-ai-session-count]')?.textContent === '1')
       && fs.existsSync(SESSIONS_FILE))
 
+    check('P4-T 顶部单行 tab 栏：1 个激活 tab，右侧折叠按钮固定在 tab 栏右边',
+      await waitFor(page, () => {
+        const strip = document.querySelector('[data-tm-ai-session-tabs]')
+        const tabs = [...document.querySelectorAll('[data-tm-ai-session-tab]')]
+        const collapse = document.querySelector('[data-tm-left-dock-collapse]')
+        return !!strip && tabs.length === 1 && tabs[0].getAttribute('aria-selected') === 'true'
+          && !!collapse && Math.round(collapse.getBoundingClientRect().right)
+            > Math.round(strip.getBoundingClientRect().right)
+      }))
+
     await page.type('[data-tm-ai-composer]', MARKER)
     check('点击发送（未配置 Key 走降级提示）', await clickButton(page, '[data-tm-ai-agent-panel]', '发送'))
     check('用户消息进入当前会话', await messagesHasMarker(page))
@@ -217,9 +227,140 @@ async function main() {
       && afterSend.sessions[0].title.includes(MARKER),
       JSON.stringify({ count: afterSend.sessions.length, title: afterSend.sessions[0]?.title }))
 
+    // ---- P4-Q 对话区左缘「提问记录」轨道：刻度 / 悬停详情 / 点击定位 ----
+    // 再发两条提问（第二条是多行），让轨道有多于一个刻度可测。
+    await page.type('[data-tm-ai-composer]', '提问记录-第二条：为什么需要这条刻度？')
+    await page.keyboard.down('Shift')
+    await page.keyboard.press('Enter')
+    await page.keyboard.up('Shift')
+    await page.type('[data-tm-ai-composer]', '补充说明：这一行用于验证悬停详情卡的多行摘要与截断。')
+    check('发送一条多行提问', await clickButton(page, '[data-tm-ai-agent-panel]', '发送'))
+    await page.type('[data-tm-ai-composer]', '提问记录-第三条：点击刻度能回到这条提问吗？')
+    check('发送第三条提问', await clickButton(page, '[data-tm-ai-agent-panel]', '发送'))
+
+    check('P4-Q 三条用户提问生成三条刻度，激活态跟随最新一条',
+      await waitFor(page, () => {
+        const rail = document.querySelector('[data-tm-ai-question-rail]')
+        const ticks = [...document.querySelectorAll('[data-tm-ai-question-tick]')]
+        const active = ticks.filter((el) => el.getAttribute('aria-current') === 'true')
+        return rail?.getAttribute('data-tm-ai-question-count') === '3'
+          && ticks.length === 3 && active.length === 1 && active[0] === ticks[ticks.length - 1]
+      }))
+
+    const railGeometry = await page.evaluate(() => {
+      const host = document.querySelector('[data-tm-ai-messages-host]')
+      const track = document.querySelector('[data-tm-ai-question-track]')
+      const ticks = [...document.querySelectorAll('[data-tm-ai-question-tick]')]
+      if (!host || !track || ticks.length < 2) return null
+      const h = host.getBoundingClientRect()
+      const t = track.getBoundingClientRect()
+      return {
+        hostHeight: Math.round(h.height),
+        trackHeight: Math.round(t.height),
+        centerOffset: Math.round((t.top + t.bottom) / 2 - (h.top + h.bottom) / 2),
+        tickGap: Math.round(ticks[1].getBoundingClientRect().top - ticks[0].getBoundingClientRect().bottom),
+        beforeContent: getComputedStyle(track, '::before').content,
+      }
+    })
+    check('P4-Q 刻度压缩成垂直居中的一小段：不贯穿消息区、无竖线、刻度紧密排列',
+      Boolean(railGeometry)
+        && railGeometry.trackHeight < railGeometry.hostHeight * 0.4
+        && Math.abs(railGeometry.centerOffset) <= 2
+        && railGeometry.beforeContent === 'none'
+        && railGeometry.tickGap <= 8,
+      JSON.stringify(railGeometry))
+
+    const questionTickIds = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-tm-ai-question-tick]')]
+        .map((el) => el.getAttribute('data-tm-ai-question-tick')))
+    const secondTickPoint = await page.evaluate((id) => {
+      const el = document.querySelector(`[data-tm-ai-question-tick="${id}"]`)
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    }, questionTickIds[1])
+    check('P4-Q 第二条刻度可定位', Boolean(secondTickPoint))
+    if (secondTickPoint) {
+      await page.mouse.move(secondTickPoint.x, secondTickPoint.y)
+      check('P4-Q 悬停浮出提问详情卡：序号 / 时间 / 标题 / 多行摘要 / 定位提示',
+        await waitFor(page, () => {
+          const card = document.querySelector('[data-tm-ai-question-card]')
+          if (!card) return false
+          const text = card.textContent || ''
+          return text.includes('提问 02 / 03') && /\d{1,2}:\d{2}/.test(text)
+            && text.includes('提问记录-第二条') && text.includes('补充说明')
+            && text.includes('点击刻度定位')
+        }))
+
+      const cardMetrics = await page.evaluate(() => {
+        const card = document.querySelector('[data-tm-ai-question-card]')
+        const host = document.querySelector('[data-tm-ai-messages-host]')
+        const track = document.querySelector('[data-tm-ai-question-track]')
+        const panel = document.querySelector('[data-tm-ai-agent-panel]')
+        if (!card || !host || !track || !panel) return null
+        const c = card.getBoundingClientRect()
+        const h = host.getBoundingClientRect()
+        const t = track.getBoundingClientRect()
+        const p = panel.getBoundingClientRect()
+        return {
+          position: getComputedStyle(card).position,
+          cardLeft: Math.round(c.left), trackRight: Math.round(t.right),
+          top: Math.round(c.top), bottom: Math.round(c.bottom),
+          hostTop: Math.round(h.top), hostBottom: Math.round(h.bottom),
+          right: Math.round(c.right), panelRight: Math.round(p.right),
+          sw: card.scrollWidth, cw: card.clientWidth,
+        }
+      })
+      check('P4-Q 详情卡贴在刻度右侧、上下钳制在消息区内、窄栏零横向溢出',
+        Boolean(cardMetrics) && cardMetrics.position === 'absolute'
+        && cardMetrics.cardLeft > cardMetrics.trackRight
+        && cardMetrics.top >= cardMetrics.hostTop - 2
+        && cardMetrics.bottom <= cardMetrics.hostBottom + 2
+        && cardMetrics.right <= cardMetrics.panelRight
+        && cardMetrics.sw <= cardMetrics.cw + 2,
+        JSON.stringify(cardMetrics))
+
+      await page.mouse.move((cardMetrics?.right ?? 240) + 24, (cardMetrics?.top ?? 120) + 8)
+      check('P4-Q 鼠标移出后详情卡收起，平时只剩一列刻度',
+        await waitFor(page, () => !document.querySelector('[data-tm-ai-question-card]'), 3000)
+        && await waitFor(page, () => !!document.querySelector('[data-tm-ai-question-rail]')))
+
+      await page.evaluate((id) => {
+        document.querySelector(`[data-tm-ai-question-tick="${id}"]`)?.click()
+      }, questionTickIds[0])
+      check('P4-Q 点击刻度定位到首条提问并短时高亮，详情卡同时收起',
+        await waitFor(page, () => {
+          const target = document.querySelector('[data-tm-ai-message-target="true"]')
+          const firstUser = document.querySelector('[data-tm-ai-message-row="user"]')
+          return !!target && target === firstUser
+            && !document.querySelector('[data-tm-ai-question-card]')
+        }, 3000))
+    }
+
     await page.click('[data-tm-ai-session-toggle]')
     check('历史会话列表展开并渲染 1 条',
       await waitFor(page, () => document.querySelectorAll('[data-tm-ai-session-item]').length === 1))
+
+    const popoverMetrics = await page.evaluate(() => {
+      const el = document.querySelector('[data-tm-ai-session-history]')
+      const header = document.querySelector('[data-tm-ai-session-header]')
+      if (!el || !header) return null
+      const r = el.getBoundingClientRect()
+      const h = header.getBoundingClientRect()
+      return {
+        position: getComputedStyle(el).position,
+        top: Math.round(r.top), headerBottom: Math.round(h.bottom),
+        right: Math.round(r.right), headerRight: Math.round(h.right),
+        sw: el.scrollWidth, cw: el.clientWidth,
+      }
+    })
+    check('P4-T 历史记录以浮窗展示：挂在标题栏下方、不占文档流、窄栏不溢出',
+      Boolean(popoverMetrics) && popoverMetrics.position === 'absolute'
+      && popoverMetrics.top >= popoverMetrics.headerBottom
+      && popoverMetrics.top <= popoverMetrics.headerBottom + 12
+      && popoverMetrics.right <= popoverMetrics.headerRight
+      && popoverMetrics.sw <= popoverMetrics.cw + 2,
+      JSON.stringify(popoverMetrics))
 
     await page.click('[data-tm-ai-session-new]')
     check('新建会话后列表变 2 条、面板清空、当前标题回到「新会话」',
@@ -227,11 +368,70 @@ async function main() {
         && document.querySelector('[data-tm-ai-session-current]')?.textContent === '新会话')
       && await messagesCleared(page))
 
+    check('P4-Q 新建空会话后提问轨道随正文清空',
+      await waitFor(page, () => !document.querySelector('[data-tm-ai-question-rail]')))
+
+    check('P4-T 新建会话自动新增 tab，激活态跟随新会话',
+      await waitFor(page, () => {
+        const tabs = [...document.querySelectorAll('[data-tm-ai-session-tab]')]
+        const active = tabs.find((item) => item.getAttribute('aria-selected') === 'true')
+        return tabs.length === 2 && (active?.textContent || '').includes('新会话')
+      }))
+
+    const stripMetrics = await page.evaluate(() => {
+      const strip = document.querySelector('[data-tm-ai-session-tabs]')
+      const collapse = document.querySelector('[data-tm-left-dock-collapse]')
+      const root = document.querySelector('[data-tm-node-tree-panel]')
+      if (!strip || !collapse || !root) return null
+      const before = strip.scrollLeft
+      // 激活 tab 通常已被自动滚到末尾，必须先归零再推到底才能测出可滚动范围。
+      strip.scrollLeft = 0
+      const atStart = strip.scrollLeft
+      strip.scrollLeft = strip.scrollWidth
+      const atEnd = strip.scrollLeft
+      strip.scrollLeft = before
+      return {
+        overflowX: getComputedStyle(strip).overflowX,
+        scrollable: atEnd > atStart,
+        sw: strip.scrollWidth, cw: strip.clientWidth,
+        stripRight: Math.round(strip.getBoundingClientRect().right),
+        collapseRight: Math.round(collapse.getBoundingClientRect().right),
+        rootOverflow: root.scrollWidth - root.clientWidth,
+      }
+    })
+    check('P4-T tab 过多时由 tab 栏自身横向滚动，右侧按钮固定、左栏不溢出',
+      Boolean(stripMetrics) && stripMetrics.overflowX === 'auto' && stripMetrics.scrollable
+      && stripMetrics.collapseRight > stripMetrics.stripRight
+      && stripMetrics.rootOverflow <= 2,
+      JSON.stringify(stripMetrics))
+
     const savedId = await findSessionId(page, '持久化验证标记')
     check('历史会话条目可定位', Boolean(savedId), String(savedId))
     if (savedId) {
       await page.click(`[data-tm-ai-session-item="${savedId}"]`)
       check('点开历史会话后正文恢复', await messagesHasMarker(page))
+      check('P4-Q 切回含 3 条提问的历史会话，刻度按落盘正文重建',
+        await waitFor(page, () => document.querySelector('[data-tm-ai-question-rail]')
+          ?.getAttribute('data-tm-ai-question-count') === '3'))
+
+      // P4-T：先关掉空白会话的 tab，再从浮窗打开它（此时「未打开」）应新增 tab；
+      // 然后回到已打开的 saved 会话应只跳转、不重复插入。最后把当前会话复位到
+      // saved，保证后续删除 blank 时不会触发「删除当前会话自动补位」分支。
+      const reopenId = await findSessionId(page, '新会话')
+      if (reopenId) {
+        await page.evaluate((id) => {
+          document.querySelector(`[data-tm-ai-session-tab-close="${id}"]`)?.click()
+        }, reopenId)
+        check('P4-T 关闭 tab 只摘入口，不删磁盘会话',
+          await waitFor(page, () => document.querySelectorAll('[data-tm-ai-session-tab]').length === 1))
+        await page.click(`[data-tm-ai-session-item="${reopenId}"]`)
+        check('P4-T 从历史浮窗打开「未打开」的会话会重新新增 tab',
+          await waitFor(page, () => document.querySelectorAll('[data-tm-ai-session-tab]').length === 2))
+        await page.click(`[data-tm-ai-session-item="${savedId}"]`)
+        check('P4-T 点击「已在 tab 栏打开」的会话只跳转、不重复新增 tab',
+          await waitFor(page, () => document.querySelectorAll('[data-tm-ai-session-tab]').length === 2)
+          && await messagesHasMarker(page))
+      }
     }
 
     const blankId = await findSessionId(page, '新会话')
@@ -260,7 +460,15 @@ async function main() {
     check('重新打开 AI 会话面板', await openAgentPanel(page))
     check('重启后历史会话列表仍在（计数 1）',
       await waitFor(page, () => document.querySelector('[data-tm-ai-session-count]')?.textContent === '1'))
+    check('P4-T 重启后 tab 栏恢复到上次打开的会话',
+      await waitFor(page, () => {
+        const tabs = [...document.querySelectorAll('[data-tm-ai-session-tab]')]
+        return tabs.length === 1 && tabs[0].getAttribute('aria-selected') === 'true'
+      }))
     check('重启后自动恢复上次会话且历史正文仍可再次打开', await messagesHasMarker(page))
+    check('P4-Q 重启后提问轨道随历史正文恢复（3 条）',
+      await waitFor(page, () => document.querySelector('[data-tm-ai-question-rail]')
+        ?.getAttribute('data-tm-ai-question-count') === '3'))
 
     await page.click('[data-tm-ai-session-toggle]')
     check('重启后列表条目可点开且标题正确',
@@ -284,6 +492,10 @@ async function main() {
         && await messagesCleared(page))
       check('删除当前会话后磁盘仍保留一条可用会话', readSessions().sessions.length === 1)
     }
+
+    await page.click('[data-tm-ai-session-toggle]')
+    check('P4-T 再次点击历史按钮可收起浮窗',
+      await waitFor(page, () => !document.querySelector('[data-tm-ai-session-history]')))
 
     check('全流程零未捕获渲染异常', pageErrors.length === 0,
       JSON.stringify(pageErrors.slice(0, 3)))

@@ -1,19 +1,18 @@
 /**
- * 智能文档里的「手绘流程图」块（Excalidraw）。
+ * 智能文档里的「手绘流程图」块（Excalidraw），双模式：
  *
- * v1 设计取舍，刻意保持最小改动面：
- * - 数据：场景 JSON 直接存块 props.scene，随 SmartDocumentContent 一起保存 /
- *   复制 / 删除。不新增文档类型、不碰 .exdraw.json 扩展名表、不碰主进程、
- *   不碰画布容器的节点生命周期。
- * - 预览：官方 exportToSvg 动态 import，走画布同款 svgPreviewQueue 并发闸门 +
- *   LRU；不直接复用 ContainerSvgPreview 组件，避免带出 data-tm-container-* 契约。
- * - 尺寸 / 对齐：displayWidth（0 = 撑满容器）、displayHeight、textAlignment 都存在
- *   块 props 里随文档落盘。拖动边框期间**只**改本地 CSS，松手才 updateBlock 一次：
- *   BlockNote 的 setNodeMarkup 会重建节点视图，逐帧写盘既卡又会卸载预览。
- * - 编辑：双击 → portal 到 body 的全屏层 → lazy 加载 Excalidraw。编辑期间
- *   **不** updateBlock：BlockNote 的 setNodeMarkup 会重建节点视图，把挂在块内的
- *   全屏 portal 一起卸载；因此草稿暂存在 ref，退出（Esc / 按钮）时一次性写回。
- *   编辑期间用 beginMathEditing 推迟 lastModified 写入，防的是同一个坑。
+ * - 引用模式（**新数据默认**）：块 props 只存 documentId / 标题快照，场景 JSON 存在
+ *   独立的 excalidraw 类型文档里（.exdraw.json）。预览读 storage.readTopoDocument，
+ *   双击全屏编辑后写回 storage.writeTopoDocument，并广播外部写 revision 让右栏 /
+ *   其它引用同一文档的块同步刷新。父文档正文不再塞入场景数据。
+ * - 内嵌模式（**旧档兼容**）：props.scene 非空且没有 documentId 时，完全沿用 v1
+ *   行为（场景随 SmartDocumentContent 落盘，退出编辑 updateBlock 一次写回）。
+ *   旧数据不迁移、不改写；两条分支共用同一套预览 / 尺寸 / 对齐 / 全屏编辑器。
+ *
+ * 其余既有取舍不变：官方 exportToSvg 动态 import + svgPreviewQueue LRU；
+ * 尺寸 / 对齐存块 props，拖动期间只改本地 CSS，松手才 updateBlock 一次；
+ * 编辑期间不 updateBlock（setNodeMarkup 会重建节点视图卸载 portal），草稿暂存在
+ * ref，退出时一次性写回，并用 beginMathEditing 推迟 lastModified 写入。
  */
 import {
   lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState,
@@ -25,6 +24,7 @@ import {
   EXCALIDRAW_DEFAULT_BACKGROUND,
   excalidrawSceneVersion,
   normalizeExcalidrawDocumentContent,
+  serializeExcalidrawDocumentContent,
   type ExcalidrawDocumentContent,
 } from '../ExcalidrawDocument/excalidrawDocumentTypes'
 import {
@@ -32,6 +32,13 @@ import {
 } from '../../graph/GraphCanvas/containers/svgPreviewQueue'
 import { beginMathEditing, endMathEditing } from './mathEditSession'
 import { excalidrawPreviewFilter, useExcalidrawColorMode } from '../ExcalidrawDocument/excalidrawTheme'
+import { useStorage } from '../../../core/storage'
+import {
+  publishDocumentExternalWrite,
+  useDocumentExternalRevision,
+} from '../services/documentExternalWriteBus'
+import { requestOpenDocumentLink } from './docLinkBridge'
+import { getExcalidrawDocumentCardPathHint } from './excalidrawDocumentBridge'
 
 export const EXCALIDRAW_BLOCK_TYPE = 'excalidraw'
 export const EXCALIDRAW_BLOCK_TITLE = '手绘流程图'
@@ -63,6 +70,75 @@ function parseBlockScene(raw: string): ExcalidrawDocumentContent | null {
   } catch {
     return null
   }
+}
+
+type ExternalSceneStatus = 'loading' | 'ready' | 'missing' | 'unsupported'
+interface ExternalSceneState {
+  status: ExternalSceneStatus
+  scene: string
+  cardPath: string
+  title: string
+}
+
+/**
+ * 引用模式：按全库稳定 docId 反查所属节点，再读独立流程图文档的场景。
+ *
+ * 刻意不把 cardPath 落进块 props：文档可以被移动到别的节点，docId 才是唯一真源。
+ * 外部写 revision 变化时重读，保证「右栏改完 / 另一个引用块改完」这里跟着刷新。
+ */
+function useExcalidrawDocumentScene(documentId: string, revision: number): ExternalSceneState {
+  const storage = useStorage()
+  const [state, setState] = useState<ExternalSceneState>({
+    status: 'loading', scene: '', cardPath: '', title: '',
+  })
+  const loadedDocIdRef = useRef('')
+
+  useEffect(() => {
+    if (!documentId) return undefined
+    let cancelled = false
+    // 换文档才清旧场景；revision 变化（自己刚写完 / 右栏改完）只是重读，
+    // 保持旧预览可见，避免每次写盘都闪一下「正在读取」并重新导出 SVG。
+    if (loadedDocIdRef.current !== documentId) {
+      loadedDocIdRef.current = documentId
+      setState({ status: 'loading', scene: '', cardPath: '', title: '' })
+    }
+    void (async () => {
+      try {
+        // cardRef 只是 O(1) 提示：文档被移到别的节点后会失效，主进程自动回落全库扫描。
+        const resolved = await storage.resolveDocumentById(documentId, getExcalidrawDocumentCardPathHint())
+        if (cancelled) return
+        if (resolved.status !== 'ok' || !resolved.cardPath) {
+          setState({ status: 'missing', scene: '', cardPath: '', title: resolved.title || '' })
+          return
+        }
+        const raw = await storage.readTopoDocument(resolved.cardPath, documentId)
+        if (cancelled) return
+        const normalized = normalizeExcalidrawDocumentContent(
+          raw, resolved.title || EXCALIDRAW_BLOCK_TITLE,
+        )
+        setState({
+          status: 'ready',
+          scene: serializeExcalidrawDocumentContent(normalized),
+          cardPath: resolved.cardPath,
+          title: resolved.title || normalized.title,
+        })
+      } catch {
+        if (!cancelled) {
+          setState({ status: 'unsupported', scene: '', cardPath: '', title: '' })
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [documentId, revision, storage])
+
+  return state
+}
+
+const EXTERNAL_SCENE_PLACEHOLDER: Record<ExternalSceneStatus, string | null> = {
+  loading: '正在读取流程图文档…',
+  ready: null,
+  missing: '流程图文档已移入回收站或不存在',
+  unsupported: '流程图文档数据版本不受支持，已保留原始数据',
 }
 
 /** 生成可安全重复挂载的 SVG 副本：去固定尺寸、保留 viewBox、等比居中撑满。 */
@@ -163,12 +239,14 @@ function ExcalidrawBlockPreview({
 }
 
 function ExcalidrawBlockFullscreenHost({
-  blockId, initialScene, onDraftChange, onClose,
+  blockId, initialScene, onDraftChange, onClose, documentTitle, externalMode,
 }: {
   blockId: string
   initialScene: string
   onDraftChange: (serialized: string) => void
   onClose: () => void
+  documentTitle?: string
+  externalMode?: boolean
 }) {
   // 全屏刚打开时焦点还在文档块上；用 window 捕获阶段兜底，保证 Esc 一定能退出。
   useEffect(() => {
@@ -201,8 +279,10 @@ function ExcalidrawBlockFullscreenHost({
     >
       <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 tm-excalidraw-block-text">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-semibold text-[var(--color-text-primary)]">{EXCALIDRAW_BLOCK_TITLE}</span>
-          <span className="shrink-0 text-[var(--color-text-muted)]">全屏编辑 · 退出后写入文档 · 按 Esc 返回</span>
+          <span className="truncate font-semibold text-[var(--color-text-primary)]">{documentTitle || EXCALIDRAW_BLOCK_TITLE}</span>
+          <span className="shrink-0 text-[var(--color-text-muted)]">
+            {externalMode ? '独立流程图文档 · 退出后写入文档 · 按 Esc 返回' : '全屏编辑 · 退出后写入文档 · 按 Esc 返回'}
+          </span>
         </div>
         <button
           type="button"
@@ -221,7 +301,7 @@ function ExcalidrawBlockFullscreenHost({
         }>
           <ExcalidrawBlockEditor
             blockId={blockId}
-            title={EXCALIDRAW_BLOCK_TITLE}
+            title={documentTitle || EXCALIDRAW_BLOCK_TITLE}
             initialScene={initialScene}
             onChange={onDraftChange}
           />
@@ -238,6 +318,10 @@ interface ExcalidrawBlockRenderProps {
     id: string
     props: {
       scene?: string
+      /** 引用模式：独立流程图文档的稳定 docId；非空时 scene 一律不参与读写。 */
+      documentId?: string
+      /** 引用模式：创建瞬间的标题快照，仅用于外部文档尚未读回时的占位显示。 */
+      title?: string
       textAlignment?: string
       displayWidth?: number
       displayHeight?: number
@@ -251,8 +335,20 @@ interface ExcalidrawBlockRenderProps {
 
 function ExcalidrawBlockRenderer(rawProps: unknown) {
   const props = rawProps as ExcalidrawBlockRenderProps
-  const scene = typeof props.block.props.scene === 'string' ? props.block.props.scene : ''
+  const storage = useStorage()
+  const documentId = typeof props.block.props.documentId === 'string'
+    ? props.block.props.documentId.trim() : ''
+  const isRefMode = documentId.length > 0
+  const titleSnapshot = typeof props.block.props.title === 'string' ? props.block.props.title : ''
+  // 外部写（右栏编辑 / 另一个引用块编辑）后重读，避免预览停留在旧场景。
+  const revision = useDocumentExternalRevision(documentId || null)
+  const external = useExcalidrawDocumentScene(documentId, revision)
+  const legacyScene = typeof props.block.props.scene === 'string' ? props.block.props.scene : ''
+  // 引用模式只认外部文档；旧档（无 documentId）继续读 props.scene，行为零变化。
+  const scene = isRefMode ? external.scene : legacyScene
   const normalized = useMemo(() => parseBlockScene(scene), [scene])
+  const placeholderText = isRefMode ? EXTERNAL_SCENE_PLACEHOLDER[external.status] : null
+  const displayTitle = external.title || titleSnapshot || EXCALIDRAW_BLOCK_TITLE
   const initialVersion = useMemo(
     () => normalized ? excalidrawSceneVersion(normalized) : -2,
     [normalized],
@@ -260,6 +356,20 @@ function ExcalidrawBlockRenderer(rawProps: unknown) {
   const [editing, setEditing] = useState(false)
   const draftRef = useRef(scene)
   const dirtyRef = useRef(false)
+
+  const externalCardPath = external.cardPath
+  const saveExternalScene = useCallback(async (serialized: string) => {
+    if (!documentId || !externalCardPath) return
+    let content: ExcalidrawDocumentContent
+    try {
+      content = normalizeExcalidrawDocumentContent(JSON.parse(serialized), displayTitle)
+    } catch {
+      return
+    }
+    await storage.writeTopoDocument(externalCardPath, documentId, content)
+    // 广播后本块的 revision 会自增并重读；右栏 adapter 同步重挂载，两边不会各自持旧草稿。
+    publishDocumentExternalWrite({ documentId, cardPath: externalCardPath, content })
+  }, [documentId, externalCardPath, displayTitle, storage])
 
   const alignment: 'left' | 'center' | 'right' = props.block.props.textAlignment === 'center'
     || props.block.props.textAlignment === 'right'
@@ -372,6 +482,14 @@ function ExcalidrawBlockRenderer(rawProps: unknown) {
   const commitDraft = useCallback(() => {
     if (!dirtyRef.current) return
     dirtyRef.current = false
+    if (isRefMode) {
+      // 引用模式写外部文档，父文档正文一个字节的场景数据都不落；写失败也绝不
+      // 回退成 props.scene 内嵌，否则新旧存储模式会被静默混用。
+      void saveExternalScene(draftRef.current).catch(() => {
+        console.error('[TopoMind] 写入独立流程图文档失败，草稿已放弃')
+      })
+      return
+    }
     try {
       props.editor.updateBlock(props.block, {
         type: EXCALIDRAW_BLOCK_TYPE,
@@ -380,7 +498,7 @@ function ExcalidrawBlockRenderer(rawProps: unknown) {
     } catch {
       // 文档编辑器可能已随标签卸载；此时草稿随会话放弃，不能抛到渲染层。
     }
-  }, [props.editor, props.block])
+  }, [isRefMode, saveExternalScene, props.editor, props.block])
 
   // 切标签 / 关文档导致块组件被卸载时，尽量把未提交的草稿写回。
   const commitRef = useRef(commitDraft)
@@ -389,10 +507,12 @@ function ExcalidrawBlockRenderer(rawProps: unknown) {
 
   const open = useCallback(() => {
     if (!props.editor.isEditable || normalized === null) return
+    // 外部文档没读回来之前不进编辑器，避免用空场景覆盖掉还没加载的内容。
+    if (isRefMode && external.status !== 'ready') return
     draftRef.current = scene
     dirtyRef.current = false
     setEditing(true)
-  }, [props.editor.isEditable, normalized, scene])
+  }, [props.editor.isEditable, normalized, isRefMode, external.status, scene])
 
   const close = useCallback(() => {
     commitDraft()
@@ -407,6 +527,7 @@ function ExcalidrawBlockRenderer(rawProps: unknown) {
       data-tm-excalidraw-block={props.block.id}
       data-tm-excalidraw-block-align={alignment}
       data-tm-excalidraw-block-tooltip="双击进入编辑"
+      data-tm-excalidraw-block-mode={isRefMode ? 'document' : 'inline'}
     >
       <button
         type="button"
@@ -424,8 +545,43 @@ function ExcalidrawBlockRenderer(rawProps: unknown) {
           open()
         }}
       >
-        <ExcalidrawBlockPreview blockId={props.block.id} normalized={normalized} />
+        {placeholderText
+          ? <BlockPlaceholder text={placeholderText} />
+          : (
+            <ExcalidrawBlockPreview
+              blockId={isRefMode ? documentId : props.block.id}
+              normalized={normalized}
+            />
+          )}
       </button>
+      {isRefMode ? (
+        <div
+          className="tm-excalidraw-block-doc-bar"
+          data-tm-excalidraw-block-doc={documentId}
+          contentEditable={false}
+        >
+          <span
+            className="tm-excalidraw-block-doc-title"
+            data-tm-excalidraw-block-doc-title={displayTitle}
+          >
+            {displayTitle}
+          </span>
+          <button
+            type="button"
+            className="tm-excalidraw-block-doc-open"
+            data-tm-excalidraw-block-open-doc={documentId}
+            title="在右栏打开流程图文档"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              requestOpenDocumentLink({ docId: documentId, title: displayTitle })
+            }}
+          >
+            打开文档
+          </button>
+        </div>
+      ) : null}
       {props.editor.isEditable ? (
         <>
           {(['right', 'bottom', 'corner'] as const).map((mode) => (
@@ -450,6 +606,8 @@ function ExcalidrawBlockRenderer(rawProps: unknown) {
           initialScene={scene}
           onDraftChange={handleDraftChange}
           onClose={close}
+          documentTitle={isRefMode ? displayTitle : undefined}
+          externalMode={isRefMode}
         />
       ) : null}
     </div>
@@ -460,7 +618,12 @@ export const ExcalidrawBlock = createReactBlockSpec(
   {
     type: EXCALIDRAW_BLOCK_TYPE,
     propSchema: {
+      // 旧档内嵌场景：保留默认值与读写链路，绝不迁移 / 改写成引用模式。
       scene: { default: '' },
+      // 新数据：只存独立 excalidraw 文档的稳定 docId（空串 = 旧内嵌模式）。
+      // 标题只是创建瞬间的快照，显示时以 resolveDocumentById 读到的真实标题为准。
+      documentId: { default: '' },
+      title: { default: '' },
       // 自定义块不会自动带 BlockNote 的 defaultProps，textAlignment 必须显式声明，
       // 否则对齐按钮 / 块菜单写入的值不会落在 tiptap 节点属性上，重开文档即丢失。
       textAlignment: { default: 'left', values: ['left', 'center', 'right'] },

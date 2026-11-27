@@ -6,7 +6,7 @@
  *
  * 布局契约：
  *  - 页面本体由 NodeTreePanel 外壳承载（标题栏 / 可拖宽度 / 让位变量都在外壳），
- *    四页共用一个宽度，内容全部 w-full / min-w-0 自适应，不碰画布几何；
+ *    三页共用一个宽度，内容全部 w-full / min-w-0 自适应，不碰画布几何；
  *  - 每个分区独立折叠、DOM 常驻（折叠只改 max-height / opacity），
  *    新增配置项只需再加一个 SettingsSection，不必改外壳或导航；
  *  - 三个分区的数据源互不重叠：视图 = lodPreferences + roomProfiles，

@@ -31,6 +31,7 @@ import { buildPromptValues } from '@/features/ai-agent/config/promptValues'
 import { renderPrompt, validatePromptTemplate } from '@/features/ai-agent/config/renderPrompt'
 import { TOOL_CATALOG, isAssignableToolId } from '@/features/ai-agent/config/toolCatalog'
 import { useAgentDefinitionStore } from '@/features/ai-agent/model/agentDefinitionStore'
+import { useAiModelStore } from '@/features/ai-agent/model/aiModelStore'
 
 const SECTION = 'mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5'
 const ROW = 'flex flex-col gap-1 border-b border-[var(--color-border-light)] py-3 last:border-b-0'
@@ -85,6 +86,9 @@ interface FormProps {
 }
 
 function AgentForm({ draft, onChange, onSave, onDelete, busy }: FormProps) {
+  const profiles = useAiModelStore((state) => state.profiles)
+  const defaultModelId = useAiModelStore((state) => state.defaultModelId)
+  const defaultName = profiles.find((item) => item.id === defaultModelId)?.name ?? '全局默认'
   const patch = (part: Partial<AgentDefinition>) => onChange({ ...draft, ...part })
   const patchModel = (part: Partial<AgentDefinition['model']>) => onChange({
     ...draft, model: { ...draft.model, ...part },
@@ -151,12 +155,33 @@ function AgentForm({ draft, onChange, onSave, onDelete, busy }: FormProps) {
           ))}
         </div>
       </div>
+      <div className={ROW} data-tm-ai-agent-model-binding="">
+        <span className="tm-label">生效模型</span>
+        <select
+          aria-label="Agent 生效模型"
+          value={draft.modelId ?? ''}
+          onChange={(event) => patch({ modelId: event.target.value || undefined })}
+          className={tmUI(TM_UI.select, INPUT)}
+          data-tm-ai-agent-model-select=""
+        >
+          <option value="">跟随全局默认（{defaultName}）</option>
+          {profiles.map((profile) => (
+            <option key={profile.id} value={profile.id}>
+              {profile.name} · {profile.model}
+            </option>
+          ))}
+        </select>
+        <span className="tm-hint">
+          只影响这个智能体；对话界面底部的模型选择可临时覆盖，未选任何模型时用全局默认。
+          在「AI 助手」里新增 / 删除 / 修改模型后，这里的下拉会同步更新。
+        </span>
+      </div>
       <div className={ROW}>
-        <span className="tm-label">模型参数（留空 = 继承全局 config.json）</span>
+        <span className="tm-label">模型参数（留空 = 继承所选模型的参数）</span>
         <label className="tm-hint flex flex-col gap-1">
-          模型名称
+          模型名称（高级覆盖，留空 = 使用所选模型）
           <input
-            type="text" value={draft.model.model ?? ''} placeholder="继承全局"
+            type="text" value={draft.model.model ?? ''} placeholder="继承所选模型"
             onChange={(event) => patchModel({ model: event.target.value || undefined })}
             className={tmUI(TM_UI.input, INPUT)}
           />
@@ -292,6 +317,8 @@ export default function AgentSettingsSection() {
   const upsert = useAgentDefinitionStore((state) => state.upsert)
   const remove = useAgentDefinitionStore((state) => state.remove)
   const createFromTemplate = useAgentDefinitionStore((state) => state.createFromTemplate)
+  const modelsLoaded = useAiModelStore((state) => state.loaded)
+  const ensureModelsLoaded = useAiModelStore((state) => state.ensureLoaded)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<AgentDefinition | null>(null)
@@ -299,7 +326,10 @@ export default function AgentSettingsSection() {
   const [busy, setBusy] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
 
-  useEffect(() => { void ensureLoaded() }, [ensureLoaded])
+  useEffect(() => {
+    void ensureLoaded()
+    if (!modelsLoaded) void ensureModelsLoaded()
+  }, [ensureLoaded, ensureModelsLoaded, modelsLoaded])
 
   // 当前编辑对象用派生值，不在 effect 里同步 setState（React 19 级联渲染告警）。
   const effectiveId = selectedId ?? config?.orchestratorId ?? null
@@ -375,8 +405,8 @@ export default function AgentSettingsSection() {
         <Bot className="h-4 w-4 text-[var(--color-accent)]" />AI 智能体
       </h2>
       <p className="tm-hint mb-4 leading-relaxed">
-        用模板创建自定义智能体，每个 Agent 独立配置系统提示词、模板变量与模型参数。
-        连接地址与 API Key 仍全局统一配置，不支持为单个 Agent 单独设置。
+        用模板创建自定义智能体，每个 Agent 独立配置系统提示词、模板变量、生效模型与模型参数。
+        连接地址与 API Key 由「AI 助手」里的模型配置统一提供，Agent 只绑定模型 id，不单独存放密钥。
       </p>
 
       <div className="tm-label">内置模板</div>

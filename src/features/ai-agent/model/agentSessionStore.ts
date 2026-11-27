@@ -58,6 +58,8 @@ interface AgentSessionState {
   /** 轮次切换：只换 taskId 与 seq，不新建气泡、不退出 streaming。 */
   continueAssistant: (taskId: string, round: number) => void
   appendDelta: (taskId: string, seq: number | undefined, delta: string) => void
+  /** 把说明写进当前流式气泡（与 appendAssistantNote 的「另起一条」区分）。 */
+  appendAssistantText: (content: string) => void
   appendAssistantNote: (content: string) => void
   finish: (taskId: string, cancelled: boolean) => void
   fail: (code: AiErrorCode, message: string, taskId?: string) => void
@@ -127,6 +129,18 @@ export const useAgentSessionStore = create<AgentSessionState>((set) => ({
       messages: [...state.messages.slice(0, -1), updated],
       lastSeq: typeof seq === 'number' ? seq : state.lastSeq,
     }
+  }),
+
+  // 轮次上限收尾用：说明与随后流式的最终答复必须落在同一条气泡里，
+  // 否则原本那条空占位会永远留在面板上显示「正在生成…」。
+  appendAssistantText: (content) => set((state) => {
+    const last = state.messages[state.messages.length - 1]
+    if (last && last.role === 'assistant') {
+      return {
+        messages: [...state.messages.slice(0, -1), { ...last, content: last.content + content }],
+      }
+    }
+    return { messages: [...state.messages, { id: newId('assistant'), role: 'assistant', content }] }
   }),
 
   appendAssistantNote: (content) => set((state) => ({

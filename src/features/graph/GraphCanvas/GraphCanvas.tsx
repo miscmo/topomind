@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { Background, ReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes } from '@xyflow/react'
+import { Background, Panel, ReactFlow, type BackgroundVariant, type Edge, type Node, type NodeTypes } from '@xyflow/react'
 import SelectionMirrorMenu from './components/SelectionMirrorMenu'
 import { useGraphStore } from '../../../stores/graphStore'
 import { MIRROR_MIN_SELECTED_NODES } from '../../../domain/graph/mirrorSelection'
@@ -13,8 +13,10 @@ import { SmartGuidesRenderer } from './SmartGuidesRenderer'
 import { CardSnappedConnectionLine } from './components/CardSnappedConnectionLine'
 import { NodeSearchBox } from './components/NodeSearchBox'
 import { EdgeRelationPicker, EdgeRelationQuickEditor } from './components/EdgeRelationPicker'
-import LodControl from './components/LodControl'
+import CanvasDiagnostics from './components/CanvasDiagnostics'
 import CanvasReadOnlyBanner from './components/CanvasReadOnlyBanner'
+import CanvasZoomBridge from './components/CanvasZoomBridge'
+import RoomBreadcrumb from './components/RoomBreadcrumb'
 import ViewportReturnButton from './components/ViewportReturnButton'
 import { useGraphCanvasModel, type UseGraphCanvasModelProps } from './model/useGraphCanvasModel'
 import { useSemanticLod } from './model/useSemanticLod'
@@ -42,11 +44,7 @@ const edgeTypes = {
   curve: FloatingEdge,
 }
 
-/** 画布专属 props：撤销 / 前进只给左侧画布状态面板用，不进 useGraphCanvasModel。 */
-interface GraphCanvasProps extends UseGraphCanvasModelProps {
-  onMoveUndo?: () => void
-  onMoveRedo?: () => void
-}
+type GraphCanvasProps = UseGraphCanvasModelProps
 
 export default memo(function GraphCanvas({
   tabId,
@@ -55,8 +53,6 @@ export default memo(function GraphCanvas({
   onPaneContextMenu,
   onSelectionContextMenu,
   onCloseContextMenu,
-  onMoveUndo,
-  onMoveRedo,
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { state, graph, actions, visibleNodesRef } = useGraphCanvasModel({
@@ -396,18 +392,25 @@ export default memo(function GraphCanvas({
         }}
       >
         <SmartGuidesRenderer guideLines={guideLines} />
-        <CanvasReadOnlyBanner state={readOnlyState} zoomLevel={zoomLevel} />
-        {showSelectionMenu && (
-          <SelectionMirrorMenu
-            selectedCount={selectedNodeCount}
-            selectedIds={selectedNodeIds}
-            canMirror={showSelectionMirror}
-            onSelectSubtree={graph.selectSubtree}
-            onFlip={graph.flipSelectionHorizontally}
-          />
-        )}
-        <LodControl
-          tabId={tabId}
+        {/* 【画布顶部浮层 2026-11-27】唯一一个 top-center Panel 统一托管三行内容，
+            按「只读提示条 → 房间面包屑 → 选中操作菜单」纵向排列：缩放比例滑动条已下线，
+            房间面包屑占据它原来的位置；多个同位置 Panel 会互相遮挡，这里绝不再拆。 */}
+        <Panel position="top-center" className="!m-3">
+          <div className="pointer-events-none flex flex-col items-center gap-2">
+            <CanvasReadOnlyBanner state={readOnlyState} zoomLevel={zoomLevel} />
+            <RoomBreadcrumb tabId={tabId} />
+            {showSelectionMenu && (
+              <SelectionMirrorMenu
+                selectedCount={selectedNodeCount}
+                selectedIds={selectedNodeIds}
+                canMirror={showSelectionMirror}
+                onSelectSubtree={graph.selectSubtree}
+                onFlip={graph.flipSelectionHorizontally}
+              />
+            )}
+          </div>
+        </Panel>
+        <CanvasDiagnostics
           visibility={lod.visibility}
           readOnlyState={readOnlyState}
           zoomLevel={zoomLevel}
@@ -415,10 +418,9 @@ export default memo(function GraphCanvas({
           policySource={lod.policySource}
           profileId={lod.profileId}
           effectiveProfileId={lod.effectiveProfileId}
-          onMoveUndo={onMoveUndo}
-          onMoveRedo={onMoveRedo}
         />
         <ViewportReturnButton tabId={tabId} />
+        <CanvasZoomBridge hostRef={containerRef} />
         {showGrid && (
           <Background id={tabId} variant={'dots' as BackgroundVariant} gap={20} size={1} color="var(--color-canvas-grid)" />
         )}

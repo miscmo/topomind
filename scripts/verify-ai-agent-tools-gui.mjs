@@ -42,6 +42,8 @@ const RAG_MISS_MARKER = 'RAGMISS9527'
 const RAG_ANSWER_MARKER = 'RAGANSWER9527'
 // 未命中场景用独立收尾标记：会话面板是累积的，共用标记会被上一条回答「假命中」。
 const RAG_MISS_ANSWER_MARKER = 'RAGMISSANSWER9527'
+// 达到轮次上限后的收尾答复标记：验证「到上限仍给出最终答案」而非硬掐断。
+const LONGRUN_LIMIT_MARKER = 'LONGRUNLIMIT9527'
 const ORCHESTRATOR_TOOL_IDS = [
   'workspace.getContext', 'document.read', 'document.search', 'graph.read',
   'graph.relations', 'kb.list', 'kb.ask', 'document.draft', 'document.polish',
@@ -61,6 +63,12 @@ const POLISH_FILE = `${POLISH_DOC}.tdoc.json`
 const CARD_FILE = `${CARD_DOC}.cardspec.json`
 const STALE_FILE = `${STALE_DOC}.tdoc.json`
 const RAG_FILE = `${RAG_DOC}.tdoc.json`
+// P5-r 附件回归夹具：引用预览必须和「节点关联文档 / 正常右栏」走同一套 adapter
+// 附件解析链路，才能把文档里持久化的 `_attach/xxx` 相对引用变成 local-file://。
+// 用 SVG 是为了夹具自包含（纯文本、无二进制 CRC 风险），listAttachments 也认图片。
+const RAG_IMAGE_NAME = 'ref-preview.svg'
+const RAG_IMAGE_REF = `_attach/${RAG_IMAGE_NAME}`
+const ATTACH_DIR = path.join(KB_DIR, 'plain-a', '_attach')
 const PANEL = '[data-tm-ai-agent-panel]'
 const PREVIEW = '[data-tm-ai-patch-preview]'
 
@@ -152,9 +160,13 @@ function extractRoomPath(messages) {
 
 function scenarioFromMessages(messages) {
   const users = messages.filter((item) => item.role === 'user' && typeof item.content === 'string')
-  const text = users.at(-1)?.content ?? ''
-  const match = /\[SCENARIO:([a-z]+)\]/.exec(text)
-  return match ? match[1] : 'rename'
+  // 达到轮次上限时编排器会追加一条「请基于已有结果作答」的 user 提示，
+  // 它不带场景标记；从后往前找第一条含标记的用户消息，才能继续命中原场景。
+  for (let i = users.length - 1; i >= 0; i -= 1) {
+    const match = /\[SCENARIO:([a-z]+)\]/.exec(users[i].content)
+    if (match) return match[1]
+  }
+  return 'rename'
 }
 
 /** 每个场景第 0 轮先读上下文（拿 roomPath），第 1 轮起才产目标写工具。 */
@@ -164,6 +176,11 @@ function responseFor(scenario, round, roomPath, toolText = '') {
 
   if (scenario === 'rounds' && round === 1) {
     return toolCallFrames([{ id: 'call_graph', name: 'graph_read', arguments: { roomPath } }])
+  }
+  // 长轮次场景：每轮都只读，不产写工具，直到编排器因轮次上限发改「无 tools 收尾请求」，
+  // mock 见 body.tools 为空才返回正文（见 createMockServer）。用来证明不再是 3 轮硬截断。
+  if (scenario === 'longrun') {
+    return toolCallFrames([{ id: `call_long_${round}`, name: 'workspace_getContext', arguments: {} }])
   }
   // S3：委托发生在第 1 轮；第 2 轮主会话收尾，避免无限自动循环。
   if ((scenario === 'delegate' || scenario === 'delegatebad') && round >= 2) {
@@ -315,6 +332,11 @@ function createMockServer() {
         writeSse(res, textFrames(`本地 mock 已完成检索 ${requests.at(-1).answerToken}，未产生任何变更建议。`))
         return
       }
+      // 轮次上限收尾请求不下发 tools：此时才给出最终正文，验证「达到上限仍作答」。
+      if (scenario === 'longrun' && (body.tools ?? []).length === 0) {
+        writeSse(res, textFrames(`${LONGRUN_LIMIT_MARKER}：已达到轮次上限，已基于前 ${toolMessages.length} 轮只读结果给出最终答复。`))
+        return
+      }
       const toolText = toolMessages.map((item) => String(item.content ?? '')).join('\n')
       writeSse(res, responseFor(scenario, toolMessages.length, extractRoomPath(messages), toolText))
     })
@@ -382,6 +404,11 @@ function writeAgentFixtures() {
 /** 4 份真实结构化文档：2 份 smart（起草 / 润色 / 陈旧校验）、1 份 cardspec、1 份占位。 */
 function writeDocFixtures() {
   fs.mkdirSync(DOCS_DIR, { recursive: true })
+  // 附件物理目录在目标节点下（与 _docs 同级）：cardPath = AI工具冒烟库/plain-a。
+  // 预览层必须按目标文档的 cardPath 解析这里的 _attach 引用，不能用当前选中节点。
+  fs.mkdirSync(ATTACH_DIR, { recursive: true })
+  fs.writeFileSync(path.join(ATTACH_DIR, RAG_IMAGE_NAME),
+    '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8"><rect width="8" height="8" fill="#d33"/></svg>', 'utf8')
   const now = Date.now()
   const smart = (title, text) => ({
     schema: 'topomind.smart-document',
@@ -389,6 +416,19 @@ function writeDocFixtures() {
     title,
     blocks: [{ id: 'block-1', type: 'paragraph', content: text }],
     metadata: { createdAt: now, updatedAt: now, editor: 'blocknote', blocknoteVersion: '0.51.2' },
+  })
+  // RAG 命中文档里额外放一张图片块：正文能出来不代表图片能出来，两者解析链路不同。
+  const ragDoc = smart('量子纠缠检索笔记',
+    `量子纠缠是 ${RAG_HIT_MARKER} 的核心概念，可用于本地知识库检索与引用定位。`)
+  ragDoc.blocks.push({
+    id: 'block-rag-image',
+    type: 'image',
+    props: {
+      url: RAG_IMAGE_REF,
+      attachmentRef: RAG_IMAGE_REF,
+      name: RAG_IMAGE_NAME,
+      caption: '引用预览附件图',
+    },
   })
   const fixture = [
     [DRAFT_DOC, DRAFT_FILE, 'smart', '起草测试文档', smart('起草测试文档', '原文段落')],
@@ -403,8 +443,7 @@ function writeDocFixtures() {
     }],
     [STALE_DOC, STALE_FILE, 'smart', '陈旧校验文档', smart('陈旧校验文档', '预览前的原文')],
     // P3：RAG 命中夹具。正文同时包含检索词与唯一标记，供索引 / 外发片段断言。
-    [RAG_DOC, RAG_FILE, 'smart', '量子纠缠检索笔记',
-      smart('量子纠缠检索笔记', `量子纠缠是 ${RAG_HIT_MARKER} 的核心概念，可用于本地知识库检索与引用定位。`)],
+    [RAG_DOC, RAG_FILE, 'smart', '量子纠缠检索笔记', ragDoc],
   ]
   const documents = {}
   fixture.forEach(([id, fileName, type, title, content], index) => {
@@ -552,9 +591,24 @@ async function enterWorkspace(page) {
   return ensureCanvas(page)
 }
 
-async function openSettings(page) {
-  await page.evaluate(() => document.querySelector('[data-tm-nav-item="settings"]')?.click())
-  return waitFor(page, () => !!document.querySelector('[data-tm-settings-ai]'), 10000)
+/**
+ * AI 设置已迁到画布页覆盖式窗口：确保左栏 AI Agent 页展开 → 点齿轮（已开则不重复点）
+ * → 切到目标 tab 并确认对应分区可见。窗口内两个分区常驻挂载，切 tab 不丢草稿。
+ */
+async function openSettings(page, tab = 'assistant') {
+  if (!await openAgentPanel(page)) return false
+  await page.evaluate(() => {
+    if (document.querySelector('[data-tm-ai-settings-window]')) return
+    document.querySelector('[data-tm-ai-settings-toggle]')?.click()
+  })
+  if (!await waitFor(page, () => !!document.querySelector('[data-tm-ai-settings-window]'), 10000)) return false
+  await page.evaluate((id) => document.querySelector(`[data-tm-ai-settings-tab="${id}"]`)?.click(), tab)
+  // 分区首次挂载会异步读主进程 AI 配置并回填输入框，等一拍再开始填写。
+  await sleep(500)
+  return waitFor(page, (id) => {
+    const pane = document.querySelector(`[data-tm-ai-settings-pane="${id}"]`)
+    return !!pane && !pane.hidden
+  }, 8000, tab)
 }
 
 async function openAgentPanel(page) {
@@ -717,7 +771,7 @@ async function main() {
     check('进入工作空间并渲染普通节点', await enterWorkspace(page))
 
     // ===== A. 配置指向本地 mock =====
-    check('打开设置页并填写 mock 服务地址 / 模型 / Key', await openSettings(page))
+    check('打开 AI 设置窗口并填写 mock 服务地址 / 模型 / Key', await openSettings(page))
     check('AI 配置与加密 Key 落盘到测试工作区', await configureMockBackend(page, mock.port),
       JSON.stringify({ baseURL: readAiConfig()?.config?.baseURL, hasKeyring: fs.existsSync(KEYRING_FILE) }))
     check('打开 AI Agent 会话面板', await openAgentPanel(page))
@@ -988,15 +1042,141 @@ async function main() {
       refButtons.refs.includes('1') && !refButtons.fake
       && refButtons.titles.some((title) => title.includes('量子纠缠')),
       JSON.stringify(refButtons))
+    // P5-r：编号不再是给用户看的最终形态。chip 直接显示文档名，回答末尾的
+    // 来源清单展开「文档 / 节点 / 块」三层名字，且不能把裸 cardPath id 露出来。
+    const expectedNodeName = String(graphSummary()?.a?.name ?? '普通节点 A')
+    const refReadable = await page.evaluate((nodeName) => {
+      const chip = [...document.querySelectorAll('[data-tm-ai-ref="1"]')].at(-1)
+      const sources = [...document.querySelectorAll('[data-tm-ai-ref-sources]')].at(-1)
+      const item = [...document.querySelectorAll('[data-tm-ai-ref-source="1"]')].at(-1)
+      return {
+        chipText: chip?.textContent ?? '',
+        chipLabel: chip?.getAttribute('data-tm-ai-ref-label') ?? '',
+        chipTitle: chip?.getAttribute('title') ?? '',
+        hasSources: !!sources,
+        sourcesText: sources?.textContent ?? '',
+        itemText: item?.textContent ?? '',
+        expectedName: nodeName,
+      }
+    }, expectedNodeName)
+    check('[P5-r 引用可读名] 按钮显示文档名，来源清单展开节点 / 块名',
+      refReadable.chipLabel === '量子纠缠检索笔记'
+      && refReadable.chipText.includes('量子纠缠检索笔记')
+      && !refReadable.chipText.includes('[ref:1]')
+      && refReadable.chipTitle.includes('节点：')
+      && refReadable.hasSources
+      && refReadable.sourcesText.includes('参考来源')
+      && refReadable.itemText.includes(refReadable.expectedName)
+      && /段落|标题|列表项|脑图/.test(refReadable.itemText)
+      && !refReadable.itemText.includes('plain-a'),
+      JSON.stringify(refReadable))
+    // P5-r：点 [ref:i] 只是右栏临时预览目标文档，画布的房间 / 知识库 / 选中节点
+    // 一律不动。先点画布空白处清空选中，再点引用，验证「零联动」。
+    const paneBox = await page.evaluate(() => {
+      const el = document.querySelector('.react-flow__pane')
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: r.x, y: r.y, width: r.width, height: r.height }
+    })
+    if (paneBox) await page.mouse.click(paneBox.x + paneBox.width - 30, paneBox.y + paneBox.height - 30)
+    const selectionCleared = await waitFor(page, () =>
+      document.querySelectorAll('.react-flow__node.selected').length === 0, 4000)
+    check('[P5-r 引用预览] 前置条件：画布当前没有选中任何节点', selectionCleared,
+      JSON.stringify(await page.evaluate(() => document.querySelectorAll('.react-flow__node.selected').length)))
+    const readCanvas = () => page.evaluate(() => ({
+      nodes: [...document.querySelectorAll('.react-flow__node')]
+        .map((node) => node.getAttribute('data-id')).sort(),
+      selected: document.querySelectorAll('.react-flow__node.selected').length,
+    }))
+    const canvasBefore = await readCanvas()
     const refClicked = await page.evaluate(() => {
       const button = document.querySelector('[data-tm-ai-ref="1"]')
       if (!button) return false
       button.click()
       return true
     })
-    check('[简版 RAG] 点击引用走既有文档打开链路，未产生未捕获异常',
+    check('[简版 RAG] 点击引用打开右栏只读预览，未产生未捕获异常',
       refClicked && pageErrors.length === 0,
       JSON.stringify({ clicked: refClicked, errors: pageErrors.slice(0, 2) }))
+    const previewShown = await waitFor(page, () => {
+      const layer = document.querySelector('[data-tm-ai-reference-preview]')
+      const text = layer?.textContent ?? ''
+      return !!layer && text.includes('量子纠缠检索笔记') && text.includes('引用预览 · 只读')
+    }, 10000)
+    const previewBody = await waitFor(page, () => {
+      const body = document.querySelector('[data-tm-ai-reference-preview-body]')
+      return !!body && (body.textContent ?? '').includes('RAGHIT9527')
+    }, 10000)
+    // P5-r 附件回归：正文能显示不代表图片能显示。文档里图片持久化的是
+    // `_attach/xxx` 相对引用，必须靠 adapter 的 listAttachments + resolveFileUrl
+    // 解析成 local-file://；裸挂 SmartDocumentEditor 时这里会全部裂图。
+    const previewImageLoaded = await waitFor(page, () => {
+      const body = document.querySelector('[data-tm-ai-reference-preview-body]')
+      if (!body) return false
+      return [...body.querySelectorAll('img')].some((img) => {
+        const src = img.getAttribute('src') ?? ''
+        return src.startsWith('local-file://') && img.complete && img.naturalWidth > 0
+      })
+    }, 12000)
+    const previewImageState = await page.evaluate(() => {
+      const body = document.querySelector('[data-tm-ai-reference-preview-body]')
+      return [...(body?.querySelectorAll('img') ?? [])].map((img) => ({
+        src: (img.getAttribute('src') ?? '').slice(0, 180),
+        complete: img.complete,
+        naturalWidth: img.naturalWidth,
+      }))
+    })
+    check('[P5-r 引用预览] 文档内图片按目标节点附件目录解析成 local-file:// 并真实加载',
+      previewImageLoaded,
+      JSON.stringify(previewImageState))
+    // 复用完整编辑器后，顶部工具栏的「样式 / 折叠」也必须在预览实例里禁用，
+    // 否则只读预览里点一下就能改全局编辑器样式并落盘。
+    const previewStyleLocked = await waitFor(page, () => {
+      const layer = document.querySelector('[data-tm-ai-reference-preview]')
+      const btn = layer?.querySelector('[data-tm-editor-style-trigger]')
+      return !!btn && btn.disabled === true
+    }, 8000)
+    const previewToolbarState = await page.evaluate(() => {
+      const layer = document.querySelector('[data-tm-ai-reference-preview]')
+      const styleBtn = layer?.querySelector('[data-tm-editor-style-trigger]')
+      const toggleBtn = layer?.querySelector('[data-tm-editor-top-toolbar-toggle]')
+      return {
+        styleExists: !!styleBtn,
+        styleDisabled: styleBtn?.disabled ?? null,
+        toggleExists: !!toggleBtn,
+        toggleDisabled: toggleBtn?.disabled ?? null,
+      }
+    })
+    check('[P5-r 引用预览] 只读隔离：预览实例的样式 / 折叠入口禁用，不改全局样式',
+      previewStyleLocked && previewToolbarState.toggleDisabled === true,
+      JSON.stringify(previewToolbarState))
+    const refPanelText = await page.evaluate(() =>
+      (document.querySelector('[data-tm-ai-agent-panel]')?.innerText || '').slice(-600))
+    check('[P5-r 引用预览] 无选中节点时点 [ref:1] 直接在右栏临时展示目标文档正文',
+      refClicked && selectionCleared && previewShown && previewBody
+      && !refPanelText.includes('请先在画布选中一个节点后重试')
+      && pageErrors.length === 0,
+      JSON.stringify({ previewShown, previewBody, oldHint: refPanelText.includes('请先在画布选中一个节点后重试'), errors: pageErrors.slice(0, 2) }))
+    const canvasAfterClick = await readCanvas()
+    check('[P5-r 引用预览] 画布零联动：不切房间/知识库、不自动选中目标节点',
+      canvasAfterClick.selected === 0
+      && JSON.stringify(canvasAfterClick.nodes) === JSON.stringify(canvasBefore.nodes)
+      && !refPanelText.includes('请先在画布选中一个节点后重试'),
+      JSON.stringify({ before: canvasBefore, after: canvasAfterClick }))
+    const previewCloseClicked = await page.evaluate(() => {
+      const button = document.querySelector('[data-tm-ai-reference-preview-close]')
+      if (!button) return false
+      button.click()
+      return true
+    })
+    const previewClosed = previewCloseClicked && await waitFor(page, () =>
+      !document.querySelector('[data-tm-ai-reference-preview]'), 5000)
+    const canvasAfterClose = await readCanvas()
+    check('[P5-r 引用预览] 「返回」关闭预览后右栏恢复，画布状态仍旧不变',
+      previewClosed && canvasAfterClose.selected === 0
+      && JSON.stringify(canvasAfterClose.nodes) === JSON.stringify(canvasBefore.nodes)
+      && pageErrors.length === 0,
+      JSON.stringify({ closed: previewClosed, after: canvasAfterClose, errors: pageErrors.slice(0, 2) }))
 
     await clearPreview(page)
     const missBefore = mock.requests.length
@@ -1024,9 +1204,11 @@ async function main() {
 
     // ===== D. 深度思考协议行为对比（mock 侧检查真实请求体，而非猜 UI 状态） =====
     const controls = '[data-tm-ai-agent-controls]'
+    // 作用域限定在对话面板控件区：AI 设置窗口的「AI 智能体」分区有同名 aria-label。
+    const sessionProtocol = `${controls} [aria-label="推理协议"]`
     check('深度思考切到「开启」并展开协议选择', await clickButton(page, controls, '开启')
-      && await waitFor(page, () => !!document.querySelector('[aria-label="推理协议"]'), 5000))
-    await page.select('[aria-label="推理协议"]', 'openai.reasoning_effort')
+      && await waitFor(page, () => !!document.querySelector('[data-tm-ai-agent-controls] [aria-label="推理协议"]'), 5000))
+    await page.select(sessionProtocol, 'openai.reasoning_effort')
     await sleep(250)
     const onAnswer = answerArgs(mock)
     const onBefore = onAnswer.beforeSeq
@@ -1072,7 +1254,7 @@ async function main() {
     await clearPreview(page)
 
     // ===== E2. S3 设置页自动调度白名单 =====
-    check('打开设置页检查自动调度白名单', await openSettings(page))
+    check('打开 AI 设置窗口检查自动调度白名单', await openSettings(page, 'agents'))
     const allowlist = await page.evaluate(() => {
       const root = document.querySelector('[data-tm-agent-delegate-allowlist]')
       const boxes = [...(root?.querySelectorAll('input[type="checkbox"]') ?? [])]
@@ -1088,24 +1270,71 @@ async function main() {
       allowlist.exists && allowlist.total === 1 && allowlist.checked === 1
       && !allowlist.labels.some((label) => label.includes('调度指挥官')),
       JSON.stringify(allowlist))
-    // 设置页是独立 view tab：点「首页」只会切到 home tab，画布 tab 不会重新激活，
-    // 左栏 dock（data-tm-left-dock-tab="agent"）也就不会渲染。真实返回路径是点回知识库 tab。
-    const clickedKbTab = await page.evaluate((name) => {
-      const tab = [...document.querySelectorAll('[data-tm-tab-id]')]
-        .find((el) => (el.getAttribute('aria-label') || '').includes(name))
-      if (!tab) return false
-      tab.click()
-      return true
-    }, KB_NAME)
-    await sleep(700)
-    let backOnCanvas = clickedKbTab && await ensureCanvas(page)
-    if (!backOnCanvas) {
-      // 兜底：整页重载按 localStorage 恢复工作区，等价于重新进入一次画布。
-      await page.reload({ waitUntil: 'networkidle2' })
-      await sleep(2000)
-      backOnCanvas = await ensureCanvas(page)
+    // AI 设置窗口是画布页内的覆盖层，不再有独立 view tab：点关闭按钮即回到画布，
+    // 左栏 dock 始终挂载，无需切标签页 / 整页重载。
+    await page.evaluate(() => document.querySelector('[data-tm-ai-settings-close]')?.click())
+    const closed = await waitFor(page, () => !document.querySelector('[data-tm-ai-settings-window]'), 6000)
+    check('关闭 AI 设置窗口后回到画布且 AI Agent 面板仍可用',
+      closed && await ensureCanvas(page) && await openAgentPanel(page))
+
+    // ===== G. 工具轮次上限放开 + 达到上限仍给出最终答复 =====
+    check('打开 AI 助手设置并把轮次上限调为 5 轮', await openSettings(page, 'assistant')
+      && await page.evaluate(() => {
+        const button = document.querySelector('[data-tm-ai-max-tool-rounds="5"]')
+        if (!button) return false
+        button.click()
+        return true
+      }))
+    check('轮次上限写入偏好且按钮呈激活态', await waitFor(page, () =>
+      localStorage.getItem('topomind:ai-max-tool-rounds') === '5'
+      && document.querySelector('[data-tm-ai-max-tool-rounds="5"]')?.getAttribute('aria-pressed') === 'true', 6000))
+    await page.evaluate(() => document.querySelector('[data-tm-ai-settings-close]')?.click())
+    check('关闭设置窗口后回到会话面板',
+      await waitFor(page, () => !document.querySelector('[data-tm-ai-settings-window]'), 6000)
+      && await openAgentPanel(page))
+
+    const longrunBefore = mock.requests.length
+    await typeInto(page, '[data-tm-ai-composer]', '[SCENARIO:longrun] 请做多轮检索')
+    check('发送长轮次只读任务', await clickButton(page, PANEL, '发送'))
+    let longrunState = null
+    const longrunEnd = Date.now() + 40000
+    while (Date.now() < longrunEnd) {
+      const finalSeen = mock.requests.slice(longrunBefore).some((item) =>
+        item.scenario === 'longrun' && item.toolNames.length === 0)
+      const state = await page.evaluate((m) => {
+        const panel = document.querySelector('[data-tm-ai-agent-panel]')
+        if (!panel) return { rendered: false, stopped: false, rounds: 0, text: '' }
+        const text = panel.innerText || ''
+        return {
+          rendered: text.includes(m),
+          stopped: ![...panel.querySelectorAll('button')]
+            .some((item) => (item.textContent || '').includes('停止')),
+          rounds: panel.querySelectorAll('[data-tm-ai-tool-round]').length,
+          text: text.slice(-700),
+        }
+      }, LONGRUN_LIMIT_MARKER)
+      if (finalSeen && state.rendered && state.stopped) {
+        longrunState = state
+        break
+      }
+      await sleep(200)
     }
-    check('设置页返回后重新打开 AI Agent 面板', backOnCanvas && await openAgentPanel(page))
+    const longrunRequests = mock.requests.slice(longrunBefore)
+    check('工具链路连续跑满 5 轮才收尾（不再是 3 轮硬截断）',
+      !!longrunState && longrunState.rounds >= 5 && longrunRequests.length >= 6,
+      JSON.stringify({ rounds: longrunState?.rounds, requests: longrunRequests.length }))
+    check('收尾请求不下发 tools，且最后一轮工具结果确实回灌',
+      longrunRequests.at(-1)?.toolNames.length === 0
+      && longrunRequests.at(-1)?.hasToolMessage === true
+      && longrunRequests.at(-1)?.hasAssistantToolCalls === true,
+      JSON.stringify(longrunRequests.map((item) => ({
+        round: item.round, tools: item.toolNames.length, toolMsg: item.hasToolMessage,
+      }))))
+    check('达到上限仍给出最终答复，而非只留一句「已达上限」',
+      !!longrunState && longrunState.text.includes(LONGRUN_LIMIT_MARKER)
+      && longrunState.text.includes('已达到工具调用轮次上限（5 轮）')
+      && !longrunState.text.includes('本次自动检索结束'),
+      JSON.stringify(longrunState?.text))
 
     // ===== F. 安全 =====
     check('mock 服务收到预期数量的请求（每写场景至少 2 轮）',

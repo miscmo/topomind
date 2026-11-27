@@ -29,6 +29,16 @@ import {
 } from './docLinkBridge'
 import { createDocumentLinkInlineContent } from './docLinkModel'
 import { DocumentLinkPicker } from './components/DocumentLinkPicker'
+import {
+  clearExcalidrawDocumentCreateHandler,
+  requestCreateExcalidrawDocument,
+  setExcalidrawDocumentCardPathHint,
+  setExcalidrawDocumentCreateHandler,
+  type ExcalidrawDocumentCreateHandler,
+} from './excalidrawDocumentBridge'
+import { EXCALIDRAW_BLOCK_TITLE } from './excalidrawBlockSupport'
+import { publishTopoDocumentListChange } from '../services/topoDocumentListChangeBus'
+import { useStorage } from '../../../core/storage'
 import { topoDocumentIdFromPath } from '../types/documentTypes'
 import type { FSBDocumentCandidate } from '../../../core/fs-backend'
 import { getEditorTopInset } from './smartDocumentUtils'
@@ -173,7 +183,13 @@ function openExternalLink(href: string) {
 }
 
 export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: SmartDocumentEditorProps) {
-  const { readOnly = false, attachmentInsertTargetKey, attachmentCardPath, onTocActiveChange } = props
+  const {
+    readOnly = false,
+    registerGlobalHandlers = true,
+    attachmentInsertTargetKey,
+    attachmentCardPath,
+    onTocActiveChange,
+  } = props
   const {
     editor,
     handleChange,
@@ -266,6 +282,50 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   const onOpenDocumentByDocIdRef = useRef(props.onOpenDocumentByDocId)
   onOpenDocumentByDocIdRef.current = props.onOpenDocumentByDocId
   const currentDocId = attachmentInsertTargetKey ? topoDocumentIdFromPath(attachmentInsertTargetKey) : null
+  const storage = useStorage()
+
+  // 「手绘流程图」默认新建独立 excalidraw 文档，再把 documentId 引用插进正文。
+  // 创建动作放这里而不是块节点视图：只有本组件同时拿得到当前节点路径与当前文档 id。
+  const createExcalidrawDocument = useCallback(async () => {
+    if (!attachmentCardPath) return null
+    try {
+      const siblings = await storage.listTopoDocuments(attachmentCardPath)
+      const index = siblings.filter((item) => item.type === 'excalidraw'
+        && (item.parentId ?? null) === (currentDocId ?? null)).length + 1
+      const title = `${EXCALIDRAW_BLOCK_TITLE} ${index}`
+      let created
+      try {
+        created = await storage.createTopoDocument(attachmentCardPath, {
+          type: 'excalidraw',
+          title,
+          parentId: currentDocId ?? null,
+        })
+      } catch {
+        // 关联视图 / 旧档里当前文档可能不在这份 manifest 中，父文档校验会失败；
+        // 降级成根节点文档，仍然保证「新数据一律独立文档」，绝不退回内嵌。
+        created = await storage.createTopoDocument(attachmentCardPath, { type: 'excalidraw', title })
+      }
+      publishTopoDocumentListChange(attachmentCardPath)
+      return { documentId: String(created.id), title: String(created.title || title) }
+    } catch (error) {
+      console.error('[TopoMind] 创建流程图文档失败，已取消插入', error)
+      return null
+    }
+  }, [attachmentCardPath, currentDocId, storage])
+
+  const createExcalidrawDocumentRef = useRef(createExcalidrawDocument)
+  createExcalidrawDocumentRef.current = createExcalidrawDocument
+  useEffect(() => {
+    if (!registerGlobalHandlers) return undefined
+    setExcalidrawDocumentCardPathHint(attachmentCardPath)
+    const handler: ExcalidrawDocumentCreateHandler = () => createExcalidrawDocumentRef.current()
+    setExcalidrawDocumentCreateHandler(handler)
+    return () => {
+      clearExcalidrawDocumentCreateHandler(handler)
+      setExcalidrawDocumentCardPathHint('')
+    }
+  }, [registerGlobalHandlers, attachmentCardPath])
+
   // 滚动联动（scroll-spy）：把当前所在标题的 block id 上抛给目录高亮
   const onTocActiveChangeRef = useRef(onTocActiveChange)
   onTocActiveChangeRef.current = onTocActiveChange
@@ -342,10 +402,12 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   }, [])
 
   // 把“打开链接菜单”的能力注册给编辑器模型层的 links.onClick（可编辑模式下的可靠拦截点）
+  // 只读预览实例不注册：模块级 handler 是单例，多实例会互相抢占 / 误清理。
   useEffect(() => {
+    if (!registerGlobalHandlers) return
     setEditorLinkClickHandler(({ href, rect }) => openLinkMenu(href, rect))
     return () => setEditorLinkClickHandler(null)
-  }, [openLinkMenu])
+  }, [openLinkMenu, registerGlobalHandlers])
 
   const cancelAttachmentPathOpen = useCallback(() => {
     if (attachmentPathOpenTimerRef.current !== null) {
@@ -409,6 +471,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   // 文档双链 chip 的点击 / `[[` 选择器的打开都从 ProseMirror 深处的节点视图发出来，
   // 通过模块级桥把一次性请求交给本组件；回调走 ref，注册只做一次，不受 props 陈旧影响。
   useEffect(() => {
+    if (!registerGlobalHandlers) return
     setDocumentLinkOpenHandler(({ docId }) => {
       onOpenDocumentByDocIdRef.current?.(docId)
     })
@@ -417,7 +480,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
       setDocumentLinkOpenHandler(null)
       setDocumentLinkPickerHandler(null)
     }
-  }, [])
+  }, [registerGlobalHandlers])
 
   const handlePickDocumentLink = useCallback((candidate: FSBDocumentCandidate) => {
     // `[[` 被 InputRule 删掉后光标就停在触发点；选择器浮层用 preventDefault 保住了选区，
@@ -1100,21 +1163,29 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
     const excalidrawItem = {
       title: '手绘流程图',
       onItemClick: () => {
-        editor.insertBlocks(
-          [
-            {
-              type: 'excalidraw',
-              props: { scene: '' },
-            },
-          ],
-          editor.getTextCursorPosition().block,
-          'after',
-        )
+        // 创建外部文档是异步的，光标锚点必须在 await 之前冻结；菜单关闭后
+        // 光标会移动，事后取 getTextCursorPosition() 会把块插到别处。
+        const anchor = editor.getTextCursorPosition().block
+        void (async () => {
+          const ref = await requestCreateExcalidrawDocument()
+          // 创建失败时不插块：绝不 silently 退化成 props.scene 内嵌（旧档才用那条路径）。
+          if (!ref) return
+          editor.insertBlocks(
+            [
+              {
+                type: 'excalidraw',
+                props: { documentId: ref.documentId, title: ref.title, scene: '' },
+              },
+            ],
+            anchor,
+            'after',
+          )
+        })()
       },
       aliases: ['excalidraw', 'flow', 'draw', '流程图', '白板', '手绘'],
       group: '高级',
       icon: <span>✎</span>,
-      subtext: '插入可双击全屏编辑的手绘流程图（Excalidraw）',
+      subtext: '插入可双击全屏编辑的手绘流程图（Excalidraw），内容存为独立文档',
     }
 
     const docLinkItem = {
@@ -1444,6 +1515,7 @@ export const SmartDocumentEditor = memo(function SmartDocumentEditor(props: Smar
   )
 }, (prevProps, nextProps) => (
   prevProps.readOnly === nextProps.readOnly
+  && prevProps.registerGlobalHandlers === nextProps.registerGlobalHandlers
   && prevProps.attachmentInsertTargetKey === nextProps.attachmentInsertTargetKey
   && prevProps.attachmentCardPath === nextProps.attachmentCardPath
   // 编号配置变化必须放行重渲染，否则开关点了没反应；但不能直接比 value 引用

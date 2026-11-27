@@ -487,10 +487,12 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
     }
   }, [detailSidebarCollapsed, detailSidebarTab, setDetailSidebarCollapsed, setDetailSidebarTab])
 
+  // 右栏是贴窗口边缘的整片面板，外壳（RightPanelShell）为方形：这里保持直角，
+  // 否则四个圆角会透出外壳底色，看起来像面板被磨圆了。
   return (
     <div 
       ref={containerRef}
-      className={`flex flex-col h-full border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-surface)] shadow-[var(--shadow-sm)] ${documentType}`} 
+      className={`flex flex-col h-full border border-[var(--color-border)] overflow-hidden bg-[var(--color-surface)] shadow-[var(--shadow-sm)] ${documentType}`} 
     >
       <div className="flex flex-1 overflow-hidden relative">
         {documentType === 'detail' && !effectiveFloating && (
@@ -616,9 +618,11 @@ export const DocumentWorkspaceLayout = memo(function DocumentWorkspaceLayout({
             )}
           </aside>
         )}
+        {/* 拖拽命中区必须与左右两侧同色（surface）：旧值 --color-bg 在暗色主题下比 surface
+            深一截，而 1px 分隔线贴在右边缘，左侧那 5px 就成了一条「细缝」。只留这条线即可。 */}
         {documentType === 'detail' && showSidebarContent && !effectiveFloating && (
           <div
-            className={`w-[6px] h-full cursor-col-resize shrink-0 bg-[var(--color-bg)] relative select-none transition-colors duration-75 before:content-[""] before:absolute before:top-0 before:bottom-0 before:right-0 before:w-px before:bg-[var(--color-border-light)] before:transition-all before:duration-75 hover:before:bg-[var(--color-primary)] ${isSidebarResizing ? 'before:!bg-[var(--color-primary)]' : ''}`}
+            className={`w-[6px] h-full cursor-col-resize shrink-0 bg-[var(--color-surface)] relative select-none transition-colors duration-75 before:content-[""] before:absolute before:top-0 before:bottom-0 before:right-0 before:w-px before:bg-[var(--color-border-light)] before:transition-all before:duration-75 hover:before:bg-[var(--color-primary)] ${isSidebarResizing ? 'before:!bg-[var(--color-primary)]' : ''}`}
             onMouseDown={handleSidebarResizeMouseDown}
             title="拖拽调整侧栏宽度"
           />

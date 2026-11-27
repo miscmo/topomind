@@ -4,17 +4,21 @@
  * 为什么不用 marked / react-markdown：marked 只是 mermaid 的传递依赖，不作为
  * 直接依赖使用；而回答来自远端模型，绝不走 dangerouslySetInnerHTML。这里用
  * 纯 React 元素输出，天然转义，覆盖会话常见语法即可：
- * 标题 / 粗体 / 斜体 / 行内代码 / 围栏代码块 / 有序无序列表 / 引用 / 链接 / 分隔线。
+ * 标题 / 粗体 / 斜体 / 行内代码 / 围栏代码块 / 有序无序列表 / 引用 / 链接 /
+ * 分隔线 / GFM 管道表格（含 `:---` / `---:` / `:---:` 对齐）。
  *
  * 流式输出时语法可能尚未闭合（例如只收到一个 `**`），未匹配的标记原样保留，
- * 等后续 token 补齐后自然解析成对应样式。视觉值只用设计 token 与标准布局类。
+ * 等后续 token 补齐后自然解析成对应样式。表格同理：分隔行没吐完前保持纯文本，
+ * 补齐后整块变成表格，后续行随 token 增长，视觉值只用设计 token 与标准布局类。
  *
- * P3：[ref:i] 只有在本轮 kb.ask 真的返回过该编号时才渲染成可点按钮（引用映射
- * 只存在 agentSessionStore 内存）；未命中 / 模型伪造的编号保持纯文本，不做死链。
+ * P3 / P5-r：[ref:i] 只有在本轮 kb.ask 真的返回过该编号时才渲染成可点按钮
+ * （引用映射只存在 agentSessionStore 内存）；未命中 / 模型伪造的编号保持纯文本，
+ * 不做死链。命中时按钮直接显示**文档名 + 编号**，回答末尾再附「参考来源」清单
+ * 展开文档 / 节点 / 块三层可读名字，用户不必猜 [ref:1] 指的是什么。
  */
 import type { ReactNode } from 'react'
 import type { AiReference } from '@/core/ai-types'
-import { TM_UI } from '@/shared/ui/controlStyles'
+import { TM_UI, tmUI } from '@/shared/ui/controlStyles'
 import { parseReferenceToken } from './model/contextBuilder'
 
 const HEADING_RE = /^(#{1,6})\s+(.+)$/
@@ -26,6 +30,9 @@ const FENCE_OPEN_RE = /^```[\w-]*\s*$/
 const FENCE_CLOSE_RE = /^```\s*$/
 const LINK_RE = /^\[([^\]]+)\]\(([^)\s]+)\)$/
 const SAFE_URL_RE = /^https?:\/\/\S+$/i
+// GFM 分隔行的单个单元格：至少一根短横线，两端冒号表示左 / 右对齐。
+const TABLE_DELIM_CELL_RE = /^:?-+:?$/
+type TableAlign = 'left' | 'center' | 'right'
 
 // 行内语法优先级：行内代码 > 粗体 > 斜体 > 引用标记 > 链接。
 // 每次调用新建 RegExp 实例，保证递归解析时 lastIndex 互不干扰。
@@ -33,8 +40,15 @@ const INLINE_SOURCE = '(`[^`\\n]+`|\\*\\*[^*\\n]+\\*\\*|__[^_\\n]+__|\\*[^*\\n]+
 
 interface InlineContext {
   onOpenRef?: (ref: number) => void
-  refIds: ReadonlySet<number>
-  titles: ReadonlyMap<number, string>
+  /** P5-r：编号 → 完整引用。文档 / 节点 / 块名都取自这里，渲染层不猜路径。 */
+  refs: ReadonlyMap<number, AiReference>
+}
+
+/** 悬停提示：三层名字一次给全，缺字段时降级到可读面包屑而不是裸 docId。 */
+function referenceTooltip(item: AiReference): string {
+  const parts = [`文档：${item.title}`, `节点：${item.nodeName || item.breadcrumb}`]
+  if (item.blockLabel) parts.push(`块：${item.blockLabel}`)
+  return `打开引用 · ${parts.join('｜')}${item.snippet ? `\n${item.snippet}` : ''}`
 }
 
 function renderInline(text: string, keyPrefix: string, ctx?: InlineContext): ReactNode[] {
@@ -60,17 +74,20 @@ function renderInline(text: string, keyPrefix: string, ctx?: InlineContext): Rea
     } else if (token.startsWith('*') || token.startsWith('_')) {
       nodes.push(<em key={key}>{renderInline(token.slice(1, -1), key, ctx)}</em>)
     } else if (ref !== null) {
-      if (ctx?.onOpenRef && ctx.refIds.has(ref)) {
+      const item = ctx?.refs.get(ref)
+      if (item) {
         nodes.push(
           <button
             key={key}
             type="button"
             data-tm-ai-ref={ref}
-            title={`打开引用：${ctx.titles.get(ref) ?? '文档'}`}
-            onClick={() => ctx.onOpenRef?.(ref)}
-            className="mx-0.5 rounded px-1 text-[var(--color-accent)] underline"
+            data-tm-ai-ref-label={item.title}
+            title={referenceTooltip(item)}
+            onClick={() => ctx?.onOpenRef?.(ref)}
+            className={tmUI(TM_UI.aiRefChip, 'mx-0.5 inline-flex max-w-40 items-center gap-1 align-baseline')}
           >
-            {token}
+            <span className={TM_UI.aiRefIndex}>{ref}</span>
+            <span className="truncate">{item.title}</span>
           </button>,
         )
       } else {
@@ -94,13 +111,67 @@ function renderInline(text: string, keyPrefix: string, ctx?: InlineContext): Rea
   return nodes
 }
 
-function isBlockStart(line: string, trimmed: string): boolean {
+/** 切分一行表格：`\|` 是字面竖线不参与分列，可选的首尾竖线不产生空列。 */
+function splitTableRow(line: string): string[] | null {
+  const trimmed = line.trim()
+  if (!trimmed.includes('|')) return null
+  const cells: string[] = []
+  let cell = ''
+  for (let i = 0; i < trimmed.length; i += 1) {
+    const ch = trimmed[i]
+    if (ch === '\\' && trimmed[i + 1] === '|') {
+      cell += '|'
+      i += 1
+    } else if (ch === '|') {
+      cells.push(cell.trim())
+      cell = ''
+    } else {
+      cell += ch
+    }
+  }
+  cells.push(cell.trim())
+  // `| a | b |` 的首尾只是外框；`|  | b |` 的第一个空单元格必须保留。
+  if (cells.length > 1 && cells[0] === '') cells.shift()
+  if (cells.length > 1 && cells[cells.length - 1] === '') cells.pop()
+  return cells.length > 0 ? cells : null
+}
+
+/** 分隔行整行合法才算表格，返回每列的对齐方式；流式未吐完时返回 null 保持纯文本。 */
+function parseTableAligns(line: string): TableAlign[] | null {
+  const cells = splitTableRow(line)
+  if (!cells || cells.length === 0 || cells.some((cell) => !TABLE_DELIM_CELL_RE.test(cell))) return null
+  return cells.map((cell) => {
+    const left = cell.startsWith(':')
+    const right = cell.endsWith(':')
+    if (left && right) return 'center'
+    if (right) return 'right'
+    return 'left'
+  })
+}
+
+/** 表头行 + 紧随的分隔行才构成表格；列数按 GFM 必须一致，否则流式还没吐完，
+ *  保持纯文本等补齐（也避免把只有一列 `| ---` 的半成品抢先渲染成空表）。 */
+function isTableStart(lines: string[], index: number): boolean {
+  const line = (lines[index] ?? '').replace(/\r$/, '')
+  const trimmed = line.trim()
+  if (!trimmed.includes('|')) return false
+  if (FENCE_OPEN_RE.test(trimmed) || HEADING_RE.test(trimmed) || HR_RE.test(trimmed)
+    || QUOTE_RE.test(line) || UL_RE.test(line) || OL_RE.test(line)) return false
+  const header = splitTableRow(line)
+  const aligns = parseTableAligns(lines[index + 1] ?? '')
+  return header !== null && aligns !== null && header.length > 0 && header.length === aligns.length
+}
+
+function isBlockStart(lines: string[], index: number): boolean {
+  const line = (lines[index] ?? '').replace(/\r$/, '')
+  const trimmed = line.trim()
   return FENCE_OPEN_RE.test(trimmed)
     || HEADING_RE.test(trimmed)
     || HR_RE.test(trimmed)
     || QUOTE_RE.test(line)
     || UL_RE.test(line)
     || OL_RE.test(line)
+    || isTableStart(lines, index)
 }
 
 function renderBlocks(content: string, ctx?: InlineContext): ReactNode[] {
@@ -187,11 +258,66 @@ function renderBlocks(content: string, ctx?: InlineContext): ReactNode[] {
       continue
     }
 
+    if (isTableStart(lines, index)) {
+      const header = splitTableRow(lines[index]) ?? []
+      const aligns = parseTableAligns(lines[index + 1]) ?? []
+      // 列数由表头决定；body 短行补空单元格、长行多余单元格丢弃（GFM 行为）。
+      const columnCount = header.length
+      const alignOf = (col: number): TableAlign => aligns[col] ?? 'left'
+      const rows: string[][] = []
+      index += 2
+      while (index < lines.length) {
+        const rowLine = lines[index].replace(/\r$/, '')
+        const rowTrimmed = rowLine.trim()
+        if (!rowTrimmed) break
+        const cells = splitTableRow(rowLine)
+        if (!cells) break
+        if (HEADING_RE.test(rowTrimmed) || FENCE_OPEN_RE.test(rowTrimmed) || HR_RE.test(rowTrimmed)
+          || QUOTE_RE.test(rowLine) || UL_RE.test(rowLine) || OL_RE.test(rowLine)) break
+        if (rows.length > 0 && isTableStart(lines, index)) break
+        rows.push(cells)
+        index += 1
+      }
+      const blockKey = nextKey()
+      const columns = Array.from({ length: columnCount }, (_, col) => col)
+      blocks.push(
+        <div
+          key={blockKey}
+          data-tm-ai-table=""
+          className={tmUI(TM_UI.aiTableWrap, TM_UI.scroll, 'my-2 w-full overflow-x-auto')}
+        >
+          <table className={TM_UI.aiTable}>
+            <thead>
+              <tr>
+                {columns.map((col) => (
+                  <th key={`${blockKey}-h${col}`} data-tm-align={alignOf(col)}>
+                    {renderInline(header[col] ?? '', `${blockKey}-h${col}`, ctx)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <tr key={`${blockKey}-r${rowIndex}`}>
+                  {columns.map((col) => (
+                    <td key={`${blockKey}-r${rowIndex}c${col}`} data-tm-align={alignOf(col)}>
+                      {renderInline(row[col] ?? '', `${blockKey}-r${rowIndex}c${col}`, ctx)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      )
+      continue
+    }
+
     const paragraph: string[] = []
     while (index < lines.length) {
       const next = lines[index].replace(/\r$/, '')
       const nextTrimmed = next.trim()
-      if (!nextTrimmed || isBlockStart(next, nextTrimmed)) break
+      if (!nextTrimmed || isBlockStart(lines, index)) break
       paragraph.push(next)
       index += 1
     }
@@ -206,6 +332,57 @@ function renderBlocks(content: string, ctx?: InlineContext): ReactNode[] {
   return blocks
 }
 
+const REF_TOKEN_GLOBAL_RE = /\[ref:(\d+)\]/g
+
+/**
+ * P5-r：回答末尾的「参考来源」清单。只列本条消息正文里真正出现过的编号，
+ * 且必须在引用映射里命中；重复引用去重，顺序按首次出现。整条清单是正文
+ * 渲染之后的兄弟节点，不参与 Markdown 分块，流式输出时随 token 增长。
+ */
+function ReferenceSources({ content, refs, onOpenRef }: {
+  content: string
+  refs: ReadonlyMap<number, AiReference>
+  onOpenRef?: (ref: number) => void
+}) {
+  const used: number[] = []
+  for (const match of content.matchAll(REF_TOKEN_GLOBAL_RE)) {
+    const ref = Number(match[1])
+    if (refs.has(ref) && !used.includes(ref)) used.push(ref)
+  }
+  if (used.length === 0) return null
+  return (
+    <section className={TM_UI.aiRefSources} data-tm-ai-ref-sources="">
+      <div className={tmUI(TM_UI.label, 'mb-1')}>参考来源</div>
+      <ul className="space-y-1">
+        {used.map((ref) => {
+          const item = refs.get(ref)
+          if (!item) return null
+          return (
+            <li key={ref}>
+              <button
+                type="button"
+                data-tm-ai-ref-source={ref}
+                title={referenceTooltip(item)}
+                onClick={() => onOpenRef?.(ref)}
+                className={TM_UI.aiRefSource}
+              >
+                <span className={TM_UI.aiRefIndex}>{ref}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block break-words font-medium">{item.title}</span>
+                  <span className={TM_UI.aiRefMeta}>
+                    {item.nodeName || item.breadcrumb}
+                    {item.blockLabel ? ` · ${item.blockLabel}` : ''}
+                  </span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
 interface AiMarkdownProps {
   content: string
   placeholder?: string
@@ -218,12 +395,12 @@ export default function AiMarkdown({ content, placeholder, references, onOpenRef
   if (!content.trim()) {
     return <span className={TM_UI.hint}>{placeholder ?? ''}</span>
   }
-  const ctx: InlineContext | undefined = references && references.length > 0
-    ? {
-      onOpenRef,
-      refIds: new Set(references.map((item) => item.ref)),
-      titles: new Map(references.map((item) => [item.ref, item.title])),
-    }
-    : undefined
-  return <div className="break-words leading-relaxed">{renderBlocks(content, ctx)}</div>
+  const refs = new Map((references ?? []).map((item) => [item.ref, item]))
+  const ctx: InlineContext | undefined = refs.size > 0 ? { onOpenRef, refs } : undefined
+  return (
+    <div className="break-words leading-relaxed">
+      {renderBlocks(content, ctx)}
+      {ctx && <ReferenceSources content={content} refs={refs} onOpenRef={onOpenRef} />}
+    </div>
+  )
 }

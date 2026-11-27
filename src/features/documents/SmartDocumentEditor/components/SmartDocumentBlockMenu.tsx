@@ -20,6 +20,10 @@ import {
   writeClipboardBeforeMutation,
 } from '../smartDocumentUtils'
 import { SmartSubMenu, SmartSubMenuDropdown, SmartSubMenuTrigger } from './SmartBlockNoteMenu'
+import { Sparkles } from 'lucide-react'
+import { useAiSelectionStore } from '../../../ai-agent/model/aiSelectionStore'
+import { requestAiEdit, targetForBlocks } from '../../../ai-agent/model/aiSelectionActions'
+import { requestCreateExcalidrawDocument } from '../excalidrawDocumentBridge'
 
 // 菜单每次打开都是重新挂载的，方向若只存在组件内 state 会丢失。这里记在模块级，
 // 让「连续在上方插入多个块」不必每次重开菜单都再切一次方向（不落盘，仅本次会话）。
@@ -70,7 +74,37 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
     return nextBlock
   }
 
+  /**
+   * 手绘流程图默认新建独立文档，再把 documentId 引用插在编辑器位置。
+   * 创建是异步的，块锚点必须在 await 之前捕获；失败时不插块，绝不退化成
+   * props.scene 内嵌（那条路径只服务旧档）。
+   */
+  const insertExcalidrawDocumentRef = async (
+    action: SmartDocumentBlockMenuAction,
+    placement: SmartDocumentInsertPlacement | 'replace',
+  ) => {
+    const ref = await requestCreateExcalidrawDocument()
+    if (!ref) return
+    const nextBlock = {
+      type: action.type,
+      // scene 显式清空：把旧内嵌块改造成引用时，父文档里不能残留场景数据。
+      props: { documentId: ref.documentId, title: ref.title, scene: '' },
+    } as unknown as SmartDocumentPartialBlock
+    if (placement === 'replace') {
+      editor.updateBlock(block, nextBlock)
+      editor.setTextCursorPosition(block.id, 'start')
+    } else {
+      const insertedBlock = editor.insertBlocks([nextBlock], block, placement)[0]
+      if (insertedBlock) editor.setTextCursorPosition(insertedBlock)
+    }
+    editor.focus()
+  }
+
   const applyToCurrentBlock = (action: SmartDocumentBlockMenuAction) => {
+    if (action.type === 'excalidraw') {
+      void insertExcalidrawDocumentRef(action, 'replace')
+      return
+    }
     const hasTextContent = getSmartDocumentBlockPlainText(block).length > 0
     if (action.type === 'divider' && hasTextContent) {
       insertBlock(action, 'after')
@@ -82,6 +116,10 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
   }
 
   const insertBlock = (action: SmartDocumentBlockMenuAction, placement: SmartDocumentInsertPlacement) => {
+    if (action.type === 'excalidraw') {
+      void insertExcalidrawDocumentRef(action, placement)
+      return
+    }
     const insertedBlock = editor.insertBlocks([createActionBlock(action, true) as unknown as SmartDocumentPartialBlock], block, placement)[0]
     if (insertedBlock) {
       editor.setTextCursorPosition(insertedBlock)
@@ -178,6 +216,16 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
   const getTargetBlocks = () => getTargetBlockIds()
     .map((id: string) => editor.getBlock(id))
     .filter((item): item is NonNullable<ReturnType<typeof editor.getBlock>> => Boolean(item))
+  const aiEditTargetBlocks = () => {
+    const docId = useAiSelectionStore.getState().documentId
+    const ids = getTargetBlockIds()
+    if (!docId || ids.length === 0) return
+    const excerpt = getSmartDocumentBlocksClipboardText(getTargetBlocks(), block.type)
+    requestAiEdit(
+      targetForBlocks(docId, ids, `选中 ${ids.length} 个块`, excerpt),
+      `请针对选中的 ${ids.length} 个内容块给出修改建议。`,
+    )
+  }
   const removeBlock = () => {
     editor.removeBlocks(getTargetBlockIds())
   }
@@ -301,6 +349,7 @@ export function SmartDocumentBlockMenu({ mode, children }: { mode: SmartDocument
       {mode === 'edit' ? (
         <div className="tm-smart-block-menu__section">
           <div className="tm-smart-block-menu__group-title">操作</div>
+          {renderRow({ label: '让 AI 修改选中块', Icon: Sparkles, onClick: aiEditTargetBlocks })}
           {renderRow({ label: '复制', Icon: Copy, shortcut: 'Ctrl+C', onClick: () => void copyBlockText() })}
           {renderRow({ label: '剪切', Icon: Scissors, shortcut: 'Ctrl+X', onClick: () => void cutBlock() })}
           {renderRow({ label: '创建副本', Icon: CopyPlus, shortcut: 'Ctrl+D', onClick: duplicateBlock })}

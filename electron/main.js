@@ -835,20 +835,27 @@ function registerIPC() {
   ipcMain.handle('ai:sessions:get', function(e, id) { return aiSessionStore.get(id); });
   ipcMain.handle('ai:sessions:upsert', function(e, payload) { return aiSessionStore.upsert(payload); });
   ipcMain.handle('ai:sessions:delete', function(e, id) { return aiSessionStore.remove(id); });
-  ipcMain.handle('ai:chat:test', function() { return aiService.testConnection(); });
+  // P5：测试连接可指定模型 id；空串由主进程回退到全局默认模型。
+  ipcMain.handle('ai:chat:test', function(e, modelId) {
+    return aiService.testConnection(typeof modelId === 'string' ? modelId.slice(0, 80) : '');
+  });
   ipcMain.handle('ai:chat:start', function(e, payload) {
     const data = payload && typeof payload === 'object' ? payload : {};
     const taskId = typeof data.taskId === 'string' ? data.taskId.slice(0, 80) : '';
     if (!taskId) return { ok: false, code: 'invalid_config', message: '缺少会话标识' };
     // S2：agent 只含渲染后的最终 prompt 与已钳制的参数，不含密钥；日志只记 id。
     const agent = data.agent && typeof data.agent === 'object' ? data.agent : null;
+    // P5：modelId 只是本轮选中的模型配置 id，不含任何密钥；agent payload 里已快照，
+    // 顶层字段是无 agent 请求的兜底。日志只记 id，不记服务地址 / 模型名。
+    const modelId = typeof data.modelId === 'string' ? data.modelId.slice(0, 80)
+      : (typeof agent?.modelId === 'string' ? agent.modelId.slice(0, 80) : '');
     // P2：只记工具数量，不记 schema / 参数 / 对话正文（C10 / C15）。
     const toolCount = Array.isArray(data.tools) ? data.tools.length : 0;
     // S3：子调用登记父任务 id，cancel 时由 ai-service 级联 abort 全部后代。
     const parentTaskId = typeof data.parentTaskId === 'string' ? data.parentTaskId.slice(0, 80) : '';
-    mainLog.info('app', 'AI 会话开始', { taskId, agentId: agent?.agentId ?? null, toolCount, hasParent: Boolean(parentTaskId) }, 'ai.chat');
+    mainLog.info('app', 'AI 会话开始', { taskId, agentId: agent?.agentId ?? null, toolCount, hasParent: Boolean(parentTaskId), modelId }, 'ai.chat');
     // 立即返回，让流式长连接不阻塞 IPC invoke。
-    void aiService.startChat({ taskId, messages: data.messages, agent, tools: data.tools, parentTaskId });
+    void aiService.startChat({ taskId, messages: data.messages, agent, tools: data.tools, parentTaskId, modelId });
     return { ok: true, taskId };
   });
   ipcMain.on('ai:chat:cancel', function(e, taskId) { aiService.cancel(taskId); });

@@ -17,7 +17,9 @@ import { buildRequestBody } from './ai-request-builder.js';
 /** S3：主 + 子至少占 2 个槽位，调度期把并发上限提到 4（§15.9）。 */
 const MAX_CONCURRENT = 4;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
-const MAX_MESSAGES = 50;
+// 工具轮次上限放开到 20（最多 50）后，一轮可能产生多条 tool 结果，
+// 50 条窗口会把 assistant.tool_calls 截掉、留下孤儿 tool 消息导致网关 400。
+const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 20000;
 /** 与 AgentDefinition 的 AGENT_LIMITS.systemPromptMax 一致（§15.4）。 */
 const MAX_SYSTEM_PROMPT_LENGTH = 8000;
@@ -141,7 +143,13 @@ function normalizeAssistantToolCalls(raw) {
  * assistant 可带 tool_calls 且允许空 content（工具轮次通常没有正文）。
  */
 export function normalizeMessages(raw, systemPrompt) {
-  const input = Array.isArray(raw) ? raw.slice(-MAX_MESSAGES) : [];
+  const windowed = Array.isArray(raw) ? raw.slice(-MAX_MESSAGES) : [];
+  // 窗口从头部截断时，可能只剩没有对应 assistant.tool_calls 的 tool 结果。
+  // OpenAI 兼容协议要求 tool 消息紧跟配对的 assistant 调用，否则直接 400；
+  // 这里丢弃窗口开头连续的孤儿 tool 消息，保证长轮次回灌始终合法。
+  let start = 0;
+  while (start < windowed.length && windowed[start]?.role === 'tool') start += 1;
+  const input = start > 0 ? windowed.slice(start) : windowed;
   const system = typeof systemPrompt === 'string' && systemPrompt.trim()
     ? systemPrompt.slice(0, MAX_SYSTEM_PROMPT_LENGTH)
     : SYSTEM_PROMPT;
@@ -436,7 +444,7 @@ export function createAiService({ keyStore, emit }) {
    * 启动一次流式对话。所有结果通过 emit 推送，不向 IPC handler 抛错，
    * handler 可以立即返回，避免长连接阻塞 invoke。
    */
-  async function startChat({ taskId, messages, agent, tools, parentTaskId }) {
+  async function startChat({ taskId, messages, agent, tools, parentTaskId, modelId }) {
     if (typeof taskId !== 'string' || !taskId) return;
     if (tasks.has(taskId)) {
       emitError(taskId, makeError(AI_ERROR_CODES.BUSY, errorMessage(AI_ERROR_CODES.BUSY)));
@@ -447,8 +455,12 @@ export function createAiService({ keyStore, emit }) {
       return;
     }
 
-    const config = keyStore.getConfig();
-    const apiKey = keyStore.getApiKey();
+    // P5：modelId 由渲染层按「会话选择 > Agent 绑定 > 全局默认」解析后随本轮快照，
+    // 一次任务的所有轮次（含收尾请求）都用同一份连接配置，中途切模型不影响在途对话。
+    const resolved = typeof keyStore.resolveModel === 'function'
+      ? keyStore.resolveModel(modelId ?? agent?.modelId)
+      : { config: keyStore.getConfig(), apiKey: keyStore.getApiKey() };
+    const { config, apiKey } = resolved;
     if (!apiKey) {
       emitError(taskId, makeError(AI_ERROR_CODES.NO_KEY, errorMessage(AI_ERROR_CODES.NO_KEY)));
       return;
@@ -561,9 +573,11 @@ export function createAiService({ keyStore, emit }) {
   }
 
   /** 设置页「测试连接」：非流式、最小 token，不写任何日志内容。 */
-  async function testConnection() {
-    const config = keyStore.getConfig();
-    const apiKey = keyStore.getApiKey();
+  async function testConnection(modelId) {
+    const resolved = typeof keyStore.resolveModel === 'function'
+      ? keyStore.resolveModel(modelId)
+      : { config: keyStore.getConfig(), apiKey: keyStore.getApiKey() };
+    const { config, apiKey } = resolved;
     if (!apiKey) return { ok: false, code: AI_ERROR_CODES.NO_KEY, message: errorMessage(AI_ERROR_CODES.NO_KEY) };
     if (config.providerType !== 'openai-compatible') {
       return { ok: false, code: AI_ERROR_CODES.UNSUPPORTED_PROVIDER, message: errorMessage(AI_ERROR_CODES.UNSUPPORTED_PROVIDER) };

@@ -17,6 +17,7 @@ import { recordStep } from '../../../core/traceBuffer'
 import { auditInterval, recordUser } from '../../../core/observe'
 import { LOG_ACTIONS } from '../../../shared/observability/logContract'
 import { TM_UI, tmUI } from '../../../shared/ui/controlStyles'
+import KnowledgeBasePicker from './KnowledgeBasePicker'
 
 /**
  * 横向知识库 tab 栏（Chrome 式弹性宽度 + Π 形连体视觉）。
@@ -34,7 +35,7 @@ import { TM_UI, tmUI } from '../../../shared/ui/controlStyles'
  *     **绝不能测 .tm-tab-strip 自己**：strip 宽度由 tab 内容决定，测它会产生
  *     「渲染 2 个 → 算出只放得下 1 个 → 只剩 1 个 → 算出还是 1 个」的正反馈，
  *     表现就是「打开两个知识库也折叠成下拉」，正是用户反馈的 bug。
- *   - 可用宽度 = zone 宽 - 恒定拖拽安全带 - 父级 gap。
+ *   - 可用宽度 = zone 宽 - 恒定拖拽安全带 - 父级 gap - 尾部常驻「+」及 strip gap。
  *   - n 个 tab 能全部以最小宽度放下时，全部横向展示，每个宽度在
  *     [--tab-min-width, --tab-max-width] 之间按可用宽度均分（Chrome 式压缩）。
  *   - 只有「n 个都压到最小宽度仍然放不下」时，才把多出来的收进「⋯N」，
@@ -47,6 +48,8 @@ interface TabMetrics {
   max: number
   gap: number
   overflow: number
+  /** 尾部常驻「+」按钮宽度：必须先扣掉，tab 才不会挤进拖拽安全带。 */
+  add: number
 }
 
 interface ZoneSize {
@@ -67,6 +70,7 @@ function readTabMetrics(): TabMetrics {
     max: px('--tab-max-width', 180),
     gap: px('--tab-gap', 4),
     overflow: px('--tab-overflow-width', 40),
+    add: px('--tab-add-width', 26),
   }
 }
 
@@ -77,7 +81,9 @@ export default memo(function TabBar() {
 
   const kbTabs = useMemo(() => tabs.filter((tab) => tab.type === 'kb'), [tabs])
 
+  /** 溢出「⋯N」菜单与「+」知识库浮窗互斥，共用一层 no-drag 遮罩。 */
   const [isOpen, setIsOpen] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [closingTabId, setClosingTabId] = useState<string | null>(null)
   const [closeError, setCloseError] = useState<string | null>(null)
   const [dirtyIds, setDirtyIds] = useState<string[]>([])
@@ -87,7 +93,9 @@ export default memo(function TabBar() {
   const rootRef = useRef<HTMLDivElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const addTriggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const lastPopoverRef = useRef<'overflow' | 'picker' | null>(null)
 
   // getDirtyState 是纯函数（由 registerTabSaver 的 isDirty 实时求值），没有可订阅的 store。
   // 低频轮询只用来刷新「未保存圆点」，不读写任何业务状态，开销可忽略。
@@ -131,7 +139,10 @@ export default memo(function TabBar() {
     // 首帧还没测量时先按最大宽度全渲染，避免挂载瞬间闪一下溢出按钮。
     if (zone.width <= 0) return { visibleCount: n, tabWidth: metrics.max, hasOverflow: false }
 
-    const available = Math.max(metrics.min, zone.width - zone.gutter - zone.gap)
+    // 「+」常驻在最后一个 tab 右侧，连同 strip gap 先扣出可用宽度，
+    // 否则均分后的 tab 会一路顶进 --tab-drag-gutter 的窗口拖拽安全带。
+    const available = Math.max(metrics.min,
+      zone.width - zone.gutter - zone.gap - metrics.add - metrics.gap)
     const allAtMin = n * metrics.min + (n - 1) * metrics.gap
 
     if (allAtMin <= available) {
@@ -191,6 +202,7 @@ export default memo(function TabBar() {
         view: 'tabbar',
       })
       setIsOpen(false)
+      setPickerOpen(false)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setCloseError(message || '保存失败，标签页未关闭')
@@ -214,6 +226,7 @@ export default memo(function TabBar() {
       })
     }
     setIsOpen(false)
+    setPickerOpen(false)
   }, [activateTab, activeTabId])
 
   // Ctrl+Tab 属于右栏显隐、Ctrl+1..9 属于左侧导航，这里只用 Alt+1..9 与 PageUp/PageDown。
@@ -231,16 +244,24 @@ export default memo(function TabBar() {
   }, { scope: 'global' })
 
   useShortcut(['Escape'], () => {
-    if (isOpen) setIsOpen(false)
+    setIsOpen(false)
+    setPickerOpen(false)
   }, { scope: 'global', preventDefault: false })
 
-  // 标题栏是 app-region: drag 区，它会吞掉原生指针事件。菜单展开时铺一层
-  // 透明的 no-drag 遮罩来接管点击（沿用旧下拉的成熟做法）。
+  // 标题栏是 app-region: drag 区，它会吞掉原生指针事件。溢出菜单或「+」浮窗
+  // 展开时铺一层透明的 no-drag 遮罩来接管点击（沿用旧下拉的成熟做法）。
+  // 两个浮层互斥但共用这一层遮罩：标题栏里绝不能同时出现两套全屏拦截。
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen && !pickerOpen) return
+    lastPopoverRef.current = isOpen ? 'overflow' : 'picker'
+    // cleanup 里要还焦点，先把当前节点复制到局部变量：ref.current 到那时可能已换节点。
+    const overflowTrigger = triggerRef.current
+    const addTrigger = addTriggerRef.current
 
-    const firstMenuItem = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')
-    firstMenuItem?.focus()
+    if (isOpen) {
+      const firstMenuItem = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')
+      firstMenuItem?.focus()
+    }
 
     const overlay = document.createElement('div')
     overlay.style.position = 'fixed'
@@ -248,7 +269,10 @@ export default memo(function TabBar() {
     overlay.style.zIndex = '1'
     overlay.style.setProperty('-webkit-app-region', 'no-drag')
 
-    const handleClose = () => setIsOpen(false)
+    const handleClose = () => {
+      setIsOpen(false)
+      setPickerOpen(false)
+    }
     overlay.addEventListener('pointerdown', handleClose)
     if (rootRef.current) rootRef.current.appendChild(overlay)
     else document.body.appendChild(overlay)
@@ -263,9 +287,12 @@ export default memo(function TabBar() {
       overlay.removeEventListener('pointerdown', handleClose)
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
       window.removeEventListener('pointerdown', handleWindowPointerDown, { capture: true })
-      window.setTimeout(() => triggerRef.current?.focus(), 0)
+      window.setTimeout(() => {
+        if (lastPopoverRef.current === 'overflow') overflowTrigger?.focus()
+        else addTrigger?.focus()
+      }, 0)
     }
-  }, [isOpen])
+  }, [isOpen, pickerOpen])
 
   const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
@@ -305,8 +332,8 @@ export default memo(function TabBar() {
     nodes[next]?.click()
   }
 
-  if (tabs.length === 0) return null
-
+  // 首页 / 系统页没有 kb tab 时也要渲染：尾部「+」是打开知识库的常驻入口，
+  // 不能因为 tabs 为空就把整个 tab 栏（连同入口）一起藏掉。
   return (
     <div
       ref={rootRef}
@@ -379,12 +406,20 @@ export default memo(function TabBar() {
             className={TM_UI.tabActionCount}
             aria-label={`更多已打开的知识库（${hiddenCount}）`}
             title={`还有 ${hiddenCount} 个已打开的知识库`}
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={() => { setIsOpen(!isOpen); setPickerOpen(false) }}
           >
             <MoreHorizontal className={TM_UI.iconSm} aria-hidden="true" />
             <span>{hiddenCount}</span>
           </button>
         )}
+        <KnowledgeBasePicker
+          open={pickerOpen}
+          onOpenChange={(next) => {
+            setPickerOpen(next)
+            if (next) setIsOpen(false)
+          }}
+          triggerRef={addTriggerRef}
+        />
       </div>
 
       {isOpen && (

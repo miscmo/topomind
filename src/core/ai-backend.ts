@@ -50,8 +50,9 @@ export function saveAiConfig(patch: AiConfigPatch): Promise<AiPublicConfig> {
   return invoke<AiPublicConfig>('ai:config:save', patch)
 }
 
-export function testAiConnection(): Promise<AiTestResult> {
-  return invoke<AiTestResult>('ai:chat:test')
+/** P5：可指定要测试的模型 id；不传时主进程测全局默认模型。 */
+export function testAiConnection(modelId?: string): Promise<AiTestResult> {
+  return invoke<AiTestResult>('ai:chat:test', modelId ?? '')
 }
 
 /**
@@ -96,6 +97,8 @@ export function startAiChat(
   tools?: readonly AiToolDefinition[],
   /** S3：子调用登记父任务，主进程 cancel 时级联 abort 所有后代。 */
   parentTaskId?: string,
+  /** P5：无 agent 场景的顶层兜底；正常链路的 modelId 已在 agent payload 里快照。 */
+  modelId?: string,
 ): Promise<AiStartResult> {
   return invoke<AiStartResult>('ai:chat:start', {
     taskId,
@@ -103,6 +106,7 @@ export function startAiChat(
     ...(agent ? { agent } : {}),
     ...(tools && tools.length > 0 ? { tools } : {}),
     ...(parentTaskId ? { parentTaskId } : {}),
+    ...(modelId ? { modelId } : {}),
   })
 }
 

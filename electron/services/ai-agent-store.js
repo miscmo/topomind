@@ -200,6 +200,10 @@ function normalizeAgent(raw, fallbackId) {
   if (typeof input.templateId === 'string' && input.templateId.trim()) {
     result.templateId = input.templateId.trim().slice(0, 80);
   }
+  // P5：只存模型配置 id，绝不存服务地址 / 密钥；未知 id 由渲染层解析时回退默认。
+  if (typeof input.modelId === 'string' && input.modelId.trim()) {
+    result.modelId = input.modelId.trim().slice(0, 80);
+  }
   return result;
 }
 

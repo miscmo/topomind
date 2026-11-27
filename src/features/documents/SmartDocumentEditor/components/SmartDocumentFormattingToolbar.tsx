@@ -15,6 +15,9 @@ import {
   getSmartDocumentSelectedTextState,
   type SmartDocumentSelectedTextState,
 } from '../smartDocumentUtils'
+import { Sparkles } from 'lucide-react'
+import { useAiSelectionStore } from '../../../ai-agent/model/aiSelectionStore'
+import { requestAiEdit, targetForBlocks } from '../../../ai-agent/model/aiSelectionActions'
 
 function useSelectedTextState(): SmartDocumentSelectedTextState | undefined {
   const editor = useSmartBlockNoteEditor()
@@ -217,6 +220,34 @@ function TextAlignmentButton({
   )
 }
 
+/** 划词后直接把「当前文字 + 所在块 id」交给 AI，避免用户手打描述目标。 */
+function AiEditSelectionButton({ state }: { state: SmartDocumentSelectedTextState }) {
+  const Components = useComponentsContext()
+  const editor = useSmartBlockNoteEditor()
+  if (!Components) return null
+  const handleClick = () => {
+    const docId = useAiSelectionStore.getState().documentId
+    const ids = (editor.getSelection()?.blocks ?? [])
+      .map((item) => item.id)
+      .filter((id): id is string => typeof id === 'string' && Boolean(id))
+    if (!docId || ids.length === 0) return
+    requestAiEdit(
+      targetForBlocks(docId, ids, `选中 ${ids.length} 个块`, state.rawText),
+      '请针对选中的文字与所在内容块给出修改建议。',
+    )
+  }
+  return (
+    <Components.FormattingToolbar.Button
+      className="bn-button"
+      isSelected={false}
+      label="让 AI 修改"
+      mainTooltip="让 AI 修改选中块"
+      icon={<Sparkles size={16} strokeWidth={2} />}
+      onClick={handleClick}
+    />
+  )
+}
+
 export function SmartDocumentFormattingToolbar() {
   const selectionState = useSelectedTextState()
   const alignment = useCurrentTextAlignment()
@@ -246,6 +277,7 @@ export function SmartDocumentFormattingToolbar() {
           <BasicTextStyleButton basicTextStyle="code" key="codeStyleButton" />
           <SelectionMathButton key="inlineMathButton" state={selectionState} />
           <CreateLinkButton key="createLinkButton" />
+          <AiEditSelectionButton key="aiEditSelectionButton" state={selectionState} />
         </>
       ) : null}
       {alignment ? (

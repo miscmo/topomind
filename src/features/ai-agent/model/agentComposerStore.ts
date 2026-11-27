@@ -74,6 +74,12 @@ interface AgentComposerState {
   inputHistory: string[]
   /** 用户追加的快捷回复，展示时拼在 DEFAULT_QUICK_REPLIES 之后。 */
   customQuickReplies: string[]
+  /**
+   * 「让 AI 修改」入口写入的一次性预填文本。只进内存、不落 localStorage：
+   * 这是跨模块的一次性交接信号，不是用户输入历史。
+   */
+  pendingDraft: string | null
+  setPendingDraft: (text: string | null) => void
   pushInput: (text: string) => void
   clearInputHistory: () => void
   /** 返回是否真的新增（空串 / 重复 / 已达上限时为 false）。 */
@@ -84,6 +90,9 @@ interface AgentComposerState {
 export const useAgentComposerStore = create<AgentComposerState>((set, get) => ({
   inputHistory: readList(HISTORY_KEY, MAX_HISTORY, false),
   customQuickReplies: readList(QUICK_KEY, MAX_QUICK, true),
+  pendingDraft: null,
+
+  setPendingDraft: (text) => set({ pendingDraft: text }),
 
   pushInput: (raw) => {
     const text = normalizeText(raw, false)

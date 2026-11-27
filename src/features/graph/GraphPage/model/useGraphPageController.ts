@@ -8,7 +8,6 @@ import { useGraphSession } from '../../../../stores/tabs/tabStore'
 import { registerTabSaver } from '../../../../core/close-guard'
 import { logAction } from '../../../../core/log-backend'
 import { recordStep } from '../../../../core/traceBuffer'
-import { useRoomHistoryTracker } from '../../../../hooks/useRoomHistory'
 
 export interface UseGraphPageControllerOptions {
   tabId: string
@@ -19,8 +18,6 @@ export function useGraphPageController({ tabId }: UseGraphPageControllerOptions)
   const graph = useGraph(tabId)
   const effectiveRoomPath = graphSession.roomPath || null
   const effectiveKbPath = graphSession.kbPath || null
-
-  useRoomHistoryTracker(tabId)
 
   useEffect(() => {
     logAction('graph.page_enter', 'GraphPage', {

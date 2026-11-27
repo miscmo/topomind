@@ -66,8 +66,6 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
     openMoveIdsToRoom,
     closeMoveToRoom,
     handleMoveNodesToRoom,
-    onMoveUndo,
-    onMoveRedo,
   } = useNodeMoveToRoom({ graph })
 
   const readSelectionSnapshot = useCallback(() => {
@@ -232,9 +230,6 @@ export function useGraphPageActions({ graph, tabId }: UseGraphPageActionsOptions
       onPaneContextMenu: openPaneMenu,
       onSelectionContextMenu: openSelectionMenu,
       onCloseContextMenu: closeContextMenu,
-      // 画布状态面板的常驻撤销 / 前进按钮：与 toast 撤销共用同一份移动历史。
-      onMoveUndo,
-      onMoveRedo,
     },
     contextMenuProps: {
       visible: contextMenu.visible,

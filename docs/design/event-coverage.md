@@ -19,7 +19,7 @@
 | 已接入（静态引用） | 103 |
 | 保留未启用（有书面理由） | 3 |
 | 仅登记待核对（缺口） | 0 |
-| 多产生点事件（需核对） | 50 |
+| 多产生点事件（需核对） | 51 |
 
 ## error
 
@@ -102,7 +102,7 @@
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | `kb.list_load` | 知识库列表加载 | state | per-state-change | 1 | 已接入 | 1 | 1 处：`src/features/kb/model/useHomeKnowledgeBases.ts` |
 | `kb.node_count_load` | 子节点数量加载 | state | per-state-change | 1 | 已接入 | 1 | 1 处：`src/features/kb/model/useHomeKnowledgeBases.ts` |
-| `kb.open` | 打开知识库 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 3 处：`src/features/graph/GraphPage/components/KnowledgeBaseListPanel.tsx`、`src/features/kb/components/KnowledgeBaseGrid.tsx`、`src/features/kb/model/useHomeKnowledgeBases.ts` |
+| `kb.open` | 打开知识库 | intent | per-interaction | 1 | 已接入 | 4（多入口需核对） | 3 处：`src/features/kb/components/KnowledgeBaseGrid.tsx`、`src/features/kb/model/useHomeKnowledgeBases.ts`、`src/features/layout/TabBar/KnowledgeBasePicker.tsx` |
 | `kb.create` | 创建知识库 | intent | per-interaction | 1 | 已接入 | 2（多入口需核对） | 1 处：`src/features/kb/model/useHomeCreateKB.ts` |
 | `kb.create_dialog` | 新建知识库弹窗 | process | per-event | 1 | 已接入 | 2 | 1 处：`src/features/kb/model/useHomeCreateKB.ts` |
 | `kb.import` | 导入知识库 | intent | per-interaction | 1 | 已接入 | 2（多入口需核对） | 2 处：`src/features/kb/model/useHomeImportKB.ts`、`electron/main.js` |
@@ -123,7 +123,7 @@
 | `edge.create` | 创建连线 | intent | per-interaction | 1 | 已接入 | 7（多入口需核对） | 5 处：`src/features/ai-agent/patch/agentPatchTypes.ts`、`src/features/ai-agent/patch/dryRunAgentPatch.ts`、`src/features/ai-agent/patch/normalizeAgentPatch.ts` … |
 | `edge.delete` | 删除连线 | intent | per-interaction | 1 | 已接入 | 8（多入口需核对） | 5 处：`src/features/ai-agent/patch/agentPatchTypes.ts`、`src/features/ai-agent/patch/dryRunAgentPatch.ts`、`src/features/ai-agent/patch/normalizeAgentPatch.ts` … |
 | `edge.update` | 更新连线 | intent | per-interaction | 1 | 已接入 | 5（多入口需核对） | 2 处：`src/features/graph/GraphPage/model/useEdgeActions.ts`、`src/hooks/useGraph/edgeOperations.ts` |
-| `room.navigate` | 房间导航 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 3 处：`src/features/layout/Breadcrumb/Breadcrumb.tsx`、`src/features/layout/RoomHistory/RoomHistory.tsx`、`src/hooks/useGraph/graphEventHandlers.ts` |
+| `room.navigate` | 房间导航 | intent | per-interaction | 1 | 已接入 | 2（多入口需核对） | 2 处：`src/features/layout/Breadcrumb/Breadcrumb.tsx`、`src/hooks/useGraph/graphEventHandlers.ts` |
 | `graph.page_enter` | 进入图谱页 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/graph/GraphPage/model/useGraphPageController.ts` |
 | `ui.context_menu` | 右键菜单 | intent | per-interaction | 1 | 已接入 | 5（多入口需核对） | 1 处：`src/features/graph/GraphPage/model/useGraphPageActions.ts` |
 | `ui.shortcut` | 快捷键 | intent | per-interaction | 1 | 已接入 | 3（多入口需核对） | 1 处：`src/features/graph/GraphCanvas/model/useGraphCanvasModel.ts` |
@@ -140,7 +140,7 @@
 | `attachment.delete` | 删除附件 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/documents/components/Layout/AttachmentsTab.tsx` |
 | `attachment.open` | 打开附件 | intent | per-interaction | 1 | 已接入 | 2（多入口需核对） | 1 处：`src/features/documents/components/Layout/AttachmentsTab.tsx` |
 | `user.command` | 执行命令 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/application/commands/commandRegistry.ts` |
-| `user.document_open` | 打开文档 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/right-panel/components/DetailTab/DetailPanel.tsx` |
+| `user.document_open` | 打开文档 | intent | per-interaction | 1 | 已接入 | 2（多入口需核对） | 1 处：`src/features/right-panel/components/DetailTab/DetailPanel.tsx` |
 | `user.node_click` | 点击节点 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/hooks/useGraph/graphEventHandlers.ts` |
 | `user.tab_close` | 关闭标签页 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/layout/TabBar/TabBar.tsx` |
 | `user.tab_switch` | 切换标签页 | intent | per-interaction | 1 | 已接入 | 1 | 1 处：`src/features/layout/TabBar/TabBar.tsx` |

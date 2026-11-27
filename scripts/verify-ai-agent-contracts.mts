@@ -1426,7 +1426,7 @@ check('S3 parentTaskId 贯通 backend → main → ai-service，主进程按父�
   assert.ok(backendSource.includes('parentTaskId?: string'))
   assert.ok(backendSource.includes('...(parentTaskId ? { parentTaskId } : {})'))
   assert.ok(mainSource.includes('parentTaskId'))
-  assert.ok(mainSource.includes('aiService.startChat({ taskId, messages: data.messages, agent, tools: data.tools, parentTaskId })'))
+  assert.ok(mainSource.includes('aiService.startChat({ taskId, messages: data.messages, agent, tools: data.tools, parentTaskId, modelId })'))
   assert.ok(serviceSource.includes('collectCascadeTargets(parents, root)'))
   assert.ok(serviceSource.includes('parents.set(taskId, parentTaskId)'))
   assert.ok(serviceSource.includes('MAX_CONCURRENT = 4'))
@@ -1747,9 +1747,108 @@ check('P3 IPC / 引用跳转链路：preload 三白名单 + 主进程 handler + 
   assert.ok(contextSource.includes('buildRetrievalEnvelope'))
   assert.ok(loopSource.includes('recordReferences'))
   assert.ok(sessionSource.includes('recordReferences'))
-  assert.ok(panelSource.includes('requestOpenDocumentLink'))
+  assert.ok(panelSource.includes('requestOpenReference'))
   assert.ok(markdownSource.includes('data-tm-ai-ref'))
   assert.ok(designDoc.includes('`kb.ask`'))
+})
+
+const docLinkBridgeSource = stripComments(await readText('../src/features/documents/SmartDocumentEditor/docLinkBridge.ts'))
+const detailPanelSource = stripComments(await readText('../src/features/right-panel/components/DetailTab/DetailPanel.tsx'))
+const previewStoreSource = stripComments(await readText('../src/features/right-panel/model/referencePreviewStore.ts'))
+const previewPanelSource = stripComments(await readText('../src/features/right-panel/components/DetailTab/ReferencePreviewPanel.tsx'))
+const rightPanelShellSource = stripComments(await readText('../src/features/right-panel/RightPanelShell.tsx'))
+const smartEditorSource = stripComments(await readText('../src/features/documents/SmartDocumentEditor/SmartDocumentEditor.tsx'))
+const editorRegistrySource = stripComments(await readText('../src/features/documents/services/documentEditorRegistry.tsx'))
+const editorToolbarSource = stripComments(await readText('../src/features/documents/SmartDocumentEditor/components/EditorTopToolbar.tsx'))
+check('P5-r 引用预览自带目标：右栏临时只读展示，画布零联动', () => {
+  // 双链桥（编辑器内）与引用桥（右栏详情常驻）分离，引用桥可等待 reveal 后注册。
+  assert.ok(docLinkBridgeSource.includes('setReferenceOpenHandler'))
+  assert.ok(docLinkBridgeSource.includes('clearReferenceOpenHandler'))
+  assert.ok(docLinkBridgeSource.includes('requestOpenReference'))
+  assert.ok(docLinkBridgeSource.includes('Date.now() + timeoutMs'))
+  assert.ok(docLinkBridgeSource.includes('nodeName?: string'))
+  // 引用 handler 只 resolve + openPreview，绝不切房间 / 选中节点 / 写激活项 / flush 草稿。
+  const previewFn = detailPanelSource.slice(
+    detailPanelSource.indexOf('const openReferencePreview'),
+    detailPanelSource.indexOf('const openReferencePreviewRef'),
+  )
+  assert.ok(previewFn.includes("view: 'reference-preview'") && previewFn.includes('openPreview({'))
+  assert.ok(!previewFn.includes('enterRoomInTab') && !previewFn.includes('setNodes('))
+  assert.ok(!previewFn.includes('setActiveDocumentPathForNode') && !previewFn.includes('flushDocumentSave'))
+  assert.ok(detailPanelSource.includes('openReferencePreviewRef'))
+  assert.ok(detailPanelSource.includes('setReferenceOpenHandler(handler)'))
+  assert.ok(!detailPanelSource.includes('!id || !selectedNodeId || !isActive'))
+  assert.ok(detailPanelSource.includes('Promise<boolean>'))
+  // 文档双链 / 引用关系列表仍保留它们自己的跨房间导航语义，未被误改成预览。
+  assert.ok(detailPanelSource.includes('tabStore.getState().enterRoomInTab'))
+  // AI 回答只走引用桥；旧的双链优先路径与劝退文案都必须消失。
+  assert.ok(panelSource.includes('requestOpenReference'))
+  assert.ok(!panelSource.includes('requestOpenDocumentLink'))
+  assert.ok(!panelSource.includes('请先在画布选中一个节点后重试'))
+  // 预览层：绝对覆盖常驻详情、按目标 cardPath 读正文。
+  // 关键：必须复用「节点关联文档 / 正常右栏」同一套 adapter 渲染链路，才能拿到
+  // listAttachments + getAttachmentAbsoluteUrl + resolveFileUrl，把文档里持久化的
+  // `_attach/xxx` 相对引用解析成 local-file://；裸挂编辑器会让预览里图片全裂。
+  assert.ok(rightPanelShellSource.includes('ReferencePreviewPanel') && rightPanelShellSource.includes('showReferencePreview'))
+  assert.ok(previewPanelSource.includes('data-tm-ai-reference-preview') && previewPanelSource.includes('closePreview'))
+  assert.ok(previewPanelSource.includes('readTopoDocument(cardPath, docId)'))
+  assert.ok(previewPanelSource.includes("getDocumentEditorAdapter('smart')"))
+  assert.ok(previewPanelSource.includes('SMART_ADAPTER.render(adapterProps)'))
+  assert.ok(previewPanelSource.includes('preview: true'))
+  assert.ok(previewPanelSource.includes('attachmentCardPath: cardPath'))
+  assert.ok(previewPanelSource.includes('attachmentInsertTargetKey: topoDocumentPath(docId)'))
+  assert.ok(!previewPanelSource.includes('<SmartDocumentEditor'))
+  assert.ok(editorRegistrySource.includes('resolveFileUrl={resolveFileUrl}'))
+  assert.ok(editorRegistrySource.includes('readOnly={preview}'))
+  assert.ok(editorRegistrySource.includes('registerGlobalHandlers={!preview}'))
+  // 第二个 adapter 实例必须让出 AI 选中态单例通道，否则会覆盖主文档上下文。
+  assert.ok(editorRegistrySource.includes('if (preview) return undefined'))
+  assert.ok(editorRegistrySource.includes('if (preview) return'))
+  assert.ok(!previewPanelSource.includes('enterRoomInTab') && !previewPanelSource.includes('setNodes('))
+  assert.ok(previewStoreSource.includes('target: null') && previewStoreSource.includes('closePreview'))
+  assert.ok(smartEditorSource.includes('if (!registerGlobalHandlers) return'))
+  // 预览复用完整编辑器，顶部工具栏的「样式 / 折叠」也必须跟着 readOnly 禁用，
+  // 否则在只读预览里点一下就能改全局编辑器样式并落盘。
+  assert.ok((editorToolbarSource.match(/disabled=\{disabled\}/g) ?? []).length >= 4)
+  assert.ok(editorToolbarSource.includes('if (disabled) return'))
+})
+check('P5-r 预览层与详情并存：DetailPanel 常驻挂载，关闭后原状恢复', () => {
+  assert.ok(rightPanelShellSource.includes('relative flex flex-1 min-h-0 flex-col overflow-hidden'))
+  assert.ok(rightPanelShellSource.includes('<DetailPanel tabId={tabId} isActive={isActive && rightPanelTab'))
+  assert.ok(previewPanelSource.includes('absolute inset-0'))
+  assert.ok(previewPanelSource.includes('key={`${target.docId}:${target.cardPath}`}'))
+  assert.ok(previewPanelSource.includes('preview: true'))
+  assert.ok(editorRegistrySource.includes('readOnly={preview}') && editorRegistrySource.includes('registerGlobalHandlers={!preview}'))
+})
+
+const refTypesSource = stripComments(await readText('../src/core/ai-types.ts'))
+check('P5-r 引用可读名真跑：索引产出节点名 / 块标签，旧索引零迁移', () => {
+  const hit = ragService.query({ question: '量子纠缠' }).hits[0] as Record<string, unknown>
+  assert.equal(hit.nodeName, '节点甲', '所属节点应显示真实名字，而不是 cardPath 末段 id')
+  assert.equal(hit.breadcrumb, '契约知识库 / 节点甲')
+  assert.ok(typeof hit.blockLabel === 'string' && String(hit.blockLabel).includes('段落'),
+    `命中块应带可读标签，实际：${String(hit.blockLabel)}`)
+  assert.ok(typeof hit.snippet === 'string' && String(hit.snippet).includes('量子纠缠'))
+  // 块标签按需读源文档算出，不写进倒排索引：AI_INDEX_VERSION 仍是 1。
+  const index = JSON.parse(nodeFs.readFileSync(ragIndexPath, 'utf8')) as {
+    version: number
+    sources: Record<string, unknown>
+  }
+  assert.equal(index.version, 1)
+  assert.ok(!JSON.stringify(index.sources).includes('blockLabel'))
+  // 信封仍只外发编号 / 标题 / 位置 / 片段；三层名字只留在渲染层内存映射里。
+  const env = buildRetrievalEnvelope('量子纠缠', [hit])
+  assert.ok(env.text.includes('[ref:1]') && !env.text.includes(String(hit.blockLabel)))
+  assert.equal((env.references[0] as unknown as Record<string, unknown>)?.nodeName, '节点甲')
+})
+check('P5-r 引用 UI 链路：三层名字从类型 → 信封 → Markdown 全部贯通', () => {
+  assert.ok(refTypesSource.includes('nodeName?: string') && refTypesSource.includes('blockLabel?: string'))
+  assert.ok(indexServiceSource.includes('extractBlockSpans') && indexServiceSource.includes('findBlockLabel'))
+  assert.ok(indexServiceSource.includes('formatDocumentSource'), '面包屑必须复用主进程统一口径')
+  assert.ok(contextSource.includes('hit.nodeName') && contextSource.includes('hit.blockLabel'))
+  assert.ok(markdownSource.includes('data-tm-ai-ref-label') && markdownSource.includes('data-tm-ai-ref-sources'))
+  assert.ok(markdownSource.includes('item.nodeName') && markdownSource.includes('item.blockLabel'))
+  assert.ok(markdownSource.includes('data-tm-ai-ref'), '旧的可点引用契约必须保留')
 })
 nodeFs.rmSync(ragDir, { recursive: true, force: true })
 
@@ -1782,6 +1881,7 @@ check('P4-S 历史会话：四条 IPC 白名单 + 主进程 sessions.json + 恢�
 const composerSource = stripComments(await readText('../src/features/ai-agent/components/AgentComposer.tsx'))
 const composerStoreSource = stripComments(await readText('../src/features/ai-agent/model/agentComposerStore.ts'))
 const controlsCssSource = stripComments(await readText('../src/styles/controls.css'))
+const tokensCssSource = stripComments(await readText('../src/styles/tokens.css'))
 const controlStylesSource = stripComments(await readText('../src/shared/ui/controlStyles.ts'))
 const baseCssSource = stripComments(await readText('../src/styles/base.css'))
 
@@ -1827,15 +1927,14 @@ check('P4-C 焦点框：文本输入控件不再套全局 2px 外描边，输入
   assert.ok(designDoc.includes('focus-visible'))
 })
 
-// --- P4-L 三边栏布局：四页顶部瘦身 + 左右折叠按钮（2026-11-26） ---
+// --- P4-L 三边栏布局：顶部瘦身 + 左右折叠按钮（2026-11-26；左栏 2026-11-27 收敛为三页）---
 const dockShellSource = stripComments(await readText('../src/features/graph/GraphPage/components/NodeTreePanel.tsx'))
-const kbListSource = stripComments(await readText('../src/features/graph/GraphPage/components/KnowledgeBaseListPanel.tsx'))
 const canvasSettingsSource = stripComments(await readText('../src/features/graph/GraphPage/components/CanvasSettingsPanel.tsx'))
 const dockStoreSource = stripComments(await readText('../src/stores/nodeTreePanelStore.ts'))
 const collapseButtonSource = stripComments(await readText('../src/features/layout/LeftDockCollapseButton.tsx'))
 const workspaceLayoutSource = stripComments(await readText('../src/features/documents/components/Layout/DocumentWorkspaceLayout.tsx'))
 
-check('P4-L 左栏：四页共用冗余标题行已删，展开/收起按钮下移到搜索行', () => {
+check('P4-L 左栏：三页共用冗余标题行已删，展开/收起按钮下移到搜索行', () => {
   assert.ok(!dockShellSource.includes('PANEL_HEADER'))
   assert.ok(!dockShellSource.includes('入口已预留') && !dockShellSource.includes('当前工作区'))
   assert.ok(!dockShellSource.includes('当前画布') && !dockShellSource.includes('个节点'))
@@ -1846,7 +1945,6 @@ check('P4-L 左栏：四页共用冗余标题行已删，展开/收起按钮下�
   assert.ok(dockShellSource.includes('data-tm-node-tree-collapse-all'))
   assert.ok(dockShellSource.includes('<LeftDockCollapseButton />'))
   assert.ok(panelSource.includes('<LeftDockCollapseButton />'))
-  assert.ok(kbListSource.includes('<LeftDockCollapseButton />'))
   assert.ok(canvasSettingsSource.includes('trailing={<LeftDockCollapseButton />}'))
   assert.ok(dockStoreSource.includes('collapseLeftDock'))
   assert.ok(collapseButtonSource.includes('data-tm-left-dock-collapse'))
@@ -1861,6 +1959,165 @@ check('P4-L 右栏：折叠按钮在全屏按钮上方，pin 仍紧贴全屏按�
     '竖 rail 顺序必须是：折叠 → 全屏 → 固定')
   assert.ok(workspaceLayoutSource.includes('useRightPanelStore((s) => s.collapseRightPanel)'))
   assert.ok(workspaceLayoutSource.includes('disabled={isRightPanelPinned}'))
+})
+
+// --- 工具轮次上限：放开硬编码 3 轮 + 到上限不再硬截断（2026-11-26） ---
+const preferencesSource = stripComments(await readText('../src/features/ai-agent/model/agentPreferencesStore.ts'))
+const aiSettingsSource = stripComments(await readText('../src/features/settings/AiSettingsSection.tsx'))
+
+check('工具轮次上限不再硬编码 3，改为用户可调偏好并在任务开始时快照', () => {
+  assert.ok(!loopSource.includes('MAX_TOOL_ROUNDS = 3'))
+  assert.ok(loopSource.includes('maxToolRounds: normalizeMaxToolRounds(useAgentPreferencesStore.getState().maxToolRounds)'))
+  assert.ok(preferencesSource.includes('DEFAULT_MAX_TOOL_ROUNDS = 20'))
+  assert.ok(preferencesSource.includes('MAX_TOOL_ROUNDS_LIMIT = 50'))
+  assert.ok(preferencesSource.includes('topomind:ai-max-tool-rounds'))
+  assert.ok(preferencesSource.includes('Math.min(MAX_TOOL_ROUNDS_LIMIT, Math.max(1, Math.round(num)))'))
+})
+
+check('达到上限仍回灌最后一轮工具结果，并发起不带 tools 的收尾请求', () => {
+  assert.ok(!loopSource.includes('本次自动检索结束'), '旧硬截断文案必须移除')
+  assert.ok(loopSource.includes('const atLimit = reachedRoundLimit || reachedContextBudget'))
+  assert.ok(loopSource.includes('const nextMessages: AiWireMessage[] = [...run.messages, assistantMessage, ...toolMessages]'))
+  assert.ok(loopSource.includes('nextMessages.push({'))
+  assert.ok(loopSource.includes('atLimit ? undefined : run.tools'))
+  assert.ok(loopSource.includes('run.finalizing = true'))
+  assert.ok(loopSource.includes('appendAssistantText('))
+})
+
+check('上限说明写进当前流式气泡，不另起一条留下「正在生成…」空占位', () => {
+  assert.ok(sessionSource.includes('appendAssistantText: (content) => set((state) => {'))
+  assert.ok(sessionSource.includes('content: last.content + content'))
+  assert.ok(loopSource.includes('store.getState().appendAssistantText('))
+  assert.ok(!loopSource.includes('appendAssistantNote(\n      `${reason}'))
+})
+
+check('收尾轮不再接管幻觉 toolCalls；工具结果累计字符预算是第二道闸', () => {
+  assert.ok(loopSource.includes('if (run.finalizing)'))
+  assert.ok(loopSource.includes('MAX_TOOL_CONTEXT_CHARS = 120_000'))
+  assert.ok(loopSource.includes('run.contextChars +='))
+})
+
+check('AI 助手设置页暴露轮次上限按钮组与契约属性', () => {
+  assert.ok(aiSettingsSource.includes('data-tm-ai-max-tool-rounds-group'))
+  assert.ok(aiSettingsSource.includes('data-tm-ai-max-tool-rounds={value}'))
+  assert.ok(aiSettingsSource.includes('MAX_TOOL_ROUNDS_OPTIONS.map'))
+  assert.ok(aiSettingsSource.includes('setMaxToolRounds(value)'))
+})
+
+check('主进程消息窗口同步放宽，且窗口截断不残留孤儿 tool 消息', () => {
+  assert.ok(serviceSource.includes('const MAX_MESSAGES = 200'))
+  assert.ok(serviceSource.includes("while (start < windowed.length && windowed[start]?.role === 'tool') start += 1"))
+  assert.ok(serviceSource.includes('const input = start > 0 ? windowed.slice(start) : windowed'))
+})
+
+// --- 对话区左缘「提问记录」轨道（2026-11-27） ---
+const questionRailSource = stripComments(await readText('../src/features/ai-agent/components/AgentQuestionRail.tsx'))
+
+check('P4-Q 提问记录轨道：只取当前会话的用户提问，平时只有刻度', () => {
+  assert.ok(panelSource.includes('<AgentQuestionRail'))
+  assert.ok(panelSource.includes('data-tm-ai-messages-host'))
+  assert.ok(panelSource.includes("style={{ paddingLeft: 'var(--ai-question-rail-gutter)' }}"))
+  assert.ok(questionRailSource.includes("messages.filter((item) => item.role === 'user')"))
+  assert.ok(questionRailSource.includes('data-tm-ai-question-rail'))
+  assert.ok(questionRailSource.includes('data-tm-ai-question-count={entries.length}'))
+  assert.ok(questionRailSource.includes('data-tm-ai-question-tick={item.id}'))
+  assert.ok(questionRailSource.includes('if (entries.length === 0) return null'))
+  assert.ok(!questionRailSource.includes('localStorage'), '轨道不得再存一份会话状态')
+})
+
+check('P4-Q 悬停浮出提问详情卡，点击刻度定位回原消息', () => {
+  assert.ok(questionRailSource.includes('data-tm-ai-question-card={hovered.id}'))
+  assert.ok(questionRailSource.includes('onJump(id)'))
+  assert.ok(questionRailSource.includes('useLayoutEffect'))
+  assert.ok(panelSource.includes('data-tm-ai-message-id={message.id}'))
+  assert.ok(panelSource.includes('data-tm-ai-message-target'))
+  assert.ok(panelSource.includes("behavior: 'smooth'"))
+  assert.ok(questionRailSource.includes('timeFromMessageId'), '时间从消息 id 解析，不新增落盘字段')
+  assert.ok(questionRailSource.includes('aria-current={activeId === item.id'))
+})
+
+check('P4-Q 轨道视觉全部走设计系统，目标消息用短时描边提示', () => {
+  assert.ok(controlsCssSource.includes('.tm-ai-question-layer'))
+  assert.ok(controlsCssSource.includes('.tm-ai-question-track'))
+  assert.ok(controlsCssSource.includes('.tm-ai-question-tick'))
+  assert.ok(controlsCssSource.includes('.tm-ai-question-card'))
+  assert.ok(controlsCssSource.includes("[data-tm-ai-message-target='true']"))
+  assert.ok(controlStylesSource.includes("aiQuestionLayer: 'tm-ai-question-layer'"))
+  assert.ok(controlStylesSource.includes("aiQuestionCard: 'tm-ai-question-card'"))
+  assert.ok(controlStylesSource.includes("aiQuestionCardFoot: 'tm-ai-question-card-foot'"))
+})
+
+check('P4-Q 轨道压缩为垂直居中的一小段：不贯穿消息区、不画竖线、激活刻度自动滚入段内', () => {
+  const rule = /\.tm-ai-question-track\s*\{([\s\S]*?)\}/.exec(controlsCssSource)?.[1] ?? ''
+  assert.ok(rule.includes('top: 50%'), '刻度段必须垂直居中')
+  assert.ok(rule.includes('transform: translateY(-50%)'))
+  assert.ok(rule.includes('max-height: min(var(--ai-question-track-max-height), 56%)'))
+  assert.ok(!rule.includes('bottom:'), '不得再用 top+bottom 撑满整个消息区')
+  assert.ok(!rule.includes('space-between'), '刻度不得沿消息区全长等距铺开')
+  assert.ok(!controlsCssSource.includes('.tm-ai-question-track::before'), '不得有贯穿竖线伪元素')
+  assert.ok(tokensCssSource.includes('--ai-question-track-max-height: 168px'))
+  assert.ok(questionRailSource.includes('track.scrollTop += above'))
+  assert.ok(questionRailSource.includes('track.scrollTop += below'))
+})
+
+// ---------------------------------------------------------------------------
+// P5：多模型配置 / 全局默认 / Agent 绑定 / 对话界面临时切换
+// 存储与解析函数的真跑断言在 scripts/verify-ai-models.mjs；这里锁死跨文件链路。
+// ---------------------------------------------------------------------------
+const keyStoreSource = stripComments(await readText('../electron/services/ai-key-store.js'))
+const modelStoreSource = stripComments(await readText('../src/features/ai-agent/model/aiModelStore.ts'))
+const aiTypesSource = stripComments(await readText('../src/core/ai-types.ts'))
+
+check('P5 存储：models[] + defaultModelId 与顶层镜像，老配置零迁移', () => {
+  assert.ok(keyStoreSource.includes('normalizeModelProfiles'))
+  assert.ok(keyStoreSource.includes('DEFAULT_MODEL_ID'))
+  assert.ok(keyStoreSource.includes('MAX_MODELS'))
+  assert.ok(keyStoreSource.includes('models.some((profile) => profile.id === requestedDefault)'))
+  assert.ok(keyStoreSource.includes('normalizeConnection(active, legacyPatch)'))
+  assert.ok(keyStoreSource.includes('keys[modelId]'), '专属 Key 必须按模型 id 隔离')
+  assert.ok(keyStoreSource.includes('readApiKey(profile.id)'))
+  assert.ok(aiTypesSource.includes('models: AiModelProfile[]'))
+  assert.ok(aiTypesSource.includes('defaultModelId: string'))
+  assert.ok(aiTypesSource.includes('modelKeys?: Record<string, string>'))
+})
+
+check('P5 请求链路：modelId 随本轮快照贯通 backend → main → ai-service', () => {
+  assert.ok(backendSource.includes('modelId?: string'))
+  assert.ok(backendSource.includes("...(modelId ? { modelId } : {})"))
+  assert.ok(mainSource.includes('agent?.modelId'))
+  assert.ok(serviceSource.includes('keyStore.resolveModel(modelId ?? agent?.modelId)'))
+  assert.ok(serviceSource.includes('keyStore.resolveModel(modelId)'))
+  assert.ok(aiTypesSource.includes('modelId?: string'))
+  assert.ok(loopSource.includes('modelId: string'), '任务内每轮请求必须复用同一模型快照')
+  assert.ok(loopSource.includes('run.modelId'))
+  assert.ok(panelSource.includes('resolveActive(initialAgent?.modelId ?? null)'))
+  assert.ok(panelSource.includes('modelId: activeModel.id'))
+  assert.ok(delegationSource.includes('resolveActive(agent.modelId ?? null)'))
+})
+
+check('P5 三处 UI：列表增删改 / 全局默认 / Agent 绑定 / 底栏切换', () => {
+  assert.ok(aiSettingsSource.includes('data-tm-ai-model-list'))
+  assert.ok(aiSettingsSource.includes('data-tm-ai-model-add'))
+  assert.ok(aiSettingsSource.includes('data-tm-ai-model-delete={profile.id}'))
+  assert.ok(aiSettingsSource.includes('data-tm-ai-model-default={profile.id}'))
+  assert.ok(aiSettingsSource.includes('id="ai-base-url"') && aiSettingsSource.includes('id="ai-model"')
+    && aiSettingsSource.includes('id="ai-api-key"'), '既有 GUI 冒烟的输入框 id 不得改动')
+  assert.ok(settingsSource.includes('data-tm-ai-agent-model-select'))
+  assert.ok(agentStoreSource.includes('result.modelId = input.modelId'))
+  assert.ok(composerSource.includes('data-tm-ai-model-picker'))
+  assert.ok(composerSource.includes('data-tm-ai-model-menu'))
+  assert.ok(composerSource.includes('data-tm-ai-model-option={profile.id}'))
+  assert.ok(controlsCssSource.includes('.tm-ai-model-menu'))
+  assert.ok(controlStylesSource.includes("aiModelMenu: 'tm-ai-model-menu'"))
+})
+
+check('P5 优先级与隔离：会话覆盖 > Agent 绑定 > 全局默认，工作区切换重拉', () => {
+  assert.ok(modelStoreSource.includes('[sessionModelId, agentModelId, defaultModelId]'))
+  assert.ok(modelStoreSource.includes('resetForWorkspace'))
+  assert.ok(preferencesSource.includes('SESSION_MODEL_ID_KEY'))
+  assert.ok(preferencesSource.includes('setSessionModelId'))
+  assert.ok(sessionResetSource.includes('useAiModelStore.getState().resetForWorkspace()'))
+  assert.ok(typesSource.includes('modelId?: string'))
 })
 
 console.log(`\nAI_AGENT_CONTRACTS_PASSED (${checks} checks)`)

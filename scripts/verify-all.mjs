@@ -9,6 +9,9 @@ import { spawnSync } from 'node:child_process'
 
 const STEPS = [
   ['npm', ['run', 'verify:design']],
+  ['npm', ['run', 'verify:ai:markdown']],
+  ['npm', ['run', 'verify:markdown:table:paste']],
+  ['npm', ['run', 'verify:ai:models']],
   ['npm', ['run', 'typecheck']],
   ['npm', ['run', 'verify:critical']],
   ['npm', ['run', 'verify:contracts']],

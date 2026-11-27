@@ -2,6 +2,8 @@ export interface MindMapNodeData {
   data: {
     text: string
     expandState?: 'expand' | 'collapse'
+    /** 节点级稳定标识，供 AI 按 id 定位；不用 simple-mind-map 内部的 uid，避免与其内部机制冲突。 */
+    tmId?: string
     [key: string]: unknown
   }
   children: MindMapNodeData[]
@@ -61,20 +63,33 @@ export function normalizeMindMapLayout(value: unknown): MindMapLayout {
     : 'logicalStructure'
 }
 
-function normalizeNode(value: unknown, fallbackText: string): MindMapNodeData {
+/** 旧档节点没有 id：按树路径 + 文本生成确定性 id，重复 normalize 不会漂移。 */
+function stableNodeId(path: string, text: string): string {
+  const seed = `${path}|${text}`
+  let hash = 2166136261
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `mm-${(hash >>> 0).toString(36)}`
+}
+
+function normalizeNode(value: unknown, fallbackText: string, path = '0'): MindMapNodeData {
   if (!isRecord(value)) {
-    return { data: { text: fallbackText, expandState: 'expand' }, children: [] }
+    return { data: { text: fallbackText, expandState: 'expand', tmId: stableNodeId(path, fallbackText) }, children: [] }
   }
 
   const data = isRecord(value.data) ? value.data : {}
+  const text = typeof data.text === 'string' ? data.text : fallbackText
   return {
     data: {
       ...data,
-      text: typeof data.text === 'string' ? data.text : fallbackText,
+      text,
       expandState: data.expandState === 'collapse' ? 'collapse' : 'expand',
+      tmId: typeof data.tmId === 'string' && data.tmId ? data.tmId : stableNodeId(path, text),
     },
     children: Array.isArray(value.children)
-      ? value.children.map((child, index) => normalizeNode(child, `分支主题 ${index + 1}`))
+      ? value.children.map((child, index) => normalizeNode(child, `分支主题 ${index + 1}`, `${path}.${index}`))
       : [],
   }
 }

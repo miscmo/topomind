@@ -1,11 +1,14 @@
 /**
- * 画布左上角房间路径面包屑：横向、逐段可点击，不用展开任何面板就能跳房间。
+ * 房间路径的唯一数据 / 导航来源（不含任何 UI）。
  *
- * - 唯一路径来源仍是「知识库根 → 历史栈 → 当前房间」，与标题 tooltip 共用一份数据。
- * - 路径再长也不撑高面板：整条面包屑在固定宽度里横向滚动，每一段始终能直接点。
+ * - 路径由「知识库根 → 历史栈 → 当前房间」派生，去重、不重复当前房间。
+ * - `useRoomPathItems().length > 1` 等价于「已进入二层或更深房间」，
+ *   画布顶部的新面包屑只在这个条件下渲染（根房间不留任何浮层）。
  * - 导航同时补一条语义化 user.room_enter 事件，进入房间的意图不被埋点遗漏。
+ * - 可见面包屑组件在 `GraphCanvas/components/RoomBreadcrumb.tsx`；
+ *   旧版左上角状态抽屉（最近打开 / 撤销前进 / 查看深度）已整体下线。
  */
-import { memo, useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { logAction } from '../../../core/log-backend'
 import { recordUser } from '../../../core/observe'
 import { LOG_ACTIONS } from '../../../shared/observability/logContract'
@@ -71,7 +74,8 @@ export function compactRoomPath(items: RoomPathItem[]) {
   }
 }
 
-function useRoomPathNavigate(tabId: string) {
+/** 面包屑逐段跳转：根段回根，历史段截断到该层，当前段不导航。 */
+export function useRoomPathNavigate(tabId: string) {
   const graph = useGraphContext()
   return useCallback(async (item: RoomPathItem) => {
     if (item.kind !== 'root' && item.historyIndex == null) return
@@ -95,46 +99,3 @@ function useRoomPathNavigate(tabId: string) {
     await graph.navigateToRoom(item.historyIndex!)
   }, [tabId, graph])
 }
-
-/** 横向面包屑：除当前段外每一段都可点击直达，长路径在容器内横向滚动。 */
-export default memo(function RoomPathBreadcrumb({ tabId }: { tabId: string }) {
-  const items = useRoomPathItems(tabId)
-  const navigate = useRoomPathNavigate(tabId)
-
-  if (items.length === 0) {
-    return <div className="tm-hint min-w-0 flex-1 truncate">当前没有房间路径</div>
-  }
-
-  return (
-    <div
-      data-tm-room-path-list=""
-      data-tm-room-path-count={items.length}
-      className="nodrag nowheel tm-scroll flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:h-1"
-    >
-      {items.map((item, index) => {
-        const isLast = index === items.length - 1
-        return (
-          <span key={item.id} className="inline-flex min-w-0 shrink-0 items-center gap-1">
-            {index > 0 && <span className="tm-hint shrink-0 opacity-60">›</span>}
-            <button
-              type="button"
-              data-tm-room-path-item={item.path}
-              disabled={isLast}
-              title={item.label}
-              aria-current={isLast ? 'page' : undefined}
-              onClick={() => { void navigate(item) }}
-              className={`nodrag nowheel tm-hint max-w-[112px] truncate rounded px-0.5 ${
-                isLast
-                  ? 'cursor-default font-semibold text-[var(--color-primary)]'
-                  : 'font-medium text-[var(--color-accent)] hover:underline'
-              }`}
-            >
-              {item.label}
-            </button>
-            {isLast && <span className="tm-hint shrink-0 opacity-70">当前</span>}
-          </span>
-        )
-      })}
-    </div>
-  )
-})

@@ -170,6 +170,51 @@
 }
 .tm-pill-btn:hover:not(:disabled) { background: var(--color-hover-bg); }
 
+/* 房间路径面包屑：画布顶部居中的单条胶囊，只在进入二层及以上房间时出现。
+   祖先段可点直达，当前段只读；长路径只在条内横向滚动，不撑宽浮层。 */
+.tm-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: min(560px, 70vw);
+  height: var(--control-height-md);
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--control-radius-pill);
+  background: var(--color-surface);
+  box-shadow: var(--control-popover-shadow);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.tm-crumb-list {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+}
+.tm-crumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 160px;
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color var(--control-transition), background-color var(--control-transition);
+}
+.tm-crumb-item:hover:not(:disabled) { background: var(--color-hover-bg); color: var(--color-accent); }
+.tm-crumb-item:disabled { cursor: default; }
+.tm-crumb-item--current { color: var(--color-primary); font-weight: 600; }
+.tm-crumb-sep { flex: none; color: var(--color-border-strong); }
+
 .tm-input,
 .tm-select {
   height: var(--control-height-md);
@@ -489,6 +534,38 @@
 .tm-tab-action:focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
 .tm-tab-action--count { border-color: var(--color-border-light); padding: 0 7px; }
 
+/* 尾部常驻「+」：浏览器标签栏语义，无底色无边框，hover / 展开才浮起一层浅底。
+   宽度由 --tab-add-width 固定，TabBar 的宽度算法会先把它扣出可用宽度。 */
+.tm-tab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--tab-add-width);
+  height: var(--tab-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--titlebar-muted);
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition);
+}
+.tm-tab-add:hover,
+.tm-tab-add[aria-expanded='true'] { background: var(--titlebar-hover); color: var(--titlebar-text); }
+.tm-tab-add:focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+
+/* 「+」弹出的知识库列表浮窗：与 .tm-menu 组合使用，这里只补纵向布局与高度钳制，
+   列表区交给 .tm-scroll 滚动，避免知识库多时把浮窗顶出屏幕。 */
+.tm-kb-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  max-height: 60vh;
+  overflow: hidden;
+}
+
 /* 合并菜单（标题栏汉堡）与溢出菜单的行内布局 */
 .tm-menu-group { display: flex; flex-direction: column; gap: 2px; }
 .tm-menu-group + .tm-menu-group {
@@ -599,3 +676,579 @@
 .tm-ai-font-sm { font-size: var(--font-size-base); }
 .tm-ai-font-md { font-size: var(--font-size-lg); }
 .tm-ai-font-lg { font-size: var(--font-size-xl); }
+
+/* ===== AI 会话 tab 栏 + 历史会话浮窗（左栏顶部一行）=====
+   不复用顶栏 .tm-tab-*（那是 32px Π 形连体 tab）：这里的 tab 活在左栏
+   36px 工具行里，是可横向滚动的独立胶囊，激活态用主题色浅底 + 描边标识。
+   色值 / 圆角 / 阴影 / 字号 / 层级一律引用 tokens.css，组件里只放布局类。 */
+.tm-ai-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+.tm-ai-tabs::-webkit-scrollbar { height: 3px; }
+.tm-ai-tabs::-webkit-scrollbar-track { background: transparent; }
+.tm-ai-tabs::-webkit-scrollbar-thumb {
+  border-radius: var(--control-radius-pill);
+  background: var(--color-border-strong);
+}
+
+.tm-ai-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 0 0 auto;
+  min-width: var(--ai-tab-min-width);
+  max-width: var(--ai-tab-max-width);
+  height: var(--control-height-md);
+  padding: 0 var(--space-xs) 0 var(--space-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--control-radius);
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--control-font);
+  line-height: var(--line-height-none);
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition),
+    border-color var(--control-transition), box-shadow var(--control-transition);
+}
+.tm-ai-tab:hover { background: var(--color-hover-bg); color: var(--color-text-primary); }
+.tm-ai-tab:focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+.tm-ai-tab--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 500;
+}
+.tm-ai-tab-icon {
+  width: var(--control-icon-sm);
+  height: var(--control-icon-sm);
+  flex-shrink: 0;
+  stroke-width: var(--control-icon-stroke);
+  color: var(--color-text-muted);
+}
+.tm-ai-tab--active .tm-ai-tab-icon { color: var(--color-accent); }
+.tm-ai-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tm-ai-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-icon);
+  height: var(--control-icon);
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--control-transition), background-color var(--control-transition),
+    color var(--control-transition);
+}
+.tm-ai-tab:hover .tm-ai-tab-close,
+.tm-ai-tab:focus-within .tm-ai-tab-close,
+.tm-ai-tab--active .tm-ai-tab-close { opacity: 1; }
+.tm-ai-tab-close:hover { background: var(--color-danger-soft); color: var(--color-danger); }
+.tm-ai-tab-close:focus-visible { opacity: 1; box-shadow: var(--shadow-focus-ring); }
+
+/* 历史 / 设置按钮展开态：不改按钮尺寸（固定 24px 方按钮），只换浅色底 + 主题色图标。 */
+[data-tm-ai-session-toggle][aria-pressed='true'],
+[data-tm-ai-settings-toggle][aria-pressed='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+/* 历史按钮右上角的数量角标：只放纯数字，点击交给父按钮。 */
+.tm-ai-session-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-icon);
+  height: var(--control-icon);
+  padding: 0 2px;
+  border-radius: var(--control-radius-pill);
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* 历史浮窗：portal 到 body，fixed 定位由组件按触发按钮 rect 注入。 */
+.tm-ai-session-popover {
+  z-index: var(--z-popover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--titlebar-menu-bg);
+  color: var(--color-text-primary);
+  box-shadow: var(--control-popover-shadow);
+  overflow: hidden;
+}
+.tm-ai-session-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--control-radius);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition),
+    border-color var(--control-transition);
+}
+.tm-ai-session-item:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  background: var(--color-hover-bg);
+}
+.tm-ai-session-item:focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+.tm-ai-session-item:disabled { opacity: 0.5; cursor: not-allowed; }
+.tm-ai-session-item--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.tm-ai-session-item-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-base);
+  font-weight: 500;
+}
+.tm-ai-session-item-meta {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+.tm-ai-session-item--active .tm-ai-session-item-meta { color: var(--color-accent); }
+.tm-ai-session-open-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: var(--control-radius-pill);
+  background: var(--color-accent);
+  opacity: 0.55;
+}
+
+/* ===== AI 设置窗口（画布页覆盖式设置页）=====
+   几何由组件给出：left = --tm-workspace-left-boundary（左栏右缘）、right = 0、
+   inset-y = 0，因此窗口贴住应用右边界并铺满左侧对话页之外的整个画布区。
+   这里只定义视觉 + 内部排版；层级必须高于右栏文档面板，色值 / 圆角 / 阴影 /
+   字号 / 层级一律引用 tokens.css，组件里只放布局类。 */
+.tm-ai-settings-window {
+  z-index: var(--z-ai-settings-window);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-popover);
+}
+
+.tm-ai-settings-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-shrink: 0;
+  height: var(--ai-settings-header-height);
+  padding: 0 var(--space-md);
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+}
+
+.tm-ai-settings-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+.tm-ai-settings-title .tm-icon { color: var(--color-accent); }
+
+.tm-ai-settings-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+.tm-ai-settings-tabs::-webkit-scrollbar { height: 3px; }
+.tm-ai-settings-tabs::-webkit-scrollbar-track { background: transparent; }
+.tm-ai-settings-tabs::-webkit-scrollbar-thumb {
+  border-radius: var(--control-radius-pill);
+  background: var(--color-border-strong);
+}
+
+.tm-ai-settings-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 0 0 auto;
+  height: var(--control-height-xl);
+  padding: 0 var(--space-md);
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--control-transition), color var(--control-transition),
+    border-color var(--control-transition);
+}
+.tm-ai-settings-tab:hover { background: var(--color-hover-bg); color: var(--color-text-primary); }
+.tm-ai-settings-tab:focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+.tm-ai-settings-tab--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 500;
+}
+.tm-ai-settings-tab-icon {
+  width: var(--control-icon);
+  height: var(--control-icon);
+  flex-shrink: 0;
+  stroke-width: var(--control-icon-stroke);
+}
+.tm-ai-settings-tab--active .tm-ai-settings-tab-icon { color: var(--color-accent); }
+
+/* 右上角关闭按钮复用图标按钮尺寸，只补一层危险色 hover。 */
+.tm-ai-settings-close:hover {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.tm-ai-settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.tm-ai-settings-body::-webkit-scrollbar { width: 6px; }
+.tm-ai-settings-body::-webkit-scrollbar-thumb {
+  border-radius: var(--control-radius-pill);
+  background: var(--color-border);
+}
+.tm-ai-settings-content {
+  width: 100%;
+  max-width: var(--ai-settings-content-max);
+  margin: 0 auto;
+  padding: var(--space-lg) var(--space-xl) var(--space-2xl);
+}
+
+.tm-ai-settings-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/* ===== AI 会话「提问记录」轨道（消息区左缘）=====
+   平时只有「垂直居中的一小段」紧凑细刻度，不铺满消息区、不画贯穿竖线；悬停 / 聚焦
+   某条刻度时，右侧才浮出这次提问的详情卡。轨道自身不占文档流，不给 240px 窄栏增加宽度；
+   层级低于历史会话浮窗（--z-popover），避免刻度盖住展开的浮层。 */
+.tm-ai-question-layer {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-dropdown);
+  pointer-events: none;
+}
+
+.tm-ai-question-track {
+  position: absolute;
+  top: 50%;
+  left: var(--ai-question-rail-inset);
+  /* 高度由刻度数量决定（height:auto），只受上限钳制：自然居中成一小段；
+     提问过多时段内滚动，且 56% 上限保证短窗口里也不会顶出消息区。 */
+  max-height: min(var(--ai-question-track-max-height), 56%);
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  width: var(--ai-question-rail-width);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  pointer-events: auto;
+}
+.tm-ai-question-track::-webkit-scrollbar { display: none; }
+
+.tm-ai-question-tick {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--ai-question-rail-width);
+  height: var(--ai-question-tick-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+.tm-ai-question-tick::after {
+  content: '';
+  display: block;
+  width: var(--control-icon-sm);
+  height: 2px;
+  border-radius: var(--control-radius-pill);
+  background: var(--color-text-muted);
+  opacity: 0.55;
+  transition:
+    width var(--control-transition) ease,
+    height var(--control-transition) ease,
+    background var(--control-transition) ease,
+    opacity var(--control-transition) ease;
+}
+.tm-ai-question-tick:hover::after {
+  width: var(--ai-question-rail-width);
+  background: var(--color-accent);
+  opacity: 0.85;
+}
+.tm-ai-question-tick[aria-current='true']::after {
+  width: var(--ai-question-rail-width);
+  height: 3px;
+  background: var(--color-accent);
+  opacity: 1;
+}
+.tm-ai-question-tick:focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+
+.tm-ai-question-card {
+  position: absolute;
+  left: calc(var(--ai-question-rail-inset) + var(--ai-question-rail-width) + var(--space-xs));
+  width: var(--ai-question-card-width);
+  max-width: calc(100% - var(--ai-question-rail-inset) - var(--ai-question-rail-width) - var(--space-sm));
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  /* 实心底：长摘要压在气泡 / Markdown 正文上时不会透字（浮层可读性优先）。 */
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  box-shadow: var(--control-popover-shadow);
+  overflow: hidden;
+  pointer-events: auto;
+}
+.tm-ai-question-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.tm-ai-question-card-index {
+  color: var(--color-accent);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.tm-ai-question-card-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  word-break: break-word;
+}
+.tm-ai-question-card-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  margin-top: var(--space-xs);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tm-ai-question-card-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border-light);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+.tm-ai-question-card-foot .tm-icon {
+  width: var(--control-icon-sm);
+  height: var(--control-icon-sm);
+  color: var(--color-accent);
+}
+
+/* 点刻度定位后的短时高亮：只描边，不改气泡本身配色，1.4s 后由组件清掉属性。 */
+[data-tm-ai-message-target='true'] {
+  border-radius: var(--control-radius);
+  box-shadow: 0 0 0 2px var(--color-accent-soft);
+}
+
+/* AI 回答里的 GFM 表格：外层容器负责窄栏横向滚动，表格本体只用 token 值。
+   单元格支持行内语法（粗体 / 代码 / 引用按钮），内容一律经 React 转义。 */
+.tm-ai-table-wrap {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--control-radius);
+  background: var(--color-surface);
+}
+.tm-ai-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--color-text-primary);
+}
+.tm-ai-table th,
+.tm-ai-table td {
+  padding: var(--space-xs) var(--space-sm);
+  border-right: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--color-border-light);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.tm-ai-table th {
+  background: var(--color-bg);
+  font-weight: 600;
+}
+.tm-ai-table th:last-child,
+.tm-ai-table td:last-child {
+  border-right: 0;
+}
+.tm-ai-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.tm-ai-table th[data-tm-align='center'],
+.tm-ai-table td[data-tm-align='center'] {
+  text-align: center;
+}
+.tm-ai-table th[data-tm-align='right'],
+.tm-ai-table td[data-tm-align='right'] {
+  text-align: right;
+}
+
+/* 对话输入区底部的模型切换浮层：向上弹出，层级用浮层 token，避免被消息
+   滚动区或提问刻度轨道盖住；尺寸 / 滚动 / 定位交给组件里的布局类。 */
+.tm-ai-model-menu {
+  z-index: var(--z-popover);
+}
+
+/* AI 回答里的引用：[ref:i] 直接显示「文档名 + 编号」，回答末尾的来源清单展开
+   「文档 / 节点 / 块」三层可读名字。颜色、字号、圆角一律取设计 token。 */
+.tm-ai-ref-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  max-width: 100%;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--control-radius);
+  background: var(--color-bg);
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  vertical-align: baseline;
+  cursor: pointer;
+}
+
+.tm-ai-ref-chip:hover {
+  background: var(--color-surface);
+}
+
+.tm-ai-ref-index {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.tm-ai-ref-sources {
+  margin-top: var(--space-md);
+  border-top: 1px solid var(--color-border-light);
+  padding-top: var(--space-sm);
+}
+
+.tm-ai-ref-source {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-xs);
+  border-radius: var(--control-radius);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tm-ai-ref-source:hover {
+  background: var(--color-bg);
+}
+
+.tm-ai-ref-meta {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+/* AI 引用的临时只读预览：绝对覆盖在右栏详情之上，不改画布状态。
+   视觉与详情头部一致，尺寸 / 滚动 / 定位交给组件里的布局类。 */
+.tm-ai-ref-preview {
+  background: var(--color-surface);
+}
+
+.tm-ai-ref-preview-bar {
+  padding: var(--space-sm);
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg);
+}
+
+.tm-ai-ref-preview-title {
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

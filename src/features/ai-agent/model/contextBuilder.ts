@@ -140,6 +140,10 @@ function referenceOf(hit: AiIndexHit): AiReference {
     cardPath: hit.cardPath,
     title: hit.title,
     breadcrumb: hit.breadcrumb,
+    // P5-r：三层可读名字只在渲染层内存里，绝不进外发文本 / 会话正文。
+    ...(hit.nodeName ? { nodeName: hit.nodeName } : {}),
+    ...(hit.blockLabel ? { blockLabel: hit.blockLabel } : {}),
+    ...(hit.snippet ? { snippet: hit.snippet } : {}),
     charRange: [hit.charRange[0], hit.charRange[1]],
   }
 }

@@ -98,10 +98,10 @@ async function connectOrLaunch() {
   throw new Error('Electron 调试端口未就绪: ' + CDP_URL)
 }
 
-async function waitFor(page, fn, timeout = 10000) {
+async function waitFor(page, fn, timeout = 10000, ...args) {
   const end = Date.now() + timeout
   while (Date.now() < end) {
-    if (await page.evaluate(fn)) return true
+    if (await page.evaluate(fn, ...args)) return true
     await sleep(200)
   }
   return false
@@ -159,16 +159,41 @@ async function enterWorkspace(page) {
   return ensureCanvas(page)
 }
 
-async function openSettings(page) {
-  await page.evaluate(() => document.querySelector('[data-tm-nav-item="settings"]')?.click())
-  return waitFor(page, () => !!document.querySelector('[data-tm-settings-ai-agents]'), 10000)
-}
-
+/** DockTab 是 toggle：已激活且展开时再点一次会把它收起。 */
 async function openAgentPanel(page) {
   const onCanvas = await ensureCanvas(page)
   if (!onCanvas) return false
+  if (await page.evaluate(() => !!document.querySelector('[data-tm-ai-agent-panel]'))) return true
   await page.evaluate(() => document.querySelector('[data-tm-left-dock-tab="agent"]')?.click())
   return waitFor(page, () => !!document.querySelector('[data-tm-ai-agent-panel]'), 10000)
+}
+
+/**
+ * AI 设置已从全局设置页迁到画布页的覆盖式窗口：先确保左栏 AI Agent 页展开，
+ * 再点标题栏齿轮按钮（已打开时不重复点，避免 toggle 反手关掉），最后切到目标 tab。
+ */
+async function openSettings(page, tab = 'agents') {
+  if (!await openAgentPanel(page)) return false
+  await page.evaluate(() => {
+    if (document.querySelector('[data-tm-ai-settings-window]')) return
+    document.querySelector('[data-tm-ai-settings-toggle]')?.click()
+  })
+  if (!await waitFor(page, () => !!document.querySelector('[data-tm-ai-settings-window]'), 10000)) return false
+  await page.evaluate((id) => document.querySelector(`[data-tm-ai-settings-tab="${id}"]`)?.click(), tab)
+  // 分区首次挂载会异步读主进程 AI 配置并回填输入框，等一拍再让断言 / 输入接手。
+  await sleep(500)
+  return waitFor(page, (id) => {
+    const pane = document.querySelector(`[data-tm-ai-settings-pane="${id}"]`)
+    return !!pane && !pane.hidden
+  }, 8000, tab)
+}
+
+async function switchSettingsTab(page, tab) {
+  await page.evaluate((id) => document.querySelector(`[data-tm-ai-settings-tab="${id}"]`)?.click(), tab)
+  return waitFor(page, (id) => {
+    const pane = document.querySelector(`[data-tm-ai-settings-pane="${id}"]`)
+    return !!pane && !pane.hidden
+  }, 8000, tab)
 }
 
 /** 点击容器内文本匹配的第一个按钮（React 合成事件可由原生 click 触发）。 */
@@ -218,8 +243,8 @@ async function main() {
 
     check('进入工作空间并渲染普通节点', await enterWorkspace(page))
 
-    // ===== A. 设置页：分区 / 模板 / 只读工具目录 =====
-    check('设置页「AI 智能体」分区可打开', await openSettings(page))
+    // ===== A. AI 设置窗口：分区 / 模板 / 只读工具目录 =====
+    check('AI 设置窗口「AI 智能体」分区可打开', await openSettings(page))
     const section = await page.evaluate((sel) => {
       const root = document.querySelector(sel)
       if (!root) return null
@@ -278,11 +303,13 @@ async function main() {
     check('工具目录内零增删改 / 启停 / 测试控件',
       catalog?.buttons === 0 && catalog?.inputs === 0,
       JSON.stringify({ buttons: catalog?.buttons, inputs: catalog?.inputs }))
+    await switchSettingsTab(page, 'assistant')
     const aiSettingsText = await page.evaluate(() =>
       document.querySelector('[data-tm-settings-ai]')?.innerText || '')
     check('AI 助手设置页不再宣称「只读问答」，改为「预览确认后才写入」',
       !/当前阶段为只读问答/.test(aiSettingsText) && /预览并确认后才会写入/.test(aiSettingsText),
       aiSettingsText.slice(0, 180).replace(/\n/g, ' | '))
+    await switchSettingsTab(page, 'agents')
 
     // ===== B. 使用模板创建 Agent，验证独立落盘 =====
     check('点击「使用模板」', await clickButton(page, SECTION, '使用模板'))
@@ -379,7 +406,7 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle2' })
     await sleep(2000)
     await ensureCanvas(page)
-    check('reload 后设置页仍能读到持久化的 Agent', await openSettings(page)
+    check('reload 后 AI 设置窗口仍能读到持久化的 Agent', await openSettings(page)
       && /文档写作助手/.test(await sectionText(page)))
     const afterReload = readAgents()?.agents.find((agent) => agent.kind === 'sub')
     check('reload 不覆盖已保存的提示词与参数',
@@ -413,15 +440,17 @@ async function main() {
       JSON.stringify({ selectedValue, expected: afterReload?.id }))
 
     const controls = '[data-tm-ai-agent-controls]'
+    // 作用域必须限定在对话面板控件区：AI 设置窗口的「AI 智能体」分区里也有
+    // 一个同名 aria-label 的下拉框，全局 querySelector 会把它误判成会话覆盖控件。
     check('深度思考「开启」写入会话偏好并展开协议选择',
       await clickButton(page, controls, '开启')
       && await waitFor(page, () => localStorage.getItem('topomind:ai-reasoning-mode') === 'on'
-        && !!document.querySelector('[aria-label="推理协议"]'), 5000),
+        && !!document.querySelector('[data-tm-ai-agent-controls] [aria-label="推理协议"]'), 5000),
       await page.evaluate(() => localStorage.getItem('topomind:ai-reasoning-mode')))
     check('深度思考「关闭」不展开协议选择',
       await clickButton(page, controls, '关闭')
       && await waitFor(page, () => localStorage.getItem('topomind:ai-reasoning-mode') === 'off'
-        && !document.querySelector('[aria-label="推理协议"]'), 5000))
+        && !document.querySelector('[data-tm-ai-agent-controls] [aria-label="推理协议"]'), 5000))
     check('深度思考「自动」可切回并保留会话覆盖',
       await clickButton(page, controls, '自动')
       && await waitFor(page, () => localStorage.getItem('topomind:ai-reasoning-mode') === 'auto', 5000))

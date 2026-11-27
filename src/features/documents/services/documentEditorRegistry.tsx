@@ -9,9 +9,12 @@ import { normalizeMindMapDocumentContent } from '../MindMapDocumentEditor/mindMa
 import { useStorage } from '../../../core/storage'
 import { useDocumentExternalRevision } from './documentExternalWriteBus'
 import { topoDocumentIdFromPath } from '../types/documentTypes'
+import { useAiSelectionStore } from '../../ai-agent/model/aiSelectionStore'
+import type { SmartDocumentSelectionInfo } from '../SmartDocumentEditor/types'
 
 const SmartDocumentEditor = lazy(() => import('../SmartDocumentEditor/SmartDocumentEditor').then(m => ({ default: m.SmartDocumentEditor })))
 const MindMapDocumentEditor = lazy(() => import('../MindMapDocumentEditor/MindMapDocumentEditor').then(m => ({ default: m.MindMapDocumentEditor })))
+const ExcalidrawDocumentEditor = lazy(() => import('../ExcalidrawDocument/ExcalidrawDocumentEditor').then(m => ({ default: m.ExcalidrawDocumentEditor })))
 
 function parseJsonValue(value: unknown) {
   if (value && typeof value === 'object') return value
@@ -173,6 +176,19 @@ export interface DocumentEditorAdapterProps {
   onBlockLastModifiedChange?: (timestamp: number | null) => void
   /** 智能文档正文里的 docLink chip 点击：按全库稳定 docId 在右栏打开目标文档。 */
   onOpenDocumentByDocId?: (docId: string) => void
+  /** 当前文档的全库稳定 id / 标题 / 所属节点，供 AI 选中态通道使用。 */
+  documentId?: string | null
+  documentTitle?: string
+  documentNodeId?: string | null
+  /**
+   * 右栏「引用临时预览」实例：与正常右栏共用同一套附件解析 / 运行时 URL 替换
+   * 链路（否则文档里 `_attach/xxx.png` 这类相对引用无法解析成 local-file://，
+   * 图片全部加载不出来），但必须关闭所有全局副作用：
+   *   - 编辑器 readOnly、不注册模块级单例 handler；
+   *   - 不上报 AI 选中态（同时挂载两个 adapter 会互相覆盖 activeDocument）。
+   * 不传时行为与原来完全一致。
+   */
+  preview?: boolean
 }
 
 interface DocumentEditorTypeAdapter {
@@ -194,6 +210,10 @@ function SmartDocumentAdapter({
   onWordCountChange,
   onBlockLastModifiedChange,
   onOpenDocumentByDocId,
+  documentId,
+  documentTitle,
+  documentNodeId,
+  preview = false,
 }: DocumentEditorAdapterProps) {
   const store = useStorage()
   const persistedValue = React.useMemo(
@@ -207,9 +227,32 @@ function SmartDocumentAdapter({
   const externalDocId = topoDocumentIdFromPath(documentInstanceKey)
   const externalRevision = useDocumentExternalRevision(externalDocId)
   const editorInstanceKey = `${documentInstanceKey}#r${externalRevision}`
+  const resolvedDocId = documentId || externalDocId
   const attachmentUrlCacheRef = React.useRef<Map<string, string>>(new Map())
   const knownAttachmentNamesRef = React.useRef<Set<string>>(new Set())
   const [attachmentRuntimeVersion, setAttachmentRuntimeVersion] = React.useState(0)
+
+  // 选中态通道：把「当前打开的文档」与「光标/选区所在块」上报给全局 store，
+  // AI 发问时据此冻结 (docId, blockIds)，才能按 id 精确修改而不是靠内容猜。
+  // 预览实例与主编辑器同时挂载，绝不能抢这条单例通道，否则 AI 会拿预览文档的
+  // blockId 去改当前文档。
+  React.useEffect(() => {
+    if (preview) return undefined
+    useAiSelectionStore.getState().setActiveDocument({
+      documentId: resolvedDocId || null,
+      title: documentTitle || title,
+      nodeId: documentNodeId ?? null,
+    })
+    return () => useAiSelectionStore.getState().clearActiveDocument(resolvedDocId || null)
+  }, [preview, resolvedDocId, documentTitle, documentNodeId, title])
+
+  const publishSelection = React.useCallback((selection: SmartDocumentSelectionInfo) => {
+    if (preview) return
+    useAiSelectionStore.getState().setEditorSelection({
+      blockIds: selection.blockIds,
+      excerpt: selection.excerpt,
+    })
+  }, [preview])
 
   React.useEffect(() => {
     attachmentUrlCacheRef.current = new Map()
@@ -370,9 +413,12 @@ function SmartDocumentAdapter({
           resolveFileUrl={resolveFileUrl}
           onWordCountChange={onWordCountChange}
           onBlockLastModifiedChange={onBlockLastModifiedChange}
+          onSelectionChange={publishSelection}
           onOpenDocumentByDocId={onOpenDocumentByDocId}
           attachmentInsertTargetKey={attachmentInsertTargetKey}
           attachmentCardPath={attachmentCardPath}
+          readOnly={preview}
+          registerGlobalHandlers={!preview}
         />
       </ErrorBoundary>
     </Suspense>
@@ -398,8 +444,43 @@ function MindMapDocumentAdapter({ value, title, onChange, onTocChange, onTocItem
   )
 }
 
-// container-only 载荷（excalidraw）与已退场的 compat 类型（flowchart）没有右栏编辑器，
-// 因此用 Partial：查找失败由 DocumentEditorHost 显示「已下线」占位，不再直接崩。
+/**
+ * 独立「手绘流程图」文档（编辑器里新建、作为当前文档子项）的右栏编辑器。
+ * 画布容器白板也是 excalidraw 类型，但不会被主动打开；万一旧链接指过来，
+ * 这里照样能正常编辑，不再显示「已下线」占位。
+ */
+function ExcalidrawDocumentAdapter({
+  value, title, onChange, onTocChange, onTocItemClickReady, onWordCountChange,
+  attachmentInsertTargetKey,
+}: DocumentEditorAdapterProps) {
+  const documentInstanceKey = attachmentInsertTargetKey || title
+  const documentId = topoDocumentIdFromPath(documentInstanceKey)
+  // 正文引用块改完图会发布外部写；按 revision 重挂载，右栏草稿才不会覆盖磁盘。
+  const revision = useDocumentExternalRevision(documentId)
+
+  React.useEffect(() => {
+    onTocChange([])
+    onTocItemClickReady(null)
+    onWordCountChange(null)
+  }, [onTocChange, onTocItemClickReady, onWordCountChange])
+
+  return (
+    <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-muted-foreground">加载编辑器...</div>}>
+      <ErrorBoundary label="手绘流程图编辑器" resetKeys={[documentInstanceKey, revision]}>
+        <ExcalidrawDocumentEditor
+          key={`${documentInstanceKey}#r${revision}`}
+          value={value}
+          title={title}
+          onChange={onChange}
+          documentId={documentId}
+        />
+      </ErrorBoundary>
+    </Suspense>
+  )
+}
+
+// 仍用 Partial：cardspec / image 等 container-only 载荷与已退场的 compat 类型
+// 没有右栏 adapter，查找失败由 DocumentEditorHost 显示「已下线」占位，不再直接崩。
 export const DOCUMENT_EDITOR_REGISTRY: Partial<Record<TopoDocumentType, DocumentEditorTypeAdapter>> = {
   smart: {
     type: 'smart',
@@ -410,6 +491,10 @@ export const DOCUMENT_EDITOR_REGISTRY: Partial<Record<TopoDocumentType, Document
   mindmap: {
     type: 'mindmap',
     render: (props) => <MindMapDocumentAdapter {...props} />,
+  },
+  excalidraw: {
+    type: 'excalidraw',
+    render: (props) => <ExcalidrawDocumentAdapter {...props} />,
   },
 }
 

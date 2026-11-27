@@ -4,6 +4,7 @@ import { useGraphUiStore } from '../stores/graphUiStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import { useAgentSessionListStore } from '@/features/ai-agent/model/agentSessionListStore'
+import { useAiModelStore } from '@/features/ai-agent/model/aiModelStore'
 
 export function resetClientSession() {
   useMonitorStore.getState().reset()
@@ -14,4 +15,6 @@ export function resetClientSession() {
   useGraphUiStore.getState().resetGraphUi()
   // P4-S：历史会话按工作目录隔离，切换 / 退出时清空内存镜像与在途写盘。
   useAgentSessionListStore.getState().resetForWorkspace()
+  // P5：模型列表 / 默认 id 也按工作目录隔离，切换后由各视图的 loaded 依赖自动重拉。
+  useAiModelStore.getState().resetForWorkspace()
 }

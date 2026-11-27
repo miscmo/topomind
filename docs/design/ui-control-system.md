@@ -126,20 +126,21 @@ node scripts/verify-design-system.mjs --update   # 迁移一批后收紧基线�
 
 ## 8. 横向知识库 tab 栏（信息架构）
 
-**三层职责，不要混**：
+**分层职责，不要混**：
 
 | 层 | 位置 | 管什么 |
 | --- | --- | --- |
 | 全局导航 | 标题栏 + 左侧 NavRail | 首页（标题栏）；学习记录 / 日志与性能 / 设置（rail 底部）；账户与工作区（最下） |
-| 左栏页面 | NavRail 顶部（仅画布页） | AI Agent / 知识库列表 / 节点结构（左栏显示哪一页） |
+| 左栏页面 | NavRail 顶部（仅画布页） | AI Agent / 节点结构 / 画布设置（当前画布左栏显示哪一页） |
 | 工作区切换 | 顶栏横向 tab | **只放 `type === 'kb'` 的已打开知识库**（在哪些文档间切换） |
+| 打开知识库 | 顶栏 tab 尾部常驻「+」 | 弹出当前工作区的知识库清单浮窗，点条目走 `tabStore.openKnowledgeBase({ name })` |
 | 对象上下文 | 右侧 absolute 浮层 | 详情 / 样式 / 文档编辑器 |
 
 - 系统页仍然进入 `tabStore.tabs`（`App.tsx` 依赖 `activeTab.viewId` 决定视图显隐），
   **只在 TabBar 渲染层过滤掉**；不要改 store 或 App 的挂载逻辑。
 - 系统页激活时所有 tab 呈非活跃态，由左侧 NavRail 的图标承担激活指示；
   首页则由标题栏按钮的高亮承担；点任一 tab 一步回到画布。
-- 顶栏三段：左＝导航栏显隐 + 首页 + 汉堡应用菜单，中＝tab 区 +
+- 顶栏三段：左＝导航栏显隐 + 首页 + 汉堡应用菜单，中＝tab 区（末尾常驻「+」）+
   `--tab-drag-gutter: 88px` 恒定拖拽安全带 + 剩余可拖留白，右＝三个窗口按钮。
   学习计时等 titlebar 插件 widget 已于 2026-11-25 移除，当日时长改由左侧导航
   「学习记录」表盘承载。**tab 区不再设百分比硬限宽**（旧的
@@ -149,16 +150,22 @@ node scripts/verify-design-system.mjs --update   # 迁移一批后收紧基线�
      **绝不能观察 `.tm-tab-strip` 自身**：strip 宽度由 tab 内容决定，测它会产生
      「渲染 2 个 → 算出只放得下 1 个 → 只剩 1 个 → 算出还是 1 个」的正反馈，
      表现就是「打开两个知识库也折叠成下拉」（2026-11-21 实测修复的 bug）。
-  2. 可用宽度 = zone 宽 − gutter − 父级 `columnGap`；宽度常量只在 `tokens.css`
-     定义一份，运行时由 `readTabMetrics()` 读取，TS 侧不写死数字。
+  2. 可用宽度 = zone 宽 − gutter − 父级 `columnGap` − `--tab-add-width` − strip `gap`；
+     尾部「+」常驻，必须先扣掉它，tab 才不会挤进拖拽安全带。宽度常量只在
+     `tokens.css` 定义一份，运行时由 `readTabMetrics()` 读取，TS 侧不写死数字。
   3. `n × --tab-min-width + 间隙 ≤ 可用宽度` → **全部横向展示**，每个 tab 宽度
      `clamp(min, 可用宽度/n, max)`，由 `--tab-current-width` 注入 strip。
   4. 只有「n 个都压到最小宽度仍放不下」→ 预留 `--tab-overflow-width` 后
      尽量多显示几个，可见 tab 一律保持最小宽度，其余收进「⋯N」菜单。
      **激活 tab 永远保持在可见列表里**（空间不足时换入末尾）。
   5. 菜单复用 `.tm-menu` / `.tm-menu-item` 与 `activateTab` / `closeTab` / `flushTabs`。
-- **不要「+」按钮**：打开知识库统一走首页的知识库卡片；
-  tab 栏只负责在已打开的知识库之间切换。
+- **尾部「+」＝打开知识库的常驻入口（2026-11-27 改）**：此前规定「不要 + 按钮、
+  统一走首页卡片」，现按产品要求改为浏览器标签栏式的尾部「+」：点击弹出
+  `KnowledgeBasePicker` 浮窗（轻量 `storage.listKBs()`，每次展开重读目录），
+  点条目统一走 `tabStore.openKnowledgeBase({ name })`，已开过的只激活、没开过的补 tab。
+  首页卡片仍保留（新建 / 导入 / 封面 / 排序归它），但**导航栏不再有知识库列表页签**。
+  TabBar 本身只负责已打开知识库之间的切换；「+」与浮窗由独立组件承载，
+  TabBar 只托管 `open` 状态、互斥与那一层 no-drag 遮罩，不把取数逻辑混进宽度算法。
 - 所有 tab 交互元素继承根节点的 `WebkitAppRegion: 'no-drag'`；
   Electron 的 `app-region: drag` 会吞掉重叠区域的全部指针事件。
 - 快捷键：`Alt+1..9` 直达、`Ctrl+PageUp/PageDown` 前后切、中键关闭。
@@ -292,8 +299,9 @@ pin / 收起按钮、设置页的「自动 / 常驻 / 隐藏」三态、笔记�
 
 左侧现在是**一条 48px rail + 一个 280px 浮层面板**，不再为每类内容各造一条竖条。
 
-- **职责分组（2026-11-25 改造）**：`NavRail` 顶部是 `HOST_DOCK_TABS` 的
-  「左栏显示哪一页」（AI Agent → 知识库列表 → 节点结构，只在画布页出现）；
+- **职责分组（2026-11-25 改造，2026-11-27 收敛为三页）**：`NavRail` 顶部是
+  `HOST_DOCK_TABS` 的「左栏显示哪一页」（AI Agent → 节点结构 → 画布设置，只在画布页出现）；
+  知识库列表页签已移除，打开 / 切换知识库统一走顶栏 tab 尾部的「+」浮窗；
   底部是「去哪里」的工具组（学习记录 → 日志与性能 → 设置，连成一组、组内无分隔线），
   紧贴账户与工作区之上，账户组前保留一条细分隔线。首页搬到标题栏后不再由 rail 渲染，
   但仍留在 `HOST_NAV_ITEMS`（`placement: 'titlebar'`）供 `Control+1..9` 与激活态推导使用。
@@ -316,12 +324,44 @@ pin / 收起按钮、设置页的「自动 / 常驻 / 隐藏」三态、笔记�
   坐标在任意展开/换页状态下都恒定。宽度刻意不做拖拽改宽，避免破坏这条像素契约。
 - **AI Agent**：目前只是 `AgentPlaceholder` 空状态入口，不引入 AI SDK、会话状态、假输入框
   或网络调用；能力定下来后替换该组件即可，Dock 外壳零改动。
-- **知识库列表**：第三页是轻量清单（只调 `storage.listKBs()`，点条目走
-  `tabStore.openKnowledgeBase({ name })`）；封面 base64 / 节点计数 / 新建导入 / 拖动排序
-  仍只属于首页，避免 280px 左栏重复首页的重型加载链路。三页共用同一个
-  `isCanvasView` 渲染分支，显隐条件只有一处。
-- **门禁**：`verify-critical` 第 72 组锁住「单一 store / 页面态不持久化 / tab 复用单例 rail /
-  三页固定顺序 / GUI 选择器与让位变量保留 / 折叠态不渲染 / 占位页不伪装可用 /
+- **知识库列表已迁出左栏**：`KnowledgeBaseListPanel` 与 `kbList` 页签于 2026-11-27 删除，
+  轻量清单逻辑搬进 `src/features/layout/TabBar/KnowledgeBasePicker.tsx`。封面 base64 /
+  节点计数 / 新建导入 / 拖动排序仍只属于首页，浮窗只调一次 `storage.listKBs()`。
+  三页共用同一个 `isCanvasView` 渲染分支，显隐条件只有一处。
+- **门禁**：`verify-critical` 第 60 组锁住「tab 栏尾部有「+」且打开知识库列表浮窗、
+  宽度算法先扣 `--tab-add-width`」；第 72 组锁住「单一 store / 页面态不持久化 /
+  tab 复用单例 rail / 三页固定顺序 / GUI 选择器与让位变量保留 / 折叠态不渲染 /
   连体走 controls.css」；第 74 组锁住「标题栏首页位置与 GUI 选择器 / 工具组底部连组 /
-  知识库列表页接线」；第 45 组锁住「唯一开关是竖 tab / collapsed 只由 setActivePanel 写入 /
-  面板内无第二套显隐控件 / 状态抽屉让位公式不变」，并用 esbuild 真跑「点 tab 折叠、再点展开」。
+  知识库列表入口只在标题栏浮窗」；第 45 组锁住「唯一开关是竖 tab /
+  collapsed 只由 setActivePanel 写入 / 面板内无第二套显隐控件 / top-left 语义宿主让位公式不变」，
+  并用 esbuild 真跑「点 tab 折叠、再点展开」。
+
+## 12. 画布顶部浮层：房间面包屑取代缩放拖动条（2026-11-27）
+
+- **唯一容器**：`GraphCanvas.tsx` 里只有**一个** `Panel position="top-center"`，
+  内部一列 `pointer-events-none flex flex-col items-center gap-2`，按
+  `CanvasReadOnlyBanner → RoomBreadcrumb → SelectionMirrorMenu` 纵向排列。
+  三个子内容都只是内容组件，**绝不再各自包一层 Panel**（同位置 Panel 会互相遮挡），
+  也绝不在 `GraphPage` 挂第二套 `absolute top-3` 浮层。
+- **缩放条下线**：`CanvasZoomSlider` / `CanvasStatusSection` / `LodControl` /
+  `canvasStatusPreferences` / `RoomHistory` / `useRoomHistory` 全部删除。
+  日常缩放只剩滚轮，回到 100% 只剩只读提示条的恢复按钮；画布上不存在任何
+  `input[type="range"]`。GUI 需要把镜头精确落在 5% / 20% / 40% 时，走
+  `CanvasZoomBridge` 暴露在画布根容器上的无界面 `__tmZoomTo(percent)`，
+  桥本身 `return null`、产品侧不消费。
+- **面包屑显隐**：路径真源在 `features/layout/Breadcrumb/Breadcrumb.tsx`
+  （`useRoomPathItems` = 知识库根 → 历史栈 → 当前房间，去重），**只导出数据 / 导航 /
+  埋点，不渲染 UI**。可见组件 `GraphCanvas/components/RoomBreadcrumb.tsx` 在
+  `items.length < 2` 时 `return null`：根房间画布上不留任何浮层，只有进入二层或更深
+  房间才出现。祖先段可点直达，当前段 `aria-current="page"` 只读。
+- **旧功能不回流**：最近打开、前进 / 撤销、查看深度、分区折叠、折叠偏好持久化
+  一律不再提供；新面包屑只有一条胶囊，层级再深也只在条内横向滚动。
+  撤销 / 前进历史仍由 toast 的「撤销」承接，不另建第二套入口。
+- **视觉**：`.tm-crumb*` 只在 `controls.css` 定义，TS 侧只用 `TM_UI.crumb*`；
+  颜色全部引用 `tokens.css` 变量，图标用 lucide `Home / ChevronRight / MapPin`，
+  交互一律 `nodrag nowheel`，避免被画布平移缩放手势抢走。
+- **诊断降级**：`CanvasDiagnostics` 是 top-left 的**隐藏**语义宿主
+  （`hidden` + `data-tm-lod-*` 属性），保留 GUI 的 LOD 读数与让位几何锚点，
+  但不产生按钮、文字、折叠态或偏好存储。**门禁**：`verify-critical` 第 21 组锁住
+  「旧文件已删 / 唯一 Panel 与顺序 / 深层才渲染 / 语义桥 / 隐藏宿主 / 设计系统类名」，
+  第 26 组锁住「滑动条文件不存在 + 语义桥精确设比例」，GUI 阶段 Q / S / AC 做实测。

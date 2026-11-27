@@ -15,6 +15,8 @@
  */
 
 import {
+  ensureStableBlockIds,
+  newSmartDocumentBlockId,
   normalizeSmartDocumentContent,
   type BlockNoteBlock,
   type SmartDocumentContent,
@@ -65,7 +67,9 @@ export function readDocumentBlockIds(content: unknown): string[] {
   if (!content || typeof content !== 'object') return []
   const blocks = (content as Record<string, unknown>).blocks
   if (!Array.isArray(blocks)) return []
-  return blocks
+  // 与 document.read 摘要、buildSmartWrite 的 base.blocks 共用同一套确定性补齐，
+  // 否则旧档缺 id 时预览里的 blockIds 会是空的，AI 的 replace_blocks 会被误判为找不到目标。
+  return ensureStableBlockIds(blocks as BlockNoteBlock[])
     .map((block) => (block && typeof block === 'object' ? (block as Record<string, unknown>).id : undefined))
     .filter((id): id is string => typeof id === 'string' && id.length > 0)
 }
@@ -113,7 +117,9 @@ export function toBlockNoteBlock(block: DocumentBlock): BlockNoteBlock {
       result.content = text
       break
   }
-  if (block.id) result.id = block.id
+  // AI 新建块落盘瞬间就要有稳定 id，否则下一次 document.read 找不到它，
+  // 用户也没法「选中这个块再让 AI 改」。已有 id 原样保留（幂等）。
+  result.id = block.id || newSmartDocumentBlockId()
   if (Array.isArray(block.children) && block.children.length > 0) {
     result.children = block.children.map(toBlockNoteBlock)
   }

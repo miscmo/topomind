@@ -91,6 +91,7 @@ export function EditorTopToolbar({
 
   const closeStylePopover = useCallback(() => setStyleOpen(false), [])
   const toggleStylePopover = useCallback(() => {
+    if (disabled) return
     if (styleOpen) {
       setStyleOpen(false)
       return
@@ -99,13 +100,14 @@ export function EditorTopToolbar({
     if (!rect) return
     setStyleRect({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right })
     setStyleOpen(true)
-  }, [styleOpen])
+  }, [disabled, styleOpen])
 
   // 折叠会改变按钮位置，先关浮层，避免它停在旧坐标上。
   const handleToggleCollapsed = useCallback(() => {
+    if (disabled) return
     setStyleOpen(false)
     setCollapsed(!collapsedState)
-  }, [])
+  }, [disabled])
 
   return (
     <div
@@ -137,6 +139,7 @@ export function EditorTopToolbar({
         aria-label="编辑器样式设置"
         title="编辑器样式设置"
         onClick={toggleStylePopover}
+        disabled={disabled}
         className="tm-editor-top-toolbar__style-trigger flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-md border-none bg-transparent px-1.5 text-[11px] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)]"
         style={collapsed ? { display: 'none' } : undefined}
       >
@@ -150,6 +153,7 @@ export function EditorTopToolbar({
         aria-label={collapsed ? '展开顶部工具栏' : '收起顶部工具栏'}
         title={collapsed ? '展开顶部工具栏' : '收起顶部工具栏'}
         onClick={handleToggleCollapsed}
+        disabled={disabled}
         className="tm-editor-top-toolbar__toggle flex h-[24px] w-[28px] shrink-0 items-center justify-center rounded-md border border-[var(--color-border-light)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] cursor-pointer shadow-sm transition-colors hover:bg-[var(--color-hover-bg)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)] z-50"
         style={collapsed ? { position: 'absolute', top: -12, right: 24 } : undefined}
       >

@@ -136,8 +136,9 @@ export function DocumentEditorHost({
     )
   }
 
-  // 旧档 / 旧链接仍可能指向已退场的 flowchart 或 container-only 载荷。
-  // 这两类都没有右栏 adapter，必须显式给占位，不能让 render() 打到 undefined。
+  // 旧档 / 旧链接仍可能指向已退场的 flowchart 或没有 adapter 的 container-only 载荷。
+  // excalidraw 已有右栏编辑器（独立流程图文档 / 画布白板），其余必须显式给占位，
+  // 不能让 render() 打到 undefined。
   const adapter = getDocumentEditorAdapter(activeTopoDocument.type)
   const loadingContent = (
     <div className="h-full min-h-0 flex items-center justify-center bg-[var(--color-surface)] p-6">
@@ -168,6 +169,9 @@ export function DocumentEditorHost({
           onWordCountChange: setDocumentStats,
           onBlockLastModifiedChange: setBlockLastModified,
           onOpenDocumentByDocId,
+          documentId: activeTopoDocument.id,
+          documentTitle: activeTopoDocument.title,
+          documentNodeId: nodeId ?? null,
         })
 
   return (

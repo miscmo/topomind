@@ -1,6 +1,11 @@
 import { normalizeHeadingNumbering, type HeadingNumberingConfig } from './headingNumbering.ts'
 
-export type BlockNoteBlock = Record<string, unknown>
+/**
+ * 运行时契约：每个块都带稳定 id（BlockNote UUID 或下方补齐的 id）。
+ * TS 侧保留可选，是因为构造期允许先不给 id；落盘前一定会被补齐。
+ * AI 定位块只认这个 id，绝不用标题、数组下标或路径文本。
+ */
+export type BlockNoteBlock = Record<string, unknown> & { id?: string }
 
 export interface SmartDocumentContent {
   schema: 'topomind.smart-document'
@@ -33,6 +38,66 @@ const LEGACY_BLOCK_TYPES = new Set(['heading', 'paragraph', 'bulleted-list', 'nu
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+/** 新块用真 UUID；只有「读旧档时补 id」才用下面的确定性兜底。 */
+export function newSmartDocumentBlockId(): string {
+  const cryptoRef = globalThis.crypto
+  if (cryptoRef && typeof cryptoRef.randomUUID === 'function') return `blk-${cryptoRef.randomUUID()}`
+  return `blk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function hashBlockSeed(seed: string): string {
+  let hash = 2166136261
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+function readBlockText(block: BlockNoteBlock): string {
+  const content = block.content
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (!part || typeof part !== 'object') return ''
+      const text = (part as Record<string, unknown>).text
+      return typeof text === 'string' ? text : ''
+    }).join('')
+  }
+  return typeof block.text === 'string' ? block.text : ''
+}
+
+/**
+ * 给缺 id 的历史块补一个**确定性** id（内容 + 树路径哈希）。
+ *
+ * 为什么不能随机：normalize 每次 value 变化都会重跑，随机 id 会让同一块
+ * 在「编辑器内存」「document.read 摘要」「AI 写入时的 base.blocks」三处各不
+ * 相同，AI 拿着 id 反而定位不到。确定性兜底保证三处一致；已经有 id 的块
+ * 一律原样保留，用户编辑 / 保存都不会改变它的身份。
+ */
+export function ensureStableBlockIds(blocks: BlockNoteBlock[], parentPath = ''): BlockNoteBlock[] {
+  let changed = false
+  const next = blocks.map((block, index) => {
+    if (!isRecord(block)) return block
+    const path = parentPath ? `${parentPath}.${index}` : String(index)
+    const patched: BlockNoteBlock = { ...block }
+    if (typeof patched.id !== 'string' || !patched.id) {
+      const seed = `${path}|${String(patched.type ?? '')}|${readBlockText(patched)}`
+      patched.id = `blk-${hashBlockSeed(seed)}-${path.replace(/\./g, '-')}`
+      changed = true
+    }
+    if (Array.isArray(patched.children)) {
+      const children = ensureStableBlockIds(patched.children as BlockNoteBlock[], path)
+      if (children !== patched.children) {
+        patched.children = children
+        changed = true
+      }
+    }
+    return patched
+  })
+  return changed ? next : blocks
 }
 
 function createParagraphBlock(content = ''): BlockNoteBlock {
@@ -70,7 +135,8 @@ function splitTextByNewlines(blocks: BlockNoteBlock[]): BlockNoteBlock[] {
     if (shouldSplitBlockTextByNewlines(block) && Array.isArray(block.content)) {
       let currentContent: unknown[] = []
       let currentBlock: BlockNoteBlock = { ...block, children, content: currentContent }
-      // 为了防止生成的块 id 冲突，如果拆分出新块，后续块不保留原有 id
+      // 拆分出的后续块必须给一个全新的稳定 id，不能复用原块 id（会冲突），
+      // 也不能留空让 BlockNote 在 mount 时才补（那样落盘瞬间该块没有可寻址身份）。
       let isFirstPart = true
       
       for (const item of block.content) {
@@ -83,8 +149,8 @@ function splitTextByNewlines(blocks: BlockNoteBlock[]): BlockNoteBlock[] {
             if (i > 0) {
               result.push(currentBlock)
               currentContent = []
-              // 后续拆分出的块，去掉 id 让 BlockNote 自动生成，同时子节点只挂在最后一个块上
-              currentBlock = { ...block, id: undefined, children: [], content: currentContent }
+              // 后续拆分出的块给全新 UUID，子节点只挂在最后一个块上
+              currentBlock = { ...block, id: newSmartDocumentBlockId(), children: [], content: currentContent }
               isFirstPart = false
             }
             if (parts[i]) {
@@ -181,7 +247,10 @@ export function normalizeSmartDocumentContent(value: unknown, fallbackTitle: str
   let parsedBlocks = createDefaultBlockNoteBlocks(input.blocks)
   // 核心修复：清理从其他来源（如 Word）粘贴进来的带有 \n 的脏块
   parsedBlocks = splitTextByNewlines(parsedBlocks)
-  
+  // 读入即保证每个块都有可寻址身份：编辑器内存、document.read 摘要、
+  // AI 写入的 base.blocks 三处共用同一套确定性补齐，blockId 才能对得上。
+  parsedBlocks = ensureStableBlockIds(parsedBlocks)
+
   return {
     schema: 'topomind.smart-document',
     version: 1,
@@ -219,6 +288,8 @@ export function serializeSmartDocumentContent(value: SmartDocumentContent | null
 export function withSmartDocumentUpdatedAt(value: SmartDocumentContent): SmartDocumentContent {
   return {
     ...value,
+    // 落盘前最后一道闸：已有 id 一律保留，缺 id 的历史块补确定性 id。
+    blocks: ensureStableBlockIds(value.blocks),
     metadata: {
       ...value.metadata,
       editor: 'blocknote',

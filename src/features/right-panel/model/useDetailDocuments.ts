@@ -13,6 +13,7 @@ import { getTopoDocumentTypeDefinition } from '../../../features/documents/servi
 import { useDetailPanelStore } from './detailPanelStore'
 import { toast } from '../../../shared/ui/Toaster/toastStore'
 import { useRightPanelStore } from '@/stores/rightPanelStore'
+import { subscribeTopoDocumentListChanges } from '../../documents/services/topoDocumentListChangeBus'
 import type { TopoDocumentManifestItem, TopoDocumentMetaPatch, TopoDocumentType } from '../../../core/storage'
 
 /**
@@ -141,6 +142,14 @@ export function useDetailDocuments({
     })
     return nextTopoDocuments
   }, [selectedNodeId, setDocumentListForNodePath, setActiveDocumentPath, storage, syncNodeHasDetail, allowedDocumentIds, syncHasDetail])
+
+  // 编辑器正文里新建的独立流程图文档是本节点的子文档；创建动作发生在 ProseMirror
+  // 节点视图里，右栏不会自动重读 manifest，这里按 cardPath 精确刷新当前节点列表。
+  useEffect(() => subscribeTopoDocumentListChanges((cardPath) => {
+    if (cardPath && cardPath === nodePathRef.current) {
+      void loadDocuments(cardPath)
+    }
+  }), [loadDocuments])
 
   useEffect(() => {
     if (!documentLinkNotice) return

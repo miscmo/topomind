@@ -138,6 +138,8 @@ export interface AgentDefinition {
   systemPrompt: string
   promptVars: PromptVarId[]
   model: AgentModelConfig
+  /** P5：绑定到模型列表里的具体配置；留空 = 跟随全局默认，对话界面仍可临时覆盖。 */
+  modelId?: string
   /** 只能引用 toolCatalog 中的 id，且不得包含 never 组。 */
   toolIds: string[]
   enabled: boolean

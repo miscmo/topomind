@@ -8,8 +8,14 @@
 
 export type AiProviderType = 'openai-compatible' | 'ollama' | 'hosted'
 
-/** 从主进程返回的配置：绝不包含明文 API Key，只有 hasKey。 */
-export interface AiPublicConfig {
+/**
+ * 一条可选大模型配置（P5）。顶层 7 个连接字段是默认模型的镜像，
+ * `models[]` 才是多模型的真源；hasKey 只由主进程按 keyring 计算，不落盘。
+ */
+export interface AiModelProfile {
+  id: string
+  /** 界面上展示的名称；默认取 model 字段。 */
+  name: string
   providerType: AiProviderType
   baseURL: string
   model: string
@@ -20,10 +26,32 @@ export interface AiPublicConfig {
   hasKey: boolean
 }
 
+export type AiModelProfileInput = Omit<AiModelProfile, 'hasKey'>
+
+/** 从主进程返回的配置：绝不包含明文 API Key，只有每项的 hasKey。 */
+export interface AiPublicConfig {
+  /** 以下 7 项恒等于 defaultModelId 指向的模型，供旧调用方读取。 */
+  providerType: AiProviderType
+  baseURL: string
+  model: string
+  temperature: number
+  maxTokens: number
+  timeoutMs: number
+  contextBudget: number
+  hasKey: boolean
+  models: AiModelProfile[]
+  defaultModelId: string
+}
+
 /** 保存配置时的可选附加字段：apiKey 为空表示「不修改现有密钥」。 */
-export interface AiConfigPatch extends Partial<Omit<AiPublicConfig, 'hasKey'>> {
+export interface AiConfigPatch extends Partial<Omit<AiPublicConfig, 'hasKey' | 'models'>> {
   apiKey?: string
   clearKey?: boolean
+  /** 整份模型列表提交；主进程会归一化 id / 字段并把默认模型镜像回顶层。 */
+  models?: AiModelProfileInput[]
+  /** 只给指定模型写专属 Key；共享 Key 仍走 apiKey。 */
+  modelKeys?: Record<string, string>
+  clearModelKeys?: string[]
 }
 
 export type AiErrorCode =
@@ -57,6 +85,8 @@ export interface AiChatMessage {
 export interface AiChatAgentPayload {
   agentId: string
   systemPrompt: string
+  /** P5：本轮生效的模型 id（会话选择 > Agent 绑定 > 全局默认，渲染层已解析）。 */
+  modelId?: string
   model?: {
     model?: string
     temperature?: number
@@ -161,6 +191,12 @@ export interface AiIndexHit {
   cardPath: string
   title: string
   breadcrumb: string
+  /** P5-r：所属节点的可读名（不是路径 id）。 */
+  nodeName?: string
+  /** P5-r：命中片段落在哪个块，形如「段落「首句…」」。 */
+  blockLabel?: string
+  /** P5-r：命中片段的短摘要，只供 UI 展示，不外发。 */
+  snippet?: string
   /** 片段相对抽取全文的字符范围，供引用定位。 */
   charRange: [number, number]
   text: string
@@ -193,6 +229,10 @@ export interface AiReference {
   cardPath: string
   title: string
   breadcrumb: string
+  /** P5-r：用户能看懂的三层名字，全部来自主进程检索结果，渲染层不猜路径。 */
+  nodeName?: string
+  blockLabel?: string
+  snippet?: string
   charRange: [number, number]
 }
 

@@ -2,16 +2,16 @@
  * 左侧 Dock 面板偏好（localStorage 持久化，全局一份）。
  *
  *  - collapsed：面板本体折叠态；
- *  - activePanelId：当前左栏页面（'agent' AI Agent 入口 / 'kbList' 知识库列表 / 'tree' 节点结构）。
+ *  - activePanelId：当前左栏页面（'agent' AI Agent 入口 / 'tree' 节点结构 / 'canvasSettings' 画布设置）。
  *    同一时刻只显示一个页面：点当前页 = 折叠，点别页 = 换页并展开。
  *    只在会话内有效、不落盘，刷新后回到节点结构，避免 GUI 回归跑在占位页上；
- *  - leftDockWidth：用户拖出来的宽度偏好，四页完全共用一份（切页不跳变），
+ *  - leftDockWidth：用户拖出来的宽度偏好，三页完全共用一份（切页不跳变），
  *    实际显示宽度仍由 workspaceGeometry 按窗口 / 导航栏 / 右栏下限统一派生；
  *  - expandedByRoom：按房间记忆「哪些节点被展开」，默认只展开房间虚拟根，
  *    其余节点全部折叠；空数组表示连房间根也收起。
  *
  * 左栏只有一份开合状态：NavRail 的竖 tab（点当前页折叠、点别页换页并展开）与
- * 四页新标题栏最右边的折叠按钮共用 `collapsed`，后者只写「折叠」这一个方向，
+ * 三页新标题栏最右边的折叠按钮共用 `collapsed`，后者只写「折叠」这一个方向，
  * 不引入第二套状态。面板本体不渲染任何其它显隐控件。
  *
  * 画布 React 代码不订阅本 store：展开时只通过 CSS 变量让 top-left 状态抽屉
@@ -28,11 +28,12 @@ import {
   toggleExpandedKeys,
 } from '../domain/graph/nodeTree'
 
-/** 左侧 Dock 的页面标识；新增页面只需在这里加一个字面量并补一条 tab 描述。 */
-export type LeftDockPanelId = 'tree' | 'agent' | 'kbList' | 'canvasSettings'
+/** 左侧 Dock 的页面标识；新增页面只需在这里加一个字面量并补一条 tab 描述。
+ *  「知识库列表」已于 2026-11-27 迁到标题栏 tab 尾部的「+」浮窗，不再是左栏页面。 */
+export type LeftDockPanelId = 'tree' | 'agent' | 'canvasSettings'
 export const LEFT_DOCK_DEFAULT_PANEL: LeftDockPanelId = 'tree'
 
-/** 左侧 Dock 的默认 / 双击复位宽度。四页完全共用一个值：切页时左侧边界 B 不跳变，
+/** 左侧 Dock 的默认 / 双击复位宽度。三页完全共用一个值：切页时左侧边界 B 不跳变，
  *  右栏不会因换页突然收窄；画布设置页内容本身是 w-full / min-w-0 自适应。
  *  真正显示多宽由 computeGeometry() 按窗口与右栏下限派生，见 domain/layout/workspaceGeometry.ts。 */
 export const NODE_TREE_PANEL_WIDTH = 280
@@ -59,7 +60,7 @@ function writeCollapsed(collapsed: boolean): void {
   }
 }
 
-/** 左栏宽度偏好：四页共用一份，非法 / 损坏存档一律回落默认值。 */
+/** 左栏宽度偏好：三页共用一份，非法 / 损坏存档一律回落默认值。 */
 function readLeftDockWidth(): number {
   try {
     const raw = Number(window.localStorage.getItem(LEFT_DOCK_WIDTH_KEY))
@@ -110,14 +111,14 @@ interface NodeTreePanelState {
   collapsed: boolean
   /** 当前左栏页面（会话态，不持久化）；同一时刻只有一个页面可见 */
   activePanelId: LeftDockPanelId
-  /** 用户拖出来的左栏宽度偏好（四页共用，localStorage 持久化） */
+  /** 用户拖出来的左栏宽度偏好（三页共用，localStorage 持久化） */
   leftDockWidth: number
   setLeftDockWidth: (width: number) => void
   /** 双击手柄复位到默认宽度 */
   resetLeftDockWidth: () => void
   /** 点击竖向 tab：点当前页折叠，点其它页换页并展开 */
   setActivePanel: (id: LeftDockPanelId) => void
-  /** 四页标题栏共用的折叠入口：与「再点当前页 tab」写同一份 collapsed + localStorage */
+  /** 三页标题栏共用的折叠入口：与「再点当前页 tab」写同一份 collapsed + localStorage */
   collapseLeftDock: () => void
   /** roomPath -> 展开的 tree key 列表；缺省（无该房间记录）= 只展开房间根 */
   expandedByRoom: Record<string, string[]>

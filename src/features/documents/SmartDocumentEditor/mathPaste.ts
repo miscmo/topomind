@@ -385,11 +385,99 @@ export function containsMathDelimiters(text: string): boolean {
   return containsBlockMathDelimiter(text) || /(^|[^\\])\$[^$\n]+\$(?!\$)/m.test(text)
 }
 
+/**
+ * GFM 管道表格的分隔行：`| --- | :---: | ---: |`，也兼容无外框的 `--- | ---`。
+ * 判据与 @blocknote/core 的 markdownToHTML/tryParseTable 保持一致：至少一个
+ * `|`，每格是「可选冒号 + 至少一条短横 + 可选冒号」，其余只允许空白 / 竖线。
+ */
+const MARKDOWN_TABLE_SEPARATOR_LINE = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/
+
+function isMarkdownTableSeparatorLine(line: string): boolean {
+  return line.includes('|') && MARKDOWN_TABLE_SEPARATOR_LINE.test(line)
+}
+
+function isMarkdownTableStart(lines: string[], index: number): boolean {
+  if (index + 1 >= lines.length) return false
+  return lines[index].includes('|') && isMarkdownTableSeparatorLine(lines[index + 1])
+}
+
+/**
+ * 剪贴板文本里是否含 GFM 表格源码。之前 containsMarkdownDelimiters 只认
+ * 标题 / 列表 / 加粗 / 链接，粘贴 `| 名称 | 说明 |\n| --- | --- |` 会落到
+ * defaultPasteHandler，用户看到的就是一堆表格源码。按行线性扫描，避免大段
+ * 剪贴板文本在 pasteHandler 的同步路径上退化成 O(n²)。
+ */
+export function containsMarkdownTable(text: string): boolean {
+  if (!text || !text.includes('|')) return false
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  for (let index = 0; index + 1 < lines.length; index += 1) {
+    if (isMarkdownTableStart(lines, index)) return true
+  }
+  return false
+}
+
+/**
+ * 标记属于同一个 GFM 表格的连续行（表头 + 分隔行 + 数据行），并跳过代码
+ * 围栏内部。splitPlainTextLinesIntoBlocks 会给相邻纯文本行之间插空行以拆成
+ * 多个段落，那会把表格拆散，markdownToHTML 就再也认不出表格：表格行必须
+ * 原样保持连续。
+ */
+function markMarkdownTableLines(lines: string[]): boolean[] {
+  const flags = lines.map(() => false)
+  let inFence = false
+  let index = 0
+  while (index < lines.length) {
+    const line = lines[index]
+    if (/^ {0,3}(`{3,}|~{3,})/.test(line)) {
+      inFence = !inFence
+      index += 1
+      continue
+    }
+    if (inFence || !isMarkdownTableStart(lines, index)) {
+      index += 1
+      continue
+    }
+    flags[index] = true
+    let cursor = index + 1
+    while (cursor < lines.length && lines[cursor].includes('|')) {
+      flags[cursor] = true
+      cursor += 1
+    }
+    index = cursor
+  }
+  return flags
+}
+
+/** 剪贴板 HTML 自身是否已经带渲染好的表格（而非 markdown 源码的外壳）。 */
+export function hasRenderedHtmlTable(html: string): boolean {
+  return /<table\b/i.test(stripClipboardMetaTags(html))
+}
+
+/**
+ * 挑选本次粘贴要按 markdown 解析成表格的源文本；返回 null 表示不该接管。
+ * 典型来源：AI 回答的「复制 markdown」、md 文件 / VSCode / 网页里选中源码，
+ * 这些剪贴板常只有 text/plain，或 text/html 只是 <pre>/<p>/<span> 包着源码。
+ * 若 HTML 里本来就是渲染好的 <table>，必须留给富文本路径，否则列宽、
+ * 合并单元格等会丢失。
+ */
+export function getMarkdownTablePasteSource(
+  markdown: string,
+  plainText: string,
+  html: string,
+): string | null {
+  if (html && hasRenderedHtmlTable(html)) return null
+  if (containsMarkdownTable(markdown)) return markdown
+  if (containsMarkdownTable(plainText)) return plainText
+  return null
+}
+
 export function containsMarkdownDelimiters(text: string): boolean {
   if (!text) return false
   return (
     // Bold / Italic (e.g. **bold** or __bold__)
     containsEmphasisDelimiter(text) ||
+    // GFM 管道表格（| a | b | + | --- | --- |）
+    containsMarkdownTable(text) ||
     // Headings
     /(^|\n)#{1,6}\s/.test(text) ||
     // Lists
@@ -417,26 +505,35 @@ export function containsStrictMarkdownDelimiters(text: string): boolean {
 
 function splitPlainTextLinesIntoBlocks(lines: string[]): string[] {
   const result: string[] = []
-  let previousKind: 'plain' | 'quote' | 'list' | 'block' | 'blank' = 'blank'
+  let previousKind: 'plain' | 'quote' | 'list' | 'block' | 'blank' | 'table' = 'blank'
   let inFence = false
+  const tableLines = markMarkdownTableLines(lines)
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
     const trimmed = line.trim()
     const fence = line.match(/^ {0,3}(`{3,}|~{3,})/)
     if (fence) inFence = !inFence
 
-    const kind: 'plain' | 'quote' | 'list' | 'block' | 'blank' = !trimmed
-      ? 'blank'
-      : inFence || fence
-        ? 'block'
-        : /^ {0,3}>/.test(line)
-          ? 'quote'
-          : /^(?: {0,3})(?:[-+*]|\d+[.)])\s+/.test(line) || /^\s{2,}\S/.test(line)
-            ? 'list'
-            : /^<(?:div|p|hr)\b/i.test(trimmed)
-              ? 'block'
-              : 'plain'
+    const kind: 'plain' | 'quote' | 'list' | 'block' | 'blank' | 'table' = tableLines[index]
+      ? 'table'
+      : !trimmed
+        ? 'blank'
+        : inFence || fence
+          ? 'block'
+          : /^ {0,3}>/.test(line)
+            ? 'quote'
+            : /^(?: {0,3})(?:[-+*]|\d+[.)])\s+/.test(line) || /^\s{2,}\S/.test(line)
+              ? 'list'
+              : /^<(?:div|p|hr)\b/i.test(trimmed)
+                ? 'block'
+                : 'plain'
 
+    // 表格块前补一个空行：markdownToHTML 的段落扫描只在「带外框的表格行」
+    // 处收尾，无外框写法（项目 | 状态）会被上一段落吞掉。
+    if (kind === 'table' && previousKind === 'plain' && result[result.length - 1] !== '') {
+      result.push('')
+    }
     if (kind === 'plain' && previousKind === 'plain' && result[result.length - 1] !== '') {
       result.push('')
     }

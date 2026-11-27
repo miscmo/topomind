@@ -10,7 +10,7 @@ import { buildPastedImageHtml, getClipboardMarkdownImage, getCodeBlockPlainTextF
 import { containsMarkdownFence } from '../fenceNormalize'
 import { inlineMathInputRuleExtension, mathBlockShortcutExtension, quoteEnterExtension } from '../mathSupport'
 import { docLinkInputRuleExtension } from '../docLinkSupport'
-import { containsMathDelimiters, containsMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml, hasMeaningfulHtmlStructure, stripClipboardHtmlNoise } from '../mathPaste'
+import { containsMathDelimiters, containsMarkdownDelimiters, convertMixedHtmlToHtml, convertMarkdownWithMathToHtml, getMarkdownTablePasteSource, hasMeaningfulHtmlStructure, stripClipboardHtmlNoise } from '../mathPaste'
 import { smartDocumentSchema } from '../smartDocumentSchema'
 import { currentBlockHighlightExtension } from '../currentBlockHighlightExtension'
 import { blockLastModifiedExtension } from '../blockLastModifiedExtension'
@@ -56,12 +56,63 @@ function readCurrentBlockLastModified(editor: SmartDocumentEditor): number | nul
   return resolveBlockLastModified((block.props as Record<string, unknown> | undefined)?.lastModified)
 }
 
+type SelectionInfo = Parameters<NonNullable<SmartDocumentEditorProps['onSelectionChange']>>[0]
+
+/** 从 BlockNote 块里取纯文本短片段，只给模型理解上下文，绝不作为定位依据。 */
+function readBlockExcerpt(block: SmartDocumentBlock): string {
+  const content = (block as unknown as Record<string, unknown>)?.content
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (!part || typeof part !== 'object') return ''
+      const text = (part as Record<string, unknown>).text
+      return typeof text === 'string' ? text : ''
+    }).join('')
+  }
+  const text = (block as unknown as Record<string, unknown>)?.text
+  return typeof text === 'string' ? text : ''
+}
+
+/**
+ * 读取当前选区 / 光标所在块 id。多选块取全部，否则退回光标块，
+ * 这样「拖选一段文字」和「光标停在某个块里」都能成为 AI 的可寻址目标。
+ */
+function readEditorSelection(editor: SmartDocumentEditor): SelectionInfo {
+  let blocks: SmartDocumentBlock[] = []
+  let hasTextSelection = false
+  try {
+    const selected = editor.getSelection()?.blocks
+    if (selected?.length) blocks = selected as SmartDocumentBlock[]
+    hasTextSelection = editor.prosemirrorState?.selection?.empty === false
+  } catch {
+    blocks = []
+  }
+  if (!blocks.length) {
+    try {
+      const block = editor.getTextCursorPosition()?.block
+      if (block) blocks = [block as SmartDocumentBlock]
+    } catch {
+      blocks = []
+    }
+  }
+  const ids: string[] = []
+  for (const block of blocks) {
+    const id = (block as unknown as Record<string, unknown>)?.id
+    if (typeof id !== 'string' || !id || ids.includes(id)) continue
+    ids.push(id)
+    if (ids.length >= 40) break
+  }
+  const excerpt = blocks.map(readBlockExcerpt).join('\n').trim().slice(0, 400)
+  return { blockIds: ids, excerpt, hasTextSelection }
+}
+
 export function useSmartDocumentEditorModel({
   value,
   onChange,
   onTocChange,
   onWordCountChange,
   onBlockLastModifiedChange,
+  onSelectionChange,
   onTocItemClickReady,
   uploadFile,
   importRemoteImage,
@@ -82,6 +133,7 @@ export function useSmartDocumentEditorModel({
   const onTocChangeRef = useRef(onTocChange)
   const onWordCountChangeRef = useRef(onWordCountChange)
   const onBlockLastModifiedChangeRef = useRef(onBlockLastModifiedChange)
+  const onSelectionChangeRef = useRef(onSelectionChange)
   const onTocItemClickReadyRef = useRef(onTocItemClickReady)
   const editorSessionActiveRef = useRef(true)
 
@@ -97,6 +149,7 @@ export function useSmartDocumentEditorModel({
   onTocChangeRef.current = onTocChange
   onWordCountChangeRef.current = onWordCountChange
   onBlockLastModifiedChangeRef.current = onBlockLastModifiedChange
+  onSelectionChangeRef.current = onSelectionChange
   onTocItemClickReadyRef.current = onTocItemClickReady
 
   const initialContent = useMemo(() => {
@@ -210,6 +263,18 @@ export function useSmartDocumentEditorModel({
       // opening and closing fences were indented.
       if (containsMarkdownFence(plainText)) {
         editor.pasteHTML(convertMarkdownWithMathToHtml(plainText))
+        return true
+      }
+
+      // 外部粘贴的 Markdown 表格源码（AI 回答的「复制 markdown」、md 文件、
+      // VSCode / 网页里选中的源码）：这类剪贴板常只有 text/plain，或
+      // text/html 只是 <pre>/<p>/<span> 包着的源码、没有真正的 <table>。
+      // 默认处理器不认管道表格，会把 `| --- | --- |` 原样写进文档；独立
+      // <pre> 保护分支也会把它做成代码块，所以必须排在那条分支之前。
+      // HTML 自带渲染表格时返回 null，继续走富文本路径以保留列宽等结构。
+      const markdownTableSource = getMarkdownTablePasteSource(markdown, plainText, html)
+      if (markdownTableSource) {
+        editor.pasteHTML(convertMarkdownWithMathToHtml(markdownTableSource))
         return true
       }
 
@@ -556,15 +621,23 @@ export function useSmartDocumentEditorModel({
   // 只从块属性里读取、不做任何 DOM 操作，因此不会干扰编辑、光标与输入法。
   useEffect(() => {
     let lastPublished: number | null | undefined
+    let lastSelectionKey = ''
 
     const publish = () => {
       const next = readCurrentBlockLastModified(editor)
       // 值没变就不上抛，避免无谓的父组件更新
-      if (next === lastPublished) {
-        return
+      if (next !== lastPublished) {
+        lastPublished = next
+        onBlockLastModifiedChangeRef.current?.(next)
       }
-      lastPublished = next
-      onBlockLastModifiedChangeRef.current?.(next)
+      // 选中态通道：光标 / 选区块 id 上抛给 aiSelectionStore，
+      // 让 AI 能凭 blockId 精确定位，而不是靠标题或位置猜。
+      const selection = readEditorSelection(editor)
+      const key = `${selection.blockIds.join(',')}|${selection.hasTextSelection}|${selection.excerpt}`
+      if (key !== lastSelectionKey) {
+        lastSelectionKey = key
+        onSelectionChangeRef.current?.(selection)
+      }
     }
 
     publish()
@@ -573,6 +646,8 @@ export function useSmartDocumentEditorModel({
     return () => {
       unsubscribeSelection?.()
       unsubscribeChange?.()
+      // 不在这里回传空选中：切文档时旧实例的 cleanup 会覆盖新实例刚上抛的值，
+      // 文档级清空统一由 aiSelectionStore.setActiveDocument 负责。
       onBlockLastModifiedChangeRef.current?.(null)
     }
   }, [editor])

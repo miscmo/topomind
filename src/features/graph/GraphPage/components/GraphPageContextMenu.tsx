@@ -1,5 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Workflow, LayoutTemplate, Image as ImageIcon, Palette, Trash2, Maximize2, SmilePlus, FolderInput, Link2, ListTree, FileText, X } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
+import { useOptionalGraphStore } from '@/stores/graphStore'
+import { requestAiEdit, targetForNode, targetForNodes } from '@/features/ai-agent/model/aiSelectionActions'
 
 interface MenuItem {
   label: string
@@ -81,6 +84,14 @@ export default memo(function GraphPageContextMenu({
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuSize, setMenuSize] = useState({ width: 200, height: 0 })
   const [focusedIndex, setFocusedIndex] = useState(-1)
+  // 「让 AI 修改」需要把选中节点 id 原样交给 AI；标题只用于 chip 展示。
+  // 用 optional store：画布未在 GraphStoreProvider 内时退化为空集合，不抛错。
+  const selectedNodeIds = useOptionalGraphStore((state) => state.selectedNodeIds)
+  const nodesMap = useOptionalGraphStore((state) => state.nodesMap)
+  const readNodeLabel = (id: string): string => {
+    const label = nodesMap.get(id)?.data?.label
+    return typeof label === 'string' && label.trim() ? label.trim() : id
+  }
 
   const isEdge = type === 'edge'
   const isPane = type === 'pane'
@@ -142,6 +153,20 @@ export default memo(function GraphPageContextMenu({
   // 集合来自打开菜单时冻结的快照，不受菜单期间选中态变化影响。
   const selectionItems: MenuEntry[] = [
     {
+      label: `让 AI 修改选中 ${selectedCount} 个节点`,
+      icon: <Sparkles className="w-4 h-4" />,
+      disabled: selectedNodeIds.length === 0,
+      action: () => {
+        if (selectedNodeIds.length > 0) {
+          requestAiEdit(
+            targetForNodes(selectedNodeIds, `选中 ${selectedNodeIds.length} 个节点`),
+            `请针对选中的 ${selectedNodeIds.length} 个节点给出修改建议。`,
+          )
+        }
+        onClose()
+      },
+    },
+    {
       label: `移动选中 ${selectedCount} 个节点到房间…`,
       icon: <FolderInput className="w-4 h-4" />,
       disabled: selectedCount === 0,
@@ -199,6 +224,17 @@ export default memo(function GraphPageContextMenu({
       icon: <FileText className="w-4 h-4" />,
       action: () => {
         if (targetId) onOpenNodeDocument(targetId)
+        onClose()
+      },
+    },
+    {
+      label: '让 AI 修改此节点',
+      icon: <Sparkles className="w-4 h-4" />,
+      action: () => {
+        if (targetId) {
+          const label = readNodeLabel(targetId)
+          requestAiEdit(targetForNode(targetId, label), `请针对节点「${label}」给出修改建议。`)
+        }
         onClose()
       },
     },

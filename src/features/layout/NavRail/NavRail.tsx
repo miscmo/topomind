@@ -11,8 +11,9 @@
  * 任何视图（含画布）下开关行为一致。二级面板、沉浸态与顶部品牌按钮已移除。
  *
  * 【2026-11-25 布局改造】首页按钮迁入标题栏（紧跟导航栏开关之后）；rail 顶部只放
- * 左栏页面 tab（AI Agent / 知识库列表 / 节点结构 / 画布设置，仅画布视图出现）；学习记录 /
+ * 左栏页面 tab（AI Agent / 节点结构 / 画布设置，仅画布视图出现）；学习记录 /
  * 日志与性能 / 设置连成一组沉到底部，紧贴账户与工作区之上。
+ * 【2026-11-27】知识库列表入口改由标题栏 tab 尾部的「+」浮窗承载，不再占一个左栏页签。
  */
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useTabStore } from '@/stores/tabs/tabStore'
@@ -240,7 +241,7 @@ export default memo(function NavRail() {
           style={{ width: 'var(--nav-rail-width)' }}
         >
           {renderGroup('workspace', false)}
-          {/* 左栏页面组占据导航栏顶部，四页共用同一显隐条件：只在画布视图出现，
+          {/* 左栏页面组占据导航栏顶部，三页共用同一显隐条件：只在画布视图出现，
               物理上仍是同一条 48px rail，不新增第二条竖条。 */}
           {isCanvasView && (
             <div ref={dockGroupRef} className={TM_UI.leftDockGroup}>

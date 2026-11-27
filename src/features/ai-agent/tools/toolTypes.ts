@@ -17,6 +17,36 @@ import type { AgentDocumentState, AgentPatchOp, WorkspaceSnapshot } from '../pat
 
 export type ToolKind = 'read' | 'write'
 
+/**
+ * 用户当前选中的可寻址对象。kind 决定 AI 该用哪一套工具定位；
+ * id 必须是该对象的稳定主键（docId / nodeId / blockId），不是标题、路径或数组下标。
+ * excerpt 只是给模型看的短文本快照，**绝不作为定位依据**。
+ */
+export interface SelectionTargetRef {
+  kind: 'document' | 'node' | 'block'
+  id: string
+  label: string
+  docId?: string
+  nodeIds?: string[]
+  blockIds?: string[]
+  excerpt?: string
+}
+
+/**
+ * 一次发问时冻结的选中上下文快照，由渲染层注入，工具层只读。
+ * 与 graphStore / 编辑器的实时状态分离：模型在一轮任务里看到的目标始终一致。
+ */
+export interface SelectionContextSnapshot {
+  documentId: string | null
+  documentTitle: string
+  documentNodeId: string | null
+  nodeIds: string[]
+  nodeLabels: string[]
+  blockIds: string[]
+  blockExcerpt: string
+  pinned: SelectionTargetRef[]
+}
+
 /** 工具执行期可用的只读上下文；全部由渲染层注入，工具本身不碰全局单例。 */
 export interface ToolWorkspaceContext {
   activeTabId: string
@@ -24,6 +54,8 @@ export interface ToolWorkspaceContext {
   workDir: string
   selectedNodeIds: string[]
   activeDocumentId: string | null
+  /** 选中对象的完整快照；可选是为了兼容只传旧字段的测试 runtime。 */
+  selection?: SelectionContextSnapshot
   viewport?: { x: number; y: number; zoom: number }
 }
 
